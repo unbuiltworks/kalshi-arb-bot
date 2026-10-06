@@ -274,7 +274,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "1",
+        "our_outcome_leg": "no",
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": "0",
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -293,7 +295,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85324.27",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": false
       },
       "SUBMITTED": {
         "committed_usd": "0.5200",
@@ -530,7 +533,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "1",
+        "our_outcome_leg": "no",
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": "0",
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -549,7 +554,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85245.52",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": false
       },
       "SUBMITTED": {
         "committed_usd": "0.2000",
@@ -786,7 +792,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "1",
+        "our_outcome_leg": "no",
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": "0",
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -805,7 +813,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85359.29",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": false
       },
       "SUBMITTED": {
         "committed_usd": "0.6100",
@@ -1042,6 +1051,8 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
+        "our_outcome_leg": "yes",
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
         "payout_usd": "0",
         "readable": true,
         "reads": 3,
@@ -1061,7 +1072,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85426.51",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": false
       },
       "SUBMITTED": {
         "committed_usd": "0.5800",
@@ -1298,6 +1310,8 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
+        "our_outcome_leg": "yes",
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
         "payout_usd": "0",
         "readable": true,
         "reads": 3,
@@ -1317,7 +1331,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85395.53",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": false
       },
       "SUBMITTED": {
         "committed_usd": "0.3600",
