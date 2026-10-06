@@ -99,7 +99,32 @@ def analyse(rows: List[dict], rep: Dict[str, Any], arm: Dict[str, Any]
 
     mint_feasible_ticks = len([r for r in live if r.get("mint_feasible")])
 
+    # WHAT HAPPENS AFTER THE DIVERGENCE. Checkpoints every 60 s from the
+    # designated marker to the window end, so the trajectory is visible
+    # rather than only the endpoints.
+    dv = (arm.get("divergence") or {})
+    first = dv.get("designated_first_material_divergence")
+    after: List[dict] = []
+    if first is not None:
+        want = list(range(first, end, 60)) + [end - 1]
+        by_t = {r["t"]: r for r in live}
+        for t in want:
+            r = by_t.get(t)
+            if r is None:
+                continue
+            after.append({
+                "t": t, "at": hhmmss(t, start), "tte_s": r["tte_s"],
+                "l5_matched": r["l5"]["matched"],
+                "l5_residual": r["l5"]["residual"],
+                "l5_pair_cost": r["l5"]["pair_cost"],
+                "s1_matched": r["s1"]["matched"],
+                "s1_residual": r["s1"]["residual"],
+                "s1_pair_cost": r["s1"]["pair_cost"],
+                "s1_evidenced_fills_so_far": r["s1"]["n_fills"],
+                "l5_fill_legs_so_far": r["l5"]["n_fills"]})
+
     return {
+        "after_divergence": after,
         "window": {"slug": rep["market_slug"], "start_utc": start,
                    "end_utc": end, "seconds": len(rows),
                    "resolvable_seconds": len(live),
@@ -254,7 +279,23 @@ def md(a: Dict[str, Any], rep: Dict[str, Any], rows: List[dict],
              % m4["ticks_with_no_order_on_either_side"])
     o.append("quoting gap is not being read as a fill failure.")
     o.append("")
-    o.append("## 4. Full trace")
+    o.append("## 4. What happens after the divergence")
+    o.append("")
+    if not a.get("after_divergence"):
+        o.append("No designated divergence, so there is no trajectory to")
+        o.append("trace.")
+    else:
+        o.append("| at | TTE | L5 matched | L5 resid | L5 pair | "
+                 "S1 matched | S1 resid | S1 pair | S1 fills |")
+        o.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+        for c in a["after_divergence"]:
+            o.append("| %s | %d | %.2f | %.2f | %s | %.2f | %.2f | %s | %d |"
+                     % (c["at"], c["tte_s"], c["l5_matched"],
+                        c["l5_residual"], c["l5_pair_cost"],
+                        c["s1_matched"], c["s1_residual"],
+                        c["s1_pair_cost"], c["s1_evidenced_fills_so_far"]))
+    o.append("")
+    o.append("## 5. Full trace")
     o.append("")
     o.append("`TRACE_%s.csv` / `.jsonl` carry one row per second with")
     o.append("timestamp, TTE, UP/DOWN BBO and depth, L5's fills and ledger,")
