@@ -125,6 +125,22 @@ continuously and keeps acquiring on both sides, its residual oscillating
 | 1787365800 | Y | 302 / 35 / 75 | 2,950 / 378 / 850 | 0.914 → 0.960 | 1.021 | 719 → **0** |
 | 1787369400 | Y | 220 / 6 / 50 | 2,817 / 24 / 543 | 0.333 → 0.920 | 1.025 | 832 → **0** |
 
+### Aggregate — arm C (third-party prints, every L5 leg removed)
+
+| | all 11 | COMPLETE-L2 only (10) |
+|---|---|---|
+| fill legs S1 / S2 vs L5 | 0.081× → **0.321×** | 0.081× → **0.321×** |
+| matched shares S1 / S2 vs L5 | 0.067× → **0.312×** | 0.067× → **0.312×** |
+| matched fraction L5 / S1 / S2 | 0.952 / 0.794 / **0.959** | 0.952 / 0.810 / **0.957** |
+| net per dollar spent *(diagnostic)* | L5 −0.18% / S1 **−5.58%** / S2 **−5.96%** | −0.03% / −3.54% / −5.89% |
+
+Arm C **strengthens the behavioural result** (3.95× the fill legs, 4.66× the
+matched shares, and a matched fraction that now slightly exceeds L5's) and
+**removes the arm-A artifact**: with the less-biased evidence standard S1 is
+also negative (−5.58%), confirming that its +8.06% in arm A was residual luck
+in four windows rather than an edge. Both policies lose; S2 loses more, on
+roughly four times the volume.
+
 ### Aggregate (arm A)
 
 | | all 11 | COMPLETE-L2 only (10) |
