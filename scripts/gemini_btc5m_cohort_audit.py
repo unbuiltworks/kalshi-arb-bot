@@ -100,6 +100,14 @@ def cohort_chain() -> List[Dict[str, Any]]:
         out.append({
             "slot": slot.get("slot"),
             "market": slot.get("market"),
+            # THE OUTCOME LEG WE ACTUALLY HOLD. The canary bought `yes` in
+            # every window, so the payout line got away with reading the
+            # contract's resolutionSide alone. The underdog bought `no` in
+            # three of five, where a contract resolving `yes` pays the NO
+            # holder NOTHING -- so the leg is carried explicitly and the
+            # payout is settled against IT, not against the contract.
+            "our_outcome": slot.get("outcome"),
+            "our_side": slot.get("side"),
             "DECISION": {
                 "utc": dec.get("utc") or slot.get("utc"),
                 "elapsed_since_open_s": dec.get("elapsed_since_open_s"),
@@ -324,9 +332,11 @@ async def main_async(a) -> int:
                  if fills.get("attributed") else None)
         principal = None if fill_px is None else fill_px * qty
         side = res.get("resolutionSide")
+        ours = str(leg.get("our_outcome") or "").strip().lower() or None
         payout = None
-        if side in ("yes", "no"):
-            payout = (D("1") * qty) if side == "yes" else D("0")
+        if side in ("yes", "no") and ours in ("yes", "no"):
+            # $1 per share iff the contract resolved to the leg WE hold
+            payout = (D("1") * qty) if side == ours else D("0")
         cash_rows = (cash.get("by_symbol") or {}).get(sym) or []
         # the entry instant, for the descriptive reconstruction
         t_entry = None
@@ -398,8 +408,16 @@ async def main_async(a) -> int:
                 "fill_record_readable": src.get("readable"),
                 "fill_record_why": src.get("why"),
             },
-            "SETTLED": dict(res, payout_usd=(None if payout is None
-                                             else str(payout))),
+            "SETTLED": dict(res,
+                             our_outcome_leg=ours,
+                             payout_usd=(None if payout is None
+                                         else str(payout)),
+                             payout_basis=("$1 per share iff the contract "
+                                           "resolved to the outcome leg WE "
+                                           "hold; a NO holder is paid $0 by "
+                                           "a `yes` resolution"),
+                             won=(None if (side is None or ours is None)
+                                  else bool(side == ours))),
             "CASH_CONFIRMED": cash_confirmed(cash_rows, fee),
             "DESCRIPTIVE": {
                 "reference_at_entry": ref_entry,
