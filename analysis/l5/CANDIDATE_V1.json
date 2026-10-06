@@ -1,0 +1,141 @@
+{
+  "label": "L5_CANDIDATE_V1_FULL_CORPUS",
+  "candidate_fingerprint_sha256": "656317d7c52f5717c6a291121c854079648bef655a2954a9a4ccbdf723b2d8c1",
+  "frozen_before_any_oos_read": true,
+  "removed_assumptions": [
+    "no 5c EXTEND improvement gate -- higher-price EXTEND allowed",
+    "no requirement that pair cost be < 1 at any point",
+    "no 13-hour [0.20,0.82] band, no 0.991 compression trigger",
+    "no fixed 900s duration -- TTE uses each event's own window"
+  ],
+  "split": {
+    "pre_incentive_events": 6252,
+    "discovery_events": 4376,
+    "OOS_events_SEALED": 1876,
+    "rule": "chronological by first fill, earliest 70%"
+  },
+  "decision_points_discovery": 157584,
+  "ambiguous_excluded_note": "legs sharing a timestamp with the opposite outcome are unordered in the tape and are excluded, never ordered by assumption",
+  "action_base_rates": {
+    "EXTEND_SAME_SIDE": 0.6027,
+    "SWITCH_OUTCOME": 0.3696,
+    "STOP": 0.0278
+  },
+  "conditionals": {
+    "move_bin": {
+      "down_0_2c": {
+        "EXTEND_SAME_SIDE": 17437,
+        "STOP": 788,
+        "SWITCH_OUTCOME": 9381
+      },
+      "down_gt_2c": {
+        "EXTEND_SAME_SIDE": 26215,
+        "STOP": 987,
+        "SWITCH_OUTCOME": 13153
+      },
+      "flat": {
+        "EXTEND_SAME_SIDE": 16745,
+        "STOP": 1085,
+        "SWITCH_OUTCOME": 10604
+      },
+      "up_0_2c": {
+        "EXTEND_SAME_SIDE": 12852,
+        "STOP": 486,
+        "SWITCH_OUTCOME": 8482
+      },
+      "up_gt_2c": {
+        "EXTEND_SAME_SIDE": 21719,
+        "STOP": 1030,
+        "SWITCH_OUTCOME": 16620
+      }
+    },
+    "run_bin": {
+      "run_1": {
+        "EXTEND_SAME_SIDE": 36285,
+        "STOP": 2008,
+        "SWITCH_OUTCOME": 24759
+      },
+      "run_2": {
+        "EXTEND_SAME_SIDE": 22547,
+        "STOP": 1074,
+        "SWITCH_OUTCOME": 13816
+      },
+      "run_3": {
+        "EXTEND_SAME_SIDE": 13551,
+        "STOP": 542,
+        "SWITCH_OUTCOME": 7817
+      },
+      "run_4": {
+        "EXTEND_SAME_SIDE": 8229,
+        "STOP": 297,
+        "SWITCH_OUTCOME": 4611
+      },
+      "run_5": {
+        "EXTEND_SAME_SIDE": 5151,
+        "STOP": 145,
+        "SWITCH_OUTCOME": 2714
+      },
+      "run_6_plus": {
+        "EXTEND_SAME_SIDE": 9205,
+        "STOP": 310,
+        "SWITCH_OUTCOME": 4523
+      }
+    },
+    "tte_bin": {
+      "0_30s": {
+        "EXTEND_SAME_SIDE": 1694,
+        "STOP": 1446,
+        "SWITCH_OUTCOME": 939
+      },
+      "120_300s": {
+        "EXTEND_SAME_SIDE": 23629,
+        "STOP": 967,
+        "SWITCH_OUTCOME": 14857
+      },
+      "30_120s": {
+        "EXTEND_SAME_SIDE": 11645,
+        "STOP": 1541,
+        "SWITCH_OUTCOME": 7503
+      },
+      "expired": {
+        "EXTEND_SAME_SIDE": 36,
+        "STOP": 92,
+        "SWITCH_OUTCOME": 16
+      },
+      "ge_300s": {
+        "EXTEND_SAME_SIDE": 56846,
+        "STOP": 287,
+        "SWITCH_OUTCOME": 34080
+      },
+      "tte_unknown": {
+        "EXTEND_SAME_SIDE": 1118,
+        "STOP": 43,
+        "SWITCH_OUTCOME": 845
+      }
+    }
+  },
+  "model_cells": 136,
+  "fidelity_discovery": {
+    "n": 157584,
+    "overall_accuracy": 0.6035,
+    "cell_coverage": 0.9976,
+    "per_action": {
+      "EXTEND_SAME_SIDE": {
+        "correct": 94691,
+        "n": 94968,
+        "accuracy": 0.9971
+      },
+      "STOP": {
+        "correct": 287,
+        "n": 4376,
+        "accuracy": 0.0656
+      },
+      "SWITCH_OUTCOME": {
+        "correct": 122,
+        "n": 58240,
+        "accuracy": 0.0021
+      }
+    }
+  },
+  "accounting": "behavioural fidelity only; no cash number here. Historical reconstruction of another trader's public activity -- not realized profit for our account."
+}
