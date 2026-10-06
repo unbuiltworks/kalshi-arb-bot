@@ -1,5 +1,5 @@
 {
-  "produced_at_utc": "2026-10-06T04:54:27Z",
+  "produced_at_utc": "2026-10-06T05:13:30Z",
   "produced_by_run_id": "37409797204",
   "produced_by_sha": "d849a0f53e82d16fb856c1cc66d2fe14a5f00dc9",
   "produced_by_run_number": "4",
@@ -9,13 +9,14 @@
     "shadow_20261006T033736Z.jsonl.gz",
     "shadow_20261006T035721Z.jsonl.gz",
     "shadow_20261006T041623Z.jsonl.gz",
-    "shadow_20261006T043526Z.jsonl.gz"
+    "shadow_20261006T043526Z.jsonl.gz",
+    "shadow_20261006T045429Z.jsonl.gz"
   ],
   "candidate_fingerprint": "441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe",
   "cohort_target": 25,
-  "COMPLETE_markets": 15,
-  "valid_measurement_markets": 19,
-  "infrastructure_failures_not_counted": 0,
+  "COMPLETE_markets": 17,
+  "valid_measurement_markets": 22,
+  "infrastructure_failures_not_counted": 2,
   "quarantined_tapes": [
     {
       "tape": "shadow_20261006T012525Z.jsonl.gz",
@@ -30,10 +31,11 @@
       "markets_excluded": 57
     }
   ],
-  "evidenced_fills_valid_markets_only": 182,
-  "uncertain_fills_valid_markets_only": 676,
+  "evidenced_fills_valid_markets_only": 226,
+  "uncertain_fills_valid_markets_only": 745,
   "gate_counts_counted_tapes": {
-    "VALID_MEASUREMENT": 19
+    "VALID_MEASUREMENT": 22,
+    "GATE5_ORDERS_NOT_INSTANTIATED_BOTH_SIDES": 2
   },
   "per_tape": [
     {
@@ -784,6 +786,296 @@
       "discovery_errors": [],
       "gate_counts": {
         "VALID_MEASUREMENT": 4
+      }
+    },
+    {
+      "tape": "shadow_20261006T045429Z.jsonl.gz",
+      "tape_stamp_utc": "2026-10-06T04:54:29Z",
+      "run_id": 37409797204,
+      "run_number": 4,
+      "sha": "d849a0f53e82d16fb856c1cc66d2fe14a5f00dc9",
+      "run_validity": "PENDING_MEASUREMENT_VALIDITY",
+      "markets": [
+        {
+          "market": "eth-updown-5m-1791262200",
+          "reported_status": "INCOMPLETE",
+          "window": {
+            "first_t": 1791262469.965001,
+            "last_t": 1791262499.8716772,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 24,
+          "successful_book_reads": 24,
+          "snapshots": 24,
+          "observations_with_both_token_books": 24,
+          "observations_with_a_bid_on_both_outcomes": 0,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [],
+          "measurement_gate": "GATE5_ORDERS_NOT_INSTANTIATED_BOTH_SIDES",
+          "evidenced_fills": 0,
+          "uncertain_fills": 0,
+          "inventory": {
+            "up": 0.0,
+            "down": 0.0
+          },
+          "matched": 0.0,
+          "residual": 0.0,
+          "cost": {
+            "up": 0.0,
+            "down": 0.0
+          }
+        },
+        {
+          "market": "bitcoin-up-or-down-october-6-2026-12am-et",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791262743.608251,
+            "last_t": 1791262799.4703252,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 44,
+          "successful_book_reads": 44,
+          "snapshots": 44,
+          "observations_with_both_token_books": 44,
+          "observations_with_a_bid_on_both_outcomes": 0,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [],
+          "measurement_gate": "GATE5_ORDERS_NOT_INSTANTIATED_BOTH_SIDES",
+          "evidenced_fills": 0,
+          "uncertain_fills": 0,
+          "inventory": {
+            "up": 0.0,
+            "down": 0.0
+          },
+          "matched": 0.0,
+          "residual": 0.0,
+          "cost": {
+            "up": 0.0,
+            "down": 0.0
+          }
+        },
+        {
+          "market": "btc-updown-5m-1791262800",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791262801.0758421,
+            "last_t": 1791263098.9098144,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 229,
+          "successful_book_reads": 229,
+          "snapshots": 229,
+          "observations_with_both_token_books": 229,
+          "observations_with_a_bid_on_both_outcomes": 175,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 20,
+          "uncertain_fills": 21,
+          "inventory": {
+            "up": 283.32000000000005,
+            "down": 188.88
+          },
+          "matched": 188.88,
+          "residual": 94.44000000000005,
+          "cost": {
+            "up": 68.469,
+            "down": 92.7873
+          }
+        },
+        {
+          "market": "eth-updown-5m-1791263100",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791263100.4915864,
+            "last_t": 1791263399.7713332,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 230,
+          "successful_book_reads": 230,
+          "snapshots": 230,
+          "observations_with_both_token_books": 230,
+          "observations_with_a_bid_on_both_outcomes": 117,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 18,
+          "uncertain_fills": 28,
+          "inventory": {
+            "up": 165.26999999999998,
+            "down": 259.71000000000004
+          },
+          "matched": 165.26999999999998,
+          "residual": 94.44000000000005,
+          "cost": {
+            "up": 59.2611,
+            "down": 82.3989
+          }
+        },
+        {
+          "market": "btc-updown-15m-1791262800",
+          "reported_status": "INCOMPLETE",
+          "window": {
+            "first_t": 1791263401.3430483,
+            "last_t": 1791263609.2806113,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 160,
+          "successful_book_reads": 160,
+          "snapshots": 160,
+          "observations_with_both_token_books": 160,
+          "observations_with_a_bid_on_both_outcomes": 155,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 6,
+          "uncertain_fills": 20,
+          "inventory": {
+            "up": 23.61,
+            "down": 118.05
+          },
+          "matched": 23.61,
+          "residual": 94.44,
+          "cost": {
+            "up": 22.429499999999997,
+            "down": 2.9748599999999996
+          }
+        }
+      ],
+      "discovery_errors": [
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262502.725479
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262514.2842057
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262525.7959063
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262537.3120248
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262548.783809
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262560.3825204
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262571.8105762
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262583.2918894
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262594.7772944
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262606.2500954
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262617.8105485
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262629.3407707
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262640.9414494
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262652.4501753
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262663.9582293
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262675.4356713
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262686.9294755
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262698.5730217
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262710.4127362
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262721.913264
+        },
+        {
+          "why": "NO_MATCH:{\"raw\": 600, \"reject_not_updown\": 600}",
+          "discovered": 0,
+          "t": 1791262733.3578846
+        }
+      ],
+      "gate_counts": {
+        "GATE5_ORDERS_NOT_INSTANTIATED_BOTH_SIDES": 2,
+        "VALID_MEASUREMENT": 3
       }
     }
   ],
