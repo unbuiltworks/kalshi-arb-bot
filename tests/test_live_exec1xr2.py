@@ -59,7 +59,10 @@ class FakeVenue(O.BoundedOrderTransport):
                               "leavesQuantity": "0.01"}}
         self.posts.append((method, path, body))
         if path == O.PREVIEW_PATH:
-            o = dict(body)
+            # The real endpoint takes the order under `request`; echo back
+            # the inner order, as the venue does.
+            o = dict(body.get("request") if isinstance(body, dict)
+                     and "request" in body else body)
             o.update({"state": "ORDER_STATE_NEW", "cumQuantity": "0"})
             return {"order": o}
         if path == O.SUBMIT_PATH:
@@ -437,3 +440,88 @@ def test_one_submission_still_bounded(monkeypatch):
     c2, second = _run_with(monkeypatch, [500.0] * 40, transport=FakeVenue())
     assert second["orders_submitted"] == 0
     assert any("LATCH" in r for r in second["refusals"])
+
+
+# ----------------------------------------- the A5 classifier, corrected
+
+class PreviewRejectingVenue(FakeVenue):
+    """A venue that answers 400 to the PREVIEW -- Attempt 5's exact case."""
+
+    def request(self, method, path, body=None, base=None):
+        if method == "POST" and path == O.PREVIEW_PATH:
+            self.posts.append((method, path, body))
+            raise O.VenueHTTPError(
+                method="POST", path=path, status=400, reason="Bad Request",
+                body='{"message":"quantity must be a number"}',
+                headers={"content-type": "application/json",
+                         "x-request-id": "req-a5"})
+        return super().request(method, path, body, base)
+
+
+class SubmitFailingVenue(FakeVenue):
+    """A venue that answers the preview and then 503s the submission."""
+
+    def request(self, method, path, body=None, base=None):
+        if method == "POST" and path == O.SUBMIT_PATH:
+            self.posts.append((method, path, body))
+            raise O.VenueHTTPError(method="POST", path=path, status=503,
+                                   reason="Unavailable", body="{}",
+                                   headers={})
+        return super().request(method, path, body, base)
+
+
+def test_a_preview_400_is_preview_rejected_not_ambiguous(monkeypatch):
+    """Attempt 5, replayed offline. It was recorded as
+    AMBIGUOUS_SUBMISSION; it is a PREVIEW_REJECTED."""
+    _arm(monkeypatch)
+    v = PreviewRejectingVenue()
+    _, rec = _run_with(monkeypatch, [897.0, 897.0, 897.0, 897.0],
+                       transport=v)
+    assert rec["stopped_at"] == "PREVIEW_REJECTED"
+    assert "AMBIGUOUS_SUBMISSION" not in rec["refusals"]
+    assert "ambiguous_submission" not in rec
+    pr = rec["preview_rejected"]
+    assert pr["crossed_order_boundary"] is False
+    assert pr["latch_consumed"] is False
+    assert pr["detail"]["status"] == 400
+    assert "quantity must be a number" in pr["detail"]["response_body"]
+    # the latch is reported as EVIDENCE, and it agrees
+    assert pr["latch"]["spent"] is False
+    assert L.state()["spent"] is False
+    assert v.submits() == 0
+
+
+def test_a_submit_failure_is_still_ambiguous(monkeypatch):
+    """The corrected classifier must not make everything benign."""
+    _arm(monkeypatch)
+    v = SubmitFailingVenue()
+    _, rec = _run_with(monkeypatch, [897.0] * 6, transport=v,
+)
+    assert rec["stopped_at"] == "AMBIGUOUS_SUBMISSION"
+    assert rec["ambiguous_submission"]["crossed_order_boundary"] is True
+    assert rec["ambiguous_submission"]["latch_consumed"] is True
+    assert L.state()["spent"] is True
+
+
+def test_the_deadman_runs_on_a_preview_rejection_too(monkeypatch):
+    """No order can exist, but cancelling cannot create one, so the net
+    stays wider than the proof."""
+    _arm(monkeypatch)
+    _, rec = _run_with(monkeypatch, [897.0] * 4,
+                       transport=PreviewRejectingVenue(),
+)
+    assert rec["deadman"]["cancel_all"]["ok"] is True
+    assert "preview rejection" in rec["deadman"]["ran_because"]
+    assert rec["deadman"]["may_create_an_order"] is False
+
+
+def test_no_secret_appears_in_a_rejection_record(monkeypatch):
+    import json as _json
+    _arm(monkeypatch)
+    _, rec = _run_with(monkeypatch, [897.0] * 4,
+                       transport=PreviewRejectingVenue(),
+)
+    flat = _json.dumps(rec, default=str)
+    for needle in ("Authorization", "Bearer", "api_secret", "PMUS_API_SECRET",
+                   "Set-Cookie", "signature="):
+        assert needle not in flat, needle

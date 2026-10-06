@@ -69,9 +69,11 @@ class FakeVenue(O.BoundedOrderTransport):
             return {"order": o}
         self.posts.append((method, path, body))
         if path == O.PREVIEW_PATH:
-            o = dict(body)
-            o.update({"state": "ORDER_STATE_NEW", "cumQuantity": "0",
-                      "quantity": body["quantity"]})
+            # The real endpoint takes the order under `request`; echo back
+            # the inner order, as the venue does.
+            o = dict(body.get("request") if isinstance(body, dict)
+                     and "request" in body else body)
+            o.update({"state": "ORDER_STATE_NEW", "cumQuantity": "0"})
             return {"order": o}
         if path == O.SUBMIT_PATH:
             self._submits += 1
@@ -225,7 +227,13 @@ def test_timeout_is_ambiguous_and_never_retried(monkeypatch):
     v = FakeVenue(submit="timeout")
     rec = _run(transport=v)
     assert rec["stopped_at"] == "AMBIGUOUS_SUBMISSION"
-    assert rec["ambiguous_submission"]["error"] == "TimeoutError"
+    # The classifier now names the PHASE, and the underlying cause is
+    # carried in the detail. A timeout at POST /v1/orders is the real
+    # ambiguous case: the request left this process.
+    assert rec["ambiguous_submission"]["error"] == "SubmissionAmbiguous"
+    assert rec["ambiguous_submission"]["crossed_order_boundary"] is True
+    assert rec["ambiguous_submission"]["detail"]["phase"] == "SUBMIT"
+    assert rec["ambiguous_submission"]["detail"]["error"] == "TimeoutError"
     assert L.state()["spent"] is True          # spent, so no retry is possible
     assert [p for _, p, _ in v.posts].count(O.SUBMIT_PATH) == 1
     assert _run(transport=FakeVenue())["orders_submitted"] == 0

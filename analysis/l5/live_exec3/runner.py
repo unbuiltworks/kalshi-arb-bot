@@ -258,15 +258,54 @@ def run_experiment(*, observe_s: float = OBSERVE_S,
             rec["refusals"].append("DURABLE_LATCH_SPENT:%s" % exc)
             rec["stopped_at"] = "LATCH_SPENT"
             return rec
-        except Exception as exc:                               # noqa: BLE001
+        except O.PreviewRejected as exc:
+            # THE PREVIEW FAILED. Not ambiguous, and not inferred from the
+            # latch: `POST /v1/order/preview` is a what-if that creates
+            # nothing, and it runs strictly before latch consumption, so
+            # the exception type itself establishes that nothing crossed
+            # the order boundary. Attempt 5 was this case and was
+            # mislabelled AMBIGUOUS_SUBMISSION by the catch-all below.
+            rec["preview_rejected"] = {
+                "error": type(exc).__name__,
+                "message": str(exc)[:600],
+                "detail": exc.detail,
+                "latch_consumed": exc.latch_consumed,
+                "crossed_order_boundary": exc.crossed_order_boundary,
+                "latch": L.state(),
+                "MEANING": ("the venue declined the what-if. No order was "
+                            "created, none rested, there is nothing to "
+                            "cancel and nothing to settle."),
+            }
+            rec["refusals"].append("PREVIEW_REJECTED")
+            rec["stopped_at"] = "PREVIEW_REJECTED"
+            return rec
+        except O.SubmissionAmbiguous as exc:
+            # TRUE ambiguity: the request reached POST /v1/orders.
             rec["ambiguous_submission"] = {
-                "error": type(exc).__name__, "detail": str(exc)[:300],
+                "error": type(exc).__name__, "detail": exc.detail,
+                "message": str(exc)[:600],
+                "latch_consumed": exc.latch_consumed,
+                "crossed_order_boundary": exc.crossed_order_boundary,
                 "latch": L.state(),
                 "MEANING": ("we do not know whether an order rested. No "
                             "retry is possible or permitted."),
             }
             rec["refusals"].append("AMBIGUOUS_SUBMISSION")
             rec["stopped_at"] = "AMBIGUOUS_SUBMISSION"
+            return rec
+        except Exception as exc:                               # noqa: BLE001
+            # Neither phase named itself. Do NOT resolve this either way:
+            # an unclassified failure is reported as unclassified, with the
+            # latch state as evidence rather than as a conclusion.
+            rec["unclassified_failure"] = {
+                "error": type(exc).__name__, "detail": str(exc)[:300],
+                "latch": L.state(),
+                "MEANING": ("the phase could not be established from the "
+                            "exception. Treated as possibly having "
+                            "submitted: the deadman runs."),
+            }
+            rec["refusals"].append("UNCLASSIFIED_SUBMISSION_FAILURE")
+            rec["stopped_at"] = "UNCLASSIFIED_SUBMISSION_FAILURE"
             return rec
 
         rec["orders_submitted"] = 1
@@ -355,11 +394,20 @@ def run_experiment(*, observe_s: float = OBSERVE_S,
         dm: Dict[str, Any] = {"attempted_utc": _stamp(),
                               "may_create_an_order": False}
         ambiguous = bool(rec.get("ambiguous_submission"))
-        if (rec.get("orders_submitted") or ambiguous) and slug:
-            dm["ran_because"] = ("ambiguous submission: an order may exist"
-                                 if ambiguous and not rec.get(
-                                     "orders_submitted")
-                                 else "an order was submitted")
+        unclassified = bool(rec.get("unclassified_failure"))
+        previewed = bool(rec.get("preview_rejected"))
+        # A preview rejection cannot have created an order, but cancelling
+        # cannot create one either, so the deadman still runs: keeping the
+        # safety net wider than the proof costs nothing.
+        if (rec.get("orders_submitted") or ambiguous or unclassified
+                or previewed) and slug:
+            dm["ran_because"] = (
+                "an order was submitted" if rec.get("orders_submitted")
+                else "ambiguous submission: an order may exist" if ambiguous
+                else "unclassified failure: phase unknown, assume an order "
+                     "may exist" if unclassified
+                else "preview rejection: no order can exist, but cancelling "
+                     "cannot create one")
             if order_id:
                 try:
                     dm["cancel_exact"] = O.cancel_exact(t, order_id=order_id,

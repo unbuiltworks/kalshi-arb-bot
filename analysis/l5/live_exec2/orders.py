@@ -32,6 +32,7 @@ import os
 from decimal import Decimal as D
 from typing import Any, Dict, Mapping, Optional
 
+from src import l5_order_body as OB
 from src import l5_preview_gate as G
 from src import pmus_auth as A
 from analysis.l5.live_exec.ledger import may_submit, validate_size
@@ -53,6 +54,74 @@ def _cancel_path(order_id: str) -> str:
 
 class MutationRefused(RuntimeError):
     """A route this build is not allowed to use."""
+
+
+class VenueHTTPError(RuntimeError):
+    """A non-2xx answer from the venue, WITH its body.
+
+    Attempt 5 lost the cause of a 400 because `urllib` raises
+    `HTTPError` and the caller never read it, so the record held only
+    "HTTP Error 400: Bad Request". The venue names the offending field in
+    the body; without it a diagnosis is guesswork. This carries the
+    status, the body and a header allowlist.
+    """
+
+    def __init__(self, *, method: str, path: str, status: int, reason: str,
+                 body: str, headers: Dict[str, str]) -> None:
+        super().__init__("%s %s -> HTTP %s %s: %s"
+                         % (method, path, status, reason, body[:300]))
+        self.method, self.path = method, path
+        self.status, self.reason = status, reason
+        self.body, self.headers = body, headers
+
+    def detail(self) -> Dict[str, Any]:
+        return {"method": self.method, "path": self.path,
+                "status": self.status, "reason": self.reason,
+                "response_body": self.body[:4000],
+                "response_headers_safe": self.headers}
+
+
+#: Response headers safe to record. An allowlist, not a denylist: a new
+#: header the venue starts returning is omitted until it is listed, which
+#: is the direction that cannot leak. Nothing carrying authentication,
+#: session or cookie material can appear here.
+SAFE_RESPONSE_HEADERS = (
+    "content-type", "content-length", "date", "x-request-id",
+    "x-correlation-id", "retry-after", "ratelimit-limit",
+    "ratelimit-remaining", "ratelimit-reset", "grpc-message", "grpc-status",
+)
+
+#: Request-header names whose VALUES are never recorded or logged. The
+#: request headers are signed and carry the API key, so the names alone go
+#: into a record and the values never do.
+REDACTED_REQUEST_HEADERS = (
+    "authorization", "cookie", "set-cookie", "x-api-key", "x-api-secret",
+    "pmus-api-key-id", "pmus-signature", "pmus-timestamp", "signature",
+)
+
+
+def safe_headers(raw: Any) -> Dict[str, str]:
+    """Allowlisted response headers, lowercased."""
+    out: Dict[str, str] = {}
+    try:
+        items = list(raw.items())
+    except AttributeError:
+        return out
+    for k, v in items:
+        lk = str(k).lower()
+        if lk in SAFE_RESPONSE_HEADERS:
+            out[lk] = str(v)[:200]
+    return out
+
+
+def redacted_request_header_names(headers: Mapping[str, Any]) -> Dict[str, Any]:
+    """Header NAMES only, with the sensitive ones marked. No values, ever --
+    including for headers that are not on the redaction list, because a
+    signed request has no header whose value is worth the risk."""
+    return {"names": sorted(str(k) for k in headers),
+            "redacted": sorted(str(k) for k in headers
+                               if str(k).lower() in REDACTED_REQUEST_HEADERS),
+            "VALUES_NEVER_RECORDED": True}
 
 
 class BoundedOrderTransport:
@@ -95,32 +164,66 @@ class BoundedOrderTransport:
                     "a second POST /v1/orders in one process is refused")
         import json as _json
         import ssl
+        import urllib.error
         import urllib.request
         data = None if body is None else _json.dumps(body).encode()
         headers = A.signed_headers(m, path) if base == A.API else \
             {"User-Agent": "pmus-exec1x", "Content-Type": "application/json"}
         req = urllib.request.Request(base + path, data=data, headers=headers,
                                      method=m)
-        with urllib.request.urlopen(
-                req, context=ssl.create_default_context(), timeout=15) as r:
-            return _json.loads(r.read() or b"{}")
+        try:
+            with urllib.request.urlopen(
+                    req, context=ssl.create_default_context(),
+                    timeout=15) as r:
+                return _json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as exc:
+            # Read the body BEFORE the handle closes. This is the whole
+            # point: the venue's own words about what it rejected.
+            try:
+                raw = exc.read() or b""
+            except (OSError, ValueError):
+                raw = b"<response body could not be read>"
+            raise VenueHTTPError(
+                method=m, path=path, status=int(exc.code),
+                reason=str(exc.reason), body=raw.decode("utf8", "replace"),
+                headers=safe_headers(getattr(exc, "headers", None))) from None
 
 
 # ------------------------------------------------------------------- the body
 
 def order_body(*, slug: str, outcome_side: str, price: Any,
                qty: Any = VENUE_MIN_QTY) -> Dict[str, Any]:
-    """The wire body. A NO order at NO price X is sent as 1 - X, which is the
-    venue's own convention and is the one piece of arithmetic here."""
-    px = D(str(price))
-    wire = (ONE - px) if str(outcome_side).upper().endswith("NO") else px
-    return {"marketSlug": slug, "type": "ORDER_TYPE_LIMIT",
-            "price": {"value": str(wire)}, "quantity": str(D(str(qty))),
-            "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
-            "participateDontInitiate": True,
-            "outcomeSide": outcome_side,
-            "action": "ORDER_ACTION_BUY",
-            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"}
+    """The wire body -- DELEGATED to `src.l5_order_body`, the one serializer
+    that has actually traded on this venue.
+
+    THIS FUNCTION USED TO HAND-ROLL THE BODY, and that is what Attempt 5
+    died of. Every other PMUS order path in this repository
+    (`pmus_micro_executor`, `l5_pmus_transport`, `pmus_preview_oneshot`,
+    `pmus_auth_preflight_readonly`) already delegates here. EXEC-1-X was
+    the only one that did not, so it was the only one that could drift --
+    and it drifted in three ways the venue does not accept:
+
+      1. `price` carried no `currency`;
+      2. `quantity` was a JSON STRING, where the venue documents
+         number<double> and fractional quantity depends on it;
+      3. the preview request was the bare body, not the `{"request": ...}`
+         envelope the preview endpoint takes.
+
+    `src.l5_order_body`'s own docstring records that this exact class of
+    bug happened once before, when `l5_pmus_transport` wrote its own body.
+    The correct fix is therefore not to repair the copy but to delete it.
+
+    The NO-side 1-X mapping was NEVER wrong: A5 sent wire 0.51 for a
+    semantic DOWN 0.49, which is what the proven serializer sends too.
+    """
+    return OB.build(slug=slug, side=outcome_side, price=price, qty=qty,
+                    post_only=True)
+
+
+def preview_request(body: Mapping[str, Any]) -> Dict[str, Any]:
+    """The preview endpoint's envelope. `POST /v1/order/preview` takes the
+    order under `request`; the bare body is a 400."""
+    return OB.preview_envelope(body)
 
 
 def preflight_submission(*, slug: str, outcome_side: str, price: Any,
@@ -162,6 +265,41 @@ class GuardRefused(RuntimeError):
     """A just-in-time guard said no between preview and POST."""
 
 
+class PreviewRejected(RuntimeError):
+    """The PREVIEW failed. Nothing crossed the order boundary.
+
+    This exists so the lifecycle classifier never has to INFER a preview
+    failure from the latch. `POST /v1/order/preview` is a read-only
+    what-if: the venue creates nothing. It happens strictly before the
+    latch is consumed, so when this is raised the latch is untouched and
+    no order can exist. That is a fact about control flow, not a
+    deduction from state.
+    """
+
+    def __init__(self, message: str, *,
+                 detail: Optional[Dict[str, Any]] = None) -> None:
+        super().__init__(message)
+        self.detail = detail or {}
+        self.latch_consumed = False
+        self.crossed_order_boundary = False
+
+
+class SubmissionAmbiguous(RuntimeError):
+    """`POST /v1/orders` was reached and we do not know what happened.
+
+    TRUE ambiguity, and the only thing that earns the name: the request
+    crossed the network boundary to the submission endpoint. An order may
+    be resting. No retry is possible or permitted.
+    """
+
+    def __init__(self, message: str, *,
+                 detail: Optional[Dict[str, Any]] = None) -> None:
+        super().__init__(message)
+        self.detail = detail or {}
+        self.latch_consumed = True
+        self.crossed_order_boundary = True
+
+
 def submit_one(t: BoundedOrderTransport, *, slug: str, outcome_side: str,
                price: Any, qty: Any = VENUE_MIN_QTY,
                checks: Optional[Mapping[str, Any]] = None,
@@ -190,7 +328,34 @@ def submit_one(t: BoundedOrderTransport, *, slug: str, outcome_side: str,
                               % checks.get("refusals"))
     body = order_body(slug=slug, outcome_side=outcome_side, price=price,
                       qty=qty)
-    echo = G.require_echo(body, t.request("POST", PREVIEW_PATH, body))
+    # PREVIEW. A what-if; the venue creates nothing here. Anything that
+    # goes wrong is a PreviewRejected, which names itself as not having
+    # crossed the order boundary -- so the caller never has to read the
+    # latch to find out.
+    try:
+        preview_response = t.request("POST", PREVIEW_PATH,
+                                     preview_request(body))
+    except VenueHTTPError as exc:
+        raise PreviewRejected(
+            "the venue rejected the PREVIEW; no order was created",
+            detail={"phase": "PREVIEW", "sent": dict(body),
+                    "sent_envelope_key": "request",
+                    **exc.detail()}) from None
+    except MutationRefused:
+        raise
+    except Exception as exc:                                   # noqa: BLE001
+        raise PreviewRejected(
+            "the preview call failed before any order could exist: %s: %s"
+            % (type(exc).__name__, exc),
+            detail={"phase": "PREVIEW", "error": type(exc).__name__,
+                    "sent": dict(body)}) from None
+    try:
+        echo = G.require_echo(body, preview_response)
+    except Exception as exc:                                   # noqa: BLE001
+        raise PreviewRejected(
+            "the preview echo did not match what we asked for: %s" % exc,
+            detail={"phase": "PREVIEW_ECHO", "sent": dict(body),
+                    "echo_failure": str(exc)[:600]}) from None
     if guard is not None:
         v = guard()
         if not v.get("ok"):
@@ -204,7 +369,22 @@ def submit_one(t: BoundedOrderTransport, *, slug: str, outcome_side: str,
                 "refused after latch consumption and BEFORE the POST: %s. "
                 "The latch is spent; the experiment is over and no order was "
                 "sent." % v.get("reason"))
-    resp = t.request("POST", SUBMIT_PATH, body)
+    # From here the latch is SPENT and the request is about to cross the
+    # order boundary. Everything after this point is genuinely ambiguous.
+    try:
+        resp = t.request("POST", SUBMIT_PATH, body)
+    except VenueHTTPError as exc:
+        raise SubmissionAmbiguous(
+            "POST /v1/orders answered %s; an order may exist" % exc.status,
+            detail={"phase": "SUBMIT", "sent": dict(body),
+                    "latch_record": record,
+                    **exc.detail()}) from None
+    except Exception as exc:                                   # noqa: BLE001
+        raise SubmissionAmbiguous(
+            "POST /v1/orders failed after the request left this process: "
+            "%s: %s" % (type(exc).__name__, exc),
+            detail={"phase": "SUBMIT", "error": type(exc).__name__,
+                    "sent": dict(body), "latch_record": record}) from None
     order_id = str(resp.get("id") or resp.get("orderId")
                    or (resp.get("order") or {}).get("id") or "")
     return {"probe": PROBE, "spec_fingerprint": EXEC1X_FINGERPRINT,

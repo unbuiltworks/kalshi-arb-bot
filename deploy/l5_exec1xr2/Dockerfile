@@ -29,6 +29,11 @@ RUN pip install --no-cache-dir "cryptography>=42" "websockets>=12"
 COPY src/__init__.py src/__init__.py
 COPY src/pmus_auth.py src/pmus_auth.py
 COPY src/l5_preview_gate.py src/l5_preview_gate.py
+# THE PROVEN VENUE SERIALIZER. Required since the hand-rolled body
+# was deleted. It carries serialization ONLY -- no credentials, no
+# transport, no endpoint, no executor import -- so copying it adds
+# NO order path to this image beyond the four permitted routes.
+COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 

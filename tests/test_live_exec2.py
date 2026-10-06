@@ -298,8 +298,11 @@ def test_body_is_post_only_limit_buy_at_the_minimum():
     assert b["type"] == "ORDER_TYPE_LIMIT"
     assert b["action"] == "ORDER_ACTION_BUY"
     assert b["tif"] == "TIME_IN_FORCE_GOOD_TILL_CANCEL"
-    assert b["quantity"] == "0.01"
-    assert b["price"]["value"] == "0.42"
+    # The venue documents number<double> for quantity, and a price object
+    # carrying its currency. A5 sent a string quantity and no currency,
+    # and the preview answered 400.
+    assert b["quantity"] == 0.01 and isinstance(b["quantity"], float)
+    assert b["price"] == {"value": "0.42", "currency": "USD"}
 
 
 def test_no_side_is_sent_as_one_minus_x():

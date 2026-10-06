@@ -268,18 +268,52 @@ def run_experiment(*, explicit_slug: Optional[str] = None,
             rec["refusals"].append("DURABLE_LATCH_SPENT:%s" % exc)
             rec["stopped_at"] = "LATCH_SPENT"
             return rec
-        except Exception as exc:                               # noqa: BLE001
-            # The latch may or may not have been consumed, and the POST may
-            # or may not have reached the venue. Both unknowns point the
-            # same way: stop.
+        except O.PreviewRejected as exc:
+            # The PREVIEW failed: a what-if that creates nothing, run
+            # strictly before latch consumption. Nothing crossed the order
+            # boundary, and the exception type says so without the latch
+            # having to be read backwards.
+            rec["preview_rejected"] = {
+                "error": type(exc).__name__, "message": str(exc)[:600],
+                "detail": exc.detail,
+                "latch_consumed": exc.latch_consumed,
+                "crossed_order_boundary": exc.crossed_order_boundary,
+                "latch": L.state(),
+                "MEANING": ("the venue declined the what-if. No order was "
+                            "created and there is nothing to cancel."),
+            }
+            rec["refusals"].append("PREVIEW_REJECTED")
+            rec["stopped_at"] = "PREVIEW_REJECTED"
+            return rec
+        except O.SubmissionAmbiguous as exc:
             rec["ambiguous_submission"] = {
-                "error": type(exc).__name__, "detail": str(exc)[:300],
+                "error": type(exc).__name__, "detail": exc.detail,
+                "message": str(exc)[:600],
+                "latch_consumed": exc.latch_consumed,
+                "crossed_order_boundary": exc.crossed_order_boundary,
                 "latch": L.state(),
                 "MEANING": ("we do not know whether an order rested. No "
                             "retry is possible or permitted."),
             }
             rec["refusals"].append("AMBIGUOUS_SUBMISSION")
             rec["stopped_at"] = "AMBIGUOUS_SUBMISSION"
+            return rec
+        except Exception as exc:                               # noqa: BLE001
+            # The latch may or may not have been consumed, and the POST may
+            # or may not have reached the venue. Both unknowns point the
+            # same way: stop.
+            # Kept, but no longer the only outcome: the phase now names
+            # itself, so a preview failure is not reported as a possible
+            # order. See the XR2W correction.
+            rec["unclassified_failure"] = {
+                "error": type(exc).__name__, "detail": str(exc)[:300],
+                "latch": L.state(),
+                "MEANING": ("the phase could not be established from the "
+                            "exception. Treated as possibly having "
+                            "submitted."),
+            }
+            rec["refusals"].append("UNCLASSIFIED_SUBMISSION_FAILURE")
+            rec["stopped_at"] = "UNCLASSIFIED_SUBMISSION_FAILURE"
             return rec
 
         rec["orders_submitted"] = 1
@@ -385,7 +419,9 @@ def run_experiment(*, explicit_slug: Optional[str] = None,
                               "may_create_an_order": False}
         # An AMBIGUOUS submission may have rested a real order, so the
         # deadman runs for it too -- that is the whole point of a deadman.
-        ambiguous = bool(rec.get("ambiguous_submission"))
+        ambiguous = bool(rec.get("ambiguous_submission")
+                         or rec.get("unclassified_failure")
+                         or rec.get("preview_rejected"))
         if (rec.get("orders_submitted") or ambiguous) and slug:
             dm["ran_because"] = ("ambiguous submission: an order may exist"
                                  if ambiguous and not rec.get(
