@@ -108,17 +108,24 @@ def scan(lo: int, hi: int, url: str = ARCHIVE
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--selection", required=True)
+    ap.add_argument("--slug", default=None,
+                    help=("scan THIS window instead of the selection's "
+                          "chosen one -- used for the generality test over "
+                          "the other 11 L5-active windows"))
     ap.add_argument("--backfill", required=True)
     ap.add_argument("--out",
                     default="analysis/l5/august_replay/window_prints.json")
     a = ap.parse_args(argv)
 
     sel = json.load(open(a.selection))
-    slug = sel["selected"]
+    slug = a.slug or sel["selected"]
     if not slug:
         print("no window selected -- nothing to scan")
         return 3
-    row = next(r for r in sel["rows"] if r["market_slug"] == slug)
+    row = next((r for r in sel["rows"] if r["market_slug"] == slug), None)
+    if row is None or "tokens" not in row:
+        print("window %s is not in the selection report" % slug)
+        return 3
     bf = next(w for w in json.load(open(a.backfill))["rows"]
               if w["market_slug"] == slug)
     lo, hi = bf["blocks"]

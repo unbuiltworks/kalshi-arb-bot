@@ -1,0 +1,138 @@
+# ALL-TRADER PRINTS for the eleven other L5-active BTC15m windows.
+#
+# HISTORICAL DIAGNOSTIC ONLY. No shadow and no live authorization. Read-only
+# with respect to every venue: public Polygon archive logs, no credential, no
+# order path. It runs in CI because polygon.drpc.org answers CONNECT -> 403
+# from the research container.
+#
+# These prints feed ARM C only -- the evidence arm in which every leg
+# involving L5 is REMOVED, so diagnostic S2 is never credited off L5's own
+# activity. Arm A needs no prints and is run locally.
+#
+# ISOLATED FROM THE PROSPECTIVE RUN: own concurrency group, own request file,
+# own commit allow-list, and a hard refusal to run on any branch but the
+# research branch.
+name: august-l5-generality-prints
+
+on:
+  push:
+    paths:
+      - '.github/august_generality_request'
+
+concurrency:
+  group: august-l5-generality-prints
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  prints:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: REFUSE to run anywhere but the research branch
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_NAME}" != "claude/august-l5-forensic-replay-788cml" ]; then
+            echo "::error::this job runs only on the research branch"; exit 1
+          fi
+          echo "branch check passed: ${GITHUB_REF_NAME}"
+
+      - name: Prove no credential and no order path
+        run: |
+          python - <<'PY'
+          import pathlib
+          wf = pathlib.Path(
+            ".github/workflows/august-l5-generality-prints.yml").read_text()
+          needles = ["secret" + "s.", "GEMINI" + "_", "KALSHI" + "_",
+                     "PRIVATE" + "_KEY", "place" + "_order",
+                     "create" + "_order", "send" + "_transaction"]
+          bad = [n for n in needles if n in wf]
+          assert not bad, "forbidden token in workflow: %s" % bad
+          print("no credential reference, no order path")
+          PY
+
+      - name: Install read deps only
+        run: python -m pip install -q pytest pyarrow pandas
+
+      - name: ASSERT frozen S1 and frozen S2 are both unchanged
+        run: |
+          python - <<'PY'
+          from src.polymarket_l5.owned_order_shadow import FINGERPRINT as S1
+          from analysis.l5.august_replay.s2 import S2_FINGERPRINT as S2
+          assert S1 == ("441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea"
+                        "76caf333fe24b6fe"), "FROZEN S1 CHANGED"
+          assert S2 == ("5650ca16943cd3e2da00254578d2e0bc1fbd146bfa76c9e5"
+                        "9fc1ba7e396f7865"), "FROZEN S2 CHANGED"
+          print("S1", S1); print("S2", S2)
+          PY
+
+      - name: Invariant tests
+        run: python -m pytest tests/test_s2_diagnostic.py tests/test_august_replay.py -q
+
+      - name: Prints for each of the eleven other windows, committed per window
+        run: |
+          set -uo pipefail
+          mkdir -p analysis/l5/august_replay/prints
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          SEL=analysis/l5/august_replay/WINDOW_SELECTION.json
+          CHOSEN=$(python -c "import json;print(json.load(open('$SEL'))['selected'])")
+          SLUGS=$(python -c "
+          import json
+          d=json.load(open('$SEL'))
+          print(' '.join(sorted(r['market_slug'] for r in d['rows']
+                                if 'gates' in r and r['market_slug']!=d['selected'])))
+          ")
+          echo "diagnostic window (already have prints): $CHOSEN"
+          for s in $SLUGS; do
+            OUT=analysis/l5/august_replay/prints/prints_$s.json
+            if [ -s "$OUT" ]; then echo "== $s already present"; continue; fi
+            echo "== $s"
+            python -m analysis.l5.august_replay.prints_backfill \
+              --selection "$SEL" --slug "$s" \
+              --backfill analysis/l5/august_replay/l5_backfill.json \
+              --out "$OUT" 2>&1 | tail -16 || echo "$s exited nonzero"
+            bash .github/august_replay_commit.sh "evidence(generality): all-trader prints for $s"
+          done
+
+      - name: Census of what was collected
+        if: always()
+        run: |
+          python - <<'PY' | tee analysis/l5/august_replay/prints/CENSUS.json
+          import glob, json, os
+          out = {}
+          for f in sorted(glob.glob(
+                  "analysis/l5/august_replay/prints/prints_*.json")):
+              try:
+                  d = json.load(open(f))
+              except Exception as e:
+                  out[os.path.basename(f)] = {"error": repr(e)[:120]}
+                  continue
+              out[d.get("market_slug")] = {
+                  "raw_exchange_logs": d.get("raw_exchange_logs"),
+                  "chunk_holes": d.get("chunk_holes"),
+                  "coverage": d.get("coverage"),
+                  "maker_order_legs": d.get("n_maker_order_legs"),
+                  "block_times_resolved": d.get("block_times_resolved"),
+                  "distinct_blocks_with_legs":
+                      d.get("distinct_blocks_with_legs")}
+          print(json.dumps({"windows": len(out), "detail": out}, indent=1))
+          PY
+
+      - name: Commit the census
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/august_replay_commit.sh "evidence(generality): prints census"
