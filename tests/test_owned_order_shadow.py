@@ -91,4 +91,9 @@ def test_discovery_requires_a_future_end_date():
     from src.polymarket_l5 import owned_order_shadow as M
     src = inspect.getsource(M.discover)
     assert "te <= now" in src, "discovery must exclude past end dates"
-    assert "ascending\": \"false\"" in src or "'ascending': 'false'" in src
+    # Up-down windows are the SOONEST-ending markets, so ascending order is
+    # correct -- but only with a server-side floor at the current time.
+    assert "end_date_min" in src, "discovery must floor end dates at now"
+    assert ("ascending\": \"true\"" in src
+            or "'ascending': 'true'" in src), "ascending order with a floor"
+    assert "floor" in src, "the floor must be passed, not just named"

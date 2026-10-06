@@ -36,6 +36,7 @@ candidate on windows used to choose it is the failure this guards against.
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
 import json
 import os
@@ -195,50 +196,80 @@ def http_get(url: str, params=None, timeout=20.0):
     return st, body
 
 
-def discover(limit: int = 200) -> Tuple[List[Dict[str, Any]], str]:
+def discover(limit: int = 200, max_pages: int = 6
+             ) -> Tuple[List[Dict[str, Any]], str]:
     """Live BTC/ETH up-down markets, via GET only.
 
-    INFRASTRUCTURE FIX. The first dispatch asked for `closed=false` ordered
-    by `endDate` ASCENDING, which returns the OLDEST unresolved listings
-    first. Every one of the 27 markets it attempted was dated 2025-12-19 --
-    ten months past -- so each tripped the `now > t_end` break with
-    polls=0, producing 27 INCOMPLETE rows and zero fills that had nothing
-    to do with S1's behaviour. Markets whose end date has already passed
-    are now excluded here AND refused in collect_market, so a stale
-    listing can never again be recorded as a fill-free market.
+    TWO FAILURES ALREADY PAID FOR, BOTH MINE, BOTH RECORDED HERE:
+
+      1. `ascending=true` with no date floor returned the OLDEST
+         unresolved listings -- 27 markets dated 2025-12-19, every one of
+         which tripped the `now > t_end` break with polls=0.
+      2. "Fixing" that by flipping to `ascending=false` returned the
+         FARTHEST-FUTURE markets instead -- long-dated listings that are
+         not 5-minute up-down at all -- so discovery found 0 eligible
+         markets and reported `discovered: 0` with no error.
+
+    Up-down windows are the SOONEST-ENDING markets, so ascending order is
+    correct; what it needs is a date floor. This asks for `end_date_min`
+    at the current time AND keeps the client-side `te > now` filter AND
+    pages, so it works whether or not the server honours that parameter.
+    Per-stage rejection counts are returned so the next failure is
+    diagnosable from the tape instead of by inference.
     """
     now = time.time()
-    st, body = http_get(GAMMA + "/markets",
-                        {"closed": "false", "active": "true",
-                         "limit": str(limit),
-                         "order": "endDate", "ascending": "false"})
-    if st != 200 or not isinstance(body, list):
-        return [], "DISCOVERY_HTTP_%s" % st
-    out = []
-    for m in body:
-        slug = str(m.get("slug") or "")
-        q = (slug + " " + str(m.get("question") or "")).lower()
-        if "updown" not in q.replace("-", "") and "up or down" not in q:
-            continue
-        if not any(c in q for c in ("btc", "bitcoin", "eth", "ethereum")):
-            continue
-        toks = m.get("clobTokenIds")
-        if isinstance(toks, str):
-            try:
-                toks = json.loads(toks)
-            except Exception:                                  # noqa: BLE001
-                toks = None
-        if not (isinstance(toks, list) and len(toks) == 2):
-            continue
-        te = parse_end(m.get("endDate"))
-        if te is None or te <= now:
-            continue                      # stale or undated: not eligible
-        out.append({"slug": slug, "condition_id": m.get("conditionId"),
-                    "end_date": m.get("endDate"), "end_ts": te,
-                    "tokens": [str(t) for t in toks],
-                    "outcomes": m.get("outcomes")})
-    out.sort(key=lambda x: x["end_ts"])   # soonest-ending live market first
-    return out, "OK"
+    import datetime as _dt
+    floor = _dt.datetime.fromtimestamp(
+        now, _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stats = collections.Counter()
+    out: List[Dict[str, Any]] = []
+    for page in range(max_pages):
+        st, body = http_get(GAMMA + "/markets",
+                            {"closed": "false", "limit": str(limit),
+                             "offset": str(page * limit),
+                             "order": "endDate", "ascending": "true",
+                             "end_date_min": floor})
+        if st != 200 or not isinstance(body, list):
+            return out, "DISCOVERY_HTTP_%s_page%d" % (st, page)
+        stats["raw"] += len(body)
+        if not body:
+            break
+        for m in body:
+            slug = str(m.get("slug") or "")
+            q = (slug + " " + str(m.get("question") or "")).lower()
+            if "updown" not in q.replace("-", "") and "up or down" not in q:
+                stats["reject_not_updown"] += 1
+                continue
+            if not any(c in q for c in ("btc", "bitcoin", "eth",
+                                        "ethereum")):
+                stats["reject_not_btc_eth"] += 1
+                continue
+            toks = m.get("clobTokenIds")
+            if isinstance(toks, str):
+                try:
+                    toks = json.loads(toks)
+                except Exception:                              # noqa: BLE001
+                    toks = None
+            if not (isinstance(toks, list) and len(toks) == 2):
+                stats["reject_no_token_pair"] += 1
+                continue
+            te = parse_end(m.get("endDate"))
+            if te is None:
+                stats["reject_no_end_date"] += 1
+                continue
+            if te <= now:
+                stats["reject_already_ended"] += 1
+                continue
+            stats["accepted"] += 1
+            out.append({"slug": slug, "condition_id": m.get("conditionId"),
+                        "end_date": m.get("endDate"), "end_ts": te,
+                        "tokens": [str(t) for t in toks],
+                        "outcomes": m.get("outcomes")})
+        if out:
+            break                         # soonest-ending live ones found
+    out.sort(key=lambda x: x["end_ts"])
+    return out, ("OK" if out else "NO_MATCH:%s"
+                 % json.dumps(dict(stats), sort_keys=True))
 
 
 def parse_end(v) -> Optional[float]:
@@ -437,7 +468,10 @@ def main(argv=None) -> int:
     while time.time() < deadline:
         mks, why = discover()
         if why != "OK":
-            sink({"kind": "discovery_error", "why": why, "t": time.time()})
+            # NO_MATCH carries per-stage rejection counts so a zero is
+            # diagnosable from the tape rather than by inference.
+            sink({"kind": "discovery_error", "why": why, "t": time.time(),
+                  "discovered": len(mks)})
             time.sleep(10.0)
             continue
         fresh = [m for m in mks if m["slug"] not in seen]
