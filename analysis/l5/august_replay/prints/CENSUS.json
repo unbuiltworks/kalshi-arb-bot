@@ -1,0 +1,93 @@
+{
+ "windows": 11,
+ "detail": {
+  "btc-updown-15m-1787274000": {
+   "raw_exchange_logs": 202203,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1006,
+   "block_times_resolved": 295,
+   "distinct_blocks_with_legs": 295
+  },
+  "btc-updown-15m-1787290200": {
+   "raw_exchange_logs": 228802,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 2265,
+   "block_times_resolved": 453,
+   "distinct_blocks_with_legs": 453
+  },
+  "btc-updown-15m-1787296500": {
+   "raw_exchange_logs": 224054,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1636,
+   "block_times_resolved": 322,
+   "distinct_blocks_with_legs": 322
+  },
+  "btc-updown-15m-1787305500": {
+   "raw_exchange_logs": 243338,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1842,
+   "block_times_resolved": 418,
+   "distinct_blocks_with_legs": 418
+  },
+  "btc-updown-15m-1787306400": {
+   "raw_exchange_logs": 215954,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1351,
+   "block_times_resolved": 401,
+   "distinct_blocks_with_legs": 401
+  },
+  "btc-updown-15m-1787307300": {
+   "raw_exchange_logs": 188268,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1520,
+   "block_times_resolved": 384,
+   "distinct_blocks_with_legs": 384
+  },
+  "btc-updown-15m-1787311800": {
+   "raw_exchange_logs": 194490,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1334,
+   "block_times_resolved": 310,
+   "distinct_blocks_with_legs": 310
+  },
+  "btc-updown-15m-1787362200": {
+   "raw_exchange_logs": 201901,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1902,
+   "block_times_resolved": 384,
+   "distinct_blocks_with_legs": 384
+  },
+  "btc-updown-15m-1787363100": {
+   "raw_exchange_logs": 218997,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1356,
+   "block_times_resolved": 373,
+   "distinct_blocks_with_legs": 373
+  },
+  "btc-updown-15m-1787365800": {
+   "raw_exchange_logs": 218175,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 2084,
+   "block_times_resolved": 416,
+   "distinct_blocks_with_legs": 416
+  },
+  "btc-updown-15m-1787369400": {
+   "raw_exchange_logs": 188947,
+   "chunk_holes": 0,
+   "coverage": "COMPLETE",
+   "maker_order_legs": 1463,
+   "block_times_resolved": 356,
+   "distinct_blocks_with_legs": 356
+  }
+ }
+}
