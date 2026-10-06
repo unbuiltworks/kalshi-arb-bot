@@ -90,7 +90,8 @@ jobs:
       - name: COLLECT (segmented, committed after every segment)
         run: |
           set -uo pipefail
-          mkdir -p data/l5/shadow analysis/l5/shadow
+          mkdir -p data/l5/shadow analysis/l5/shadow \
+                   analysis/l5/shadow/runs
           # SELF-REGISTER this run in the tape manifest BEFORE collecting,
           # so every tape it writes is attributable even if the job dies
           # mid-segment. Validity starts PENDING and is decided by the
@@ -131,12 +132,19 @@ jobs:
             # manifest marks invalid, and stamp the producing run into the
             # artifact so a stale file cannot masquerade as current.
             # It imports nothing from the collector and cannot alter S1.
-            python scripts/shadow_cohort_report.py || true
+            python scripts/shadow_cohort_report.py \
+              --out "analysis/l5/shadow/runs/${GITHUB_RUN_ID}.json" || true
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
+            # ONLY uniquely-named, run-scoped files are committed. The
+            # shared COHORT_PROGRESS.json and RUN_MANIFEST.json are
+            # DELIBERATELY excluded: run 3 lost three segments of real
+            # evidence because CI rewrote COHORT_PROGRESS.json while a
+            # local commit had changed the same file, the rebase
+            # conflicted, and every later push died on the leftover
+            # .git/rebase-merge. Tapes and per-run files cannot collide.
             for f in data/l5/shadow/shadow_*.jsonl.gz \
-                     analysis/l5/shadow/COHORT_PROGRESS.json \
-                     analysis/l5/shadow/RUN_MANIFEST.json; do
+                     "analysis/l5/shadow/runs/${GITHUB_RUN_ID}.json"; do
               [ -e "$f" ] && git add -- "$f"
             done
             if git diff --cached --quiet; then
@@ -148,12 +156,26 @@ jobs:
                 git diff --cached --name-only; exit 1
               fi
               git commit -m "evidence(shadow): S1 segment $i [skip ci]"
+              pushed=no
               for k in 1 2 3 4; do
-                git pull --rebase -q origin "${GITHUB_REF_NAME}" && \
-                git push -q origin "HEAD:${GITHUB_REF_NAME}" && break || sleep $((2**k))
+                # Clear any half-finished rebase BEFORE pulling. Without
+                # this a single conflict wedges the repo for the rest of
+                # the job and every subsequent segment is silently lost.
+                git rebase --abort >/dev/null 2>&1 || true
+                rm -rf .git/rebase-merge .git/rebase-apply || true
+                if git pull --rebase --autostash -q origin \
+                     "${GITHUB_REF_NAME}" && \
+                   git push -q origin "HEAD:${GITHUB_REF_NAME}"; then
+                  pushed=yes; break
+                fi
+                sleep $((2**k))
               done
+              if [ "$pushed" != yes ]; then
+                echo "::error::segment $i committed but COULD NOT PUSH; evidence exists only on this runner"
+                git log --oneline -1
+              fi
             fi
-            COMPLETE=$(python -c "import json;print(json.load(open('analysis/l5/shadow/COHORT_PROGRESS.json'))['COMPLETE_markets'])" 2>/dev/null || echo 0)
+            COMPLETE=$(python -c "import json,os;print(json.load(open('analysis/l5/shadow/runs/%s.json' % os.environ['GITHUB_RUN_ID']))['COMPLETE_markets'])" 2>/dev/null || echo 0)
             echo "COMPLETE markets so far: $COMPLETE / 25"
             if [ "$COMPLETE" -ge 25 ]; then
               echo "cohort target reached -- freezing collection for evaluation"

@@ -1,0 +1,46 @@
+{
+  "status": "EVIDENCE_DESTROYED_NOT_COUNTED",
+  "run_id": 37403272240,
+  "sha": "1d54880271d01aad813b54b1a4eeeb7c64a120b3",
+  "candidate_fingerprint_verified_in_ci": "441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe",
+  "collected_utc": ["2026-10-06T02:17:30Z", "2026-10-06T03:33:05Z"],
+  "source": "GitHub Actions job log for job 112075201808, the ONLY surviving record. The tapes were committed to a detached HEAD on the runner, never pushed, and destroyed when the runner was torn down.",
+  "counts_toward_cohort": false,
+  "why_not_counted": "No tape survives, so no market can be put through the measurement-validity gates, no per-market book/order/fill detail exists, and uncertain fills cannot be separated per market. A log summary is not evidence of a cohort market. The 25-market cohort therefore stands at 0.",
+  "what_the_log_establishes": {
+    "all_four_ci_safety_gates": "PASS",
+    "discovery_worked": "every segment discovered live, soonest-ending up-down markets; the date-floored ascending paging fix was correct",
+    "valid_books_obtained": "yes -- a COMPLETE status requires >= 30 successful two-sided book reads AND reaching the window end, and 12 markets reached COMPLETE",
+    "hypothetical_orders_instantiated": "yes -- evidenced fills are only reachable through the owned-order lifecycle",
+    "polymarket_reachable_from_ci": "yes"
+  },
+  "log_reported_totals_including_two_stale_tapes": {
+    "COMPLETE": 12,
+    "INCOMPLETE": 30,
+    "NO_ELIGIBLE_MARKET": 114,
+    "evidenced_fills": 157,
+    "uncertain_fills": 564
+  },
+  "attributable_to_run_3_alone": {
+    "COMPLETE": 12,
+    "INCOMPLETE": 3,
+    "NO_ELIGIBLE_MARKET": 0,
+    "evidenced_fills": 157,
+    "uncertain_fills": 564,
+    "basis": "the two quarantined tapes from runs 1-2 contributed 27 INCOMPLETE + 114 NO_ELIGIBLE_MARKET and exactly 0 COMPLETE and 0 fills, so the COMPLETE and fill totals are run 3's alone"
+  },
+  "market_identities_from_the_log": {
+    "segment_1": ["eth-updown-5m-1791252900 COMPLETE", "eth-updown-5m-1791253200 COMPLETE", "eth-updown-15m-1791252900 COMPLETE", "eth-updown-5m-1791253800 COMPLETE", "eth-updown-5m-1791254100 INCOMPLETE"],
+    "segment_2": ["eth-updown-5m-1791254100 COMPLETE", "eth-updown-15m-1791253800 COMPLETE", "eth-updown-5m-1791254700 COMPLETE", "eth-updown-5m-1791255000 COMPLETE", "bitcoin-up-or-down-october-5-2026-10pm-et INCOMPLETE"],
+    "segment_3": ["bitcoin-up-or-down-october-5-2026-10pm-et COMPLETE", "eth-updown-5m-1791255600 COMPLETE", "eth-updown-5m-1791255900 COMPLETE", "btc-updown-15m-1791255600 COMPLETE", "eth-updown-5m-1791256500 INCOMPLETE"],
+    "segment_4": "cancelled mid-segment at 03:33:05Z; nothing recorded"
+  },
+  "failure_mechanism": "A local commit of mine rewrote analysis/l5/shadow/COHORT_PROGRESS.json at 02:31Z. CI committed its own version of the same file, then `git pull --rebase` hit a content conflict on it at 02:37:19Z and left .git/rebase-merge in place. Every push thereafter failed with 'there is already a rebase-merge directory', four fatal retries per segment, all swallowed by `|| sleep`. Collection and local commits continued normally for 56 more minutes on a detached HEAD.",
+  "my_three_errors": [
+    "Putting a shared mutable file in CI's commit set, which makes a rebase conflict inevitable under any concurrent edit.",
+    "Writing to that exact file from this workstation at 02:31Z while the run was live.",
+    "Reading 'no tape on origin' as 'no data collected' and cancelling the run to read its log, which destroyed the only copy. Job logs are unreadable while a job runs, so cancelling was the only way to see them -- and it was the wrong trade."
+  ],
+  "not_an_s1_result": "Nothing here is evidence about S1's fill opportunity, and the 157 evidenced fills must NOT be read as a result: they were produced under the frozen candidate but cannot be audited, gate-checked or separated from uncertain fills without the tapes. S1 is unchanged and will be re-measured from zero.",
+  "fix": "CI now commits only uniquely-named run-scoped files (tapes plus analysis/l5/shadow/runs/<run_id>.json), clears any half-finished rebase before each pull, uses --autostash, and raises ::error:: when a committed segment cannot be pushed. See analysis/l5/shadow/runs/README.md."
+}

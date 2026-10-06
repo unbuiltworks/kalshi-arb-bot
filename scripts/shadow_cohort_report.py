@@ -35,6 +35,7 @@ import glob
 import gzip
 import json
 import os
+import argparse
 import re
 import sys
 
@@ -58,6 +59,20 @@ def parse_iso(v):
         return None
     return dt.datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ").replace(
         tzinfo=dt.timezone.utc)
+
+
+def load_run_dir(d):
+    """Run-scoped metadata files, which CI writes instead of appending to
+    the shared manifest. Each is self-describing and cannot collide."""
+    out = []
+    for p in sorted(glob.glob(os.path.join(d, "*.json"))):
+        try:
+            r = json.load(open(p, encoding="utf-8"))
+        except Exception:                                      # noqa: BLE001
+            continue
+        if isinstance(r, dict) and r.get("run_metadata"):
+            out.append(r["run_metadata"])
+    return out
 
 
 def load_manifest():
@@ -189,8 +204,17 @@ def summarise(rows):
     return out, disc_rejects
 
 
-def main() -> int:
-    runs = load_manifest()
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=OUT,
+                    help=("where to write the report. CI passes a "
+                          "RUN-SCOPED path so it only ever ADDS a "
+                          "uniquely-named file: rewriting a shared file "
+                          "mid-run is what wedged run 3's pushes and "
+                          "cost three segments of real evidence."))
+    ap.add_argument("--runs-dir", default="analysis/l5/shadow/runs")
+    a = ap.parse_args(argv)
+    runs = load_manifest() + load_run_dir(a.runs_dir)
     tapes = sorted(glob.glob(os.path.join(SHADOW_DIR, "shadow_*.jsonl")) +
                    glob.glob(os.path.join(SHADOW_DIR, "shadow_*.jsonl.gz")))
     per_tape, counted, quarantined = [], [], []
@@ -282,8 +306,21 @@ def main() -> int:
                  "a defective run cannot masquerade as a current result. "
                  "Uncertain fills are excluded from primary economics."),
     }
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w", encoding="utf-8") as fh:
+    # Self-describing run metadata, so a later aggregation can attribute
+    # this run's tapes without the shared manifest.
+    out["run_metadata"] = {
+        "run_id": (int(os.environ["GITHUB_RUN_ID"])
+                   if os.environ.get("GITHUB_RUN_ID") else None),
+        "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
+        "sha": os.environ.get("GITHUB_SHA"),
+        "started_utc": None,
+        "ended_utc": None,
+        "validity": "PENDING_MEASUREMENT_VALIDITY",
+        "why": "self-described by the run that wrote this file",
+    }
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".",
+                exist_ok=True)
+    with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2)
         fh.write("\n")
     brief = {k: out[k] for k in (
@@ -292,6 +329,7 @@ def main() -> int:
         "gate_counts_counted_tapes", "evidenced_fills_valid_markets_only",
         "uncertain_fills_valid_markets_only")}
     print(json.dumps(brief, indent=2))
+    print("wrote %s" % a.out)
     return 0
 
 
