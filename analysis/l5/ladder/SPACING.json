@@ -1,0 +1,628 @@
+{
+ "protocol": "PREREGISTRATION_SPACING.md @ c65bf29f",
+ "bids_only": true,
+ "LOWER_BOUNDS": "every level count, latent quantity and lifetime is a floor; cancels and unfilled orders are invisible and none is inferred",
+ "crossed_exposure_archive_flag": {
+  "1787274000": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787290200": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787296500": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787300100": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787305500": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787306400": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787307300": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787311800": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787362200": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787363100": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787365800": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787369400": {
+   "up": 0.0,
+   "down": 0.0
+  }
+ },
+ "DISTRIBUTIONS": {
+  "n_level_inference_events": 1805,
+  "n_new_levels": 899,
+  "SELECTION_TAUTOLOGY_NOTE": "P(any consumption | inferable) == 1.0 by construction, because a level is only visible through its fills. Only P(full consumption to the 80 ceiling) is reported.",
+  "by_level_number": {
+   "1": {
+    "n": 656,
+    "offset_ticks": {
+     "n": 656,
+     "min": -21.0,
+     "p10": -4.0,
+     "p25": -1.0,
+     "p50": 0.0,
+     "p75": 1.0,
+     "p90": 3.0,
+     "max": 44.0,
+     "mean": -0.170732,
+     "share_negative": 0.4055,
+     "share_zero": 0.279,
+     "share_positive": 0.3155
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 656,
+     "min": 0.02,
+     "p10": 1.6667,
+     "p25": 8.0899,
+     "p50": 30.0,
+     "p75": 73.0,
+     "p90": 80.0,
+     "max": 233.89,
+     "mean": 39.158648,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 656,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 2.0,
+     "max": 10.0,
+     "mean": 0.4375,
+     "share_negative": 0.0,
+     "share_zero": 0.8277,
+     "share_positive": 0.1723
+    },
+    "P_full_consumption_to_80_given_inferable": 0.2119
+   },
+   "2": {
+    "n": 397,
+    "offset_ticks": {
+     "n": 397,
+     "min": -31.0,
+     "p10": -3.0,
+     "p25": -1.0,
+     "p50": 0.0,
+     "p75": 2.0,
+     "p90": 4.0,
+     "max": 18.0,
+     "mean": 0.508816,
+     "share_negative": 0.3073,
+     "share_zero": 0.2418,
+     "share_positive": 0.4509
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 397,
+     "min": 0.02,
+     "p10": 0.73,
+     "p25": 7.3889,
+     "p50": 23.26,
+     "p75": 59.0,
+     "p90": 80.0,
+     "max": 156.0,
+     "mean": 34.337532,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 397,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 1.0,
+     "max": 9.0,
+     "mean": 0.450882,
+     "share_negative": 0.0,
+     "share_zero": 0.8463,
+     "share_positive": 0.1537
+    },
+    "P_full_consumption_to_80_given_inferable": 0.1763
+   },
+   "3": {
+    "n": 232,
+    "offset_ticks": {
+     "n": 232,
+     "min": -13.0,
+     "p10": -2.0,
+     "p25": -1.0,
+     "p50": 0.0,
+     "p75": 2.0,
+     "p90": 4.0,
+     "max": 17.0,
+     "mean": 0.525862,
+     "share_negative": 0.3147,
+     "share_zero": 0.2457,
+     "share_positive": 0.4397
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 232,
+     "min": 0.02,
+     "p10": 2.04,
+     "p25": 8.0,
+     "p50": 27.0,
+     "p75": 72.02,
+     "p90": 80.0,
+     "max": 160.0,
+     "mean": 37.484712,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 232,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 2.0,
+     "max": 13.0,
+     "mean": 0.573276,
+     "share_negative": 0.0,
+     "share_zero": 0.8276,
+     "share_positive": 0.1724
+    },
+    "P_full_consumption_to_80_given_inferable": 0.1983
+   },
+   "4": {
+    "n": 154,
+    "offset_ticks": {
+     "n": 154,
+     "min": -10.0,
+     "p10": -2.0,
+     "p25": -1.0,
+     "p50": 0.0,
+     "p75": 2.0,
+     "p90": 5.0,
+     "max": 13.0,
+     "mean": 0.896104,
+     "share_negative": 0.2597,
+     "share_zero": 0.2532,
+     "share_positive": 0.487
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 154,
+     "min": 0.02,
+     "p10": 0.71,
+     "p25": 5.4054,
+     "p50": 23.0,
+     "p75": 68.5254,
+     "p90": 80.0,
+     "max": 140.4229,
+     "mean": 35.504627,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 154,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 2.0,
+     "max": 18.0,
+     "mean": 0.487013,
+     "share_negative": 0.0,
+     "share_zero": 0.8506,
+     "share_positive": 0.1494
+    },
+    "P_full_consumption_to_80_given_inferable": 0.2078
+   },
+   "5": {
+    "n": 106,
+    "offset_ticks": {
+     "n": 106,
+     "min": -9.0,
+     "p10": -2.0,
+     "p25": -1.0,
+     "p50": 0.0,
+     "p75": 1.0,
+     "p90": 4.0,
+     "max": 9.0,
+     "mean": 0.566038,
+     "share_negative": 0.3113,
+     "share_zero": 0.2453,
+     "share_positive": 0.4434
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 106,
+     "min": 0.02,
+     "p10": 1.4493,
+     "p25": 7.6163,
+     "p50": 21.33,
+     "p75": 49.5,
+     "p90": 80.0,
+     "max": 188.5882,
+     "mean": 33.670526,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 106,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 3.0,
+     "max": 9.0,
+     "mean": 0.716981,
+     "share_negative": 0.0,
+     "share_zero": 0.8302,
+     "share_positive": 0.1698
+    },
+    "P_full_consumption_to_80_given_inferable": 0.1415
+   },
+   "6": {
+    "n": 73,
+    "offset_ticks": {
+     "n": 73,
+     "min": -10.0,
+     "p10": -4.0,
+     "p25": -1.0,
+     "p50": 0.0,
+     "p75": 3.0,
+     "p90": 4.0,
+     "max": 9.0,
+     "mean": 0.342466,
+     "share_negative": 0.3973,
+     "share_zero": 0.1096,
+     "share_positive": 0.4932
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 73,
+     "min": 0.02,
+     "p10": 0.7142,
+     "p25": 2.8518,
+     "p50": 10.0,
+     "p75": 36.0,
+     "p90": 77.0,
+     "max": 158.1765,
+     "mean": 25.841516,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 73,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 2.0,
+     "max": 9.0,
+     "mean": 0.39726,
+     "share_negative": 0.0,
+     "share_zero": 0.863,
+     "share_positive": 0.137
+    },
+    "P_full_consumption_to_80_given_inferable": 0.1096
+   },
+   "7": {
+    "n": 52,
+    "offset_ticks": {
+     "n": 52,
+     "min": -4.0,
+     "p10": -2.0,
+     "p25": -1.0,
+     "p50": 1.0,
+     "p75": 4.0,
+     "p90": 6.0,
+     "max": 11.0,
+     "mean": 1.711538,
+     "share_negative": 0.3269,
+     "share_zero": 0.0962,
+     "share_positive": 0.5769
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 52,
+     "min": 0.02,
+     "p10": 2.98,
+     "p25": 5.0,
+     "p50": 12.0,
+     "p75": 32.97,
+     "p90": 70.0,
+     "max": 80.0,
+     "mean": 24.744702,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 52,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.0,
+     "max": 2.0,
+     "mean": 0.115385,
+     "share_negative": 0.0,
+     "share_zero": 0.9038,
+     "share_positive": 0.0962
+    },
+    "P_full_consumption_to_80_given_inferable": 0.0962
+   },
+   "8": {
+    "n": 37,
+    "offset_ticks": {
+     "n": 37,
+     "min": -6.0,
+     "p10": -2.0,
+     "p25": -1.0,
+     "p50": 0.0,
+     "p75": 2.0,
+     "p90": 5.0,
+     "max": 26.0,
+     "mean": 1.162162,
+     "share_negative": 0.4595,
+     "share_zero": 0.1622,
+     "share_positive": 0.3784
+    },
+    "latent_quantity_LOWER_BOUND": {
+     "n": 37,
+     "min": 0.43,
+     "p10": 4.7609,
+     "p25": 9.8984,
+     "p50": 16.2667,
+     "p75": 40.0,
+     "p90": 52.0,
+     "max": 100.6609,
+     "mean": 25.061886,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "lifetime_lower_bound_s": {
+     "n": 37,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 3.0,
+     "max": 10.0,
+     "mean": 0.783784,
+     "share_negative": 0.0,
+     "share_zero": 0.8108,
+     "share_positive": 0.1892
+    },
+    "P_full_consumption_to_80_given_inferable": 0.0541
+   },
+   "9": {
+    "n": 26,
+    "UNDERPOWERED": true
+   },
+   "10": {
+    "n": 22,
+    "UNDERPOWERED": true
+   },
+   "11": {
+    "n": 20,
+    "UNDERPOWERED": true
+   },
+   "12": {
+    "n": 17,
+    "UNDERPOWERED": true
+   }
+  },
+  "pooled_offset_ticks": {
+   "n": 1805,
+   "min": -31.0,
+   "p10": -3.0,
+   "p25": -1.0,
+   "p50": 0.0,
+   "p75": 2.0,
+   "p90": 4.0,
+   "max": 44.0,
+   "mean": 0.469252,
+   "share_negative": 0.3446,
+   "share_zero": 0.246,
+   "share_positive": 0.4094
+  },
+  "pooled_new_level_offset_ticks": {
+   "n": 899,
+   "min": -21.0,
+   "p10": -3.0,
+   "p25": -1.0,
+   "p50": 0.0,
+   "p75": 2.0,
+   "p90": 5.0,
+   "max": 44.0,
+   "mean": 0.74416,
+   "share_negative": 0.327,
+   "share_zero": 0.2269,
+   "share_positive": 0.4461
+  },
+  "pooled_latent_quantity_LOWER_BOUND": {
+   "n": 1805,
+   "min": 0.02,
+   "p10": 1.3317,
+   "p25": 6.99,
+   "p50": 24.0,
+   "p75": 64.14,
+   "p90": 80.0,
+   "max": 233.89,
+   "mean": 35.589395,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "pooled_lifetime_lower_bound_s": {
+   "n": 1805,
+   "min": 0.0,
+   "p10": 0.0,
+   "p25": 0.0,
+   "p50": 0.0,
+   "p75": 0.0,
+   "p90": 2.0,
+   "max": 18.0,
+   "mean": 0.470914,
+   "share_negative": 0.0,
+   "share_zero": 0.8393,
+   "share_positive": 0.1607
+  },
+  "P_full_consumption_overall": 0.1845,
+  "n_live_levels_lower_bound": {
+   "n": 1805,
+   "min": 1.0,
+   "p10": 1.0,
+   "p25": 2.0,
+   "p50": 4.0,
+   "p75": 7.0,
+   "p90": 10.0,
+   "max": 15.0,
+   "mean": 5.044321,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  }
+ },
+ "SPACING_MODELS": {
+  "DEGENERACY": "uniform ticks and uniform cents are the SAME model: the Polymarket grid IS $0.01. One result, not two.",
+  "M4_uses_contract_price_volatility_not_BTC": true,
+  "LOWO_median_L1_gap_ticks": {
+   "M1_uniform_ticks_eq_cents": 2.5356,
+   "M2_increasing_with_depth": 2.538,
+   "M3_probability_scaled": 2.9299,
+   "M4_contract_volatility_scaled": 2.2393
+  },
+  "held_out_wins": {
+   "M1_uniform_ticks_eq_cents": 3,
+   "M2_increasing_with_depth": 2,
+   "M3_probability_scaled": 1,
+   "M4_contract_volatility_scaled": 6
+  },
+  "best": "M4_contract_volatility_scaled",
+  "next_best": "M1_uniform_ticks_eq_cents",
+  "relative_improvement": 0.1169,
+  "VERDICT": "NOT_DISCRIMINATED",
+  "bar": ">=20% better than next best AND >=9/12 held-out wins",
+  "pooled_gap_ticks": {
+   "n": 7029,
+   "min": 1.0,
+   "p10": 1.0,
+   "p25": 1.0,
+   "p50": 2.0,
+   "p75": 4.0,
+   "p90": 8.0,
+   "max": 57.0,
+   "mean": 3.554417,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  }
+ },
+ "STABILITY_from_moving_touch": {
+  "n_new_levels": 899,
+  "new_level_offset_ticks": {
+   "n": 899,
+   "min": -21.0,
+   "p10": -3.0,
+   "p25": -1.0,
+   "p50": 0.0,
+   "p75": 2.0,
+   "p90": 5.0,
+   "max": 44.0,
+   "mean": 0.74416,
+   "share_negative": 0.327,
+   "share_zero": 0.2269,
+   "share_positive": 0.4461
+  },
+  "IQR_ticks": 3.0,
+  "per_window_median_offset": {
+   "1787274000": 0,
+   "1787290200": 0.0,
+   "1787296500": 1,
+   "1787300100": 1.0,
+   "1787305500": 0.0,
+   "1787306400": 1.0,
+   "1787307300": 1,
+   "1787311800": 0.0,
+   "1787362200": 0.0,
+   "1787363100": 0.0,
+   "1787365800": 0,
+   "1787369400": 0
+  },
+  "windows_within_2_ticks_of_pooled_median": 12,
+  "T_STABLE_PASS": false,
+  "T_STABLE_bar": "IQR<=2 ticks AND >=9/12 windows within 2 ticks",
+  "T_SET_smallest_offset_set_ticks": [
+   -3,
+   -2,
+   -1,
+   0,
+   1,
+   2,
+   3,
+   4
+  ],
+  "T_SET_coverage": 0.8009,
+  "T_RECENTER_abs_offset_change_ticks": {
+   "n": 559,
+   "min": 0.0,
+   "p10": 0.0,
+   "p25": 1.0,
+   "p50": 2.0,
+   "p75": 5.0,
+   "p90": 7.0,
+   "max": 48.0,
+   "mean": 3.55814,
+   "share_negative": 0.0,
+   "share_zero": 0.1503,
+   "share_positive": 0.8497
+  },
+  "T_RECENTER_per_window_median": {
+   "1787274000": 2,
+   "1787290200": 2,
+   "1787296500": 5,
+   "1787300100": 3,
+   "1787305500": 2,
+   "1787306400": 2.0,
+   "1787307300": 3.5,
+   "1787311800": 2,
+   "1787362200": 3.0,
+   "1787363100": 2.0,
+   "1787365800": 2,
+   "1787369400": 2.0
+  },
+  "T_RECENTER_windows_median_le_1_tick": 0,
+  "T_RECENTER_PASS": false
+ }
+}
