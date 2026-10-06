@@ -250,6 +250,10 @@ def build(books: Dict[str, Book], tok_up: str, tok_dn: str, start: int,
             "token_id": tok, "outcome": side, "price": px, "quantity": qty,
             # timestamp precision / uncertainty
             "block": b, "log_index": f.get("log_index"),
+            # the transaction is what makes a complete-set purchase ATOMIC;
+            # keying pairs on the block alone conflates coincidence with one
+            # event, which is how the first pass nearly mis-read these.
+            "tx": f.get("tx"), "l5_role": f.get("l5_role"),
             "l5_fills_sharing_this_block": per_block.get(b),
             "block_interval_to_next_s": nb, "block_interval_from_prev_s": pb,
             "timestamp_precision": "whole seconds, from the block timestamp",

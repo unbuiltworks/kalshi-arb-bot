@@ -1,0 +1,5319 @@
+{
+ "contract_length": "5m",
+ "pairs_keyed_on": "TRANSACTION (never the block)",
+ "n_pairs": 48,
+ "windows_with_a_pair": 15,
+ "windows_total": 23,
+ "paired_fills": 96,
+ "total_fills": 373,
+ "paired_fill_share": 0.2574,
+ "paired_shares": 3523.01,
+ "total_shares": 12241.54,
+ "paired_share_of_volume": 0.2878,
+ "both_legs_taker_share": 1.0,
+ "hypotheses": {
+  "n_pairs": 48,
+  "H1_initializes_a_new_market": {
+   "share_that_are_the_FIRST_l5_action_in_the_window": 0.1875,
+   "l5_actions_before_the_pair": {
+    "n": 48,
+    "min": 0.0,
+    "max": 57.0,
+    "mean": 9.1667,
+    "p10": 0.0,
+    "p25": 2.0,
+    "p50": 7.0,
+    "p75": 11.0,
+    "p90": 21.0
+   },
+   "verdict_note": "a pair that opens a market would have zero prior L5 actions"
+  },
+  "H2_replenishes_matched_inventory_after_passive_depletion": {
+   "passive_shares_in_the_60s_BEFORE": {
+    "n": 48,
+    "min": 0.0,
+    "max": 801.5829,
+    "mean": 105.3469,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 80.0,
+    "p75": 160.0,
+    "p90": 247.78
+   },
+   "passive_shares_in_the_60s_AFTER": {
+    "n": 48,
+    "min": 0.0,
+    "max": 805.1829,
+    "mean": 124.1024,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 90.0,
+    "p75": 160.0,
+    "p90": 294.6106
+   },
+   "share_with_MORE_passive_after_than_before": 0.5,
+   "matched_delta_from_the_pair_itself": {
+    "n": 48,
+    "min": 1.0,
+    "max": 80.0,
+    "mean": 36.698,
+    "p10": 5.0,
+    "p25": 10.0,
+    "p50": 20.2222,
+    "p75": 76.27,
+    "p90": 80.0
+   },
+   "matched_growth_after": {
+    "30": {
+     "n": 48,
+     "min": 0.0,
+     "max": 267.28,
+     "mean": 45.5913,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 8.51,
+     "p75": 80.0,
+     "p90": 100.0
+    },
+    "60": {
+     "n": 48,
+     "min": 0.0,
+     "max": 400.33,
+     "mean": 78.3136,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 50.0,
+     "p75": 95.0,
+     "p90": 180.0
+    },
+    "120": {
+     "n": 48,
+     "min": 0.0,
+     "max": 554.03,
+     "mean": 136.3726,
+     "p10": 0.0,
+     "p25": 15.0,
+     "p50": 95.0,
+     "p75": 175.9953,
+     "p90": 300.5443
+    }
+   }
+  },
+  "H3_reduces_directional_imbalance": {
+   "abs_imbalance_delta": {
+    "n": 48,
+    "min": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0
+   },
+   "residual_delta": {
+    "n": 48,
+    "min": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0
+   },
+   "share_with_ANY_residual_change": 0.0,
+   "verdict": "REFUTED BY CONSTRUCTION AND CONFIRMED IN DATA: equal quantity on both outcomes cannot move residual"
+  },
+  "H4_precedes_a_new_passive_ladder_cycle": {
+   "share_with_a_passive_fill_within_30s_after": 0.4792,
+   "share_with_a_passive_fill_within_120s_after": 0.7292,
+   "share_with_a_passive_fill_within_30s_BEFORE": 0.3542,
+   "passive_fills_after_30s": {
+    "n": 48,
+    "min": 0.0,
+    "max": 15.0,
+    "mean": 2.2708,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 4.0,
+    "p90": 5.0
+   }
+  },
+  "H5_regular_80_share_quantities": {
+   "quantity_per_leg": {
+    "n": 48,
+    "min": 1.0,
+    "max": 80.0,
+    "mean": 36.698,
+    "p10": 5.0,
+    "p25": 10.0,
+    "p50": 20.2222,
+    "p75": 76.27,
+    "p90": 80.0
+   },
+   "share_at_80": 0.25,
+   "share_on_the_20_grid": 0.3958,
+   "distinct_quantities": 31,
+   "top_quantities": [
+    [
+     80.0,
+     12
+    ],
+    [
+     15.0,
+     4
+    ],
+    [
+     10.0,
+     2
+    ],
+    [
+     20.0,
+     2
+    ],
+    [
+     1.0,
+     2
+    ],
+    [
+     17.34,
+     1
+    ],
+    [
+     50.0,
+     1
+    ],
+    [
+     49.83,
+     1
+    ]
+   ]
+  },
+  "H6_preferentially_at_the_opening": {
+   "secs_after_open_of_PAIRS": {
+    "n": 48,
+    "min": 4.0,
+    "max": 289.0,
+    "mean": 162.4792,
+    "p10": 16.0,
+    "p25": 126.0,
+    "p50": 177.0,
+    "p75": 220.0,
+    "p90": 246.0
+   },
+   "secs_after_open_of_ALL_FILLS": {
+    "n": 373,
+    "min": 4.0,
+    "max": 289.0,
+    "mean": 169.0938,
+    "p10": 16.0,
+    "p25": 132.0,
+    "p50": 184.0,
+    "p75": 231.0,
+    "p90": 250.0
+   },
+   "share_of_pairs_in_first_30s": 0.1042,
+   "share_of_all_fills_in_first_30s": 0.1046,
+   "tte_fraction_remaining": {
+    "n": 48,
+    "min": 0.0367,
+    "max": 0.9867,
+    "mean": 0.4584,
+    "p10": 0.1767,
+    "p25": 0.2567,
+    "p50": 0.3867,
+    "p75": 0.56,
+    "p90": 0.8667
+   }
+  },
+  "H7_incentive_or_reward_periods": {
+   "verdict": "UNDETERMINABLE_FROM_THIS_DATA",
+   "why": "no credited rebate or reward appears in any artifact this repository holds for these windows, and the operating model forbids assuming one. The archive spans 2026-08-21..24 only, which is far too short to resolve an incentive regime against a baseline.",
+   "what_would_settle_it": "the venue's credited rebate/reward ledger for L5's address over a span containing a regime change"
+  },
+  "ECONOMICS": {
+   "gross_margin_usd": {
+    "n": 48,
+    "min": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "p10": 0.0,
+    "p25": 0.0,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.0
+   },
+   "model_implied_fee_usd": {
+    "n": 48,
+    "min": 0.0323,
+    "max": 2.7821,
+    "mean": 0.7072,
+    "p10": 0.1033,
+    "p25": 0.211,
+    "p50": 0.4671,
+    "p75": 0.8488,
+    "p90": 1.792
+   },
+   "net_after_model_fee_usd": {
+    "n": 48,
+    "min": -2.7821,
+    "max": -0.0323,
+    "mean": -0.7072,
+    "p10": -2.0667,
+    "p25": -0.9173,
+    "p50": -0.4712,
+    "p75": -0.2121,
+    "p90": -0.1119
+   },
+   "total_cash_out": 1761.5,
+   "total_settlement_payout": 1761.5,
+   "total_model_implied_fee": 33.94,
+   "note": "gross margin is exactly zero by construction when the price sum is 1.0000; the model-implied fee therefore makes every such pair NEGATIVE before any rebate"
+  }
+ },
+ "no_pnl_optimized": true,
+ "pairs": [
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "tx": "0x4295d426a5422f364d3581bb93ede4d27d13df5d20c0b1c2ebd118e3bd46995f",
+   "t": 1787271904,
+   "secs_after_open": 4,
+   "tte_s": 296,
+   "tte_fraction_remaining": 0.9867,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.54,
+   "down_price": 0.46,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 80.0,
+    "inv_down": 80.0,
+    "matched": 80.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 80.0,
+   "matched_delta": 80.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 160.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 30.0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 30.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 190.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 95.0,
+    "60": 95.0,
+    "120": 175.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 2.78208,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -2.78208,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "tx": "0xa62da9eead85152d4682b4465429bc9d9357ffedb81870e8de02e99aa07948de",
+   "t": 1787271916,
+   "secs_after_open": 16,
+   "tte_s": 284,
+   "tte_fraction_remaining": 0.9467,
+   "quantity_per_leg": 15.0,
+   "up_price": 0.64,
+   "down_price": 0.36,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 160.0,
+    "inv_down": 160.0,
+    "matched": 160.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 175.0,
+    "inv_down": 175.0,
+    "matched": 175.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 160.0,
+   "matched_after": 175.0,
+   "matched_delta": 15.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 5,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 194.68
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 97.34
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 15.0,
+   "settlement_payout": 15.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.48384,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.48384,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "tx": "0x4b01656e05a17089c12ee1aec87362ed71f41844b24fcc326e88c85e67b0c9ff",
+   "t": 1787271990,
+   "secs_after_open": 90,
+   "tte_s": 210,
+   "tte_fraction_remaining": 0.7,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.67,
+   "down_price": 0.33,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 175.0,
+    "inv_down": 175.0,
+    "matched": 175.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 255.0,
+    "inv_down": 255.0,
+    "matched": 255.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 175.0,
+   "matched_after": 255.0,
+   "matched_delta": 80.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 7,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 160.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 12,
+     "shares": 407.78
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 34.68
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 64.68
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 17.34,
+    "120": 227.72
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 2.47632,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -2.47632,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "tx": "0xb1809f8f380bdb9063639abdfcebc4123988682122df705d35a3577013112f6b",
+   "t": 1787272026,
+   "secs_after_open": 126,
+   "tte_s": 174,
+   "tte_fraction_remaining": 0.58,
+   "quantity_per_leg": 17.34,
+   "up_price": 0.74,
+   "down_price": 0.26,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 255.0,
+    "inv_down": 255.0,
+    "matched": 255.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 272.34,
+    "inv_down": 272.34,
+    "matched": 272.34,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 255.0,
+   "matched_after": 272.34,
+   "matched_delta": 17.34,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 9,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 160.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 10,
+     "shares": 350.44
+    },
+    "120": {
+     "n_fills": 23,
+     "shares": 786.8629
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 30.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 130.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 80.0,
+    "60": 185.71,
+    "120": 447.66
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 17.34,
+   "settlement_payout": 17.34,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.46707,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.46707,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "tx": "0xde6fb18382656e16417553dbab853623935026c9bc5880d75ac733c85bacc6b8",
+   "t": 1787272086,
+   "secs_after_open": 186,
+   "tte_s": 114,
+   "tte_fraction_remaining": 0.38,
+   "quantity_per_leg": 15.0,
+   "up_price": 0.69,
+   "down_price": 0.31,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 452.07,
+    "inv_down": 443.05,
+    "matched": 443.05,
+    "residual": 9.02,
+    "imbalance_up_minus_down": 9.02,
+    "running_pair_cost": 1.001832
+   },
+   "inv_after": {
+    "inv_up": 467.07,
+    "inv_down": 458.05,
+    "matched": 458.05,
+    "residual": 9.02,
+    "imbalance_up_minus_down": 9.02,
+    "running_pair_cost": 1.001772
+   },
+   "matched_before": 443.05,
+   "matched_after": 458.05,
+   "matched_delta": 15.0,
+   "residual_before": 9.02,
+   "residual_after": 9.02,
+   "residual_delta": 0.0,
+   "imbalance_before": 9.02,
+   "imbalance_after": 9.02,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 21,
+   "passive_fills_before_it": 13,
+   "passive_before": {
+    "30": {
+     "n_fills": 10,
+     "shares": 350.44
+    },
+    "60": {
+     "n_fills": 10,
+     "shares": 350.44
+    },
+    "120": {
+     "n_fills": 10,
+     "shares": 350.44
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 57.34
+    },
+    "60": {
+     "n_fills": 13,
+     "shares": 436.4229
+    },
+    "120": {
+     "n_fills": 32,
+     "shares": 920.9229
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 100.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 199.66
+    }
+   },
+   "matched_growth_after": {
+    "30": 24.67,
+    "60": 261.95,
+    "120": 554.03
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 15.0,
+   "settlement_payout": 15.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.44919,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.44919,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "tx": "0xdfb8c2eadc3571b2b5e62649f948a60802aea28f0090830828412b0867b8ec58",
+   "t": 1787272120,
+   "secs_after_open": 220,
+   "tte_s": 80,
+   "tte_fraction_remaining": 0.2667,
+   "quantity_per_leg": 50.0,
+   "up_price": 0.66,
+   "down_price": 0.34,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 499.74,
+    "inv_down": 482.72,
+    "matched": 482.72,
+    "residual": 17.02,
+    "imbalance_up_minus_down": 17.02,
+    "running_pair_cost": 1.000374
+   },
+   "inv_after": {
+    "inv_up": 549.74,
+    "inv_down": 532.72,
+    "matched": 532.72,
+    "residual": 17.02,
+    "imbalance_up_minus_down": 17.02,
+    "running_pair_cost": 1.003534
+   },
+   "matched_before": 482.72,
+   "matched_after": 532.72,
+   "matched_delta": 50.0,
+   "residual_before": 17.02,
+   "residual_after": 17.02,
+   "residual_delta": 0.0,
+   "imbalance_before": 17.02,
+   "imbalance_after": 17.02,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 25,
+   "passive_fills_before_it": 15,
+   "passive_before": {
+    "30": {
+     "n_fills": 2,
+     "shares": 57.34
+    },
+    "60": {
+     "n_fills": 8,
+     "shares": 247.78
+    },
+    "120": {
+     "n_fills": 12,
+     "shares": 407.78
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 15,
+     "shares": 539.0829
+    },
+    "60": {
+     "n_fills": 26,
+     "shares": 805.1829
+    },
+    "120": {
+     "n_fills": 30,
+     "shares": 863.5829
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 99.66
+    }
+   },
+   "matched_growth_after": {
+    "30": 267.28,
+    "60": 400.33,
+    "120": 479.36
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 50.0,
+   "settlement_payout": 50.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 1.5708,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -1.5708,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "tx": "0x15d82a9cf77406cb21cac9adc80a0027e79b4e668523c5b393c26086b8b8e27d",
+   "t": 1787272189,
+   "secs_after_open": 289,
+   "tte_s": 11,
+   "tte_fraction_remaining": 0.0367,
+   "quantity_per_leg": 49.83,
+   "up_price": 0.61,
+   "down_price": 0.39,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 983.7929,
+    "inv_down": 962.25,
+    "matched": 962.25,
+    "residual": 21.5429,
+    "imbalance_up_minus_down": 21.5429,
+    "running_pair_cost": 0.996827
+   },
+   "inv_after": {
+    "inv_up": 1033.6229,
+    "inv_down": 1012.08,
+    "matched": 1012.08,
+    "residual": 21.5429,
+    "imbalance_up_minus_down": 21.5429,
+    "running_pair_cost": 1.00422
+   },
+   "matched_before": 962.25,
+   "matched_after": 1012.08,
+   "matched_delta": 49.83,
+   "residual_before": 21.5429,
+   "residual_after": 21.5429,
+   "residual_delta": 0.0,
+   "imbalance_before": 21.5429,
+   "imbalance_after": 21.5429,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 57,
+   "passive_fills_before_it": 45,
+   "passive_before": {
+    "30": {
+     "n_fills": 10,
+     "shares": 164.5
+    },
+    "60": {
+     "n_fills": 27,
+     "shares": 801.5829
+    },
+    "120": {
+     "n_fills": 35,
+     "shares": 1080.9229
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 49.83,
+   "settlement_payout": 49.83,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 1.659638,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -1.659638,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787272500",
+   "contract_length": "5m",
+   "tx": "0x9870a1ca85db1dca84fa023f2a0961dbdbb3c67d8fd3493bbcb30bae8ad04474",
+   "t": 1787272632,
+   "secs_after_open": 132,
+   "tte_s": 168,
+   "tte_fraction_remaining": 0.56,
+   "quantity_per_leg": 33.33,
+   "up_price": 0.08,
+   "down_price": 0.92,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 33.33,
+    "inv_down": 33.33,
+    "matched": 33.33,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 33.33,
+   "matched_delta": 33.33,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 9,
+     "shares": 475.5102
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 57.22
+    }
+   },
+   "matched_growth_after": {
+    "30": 80.0,
+    "60": 80.0,
+    "120": 263.8651
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 33.33,
+   "settlement_payout": 33.33,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.343432,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.343432,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787272500",
+   "contract_length": "5m",
+   "tx": "0xaf81f3eaa1be0ba4bb3cbdaed708c401d58ac86e3604df71defed59b3371bbb4",
+   "t": 1787272741,
+   "secs_after_open": 241,
+   "tte_s": 59,
+   "tte_fraction_remaining": 0.1967,
+   "quantity_per_leg": 20.1,
+   "up_price": 0.34,
+   "down_price": 0.66,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 268.5851,
+    "inv_down": 273.5851,
+    "matched": 268.5851,
+    "residual": 5.0,
+    "imbalance_up_minus_down": -5.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 288.6851,
+    "inv_down": 293.6851,
+    "matched": 288.6851,
+    "residual": 5.0,
+    "imbalance_up_minus_down": -5.0,
+    "running_pair_cost": 1.00433
+   },
+   "matched_before": 268.5851,
+   "matched_after": 288.6851,
+   "matched_delta": 20.1,
+   "residual_before": 5.0,
+   "residual_after": 5.0,
+   "residual_delta": 0.0,
+   "imbalance_before": -5.0,
+   "imbalance_after": -5.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 11,
+   "passive_fills_before_it": 9,
+   "passive_before": {
+    "30": {
+     "n_fills": 6,
+     "shares": 315.5102
+    },
+    "60": {
+     "n_fills": 6,
+     "shares": 315.5102
+    },
+    "120": {
+     "n_fills": 9,
+     "shares": 475.5102
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 17.02
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 17.02
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 17.02
+    }
+   },
+   "matched_growth_after": {
+    "30": 8.51,
+    "60": 8.51,
+    "120": 8.51
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 20.1,
+   "settlement_payout": 20.1,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.631462,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.631462,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787272500",
+   "contract_length": "5m",
+   "tx": "0x50b200216c6d9791bd0ccfb871f200cfe33adf799675b0b39129df66085aac5a",
+   "t": 1787272746,
+   "secs_after_open": 246,
+   "tte_s": 54,
+   "tte_fraction_remaining": 0.18,
+   "quantity_per_leg": 8.51,
+   "up_price": 0.23,
+   "down_price": 0.77,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 288.6851,
+    "inv_down": 293.6851,
+    "matched": 288.6851,
+    "residual": 5.0,
+    "imbalance_up_minus_down": -5.0,
+    "running_pair_cost": 1.00433
+   },
+   "inv_after": {
+    "inv_up": 297.1951,
+    "inv_down": 302.1951,
+    "matched": 297.1951,
+    "residual": 5.0,
+    "imbalance_up_minus_down": -5.0,
+    "running_pair_cost": 1.002355
+   },
+   "matched_before": 288.6851,
+   "matched_after": 297.1951,
+   "matched_delta": 8.51,
+   "residual_before": 5.0,
+   "residual_after": 5.0,
+   "residual_delta": 0.0,
+   "imbalance_before": -5.0,
+   "imbalance_after": -5.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 13,
+   "passive_fills_before_it": 9,
+   "passive_before": {
+    "30": {
+     "n_fills": 6,
+     "shares": 315.5102
+    },
+    "60": {
+     "n_fills": 6,
+     "shares": 315.5102
+    },
+    "120": {
+     "n_fills": 9,
+     "shares": 475.5102
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 8.51,
+   "settlement_payout": 8.51,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.210997,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.210997,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787280000",
+   "contract_length": "5m",
+   "tx": "0x8ee9ca8ab188e6febe30a06c171f12f0196fb712c3b2e4e21d38496020852762",
+   "t": 1787280177,
+   "secs_after_open": 177,
+   "tte_s": 123,
+   "tte_fraction_remaining": 0.41,
+   "quantity_per_leg": 13.02,
+   "up_price": 0.13,
+   "down_price": 0.87,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 41.32,
+    "inv_down": 41.32,
+    "matched": 41.32,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 54.34,
+    "inv_down": 54.34,
+    "matched": 54.34,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 41.32,
+   "matched_after": 54.34,
+   "matched_delta": 13.02,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 3,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 8,
+     "shares": 200.0
+    },
+    "60": {
+     "n_fills": 13,
+     "shares": 360.0
+    },
+    "120": {
+     "n_fills": 13,
+     "shares": 360.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 100.0,
+    "60": 180.0,
+    "120": 180.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 13.02,
+   "settlement_payout": 13.02,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.206159,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.206159,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787281500",
+   "contract_length": "5m",
+   "tx": "0x17f5ee3d3dd9d2c104be3b57edff31a63d648fb7d9903b6f290f72c33481ad96",
+   "t": 1787281702,
+   "secs_after_open": 202,
+   "tte_s": 98,
+   "tte_fraction_remaining": 0.3267,
+   "quantity_per_leg": 15.0,
+   "up_price": 0.25,
+   "down_price": 0.75,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 108.53,
+    "inv_down": 68.73,
+    "matched": 68.73,
+    "residual": 39.8,
+    "imbalance_up_minus_down": 39.8,
+    "running_pair_cost": 0.996576
+   },
+   "inv_after": {
+    "inv_up": 123.53,
+    "inv_down": 83.73,
+    "matched": 83.73,
+    "residual": 39.8,
+    "imbalance_up_minus_down": 39.8,
+    "running_pair_cost": 0.986441
+   },
+   "matched_before": 68.73,
+   "matched_after": 83.73,
+   "matched_delta": 15.0,
+   "residual_before": 39.8,
+   "residual_after": 39.8,
+   "residual_delta": 0.0,
+   "imbalance_before": 39.8,
+   "imbalance_after": 39.8,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 7,
+   "passive_fills_before_it": 7,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 143.73
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 143.73
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 83.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 83.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 180.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 180.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 80.0,
+    "60": 95.0,
+    "120": 95.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 15.0,
+   "settlement_payout": 15.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.39375,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.39375,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787281500",
+   "contract_length": "5m",
+   "tx": "0x77f2148af6c39d4a495c55d103d58027fb70dd6cc398a89cbec6374d6d91b5fb",
+   "t": 1787281728,
+   "secs_after_open": 228,
+   "tte_s": 72,
+   "tte_fraction_remaining": 0.24,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.09,
+   "down_price": 0.91,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 123.53,
+    "inv_down": 83.73,
+    "matched": 83.73,
+    "residual": 39.8,
+    "imbalance_up_minus_down": 39.8,
+    "running_pair_cost": 0.986441
+   },
+   "inv_after": {
+    "inv_up": 203.53,
+    "inv_down": 163.73,
+    "matched": 163.73,
+    "residual": 39.8,
+    "imbalance_up_minus_down": 39.8,
+    "running_pair_cost": 1.022871
+   },
+   "matched_before": 83.73,
+   "matched_after": 163.73,
+   "matched_delta": 80.0,
+   "residual_before": 39.8,
+   "residual_after": 39.8,
+   "residual_delta": 0.0,
+   "imbalance_before": 39.8,
+   "imbalance_after": 39.8,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 9,
+   "passive_fills_before_it": 7,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 143.73
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 143.73
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 83.0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 83.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 83.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 20.0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 20.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 20.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 15.0,
+    "60": 15.0,
+    "120": 15.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.91728,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.91728,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787281500",
+   "contract_length": "5m",
+   "tx": "0x9306bada3d3dcf4158522784fb3b100764a6e768bc9c55fb302ca80b3927da2f",
+   "t": 1787281743,
+   "secs_after_open": 243,
+   "tte_s": 57,
+   "tte_fraction_remaining": 0.19,
+   "quantity_per_leg": 10.0,
+   "up_price": 0.05,
+   "down_price": 0.95,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 203.53,
+    "inv_down": 163.73,
+    "matched": 163.73,
+    "residual": 39.8,
+    "imbalance_up_minus_down": 39.8,
+    "running_pair_cost": 1.022871
+   },
+   "inv_after": {
+    "inv_up": 213.53,
+    "inv_down": 173.73,
+    "matched": 173.73,
+    "residual": 39.8,
+    "imbalance_up_minus_down": 39.8,
+    "running_pair_cost": 1.023857
+   },
+   "matched_before": 163.73,
+   "matched_after": 173.73,
+   "matched_delta": 10.0,
+   "residual_before": 39.8,
+   "residual_after": 39.8,
+   "residual_delta": 0.0,
+   "imbalance_before": 39.8,
+   "imbalance_after": 39.8,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 11,
+   "passive_fills_before_it": 7,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 143.73
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 83.0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 83.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 83.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 5.0,
+    "60": 5.0,
+    "120": 5.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 10.0,
+   "settlement_payout": 10.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.0665,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.0665,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787283600",
+   "contract_length": "5m",
+   "tx": "0x98bc3d4af1e5c8dec08e8f1331f21895997ae5d13c00b0bbf83b9eb1dab392cb",
+   "t": 1787283607,
+   "secs_after_open": 7,
+   "tte_s": 293,
+   "tte_fraction_remaining": 0.9767,
+   "quantity_per_leg": 20.0,
+   "up_price": 0.33,
+   "down_price": 0.67,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 20.0,
+    "inv_down": 20.0,
+    "matched": 20.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 20.0,
+   "matched_delta": 20.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 20.0,
+   "settlement_payout": 20.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.61908,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.61908,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787283600",
+   "contract_length": "5m",
+   "tx": "0x84b76605ff8914bb56e5a2a680645f8213e72ff422ae419c95f62f55a666ab90",
+   "t": 1787283805,
+   "secs_after_open": 205,
+   "tte_s": 95,
+   "tte_fraction_remaining": 0.3167,
+   "quantity_per_leg": 20.21052,
+   "up_price": 0.95,
+   "down_price": 0.05,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 180.8421,
+    "inv_down": 180.8421,
+    "matched": 180.8421,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 201.0526,
+    "inv_down": 201.0526,
+    "matched": 201.0526,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 180.8421,
+   "matched_after": 201.0526,
+   "matched_delta": 20.2105,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 10,
+   "passive_fills_before_it": 8,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 5,
+     "shares": 140.3521
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 140.3521
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 140.3521
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 44.51,
+    "60": 44.51,
+    "120": 44.51
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 20.2105,
+   "settlement_payout": 20.2105,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.1344,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.1344,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "tx": "0x4bc4f729c7cb6fbd0d320236222c99e94d5a2b2a17460e1b7773f4dc068e774b",
+   "t": 1787292340,
+   "secs_after_open": 40,
+   "tte_s": 260,
+   "tte_fraction_remaining": 0.8667,
+   "quantity_per_leg": 1.0,
+   "up_price": 0.43,
+   "down_price": 0.57,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 80.0,
+    "inv_down": 80.0,
+    "matched": 80.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 81.0,
+    "inv_down": 81.0,
+    "matched": 81.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 80.0,
+   "matched_after": 81.0,
+   "matched_delta": 1.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 3,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 160.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 7,
+     "shares": 182.2568
+    },
+    "120": {
+     "n_fills": 7,
+     "shares": 182.2568
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 72.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 81.13,
+    "120": 117.13
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 1.0,
+   "settlement_payout": 1.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.034314,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.034314,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "tx": "0xb347dcd1129adc2fdafcd2d4f4dda1db56a0c0dde735d0346fec8f6c731b0f0c",
+   "t": 1787292441,
+   "secs_after_open": 141,
+   "tte_s": 159,
+   "tte_fraction_remaining": 0.53,
+   "quantity_per_leg": 36.0,
+   "up_price": 0.76,
+   "down_price": 0.24,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "UNRESOLVED_NO_BOOK",
+    "down": "UNRESOLVED_NO_BOOK"
+   },
+   "inv_before": {
+    "inv_up": 162.13,
+    "inv_down": 182.1268,
+    "matched": 162.13,
+    "residual": 19.9968,
+    "imbalance_up_minus_down": -19.9968,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 198.13,
+    "inv_down": 218.1268,
+    "matched": 198.13,
+    "residual": 19.9968,
+    "imbalance_up_minus_down": -19.9968,
+    "running_pair_cost": 1.047436
+   },
+   "matched_before": 162.13,
+   "matched_after": 198.13,
+   "matched_delta": 36.0,
+   "residual_before": 19.9968,
+   "residual_after": 19.9968,
+   "residual_delta": 0.0,
+   "imbalance_before": -19.9968,
+   "imbalance_after": -19.9968,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 12,
+   "passive_fills_before_it": 10,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 7,
+     "shares": 182.2568
+    },
+    "120": {
+     "n_fills": 7,
+     "shares": 182.2568
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 15.24
+    },
+    "120": {
+     "n_fills": 15,
+     "shares": 401.62
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 52.02
+    },
+    "120": {
+     "n_fills": 8,
+     "shares": 228.04
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 28.63,
+    "120": 271.02
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 36.0,
+   "settlement_payout": 36.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.919296,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.919296,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "tx": "0xd8224fc582d39969135c0f64dd87c8757c5a58ff31fd11e433be61130b54ac53",
+   "t": 1787292474,
+   "secs_after_open": 174,
+   "tte_s": 126,
+   "tte_fraction_remaining": 0.42,
+   "quantity_per_leg": 26.01,
+   "up_price": 0.63,
+   "down_price": 0.37,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "UNRESOLVED_NO_BOOK",
+    "down": "UNRESOLVED_NO_BOOK"
+   },
+   "inv_before": {
+    "inv_up": 198.13,
+    "inv_down": 218.1268,
+    "matched": 198.13,
+    "residual": 19.9968,
+    "imbalance_up_minus_down": -19.9968,
+    "running_pair_cost": 1.047436
+   },
+   "inv_after": {
+    "inv_up": 224.14,
+    "inv_down": 244.1368,
+    "matched": 224.14,
+    "residual": 19.9968,
+    "imbalance_up_minus_down": -19.9968,
+    "running_pair_cost": 1.030333
+   },
+   "matched_before": 198.13,
+   "matched_after": 224.14,
+   "matched_delta": 26.01,
+   "residual_before": 19.9968,
+   "residual_after": 19.9968,
+   "residual_delta": 0.0,
+   "imbalance_before": -19.9968,
+   "imbalance_after": -19.9968,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 14,
+   "passive_fills_before_it": 10,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 7,
+     "shares": 182.2568
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 15.24
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 95.24
+    },
+    "120": {
+     "n_fills": 20,
+     "shares": 538.2306
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 6.02
+    },
+    "120": {
+     "n_fills": 6,
+     "shares": 176.02
+    }
+   },
+   "matched_growth_after": {
+    "30": 2.62,
+    "60": 5.63,
+    "120": 342.0053
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 26.01,
+   "settlement_payout": 26.01,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.84881,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.84881,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "tx": "0x5a31d781784c14e3433a4f3249ea4eef0bd26b732c5f82b7e564f48c6e5a467b",
+   "t": 1787292511,
+   "secs_after_open": 211,
+   "tte_s": 89,
+   "tte_fraction_remaining": 0.2967,
+   "quantity_per_leg": 3.01,
+   "up_price": 0.43,
+   "down_price": 0.57,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "UNRESOLVED_NO_BOOK",
+    "down": "UNRESOLVED_NO_BOOK"
+   },
+   "inv_before": {
+    "inv_up": 226.76,
+    "inv_down": 336.7568,
+    "matched": 226.76,
+    "residual": 109.9968,
+    "imbalance_up_minus_down": -109.9968,
+    "running_pair_cost": 1.033218
+   },
+   "inv_after": {
+    "inv_up": 229.77,
+    "inv_down": 339.7668,
+    "matched": 229.77,
+    "residual": 109.9968,
+    "imbalance_up_minus_down": -109.9968,
+    "running_pair_cost": 1.030163
+   },
+   "matched_before": 226.76,
+   "matched_after": 229.77,
+   "matched_delta": 3.01,
+   "residual_before": 109.9968,
+   "residual_after": 109.9968,
+   "residual_delta": 0.0,
+   "imbalance_before": -109.9968,
+   "imbalance_after": -109.9968,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 19,
+   "passive_fills_before_it": 13,
+   "passive_before": {
+    "30": {
+     "n_fills": 3,
+     "shares": 95.24
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 95.24
+    },
+    "120": {
+     "n_fills": 10,
+     "shares": 277.4968
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 6,
+     "shares": 148.38
+    },
+    "60": {
+     "n_fills": 17,
+     "shares": 442.9906
+    },
+    "120": {
+     "n_fills": 17,
+     "shares": 442.9906
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 170.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 170.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 75.38,
+    "60": 336.3753,
+    "120": 336.3753
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 3.01,
+   "settlement_payout": 3.01,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.103285,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.103285,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "tx": "0x7180d6a5343de142066a33b66e3345c9fa2409b66b2662dc3eaf37abdb323889",
+   "t": 1787292547,
+   "secs_after_open": 247,
+   "tte_s": 53,
+   "tte_fraction_remaining": 0.1767,
+   "quantity_per_leg": 5.0,
+   "up_price": 0.24,
+   "down_price": 0.76,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 305.15,
+    "inv_down": 412.7668,
+    "matched": 305.15,
+    "residual": 107.6168,
+    "imbalance_up_minus_down": -107.6168,
+    "running_pair_cost": 0.92341
+   },
+   "inv_after": {
+    "inv_up": 310.15,
+    "inv_down": 417.7668,
+    "matched": 310.15,
+    "residual": 107.6168,
+    "imbalance_up_minus_down": -107.6168,
+    "running_pair_cost": 0.920453
+   },
+   "matched_before": 305.15,
+   "matched_after": 310.15,
+   "matched_delta": 5.0,
+   "residual_before": 107.6168,
+   "residual_after": 107.6168,
+   "residual_delta": 0.0,
+   "imbalance_before": -107.6168,
+   "imbalance_after": -107.6168,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 27,
+   "passive_fills_before_it": 19,
+   "passive_before": {
+    "30": {
+     "n_fills": 6,
+     "shares": 148.38
+    },
+    "60": {
+     "n_fills": 9,
+     "shares": 243.62
+    },
+    "120": {
+     "n_fills": 9,
+     "shares": 243.62
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 11,
+     "shares": 294.6106
+    },
+    "60": {
+     "n_fills": 11,
+     "shares": 294.6106
+    },
+    "120": {
+     "n_fills": 11,
+     "shares": 294.6106
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 160.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 255.9953,
+    "60": 255.9953,
+    "120": 255.9953
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 5.0,
+   "settlement_payout": 5.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.12768,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.12768,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "tx": "0x15a673807652450ce43f87442c44c576ee9f28fb809834d700ba70c622f632fa",
+   "t": 1787292552,
+   "secs_after_open": 252,
+   "tte_s": 48,
+   "tte_fraction_remaining": 0.16,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.07,
+   "down_price": 0.93,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 310.15,
+    "inv_down": 417.7668,
+    "matched": 310.15,
+    "residual": 107.6168,
+    "imbalance_up_minus_down": -107.6168,
+    "running_pair_cost": 0.920453
+   },
+   "inv_after": {
+    "inv_up": 390.15,
+    "inv_down": 497.7668,
+    "matched": 390.15,
+    "residual": 107.6168,
+    "imbalance_up_minus_down": -107.6168,
+    "running_pair_cost": 0.887852
+   },
+   "matched_before": 310.15,
+   "matched_after": 390.15,
+   "matched_delta": 80.0,
+   "residual_before": 107.6168,
+   "residual_after": 107.6168,
+   "residual_delta": 0.0,
+   "imbalance_before": -107.6168,
+   "imbalance_after": -107.6168,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 29,
+   "passive_fills_before_it": 19,
+   "passive_before": {
+    "30": {
+     "n_fills": 6,
+     "shares": 148.38
+    },
+    "60": {
+     "n_fills": 7,
+     "shares": 228.38
+    },
+    "120": {
+     "n_fills": 9,
+     "shares": 243.62
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 11,
+     "shares": 294.6106
+    },
+    "60": {
+     "n_fills": 11,
+     "shares": 294.6106
+    },
+    "120": {
+     "n_fills": 11,
+     "shares": 294.6106
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 175.9953,
+    "60": 175.9953,
+    "120": 175.9953
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.72912,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.72912,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787296800",
+   "contract_length": "5m",
+   "tx": "0x034c58095537d29fd232d5cc93478b364236d3939710ca419ce4e5473edf9c28",
+   "t": 1787296947,
+   "secs_after_open": 147,
+   "tte_s": 153,
+   "tte_fraction_remaining": 0.51,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.2,
+   "down_price": 0.8,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 3.23,
+    "matched": 0.0,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 80.0,
+    "inv_down": 83.23,
+    "matched": 80.0,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": 0.997981
+   },
+   "matched_before": 0.0,
+   "matched_after": 80.0,
+   "matched_delta": 80.0,
+   "residual_before": 3.23,
+   "residual_after": 3.23,
+   "residual_delta": 0.0,
+   "imbalance_before": -3.23,
+   "imbalance_after": -3.23,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 1,
+   "passive_fills_before_it": 1,
+   "passive_before": {
+    "30": {
+     "n_fills": 1,
+     "shares": 3.23
+    },
+    "60": {
+     "n_fills": 1,
+     "shares": 3.23
+    },
+    "120": {
+     "n_fills": 1,
+     "shares": 3.23
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 8,
+     "shares": 260.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 136.66
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 177.1044
+    },
+    "120": {
+     "n_fills": 6,
+     "shares": 337.1044
+    }
+   },
+   "matched_growth_after": {
+    "30": 148.33,
+    "60": 168.5522,
+    "120": 298.5522
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 1.792,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -1.792,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787296800",
+   "contract_length": "5m",
+   "tx": "0x6d4278c5a7d86a977be86a50105ee8a157cd9aa7f347883f7416d96d6c9f0fe0",
+   "t": 1787296965,
+   "secs_after_open": 165,
+   "tte_s": 135,
+   "tte_fraction_remaining": 0.45,
+   "quantity_per_leg": 68.33,
+   "up_price": 0.11,
+   "down_price": 0.89,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "INSIDE_SPREAD",
+    "down": "INSIDE_SPREAD"
+   },
+   "inv_before": {
+    "inv_up": 160.0,
+    "inv_down": 163.23,
+    "matched": 160.0,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": 0.996164
+   },
+   "inv_after": {
+    "inv_up": 228.33,
+    "inv_down": 231.56,
+    "matched": 228.33,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": 0.99802
+   },
+   "matched_before": 160.0,
+   "matched_after": 228.33,
+   "matched_delta": 68.33,
+   "residual_before": 3.23,
+   "residual_after": 3.23,
+   "residual_delta": 0.0,
+   "imbalance_before": -3.23,
+   "imbalance_after": -3.23,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 6,
+   "passive_fills_before_it": 4,
+   "passive_before": {
+    "30": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 163.23
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 163.23
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 100.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 40.4444
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 40.4444
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 200.4444
+    }
+   },
+   "matched_growth_after": {
+    "30": 20.2222,
+    "60": 20.2222,
+    "120": 150.2222
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 68.33,
+   "settlement_payout": 68.33,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.936531,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.936531,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787296800",
+   "contract_length": "5m",
+   "tx": "0xdb7905278187e480a7563e170184283ca0f2d27249c8502031346fd96cdc82f5",
+   "t": 1787296987,
+   "secs_after_open": 187,
+   "tte_s": 113,
+   "tte_fraction_remaining": 0.3767,
+   "quantity_per_leg": 20.22222,
+   "up_price": 0.1,
+   "down_price": 0.9,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 228.33,
+    "inv_down": 231.56,
+    "matched": 228.33,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": 0.99802
+   },
+   "inv_after": {
+    "inv_up": 248.5522,
+    "inv_down": 251.7822,
+    "matched": 248.5522,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": 0.998051
+   },
+   "matched_before": 228.33,
+   "matched_after": 248.5522,
+   "matched_delta": 20.2222,
+   "residual_before": 3.23,
+   "residual_after": 3.23,
+   "residual_delta": 0.0,
+   "imbalance_before": -3.23,
+   "imbalance_after": -3.23,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 8,
+   "passive_fills_before_it": 4,
+   "passive_before": {
+    "30": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 163.23
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 100.0
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 100.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 160.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 130.0,
+    "120": 130.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 20.2222,
+   "settlement_payout": 20.2222,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.2548,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.2548,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787296800",
+   "contract_length": "5m",
+   "tx": "0x5ab0d712bb2b657e5561f19221efe4a8cea2465cb459ac83bdf1b1cf1b017115",
+   "t": 1787297028,
+   "secs_after_open": 228,
+   "tte_s": 72,
+   "tte_fraction_remaining": 0.24,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.07,
+   "down_price": 0.93,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 248.5522,
+    "inv_down": 251.7822,
+    "matched": 248.5522,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": 0.998051
+   },
+   "inv_after": {
+    "inv_up": 328.5522,
+    "inv_down": 331.7822,
+    "matched": 328.5522,
+    "residual": 3.23,
+    "imbalance_up_minus_down": -3.23,
+    "running_pair_cost": 0.99823
+   },
+   "matched_before": 248.5522,
+   "matched_after": 328.5522,
+   "matched_delta": 80.0,
+   "residual_before": 3.23,
+   "residual_after": 3.23,
+   "residual_delta": 0.0,
+   "imbalance_before": -3.23,
+   "imbalance_after": -3.23,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 10,
+   "passive_fills_before_it": 4,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 163.23
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 5,
+     "shares": 100.0
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 100.0
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 100.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 50.0,
+    "60": 50.0,
+    "120": 50.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.72912,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.72912,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787300100",
+   "contract_length": "5m",
+   "tx": "0x79be5a9a098d85d86f22042c090cf355b02cd01c1c5abebbbb180d4d8ad3b694",
+   "t": 1787300176,
+   "secs_after_open": 76,
+   "tte_s": 224,
+   "tte_fraction_remaining": 0.7467,
+   "quantity_per_leg": 7.0,
+   "up_price": 0.31,
+   "down_price": 0.69,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 7.0,
+    "inv_down": 7.0,
+    "matched": 7.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 7.0,
+   "matched_delta": 7.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 8,
+     "shares": 250.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 90.72
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 80.0,
+    "120": 170.36
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 7.0,
+   "settlement_payout": 7.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.209622,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.209622,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787300100",
+   "contract_length": "5m",
+   "tx": "0xae6d64933f3817fd027b4d7a3d882c920cf504260bc9bf4899f24a441045fe68",
+   "t": 1787300256,
+   "secs_after_open": 156,
+   "tte_s": 144,
+   "tte_fraction_remaining": 0.48,
+   "quantity_per_leg": 17.03,
+   "up_price": 0.7,
+   "down_price": 0.3,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 87.0,
+    "inv_down": 87.0,
+    "matched": 87.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 104.03,
+    "inv_down": 104.03,
+    "matched": 104.03,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 87.0,
+   "matched_after": 104.03,
+   "matched_delta": 17.03,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 6,
+   "passive_fills_before_it": 4,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 160.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 4,
+     "shares": 90.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 90.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 90.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 56.66
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 216.66
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 216.66
+    }
+   },
+   "matched_growth_after": {
+    "30": 73.33,
+    "60": 153.33,
+    "120": 153.33
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 17.03,
+   "settlement_payout": 17.03,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.500682,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.500682,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787300100",
+   "contract_length": "5m",
+   "tx": "0xaf0e5571ca55443709154eb8e936acfc9e702570f7935445f5c3b897d4c96ec2",
+   "t": 1787300286,
+   "secs_after_open": 186,
+   "tte_s": 114,
+   "tte_fraction_remaining": 0.38,
+   "quantity_per_leg": 28.33,
+   "up_price": 0.81,
+   "down_price": 0.19,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 149.03,
+    "inv_down": 149.03,
+    "matched": 149.03,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 177.36,
+    "inv_down": 177.36,
+    "matched": 177.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 149.03,
+   "matched_after": 177.36,
+   "matched_delta": 28.33,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 12,
+   "passive_fills_before_it": 8,
+   "passive_before": {
+    "30": {
+     "n_fills": 4,
+     "shares": 90.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 90.0
+    },
+    "120": {
+     "n_fills": 8,
+     "shares": 250.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 160.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 80.0,
+    "60": 80.0,
+    "120": 80.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 28.33,
+   "settlement_payout": 28.33,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.610398,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.610398,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787300100",
+   "contract_length": "5m",
+   "tx": "0x183330eba01795b57564ca3b4b16103d59e08521eb5d43f38b446dbaa8e3ee18",
+   "t": 1787300304,
+   "secs_after_open": 204,
+   "tte_s": 96,
+   "tte_fraction_remaining": 0.32,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.98,
+   "down_price": 0.02,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "UNRESOLVED_NO_BOOK",
+    "down": "UNRESOLVED_NO_BOOK"
+   },
+   "inv_before": {
+    "inv_up": 177.36,
+    "inv_down": 177.36,
+    "matched": 177.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 257.36,
+    "inv_down": 257.36,
+    "matched": 257.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 177.36,
+   "matched_after": 257.36,
+   "matched_delta": 80.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 14,
+   "passive_fills_before_it": 8,
+   "passive_before": {
+    "30": {
+     "n_fills": 4,
+     "shares": 90.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 90.0
+    },
+    "120": {
+     "n_fills": 8,
+     "shares": 250.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.21952,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.21952,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787310900",
+   "contract_length": "5m",
+   "tx": "0x980bc09bc782d0d7579156d3e047fcc0786e1de3a4d2b55769d473d998bf2b1d",
+   "t": 1787311119,
+   "secs_after_open": 219,
+   "tte_s": 81,
+   "tte_fraction_remaining": 0.27,
+   "quantity_per_leg": 15.0,
+   "up_price": 0.34,
+   "down_price": 0.66,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 64.78,
+    "inv_down": 64.78,
+    "matched": 64.78,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 79.78,
+    "inv_down": 79.78,
+    "matched": 79.78,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 64.78,
+   "matched_after": 79.78,
+   "matched_delta": 15.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 5,
+   "passive_fills_before_it": 5,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 129.56
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 129.56
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 160.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 4,
+     "shares": 164.24
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 164.24
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 164.24
+    }
+   },
+   "matched_growth_after": {
+    "30": 162.12,
+    "60": 162.12,
+    "120": 162.12
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 15.0,
+   "settlement_payout": 15.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.47124,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.47124,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787310900",
+   "contract_length": "5m",
+   "tx": "0x12321c2e9103aec48479dd6d0ec91f68b6f2ad6af557ea0ebd3f8232e8194e05",
+   "t": 1787311123,
+   "secs_after_open": 223,
+   "tte_s": 77,
+   "tte_fraction_remaining": 0.2567,
+   "quantity_per_leg": 76.27,
+   "up_price": 0.35,
+   "down_price": 0.65,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 79.78,
+    "inv_down": 79.78,
+    "matched": 79.78,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 156.05,
+    "inv_down": 156.05,
+    "matched": 156.05,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 79.78,
+   "matched_after": 156.05,
+   "matched_delta": 76.27,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 7,
+   "passive_fills_before_it": 5,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 129.56
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 129.56
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 160.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 11.7
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 11.7
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 11.7
+    }
+   },
+   "matched_growth_after": {
+    "30": 85.85,
+    "60": 85.85,
+    "120": 85.85
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 76.27,
+   "settlement_payout": 76.27,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 2.4292,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -2.4292,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787310900",
+   "contract_length": "5m",
+   "tx": "0xea5259c6bcc9d88e26983090f4ae108f74a07ce1a2389a2b831e770b5e66dd53",
+   "t": 1787311138,
+   "secs_after_open": 238,
+   "tte_s": 62,
+   "tte_fraction_remaining": 0.2067,
+   "quantity_per_leg": 5.85,
+   "up_price": 0.06,
+   "down_price": 0.94,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 156.05,
+    "inv_down": 156.05,
+    "matched": 156.05,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 161.9,
+    "inv_down": 161.9,
+    "matched": 161.9,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 156.05,
+   "matched_after": 161.9,
+   "matched_delta": 5.85,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 9,
+   "passive_fills_before_it": 5,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 129.56
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 129.56
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 160.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 80.0,
+    "60": 80.0,
+    "120": 80.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 5.85,
+   "settlement_payout": 5.85,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.046192,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.046192,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787312400",
+   "contract_length": "5m",
+   "tx": "0xc6a8b5f58132d343b21a671dd88783b5a9bb50b628945e99926e5121b80c8324",
+   "t": 1787312560,
+   "secs_after_open": 160,
+   "tte_s": 140,
+   "tte_fraction_remaining": 0.4667,
+   "quantity_per_leg": 20.0,
+   "up_price": 0.09,
+   "down_price": 0.91,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 20.0,
+    "inv_down": 20.0,
+    "matched": 20.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 20.0,
+   "matched_delta": 20.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 20.0,
+   "settlement_payout": 20.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.22932,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.22932,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787314200",
+   "contract_length": "5m",
+   "tx": "0x5e519f13c6ece1124ca7070f946fc4db63e2f528ad3040a8239e2b8c92c3682a",
+   "t": 1787314344,
+   "secs_after_open": 144,
+   "tte_s": 156,
+   "tte_fraction_remaining": 0.52,
+   "quantity_per_leg": 60.23,
+   "up_price": 0.57,
+   "down_price": 0.43,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 60.23,
+    "inv_down": 60.23,
+    "matched": 60.23,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 60.23,
+   "matched_delta": 60.23,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 160.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 43.74
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 43.74
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 21.87,
+    "120": 101.87
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 60.23,
+   "settlement_payout": 60.23,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 2.066732,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -2.066732,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787314200",
+   "contract_length": "5m",
+   "tx": "0x1cb919421ad94c39ff9c664bd8767f89afa7bc043c8bd98c60303b1689343662",
+   "t": 1787314393,
+   "secs_after_open": 193,
+   "tte_s": 107,
+   "tte_fraction_remaining": 0.3567,
+   "quantity_per_leg": 21.87,
+   "up_price": 0.51,
+   "down_price": 0.49,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "UNRESOLVED_NO_BOOK",
+    "down": "UNRESOLVED_NO_BOOK"
+   },
+   "inv_before": {
+    "inv_up": 60.23,
+    "inv_down": 60.23,
+    "matched": 60.23,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 82.1,
+    "inv_down": 82.1,
+    "matched": 82.1,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 60.23,
+   "matched_after": 82.1,
+   "matched_delta": 21.87,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 2,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 4,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 160.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 80.0,
+    "120": 80.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 21.87,
+   "settlement_payout": 21.87,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.765144,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.765144,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787356500",
+   "contract_length": "5m",
+   "tx": "0xd8740151f0fc308fe5fe1a380664d784bfa47881a52a19df5fd801f7b7e9c2e9",
+   "t": 1787356507,
+   "secs_after_open": 7,
+   "tte_s": 293,
+   "tte_fraction_remaining": 0.9767,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.56,
+   "down_price": 0.44,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 80.0,
+    "inv_down": 80.0,
+    "matched": 80.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 80.0,
+   "matched_delta": 80.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 2.75968,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -2.75968,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787356500",
+   "contract_length": "5m",
+   "tx": "0x1d7254fc3351abef222a734de5c7bfbdd8933a0d3985cb5df49e10d75ed6b6db",
+   "t": 1787356666,
+   "secs_after_open": 166,
+   "tte_s": 134,
+   "tte_fraction_remaining": 0.4467,
+   "quantity_per_leg": 10.0,
+   "up_price": 0.89,
+   "down_price": 0.11,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "UNRESOLVED_NO_BOOK",
+    "down": "UNRESOLVED_NO_BOOK"
+   },
+   "inv_before": {
+    "inv_up": 80.0,
+    "inv_down": 80.0,
+    "matched": 80.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 90.0,
+    "inv_down": 90.0,
+    "matched": 90.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 80.0,
+   "matched_after": 90.0,
+   "matched_delta": 10.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 2,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 5,
+     "shares": 144.96
+    },
+    "60": {
+     "n_fills": 5,
+     "shares": 144.96
+    },
+    "120": {
+     "n_fills": 5,
+     "shares": 144.96
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 67.49,
+    "60": 67.49,
+    "120": 67.49
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 10.0,
+   "settlement_payout": 10.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.13706,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.13706,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787365200",
+   "contract_length": "5m",
+   "tx": "0x9cf9457d54632470b3b32b2183441ec3f0bb029ea2c95749a33419ca65e542d2",
+   "t": 1787365270,
+   "secs_after_open": 70,
+   "tte_s": 230,
+   "tte_fraction_remaining": 0.7667,
+   "quantity_per_leg": 20.571427,
+   "up_price": 0.65,
+   "down_price": 0.35,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 20.5714,
+    "inv_down": 20.5714,
+    "matched": 20.5714,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 20.5714,
+   "matched_delta": 20.5714,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 3,
+     "shares": 139.74
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 139.74
+    },
+    "120": {
+     "n_fills": 12,
+     "shares": 335.6083
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 12.68
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 12.68
+    },
+    "120": {
+     "n_fills": 4,
+     "shares": 14.68
+    }
+   },
+   "matched_growth_after": {
+    "30": 66.08,
+    "60": 66.08,
+    "120": 152.5142
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 20.5714,
+   "settlement_payout": 20.5714,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.6552,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.6552,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787365200",
+   "contract_length": "5m",
+   "tx": "0x118ffa8e87d92089d8c456e30273e38569d7df5ca9000a907aedd6e8ed26e576",
+   "t": 1787365300,
+   "secs_after_open": 100,
+   "tte_s": 200,
+   "tte_fraction_remaining": 0.6667,
+   "quantity_per_leg": 6.34,
+   "up_price": 0.5,
+   "down_price": 0.5,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 100.5714,
+    "inv_down": 80.3114,
+    "matched": 80.3114,
+    "residual": 20.26,
+    "imbalance_up_minus_down": 20.26,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 106.9114,
+    "inv_down": 86.6514,
+    "matched": 86.6514,
+    "residual": 20.26,
+    "imbalance_up_minus_down": 20.26,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 80.3114,
+   "matched_after": 86.6514,
+   "matched_delta": 6.34,
+   "residual_before": 20.26,
+   "residual_after": 20.26,
+   "residual_delta": 0.0,
+   "imbalance_before": 20.26,
+   "imbalance_after": 20.26,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 5,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 3,
+     "shares": 139.74
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 139.74
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 139.74
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 9,
+     "shares": 195.8683
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 2.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 2.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 1.0,
+    "120": 86.4342
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 6.34,
+   "settlement_payout": 6.34,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.2219,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.2219,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787365200",
+   "contract_length": "5m",
+   "tx": "0x468e79f3c568140fc30d4cce392086ee27d2a9c54e987b5e3942a856ee5bf394",
+   "t": 1787365338,
+   "secs_after_open": 138,
+   "tte_s": 162,
+   "tte_fraction_remaining": 0.54,
+   "quantity_per_leg": 1.0,
+   "up_price": 0.64,
+   "down_price": 0.36,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 106.9114,
+    "inv_down": 86.6514,
+    "matched": 86.6514,
+    "residual": 20.26,
+    "imbalance_up_minus_down": 20.26,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 107.9114,
+    "inv_down": 87.6514,
+    "matched": 87.6514,
+    "residual": 20.26,
+    "imbalance_up_minus_down": 20.26,
+    "running_pair_cost": 0.998403
+   },
+   "matched_before": 86.6514,
+   "matched_after": 87.6514,
+   "matched_delta": 1.0,
+   "residual_before": 20.26,
+   "residual_after": 20.26,
+   "residual_delta": 0.0,
+   "imbalance_before": 20.26,
+   "imbalance_after": 20.26,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 7,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 139.74
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 139.74
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 9,
+     "shares": 195.8683
+    },
+    "120": {
+     "n_fills": 20,
+     "shares": 450.1199
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 160.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 85.4342,
+    "120": 300.5443
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 1.0,
+   "settlement_payout": 1.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.032256,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.032256,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787365200",
+   "contract_length": "5m",
+   "tx": "0xcdae69b78bd085f6d3854f96f68f5f294483ba620000cce81f8236f4eaffc2cf",
+   "t": 1787365450,
+   "secs_after_open": 250,
+   "tte_s": 50,
+   "tte_fraction_remaining": 0.1667,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.96,
+   "down_price": 0.04,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 337.487,
+    "inv_down": 308.1957,
+    "matched": 308.1957,
+    "residual": 29.2913,
+    "imbalance_up_minus_down": 29.2913,
+    "running_pair_cost": 0.944008
+   },
+   "inv_after": {
+    "inv_up": 417.487,
+    "inv_down": 388.1957,
+    "matched": 388.1957,
+    "residual": 29.2913,
+    "imbalance_up_minus_down": 29.2913,
+    "running_pair_cost": 0.9444
+   },
+   "matched_before": 308.1957,
+   "matched_after": 388.1957,
+   "matched_delta": 80.0,
+   "residual_before": 29.2913,
+   "residual_after": 29.2913,
+   "residual_delta": 0.0,
+   "imbalance_before": 29.2913,
+   "imbalance_after": 29.2913,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 29,
+   "passive_fills_before_it": 23,
+   "passive_before": {
+    "30": {
+     "n_fills": 11,
+     "shares": 254.2516
+    },
+    "60": {
+     "n_fills": 11,
+     "shares": 254.2516
+    },
+    "120": {
+     "n_fills": 20,
+     "shares": 450.1199
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.43008,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.43008,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787374800",
+   "contract_length": "5m",
+   "tx": "0x81cd835efc3df24164c9f05890abad79ec2be86b6504286cdb01ec2fbe4c51f6",
+   "t": 1787374876,
+   "secs_after_open": 76,
+   "tte_s": 224,
+   "tte_fraction_remaining": 0.7467,
+   "quantity_per_leg": 6.66,
+   "up_price": 0.65,
+   "down_price": 0.35,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 4.77,
+    "inv_down": 19.77,
+    "matched": 4.77,
+    "residual": 15.0,
+    "imbalance_up_minus_down": -15.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 11.43,
+    "inv_down": 26.43,
+    "matched": 11.43,
+    "residual": 15.0,
+    "imbalance_up_minus_down": -15.0,
+    "running_pair_cost": 1.104882
+   },
+   "matched_before": 4.77,
+   "matched_after": 11.43,
+   "matched_delta": 6.66,
+   "residual_before": 15.0,
+   "residual_after": 15.0,
+   "residual_delta": 0.0,
+   "imbalance_before": -15.0,
+   "imbalance_after": -15.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 2,
+   "passive_fills_before_it": 2,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 24.54
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 1,
+     "shares": 80.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 110.16
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 70.08
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 6.66,
+   "settlement_payout": 6.66,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.212121,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.212121,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787374800",
+   "contract_length": "5m",
+   "tx": "0x815d0bad25d9ae3134b1a0b00f15a560cc858186b6e037f9791adfca0ac2f48f",
+   "t": 1787374984,
+   "secs_after_open": 184,
+   "tte_s": 116,
+   "tte_fraction_remaining": 0.3867,
+   "quantity_per_leg": 55.08,
+   "up_price": 0.93,
+   "down_price": 0.07,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 11.43,
+    "inv_down": 26.43,
+    "matched": 11.43,
+    "residual": 15.0,
+    "imbalance_up_minus_down": -15.0,
+    "running_pair_cost": 1.104882
+   },
+   "inv_after": {
+    "inv_up": 66.51,
+    "inv_down": 81.51,
+    "matched": 66.51,
+    "residual": 15.0,
+    "imbalance_up_minus_down": -15.0,
+    "running_pair_cost": 1.103744
+   },
+   "matched_before": 11.43,
+   "matched_after": 66.51,
+   "matched_delta": 55.08,
+   "residual_before": 15.0,
+   "residual_after": 15.0,
+   "residual_delta": 0.0,
+   "imbalance_before": -15.0,
+   "imbalance_after": -15.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 4,
+   "passive_fills_before_it": 2,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 1,
+     "shares": 80.0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 160.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 160.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 15.0,
+    "60": 125.0,
+    "120": 125.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 55.08,
+   "settlement_payout": 55.08,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.501999,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.501999,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787374800",
+   "contract_length": "5m",
+   "tx": "0x8d8369563ed314b90fa133f0d4da8b5cbb6eda35181338079507d2af85239386",
+   "t": 1787375016,
+   "secs_after_open": 216,
+   "tte_s": 84,
+   "tte_fraction_remaining": 0.28,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.98,
+   "down_price": 0.02,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "MINT_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 146.51,
+    "inv_down": 81.51,
+    "matched": 81.51,
+    "residual": 65.0,
+    "imbalance_up_minus_down": 65.0,
+    "running_pair_cost": 1.082812
+   },
+   "inv_after": {
+    "inv_up": 226.51,
+    "inv_down": 161.51,
+    "matched": 161.51,
+    "residual": 65.0,
+    "imbalance_up_minus_down": 65.0,
+    "running_pair_cost": 1.017646
+   },
+   "matched_before": 81.51,
+   "matched_after": 161.51,
+   "matched_delta": 80.0,
+   "residual_before": 65.0,
+   "residual_after": 65.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 65.0,
+   "imbalance_after": 65.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 7,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 1,
+     "shares": 80.0
+    },
+    "60": {
+     "n_fills": 1,
+     "shares": 80.0
+    },
+    "120": {
+     "n_fills": 1,
+     "shares": 80.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 2,
+     "shares": 80.0
+    },
+    "60": {
+     "n_fills": 2,
+     "shares": 80.0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 80.0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 30.0,
+    "60": 30.0,
+    "120": 30.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.21952,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.21952,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787567400",
+   "contract_length": "5m",
+   "tx": "0x432e9ebf5796ce7bc1ceb04ea15e599eb722a3ce37a1b47e5756264944183430",
+   "t": 1787567404,
+   "secs_after_open": 4,
+   "tte_s": 296,
+   "tte_fraction_remaining": 0.9867,
+   "quantity_per_leg": 3.36,
+   "up_price": 0.39,
+   "down_price": 0.61,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "MINT_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 0.0,
+    "inv_down": 0.0,
+    "matched": 0.0,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": null
+   },
+   "inv_after": {
+    "inv_up": 3.36,
+    "inv_down": 3.36,
+    "matched": 3.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 0.0,
+   "matched_after": 3.36,
+   "matched_delta": 3.36,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": true,
+   "l5_actions_before_it": 0,
+   "passive_fills_before_it": 0,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 3.36,
+   "settlement_payout": 3.36,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.111908,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.111908,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787567400",
+   "contract_length": "5m",
+   "tx": "0xc6b127d38b09fea2bd2c05c45a038656c1b9f5508d20eb378577622235732fc3",
+   "t": 1787567535,
+   "secs_after_open": 135,
+   "tte_s": 165,
+   "tte_fraction_remaining": 0.55,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.9,
+   "down_price": 0.1,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "RESTING_BID_CONSISTENT"
+   },
+   "inv_before": {
+    "inv_up": 83.36,
+    "inv_down": 83.36,
+    "matched": 83.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 163.36,
+    "inv_down": 163.36,
+    "matched": 163.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 83.36,
+   "matched_after": 163.36,
+   "matched_delta": 80.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 5,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "60": {
+     "n_fills": 3,
+     "shares": 160.0
+    },
+    "120": {
+     "n_fills": 3,
+     "shares": 160.0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 2,
+     "shares": 160.0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 80.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 1.008,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -1.008,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  },
+  {
+   "market_slug": "btc-updown-5m-1787567400",
+   "contract_length": "5m",
+   "tx": "0xf1809d519bb0be65c110478300dee576847bba600798270a2c1be5b77985eb68",
+   "t": 1787567650,
+   "secs_after_open": 250,
+   "tte_s": 50,
+   "tte_fraction_remaining": 0.1667,
+   "quantity_per_leg": 80.0,
+   "up_price": 0.98,
+   "down_price": 0.02,
+   "price_sum": 1.0,
+   "roles": {
+    "up": "taker",
+    "down": "taker"
+   },
+   "both_taker": true,
+   "mechanisms": {
+    "up": "RESTING_BID_CONSISTENT",
+    "down": "UNRESOLVED_NO_BOOK"
+   },
+   "inv_before": {
+    "inv_up": 163.36,
+    "inv_down": 163.36,
+    "matched": 163.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "inv_after": {
+    "inv_up": 243.36,
+    "inv_down": 243.36,
+    "matched": 243.36,
+    "residual": 0.0,
+    "imbalance_up_minus_down": 0.0,
+    "running_pair_cost": 1.0
+   },
+   "matched_before": 163.36,
+   "matched_after": 243.36,
+   "matched_delta": 80.0,
+   "residual_before": 0.0,
+   "residual_after": 0.0,
+   "residual_delta": 0.0,
+   "imbalance_before": 0.0,
+   "imbalance_after": 0.0,
+   "abs_imbalance_delta": 0.0,
+   "is_first_l5_action_in_window": false,
+   "l5_actions_before_it": 7,
+   "passive_fills_before_it": 3,
+   "passive_before": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "passive_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "paired_after": {
+    "30": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "60": {
+     "n_fills": 0,
+     "shares": 0
+    },
+    "120": {
+     "n_fills": 0,
+     "shares": 0
+    }
+   },
+   "matched_growth_after": {
+    "30": 0.0,
+    "60": 0.0,
+    "120": 0.0
+   },
+   "gross_pair_cost": 1.0,
+   "cash_out": 80.0,
+   "settlement_payout": 80.0,
+   "gross_margin": 0.0,
+   "model_implied_fee_usd": 0.21952,
+   "model_implied_fee_note": "0.07 * p * (1-p) per leg, from L5_OPERATING_MODEL.md; NOT a credited fee from a venue ledger",
+   "net_after_model_fee": -0.21952,
+   "reward_eligibility": "UNDETERMINABLE_FROM_THIS_DATA"
+  }
+ ]
+}
