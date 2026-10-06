@@ -1,0 +1,163 @@
+{
+  "label": "L5_FILL_TOXICITY_VS_REAL_BOOK",
+  "source": {
+    "zenodo_record": 22084977,
+    "file": "updown_15m.parquet",
+    "sha256": "d86191506e416026f460338b1b238c628b3fcee37f468e646b3a2256bd0be959",
+    "licence": "CC-BY-4.0",
+    "note": "committed byte-identical; never altered"
+  },
+  "join": {
+    "book_series": 128,
+    "book_slugs": 64,
+    "L5_fills_joined": 3069,
+    "distinct_markets": 27,
+    "join_key": "market_slug + outcome, never market name alone"
+  },
+  "fill_vs_prevailing_touch": {
+    "AT_OR_ABOVE_ASK": 969,
+    "AT_OR_BELOW_BID": 1887,
+    "INSIDE_SPREAD": 194,
+    "null": 19
+  },
+  "spread_before_fill": {
+    "n": 2878,
+    "unit": "$",
+    "p10": 0.01,
+    "median": 0.01,
+    "mean": 0.0106,
+    "p90": 0.01
+  },
+  "crossed_rows_excluded_from_spread": 172,
+  "SETTLEMENT_ADVERSE_SELECTION_per_fill": {
+    "mean": -0.0041,
+    "ci95": [
+      -0.0251,
+      0.0194
+    ],
+    "markets": 27,
+    "fills": 3069
+  },
+  "gemini_comparable": {
+    "gemini_maker_adverse_selection_per_fill": -0.238,
+    "gemini_ci95": [
+      -0.2831,
+      -0.1935
+    ],
+    "definition": "both are settlement-based: payout - price. Gemini's figure additionally nets its charged fee; L5's charged fee is reported separately so the two price terms stay comparable."
+  },
+  "by_vs_touch": {
+    "AT_OR_ABOVE_ASK": {
+      "fills": 969,
+      "settlement_adverse_selection": {
+        "mean": 0.0103,
+        "ci95": [
+          -0.0394,
+          0.0684
+        ],
+        "markets": 27,
+        "fills": 969
+      },
+      "spread_before": {
+        "n": 969,
+        "unit": "$",
+        "p10": -0.02,
+        "median": 0.01,
+        "mean": -0.0102,
+        "p90": 0.01
+      },
+      "avg_price": 0.5201
+    },
+    "AT_OR_BELOW_BID": {
+      "fills": 1887,
+      "settlement_adverse_selection": {
+        "mean": -0.0146,
+        "ci95": [
+          -0.0418,
+          0.0176
+        ],
+        "markets": 23,
+        "fills": 1887
+      },
+      "spread_before": {
+        "n": 1887,
+        "unit": "$",
+        "p10": 0.01,
+        "median": 0.01,
+        "mean": 0.007,
+        "p90": 0.01
+      },
+      "avg_price": 0.4624
+    },
+    "INSIDE_SPREAD": {
+      "fills": 194,
+      "settlement_adverse_selection": {
+        "mean": 0.0259,
+        "ci95": [
+          -0.083,
+          0.1118
+        ],
+        "markets": 16,
+        "fills": 194
+      },
+      "spread_before": {
+        "n": 194,
+        "unit": "$",
+        "p10": 0.01,
+        "median": 0.01,
+        "mean": 0.0128,
+        "p90": 0.02
+      },
+      "avg_price": 0.4019
+    }
+  },
+  "forward_mark_change_vs_fill_price": {
+    "+1s": {
+      "n": 3041,
+      "unit": "$",
+      "p10": -0.035,
+      "median": 0.005,
+      "mean": 0.003,
+      "p90": 0.045
+    },
+    "+5s": {
+      "n": 3024,
+      "unit": "$",
+      "p10": -0.05,
+      "median": 0.005,
+      "mean": -0.0019,
+      "p90": 0.05
+    },
+    "+10s": {
+      "n": 2989,
+      "unit": "$",
+      "p10": -0.075,
+      "median": -0.0,
+      "mean": -0.0037,
+      "p90": 0.065
+    },
+    "+30s": {
+      "n": 2879,
+      "unit": "$",
+      "p10": -0.115,
+      "median": -0.005,
+      "mean": 0.0007,
+      "p90": 0.125
+    },
+    "+60s": {
+      "n": 2720,
+      "unit": "$",
+      "p10": -0.145,
+      "median": -0.005,
+      "mean": 0.004,
+      "p90": 0.165
+    }
+  },
+  "caveats": [
+    "no order in this archive is attributed to any trader, so maker/taker is INFERRED from price against the touch",
+    "a row is written only when the book changes; a stale row is carried at most 60s and refused beyond that",
+    "~24k events/s with no sequence numbers, so a dropped delta is undetectable and every offset carries up to one resync of drift",
+    "bid(X)+ask(complement) is mechanically 1.0000 in 97.8% of instants, so no test is built on that sum; the mint sum bid+bid is median 0.9800 and IS discriminating"
+  ],
+  "accounting": "historical replay on third-party public data. No order was sent. Not realized profit for our account."
+}
