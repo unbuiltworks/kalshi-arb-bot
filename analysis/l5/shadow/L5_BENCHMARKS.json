@@ -1,78 +1,123 @@
 {
-  "maker_fraction": {
-    "value": 0.883,
-    "source": "analysis/l5/historical_l2/ZENODO_OVERLAP_FINDINGS.md",
-    "note": "2,795 of 3,166 overlap fills; recomputed figure pending a machine-readable artifact"
+  "burst_both_outcomes_all": {
+    "source": "analysis/l5/LADDER_V1.json",
+    "value": 0.309
+  },
+  "fill_class_pct": {
+    "source": "analysis/l5/LADDER_V1.json",
+    "value": {
+      "INSIDE_SPREAD": 9.0,
+      "MINT_OR_AT_ABOVE_ASK": 29.0,
+      "RESTING_BID_CONSISTENT": 62.0
+    }
   },
   "fill_toxicity": {
+    "source": "analysis/l5/FILL_TOXICITY.json",
     "value": {
-      "mean": -0.0041,
       "ci95": [
         -0.0251,
         0.0194
       ],
+      "fills": 3069,
       "markets": 27,
-      "fills": 3069
-    },
-    "source": "analysis/l5/FILL_TOXICITY.json"
-  },
-  "two_outcome_burst_incidence_ge3": {
-    "value": 0.716,
-    "source": "analysis/l5/LADDER_V1.md",
-    "note": "156 of 218 bursts with >=3 fills"
-  },
-  "burst_both_outcomes_all": {
-    "value": 0.309,
-    "source": "analysis/l5/LADDER_V1.json"
+      "mean": -0.0041
+    }
   },
   "leg_qty_median": {
-    "value": 23.61,
-    "source": "analysis/l5/LADDER_V1.json"
+    "source": "analysis/l5/LADDER_V1.json",
+    "value": 23.61
   },
-  "fill_class_pct": {
-    "value": {
-      "RESTING_BID_CONSISTENT": 62.0,
-      "MINT_OR_AT_ABOVE_ASK": 29.0,
-      "INSIDE_SPREAD": 9.0
+  "maker_fraction": {
+    "caveats": [
+      "BTC15m only, 33 windows, 12 of which carry L5 fills: this is not a corpus-wide maker share.",
+      "A chunk hole would be a queried-range gap, not an absence of fills; holes are reported above and must be 0 for the count to be complete."
+    ],
+    "definition": "count of on-chain OrderFilled logs in which L5 is the maker party, over all L5 fills in the Zenodo BTC15m overlap; l5_role is read from the log, never inferred from book state",
+    "inputs": {
+      "chunk_holes": 0,
+      "l5_fills": 3166,
+      "role_counts": {
+        "maker": 2795,
+        "taker": 371
+      },
+      "unlabelled_fills_excluded_from_denominator": 0,
+      "windows": 33,
+      "windows_with_l5_fills": 12
     },
-    "source": "analysis/l5/LADDER_V1.json"
+    "sha256_of_source": "58dae795729c683631ebc1fecffff86e285aec9ee6683260fa355430b6f09f01",
+    "source": "analysis/l5/historical_l2/l5_chain_backfill_33_windows.json",
+    "value": 0.8828
   },
   "matched_pair_economics_usd": {
-    "value": 80652.14,
-    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
-  },
-  "residual_economics_usd": {
-    "value": -30654.03,
-    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
-  },
-  "pair_cost": {
-    "value": {
-      "n": 5100,
-      "min": 0.2485,
-      "p10": 0.8492,
-      "p25": 0.9195,
-      "median": 0.9679,
-      "p75": 1.0136,
-      "p90": 1.0933,
-      "max": 1.775,
-      "mean": 0.9711,
-      "sum": 4952.45
-    },
-    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json",
+    "value": 80652.14
   },
   "matched_pct": {
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json",
     "value": {
-      "n": 6252,
-      "min": 0.0,
-      "p10": 0.0,
-      "p25": 0.271,
-      "median": 0.7034,
-      "p75": 0.8797,
-      "p90": 0.954,
       "max": 1.0,
       "mean": 0.5778,
+      "median": 0.7034,
+      "min": 0.0,
+      "n": 6252,
+      "p10": 0.0,
+      "p25": 0.271,
+      "p75": 0.8797,
+      "p90": 0.954,
       "sum": 3612.46
+    }
+  },
+  "pair_cost": {
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json",
+    "value": {
+      "max": 1.775,
+      "mean": 0.9711,
+      "median": 0.9679,
+      "min": 0.2485,
+      "n": 5100,
+      "p10": 0.8492,
+      "p25": 0.9195,
+      "p75": 1.0136,
+      "p90": 1.0933,
+      "sum": 4952.45
+    }
+  },
+  "residual_economics_usd": {
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json",
+    "value": -30654.03
+  },
+  "two_outcome_burst_incidence_ge3": {
+    "caveats": [
+      "This is a DESCRIPTION of the observed fill process, not evidence that the second leg was a decision: a burst filling both outcomes within seconds is consistent with two resting orders being taken, which is why Candidate V2 was killed.",
+      "Conditioned on >= 3 legs. The unconditioned fraction is reported here as both_outcomes_all and is much lower."
+    ],
+    "definition": "fraction of bursts of >= 3 legs that fill BOTH outcomes, where a burst is a maximal run of legs <= 5s apart (l5_ladder_v1.BURST_GAP_S, imported)",
+    "inputs": {
+      "both_outcomes_all": 49150,
+      "both_outcomes_ge3": 34662,
+      "burst_gap_s": 5.0,
+      "bursts_all": 240307,
+      "bursts_ge3": 52246,
+      "markets": 17046
     },
-    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
+    "l2_overlap_subset": {
+      "inputs": {
+        "both": 197,
+        "both_ge3": 156,
+        "bursts": 637,
+        "bursts_ge3": 218
+      },
+      "markets": 64,
+      "note": "the population the 0.716 prose figure was measured on; a difference from the corpus-wide value above is a population difference, not a correction",
+      "value_ge3": 0.7156
+    },
+    "prior_entry": {
+      "note": "reproduces to 0.7156 on the L2-overlap subset it was measured on; the entry above is corpus-wide",
+      "source": "analysis/l5/LADDER_V1.md",
+      "status": "POPULATION_SCOPED",
+      "value": 0.716
+    },
+    "source": "scripts/l5_regen_benchmarks.py over data/l5/raw",
+    "value": 0.6634
   }
 }
