@@ -1,0 +1,386 @@
+{
+ "contract_length": "5m",
+ "window_s": 300,
+ "n_events": 373,
+ "windows": 23,
+ "windows_with_fills": 23,
+ "mechanism_counts": {
+  "MINT_CONSISTENT": 144,
+  "RESTING_BID_CONSISTENT": 163,
+  "UNRESOLVED_NO_BOOK": 64,
+  "INSIDE_SPREAD": 2
+ },
+ "backfill_total_l5_fills": 373,
+ "backfill_chunk_holes": 0,
+ "resolution": "whole seconds, event-driven; no interpolation, no manufactured sub-second state",
+ "per_window": [
+  {
+   "market_slug": "btc-updown-5m-1787271900",
+   "contract_length": "5m",
+   "window_utc": [
+    1787271900,
+    1787272200
+   ],
+   "n_events": 59,
+   "fills_in_backfill": 59,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "41223213334902256677302439144387221507827323959586348923516446769488925124363",
+    "down": "108953863752053143150141769951736856871150689393500192590418606233863508117908"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787272500",
+   "contract_length": "5m",
+   "window_utc": [
+    1787272500,
+    1787272800
+   ],
+   "n_events": 15,
+   "fills_in_backfill": 15,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "1333371746607931058715211674551995854796409194463336519635935245165067242987",
+    "down": "33502953788576425303168664226341237421586279096482849072815771956609245632383"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787280000",
+   "contract_length": "5m",
+   "window_utc": [
+    1787280000,
+    1787280300
+   ],
+   "n_events": 18,
+   "fills_in_backfill": 18,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "70051120697039252629613614048553012063257495961980452780077158258918802016651",
+    "down": "47728490491760547854182425611528478304502243671638718225366757490685216018497"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787281500",
+   "contract_length": "5m",
+   "window_utc": [
+    1787281500,
+    1787281800
+   ],
+   "n_events": 15,
+   "fills_in_backfill": 15,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "66166100030549980210707832400845184487382422925587392759074594114078243987732",
+    "down": "86733516015089602428311612359571772700570474790159333608643309329603662558780"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787283600",
+   "contract_length": "5m",
+   "window_utc": [
+    1787283600,
+    1787283900
+   ],
+   "n_events": 17,
+   "fills_in_backfill": 17,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "38204336997631061930004715440075829290183360288167999542233614705717362352890",
+    "down": "20547645431775688167727811305589746007960224796111934388483516926281994128552"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787287200",
+   "contract_length": "5m",
+   "window_utc": [
+    1787287200,
+    1787287500
+   ],
+   "n_events": 36,
+   "fills_in_backfill": 36,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "84651921709133222168372441318781592440342906987667673385267576783411372370802",
+    "down": "64483263758650588070279337799485924628109427416710725115082766680302033749696"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787287500",
+   "contract_length": "5m",
+   "window_utc": [
+    1787287500,
+    1787287800
+   ],
+   "n_events": 9,
+   "fills_in_backfill": 9,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "103678676625231062162159773107389083978859446952099310342734303946478656997319",
+    "down": "19660782041614729150594297233191174020928897925968589354038246507579032856229"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787292300",
+   "contract_length": "5m",
+   "window_utc": [
+    1787292300,
+    1787292600
+   ],
+   "n_events": 42,
+   "fills_in_backfill": 42,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "105073708803679295649843836117518066438745728862686123985730278199941969936778",
+    "down": "115105638673856980955667055941901404730039520034935240979722167999715687552052"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787296800",
+   "contract_length": "5m",
+   "window_utc": [
+    1787296800,
+    1787297100
+   ],
+   "n_events": 17,
+   "fills_in_backfill": 17,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "97852990157203972196108339292453581773722810626822042528444551962792786886948",
+    "down": "87896754463395564114400760323718824312284658879802106654158713080600593046039"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787300100",
+   "contract_length": "5m",
+   "window_utc": [
+    1787300100,
+    1787300400
+   ],
+   "n_events": 16,
+   "fills_in_backfill": 16,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "33467320933738046903787308056744966060779493410135250686818675271011479201813",
+    "down": "7235791078077717434709185527267651631712828339104196731829862131317695340676"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787310600",
+   "contract_length": "5m",
+   "window_utc": [
+    1787310600,
+    1787310900
+   ],
+   "n_events": 5,
+   "fills_in_backfill": 5,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "19155966940486224117423994571907481065836277387083107932317809559674227567435",
+    "down": "96417624817175525826347310266296396869053976610028489401480150738254199467623"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787310900",
+   "contract_length": "5m",
+   "window_utc": [
+    1787310900,
+    1787311200
+   ],
+   "n_events": 15,
+   "fills_in_backfill": 15,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "76925213221336420423746312724699027160491525435613948902130780817975369024566",
+    "down": "28889267531877190016531198242027880698807611415537000883680403873158555345192"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787312400",
+   "contract_length": "5m",
+   "window_utc": [
+    1787312400,
+    1787312700
+   ],
+   "n_events": 4,
+   "fills_in_backfill": 4,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "113916960270256670273742643897685059493753787750298782781501845863618543250249",
+    "down": "103991254085706968158784929281116002456938943845609901787785105493360593880957"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787314200",
+   "contract_length": "5m",
+   "window_utc": [
+    1787314200,
+    1787314500
+   ],
+   "n_events": 8,
+   "fills_in_backfill": 8,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "102543148856175956656925583864814382278531612121717212311924647429532085337656",
+    "down": "42849680752338557230916023766424800522017142043685382192599292241804291746343"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787321100",
+   "contract_length": "5m",
+   "window_utc": [
+    1787321100,
+    1787321400
+   ],
+   "n_events": 8,
+   "fills_in_backfill": 8,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "6299187820244959048347158540064461387172026053468294835853472988110240353076",
+    "down": "23924075783810476608920542960128563129005923265956377263368608883354318673309"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787349900",
+   "contract_length": "5m",
+   "window_utc": [
+    1787349900,
+    1787350200
+   ],
+   "n_events": 3,
+   "fills_in_backfill": 3,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "48859492717376057811109806280140855699340008212895470242839318120994825391749",
+    "down": "46243716396200517869687529753544802232410887024349150099622266047227841644967"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787356500",
+   "contract_length": "5m",
+   "window_utc": [
+    1787356500,
+    1787356800
+   ],
+   "n_events": 9,
+   "fills_in_backfill": 9,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "26370673976761483072214309658857251102020018842983988508227851505742342070705",
+    "down": "9760902402515850228698720779220575967233141731727606741783229469585120896670"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787357100",
+   "contract_length": "5m",
+   "window_utc": [
+    1787357100,
+    1787357400
+   ],
+   "n_events": 2,
+   "fills_in_backfill": 2,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "45906153286958711243694375368719107434746020359136270876485847533287138614467",
+    "down": "16369876675757082986273518157154923627411585394310719364430331347145866140316"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-5m-1787365200",
+   "contract_length": "5m",
+   "window_utc": [
+    1787365200,
+    1787365500
+   ],
+   "n_events": 31,
+   "fills_in_backfill": 31,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "23956359816814519585596258992934153444350943938498444217713661526012285270405",
+    "down": "16418816820047813812790483270186681676456659546069524479643755258104443747021"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787374800",
+   "contract_length": "5m",
+   "window_utc": [
+    1787374800,
+    1787375100
+   ],
+   "n_events": 11,
+   "fills_in_backfill": 11,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "107765513262488372343344995212367280951716816745569864455696861384410077667189",
+    "down": "33456624206328225042587903058005869156651900801432200700506652321120539337611"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787558700",
+   "contract_length": "5m",
+   "window_utc": [
+    1787558700,
+    1787559000
+   ],
+   "n_events": 4,
+   "fills_in_backfill": 4,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "98000349907958863281343010817456014059305486284067108594678742216123894911819",
+    "down": "36769568785712922756916998982820850486014959211579182079375184239538777531406"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787565000",
+   "contract_length": "5m",
+   "window_utc": [
+    1787565000,
+    1787565300
+   ],
+   "n_events": 20,
+   "fills_in_backfill": 20,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "69817436868939775479090190303615397246636418727255486051855065697559907259898",
+    "down": "101652829135157399482531067867400351816243701418826747252345892971276174595581"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-5m-1787567400",
+   "contract_length": "5m",
+   "window_utc": [
+    1787567400,
+    1787567700
+   ],
+   "n_events": 9,
+   "fills_in_backfill": 9,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "98344745945745208565730553170602076950228015770627324904478820461320960108818",
+    "down": "90081592374550087625748784902942373812187337445321717608951580151744914146194"
+   },
+   "winner_up": true
+  }
+ ]
+}

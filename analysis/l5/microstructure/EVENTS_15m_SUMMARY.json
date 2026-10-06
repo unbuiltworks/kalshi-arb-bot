@@ -1,0 +1,211 @@
+{
+ "contract_length": "15m",
+ "window_s": 900,
+ "n_events": 3166,
+ "windows": 12,
+ "windows_with_fills": 12,
+ "mechanism_counts": {
+  "MINT_CONSISTENT": 923,
+  "RESTING_BID_CONSISTENT": 2199,
+  "INSIDE_SPREAD": 28,
+  "UNRESOLVED_NO_BOOK": 15,
+  "UNRESOLVED_ABOVE_ASK": 1
+ },
+ "backfill_total_l5_fills": 3166,
+ "backfill_chunk_holes": 0,
+ "resolution": "whole seconds, event-driven; no interpolation, no manufactured sub-second state",
+ "per_window": [
+  {
+   "market_slug": "btc-updown-15m-1787274000",
+   "contract_length": "15m",
+   "window_utc": [
+    1787274000,
+    1787274900
+   ],
+   "n_events": 145,
+   "fills_in_backfill": 145,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "96130134142585380589598164875912050078764872810076261184365024885646777572261",
+    "down": "88168024926615299762915745134404456008926950205482700560123893248136441143968"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787290200",
+   "contract_length": "15m",
+   "window_utc": [
+    1787290200,
+    1787291100
+   ],
+   "n_events": 379,
+   "fills_in_backfill": 379,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "68053599192034332996506097228923479102527860498493114785335945798323495083552",
+    "down": "77468821864231965147674736663234589747070173571123419346521510279572623008571"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787296500",
+   "contract_length": "15m",
+   "window_utc": [
+    1787296500,
+    1787297400
+   ],
+   "n_events": 245,
+   "fills_in_backfill": 245,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "111391172532666726255234677943994769989466496466524244292211629245520313007849",
+    "down": "83382632747033594820713281397104619098400094322040539972729369852260944440831"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787300100",
+   "contract_length": "15m",
+   "window_utc": [
+    1787300100,
+    1787301000
+   ],
+   "n_events": 398,
+   "fills_in_backfill": 398,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "57006202117550541518521961689036825756655221835821437576802607839503907636078",
+    "down": "1850913401628293007994621867496115006695624924039532983681522971528992487442"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787305500",
+   "contract_length": "15m",
+   "window_utc": [
+    1787305500,
+    1787306400
+   ],
+   "n_events": 246,
+   "fills_in_backfill": 246,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "12058521546134409639599734692337965366177254906196152500500691588607977849795",
+    "down": "52654791214784241373087337558451000589277208516309514032416274652398466639092"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-15m-1787306400",
+   "contract_length": "15m",
+   "window_utc": [
+    1787306400,
+    1787307300
+   ],
+   "n_events": 268,
+   "fills_in_backfill": 268,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "50830420171160670624154433620588972779081471015448116738439344157061154820801",
+    "down": "14416592340950540945801608693393189139119239491754781295018014596076520942196"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787307300",
+   "contract_length": "15m",
+   "window_utc": [
+    1787307300,
+    1787308200
+   ],
+   "n_events": 236,
+   "fills_in_backfill": 236,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "95815248540219353140033614986271110424319486519533240272288918593877833451835",
+    "down": "72725167458857066535088887580151392707918501129306890140232660058418276225226"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-15m-1787311800",
+   "contract_length": "15m",
+   "window_utc": [
+    1787311800,
+    1787312700
+   ],
+   "n_events": 238,
+   "fills_in_backfill": 238,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "109883474150629705400022168192615903490304320580514845817582910765392958324615",
+    "down": "41507143742792454373653280927870272713827782437572162399865647865584746441666"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-15m-1787362200",
+   "contract_length": "15m",
+   "window_utc": [
+    1787362200,
+    1787363100
+   ],
+   "n_events": 281,
+   "fills_in_backfill": 281,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "17746763795151727267079145295136524064764795102982981086288601338416705891841",
+    "down": "59053489467876473663117833937156827384125133966597880426907837418755083118605"
+   },
+   "winner_up": false
+  },
+  {
+   "market_slug": "btc-updown-15m-1787363100",
+   "contract_length": "15m",
+   "window_utc": [
+    1787363100,
+    1787364000
+   ],
+   "n_events": 208,
+   "fills_in_backfill": 208,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "58306571321996642443082328026865114876781946299719081948677288788696652860269",
+    "down": "97885698076066508844285778783112795919487711812945544986608533083132069283171"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787365800",
+   "contract_length": "15m",
+   "window_utc": [
+    1787365800,
+    1787366700
+   ],
+   "n_events": 302,
+   "fills_in_backfill": 302,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "30759864932560425919287214608833322211597767159071052497377749806186627746233",
+    "down": "72266249524686852361660408215949777627474075494275628649972582568231543523912"
+   },
+   "winner_up": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787369400",
+   "contract_length": "15m",
+   "window_utc": [
+    1787369400,
+    1787370300
+   ],
+   "n_events": 220,
+   "fills_in_backfill": 220,
+   "fills_without_a_block_timestamp_excluded": 0,
+   "tokens": {
+    "up": "82043716617473588632854672808816246807298402218334971927981070244663300404685",
+    "down": "71881000607989322244571190852705184623007523731075259717556038672733236182123"
+   },
+   "winner_up": false
+  }
+ ]
+}
