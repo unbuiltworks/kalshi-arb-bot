@@ -1,0 +1,98 @@
+name: s3-cohort
+# S3 prospective cohort: ZERO CAPITAL, read-only public endpoints only.
+# No credentials, no signing, no order submission. The job collects a
+# read-only PMUS book tape and runs the frozen S3 instrument over it.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "collection minutes (one BTC15m window is 15)"
+        required: false
+        default: "80"
+      series:
+        description: "PMUS recurring series slug"
+        required: false
+        default: "btc-updown-15m"
+
+permissions:
+  contents: write
+
+jobs:
+  collect-and-measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/august-l5-forensic-replay-788cml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify the frozen S3 fingerprint BEFORE collecting
+        run: |
+          python3 -c "
+          from analysis.l5.s3.spec import assert_frozen, S3_FINGERPRINT
+          assert_frozen()
+          want='8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df'
+          assert S3_FINGERPRINT==want, 'S3 spec moved; refusing to run'
+          print('S3 frozen OK', S3_FINGERPRINT)"
+
+      - name: Assert no execution surface is reachable
+        run: |
+          python3 -c "
+          from analysis.l5.s3.instrument import assert_no_execution_surface
+          assert_no_execution_surface(); print('no signing/execution module loaded')"
+
+      - name: Run the S3 test suite (must pass before any collection)
+        run: |
+          pip install -q pytest
+          python3 -m pytest tests/test_s3_instrument.py -q
+
+      - name: Collect read-only PMUS book tape
+        id: collect
+        continue-on-error: true
+        run: |
+          mkdir -p data/s3_cohort
+          python3 src/pmus_book_tape.py \
+            --out-dir data/s3_cohort \
+            --series "${{ github.event.inputs.series || 'btc-updown-15m' }}" \
+            --minutes "${{ github.event.inputs.minutes || 80 }}" \
+            --interval 2 --with-book 2>&1 | tail -40 || true
+          ls -la data/s3_cohort || true
+
+      - name: Run the frozen S3 instrument over the collected tape
+        run: |
+          TAPE=$(ls -1 data/s3_cohort/*.jsonl 2>/dev/null | head -1 || true)
+          if [ -z "$TAPE" ]; then
+            echo "NO TAPE COLLECTED -- recording that fact, not inventing data"
+            python3 - <<'PY'
+          import json, os
+          os.makedirs("analysis/l5/s3", exist_ok=True)
+          json.dump({"VERDICT": "NO_TAPE_COLLECTED",
+                     "detail": "the collector produced no book rows; this is "
+                               "an acquisition failure, not a zero-fill "
+                               "measurement, and the cohort is NOT advanced",
+                     "cohort_completed": 0},
+                    open("analysis/l5/s3/S3_COHORT.json", "w"), indent=1)
+          PY
+          else
+            echo "running over $TAPE"
+            python3 -m analysis.l5.s3.cohort --tape "$TAPE"
+          fi
+
+      - name: Commit artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/s3_cohort analysis/l5/s3 || true
+          if git diff --cached --quiet; then
+            echo "nothing to commit"; exit 0
+          fi
+          printf 'data(s3): prospective cohort tape and frozen-instrument output [skip ci]\n\nZero capital. Read-only public endpoints. No orders, no signing.\n' > /tmp/m.txt
+          git commit -F /tmp/m.txt
+          for i in 1 2 3 4; do
+            git push origin claude/august-l5-forensic-replay-788cml && break
+            sleep $((2**i))
+          done
