@@ -1,0 +1,8553 @@
+{
+ "classification": "DIAGNOSTIC_HISTORICAL_REPLAY_NOT_VALIDATION",
+ "not_part_of_prospective_cohort": true,
+ "must_not_modify_s1_while_cohort_runs": true,
+ "frozen_candidate": {
+  "candidate_fingerprint_sha256": "441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe",
+  "matches_frozen": true,
+  "module_file_sha256": "50a1dd1b85e0775389004953ac6f4d8a1606048f510be1fda0a786e77830a56f",
+  "classify_fill_is_imported_not_reimplemented": true
+ },
+ "candidate": {
+  "name": "SHADOW_S1_MINIMAL_TWO_SIDED_PASSIVE",
+  "levels": 1,
+  "offset_from_bid_ticks": 0,
+  "quantity_shares": 23.61,
+  "quantity_source": "analysis/l5/shadow/L5_BENCHMARKS.json leg_qty_median",
+  "replenish_after_evidenced_fill": true,
+  "replenish_after_uncertain_fill": false,
+  "order_lifetime_s": null,
+  "residual_cap_shares": 80,
+  "residual_control": "QUOTE_SUPPRESSION_ONLY",
+  "tte_shutdown_s": 60,
+  "no_5c_extend_rule": true,
+  "no_aggressive_opposite_side": true,
+  "fill_standard": "evidenced only; uncertain tracked separately"
+ },
+ "market_slug": "btc-updown-15m-1787300100",
+ "window_utc": [
+  1787300100,
+  1787301000
+ ],
+ "tokens": {
+  "up": "57006202117550541518521961689036825756655221835821437576802607839503907636078",
+  "down": "1850913401628293007994621867496115006695624924039532983681522971528992487442"
+ },
+ "selection_gates": {
+  "G1_complete_l2_coverage": true,
+  "G2_l5_active_throughout": true,
+  "G3_substantial_activity": true,
+  "G4_both_mechanisms": true,
+  "G5_zero_chunk_holes": true
+ },
+ "l5_fill_classes_in_window": {
+  "classes": {
+   "RESTING_BID_CONSISTENT": 305,
+   "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 91,
+   "INSIDE_SPREAD_IMPROVED_THE_TOUCH": 1,
+   "NO_BOOK": 1
+  },
+  "n_resting_bid_consistent": 305,
+  "n_mint_consistent": 91,
+  "BOTH_MECHANISMS_PRESENT": true
+ },
+ "prints": {
+  "supplied": true,
+  "n_maker_order_legs": 2355,
+  "chunk_holes": 0,
+  "coverage": "COMPLETE"
+ },
+ "rules": {
+  "no_crediting_s1_with_l5_fills": "separate ledgers; S1 inventory moves only on an EVIDENCED_* verdict on S1's own order",
+  "no_touch_equals_fill": "only the frozen classifier's evidenced verdicts move inventory; uncertain verdicts are excluded",
+  "no_future_information": "Book.at(t) returns the latest row at or before t; prints from (t-1, t]; the tape is walked strictly forward"
+ },
+ "arms": {
+  "A_faithful_frozen_no_prints": {
+   "events": [
+    {
+     "t": 1787300100,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.44,
+     "order_id": "replay-1",
+     "queue_ahead": 4.46
+    },
+    {
+     "t": 1787300100,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.55,
+     "order_id": "replay-2",
+     "queue_ahead": 15.44
+    },
+    {
+     "t": 1787300102,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.44,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-1"
+    },
+    {
+     "t": 1787300102,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.4,
+     "order_id": "replay-3",
+     "queue_ahead": 55.0
+    },
+    {
+     "t": 1787300107,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 6.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300109,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 12.375,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300110,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 2.804877,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300112,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 5.243901,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300112,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 9.390242,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300115,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.4,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-3"
+    },
+    {
+     "t": 1787300115,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.39,
+     "order_id": "replay-4",
+     "queue_ahead": 45.0
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 7.5,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 5.4,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 23.975,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 9.45,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300124,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.39,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-4"
+    },
+    {
+     "t": 1787300124,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.38,
+     "order_id": "replay-5",
+     "queue_ahead": 160.0
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 5.73,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 22.7,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 9.16,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 4.36,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300134,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.39,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300137,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.58,
+     "size": 66.98,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300137,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.58,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300139,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.57,
+     "size": 4.63,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300140,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.57,
+     "size": 0.49,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300141,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-2"
+    },
+    {
+     "t": 1787300141,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.54,
+     "order_id": "replay-6",
+     "queue_ahead": 57.04
+    },
+    {
+     "t": 1787300143,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 52.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300145,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.54,
+     "size": 15.96,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300145,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.52,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300145,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.52,
+     "size": 9.603332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300146,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.51,
+     "size": 39.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300146,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.54,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-6"
+    },
+    {
+     "t": 1787300146,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.5,
+     "order_id": "replay-7",
+     "queue_ahead": 10.0
+    },
+    {
+     "t": 1787300148,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.48,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300152,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.5,
+     "size": 20.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300152,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.48,
+     "size": 6.2,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300154,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.49,
+     "size": 5.11,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.47,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.49,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.47,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300158,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.5,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-7"
+    },
+    {
+     "t": 1787300158,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.49,
+     "order_id": "replay-8",
+     "queue_ahead": 304.2
+    },
+    {
+     "t": 1787300163,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300163,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300165,
+     "who": "S1",
+     "kind": "uncertain",
+     "outcome": "down",
+     "verdict": "UNCERTAIN_PARTIAL",
+     "order_id": "replay-8",
+     "price": 0.49,
+     "excluded_from_primary_economics": true
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.45,
+     "size": 52.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.46,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.45,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.45,
+     "size": 19.8,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300170,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.4,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300170,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.4,
+     "size": 70.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300170,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.39,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 40.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.54,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 30.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "S1",
+     "kind": "uncertain",
+     "outcome": "down",
+     "verdict": "UNCERTAIN_PARTIAL",
+     "order_id": "replay-8",
+     "price": 0.49,
+     "excluded_from_primary_economics": true
+    },
+    {
+     "t": 1787300182,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.52,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300182,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.51,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300183,
+     "who": "S1",
+     "kind": "uncertain",
+     "outcome": "down",
+     "verdict": "UNCERTAIN_PARTIAL",
+     "order_id": "replay-8",
+     "price": 0.49,
+     "excluded_from_primary_economics": true
+    },
+    {
+     "t": 1787300185,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.48,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300190,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 19.83,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300190,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 60.17,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300191,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.46,
+     "size": 67.392591,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300191,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.49,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-8"
+    },
+    {
+     "t": 1787300191,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.46,
+     "order_id": "replay-9",
+     "queue_ahead": 5.2
+    },
+    {
+     "t": 1787300194,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.46,
+     "size": 12.818517,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300199,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 57.54,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300200,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300201,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.46,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-9"
+    },
+    {
+     "t": 1787300201,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.34,
+     "order_id": "replay-10",
+     "queue_ahead": 163.8
+    },
+    {
+     "t": 1787300203,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.34,
+     "size": 17.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 54.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 70.9,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 11.5,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.33,
+     "size": 28.57,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300208,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 6.709676,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 14.451611,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 7.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 14.161289,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 14.225805,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 20.41,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.68,
+     "size": 7.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300211,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300211,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300212,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 57.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300214,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 23.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300214,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 23.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300217,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.55,
+     "size": 57.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300217,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.56,
+     "size": 65.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300245,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 16.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300245,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300251,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 9.627117,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300256,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300256,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 6.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300256,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300257,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.39,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300263,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.29,
+     "size": 7.042251,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300265,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.29,
+     "size": 10.140844,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300270,
+     "who": "S1",
+     "kind": "uncertain",
+     "outcome": "down",
+     "verdict": "UNCERTAIN_PARTIAL",
+     "order_id": "replay-10",
+     "price": 0.34,
+     "excluded_from_primary_economics": true
+    },
+    {
+     "t": 1787300279,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.34,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-10"
+    },
+    {
+     "t": 1787300279,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.32,
+     "order_id": "replay-11",
+     "queue_ahead": 10.0
+    },
+    {
+     "t": 1787300283,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 14.63235,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300283,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 24.63,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300286,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.62,
+     "size": 51.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300289,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 48.82,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300289,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 16.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300292,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 67.43478,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300298,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 20.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300298,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.7,
+     "size": 8.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300299,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 73.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300299,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-11"
+    },
+    {
+     "t": 1787300301,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300313,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 2.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300323,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 6.471427,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300331,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 8.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300332,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 2.026312,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300332,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 1.763154,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300349,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 12.987008,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300349,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 1.2987,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 20.91139,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 56.06,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 1.204817,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 7.3012,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 46.7,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300359,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.19,
+     "size": 1.234563,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300361,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.18,
+     "size": 2.439022,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300361,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.18,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300362,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.18,
+     "size": 5.060972,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300370,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 0.125,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300379,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.75,
+     "size": 48.48,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300379,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.76,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 61.48,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.730001,
+     "size": 0.389628,
+     "t_minus_1_class": "INSIDE_SPREAD_IMPROVED_THE_TOUCH",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 4.642856,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 13.5,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 47.61,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300394,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 20.64,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300394,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 17.241378,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.7,
+     "size": 45.98,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 41.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.7,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300398,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300400,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 21.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300401,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.28,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 5.133332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 1.346664,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 8.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.28,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 6.878376,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 5.066664,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 6.76,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300412,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300412,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.067565,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300415,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.067565,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300415,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.067565,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300415,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 1.32,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 11.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 15.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 5.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300424,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300425,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300425,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300428,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 3.935895,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300440,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 22.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300446,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300449,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300455,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 15.535713,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300455,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300455,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300457,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300460,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 51.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300466,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 39.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300469,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 32.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300479,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300479,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300479,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 10.246374,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300485,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.28,
+     "size": 21.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300509,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.63,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300509,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 30.28205,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300523,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 9.236955,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300532,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 67.254236,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300532,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.58,
+     "size": 20.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300533,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 4.760868,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300533,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300533,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300553,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 3.474575,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300562,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.36,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300562,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.36,
+     "size": 15.275,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300563,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.35,
+     "size": 24.3,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300563,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.33,
+     "size": 71.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300575,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.3,
+     "size": 6.38,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300577,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 12.8,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300577,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.3,
+     "size": 73.62,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300578,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 39.2,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300578,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 10.795066,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300578,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 30.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300580,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 13.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300580,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 18.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300584,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 14.59,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300584,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300589,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.65,
+     "size": 59.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300595,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.57,
+     "size": 0.679068,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300598,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 11.37,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300598,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 68.63,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300614,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.58,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300616,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 5.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300631,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 10.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300635,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.58,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300644,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300646,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 9.932202,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300649,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 5.9,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300649,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.59,
+     "size": 6.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300649,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.59,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300656,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 56.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300658,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.3,
+     "size": 3.97,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.34,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.33,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 11.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.64,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.64,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300667,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.63,
+     "size": 8.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300667,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.63,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300668,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300671,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 8.321738,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300671,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 12.869564,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300692,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.65,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300694,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.65,
+     "size": 7.4,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300710,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.78,
+     "size": 61.74,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.78,
+     "size": 18.26,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 6.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300716,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.75,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300719,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 17.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300721,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 63.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300721,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300727,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.81,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300733,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 3.571425,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300734,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 11.904756,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.84,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300742,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300742,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 1.176466,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300745,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 6.976742,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300745,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 23.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300745,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 3.6279,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300749,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.13,
+     "size": 6.965515,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300749,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.12,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300749,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.12,
+     "size": 5.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300751,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 5.617972,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300751,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 1.12359,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300751,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 1.12359,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300752,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300754,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 27.619562,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300754,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 17.74,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300755,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300755,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 79.96,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300755,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300760,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.07,
+     "size": 67.98,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300761,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 65.857141,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300763,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.06,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300764,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 19.63,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300769,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300772,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 2.041233,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300773,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 40.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300776,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 51.56,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300779,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 28.44,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300782,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300782,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300782,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 23.333332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300784,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300784,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 0.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 23.64,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 56.36,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.07,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300791,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300793,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 21.05,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300797,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 5.208325,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300797,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300799,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 5.1875,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300799,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 11.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300800,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 53.6,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300800,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 44.845333,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300803,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 0.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300803,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300803,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 66.26,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 11.69,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 57.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 11.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 9.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 13.61,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.92,
+     "size": 61.66125,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.92,
+     "size": 3.64,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300806,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 14.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300806,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 43.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300806,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300808,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 6.73,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300808,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 73.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300811,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300811,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 7.52,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300811,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300814,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.07,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300820,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.89,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300820,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.92,
+     "size": 62.5,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300820,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.9,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300824,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.13,
+     "size": 10.1,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300827,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.86,
+     "size": 33.161427,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300829,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 5.81395,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300829,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300830,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.79,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300833,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.84,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300838,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 39.423912,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300839,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 1.73,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300839,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 78.27,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300839,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300848,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300850,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300853,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300856,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.83,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300856,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.82,
+     "size": 6.333332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300862,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 3.292127,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300863,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 33.666665,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300863,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 33.4,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300863,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 12.93,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300865,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.83,
+     "size": 29.7,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300865,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 29.7,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 49.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 18.521738,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 18.782607,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 9.521738,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300869,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.78,
+     "size": 61.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300869,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 25.15,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300871,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 14.179486,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300871,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300871,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 33.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 50.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.19,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 25.2875,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 4.71,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.19,
+     "size": 10.348147,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300883,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.13,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300883,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 1.190475,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300883,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 78.8,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300884,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 48.482346,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300887,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 11.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 9.09472,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 8.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 11.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.97,
+     "size": 70.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300892,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 6.1237,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300892,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 5.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300892,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300893,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 70.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300893,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 41.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300893,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 19.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 14.17,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 38.31,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 41.69,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 5.31,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 60.52,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300899,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 71.57,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300901,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300902,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 10.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 6.175233,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 2.051533,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 3.082466,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 10.298966,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300910,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 10.20405,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300911,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300913,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 59.79,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300916,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 18.39,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300925,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.01,
+     "size": 80.0,
+     "t_minus_1_class": "NO_BOOK",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300935,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.97,
+     "size": 21.44,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300941,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 24.75,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300941,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 24.75,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300944,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 47.97,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300944,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300944,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 47.97,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300948,
+     "who": "S1",
+     "kind": "uncertain",
+     "outcome": "up",
+     "verdict": "UNCERTAIN_PARTIAL",
+     "order_id": "replay-5",
+     "price": 0.38,
+     "excluded_from_primary_economics": true
+    },
+    {
+     "t": 1787300959,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.99,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": null
+    },
+    {
+     "t": 1787300962,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.99,
+     "size": 52.43,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": null
+    },
+    {
+     "t": 1787300965,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.99,
+     "size": 22.57,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": null
+    }
+   ],
+   "s1_final": {
+    "inv_up": 70.83,
+    "inv_down": 165.27,
+    "matched": 70.83,
+    "residual": 94.44,
+    "pair_cost": 0.867143,
+    "n_fills": 10
+   },
+   "l5_final": {
+    "inv_up": 4813.4389,
+    "inv_down": 5041.8925,
+    "matched": 4813.4389,
+    "residual": 228.4537,
+    "pair_cost": 0.991077,
+    "n_fills": 398
+   },
+   "s1_uncertain_counts": {
+    "UNCERTAIN_PARTIAL": 5
+   },
+   "unresolvable_ticks": 0,
+   "orders_placed": 11,
+   "used_prints": false,
+   "divergence": {
+    "D1_first_l5_fill": 1787300107,
+    "D2_l5_matched_while_s1_zero": 1787300134,
+    "D3_first_s1_evidenced_fill": 1787300102,
+    "D4_residual_gap_ge_one_leg": 1787300102,
+    "designated_first_material_divergence": 1787300134,
+    "definition": "D2: the first second at which L5 holds a matched pair and S1 holds none. Chosen as the marker because it is the first divergence in POSITION rather than in quote."
+   }
+  },
+  "B_sensitivity_with_chain_prints": {
+   "events": [
+    {
+     "t": 1787300100,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.44,
+     "order_id": "replay-1",
+     "queue_ahead": 4.46
+    },
+    {
+     "t": 1787300100,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.55,
+     "order_id": "replay-2",
+     "queue_ahead": 15.44
+    },
+    {
+     "t": 1787300101,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 23.61,
+     "evidence": "EVIDENCED_TRADE_THROUGH",
+     "order_id": "replay-2"
+    },
+    {
+     "t": 1787300101,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.55,
+     "order_id": "replay-3",
+     "queue_ahead": 15.44
+    },
+    {
+     "t": 1787300102,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.44,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-1"
+    },
+    {
+     "t": 1787300102,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.4,
+     "order_id": "replay-4",
+     "queue_ahead": 55.0
+    },
+    {
+     "t": 1787300107,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 6.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300109,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 12.375,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300110,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 2.804877,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300112,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 5.243901,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300112,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.59,
+     "size": 9.390242,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300115,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.4,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-4"
+    },
+    {
+     "t": 1787300115,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.39,
+     "order_id": "replay-5",
+     "queue_ahead": 45.0
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 7.5,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 5.4,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 23.975,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300116,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 9.45,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300124,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.39,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-5"
+    },
+    {
+     "t": 1787300124,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "up",
+     "price": 0.38,
+     "order_id": "replay-6",
+     "queue_ahead": 160.0
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 5.73,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 22.7,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 9.16,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300133,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.6,
+     "size": 4.36,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300134,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.39,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300137,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.58,
+     "size": 66.98,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300137,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.58,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300139,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.57,
+     "size": 4.63,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300140,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.57,
+     "size": 0.49,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300141,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-3"
+    },
+    {
+     "t": 1787300141,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.54,
+     "order_id": "replay-7",
+     "queue_ahead": 57.04
+    },
+    {
+     "t": 1787300143,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 52.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300145,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.54,
+     "size": 15.96,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300145,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.52,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300145,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.52,
+     "size": 9.603332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300145,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.54,
+     "size": 23.61,
+     "evidence": "EVIDENCED_TRADE_THROUGH",
+     "order_id": "replay-7"
+    },
+    {
+     "t": 1787300145,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.54,
+     "order_id": "replay-8",
+     "queue_ahead": 57.04
+    },
+    {
+     "t": 1787300146,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.51,
+     "size": 39.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300146,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.54,
+     "size": 23.61,
+     "evidence": "EVIDENCED_LEVEL_CONSUMED",
+     "order_id": "replay-8"
+    },
+    {
+     "t": 1787300146,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.5,
+     "order_id": "replay-9",
+     "queue_ahead": 10.0
+    },
+    {
+     "t": 1787300148,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.48,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300149,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.5,
+     "size": 23.61,
+     "evidence": "EVIDENCED_TRADE_THROUGH",
+     "order_id": "replay-9"
+    },
+    {
+     "t": 1787300149,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.5,
+     "order_id": "replay-10",
+     "queue_ahead": 10.0
+    },
+    {
+     "t": 1787300151,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.5,
+     "size": 23.61,
+     "evidence": "EVIDENCED_TRADE_THROUGH",
+     "order_id": "replay-10"
+    },
+    {
+     "t": 1787300151,
+     "who": "S1",
+     "kind": "order_placed",
+     "outcome": "down",
+     "price": 0.5,
+     "order_id": "replay-11",
+     "queue_ahead": 10.0
+    },
+    {
+     "t": 1787300152,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.5,
+     "size": 20.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300152,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.48,
+     "size": 6.2,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300152,
+     "who": "S1",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.5,
+     "size": 23.61,
+     "evidence": "EVIDENCED_TRADE_THROUGH",
+     "order_id": "replay-11"
+    },
+    {
+     "t": 1787300154,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.49,
+     "size": 5.11,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.47,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.49,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300155,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.47,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300163,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300163,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.45,
+     "size": 52.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.46,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.45,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300166,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.45,
+     "size": 19.8,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300170,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.4,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300170,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.4,
+     "size": 70.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300170,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.39,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 40.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.54,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300178,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.55,
+     "size": 30.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300182,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.52,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300182,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.51,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300185,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.48,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300190,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 19.83,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300190,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 60.17,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300191,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.46,
+     "size": 67.392591,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300194,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.46,
+     "size": 12.818517,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300199,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 57.54,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300200,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300203,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.34,
+     "size": 17.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 54.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 70.9,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 11.5,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300205,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.33,
+     "size": 28.57,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300208,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 6.709676,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 14.451611,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 7.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 14.161289,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 14.225805,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 20.41,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.68,
+     "size": 7.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300209,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300211,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300211,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300212,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 57.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300214,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 23.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300214,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 23.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300217,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.55,
+     "size": 57.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300217,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.56,
+     "size": 65.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300245,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 16.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300245,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300251,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 9.627117,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300256,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300256,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 6.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300256,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.4,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300257,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.39,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300263,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.29,
+     "size": 7.042251,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300265,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.29,
+     "size": 10.140844,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300283,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 14.63235,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300283,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 24.63,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300286,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.62,
+     "size": 51.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300289,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 48.82,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300289,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 16.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300292,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 67.43478,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300298,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 20.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300298,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.7,
+     "size": 8.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300299,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 73.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300301,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300313,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 2.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300323,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 6.471427,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300331,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 8.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300332,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 2.026312,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300332,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 1.763154,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300349,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 12.987008,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300349,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 1.2987,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 20.91139,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300350,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 56.06,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 1.204817,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 7.3012,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300358,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 46.7,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300359,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.19,
+     "size": 1.234563,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300361,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.18,
+     "size": 2.439022,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300361,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.18,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300362,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.18,
+     "size": 5.060972,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300370,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 0.125,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300379,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.75,
+     "size": 48.48,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300379,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.76,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 61.48,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.730001,
+     "size": 0.389628,
+     "t_minus_1_class": "INSIDE_SPREAD_IMPROVED_THE_TOUCH",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 4.642856,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 13.5,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300388,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 47.61,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300394,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 20.64,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300394,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 17.241378,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.7,
+     "size": 45.98,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 41.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300397,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.7,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300398,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300400,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.69,
+     "size": 21.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300401,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.28,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 5.133332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 1.346664,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300403,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 8.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.28,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 6.878376,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300404,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 2.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 5.066664,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300406,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 6.76,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300412,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300412,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.067565,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300415,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.067565,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300415,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 5.067565,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300415,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.26,
+     "size": 1.32,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 11.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 15.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.23,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300416,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 5.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300424,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300425,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300425,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300428,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 3.935895,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300440,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.21,
+     "size": 22.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300446,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.74,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300449,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300455,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 15.535713,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300455,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300455,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300457,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.72,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300460,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.73,
+     "size": 51.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300466,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.71,
+     "size": 39.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300469,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 32.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300479,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300479,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300479,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 10.246374,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300485,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.28,
+     "size": 21.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300509,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.63,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300509,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 30.28205,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300523,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 9.236955,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300532,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 67.254236,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300532,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.58,
+     "size": 20.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300533,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 4.760868,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300533,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300533,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.53,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300553,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 3.474575,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300562,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.36,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300562,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.36,
+     "size": 15.275,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300563,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.35,
+     "size": 24.3,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300563,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.33,
+     "size": 71.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300575,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.3,
+     "size": 6.38,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300577,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.31,
+     "size": 12.8,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300577,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.3,
+     "size": 73.62,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300578,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 39.2,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300578,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 10.795066,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300578,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.27,
+     "size": 30.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300580,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 13.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300580,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 18.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300584,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 14.59,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300584,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.25,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300589,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.65,
+     "size": 59.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300595,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.57,
+     "size": 0.679068,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300598,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 11.37,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300598,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.48,
+     "size": 68.63,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300614,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.58,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300616,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.61,
+     "size": 5.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300631,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 10.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300635,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.58,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300644,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300646,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.41,
+     "size": 9.932202,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300649,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 5.9,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300649,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.59,
+     "size": 6.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300649,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.59,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300656,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.32,
+     "size": 56.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300658,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.3,
+     "size": 3.97,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.34,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.33,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 11.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.64,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.66,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300662,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.64,
+     "size": 60.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300667,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.63,
+     "size": 8.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300667,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.63,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300668,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.6,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300671,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 8.321738,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300671,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.54,
+     "size": 12.869564,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300692,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.65,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300694,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.65,
+     "size": 7.4,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300710,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.78,
+     "size": 61.74,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.78,
+     "size": 18.26,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 6.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300712,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300716,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.75,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300719,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 17.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300721,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 63.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300721,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300727,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.81,
+     "size": 20.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300733,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 3.571425,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300734,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 11.904756,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300740,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.84,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300742,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 77.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300742,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 1.176466,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300745,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 6.976742,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300745,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 23.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300745,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 3.6279,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300749,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.13,
+     "size": 6.965515,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300749,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.12,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300749,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.12,
+     "size": 5.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300751,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 5.617972,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300751,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 1.12359,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300751,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 1.12359,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300752,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300754,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 27.619562,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300754,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 17.74,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300755,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300755,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 79.96,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300755,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300760,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.07,
+     "size": 67.98,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300761,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 65.857141,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300763,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.06,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300764,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 19.63,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300769,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300772,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 2.041233,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300773,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 40.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300776,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 51.56,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300779,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 28.44,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300782,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300782,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300782,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 23.333332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300784,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 3.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300784,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 0.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 23.64,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 56.36,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300788,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.07,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300791,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300793,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 21.05,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300797,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 5.208325,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300797,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300799,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 5.1875,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300799,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 11.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300800,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 53.6,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300800,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 44.845333,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300803,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 0.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300803,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300803,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 66.26,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 11.69,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 57.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 11.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 9.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 13.61,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.92,
+     "size": 61.66125,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300805,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.92,
+     "size": 3.64,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300806,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 14.29,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300806,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.93,
+     "size": 43.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300806,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300808,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 6.73,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300808,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 73.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300811,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300811,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 7.52,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300811,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.91,
+     "size": 3.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300814,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.07,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300820,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.89,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300820,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.92,
+     "size": 62.5,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300820,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.9,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300824,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.13,
+     "size": 10.1,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300827,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.86,
+     "size": 33.161427,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300829,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 5.81395,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300829,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300830,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.79,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300833,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.84,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300838,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 39.423912,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300839,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 1.73,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300839,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.09,
+     "size": 78.27,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300839,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.08,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300848,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300850,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 77.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300853,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.14,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300856,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.83,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300856,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.82,
+     "size": 6.333332,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300862,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.11,
+     "size": 3.292127,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300863,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 33.666665,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300863,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 33.4,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300863,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.85,
+     "size": 12.93,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300865,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.83,
+     "size": 29.7,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300865,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.17,
+     "size": 29.7,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 49.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 18.521738,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 18.782607,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300868,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 9.521738,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300869,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.78,
+     "size": 61.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300869,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.77,
+     "size": 25.15,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300871,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 14.179486,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300871,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.22,
+     "size": 0.02,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300871,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.24,
+     "size": 33.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 50.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.19,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 25.2875,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.2,
+     "size": 4.71,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300877,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.19,
+     "size": 10.348147,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300883,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.13,
+     "size": 0.02,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300883,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 1.190475,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300883,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.16,
+     "size": 78.8,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300884,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.15,
+     "size": 48.482346,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300887,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 11.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 9.09472,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 8.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 11.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300889,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.97,
+     "size": 70.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300892,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 6.1237,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300892,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 5.1,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300892,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300893,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 70.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300893,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 41.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300893,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 19.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 14.17,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 38.31,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 41.69,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 5.31,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300895,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 60.52,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300899,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 71.57,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300901,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300902,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.04,
+     "size": 10.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 6.175233,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 2.051533,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 3.082466,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300908,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.03,
+     "size": 10.298966,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300910,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 10.20405,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300911,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 10.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300913,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 59.79,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300916,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 18.39,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300925,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.01,
+     "size": 80.0,
+     "t_minus_1_class": "NO_BOOK",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300935,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.97,
+     "size": 21.44,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300941,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 24.75,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300941,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.98,
+     "size": 24.75,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.02,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.96,
+     "size": 80.0,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300943,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300944,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.95,
+     "size": 47.97,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300944,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.94,
+     "size": 80.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": false
+    },
+    {
+     "t": 1787300944,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "down",
+     "price": 0.05,
+     "size": 47.97,
+     "t_minus_1_class": "AT_OR_ABOVE_ASK_NOT_MEASURABLE",
+     "mint_consistent": true
+    },
+    {
+     "t": 1787300948,
+     "who": "S1",
+     "kind": "uncertain",
+     "outcome": "up",
+     "verdict": "UNCERTAIN_PARTIAL",
+     "order_id": "replay-6",
+     "price": 0.38,
+     "excluded_from_primary_economics": true
+    },
+    {
+     "t": 1787300959,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.99,
+     "size": 5.0,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": null
+    },
+    {
+     "t": 1787300962,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.99,
+     "size": 52.43,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": null
+    },
+    {
+     "t": 1787300965,
+     "who": "L5",
+     "kind": "fill",
+     "outcome": "up",
+     "price": 0.99,
+     "size": 22.57,
+     "t_minus_1_class": "RESTING_BID_CONSISTENT",
+     "mint_consistent": null
+    }
+   ],
+   "s1_final": {
+    "inv_up": 70.83,
+    "inv_down": 165.27,
+    "matched": 70.83,
+    "residual": 94.44,
+    "pair_cost": 0.935714,
+    "n_fills": 10
+   },
+   "l5_final": {
+    "inv_up": 4813.4389,
+    "inv_down": 5041.8925,
+    "matched": 4813.4389,
+    "residual": 228.4537,
+    "pair_cost": 0.991077,
+    "n_fills": 398
+   },
+   "s1_uncertain_counts": {
+    "UNCERTAIN_PARTIAL": 1
+   },
+   "unresolvable_ticks": 0,
+   "orders_placed": 11,
+   "used_prints": true,
+   "divergence": {
+    "D1_first_l5_fill": 1787300107,
+    "D2_l5_matched_while_s1_zero": null,
+    "D3_first_s1_evidenced_fill": 1787300101,
+    "D4_residual_gap_ge_one_leg": 1787300101,
+    "designated_first_material_divergence": null,
+    "definition": "D2: the first second at which L5 holds a matched pair and S1 holds none. Chosen as the marker because it is the first divergence in POSITION rather than in quote."
+   }
+  }
+ }
+}
