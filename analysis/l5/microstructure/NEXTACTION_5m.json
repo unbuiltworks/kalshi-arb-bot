@@ -1,0 +1,63 @@
+{
+ "contract_length": "5m",
+ "protocol": "PREREGISTRATION_NEXTACTION.md, leave-one-window-out",
+ "n_windows": 23,
+ "par_pairs_excluded_from_target": true,
+ "quantity_is_not_a_target": true,
+ "n_decision_points": 177,
+ "n_non_terminal": 154,
+ "n_terminal": 23,
+ "coverage": 0.8182,
+ "rules_selected_across_folds": {
+  "side": {
+   "S-ALT": 23
+  },
+  "price": {
+   "P-TOUCH": 23
+  },
+  "act": {
+   "A-EXPOSE": 23
+  },
+  "time": {
+   "T-MED": 23
+  },
+  "ceil": {
+   "C-BASE": 23
+  }
+ },
+ "SIDE": {
+  "accuracy_covered": 0.8413,
+  "accuracy_all_non_terminal": 0.6883,
+  "baseline_majority": 0.5325,
+  "baseline_persistence": 0.1883,
+  "lift_over_best_baseline": 1.58
+ },
+ "PRICE": {
+  "exact_tick_hit_rate_covered": 0.1111,
+  "baseline_touch_hit_rate": 0.104,
+  "tick_error_p50": 7.999999999999996,
+  "tick_error_p90": 43.24100000000001,
+  "tick_error_mean": 17.175
+ },
+ "JOINT_SIDE_AND_PRICE": {
+  "exact_accuracy_covered": 0.0952
+ },
+ "ACTION_TYPE": {
+  "accuracy": 0.7966,
+  "baseline_majority": 0.7966,
+  "confusion_true_to_pred": {
+   "EXPOSE->EXPOSE": 141,
+   "WITHDRAW->EXPOSE": 23,
+   "MAINTAIN->EXPOSE": 13
+  }
+ },
+ "TIMING": {
+  "mae_s": 14.38,
+  "median_abs_error_s": 0,
+  "baseline_median_mae_s": 14.38
+ },
+ "CLIP_CEILING_secondary": {
+  "accuracy": 0.7403,
+  "base_rate_is_80": 0.2597
+ }
+}

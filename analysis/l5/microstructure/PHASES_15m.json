@@ -1,0 +1,130 @@
+{
+ "contract_length": "15m",
+ "phases_preregistered": [
+  {
+   "name": "OPENING",
+   "from_s": 0,
+   "to_s": 60
+  },
+  {
+   "name": "EARLY",
+   "from_s": 60,
+   "to_s": 300
+  },
+  {
+   "name": "MID",
+   "from_s": 300,
+   "to_s": 600
+  },
+  {
+   "name": "LATE",
+   "from_s": 600,
+   "to_s": 840
+  },
+  {
+   "name": "EXPIRY",
+   "from_s": 840,
+   "to_s": 900
+  }
+ ],
+ "boundaries_were_not_searched": true,
+ "no_alternative_slicing_reported": true,
+ "WHOLE_WINDOW": {
+  "n_transitions": 2028,
+  "n_ordered_pairs": 2016,
+  "base_rate_modal": 0.5676,
+  "first_order_accuracy": 0.5734,
+  "lift": 1.01,
+  "entropy_uncond_bits": 1.612,
+  "entropy_cond_bits": 1.508,
+  "bits_gained": 0.104,
+  "distribution": {
+   "MOVE_LEVEL": 0.5676,
+   "TWO_SIDED_ACQUISITION_MOVE_LEVEL": 0.3028,
+   "REPLENISH_SAME_PRICE": 0.0523,
+   "MATCHED_INJECTION": 0.0454
+  }
+ },
+ "BY_PHASE": {
+  "OPENING": {
+   "n_transitions": 136,
+   "n_ordered_pairs": 124,
+   "base_rate_modal": 0.5294,
+   "first_order_accuracy": 0.6129,
+   "lift": 1.158,
+   "entropy_uncond_bits": 2.018,
+   "entropy_cond_bits": 1.489,
+   "bits_gained": 0.53,
+   "distribution": {
+    "MOVE_LEVEL": 0.5294,
+    "TWO_SIDED_ACQUISITION_MOVE_LEVEL": 0.1691,
+    "REPLENISH_SAME_PRICE": 0.1029,
+    "OPEN_SIDE": 0.0882
+   }
+  },
+  "EARLY": {
+   "n_transitions": 563,
+   "n_ordered_pairs": 551,
+   "base_rate_modal": 0.5844,
+   "first_order_accuracy": 0.5935,
+   "lift": 1.016,
+   "entropy_uncond_bits": 1.362,
+   "entropy_cond_bits": 1.306,
+   "bits_gained": 0.056,
+   "distribution": {
+    "MOVE_LEVEL": 0.5844,
+    "TWO_SIDED_ACQUISITION_MOVE_LEVEL": 0.3464,
+    "REPLENISH_SAME_PRICE": 0.0373,
+    "TWO_SIDED_ACQUISITION_REPLENISH_SAME_PRICE": 0.0178
+   }
+  },
+  "MID": {
+   "n_transitions": 622,
+   "n_ordered_pairs": 610,
+   "base_rate_modal": 0.574,
+   "first_order_accuracy": 0.577,
+   "lift": 1.005,
+   "entropy_uncond_bits": 1.577,
+   "entropy_cond_bits": 1.526,
+   "bits_gained": 0.05,
+   "distribution": {
+    "MOVE_LEVEL": 0.574,
+    "TWO_SIDED_ACQUISITION_MOVE_LEVEL": 0.2878,
+    "REPLENISH_SAME_PRICE": 0.0707,
+    "MATCHED_INJECTION": 0.037
+   }
+  },
+  "LATE": {
+   "n_transitions": 673,
+   "n_ordered_pairs": 661,
+   "base_rate_modal": 0.5542,
+   "first_order_accuracy": 0.5582,
+   "lift": 1.007,
+   "entropy_uncond_bits": 1.554,
+   "entropy_cond_bits": 1.482,
+   "bits_gained": 0.072,
+   "distribution": {
+    "MOVE_LEVEL": 0.5542,
+    "TWO_SIDED_ACQUISITION_MOVE_LEVEL": 0.3165,
+    "MATCHED_INJECTION": 0.0758,
+    "REPLENISH_SAME_PRICE": 0.0357
+   }
+  },
+  "EXPIRY": {
+   "n_transitions": 34,
+   "n_ordered_pairs": 30,
+   "base_rate_modal": 0.5882,
+   "first_order_accuracy": 0.6667,
+   "lift": 1.133,
+   "entropy_uncond_bits": 1.592,
+   "entropy_cond_bits": 1.024,
+   "bits_gained": 0.568,
+   "distribution": {
+    "MOVE_LEVEL": 0.5882,
+    "MATCHED_INJECTION": 0.2059,
+    "TWO_SIDED_ACQUISITION_MOVE_LEVEL": 0.1176,
+    "REPLENISH_SAME_PRICE": 0.0882
+   }
+  }
+ }
+}

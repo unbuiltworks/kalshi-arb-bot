@@ -29,6 +29,18 @@ useful — it is in the branch history and readable without fetching tags.
 * Par pairs are **atomic, single-transaction, L5 taker on both legs**, price sum exactly 1.0000.
 * First fill at **6/7/7 s** (p25/p50/p75), identical on both contract lengths.
 
+## Corrections applied after the freeze
+
+The freeze covers the artifacts above. One **statistic** stated in
+`LADDER_MODEL.md` has since been corrected, and the correction is recorded
+here rather than hidden by a silent edit:
+
+* **"22 of 23 BTC5m windows open with an atomic pair" was wrong.** It counted
+  any same-second two-sided activity. Keyed on the TRANSACTION the correct
+  figures are **10 of 23 (BTC5m)** and **2 of 12 (BTC15m)**. No other frozen
+  claim is affected: the pair definition, the taker-on-both-legs result, the
+  volume shares and the 80-share lattice are unchanged.
+
 ## Rule
 
 Superseding work **cites this commit** rather than silently revising these

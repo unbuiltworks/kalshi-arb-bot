@@ -74,7 +74,14 @@ Same-block, opposite-outcome fills of **identical quantity** at
 | pairs | 104 | 48 |
 | summing to **exactly 1.0000** | **90.4%** | **100%** |
 | share of all shares acquired | **11.3%** | **28.8%** |
-| windows that *open* this way | — | **22 of 23** |
+| windows that *open* this way (**corrected**) | **2 of 12** | **10 of 23** |
+
+**CORRECTION (supersedes the first draft).** An earlier version of this file
+said "22 of 23 BTC5m windows open this way". That figure counted any
+same-second two-sided activity. Keyed properly on the TRANSACTION, the windows
+whose first L5 action is an atomic par pair are **10 of 23 (BTC5m)** and
+**2 of 12 (BTC15m)**. The pairs are not predominantly an opening phenomenon —
+on BTC15m they skew late (TTE fraction remaining p50 0.29).
 
 In the opening pairs one leg is visible in the book — often **from before the
 nominal open** — and the other has **no visible size at all** and classifies
