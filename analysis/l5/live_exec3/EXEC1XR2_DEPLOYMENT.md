@@ -114,10 +114,30 @@ Both reached the real final gate on live data — 17:42 read
 spread 0.0100, our price 0.0100 at offset 0, depth ahead 11137.66
 (anonymous) — and both stopped only on the owner's two refusals.
 
-**What these two boots do NOT show.** Both containers started AFTER their
-window had already opened (`waited_s: 0.0`), because the build took ~25
-minutes the first time and the redeploy ~13 minutes the second. So the
-pre-open **wait** is proven by tests, not yet by production. A third boot
-pointed at the 19:00Z window with a 3600 s bound is running to close that
-gap; until its log lands, the early-start claim rests on the unit tests
-alone, and this document should be read that way.
+**The pre-open wait, proven in production.** A third boot closed the gap the
+first two left open.
+
+| | |
+|---|---|
+| boot | **2026-10-06T18:19:13Z**, deployment `ca33d133-c4c0-4f22-ae5d-39ef47d8cc57` |
+| frozen slug | `cpc-btc-updown-15m-2026-10-06-1900z`, `window_start_unix 1791313200` |
+| pre-open detection | `no_discovery: true`, `no_substitution: true`, `no_roll_forward: true` |
+| **actual waited duration** | **2450.1 s (40 min 50 s) over 490 polls** |
+| window-open transition | `opened: true`, `tte_at_open_s 896.27` |
+| TTE at run start | 896.27 s, allowed (cutoff 120.0) |
+| AuthBook | bid/ask **0.4900/0.5000**, **age 0.012 s**, two-sided, 1st try, spread 0.0100 |
+| price at offset 0 | 0.4900, qty 0.01, depth ahead 818.13 (anonymous) |
+| final pre-POST TTE guard | **ok at 896.149 s**, `invariant: no submission when TTE <= 120.0s` |
+| refusals | `SIDE_RULE_INPUT_MISSING`, `DISARMED`, `FINGERPRINT_NOT_PINNED_BY_OWNER` |
+| `orders_submitted` | **0** |
+| durable latch | **unspent** — unscoped, no session id, no file created |
+| deadman | `no submission was attempted, so there is nothing that could be resting` |
+| venue mutation | none: the record shows no preview and no POST |
+
+Fingerprint in-container `0f3340195d68a5faf42dca97450e88eef3e7964ce4ca794c6e00baed54c9042f`
+with `xr2_frozen: true`; `RAILWAY_GIT_COMMIT_SHA
+44cbdc8117866976f128103defff6db83bfa1481`.
+
+The experiment no longer depends on a chat worker waking on the right second
+or on a redeploy finishing after market open: the process was already running
+41 minutes before the window and entered eligibility when it opened.
