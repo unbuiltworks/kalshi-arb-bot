@@ -117,3 +117,39 @@ No frozen verdict moves. Specifically: RUNNING PAIR-COST CONTROL remains
 finding; completion remains T1-pass / T2-fail / T3-fail; and the
 mint-opportunity conclusion is strengthened. S3 is unaffected — it consumes
 **live PMUS** data, not this archive.
+
+---
+
+## Addendum (2026-10-06) — the archive declares the defect itself
+
+A later check of the parquet schema found a **`crossed` column** in the
+source data: the archive flags the condition itself.
+
+| | |
+| --- | --- |
+| rows | 239,310 |
+| rows with `crossed = true` | **7,377 (3.08 %)** |
+| rows where `best_ask < best_bid` arithmetically | 5,689 |
+| flag agrees with the arithmetic | 215,430 of 217,118 comparable rows |
+
+Two consequences, both corrections to this note's first version:
+
+1. **The cause is better described as declared-but-unread than as
+   undetected.** My original wording ("almost certainly the delta capture
+   dropping an ask-side update") was a hypothesis about an unflagged
+   artifact. The archive's own flag shows the capture *knew*. The upstream
+   mechanism is still a hypothesis, but the condition was never hidden.
+2. **No consuming study in this repo reads the `crossed` column.** That is
+   the actual provenance failure here — ours, not the archive's. The flag
+   is also *broader* than the arithmetic test (7,377 vs 5,689 rows), so it
+   likely covers conditions beyond `ask < bid`, and it is the authoritative
+   signal.
+
+**Added standing rule, superseding rule 1 above where they differ:** any
+study consuming this archive must **read and report the `crossed` column**,
+not re-derive the condition arithmetically, and must state its exposure in
+terms of that flag.
+
+This addendum changes no frozen verdict. The direction of bias and the
+impact inventory stand; the pair-cost REFUTED verdict rests on bid-only
+evidence either way.
