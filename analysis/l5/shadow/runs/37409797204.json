@@ -1,0 +1,265 @@
+{
+  "produced_at_utc": "2026-10-06T03:56:37Z",
+  "produced_by_run_id": "37409797204",
+  "produced_by_sha": "d849a0f53e82d16fb856c1cc66d2fe14a5f00dc9",
+  "produced_by_run_number": "4",
+  "tapes_read": [
+    "shadow_20261006T012525Z.jsonl.gz",
+    "shadow_20261006T014819Z.jsonl.gz",
+    "shadow_20261006T033736Z.jsonl.gz"
+  ],
+  "candidate_fingerprint": "441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe",
+  "cohort_target": 25,
+  "COMPLETE_markets": 4,
+  "valid_measurement_markets": 5,
+  "infrastructure_failures_not_counted": 0,
+  "quarantined_tapes": [
+    {
+      "tape": "shadow_20261006T012525Z.jsonl.gz",
+      "run_id": 37399000910,
+      "validity": "INVALID_NO_BOOK_READS",
+      "markets_excluded": 84
+    },
+    {
+      "tape": "shadow_20261006T014819Z.jsonl.gz",
+      "run_id": 37400932571,
+      "validity": "INVALID_NO_DISCOVERY",
+      "markets_excluded": 57
+    }
+  ],
+  "evidenced_fills_valid_markets_only": 50,
+  "uncertain_fills_valid_markets_only": 115,
+  "gate_counts_counted_tapes": {
+    "VALID_MEASUREMENT": 5
+  },
+  "per_tape": [
+    {
+      "tape": "shadow_20261006T012525Z.jsonl.gz",
+      "tape_stamp_utc": "2026-10-06T01:25:25Z",
+      "run_id": 37399000910,
+      "run_number": 1,
+      "sha": "5af61f30ced2567850d970c02b799a0fefa86299",
+      "run_validity": "INVALID_NO_BOOK_READS",
+      "discovery_errors": [],
+      "gate_counts": {
+        "GATE3_NO_POLLS": 27,
+        "GATE1_NO_MARKET_IDENTITY": 57
+      },
+      "markets_excluded": 84,
+      "detail_withheld": "per-market rows omitted: this run is marked invalid, so its rows are not measurements. The raw tape is retained and unmodified."
+    },
+    {
+      "tape": "shadow_20261006T014819Z.jsonl.gz",
+      "tape_stamp_utc": "2026-10-06T01:48:19Z",
+      "run_id": 37400932571,
+      "run_number": 2,
+      "sha": "46c464ab0e2214ff413284eff7bd66ef04a0fcc1",
+      "run_validity": "INVALID_NO_DISCOVERY",
+      "discovery_errors": [],
+      "gate_counts": {
+        "GATE1_NO_MARKET_IDENTITY": 57
+      },
+      "markets_excluded": 57,
+      "detail_withheld": "per-market rows omitted: this run is marked invalid, so its rows are not measurements. The raw tape is retained and unmodified."
+    },
+    {
+      "tape": "shadow_20261006T033736Z.jsonl.gz",
+      "tape_stamp_utc": "2026-10-06T03:37:36Z",
+      "run_id": 37409797204,
+      "run_number": 4,
+      "sha": "d849a0f53e82d16fb856c1cc66d2fe14a5f00dc9",
+      "run_validity": "PENDING_MEASUREMENT_VALIDITY",
+      "markets": [
+        {
+          "market": "btc-updown-5m-1791257700",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791257857.2728722,
+            "last_t": 1791257999.9114668,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 109,
+          "successful_book_reads": 109,
+          "snapshots": 109,
+          "observations_with_both_token_books": 109,
+          "observations_with_a_bid_on_both_outcomes": 62,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 4,
+          "uncertain_fills": 16,
+          "inventory": {
+            "up": 0.0,
+            "down": 94.44
+          },
+          "matched": 0.0,
+          "residual": 94.44,
+          "cost": {
+            "up": 0.0,
+            "down": 7.083
+          }
+        },
+        {
+          "market": "eth-updown-15m-1791257400",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791258001.4737122,
+            "last_t": 1791258299.3310385,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 228,
+          "successful_book_reads": 228,
+          "snapshots": 228,
+          "observations_with_both_token_books": 228,
+          "observations_with_a_bid_on_both_outcomes": 173,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 10,
+          "uncertain_fills": 72,
+          "inventory": {
+            "up": 70.83,
+            "down": 165.26999999999998
+          },
+          "matched": 70.83,
+          "residual": 94.43999999999998,
+          "cost": {
+            "up": 0.37776,
+            "down": 161.56322999999998
+          }
+        },
+        {
+          "market": "btc-updown-5m-1791258300",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791258300.9206269,
+            "last_t": 1791258599.0545132,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 228,
+          "successful_book_reads": 228,
+          "snapshots": 228,
+          "observations_with_both_token_books": 228,
+          "observations_with_a_bid_on_both_outcomes": 166,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 16,
+          "uncertain_fills": 11,
+          "inventory": {
+            "up": 141.66,
+            "down": 236.10000000000002
+          },
+          "matched": 141.66,
+          "residual": 94.44000000000003,
+          "cost": {
+            "up": 66.5802,
+            "down": 81.2184
+          }
+        },
+        {
+          "market": "eth-updown-5m-1791258600",
+          "reported_status": "COMPLETE",
+          "window": {
+            "first_t": 1791258600.6112616,
+            "last_t": 1791258899.7473412,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 227,
+          "successful_book_reads": 227,
+          "snapshots": 227,
+          "observations_with_both_token_books": 227,
+          "observations_with_a_bid_on_both_outcomes": 200,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 12,
+          "uncertain_fills": 4,
+          "inventory": {
+            "up": 94.44,
+            "down": 188.88
+          },
+          "matched": 94.44,
+          "residual": 94.44,
+          "cost": {
+            "up": 55.4835,
+            "down": 69.4134
+          }
+        },
+        {
+          "market": "bitcoin-up-or-down-october-5-2026-11pm-et",
+          "reported_status": "INCOMPLETE",
+          "window": {
+            "first_t": 1791258901.3248086,
+            "last_t": 1791258996.0091774,
+            "outcomes": [
+              "down",
+              "up"
+            ]
+          },
+          "polls": 73,
+          "successful_book_reads": 73,
+          "snapshots": 73,
+          "observations_with_both_token_books": 73,
+          "observations_with_a_bid_on_both_outcomes": 73,
+          "book_errors": 0,
+          "hypothetical_orders_instantiated_on": [
+            "down",
+            "up"
+          ],
+          "measurement_gate": "VALID_MEASUREMENT",
+          "evidenced_fills": 8,
+          "uncertain_fills": 12,
+          "inventory": {
+            "up": 47.22,
+            "down": 141.66
+          },
+          "matched": 47.22,
+          "residual": 94.44,
+          "cost": {
+            "up": 18.1797,
+            "down": 81.4545
+          }
+        }
+      ],
+      "discovery_errors": [],
+      "gate_counts": {
+        "VALID_MEASUREMENT": 5
+      }
+    }
+  ],
+  "note": "Measurement validity is established BEFORE strategy statistics. A market failing gates 1-5 is an infrastructure result and does not count toward the cohort whatever its fill count; missing or unreadable data is never a zero fill. Only COMPLETE markets that also pass every gate count. Tapes from runs the manifest marks INVALID are quarantined, not summed, so a defective run cannot masquerade as a current result. Uncertain fills are excluded from primary economics.",
+  "run_metadata": {
+    "run_id": 37409797204,
+    "run_number": "4",
+    "sha": "d849a0f53e82d16fb856c1cc66d2fe14a5f00dc9",
+    "started_utc": null,
+    "ended_utc": null,
+    "validity": "PENDING_MEASUREMENT_VALIDITY",
+    "why": "self-described by the run that wrote this file"
+  }
+}
