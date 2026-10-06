@@ -80,6 +80,13 @@ In the opening pairs one leg is visible in the book — often **from before the
 nominal open** — and the other has **no visible size at all** and classifies
 mint-consistent. This is the CTF complete-set primitive, directly observed.
 
+**And it is a TAKER action, verified at transaction level.** Of the 95 BTC15m
+pairs, **91 (95.8%) are a single transaction**, each containing **exactly two**
+L5 legs, and the venue's own topic layout puts L5 as **taker on both legs in
+all 91**. So he is not passively receiving a set someone else assembled — he
+**aggressively buys a complete set in one atomic transaction at exactly
+$1.00**. This half of his flow is not liquidity provision at all.
+
 **It is economically distinct and must not be pooled:**
 
 | | pair cost |
@@ -89,9 +96,11 @@ mint-consistent. This is the CTF complete-set primitive, directly observed.
 | unpaired resting-bid acquisition, BTC5m | 1.0066 |
 
 So the sub-par pair economics come from the **unpaired resting-bid** flow; the
-atomic pairs are break-even gross and fee-bearing. Why he takes them is **not
-observable here** — volume-linked incentives would explain it, but per the
-operating model a rebate is never assumed until credited and source-accounted.
+atomic pairs are break-even gross, fee-bearing, and **taken aggressively**.
+Why he pays par as a taker is still **not observable here** — volume-linked
+incentives would explain it, but per the operating model a rebate is never
+assumed until credited and source-accounted. What *is* now settled is that the
+action is deliberate aggression, not passive assignment.
 
 ### 1.4 Replenishment and re-quoting
 
@@ -132,9 +141,12 @@ residual**. Residual does not stop him; time and price do. Weaker on BTC5m
 | **EXPIRY WITHDRAWAL** | **supported on 15m, weak on 5m** | δ −0.805 vs −0.293 |
 
 **One phase is missing from the proposed chain and is required by the data:**
-**ATOMIC PAIR ACQUISITION** — 11.3%/28.8% of shares arrive as complete-set
-pairs at exactly $1.00, outside the book entirely. It is not a stage in a
-sequence; it runs in parallel with the ladder and has its own economics.
+**ATOMIC TAKER PURCHASE OF COMPLETE SETS** — 11.3% (15m) and 28.8% (5m) of all
+shares arrive as complete-set pairs at exactly $1.00, in a single transaction,
+with L5 **taking both legs**. It is not a stage in the ladder sequence: it
+bypasses the book entirely, is aggressive rather than passive, and carries its
+own (zero gross margin) economics. Any model that describes L5 purely as a
+passive multi-level quoter omits between a ninth and a quarter of his volume.
 
 ---
 
@@ -147,7 +159,8 @@ sequence; it runs in parallel with the ladder and has its own economics.
 * The **≈80 clip lattice** and its 26–32× excess over local background.
 * **Partial consumption**: irregular quantities summing to exactly 80.
 * **Atomic $1.00 pairs**: same block, opposite outcomes, identical quantity,
-  prices summing to exactly 1.0000.
+  prices summing to exactly 1.0000 — and **91 of 95 are a single transaction
+  carrying exactly two L5 legs, with L5 as TAKER on both**.
 * **Replenishment events**: size at a price increased between two fills (109 /
   13 occurrences).
 * The 100-share **per-fill** ceiling on BTC15m (0 of 3,166 above it).
@@ -180,8 +193,10 @@ sequence; it runs in parallel with the ladder and has its own economics.
   82.73, and it may be a venue or counterparty limit, not L5's.
 * **The 20-grid secondary levels** (20/40/60). Excess is 2–9× but on tens of
   clips, not hundreds.
-* **Why he takes $1.00 pairs.** Zero gross margin and fee-bearing; consistent
-  with volume-linked incentives, but no rebate is credited in anything we hold.
+* **Why he pays par as a taker on complete sets.** Zero gross margin,
+  fee-bearing, and now known to be deliberate aggression rather than passive
+  assignment. Consistent with volume-linked incentives, but no rebate is
+  credited in anything we hold, so the motive stays unestablished.
 
 ### Fundamentally unobservable — no amount of this data will settle it
 
@@ -197,8 +212,10 @@ sequence; it runs in parallel with the ladder and has its own economics.
   been earlier or later.
 * **Sub-second ordering.** Fills inside a block are ordered by `log_index` but
   not separately timed; the archive has no sub-second state at all.
-* **Intent.** Whether the $1.00 pairs are self-matched, counterparty-matched,
-  or incentive-driven cannot be read from public logs.
+* **Intent.** *Partly resolved:* the pairs are not self-matches — they are
+  single transactions in which L5 is taker on both legs, so he is buying a
+  complete set from a counterparty. What remains unobservable is **why** he
+  pays par for it.
 
 ---
 
@@ -210,7 +227,10 @@ archive, because the evidence that separates them is *unfilled orders*. Only a
 dataset where order ownership is known can decide it, which is the prospective
 experiment and not this one.
 
-The one question this archive *could* still answer with more work: whether the
-atomic $1.00 pairs are self-matches (both legs L5's own orders) or matches
-against a third party. The transaction-level logs carry both counterparties'
-addresses; the pairing test here keyed only on block, quantity and price.
+The question this section originally flagged — whether the $1.00 pairs are
+self-matches — **has now been answered** by re-keying the pairing test from
+block to transaction: 91 of 95 are one transaction with exactly two L5 legs
+and L5 as **taker on both**, so they are complete-set purchases from a
+counterparty, not self-matches. The open question is narrower and economic: at
+zero gross margin and bearing fees, what makes paying par worthwhile. That
+needs the credited rebate and reward ledger, not more public chain data.
