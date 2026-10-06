@@ -1,0 +1,14 @@
+August L5 forensic replay -- diagnostic historical replay only.
+dispatched: 2026-10-06T01:48:53Z
+branch: claude/august-l5-forensic-replay-788cml
+frozen candidate fingerprint (asserted, not modified):
+441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe
+
+Scope: acquire Zenodo 22084977 updown_15m.parquet (checksum-verified),
+backfill L5's canonical August BTC15m fills from the chain by token id with
+real block timestamps, select ONE window on S1-independent gates, collect
+all-trader prints for that window, and replay frozen S1 through the tape.
+
+This run is NOT validation and is NOT part of the prospective 25-market
+Shadow S1 cohort. It must not touch the shadow branch or workflow
+37399000910, and its artifacts must not be used to modify Candidate S1.
