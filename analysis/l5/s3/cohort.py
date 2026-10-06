@@ -25,6 +25,20 @@ from analysis.l5.s3.spec import SPEC, S3_FINGERPRINT, assert_frozen
 GATE = SPEC["catastrophic_mismatch_gate"]["abort_if_any"]
 COHORT_N = SPEC["cohort"]["n_markets_required"]
 
+#: "COMPLETE market" is NOT a frozen-spec parameter -- the spec fixes the
+#: cohort SIZE (25) but not what counts as complete. Declared here at
+#: runner level and disclosed: a market is COMPLETE when its observations
+#: span at least 840 s of the 900 s window with no observation gap longer
+#: than 60 s. A partially observed market still appears in the output but
+#: does NOT count toward the 25.
+MARKET_COMPLETE_MIN_SPAN_S = 840.0
+MARKET_COMPLETE_MAX_GAP_S = 60.0
+MARKET_COMPLETE_DOC = (
+    "RUNNER-LEVEL criterion, not a frozen-spec parameter: span >= %ds of "
+    "the 900s window AND no observation gap > %ds. Partially observed "
+    "markets are reported but do not count toward the %d."
+    % (MARKET_COMPLETE_MIN_SPAN_S, MARKET_COMPLETE_MAX_GAP_S, 25))
+
 
 def load_tape(path: str) -> Dict[str, List[dict]]:
     by: Dict[str, List[dict]] = defaultdict(list)
@@ -99,7 +113,13 @@ def run_market(slug: str, rows: List[dict]) -> Dict[str, Any]:
     out = m.metrics()
     out["complement_never_observed"] = not comp_seen
     out["n_snapshots"] = len(obs)
-    out["span_s"] = round(obs[-1][0] - obs[0][0], 1)
+    span = obs[-1][0] - obs[0][0]
+    gaps = [b[0] - a[0] for a, b in zip(obs, obs[1:])]
+    out["span_s"] = round(span, 1)
+    out["max_observation_gap_s"] = (round(max(gaps), 1) if gaps else None)
+    out["market_COMPLETE"] = bool(
+        span >= MARKET_COMPLETE_MIN_SPAN_S
+        and (not gaps or max(gaps) <= MARKET_COMPLETE_MAX_GAP_S))
     out["orders"] = [o.record(m.inv) for o in m.closed]
     out["stand_downs"] = m.stand_downs
     return out
@@ -231,7 +251,11 @@ def main(argv=None) -> int:
     assert_no_execution_surface()
     assert_frozen()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tape", help="recorded book tape (jsonl)")
+    ap.add_argument("--tape", nargs="+",
+                    help="one or more recorded book tapes (jsonl). Several "
+                         "are accepted so repeated collection runs "
+                         "accumulate toward the frozen 25-market cohort; "
+                         "the spec's cohort size is unchanged.")
     ap.add_argument("--max-markets", type=int, default=COHORT_N)
     ap.add_argument("--outdir", default="analysis/l5/s3")
     ap.add_argument("--out-name", default="S3_COHORT.json")
@@ -240,7 +264,12 @@ def main(argv=None) -> int:
     if not a.tape:
         print("no --tape given; S3 has no live feed in this environment")
         return 2
-    by = load_tape(a.tape)
+    by: Dict[str, List[dict]] = defaultdict(list)
+    for path in a.tape:
+        for slug, rows in load_tape(path).items():
+            by[slug].extend(rows)
+    for rows in by.values():
+        rows.sort(key=lambda r: str(r.get("t")))
     done: List[Dict[str, Any]] = []
     gate: Dict[str, Any] = {"n_markets_done": 0, "breaches": [], "halt": False}
     for slug in sorted(by):
@@ -251,12 +280,19 @@ def main(argv=None) -> int:
         if gate["halt"]:
             break
 
+    complete = [d for d in done if d.get("market_COMPLETE")]
     out = {
         "spec_fingerprint": S3_FINGERPRINT,
+        "markets_COMPLETE": len(complete),
+        "cohort_ready_to_evaluate": len(complete) >= COHORT_N,
+        "EVALUATION_HELD": (
+            "per the frozen protocol the cohort is NOT evaluated before %d "
+            "COMPLETE markets unless a catastrophic gate fires" % COHORT_N),
         "spec_commit": "28c619df",
         "is_predictor": SPEC["is_predictor"],
         "zero_capital": True, "orders_submitted": 0, "orders_signed": 0,
-        "source": {"kind": "RECORDED_TAPE", "path": a.tape},
+        "source": {"kind": "RECORDED_TAPE", "paths": list(a.tape)},
+        "market_completeness_criterion": MARKET_COMPLETE_DOC,
         "cohort_required": COHORT_N,
         "cohort_completed": len(done),
         "gate": gate,

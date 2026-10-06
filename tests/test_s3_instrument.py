@@ -480,3 +480,46 @@ def test_true_instrumentation_failure_still_detected():
     c = C.classify_zero_fill(head)
     assert c["classification"] == "INSTRUMENTATION_FAILURE"
     assert c["zero_orders_because_reservation_blocked"] is False
+
+
+# ------------------------------------------- cohort accumulation
+def test_market_completeness_is_runner_level_and_documented():
+    """25 is frozen; what counts as COMPLETE is not, so it must be declared."""
+    assert "not a frozen-spec parameter" in C.MARKET_COMPLETE_DOC
+    assert C.MARKET_COMPLETE_MIN_SPAN_S == 840.0
+    assert C.MARKET_COMPLETE_MAX_GAP_S == 60.0
+    assert SPEC["cohort"]["n_markets_required"] == 25
+
+
+def test_short_span_market_is_not_counted_complete(tmp_path):
+    by = C.load_tape(_tape(tmp_path, "cheap_pair"))
+    out = C.run_market(sorted(by)[0], by[sorted(by)[0]])
+    assert out["span_s"] < C.MARKET_COMPLETE_MIN_SPAN_S
+    assert out["market_COMPLETE"] is False
+
+
+def test_full_span_market_counts_complete(tmp_path):
+    from analysis.l5.s3 import synth
+    rows = [synth.row("synth-long", t, oc, 0.45, 0.46, 100.0)
+            for t in range(0, 900, 5) for oc in ("up", "down")]
+    p = tmp_path / "long.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    by = C.load_tape(str(p))
+    out = C.run_market(sorted(by)[0], by[sorted(by)[0]])
+    assert out["span_s"] >= C.MARKET_COMPLETE_MIN_SPAN_S
+    assert out["max_observation_gap_s"] <= C.MARKET_COMPLETE_MAX_GAP_S
+    assert out["market_COMPLETE"] is True
+
+
+def test_multiple_tapes_accumulate_markets(tmp_path):
+    a = _tape(tmp_path, "cheap_pair")
+    b = tmp_path / "second.jsonl"
+    from analysis.l5.s3 import synth
+    b.write_text("\n".join(json.dumps(r) for r in
+                           synth.cheap_pair(slug="synth-other-00")),
+                 encoding="utf-8")
+    merged = {}
+    for path in (a, str(b)):
+        for slug, rows in C.load_tape(path).items():
+            merged.setdefault(slug, []).extend(rows)
+    assert len(merged) == 2, "two tapes must contribute two distinct markets"

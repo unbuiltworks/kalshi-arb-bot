@@ -3,16 +3,26 @@ name: s3-cohort
 # No credentials, no signing, no order submission. The job collects a
 # read-only PMUS book tape and runs the frozen S3 instrument over it.
 on:
+  # Sentinel push trigger: the same pattern btc-spot-proxy-acquire.yml uses.
+  # It registers and fires the workflow from this research branch, so NO
+  # change to the default branch is required.
+  push:
+    paths:
+      - '.github/s3_cohort_request'
   workflow_dispatch:
     inputs:
       minutes:
         description: "collection minutes (one BTC15m window is 15)"
         required: false
-        default: "80"
+        default: "300"
       series:
         description: "PMUS recurring series slug"
         required: false
         default: "btc-updown-15m"
+
+concurrency:
+  group: s3-cohort
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -20,7 +30,7 @@ permissions:
 jobs:
   collect-and-measure:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,14 +68,14 @@ jobs:
           python3 src/pmus_book_tape.py \
             --out-dir data/s3_cohort \
             --series "${{ github.event.inputs.series || 'btc-updown-15m' }}" \
-            --minutes "${{ github.event.inputs.minutes || 80 }}" \
+            --minutes "${{ github.event.inputs.minutes || 300 }}" \
             --interval 2 --with-book 2>&1 | tail -40 || true
           ls -la data/s3_cohort || true
 
       - name: Run the frozen S3 instrument over the collected tape
         run: |
-          TAPE=$(ls -1 data/s3_cohort/*.jsonl 2>/dev/null | head -1 || true)
-          if [ -z "$TAPE" ]; then
+          TAPES=$(ls -1 data/s3_cohort/*.jsonl 2>/dev/null || true)
+          if [ -z "$TAPES" ]; then
             echo "NO TAPE COLLECTED -- recording that fact, not inventing data"
             python3 - <<'PY'
           import json, os
@@ -78,8 +88,8 @@ jobs:
                     open("analysis/l5/s3/S3_COHORT.json", "w"), indent=1)
           PY
           else
-            echo "running over $TAPE"
-            python3 -m analysis.l5.s3.cohort --tape "$TAPE"
+            echo "running over:"; echo "$TAPES"
+            python3 -m analysis.l5.s3.cohort --tape $TAPES
           fi
 
       - name: Commit artifacts
