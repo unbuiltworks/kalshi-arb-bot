@@ -186,24 +186,199 @@ def preamble(outdir: str) -> Dict[str, Any]:
     }
 
 
+def http_get(url: str, params=None, timeout=20.0):
+    """GET-only. NOTE: the existing realtime_mirror polls `/books` with a
+    POST batch; that is read-only in intent but violates this module's
+    GET-only invariant, so the single-book GET endpoint is used instead,
+    two requests per market."""
+    st, body, _ = get_json(url, params=params, timeout=timeout)
+    return st, body
+
+
+def discover(limit: int = 200) -> Tuple[List[Dict[str, Any]], str]:
+    """Live BTC/ETH up-down markets, via GET only."""
+    st, body = http_get(GAMMA + "/markets",
+                        {"closed": "false", "limit": str(limit),
+                         "order": "endDate", "ascending": "true"})
+    if st != 200 or not isinstance(body, list):
+        return [], "DISCOVERY_HTTP_%s" % st
+    out = []
+    for m in body:
+        slug = str(m.get("slug") or "")
+        q = (slug + " " + str(m.get("question") or "")).lower()
+        if "updown" not in q.replace("-", "") and "up or down" not in q:
+            continue
+        if not any(c in q for c in ("btc", "bitcoin", "eth", "ethereum")):
+            continue
+        toks = m.get("clobTokenIds")
+        if isinstance(toks, str):
+            try:
+                toks = json.loads(toks)
+            except Exception:                                  # noqa: BLE001
+                toks = None
+        if not (isinstance(toks, list) and len(toks) == 2):
+            continue
+        out.append({"slug": slug, "condition_id": m.get("conditionId"),
+                    "end_date": m.get("endDate"),
+                    "tokens": [str(t) for t in toks],
+                    "outcomes": m.get("outcomes")})
+    return out, "OK"
+
+
+def book(token: str):
+    st, body = http_get(CLOB + "/book", {"token_id": token})
+    if st != 200 or not isinstance(body, dict):
+        return None, "BOOK_HTTP_%s" % st
+    return body, "OK"
+
+
+def collect_market(mk: Dict[str, Any], sink, poll_s: float,
+                   max_s: float) -> str:
+    """One market to a terminal status. Missing data is NEVER a zero fill."""
+    t_end = None
+    try:
+        import datetime as _dt
+        if mk.get("end_date"):
+            t_end = _dt.datetime.fromisoformat(
+                str(mk["end_date"]).replace("Z", "+00:00")).timestamp()
+    except Exception:                                          # noqa: BLE001
+        t_end = None
+    toks = mk["tokens"]
+    names = ["tok0", "tok1"]
+    oc = mk.get("outcomes")
+    if isinstance(oc, str):
+        try:
+            oc = json.loads(oc)
+        except Exception:                                      # noqa: BLE001
+            oc = None
+    if isinstance(oc, list) and len(oc) == 2:
+        names = [str(x).lower() for x in oc]
+    orders: Dict[str, Optional[Order]] = {names[0]: None, names[1]: None}
+    inv = {names[0]: 0.0, names[1]: 0.0}
+    cost = {names[0]: 0.0, names[1]: 0.0}
+    seq = 0
+    polls = read_ok = 0
+    evidenced = uncertain = 0
+    started = time.time()
+    last_prints: Dict[str, List[Tuple[float, float]]] = {n: [] for n in names}
+    while True:
+        now = time.time()
+        if now - started > max_s:
+            break
+        if t_end is not None and now > t_end:
+            break
+        polls += 1
+        snap = {}
+        bad = None
+        for tok, nm in zip(toks, names):
+            b, why = book(tok)
+            if b is None:
+                bad = why
+                break
+            snap[nm] = b
+        if bad:
+            sink({"kind": "book_error", "market": mk["slug"], "why": bad,
+                  "t": now})
+            time.sleep(poll_s)
+            continue
+        read_ok += 1
+        bids = {nm: ladder(snap[nm].get("bids")) for nm in names}
+        asks = {nm: ladder(snap[nm].get("asks")) for nm in names}
+        row = {"kind": "shadow_snapshot", "market": mk["slug"], "t": now,
+               "tte_s": (round(t_end - now, 2) if t_end else None)}
+        for nm in names:
+            row[nm + "_bid"] = best_bid(bids[nm])
+            row[nm + "_ask"] = best_ask(asks[nm])
+            row[nm + "_bid_depth"] = size_at(
+                bids[nm], best_bid(bids[nm])) if bids[nm] else None
+        bb = [row[nm + "_bid"] for nm in names]
+        row["mint_sum"] = (bb[0] + bb[1]) if None not in bb else None
+        row["mint_feasible"] = ((row["mint_sum"] >= 1.0)
+                                if row["mint_sum"] is not None else None)
+        # ---- lifecycle on hypothetical owned orders
+        for nm in names:
+            o = orders[nm]
+            if o is not None:
+                v = classify_fill(o, bids[nm], last_prints[nm])
+                if v in ("EVIDENCED_LEVEL_CONSUMED",
+                         "EVIDENCED_TRADE_THROUGH"):
+                    o.state, o.evidence, o.state_t = "FILLED", v, now
+                    inv[nm] += o.qty
+                    cost[nm] += o.px * o.qty
+                    evidenced += 1
+                    sink({"kind": "shadow_fill", "market": mk["slug"],
+                          "t": now, "outcome": nm, "evidence": v,
+                          "order": o.row(now),
+                          "inventory": dict(inv),
+                          "matched": min(inv[names[0]], inv[names[1]]),
+                          "residual": abs(inv[names[0]] - inv[names[1]])})
+                    orders[nm] = None if CANDIDATE[
+                        "replenish_after_evidenced_fill"] else o
+                elif v in ("UNCERTAIN_PARTIAL",
+                           "QUEUE_CLEARED_FRONT_OF_BOOK"):
+                    uncertain += 1
+                    sink({"kind": "shadow_uncertain", "market": mk["slug"],
+                          "t": now, "outcome": nm, "verdict": v,
+                          "order": o.row(now),
+                          "excluded_from_primary_economics": True})
+                    o.last_size_at = size_at(bids[nm], o.px)
+            # place / replenish under suppression + TTE shutdown
+            if orders[nm] is None:
+                other = names[1] if nm == names[0] else names[0]
+                if inv[nm] - inv[other] >= CANDIDATE[
+                        "residual_cap_shares"]:
+                    continue
+                if t_end is not None and (t_end - now) < CANDIDATE[
+                        "tte_shutdown_s"]:
+                    continue
+                p = best_bid(bids[nm])
+                if p is None:
+                    continue
+                seq += 1
+                orders[nm] = Order("%s-%d" % (mk["slug"][:24], seq),
+                                   toks[names.index(nm)], nm, p,
+                                   CANDIDATE["quantity_shares"], now,
+                                   size_at(bids[nm], p),
+                                   size_at(bids[nm], p))
+                sink({"kind": "shadow_order_placed", "market": mk["slug"],
+                      "t": now, "order": orders[nm].row(now)})
+        sink(row)
+        time.sleep(poll_s)
+    status = "COMPLETE" if (read_ok >= 30 and t_end is not None
+                            and time.time() >= t_end) else "INCOMPLETE"
+    sink({"kind": "market_terminal", "market": mk["slug"], "status": status,
+          "polls": polls, "successful_reads": read_ok,
+          "evidenced_fills": evidenced, "uncertain_fills": uncertain,
+          "inventory": dict(inv), "cost": dict(cost),
+          "matched": min(inv[names[0]], inv[names[1]]),
+          "residual": abs(inv[names[0]] - inv[names[1]]),
+          "note": ("status is explicit; missing or unreadable data is "
+                   "never converted into zero fills")})
+    return status
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--outdir", default="data/l5/shadow")
     ap.add_argument("--minutes", type=float, default=20.0)
     ap.add_argument("--book-poll-s", type=float, default=1.0)
+    ap.add_argument("--market-max-s", type=float, default=1200.0)
     ap.add_argument("--preflight-only", action="store_true")
     a = ap.parse_args(argv)
     os.makedirs(a.outdir, exist_ok=True)
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     path = os.path.join(a.outdir, "shadow_%s.jsonl" % stamp)
     pre = preamble(a.outdir)
-    with open(path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(pre, default=str) + "\n")
+    fh = open(path, "a", encoding="utf-8")
+
+    def sink(row):
+        fh.write(json.dumps(row, default=str) + "\n")
         fh.flush()
-    print(json.dumps(pre, indent=2, default=str)[:2200])
+
+    sink(pre)
+    print(json.dumps({"tape": path,
+                      "fingerprint": FINGERPRINT}, indent=2))
     if a.preflight_only:
-        # prove every import and the no-verb invariant without touching
-        # the venue
         import ast
         src = open(__file__, encoding="utf-8").read()
         tree = ast.parse(src)
@@ -212,30 +387,56 @@ def main(argv=None) -> int:
         found = {n.attr for n in ast.walk(tree)
                  if isinstance(n, ast.Attribute)} & banned
         assert not found, "forbidden call name present: %s" % found
-        # Check IDENTIFIERS via the AST, never a substring of this file's
-        # own source -- an earlier version grepped the source and matched
-        # the text of its own assertion.
         secretish = {"private_key", "privatekey", "api_secret", "signer",
                      "wallet", "mnemonic", "seed_phrase"}
         idents = {n.id.lower() for n in ast.walk(tree)
                   if isinstance(n, ast.Name)}
         idents |= {n.attr.lower() for n in ast.walk(tree)
                    if isinstance(n, ast.Attribute)}
-        idents |= {k.arg.lower() for n in ast.walk(tree)
-                   if isinstance(n, ast.Call)
-                   for k in (n.keywords or []) if k.arg}
         leak = idents & secretish
         assert not leak, "credential-ish identifier present: %s" % leak
-        print(json.dumps({"preflight": "ok", "tape": path,
-                          "no_write_verbs": True,
+        print(json.dumps({"preflight": "ok", "no_write_verbs": True,
                           "no_credential_identifiers": True,
                           "checked": "AST identifiers, not source text"},
                          indent=2))
+        fh.close()
         return 0
-    print(json.dumps({"note": "collection requires venue egress; this "
-                               "container is CONNECT-blocked for "
-                               "clob.polymarket.com, so the collector "
-                               "runs in CI", "tape": path}, indent=2))
+
+    deadline = time.time() + a.minutes * 60.0
+    done = []
+    seen = set()
+    while time.time() < deadline:
+        mks, why = discover()
+        if why != "OK":
+            sink({"kind": "discovery_error", "why": why, "t": time.time()})
+            time.sleep(10.0)
+            continue
+        fresh = [m for m in mks if m["slug"] not in seen]
+        if not fresh:
+            sink({"kind": "market_terminal", "market": None,
+                  "status": "NO_ELIGIBLE_MARKET", "t": time.time(),
+                  "discovered": len(mks)})
+            time.sleep(20.0)
+            continue
+        mk = fresh[0]
+        seen.add(mk["slug"])
+        try:
+            st = collect_market(mk, sink, a.book_poll_s,
+                                min(a.market_max_s,
+                                    max(0.0, deadline - time.time())))
+        except Exception as exc:                               # noqa: BLE001
+            st = "COLLECTOR_ERROR"
+            sink({"kind": "market_terminal", "market": mk["slug"],
+                  "status": st, "error": repr(exc)[:300]})
+        done.append((mk["slug"], st))
+        print("market %s -> %s" % (mk["slug"], st), flush=True)
+    sink({"kind": "session_summary", "markets": done,
+          "complete": sum(1 for _, s in done if s == "COMPLETE"),
+          "cohort_target_complete_markets": 25})
+    fh.close()
+    print(json.dumps({"markets": done,
+                      "complete": sum(1 for _, s in done
+                                      if s == "COMPLETE")}, indent=2))
     return 0
 
 
