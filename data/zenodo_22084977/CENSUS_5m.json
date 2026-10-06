@@ -1,0 +1,9 @@
+{
+ "file": "updown_5m.parquet",
+ "sha256": "166822b28caa160bb8321c548a8d2ef02b15ae0f06975dd05fced7f4ae118d11",
+ "rows": 167941,
+ "markets": 471,
+ "lo": "2026-08-21 00:15:48",
+ "hi": "2026-08-24 11:44:59",
+ "verification": "STRUCTURAL_NOT_CRYPTOGRAPHIC"
+}
