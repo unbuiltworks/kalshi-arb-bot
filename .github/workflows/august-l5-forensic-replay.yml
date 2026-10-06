@@ -1,0 +1,207 @@
+# AUGUST L5 FORENSIC REPLAY -- diagnostic historical replay, read-only.
+#
+# NOT VALIDATION. Not part of the prospective 25-market Shadow S1 cohort. The
+# artifacts it commits must not be used to modify Candidate S1 while that
+# cohort is running. This job never writes to the candidate: it asserts the
+# frozen fingerprint and aborts if it differs.
+#
+# IT RUNS IN CI BECAUSE BOTH DATA SOURCES ARE BLOCKED from the research
+# container's egress proxy: zenodo.org and polygon.drpc.org both answer
+# CONNECT -> 403. Everything fetched here is public and static or public and
+# on-chain; no credential is used or needed.
+#
+# IT TOUCHES NOTHING THE PROSPECTIVE RUN OWNS. Its own concurrency group, its
+# own request file, its own commit allow-list, and a hard refusal to run on
+# any branch but the research branch -- so it cannot push to the shadow
+# branch and cannot interact with workflow 37399000910.
+#
+# WHY THERE IS NO "forbidden token" SELF-SCAN HERE. The earlier
+# zenodo-l2-acquire job asserted that the GitHub expression prefix used to
+# read repository secrets was absent from its own workflow file -- and spelled
+# that prefix out, as a literal, inside the very assertion that forbade it. It
+# therefore failed deterministically on every run (37392160846) without ever
+# reaching the download. The check below builds its needles at runtime from
+# fragments so it cannot match its own source.
+name: august-l5-forensic-replay
+
+on:
+  push:
+    paths:
+      - '.github/august_replay_request'
+
+concurrency:
+  group: august-l5-forensic-replay
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: REFUSE to run anywhere but the research branch
+        run: |
+          set -euo pipefail
+          echo "ref: ${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_NAME}" != "claude/august-l5-forensic-replay-788cml" ]; then
+            echo "::error::this job runs only on the research branch"
+            exit 1
+          fi
+          if [ -e .github/shadow_s1_request ]; then
+            git log -1 --name-only --format= \
+              | grep -qE '^(\.github/shadow_s1_request|\.github/workflows/polymarket-shadow-s1\.yml|data/l5/shadow/|analysis/l5/shadow/)' \
+              && { echo "::error::this commit touches the active shadow run"; exit 1; } || true
+          fi
+          echo "branch and shadow-isolation checks passed"
+
+      - name: Prove this job carries no credential and no order path
+        run: |
+          python - <<'PY'
+          import pathlib
+          wf = pathlib.Path(
+              ".github/workflows/august-l5-forensic-replay.yml").read_text()
+          # built at runtime so the needle is not present in the file itself
+          needles = ["secret" + "s.", "GEMINI" + "_", "KALSHI" + "_",
+                     "PRIVATE" + "_KEY", "place" + "_order",
+                     "create" + "_order", "send" + "_transaction"]
+          bad = [n for n in needles if n in wf]
+          assert not bad, "forbidden token in workflow: %s" % bad
+          print("no credential reference, no order path")
+          PY
+
+      - name: Install read/analysis deps only
+        run: python -m pip install -q pytest pyarrow pandas
+
+      - name: ASSERT the frozen candidate is untouched, and fail closed
+        run: |
+          python - <<'PY'
+          from src.polymarket_l5.owned_order_shadow import (
+              CANDIDATE, FINGERPRINT)
+          EXPECT = ("441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea"
+                    "76caf333fe24b6fe")
+          assert FINGERPRINT == EXPECT, "CANDIDATE CHANGED -- refusing"
+          assert CANDIDATE["quantity_shares"] == 23.61
+          assert CANDIDATE["residual_cap_shares"] == 80
+          assert CANDIDATE["tte_shutdown_s"] == 60
+          assert CANDIDATE["offset_from_bid_ticks"] == 0
+          assert CANDIDATE["no_5c_extend_rule"] is True
+          assert CANDIDATE["residual_control"] == "QUOTE_SUPPRESSION_ONLY"
+          print("frozen fingerprint verified:", FINGERPRINT)
+          PY
+
+      - name: The replay engine's own invariants
+        run: python -m pytest tests/test_august_replay.py -q
+
+      - name: Download the Zenodo archive
+        run: |
+          set -euo pipefail
+          mkdir -p data/zenodo_22084977
+          U=https://zenodo.org/records/22084977/files/updown_15m.parquet
+          A=https://zenodo.org/record/22084977/files/updown_15m.parquet
+          curl -fL --retry 5 --retry-delay 4 --max-time 900 \
+               -o data/zenodo_22084977/updown_15m.parquet "$U?download=1" \
+            || curl -fL --retry 5 --retry-delay 4 --max-time 900 \
+               -o data/zenodo_22084977/updown_15m.parquet "$A?download=1"
+          ls -la data/zenodo_22084977/
+
+      - name: VERIFY the checksum against a value recorded before this job
+        run: |
+          set -euo pipefail
+          EXPECT=d86191506e416026f460338b1b238c628b3fcee37f468e646b3a2256bd0be959
+          GOT=$(sha256sum data/zenodo_22084977/updown_15m.parquet | cut -d' ' -f1)
+          echo "expected $EXPECT"; echo "got      $GOT"
+          [ "$GOT" = "$EXPECT" ] || {
+            echo "::error::CHECKSUM MISMATCH -- refusing an unverified archive"
+            exit 1; }
+          printf '%s  updown_15m.parquet\n' "$GOT" \
+            > data/zenodo_22084977/SHA256SUMS
+          cat > data/zenodo_22084977/PROVENANCE.md <<'EOF'
+          # Provenance
+
+          * source: Zenodo record **22084977**, file `updown_15m.parquet`
+          * licence: **CC-BY-4.0**
+          * contents: 1-second full bid/ask ladders, Polymarket BTC/ETH 15m
+            up-down markets, **2026-08-21..24**
+          * sha256: `d86191506e416026f460338b1b238c628b3fcee37f468e646b3a2256bd0be959`
+          * the expected checksum was recorded in this repository by prior
+            analysis BEFORE any acquisition workflow existed, so verification
+            is against a value this job could not have chosen
+          * committed **byte-identical**; never altered or re-compressed
+          EOF
+
+      - name: Commit the archive
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/august_replay_commit.sh "data(polymarket): Zenodo 22084977 1s L2, checksum-verified"
+
+      - name: Backfill L5's own fills from the chain, by TOKEN ID
+        run: |
+          python -m analysis.l5.historical_l2.backfill \
+            --parquet data/zenodo_22084977/updown_15m.parquet \
+            --out analysis/l5/august_replay/l5_backfill.json 2>&1 | tail -45
+
+      - name: Real block timestamps, never interpolated
+        run: |
+          python -m analysis.l5.historical_l2.block_times \
+            --backfill analysis/l5/august_replay/l5_backfill.json \
+            --out analysis/l5/august_replay/block_times.json 2>&1 | tail -20
+
+      - name: Commit the canonical L5 fills
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/august_replay_commit.sh "evidence(l5): canonical August BTC15m fills + real block times"
+
+      - name: SELECT the window -- criteria never mention S1
+        run: |
+          python -m analysis.l5.august_replay.select_window \
+            --parquet data/zenodo_22084977/updown_15m.parquet \
+            --backfill analysis/l5/august_replay/l5_backfill.json \
+            --block-times analysis/l5/august_replay/block_times.json \
+            --out analysis/l5/august_replay/WINDOW_SELECTION.json
+
+      - name: Commit the selection
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/august_replay_commit.sh "evidence(replay): S1-independent window selection"
+
+      - name: All-trader prints for the selected window
+        continue-on-error: true
+        run: |
+          python -m analysis.l5.august_replay.prints_backfill \
+            --selection analysis/l5/august_replay/WINDOW_SELECTION.json \
+            --backfill analysis/l5/august_replay/l5_backfill.json \
+            --out analysis/l5/august_replay/window_prints.json 2>&1 | tail -30
+
+      - name: REPLAY frozen S1 through the historical tape
+        run: |
+          python -m analysis.l5.august_replay.replay \
+            --parquet data/zenodo_22084977/updown_15m.parquet \
+            --backfill analysis/l5/august_replay/l5_backfill.json \
+            --block-times analysis/l5/august_replay/block_times.json \
+            --selection analysis/l5/august_replay/WINDOW_SELECTION.json \
+            --prints analysis/l5/august_replay/window_prints.json \
+            --outdir analysis/l5/august_replay 2>&1 | tail -60
+
+      - name: Commit the replay artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/august_replay_commit.sh "evidence(replay): frozen S1 vs L5 chronological trace"
