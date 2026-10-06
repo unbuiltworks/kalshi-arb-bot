@@ -114,6 +114,46 @@ medians ≥ $0.20 and 110 shares at the best bid, against BTC05M's $0.225 /
 habitat of the two. 28 windows on one day is a *hypothesis*, not a regime
 finding — which is exactly what the BTC15M recorder is for.
 
+## First live BTC15M two-sided tape — 2026-10-06, and the venue's own answer
+
+Run `37393996336`, tape `analysis/gemini/btc15m_rec/btc15m_rec_20261006T002656Z.jsonl.gz`,
+20 minutes, 2026-10-06T00:26:58Z → 00:46:57Z, 2 BTC15M windows, 3,994 rows
+(900 `p_snapshot`, 838 `pair_snapshot`, 401 `p_depth`, 13 `p_trade`, 599
+`window_poll`, 6 `down_probe`, 3 `strike_resolved`).
+
+**The `down_probe` settles the UP-leg question from the venue's own mouth.**
+Subscribing the hypothetical DOWN stream returns:
+
+```
+{"id":"dn","status":400,
+ "error":{"code":-1013,"msg":"Invalid stream name: gemi-btc15m2610060030-down@depth20"}}
+```
+
+So **no separate DOWN instrument exists**. The complement can only ever be
+derived as `1 − UP`, and the 23,318-row UP-leg-only file was not a recorder
+that missed a feed — it was a tape that never wrote the derivation down. This
+is now evidence rather than inference.
+
+Measured on that tape (2 windows, 851 two-sided observations — far too few for
+any regime statement):
+
+* single-leg spread: median **$0.11**, 0 % of window medians ≥ $0.20
+* depth at best bid: median **400** shares; top-3 bid **966**
+* print rate: median **0.94** prints/min, 13 prints
+* complement reach `1 − up_bid`: median **$0.615**; pair-cost excess **$0.11**
+* book states: TWO_SIDED 426, ONE_SIDED 143, EMPTY 269
+
+A worked `pair_snapshot`: UP bid `0.57 × 400`, UP ask `0.68 × 400` → derived
+DOWN bid `0.32 × 400`, DOWN ask `0.43 × 400`; single-leg spread **$0.11**,
+two-leg pair cost **$1.11**. Both legs, both units, one row.
+
+`strike_resolved` fired as designed: `BTC15M2610060030` strike `85840.28`,
+`availableAt 2026-10-06T00:15:00Z`, captured on re-read **717 s** after
+availableAt — the authoritative value the first `window` row did not carry.
+
+$0.11 is still 5.5x the historical $0.02. It is two windows on one night.
+Nothing is triggered.
+
 ## Known measurement limits
 
 * **Top-3 depth is UNAVAILABLE on the flat `*_bbo_*.jsonl.gz` tapes.** They

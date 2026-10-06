@@ -660,5 +660,155 @@
     ],
     "unit_warning": "single_leg_spread is '$ ask-bid, one leg'. STRUCTURAL_EXPANDED.json's spread_proxy_q1 is '$ over 1.00', a TWO-LEG pair-cost excess. Never compare them.",
     "windows": 114
+  },
+  {
+    "BTC15M": {
+      "complement_leg": "DERIVED from the UP book; no separate DOWN instrument has ever appeared on any tape this programme has taken",
+      "complement_reach_price": {
+        "median_of_window_medians": 0.615,
+        "observations": 851,
+        "unit": "$ to buy the DERIVED complement leg, 1 - up_bid",
+        "window_median_spread_of_medians": {
+          "frac_ge_0_20": 1.0,
+          "frac_le_0_02": 0.0,
+          "max": 0.78,
+          "median": 0.615,
+          "min": 0.45,
+          "n": 2,
+          "p10": 0.45,
+          "p25": 0.45,
+          "p75": 0.78,
+          "p90": 0.78,
+          "unit": "$ to buy the DERIVED complement leg, 1 - up_bid"
+        },
+        "windows_with_data": 2
+      },
+      "date_range_utc": [
+        "2026-10-06T00:26:58.600793+00:00",
+        "2026-10-06T00:46:57.379650+00:00"
+      ],
+      "depth_top1_ask": {
+        "median_of_window_medians": 400.0,
+        "observations": 851,
+        "unit": "shares at best ask",
+        "window_median_spread_of_medians": {
+          "frac_ge_0_20": 1.0,
+          "frac_le_0_02": 0.0,
+          "max": 400.0,
+          "median": 400.0,
+          "min": 400.0,
+          "n": 2,
+          "p10": 400.0,
+          "p25": 400.0,
+          "p75": 400.0,
+          "p90": 400.0,
+          "unit": "shares at best ask"
+        },
+        "windows_with_data": 2
+      },
+      "depth_top1_bid": {
+        "median_of_window_medians": 400.0,
+        "observations": 851,
+        "unit": "shares at best bid",
+        "window_median_spread_of_medians": {
+          "frac_ge_0_20": 1.0,
+          "frac_le_0_02": 0.0,
+          "max": 400.0,
+          "median": 400.0,
+          "min": 400.0,
+          "n": 2,
+          "p10": 400.0,
+          "p25": 400.0,
+          "p75": 400.0,
+          "p90": 400.0,
+          "unit": "shares at best bid"
+        },
+        "windows_with_data": 2
+      },
+      "depth_top3_bid": {
+        "median_of_window_medians": 965.975,
+        "observations": 851,
+        "unit": "shares, top 3 bid levels",
+        "window_median_spread_of_medians": {
+          "frac_ge_0_20": 1.0,
+          "frac_le_0_02": 0.0,
+          "max": 1191.95,
+          "median": 965.975,
+          "min": 740.0,
+          "n": 2,
+          "p10": 740.0,
+          "p25": 740.0,
+          "p75": 1191.95,
+          "p90": 1191.95,
+          "unit": "shares, top 3 bid levels"
+        },
+        "windows_with_data": 2
+      },
+      "pair_cost_excess_over_1": {
+        "median_of_window_medians": 0.11,
+        "observations": 851,
+        "unit": "$ over 1.00, two legs",
+        "window_median_spread_of_medians": {
+          "frac_ge_0_20": 0.0,
+          "frac_le_0_02": 0.0,
+          "max": 0.11,
+          "median": 0.11,
+          "min": 0.11,
+          "n": 2,
+          "p10": 0.11,
+          "p25": 0.11,
+          "p75": 0.11,
+          "p90": 0.11,
+          "unit": "$ over 1.00, two legs"
+        },
+        "windows_with_data": 2
+      },
+      "print_rate_per_min": {
+        "frac_ge_0_20": 1.0,
+        "frac_le_0_02": 0.0,
+        "max": 1.325,
+        "median": 0.942,
+        "min": 0.559,
+        "n": 2,
+        "p10": 0.559,
+        "p25": 0.559,
+        "p75": 1.325,
+        "p90": 1.325,
+        "unit": "prints/min"
+      },
+      "prints_total": 13,
+      "single_leg_spread": {
+        "median_of_window_medians": 0.11,
+        "observations": 851,
+        "unit": "$ ask-bid, one leg, top of book",
+        "window_median_spread_of_medians": {
+          "frac_ge_0_20": 0.0,
+          "frac_le_0_02": 0.0,
+          "max": 0.11,
+          "median": 0.11,
+          "min": 0.11,
+          "n": 2,
+          "p10": 0.11,
+          "p25": 0.11,
+          "p75": 0.11,
+          "p90": 0.11,
+          "unit": "$ ask-bid, one leg, top of book"
+        },
+        "windows_with_data": 2
+      },
+      "windows": 2
+    },
+    "accounting": "public market data; no order; not realized profit",
+    "generated_utc": "2026-10-06T00:48:52.987195+00:00",
+    "kind": "regime_summary",
+    "label": "GEMINI_REGIME_MONITOR_V1",
+    "no_verdict": "distributions only -- a regime statement needs a series of windows, not one window, and this file deliberately applies no threshold",
+    "research_trigger_note": "A return toward the historical ~$0.02 single-leg regime is a RESEARCH TRIGGER, NOT TRADING AUTHORIZATION.",
+    "tag": "live_2026_10_06_btc15m_recorder",
+    "tapes": [
+      "analysis/gemini/btc15m_rec/btc15m_rec_20261006T002656Z.jsonl.gz"
+    ],
+    "unit_warning": "single_leg_spread is '$ ask-bid, one leg'. STRUCTURAL_EXPANDED.json's spread_proxy_q1 is '$ over 1.00', a TWO-LEG pair-cost excess. Never compare them.",
+    "windows": 2
   }
 ]

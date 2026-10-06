@@ -273,12 +273,18 @@ async def strike_task(sink: Sink, stop: asyncio.Event,
                     val = strike.get("value")
                     if val is None:
                         continue
-                    resolved.add(sym)
                     av = parse_ts(strike.get("availableAt"))
                     meta = known.get(sym)
                     if isinstance(meta, dict):
                         meta["strike"] = val
                         meta["strike_source"] = "window_poll_non_null"
+                        # ONLY NOW is this market done. The first poll can win
+                        # the race against meta_task's own listing read, so
+                        # `known` may not hold the market yet; marking it
+                        # resolved then would strand strike:null on every
+                        # later pair_snapshot, which is exactly what the first
+                        # live tape showed.
+                        resolved.add(sym)
                     sink.write({
                         "t_ns": now_ns(), "kind": "strike_resolved",
                         "market": sym, "ticker": ev.get("ticker"),
@@ -344,8 +350,7 @@ def validate(path: Path) -> Dict[str, Any]:
                     got["btc15m_window_seen"] = True
                 if k == "window_poll" and r.get("strike") is not None:
                     got["window_poll_strike_resolved"] = True
-                    examples.setdefault("window_poll_strike",
-                                                  "strike_resolved", {
+                    examples.setdefault("window_poll_strike", {
                         "market": r.get("market"), "strike": r.get("strike"),
                         "availableAt": r.get("availableAt")})
             elif k == "strike_resolved" and r.get("strike") is not None:
@@ -402,6 +407,7 @@ def validate(path: Path) -> Dict[str, Any]:
         "single_leg_spread_n": len(spreads),
         "single_leg_spread_median": (spreads[len(spreads) // 2]
                                      if spreads else None),
+        "examples": examples,
         "accounting": "public market-data recording; no order was sent; "
                       "nothing here is realized profit",
         "reading": ("down_leg_derived_present is the point of this recorder: "
