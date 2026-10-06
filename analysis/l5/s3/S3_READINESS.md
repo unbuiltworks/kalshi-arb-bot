@@ -150,3 +150,50 @@ cohort that cannot see a live book must not be reported as a zero-fill
 result. The CI job encodes this too: with no tape it writes
 `VERDICT: NO_TAPE_COLLECTED` and explicitly does **not** advance the
 cohort.
+
+---
+
+## Launch record (2026-10-06)
+
+**The default-branch change proved unnecessary.** The dispatch blocker was
+filename→default-branch resolution, not registration:
+`btc-spot-proxy-acquire.yml` is also absent from `main` yet fires reliably,
+because it registers through a **push trigger on a sentinel path**. S3 now
+uses the same proven pattern.
+
+For the record, the authorized launcher-only diff against `main` would have
+been exactly:
+
+```
+A  .github/workflows/s3-cohort.yml      (1 file, +98 lines)
+```
+
+and nothing else — no S3 code, no research code. (For contrast, 5,774 files
+differ from `main` under `analysis/`, `src/` and `tests/`, which is why a
+*merge* would have been contamination.) **It was not applied.**
+
+| | |
+| --- | --- |
+| workflow run | **37469519509** |
+| workflow id (now registered) | 376426374 |
+| trigger | sentinel push, `.github/s3_cohort_request` |
+| default branch touched | **no** |
+| fingerprint verified in CI | **success** |
+| no-execution-surface assertion | **success** |
+| test suite before collection | **success** (75 tests) |
+| collection | 300 min/run, read-only public endpoints |
+| orders / signing / capital | **0 / 0 / 0** |
+| 0.96 reservation | **unchanged**, as frozen |
+
+**Accumulation.** One job cannot reach 25 fifteen-minute markets inside the
+runner limit, so the cohort runner accepts several tapes and accumulates
+across runs. The frozen cohort size is unchanged.
+
+**Market completeness is a RUNNER-LEVEL criterion, disclosed:** the spec
+fixes the cohort size (25) but never defines "complete". A market counts
+only with ≥840 s of span and no observation gap >60 s; partially observed
+markets are reported but excluded from the 25.
+
+**Evaluation is held.** Output carries `markets_COMPLETE` and
+`cohort_ready_to_evaluate`, and the cohort is not evaluated before 25
+COMPLETE markets unless a frozen catastrophic gate fires.
