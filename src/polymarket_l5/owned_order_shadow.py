@@ -196,10 +196,22 @@ def http_get(url: str, params=None, timeout=20.0):
 
 
 def discover(limit: int = 200) -> Tuple[List[Dict[str, Any]], str]:
-    """Live BTC/ETH up-down markets, via GET only."""
+    """Live BTC/ETH up-down markets, via GET only.
+
+    INFRASTRUCTURE FIX. The first dispatch asked for `closed=false` ordered
+    by `endDate` ASCENDING, which returns the OLDEST unresolved listings
+    first. Every one of the 27 markets it attempted was dated 2025-12-19 --
+    ten months past -- so each tripped the `now > t_end` break with
+    polls=0, producing 27 INCOMPLETE rows and zero fills that had nothing
+    to do with S1's behaviour. Markets whose end date has already passed
+    are now excluded here AND refused in collect_market, so a stale
+    listing can never again be recorded as a fill-free market.
+    """
+    now = time.time()
     st, body = http_get(GAMMA + "/markets",
-                        {"closed": "false", "limit": str(limit),
-                         "order": "endDate", "ascending": "true"})
+                        {"closed": "false", "active": "true",
+                         "limit": str(limit),
+                         "order": "endDate", "ascending": "false"})
     if st != 200 or not isinstance(body, list):
         return [], "DISCOVERY_HTTP_%s" % st
     out = []
@@ -218,11 +230,26 @@ def discover(limit: int = 200) -> Tuple[List[Dict[str, Any]], str]:
                 toks = None
         if not (isinstance(toks, list) and len(toks) == 2):
             continue
+        te = parse_end(m.get("endDate"))
+        if te is None or te <= now:
+            continue                      # stale or undated: not eligible
         out.append({"slug": slug, "condition_id": m.get("conditionId"),
-                    "end_date": m.get("endDate"),
+                    "end_date": m.get("endDate"), "end_ts": te,
                     "tokens": [str(t) for t in toks],
                     "outcomes": m.get("outcomes")})
+    out.sort(key=lambda x: x["end_ts"])   # soonest-ending live market first
     return out, "OK"
+
+
+def parse_end(v) -> Optional[float]:
+    if not v:
+        return None
+    try:
+        import datetime as _dt
+        return _dt.datetime.fromisoformat(
+            str(v).replace("Z", "+00:00")).timestamp()
+    except Exception:                                          # noqa: BLE001
+        return None
 
 
 def book(token: str):
@@ -235,14 +262,16 @@ def book(token: str):
 def collect_market(mk: Dict[str, Any], sink, poll_s: float,
                    max_s: float) -> str:
     """One market to a terminal status. Missing data is NEVER a zero fill."""
-    t_end = None
-    try:
-        import datetime as _dt
-        if mk.get("end_date"):
-            t_end = _dt.datetime.fromisoformat(
-                str(mk["end_date"]).replace("Z", "+00:00")).timestamp()
-    except Exception:                                          # noqa: BLE001
-        t_end = None
+    t_end = mk.get("end_ts") or parse_end(mk.get("end_date"))
+    # REFUSE a market that has already ended rather than letting it fall
+    # through the poll loop and report polls=0 / zero fills.
+    if t_end is None or t_end <= time.time():
+        sink({"kind": "market_terminal", "market": mk["slug"],
+              "status": "STALE_MARKET_SKIPPED", "polls": 0,
+              "successful_reads": 0, "end_date": mk.get("end_date"),
+              "note": ("end date already passed; refused before polling so "
+                       "it cannot be mistaken for a fill-free market")})
+        return "STALE_MARKET_SKIPPED"
     toks = mk["tokens"]
     names = ["tok0", "tok1"]
     oc = mk.get("outcomes")

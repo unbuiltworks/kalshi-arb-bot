@@ -116,8 +116,12 @@ jobs:
                  "COMPLETE_markets": st.get("COMPLETE", 0),
                  "cohort_target": 25,
                  "evidenced_fills": ev, "uncertain_fills": un,
-                 "note": ("uncertain fills are excluded from primary "
-                          "economics; missing data is never a zero fill")}
+                 "non_counting_statuses": {
+                     k: v for k, v in st.items() if k != "COMPLETE"},
+                 "note": ("only COMPLETE counts toward the cohort. "
+                          "uncertain fills are excluded from primary "
+                          "economics; missing data, a stale listing or a "
+                          "collector error is never a zero fill")}
           json.dump(out, open("analysis/l5/shadow/COHORT_PROGRESS.json", "w"),
                     indent=2)
           print(json.dumps(out, indent=2))

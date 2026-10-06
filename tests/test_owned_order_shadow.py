@@ -64,3 +64,31 @@ def test_candidate_has_no_5c_extend_rule_and_suppression_only():
     assert CANDIDATE["residual_control"] == "QUOTE_SUPPRESSION_ONLY"
     assert CANDIDATE["no_aggressive_opposite_side"] is True
     assert len(FINGERPRINT) == 64
+
+
+def test_stale_market_is_refused_not_reported_as_zero_fills():
+    """The first dispatch attempted 27 markets dated 2025-12-19 and logged
+    them as INCOMPLETE with polls=0, which reads like a fill-free market.
+    A past end date must be refused before polling."""
+    import time
+
+    from src.polymarket_l5.owned_order_shadow import collect_market
+
+    rows = []
+    status = collect_market(
+        {"slug": "btc-updown-5m-1766161800",
+         "end_date": "2025-12-19T16:30:00Z",
+         "tokens": ["a", "b"], "outcomes": '["Up","Down"]'},
+        rows.append, 1.0, 60.0)
+    assert status == "STALE_MARKET_SKIPPED"
+    assert rows and rows[0]["status"] == "STALE_MARKET_SKIPPED"
+    assert rows[0]["polls"] == 0
+
+
+def test_discovery_requires_a_future_end_date():
+    import inspect
+
+    from src.polymarket_l5 import owned_order_shadow as M
+    src = inspect.getsource(M.discover)
+    assert "te <= now" in src, "discovery must exclude past end dates"
+    assert "ascending\": \"false\"" in src or "'ascending': 'false'" in src
