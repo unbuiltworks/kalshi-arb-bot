@@ -1,0 +1,859 @@
+{
+ "defect": "CROSSED_BOOK_best_ask_below_best_bid",
+ "discovered": "2026-10-06, during PAIRCOST confirmation @ 1498a293",
+ "cause_hypothesis": "event-driven delta capture dropped an ask-side update while the bid moved past it, leaving a stale low ask",
+ "scope": "ASK side only; the bid side shows no inversion by construction",
+ "this_module_only_measures": true,
+ "BTC15m": {
+  "contract_length": "15m",
+  "n_windows": 12,
+  "windows_with_any_crossing": 10,
+  "pooled_seconds_with_full_quotes": 9607,
+  "pooled_crossed_seconds": 777,
+  "pooled_crossed_share": 0.0809,
+  "inversion_magnitude_bid_minus_ask": {
+   "n": 1105,
+   "min": 0.007,
+   "p10": 0.01,
+   "p25": 0.016,
+   "p50": 0.03,
+   "p75": 0.1,
+   "p90": 0.33,
+   "max": 0.39,
+   "mean": 0.093957,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "per_window": {
+   "btc-updown-15m-1787274000": {
+    "seconds_with_full_quotes": 758,
+    "crossed_seconds_either_token": 26,
+    "crossed_share": 0.0343,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 758,
+      "crossed_seconds": 26,
+      "crossed_share": 0.0343
+     },
+     "up": {
+      "seconds_with_both_quotes": 758,
+      "crossed_seconds": 8,
+      "crossed_share": 0.0106
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 561,
+     "outcome": "down",
+     "best_bid": 0.09,
+     "best_ask": 0.05,
+     "inversion": 0.04
+    }
+   },
+   "btc-updown-15m-1787290200": {
+    "seconds_with_full_quotes": 860,
+    "crossed_seconds_either_token": 98,
+    "crossed_share": 0.114,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 860,
+      "crossed_seconds": 6,
+      "crossed_share": 0.007
+     },
+     "down": {
+      "seconds_with_both_quotes": 860,
+      "crossed_seconds": 94,
+      "crossed_share": 0.1093
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 758,
+     "outcome": "down",
+     "best_bid": 0.45,
+     "best_ask": 0.15,
+     "inversion": 0.3
+    }
+   },
+   "btc-updown-15m-1787296500": {
+    "seconds_with_full_quotes": 685,
+    "crossed_seconds_either_token": 0,
+    "crossed_share": 0.0,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 685,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "down": {
+      "seconds_with_both_quotes": 685,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": null
+   },
+   "btc-updown-15m-1787300100": {
+    "seconds_with_full_quotes": 838,
+    "crossed_seconds_either_token": 10,
+    "crossed_share": 0.0119,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 838,
+      "crossed_seconds": 10,
+      "crossed_share": 0.0119
+     },
+     "up": {
+      "seconds_with_both_quotes": 838,
+      "crossed_seconds": 10,
+      "crossed_share": 0.0119
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 764,
+     "outcome": "up",
+     "best_bid": 0.89,
+     "best_ask": 0.87,
+     "inversion": 0.02
+    }
+   },
+   "btc-updown-15m-1787305500": {
+    "seconds_with_full_quotes": 800,
+    "crossed_seconds_either_token": 74,
+    "crossed_share": 0.0925,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 800,
+      "crossed_seconds": 69,
+      "crossed_share": 0.0862
+     },
+     "down": {
+      "seconds_with_both_quotes": 800,
+      "crossed_seconds": 65,
+      "crossed_share": 0.0813
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 497,
+     "outcome": "down",
+     "best_bid": 0.79,
+     "best_ask": 0.71,
+     "inversion": 0.08
+    }
+   },
+   "btc-updown-15m-1787306400": {
+    "seconds_with_full_quotes": 811,
+    "crossed_seconds_either_token": 80,
+    "crossed_share": 0.0986,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 811,
+      "crossed_seconds": 80,
+      "crossed_share": 0.0986
+     },
+     "up": {
+      "seconds_with_both_quotes": 811,
+      "crossed_seconds": 80,
+      "crossed_share": 0.0986
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 155,
+     "outcome": "up",
+     "best_bid": 0.55,
+     "best_ask": 0.51,
+     "inversion": 0.04
+    }
+   },
+   "btc-updown-15m-1787307300": {
+    "seconds_with_full_quotes": 786,
+    "crossed_seconds_either_token": 257,
+    "crossed_share": 0.327,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 786,
+      "crossed_seconds": 52,
+      "crossed_share": 0.0662
+     },
+     "up": {
+      "seconds_with_both_quotes": 786,
+      "crossed_seconds": 250,
+      "crossed_share": 0.3181
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 274,
+     "outcome": "up",
+     "best_bid": 0.75,
+     "best_ask": 0.57,
+     "inversion": 0.18
+    }
+   },
+   "btc-updown-15m-1787311800": {
+    "seconds_with_full_quotes": 758,
+    "crossed_seconds_either_token": 219,
+    "crossed_share": 0.2889,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 758,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "down": {
+      "seconds_with_both_quotes": 870,
+      "crossed_seconds": 331,
+      "crossed_share": 0.3805
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 257,
+     "outcome": "down",
+     "best_bid": 0.95,
+     "best_ask": 0.56,
+     "inversion": 0.39
+    }
+   },
+   "btc-updown-15m-1787362200": {
+    "seconds_with_full_quotes": 836,
+    "crossed_seconds_either_token": 4,
+    "crossed_share": 0.0048,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 836,
+      "crossed_seconds": 4,
+      "crossed_share": 0.0048
+     },
+     "down": {
+      "seconds_with_both_quotes": 836,
+      "crossed_seconds": 2,
+      "crossed_share": 0.0024
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 785,
+     "outcome": "up",
+     "best_bid": 0.55,
+     "best_ask": 0.5,
+     "inversion": 0.05
+    }
+   },
+   "btc-updown-15m-1787363100": {
+    "seconds_with_full_quotes": 841,
+    "crossed_seconds_either_token": 3,
+    "crossed_share": 0.0036,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 841,
+      "crossed_seconds": 3,
+      "crossed_share": 0.0036
+     },
+     "down": {
+      "seconds_with_both_quotes": 841,
+      "crossed_seconds": 3,
+      "crossed_share": 0.0036
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 701,
+     "outcome": "down",
+     "best_bid": 0.34,
+     "best_ask": 0.29,
+     "inversion": 0.05
+    }
+   },
+   "btc-updown-15m-1787365800": {
+    "seconds_with_full_quotes": 859,
+    "crossed_seconds_either_token": 6,
+    "crossed_share": 0.007,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 859,
+      "crossed_seconds": 6,
+      "crossed_share": 0.007
+     },
+     "down": {
+      "seconds_with_both_quotes": 859,
+      "crossed_seconds": 6,
+      "crossed_share": 0.007
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 167,
+     "outcome": "down",
+     "best_bid": 0.45,
+     "best_ask": 0.44,
+     "inversion": 0.01
+    }
+   },
+   "btc-updown-15m-1787369400": {
+    "seconds_with_full_quotes": 775,
+    "crossed_seconds_either_token": 0,
+    "crossed_share": 0.0,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 775,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "up": {
+      "seconds_with_both_quotes": 775,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": null
+   }
+  }
+ },
+ "BTC5m": {
+  "contract_length": "5m",
+  "n_windows": 23,
+  "windows_with_any_crossing": 18,
+  "pooled_seconds_with_full_quotes": 4870,
+  "pooled_crossed_seconds": 1261,
+  "pooled_crossed_share": 0.2589,
+  "inversion_magnitude_bid_minus_ask": {
+   "n": 1714,
+   "min": 0.002,
+   "p10": 0.02,
+   "p25": 0.05,
+   "p50": 0.18,
+   "p75": 0.53,
+   "p90": 0.63,
+   "max": 0.86,
+   "mean": 0.276288,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "per_window": {
+   "btc-updown-5m-1787271900": {
+    "seconds_with_full_quotes": 291,
+    "crossed_seconds_either_token": 181,
+    "crossed_share": 0.622,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 291,
+      "crossed_seconds": 8,
+      "crossed_share": 0.0275
+     },
+     "up": {
+      "seconds_with_both_quotes": 300,
+      "crossed_seconds": 190,
+      "crossed_share": 0.6333
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 271,
+     "outcome": "up",
+     "best_bid": 0.99,
+     "best_ask": 0.54,
+     "inversion": 0.45
+    }
+   },
+   "btc-updown-5m-1787272500": {
+    "seconds_with_full_quotes": 238,
+    "crossed_seconds_either_token": 0,
+    "crossed_share": 0.0,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 238,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "down": {
+      "seconds_with_both_quotes": 238,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": null
+   },
+   "btc-updown-5m-1787280000": {
+    "seconds_with_full_quotes": 194,
+    "crossed_seconds_either_token": 12,
+    "crossed_share": 0.0619,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 194,
+      "crossed_seconds": 12,
+      "crossed_share": 0.0619
+     },
+     "up": {
+      "seconds_with_both_quotes": 194,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 58,
+     "outcome": "down",
+     "best_bid": 0.4,
+     "best_ask": 0.38,
+     "inversion": 0.02
+    }
+   },
+   "btc-updown-5m-1787281500": {
+    "seconds_with_full_quotes": 245,
+    "crossed_seconds_either_token": 13,
+    "crossed_share": 0.0531,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 245,
+      "crossed_seconds": 13,
+      "crossed_share": 0.0531
+     },
+     "down": {
+      "seconds_with_both_quotes": 245,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 149,
+     "outcome": "up",
+     "best_bid": 0.33,
+     "best_ask": 0.32,
+     "inversion": 0.01
+    }
+   },
+   "btc-updown-5m-1787283600": {
+    "seconds_with_full_quotes": 218,
+    "crossed_seconds_either_token": 169,
+    "crossed_share": 0.7752,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 264,
+      "crossed_seconds": 199,
+      "crossed_share": 0.7538
+     },
+     "up": {
+      "seconds_with_both_quotes": 218,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 162,
+     "outcome": "down",
+     "best_bid": 0.52,
+     "best_ask": 0.04,
+     "inversion": 0.48
+    }
+   },
+   "btc-updown-5m-1787287200": {
+    "seconds_with_full_quotes": 280,
+    "crossed_seconds_either_token": 121,
+    "crossed_share": 0.4321,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 280,
+      "crossed_seconds": 121,
+      "crossed_share": 0.4321
+     },
+     "up": {
+      "seconds_with_both_quotes": 280,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 279,
+     "outcome": "down",
+     "best_bid": 0.93,
+     "best_ask": 0.07,
+     "inversion": 0.86
+    }
+   },
+   "btc-updown-5m-1787287500": {
+    "seconds_with_full_quotes": 232,
+    "crossed_seconds_either_token": 8,
+    "crossed_share": 0.0345,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 232,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "down": {
+      "seconds_with_both_quotes": 274,
+      "crossed_seconds": 50,
+      "crossed_share": 0.1825
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 125,
+     "outcome": "down",
+     "best_bid": 0.16,
+     "best_ask": 0.11,
+     "inversion": 0.05
+    }
+   },
+   "btc-updown-5m-1787292300": {
+    "seconds_with_full_quotes": 193,
+    "crossed_seconds_either_token": 0,
+    "crossed_share": 0.0,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 193,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "down": {
+      "seconds_with_both_quotes": 193,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": null
+   },
+   "btc-updown-5m-1787296800": {
+    "seconds_with_full_quotes": 248,
+    "crossed_seconds_either_token": 0,
+    "crossed_share": 0.0,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 248,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "up": {
+      "seconds_with_both_quotes": 248,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": null
+   },
+   "btc-updown-5m-1787300100": {
+    "seconds_with_full_quotes": 200,
+    "crossed_seconds_either_token": 18,
+    "crossed_share": 0.09,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 200,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "down": {
+      "seconds_with_both_quotes": 200,
+      "crossed_seconds": 18,
+      "crossed_share": 0.09
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 72,
+     "outcome": "down",
+     "best_bid": 0.64,
+     "best_ask": 0.46,
+     "inversion": 0.18
+    }
+   },
+   "btc-updown-5m-1787310600": {
+    "seconds_with_full_quotes": 166,
+    "crossed_seconds_either_token": 86,
+    "crossed_share": 0.5181,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 166,
+      "crossed_seconds": 37,
+      "crossed_share": 0.2229
+     },
+     "down": {
+      "seconds_with_both_quotes": 275,
+      "crossed_seconds": 195,
+      "crossed_share": 0.7091
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 248,
+     "outcome": "down",
+     "best_bid": 0.999,
+     "best_ask": 0.36,
+     "inversion": 0.639
+    }
+   },
+   "btc-updown-5m-1787310900": {
+    "seconds_with_full_quotes": 253,
+    "crossed_seconds_either_token": 81,
+    "crossed_share": 0.3202,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 253,
+      "crossed_seconds": 70,
+      "crossed_share": 0.2767
+     },
+     "up": {
+      "seconds_with_both_quotes": 253,
+      "crossed_seconds": 18,
+      "crossed_share": 0.0711
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 27,
+     "outcome": "down",
+     "best_bid": 0.56,
+     "best_ask": 0.37,
+     "inversion": 0.19
+    }
+   },
+   "btc-updown-5m-1787312400": {
+    "seconds_with_full_quotes": 230,
+    "crossed_seconds_either_token": 171,
+    "crossed_share": 0.7435,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 230,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "up": {
+      "seconds_with_both_quotes": 270,
+      "crossed_seconds": 211,
+      "crossed_share": 0.7815
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 251,
+     "outcome": "up",
+     "best_bid": 0.6,
+     "best_ask": 0.001,
+     "inversion": 0.599
+    }
+   },
+   "btc-updown-5m-1787314200": {
+    "seconds_with_full_quotes": 190,
+    "crossed_seconds_either_token": 38,
+    "crossed_share": 0.2,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 190,
+      "crossed_seconds": 19,
+      "crossed_share": 0.1
+     },
+     "down": {
+      "seconds_with_both_quotes": 190,
+      "crossed_seconds": 19,
+      "crossed_share": 0.1
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 30,
+     "outcome": "up",
+     "best_bid": 0.37,
+     "best_ask": 0.33,
+     "inversion": 0.04
+    }
+   },
+   "btc-updown-5m-1787321100": {
+    "seconds_with_full_quotes": 194,
+    "crossed_seconds_either_token": 6,
+    "crossed_share": 0.0309,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 194,
+      "crossed_seconds": 3,
+      "crossed_share": 0.0155
+     },
+     "up": {
+      "seconds_with_both_quotes": 194,
+      "crossed_seconds": 3,
+      "crossed_share": 0.0155
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 179,
+     "outcome": "up",
+     "best_bid": 0.91,
+     "best_ask": 0.9,
+     "inversion": 0.01
+    }
+   },
+   "btc-updown-5m-1787349900": {
+    "seconds_with_full_quotes": 160,
+    "crossed_seconds_either_token": 137,
+    "crossed_share": 0.8562,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 160,
+      "crossed_seconds": 18,
+      "crossed_share": 0.1125
+     },
+     "up": {
+      "seconds_with_both_quotes": 270,
+      "crossed_seconds": 247,
+      "crossed_share": 0.9148
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 227,
+     "outcome": "up",
+     "best_bid": 0.999,
+     "best_ask": 0.34,
+     "inversion": 0.659
+    }
+   },
+   "btc-updown-5m-1787356500": {
+    "seconds_with_full_quotes": 132,
+    "crossed_seconds_either_token": 0,
+    "crossed_share": 0.0,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 132,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "down": {
+      "seconds_with_both_quotes": 137,
+      "crossed_seconds": 5,
+      "crossed_share": 0.0365
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 271,
+     "outcome": "down",
+     "best_bid": 0.62,
+     "best_ask": 0.01,
+     "inversion": 0.61
+    }
+   },
+   "btc-updown-5m-1787357100": {
+    "seconds_with_full_quotes": 114,
+    "crossed_seconds_either_token": 0,
+    "crossed_share": 0.0,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 114,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     },
+     "up": {
+      "seconds_with_both_quotes": 114,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": null
+   },
+   "btc-updown-5m-1787365200": {
+    "seconds_with_full_quotes": 183,
+    "crossed_seconds_either_token": 34,
+    "crossed_share": 0.1858,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 198,
+      "crossed_seconds": 49,
+      "crossed_share": 0.2475
+     },
+     "up": {
+      "seconds_with_both_quotes": 183,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 258,
+     "outcome": "down",
+     "best_bid": 0.49,
+     "best_ask": 0.01,
+     "inversion": 0.48
+    }
+   },
+   "btc-updown-5m-1787374800": {
+    "seconds_with_full_quotes": 236,
+    "crossed_seconds_either_token": 44,
+    "crossed_share": 0.1864,
+    "per_token": {
+     "up": {
+      "seconds_with_both_quotes": 236,
+      "crossed_seconds": 10,
+      "crossed_share": 0.0424
+     },
+     "down": {
+      "seconds_with_both_quotes": 236,
+      "crossed_seconds": 44,
+      "crossed_share": 0.1864
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 170,
+     "outcome": "down",
+     "best_bid": 0.38,
+     "best_ask": 0.19,
+     "inversion": 0.19
+    }
+   },
+   "btc-updown-5m-1787558700": {
+    "seconds_with_full_quotes": 222,
+    "crossed_seconds_either_token": 19,
+    "crossed_share": 0.0856,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 222,
+      "crossed_seconds": 1,
+      "crossed_share": 0.0045
+     },
+     "up": {
+      "seconds_with_both_quotes": 222,
+      "crossed_seconds": 19,
+      "crossed_share": 0.0856
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 79,
+     "outcome": "up",
+     "best_bid": 0.8,
+     "best_ask": 0.79,
+     "inversion": 0.01
+    }
+   },
+   "btc-updown-5m-1787565000": {
+    "seconds_with_full_quotes": 222,
+    "crossed_seconds_either_token": 34,
+    "crossed_share": 0.1532,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 222,
+      "crossed_seconds": 33,
+      "crossed_share": 0.1486
+     },
+     "up": {
+      "seconds_with_both_quotes": 222,
+      "crossed_seconds": 13,
+      "crossed_share": 0.0586
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 110,
+     "outcome": "down",
+     "best_bid": 0.68,
+     "best_ask": 0.59,
+     "inversion": 0.09
+    }
+   },
+   "btc-updown-5m-1787567400": {
+    "seconds_with_full_quotes": 229,
+    "crossed_seconds_either_token": 89,
+    "crossed_share": 0.3886,
+    "per_token": {
+     "down": {
+      "seconds_with_both_quotes": 229,
+      "crossed_seconds": 89,
+      "crossed_share": 0.3886
+     },
+     "up": {
+      "seconds_with_both_quotes": 229,
+      "crossed_seconds": 0,
+      "crossed_share": 0.0
+     }
+    },
+    "worst_inversion_example": {
+     "secs_after_open": 18,
+     "outcome": "down",
+     "best_bid": 0.53,
+     "best_ask": 0.4,
+     "inversion": 0.13
+    }
+   }
+  }
+ }
+}
