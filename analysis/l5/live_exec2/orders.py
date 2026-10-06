@@ -158,14 +158,31 @@ def preflight_submission(*, slug: str, outcome_side: str, price: Any,
             "probe": PROBE, "spec_fingerprint": EXEC1X_FINGERPRINT}
 
 
+class GuardRefused(RuntimeError):
+    """A just-in-time guard said no between preview and POST."""
+
+
 def submit_one(t: BoundedOrderTransport, *, slug: str, outcome_side: str,
                price: Any, qty: Any = VENUE_MIN_QTY,
-               checks: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+               checks: Optional[Mapping[str, Any]] = None,
+               guard: Optional[Any] = None) -> Dict[str, Any]:
     """Preview, echo-check, consume the durable latch, then POST once.
 
     Raises rather than returning a soft failure. The latch is consumed
     between the echo check and the POST, so a crash anywhere after this point
     leaves the experiment spent -- which is the intended direction.
+
+    `guard`, when given, is a zero-argument callable returning
+    {"ok": bool, "reason": ...}. It is called TWICE: immediately before the
+    latch is consumed, and again immediately before the POST. The first call
+    is the one that protects the latch -- a refusal there costs nothing. The
+    second closes the microsecond window between the two, and a refusal there
+    leaves the latch spent and the experiment over, which is the safe
+    direction: a spent latch loses a run, a late POST breaks the envelope.
+
+    Time passes between the preview and the POST. Without a guard, that gap
+    is unchecked, which is how a run that was eligible when it started could
+    submit when it no longer is.
     """
     assert_frozen()
     if checks is not None and not checks.get("ok"):
@@ -174,7 +191,19 @@ def submit_one(t: BoundedOrderTransport, *, slug: str, outcome_side: str,
     body = order_body(slug=slug, outcome_side=outcome_side, price=price,
                       qty=qty)
     echo = G.require_echo(body, t.request("POST", PREVIEW_PATH, body))
+    if guard is not None:
+        v = guard()
+        if not v.get("ok"):
+            raise GuardRefused("refused before latch consumption: %s"
+                               % v.get("reason"))
     record = L.consume(slug=slug, side=outcome_side, price=price, qty=qty)
+    if guard is not None:
+        v = guard()
+        if not v.get("ok"):
+            raise GuardRefused(
+                "refused after latch consumption and BEFORE the POST: %s. "
+                "The latch is spent; the experiment is over and no order was "
+                "sent." % v.get("reason"))
     resp = t.request("POST", SUBMIT_PATH, body)
     order_id = str(resp.get("id") or resp.get("orderId")
                    or (resp.get("order") or {}).get("id") or "")
