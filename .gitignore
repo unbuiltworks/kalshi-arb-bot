@@ -126,3 +126,9 @@ analysis/gemini/shadow_cohorts/
 # Shadow preflight tapes: single preregistration row, no observations.
 # Excluded so an empty tape cannot be mistaken for a zero-fill collection run.
 data/l5/shadow/shadow_*.jsonl
+
+# The august_replay study's own compiled cache. A commit script once used
+# `git add -f` here (to force gitignored JSON caches that turned out never to
+# have been ignored) and swept these in; the -f is gone and this is belt and
+# braces.
+analysis/l5/august_replay/__pycache__/
