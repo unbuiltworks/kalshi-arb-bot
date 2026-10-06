@@ -1,0 +1,135 @@
+{
+  "label": "L5_CANDIDATE_V2_BOOK_CONDITIONED",
+  "spec_fingerprint_sha256": "075eaa15d3e71dca5c2f6832c286e56c50f5a7a7878e33a517d242f89f7f26ae",
+  "book_source": {
+    "zenodo_record": 22084977,
+    "sha256": "d86191506e416026f460338b1b238c628b3fcee37f468e646b3a2256bd0be959",
+    "licence": "CC-BY-4.0"
+  },
+  "POWER_STATEMENT": "27 markets / 3073 fills; fills per market max 390, median 13, min 1. The independent unit is the MARKET. A chronological 70/30 split would leave ~9 OOS markets, which is NOT a defensible out-of-sample test, so NONE IS CLAIMED. Grouped leave-one-market-out CV is used instead and reported as such.",
+  "join": {
+    "markets": 27,
+    "decision_points": 1591,
+    "with_book_state": 1566,
+    "book_coverage_pct": 98.43
+  },
+  "label_base_rates": {
+    "EXTEND_SAME_SIDE": 0.6673,
+    "SWITCH_OUTCOME": 0.3225,
+    "STOP": 0.0102
+  },
+  "MINT_SUM_IS_FIRST_CLASS": {
+    "feature": "bid(own)+bid(complement)",
+    "bins": {
+      "0.98_1.00": {
+        "n": 1463,
+        "markets": 24,
+        "p_switch": 0.3185,
+        "p_extend": 0.6719,
+        "p_stop": 0.0096
+      },
+      "ge_1.00": {
+        "n": 83,
+        "markets": 17,
+        "p_switch": 0.3614,
+        "p_extend": 0.6386,
+        "p_stop": 0.0
+      },
+      "0.95_0.98": {
+        "n": 16,
+        "markets": 9,
+        "p_switch": 0.4375,
+        "p_extend": 0.5,
+        "p_stop": 0.0625
+      },
+      "lt_0.95": {
+        "n": 4,
+        "markets": 3,
+        "p_switch": 0.5,
+        "p_extend": 0.25,
+        "p_stop": 0.25
+      }
+    }
+  },
+  "marginal_pair_if_switch": {
+    "feature": "vw_own + complement ask",
+    "bins": {
+      "0.96_1.00": {
+        "n": 189,
+        "markets": 21,
+        "p_switch": 0.2751,
+        "p_extend": 0.709,
+        "p_stop": 0.0159
+      },
+      "lt_0.96": {
+        "n": 570,
+        "markets": 23,
+        "p_switch": 0.3421,
+        "p_extend": 0.6439,
+        "p_stop": 0.014
+      },
+      "1.00_1.05": {
+        "n": 227,
+        "markets": 23,
+        "p_switch": 0.304,
+        "p_extend": 0.6916,
+        "p_stop": 0.0044
+      },
+      "ge_1.05": {
+        "n": 580,
+        "markets": 22,
+        "p_switch": 0.3259,
+        "p_extend": 0.6672,
+        "p_stop": 0.0069
+      }
+    }
+  },
+  "inventory_imbalance": {
+    "feature": "imbalance",
+    "bins": {
+      "one_sided": {
+        "n": 87,
+        "markets": 23,
+        "p_switch": 0.2759,
+        "p_extend": 0.7126,
+        "p_stop": 0.0115
+      },
+      "balanced": {
+        "n": 1062,
+        "markets": 19,
+        "p_switch": 0.3352,
+        "p_extend": 0.6601,
+        "p_stop": 0.0047
+      },
+      "mild": {
+        "n": 303,
+        "markets": 23,
+        "p_switch": 0.3432,
+        "p_extend": 0.637,
+        "p_stop": 0.0198
+      },
+      "heavy": {
+        "n": 114,
+        "markets": 19,
+        "p_switch": 0.1842,
+        "p_extend": 0.7807,
+        "p_stop": 0.0351
+      }
+    }
+  },
+  "SWITCH_discrimination_groupedCV": {
+    "PR_AUC_average_precision": 0.3555,
+    "base_rate_switch": 0.3225,
+    "precision_at_base_rate_threshold": 0.3495,
+    "recall_at_base_rate_threshold": 0.5129,
+    "n_scored": 1566,
+    "note": "threshold is the base rate, NOT tuned. PR-AUC at or near the base rate means no discrimination."
+  },
+  "v1_comparison": {
+    "v1_OOS_switch_recall": 0.0,
+    "v1_OOS_switch_predictions": "0 of 17,096",
+    "v1_overall_accuracy": 0.5996,
+    "always_extend_baseline": 0.6027
+  },
+  "accounting": "historical replay on third-party public data; no order sent; not realized profit for our account."
+}
