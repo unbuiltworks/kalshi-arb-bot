@@ -91,6 +91,30 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p data/l5/shadow analysis/l5/shadow
+          # SELF-REGISTER this run in the tape manifest BEFORE collecting,
+          # so every tape it writes is attributable even if the job dies
+          # mid-segment. Validity starts PENDING and is decided by the
+          # gate order in the report, never assumed.
+          python - <<'PY' || true
+          import json, os, datetime
+          p = "analysis/l5/shadow/RUN_MANIFEST.json"
+          d = json.load(open(p)) if os.path.exists(p) else {"runs": []}
+          rid = int(os.environ.get("GITHUB_RUN_ID") or 0)
+          if rid and not any(r.get("run_id") == rid for r in d["runs"]):
+              d["runs"].append({
+                  "run_id": rid,
+                  "run_number": int(os.environ.get("GITHUB_RUN_NUMBER") or 0),
+                  "sha": os.environ.get("GITHUB_SHA"),
+                  "started_utc": datetime.datetime.now(
+                      datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "ended_utc": None,
+                  "conclusion": "in_progress",
+                  "validity": "PENDING_MEASUREMENT_VALIDITY",
+                  "why": "self-registered at collection start",
+              })
+              json.dump(d, open(p, "w"), indent=2)
+              print("registered run %d in the tape manifest" % rid)
+          PY
           for i in $(seq 1 16); do
             echo "=== segment $i ==="
             python -m src.polymarket_l5.owned_order_shadow \
@@ -101,35 +125,18 @@ jobs:
               [ -e "$f" ] || continue
               gzip -f "$f" || true
             done
-            python - <<'PY' || true
-          import glob, gzip, json, collections
-          st = collections.Counter(); ev = un = 0
-          for f in glob.glob("data/l5/shadow/shadow_*.jsonl.gz"):
-              for l in gzip.open(f, "rt", errors="ignore"):
-                  try: r = json.loads(l)
-                  except Exception: continue
-                  if r.get("kind") == "market_terminal":
-                      st[r.get("status")] += 1
-                      ev += r.get("evidenced_fills") or 0
-                      un += r.get("uncertain_fills") or 0
-          out = {"terminal_status_counts": dict(st),
-                 "COMPLETE_markets": st.get("COMPLETE", 0),
-                 "cohort_target": 25,
-                 "evidenced_fills": ev, "uncertain_fills": un,
-                 "non_counting_statuses": {
-                     k: v for k, v in st.items() if k != "COMPLETE"},
-                 "note": ("only COMPLETE counts toward the cohort. "
-                          "uncertain fills are excluded from primary "
-                          "economics; missing data, a stale listing or a "
-                          "collector error is never a zero fill")}
-          json.dump(out, open("analysis/l5/shadow/COHORT_PROGRESS.json", "w"),
-                    indent=2)
-          print(json.dumps(out, indent=2))
-          PY
+            # Cohort accounting lives in a committed, TESTED script, not
+            # inline here: it must establish MEASUREMENT VALIDITY before
+            # reporting strategy statistics, quarantine tapes from runs the
+            # manifest marks invalid, and stamp the producing run into the
+            # artifact so a stale file cannot masquerade as current.
+            # It imports nothing from the collector and cannot alter S1.
+            python scripts/shadow_cohort_report.py || true
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             for f in data/l5/shadow/shadow_*.jsonl.gz \
-                     analysis/l5/shadow/COHORT_PROGRESS.json; do
+                     analysis/l5/shadow/COHORT_PROGRESS.json \
+                     analysis/l5/shadow/RUN_MANIFEST.json; do
               [ -e "$f" ] && git add -- "$f"
             done
             if git diff --cached --quiet; then

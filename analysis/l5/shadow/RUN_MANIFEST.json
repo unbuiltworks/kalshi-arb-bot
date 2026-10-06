@@ -1,0 +1,35 @@
+{
+  "note": "Which CI run produced which Shadow S1 tape. Tapes are named by their start timestamp and carry no run id, so attribution is by timestamp window. Seeded by hand for runs 1-3 from the GitHub Actions record; later runs append themselves at segment time.",
+  "runs": [
+    {
+      "run_id": 37399000910,
+      "run_number": 1,
+      "sha": "5af61f30ced2567850d970c02b799a0fefa86299",
+      "started_utc": "2026-10-06T01:24:30Z",
+      "ended_utc": "2026-10-06T01:47:22Z",
+      "conclusion": "cancelled",
+      "validity": "INVALID_NO_BOOK_READS",
+      "why": "discovery ordered endDate ascending with no date floor and returned the 27 oldest unresolved listings, all dated 2025-12-19; every market tripped the end-date break with polls=0 and successful_reads=0. Collector defect, not an S1 result."
+    },
+    {
+      "run_id": 37400932571,
+      "run_number": 2,
+      "sha": "46c464ab0e2214ff413284eff7bd66ef04a0fcc1",
+      "started_utc": "2026-10-06T01:47:21Z",
+      "ended_utc": "2026-10-06T02:15:00Z",
+      "conclusion": "cancelled",
+      "validity": "INVALID_NO_DISCOVERY",
+      "why": "the fix to run 1 flipped endDate to descending, which returns the farthest-future long-dated listings rather than the soonest-ending up-down windows; discovery returned 0 eligible markets on every attempt. Collector defect, not an S1 result."
+    },
+    {
+      "run_id": 37403272240,
+      "run_number": 3,
+      "sha": "1d54880271d01aad813b54b1a4eeeb7c64a120b3",
+      "started_utc": "2026-10-06T02:16:29Z",
+      "ended_utc": null,
+      "conclusion": "in_progress",
+      "validity": "PENDING_MEASUREMENT_VALIDITY",
+      "why": "date-floored ascending paging with per-stage rejection counters. All four CI safety gates passed at 02:17:30Z. Validity is decided by the gate order in scripts/shadow_cohort_report.py, not assumed."
+    }
+  ]
+}
