@@ -1,0 +1,234 @@
+{
+ "protocol": "PREREGISTRATION_PERSISTENCE.md @ 5816406e",
+ "frozen": {
+  "D_ticks": 6,
+  "min_excursion_s": 10,
+  "return_tolerance_ticks": 1,
+  "near_touch_band_ticks": [
+   -3,
+   4
+  ],
+  "horizon_s": 60
+ },
+ "THE_CONTROL_IS_THE_TEST": "L5 places at the touch, so a return fill is expected under both persistence and reposting. Only the treated-vs-control contrast discriminates.",
+ "ORDER_IDENTITY_UNOBSERVABLE": "a returning fill is never proof the original order remained resting; no order id, placement or cancel is observable",
+ "crossed_exposure_archive_flag": {
+  "1787274000": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787290200": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787296500": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787300100": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787305500": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787306400": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787307300": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787311800": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787362200": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787363100": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787365800": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787369400": {
+   "up": 0.0,
+   "down": 0.0
+  }
+ },
+ "treated_class_counts": {
+  "ADJACENT_PRICE_RETURN": 216,
+  "OPPOSITE_OUTCOME_FILL": 275,
+  "SAME_EXACT_PRICE_RETURN": 180,
+  "NO_L5_FILL": 2,
+  "INSUFFICIENT_SUBSEQUENT_OPPORTUNITY": 5
+ },
+ "control_class_counts": {
+  "ADJACENT_PRICE_RETURN": 277,
+  "OPPOSITE_OUTCOME_FILL": 261,
+  "SAME_EXACT_PRICE_RETURN": 183,
+  "NO_L5_FILL": 5,
+  "INSUFFICIENT_SUBSEQUENT_OPPORTUNITY": 1
+ },
+ "P1": {
+  "treated_rate": 0.2675,
+  "treated_k": 180,
+  "treated_n": 673,
+  "control_rate": 0.2521,
+  "control_k": 183,
+  "control_n": 726,
+  "ratio": 1.061,
+  "windows_treated_higher": 6,
+  "bar": "ratio>=2.0 AND n>=30 AND >=9/12 windows",
+  "PASS": false
+ },
+ "P2_partial_vs_full": {
+  "partial_rate": 0.2776,
+  "partial_n": 544,
+  "full_rate": 0.2248,
+  "full_n": 129,
+  "difference": 0.0528,
+  "windows_partial_higher": 6,
+  "bar": "diff>=0.10 AND n>=30 each AND >=8 windows",
+  "PASS": false
+ },
+ "latency_return_to_first_fill_at_old_level_s": {
+  "n": 180,
+  "min": 0.0,
+  "p10": 1.0,
+  "p25": 3.0,
+  "p50": 9.0,
+  "p75": 24.0,
+  "p90": 44.0,
+  "max": 60.0,
+  "mean": 15.488889,
+  "share_negative": 0.0,
+  "share_zero": 0.05,
+  "share_positive": 0.95
+ },
+ "covariates_hit_vs_miss": {
+  "excursion_peak_ticks": {
+   "n_a": 180,
+   "n_b": 2,
+   "delta": null
+  },
+  "excursion_duration_s": {
+   "n_a": 180,
+   "n_b": 2,
+   "delta": null
+  },
+  "tte_s": {
+   "n_a": 180,
+   "n_b": 2,
+   "delta": null
+  },
+  "inventory_at_return": {
+   "n_a": 180,
+   "n_b": 2,
+   "delta": null
+  },
+  "consumed_before_excursion": {
+   "n_a": 180,
+   "n_b": 2,
+   "delta": null
+  },
+  "remaining_latent_INFERRED": {
+   "n_a": 151,
+   "n_b": 2,
+   "delta": null
+  }
+ },
+ "per_window": {
+  "1787274000": {
+   "treated_rate": 0.2593,
+   "treated_n": 27,
+   "control_rate": 0.4762,
+   "control_n": 21,
+   "treated_higher": false
+  },
+  "1787290200": {
+   "treated_rate": 0.2759,
+   "treated_n": 116,
+   "control_rate": 0.2426,
+   "control_n": 136,
+   "treated_higher": true
+  },
+  "1787296500": {
+   "treated_rate": 0.6316,
+   "treated_n": 19,
+   "control_rate": 0.4286,
+   "control_n": 14,
+   "treated_higher": true
+  },
+  "1787300100": {
+   "treated_rate": 0.3391,
+   "treated_n": 115,
+   "control_rate": 0.3056,
+   "control_n": 72,
+   "treated_higher": true
+  },
+  "1787305500": {
+   "treated_rate": 0.2366,
+   "treated_n": 93,
+   "control_rate": 0.2959,
+   "control_n": 98,
+   "treated_higher": false
+  },
+  "1787306400": {
+   "treated_rate": 0.2439,
+   "treated_n": 41,
+   "control_rate": 0.2679,
+   "control_n": 56,
+   "treated_higher": false
+  },
+  "1787307300": {
+   "treated_rate": 0.1667,
+   "treated_n": 30,
+   "control_rate": 0.3421,
+   "control_n": 38,
+   "treated_higher": false
+  },
+  "1787311800": {
+   "treated_rate": 0.0,
+   "treated_n": 2,
+   "control_rate": 0.0,
+   "control_n": 3,
+   "treated_higher": false
+  },
+  "1787362200": {
+   "treated_rate": 0.1711,
+   "treated_n": 76,
+   "control_rate": 0.1765,
+   "control_n": 85,
+   "treated_higher": false
+  },
+  "1787363100": {
+   "treated_rate": 0.2955,
+   "treated_n": 44,
+   "control_rate": 0.163,
+   "control_n": 92,
+   "treated_higher": true
+  },
+  "1787365800": {
+   "treated_rate": 0.2051,
+   "treated_n": 78,
+   "control_rate": 0.1974,
+   "control_n": 76,
+   "treated_higher": true
+  },
+  "1787369400": {
+   "treated_rate": 0.3438,
+   "treated_n": 32,
+   "control_rate": 0.2857,
+   "control_n": 35,
+   "treated_higher": true
+  }
+ },
+ "VERDICT": "CONSISTENT_WITH_REPOSTING"
+}
