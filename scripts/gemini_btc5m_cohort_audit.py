@@ -36,9 +36,47 @@ from typing import Any, Dict, List, Optional
 
 from src.gemini_execution import btc5m_canary as C
 
-LABEL = "GEMINI_BTC5M_COHORT1_AUDIT_V1"
+# ------------------------------------------------------------ cohort select
+# The audit was written against the CANARY ledger and hardcoded to it. The
+# UNDERDOG cohort ran the same lifecycle under its own grant, its own ledger
+# and its own run artifacts, so the cohort is now a PARAMETER rather than a
+# second copy of this file. Everything else -- the flattened resolution_for
+# read, the keyword-only `params`, the settled-POSITION cashflow, the exact
+# order_id attribution against THIS cohort's own ledger -- is shared, which
+# is the point: those four corrections are not re-learned per cohort.
+COHORTS: Dict[str, Dict[str, Any]] = {
+    "canary": {
+        "module": "src.gemini_execution.btc5m_canary",
+        "runs": "canary_run_*.json",
+        "label": "GEMINI_BTC5M_COHORT1_AUDIT_V1",
+        "out": "analysis/gemini/btc5m_canary/cohort1_audit.json",
+    },
+    "underdog": {
+        "module": "src.gemini_execution.underdog_cohort",
+        "runs": "underdog_run_*.json",
+        "label": "GEMINI_BTC5M_UNDERDOG_COHORT1_AUDIT_V1",
+        "out": "analysis/gemini/underdog_audit/UNDERDOG_COHORT1_AUDIT.json",
+    },
+}
+
+LABEL = COHORTS["canary"]["label"]
+RUN_GLOB = COHORTS["canary"]["runs"]
+COHORT_NAME = "canary"
 TAKER_RATE = D("0.07")
 SETTLED_PATH = "/v1/prediction-markets/positions/settled"
+MYTRADES_PATH = "/v1/mytrades"
+
+
+def select_cohort(name: str) -> Dict[str, Any]:
+    """Bind the module whose ledger, grant and run artifacts we audit."""
+    global C, LABEL, RUN_GLOB, COHORT_NAME
+    import importlib
+    spec = COHORTS[name]
+    C = importlib.import_module(spec["module"])
+    LABEL = spec["label"]
+    RUN_GLOB = spec["runs"]
+    COHORT_NAME = name
+    return spec
 
 
 def _d(v: Any) -> Optional[D]:
@@ -55,7 +93,10 @@ def cohort_chain() -> List[Dict[str, Any]]:
                     and r.get("slot") == slot.get("slot")), {})
         body = ((sub.get("venue") or {}).get("body") or {})
         dec = slot.get("decision") or {}
-        bk = dec.get("book") or {}
+        # the canary ledger carries `book`; the underdog ledger carries
+        # `book_raw` with the acquisition prices already on it. An absent
+        # `book` is not an absent ladder.
+        bk = dec.get("book") or dec.get("book_raw") or {}
         out.append({
             "slot": slot.get("slot"),
             "market": slot.get("market"),
@@ -70,8 +111,10 @@ def cohort_chain() -> List[Dict[str, Any]]:
                 # the venue publishes one ladder; DOWN acquisition is
                 # 1 - YES bid, which is what buying NO actually consumes
                 "down_acquisition_contemporaneous": (
-                    None if bk.get("bid") is None
-                    else str(D("1") - D(str(bk["bid"])))),
+                    str(bk["down_acquisition"])
+                    if bk.get("down_acquisition") is not None
+                    else (None if bk.get("bid") is None
+                          else str(D("1") - D(str(bk["bid"]))))),
             },
             "SUBMITTED": {
                 "utc": sub.get("utc"),
@@ -241,12 +284,36 @@ async def main_async(a) -> int:
     cash = await cash_leg(symbols) if not a.no_venue else {
         "readable": False, "why": "--no-venue"}
 
+    # the fill rows, per symbol: the preserved local artifact first, the
+    # venue's own record only where nothing was preserved. A venue read that
+    # fails is recorded as UNREADABLE and never as "no fills".
+    fill_src: Dict[str, Dict[str, Any]] = {}
+    for sym in symbols:
+        loc = a_fills(sym)
+        if loc:
+            fill_src[sym] = {"rows": loc, "source": "preserved run artifact",
+                             "readable": True}
+            continue
+        if a.no_venue:
+            fill_src[sym] = {"rows": [], "readable": False,
+                             "source": "none",
+                             "why": ("no preserved row and --no-venue; "
+                                     "UNREADABLE IS NOT ZERO")}
+            continue
+        got = await venue_fill_rows(sym)
+        fill_src[sym] = {"rows": got.get("rows") or [],
+                         "readable": got.get("readable"),
+                         "source": ("venue order_history + mytrades, joined "
+                                    "on order_id"),
+                         "why": got.get("why")}
+
     audit: List[Dict[str, Any]] = []
     for leg in chain:
         sym = leg["market"]
         res = ({"readable": False, "why": "--no-venue"} if a.no_venue
                else await settled_outcome(sym))
-        fills = C.attribute_fills(sym, a_fills(sym, a))
+        src = fill_src.get(sym) or {"rows": [], "readable": False}
+        fills = C.attribute_fills(sym, src.get("rows") or [])
         px = _d(leg["SUBMITTED"]["requested_price"])
         qty = _d(leg["SUBMITTED"]["requested_quantity"]) or D("1")
         fill_px = (_d(fills["attributed"][0].get("price"))
@@ -327,6 +394,9 @@ async def main_async(a) -> int:
                 "acquisition_principal_usd": (
                     None if principal is None else str(principal)),
                 "foreign": fills.get("foreign"),
+                "fill_record_source": src.get("source"),
+                "fill_record_readable": src.get("readable"),
+                "fill_record_why": src.get("why"),
             },
             "SETTLED": dict(res, payout_usd=(None if payout is None
                                              else str(payout))),
@@ -353,6 +423,8 @@ async def main_async(a) -> int:
         })
     rep = {
         "label": LABEL,
+        "cohort": COHORT_NAME,
+        "cohort_ledger": C.LEDGER,
         "accounting": ("FILLED -> SETTLED -> CASH_CONFIRMED -> REALIZED. "
                        "SETTLED and CASH_CONFIRMED are kept separate and a "
                        "settled outcome is never reported as realized."),
@@ -446,11 +518,19 @@ def trajectory(ser, t_entry, res) -> Dict[str, Any]:
                       "that instant; nothing is read forward")}
 
 
-def a_fills(symbol: str, a) -> List[Dict[str, Any]]:
-    """The venue fill rows already preserved in the cohort run artifact."""
+def a_fills(symbol: str, a=None) -> List[Dict[str, Any]]:
+    """The venue fill rows already preserved in the cohort run artifact.
+
+    THREE places hold them and all three are read. `fills.rows` is the happy
+    path; `fills.foreign` is where the underdog run artifacts put every one
+    of theirs, because the run's own fill read attributed against the CI15M
+    root and classified our own fills FOREIGN; `attribution.attributed` is
+    the same rows after the cohort's own exact-order_id attribution. Reading
+    only `fills.rows` would have reported the underdog cohort as having no
+    preserved fills at all, which is unreadable-mistaken-for-empty again.
+    """
     rows: List[Dict[str, Any]] = []
-    for f in sorted(glob.glob(os.path.join(C.LEDGER_DIR,
-                                           "canary_run_*.json"))):
+    for f in sorted(glob.glob(os.path.join(C.LEDGER_DIR, RUN_GLOB))):
         try:
             d = json.load(open(f, encoding="utf-8"))
         except Exception:                                      # noqa: BLE001
@@ -459,21 +539,99 @@ def a_fills(symbol: str, a) -> List[Dict[str, Any]]:
             if w.get("symbol") != symbol:
                 continue
             fl = w.get("fills") or {}
-            for r in (fl.get("rows") or []) + (fl.get("foreign") or []):
-                if r not in rows:
-                    rows.append(r)
+            att = w.get("attribution") or {}
+            for r in ((fl.get("rows") or []) + (fl.get("foreign") or [])
+                      + (att.get("attributed") or [])):
+                if not isinstance(r, dict):
+                    continue
+                clean = {k: v for k, v in r.items()
+                         if not str(k).startswith("_")}
+                if any(x.get("tid") == clean.get("tid") for x in rows):
+                    continue
+                rows.append(clean)
     return rows
+
+
+async def venue_fill_rows(symbol: str) -> Dict[str, Any]:
+    """The venue's OWN fill record for a symbol, read fresh.
+
+    Needed because a fill can be economically real and have no preserved
+    local row: underdog slot 1 ran in a session whose run artifact kept no
+    window, so its CHARGED fee exists only at the venue. The ACK body does
+    not carry a fee and a projected fee is not a charged one.
+
+    This deliberately does NOT go through ci15m_probe.authenticated_fills:
+    that helper attributes against the CI15M cohort root, which is exactly
+    why all five canary fills first came back FOREIGN, and it HALTs that
+    unrelated root as a side effect. The raw read is done here and
+    attribution is left to THIS cohort's own ledger.
+    """
+    from src.gemini_execution import metadata
+    from src.gemini_execution import fill_reconciliation as FR
+    from src.gemini_prediction_auth import private_rest_request
+    out: Dict[str, Any] = {"symbol": symbol, "readable": False, "rows": []}
+    try:
+        hist = await metadata.order_history(symbol=symbol,
+                                            statuses=("filled",), limit=100,
+                                            include_rows=True)
+    except Exception as exc:                                   # noqa: BLE001
+        out["why"] = "order history raised %s" % type(exc).__name__
+        return out
+    if not hist.get("readable", True):
+        out["why"] = "order history unreadable: %s" % hist.get("verdict")
+        return out
+    orders_seen = [o for grp in (hist.get("per_status") or [])
+                   for o in (grp.get("orders") or [])
+                   if isinstance(o, dict) and o.get("symbol") == symbol]
+    try:
+        # KEYWORD-ONLY. Positionally this raises TypeError and the caller
+        # records a readable surface as unreadable for no venue reason.
+        r = await private_rest_request("POST", MYTRADES_PATH,
+                                       params={"symbol": symbol,
+                                               "limit_trades": 500},
+                                       timeout=20.0)
+    except Exception as exc:                                   # noqa: BLE001
+        out["why"] = "mytrades raised %s" % type(exc).__name__
+        return out
+    if getattr(r, "status_code", None) != 200:
+        out["why"] = "mytrades returned %s" % getattr(r, "status_code", None)
+        return out
+    try:
+        body = r.json()
+    except ValueError:
+        out["why"] = "mytrades body was not JSON"
+        return out
+    trades = body.get("trades") if isinstance(body, dict) else body
+    if not isinstance(trades, list):
+        out["why"] = ("mytrades carried no trade list; the shape is "
+                      "unrecognised and is NOT read as empty")
+        return out
+    auth = FR.authoritative_fills({"orders_seen": orders_seen,
+                                   "trades": [t for t in trades
+                                              if isinstance(t, dict)]})
+    if not auth.get("readable"):
+        out["why"] = auth.get("why")
+        return out
+    out.update({"readable": True, "rows": auth.get("rows") or [],
+                "orders_joined": auth.get("orders_joined"),
+                "source": auth.get("source")})
+    return out
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--cohort", choices=sorted(COHORTS), default="canary",
+                    help="which cohort's ledger/grant/run artifacts to audit")
     ap.add_argument("--tapes",
                     default="analysis/gemini/btc5m_rec/btc5m_rec_*.jsonl.gz")
     ap.add_argument("--no-venue", action="store_true",
                     help="skip every account/contract read; local legs only")
-    ap.add_argument("--out",
-                    default="analysis/gemini/btc5m_canary/cohort1_audit.json")
-    return asyncio.run(main_async(ap.parse_args(argv)))
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    spec = select_cohort(a.cohort)
+    if not a.out:
+        a.out = spec["out"]
+    return asyncio.run(main_async(a))
 
 
 if __name__ == "__main__":
