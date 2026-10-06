@@ -1,0 +1,151 @@
+# ACQUIRE Zenodo record 22084977 `updown_15m.parquet` -- 1-second full
+# Polymarket L2 for BTC/ETH 15m up-down markets, 2026-08-21..24, CC-BY-4.0.
+#
+# IT RUNS IN CI BECAUSE zenodo.org IS BLOCKED from the research container's
+# egress proxy (CONNECT -> 403). This is the programme's P0 data task: the
+# dataset overlaps 12 windows in which L5 traded (3,166 fills, 88.3% maker),
+# and it is the only book-complete evidence that can establish whether L5's
+# higher-price EXTENDs executed against real liquidity.
+#
+# FAIL CLOSED ON PROVENANCE. The expected sha256 is already recorded in this
+# repository from the prior analysis, so the download is verified against a
+# value fixed BEFORE this workflow existed. A mismatch aborts; the raw file
+# is never altered, rewritten or re-compressed.
+#
+# Read-only with respect to the venue: no credential, no order path, no
+# Polymarket API call. It fetches a static archive and commits it.
+name: zenodo-l2-acquire
+
+on:
+  push:
+    paths:
+      - '.github/zenodo_l2_request'
+
+concurrency:
+  group: zenodo-l2-acquire
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prove no order path and no credential in this job
+        run: |
+          python - <<'PY'
+          import pathlib
+          wf = pathlib.Path(".github/workflows/zenodo-l2-acquire.yml").read_text()
+          for bad in ("secrets.", "GEMINI_", "KALSHI_", "POLYMARKET_",
+                      "PRIVATE_KEY", "place", "order"):
+              assert bad not in wf, "forbidden token in workflow: %s" % bad
+          print("workflow carries no credential reference and no order path")
+          PY
+
+      - name: Download the archive
+        run: |
+          set -euo pipefail
+          mkdir -p data/zenodo_22084977
+          URL="https://zenodo.org/records/22084977/files/updown_15m.parquet?download=1"
+          ALT="https://zenodo.org/record/22084977/files/updown_15m.parquet?download=1"
+          echo "primary: $URL"
+          curl -fL --retry 5 --retry-delay 4 --max-time 900 \
+               -o data/zenodo_22084977/updown_15m.parquet "$URL" \
+            || curl -fL --retry 5 --retry-delay 4 --max-time 900 \
+               -o data/zenodo_22084977/updown_15m.parquet "$ALT"
+          ls -la data/zenodo_22084977/
+
+      - name: VERIFY the checksum against the value recorded before this job
+        run: |
+          set -euo pipefail
+          EXPECT=d86191506e416026f460338b1b238c628b3fcee37f468e646b3a2256bd0be959
+          GOT=$(sha256sum data/zenodo_22084977/updown_15m.parquet | cut -d' ' -f1)
+          echo "expected $EXPECT"
+          echo "got      $GOT"
+          if [ "$GOT" != "$EXPECT" ]; then
+            echo "::error::CHECKSUM MISMATCH -- refusing to commit an unverified archive"
+            exit 1
+          fi
+          printf '%s  updown_15m.parquet\n' "$GOT" \
+            > data/zenodo_22084977/SHA256SUMS
+          cat > data/zenodo_22084977/PROVENANCE.md <<'EOF'
+          # Provenance
+
+          * source: Zenodo record **22084977**, file `updown_15m.parquet`
+          * licence: **CC-BY-4.0**
+          * contents: 1-second full bid/ask ladders, Polymarket BTC/ETH 15m
+            up-down markets, **2026-08-21..24**
+          * sha256: `d86191506e416026f460338b1b238c628b3fcee37f468e646b3a2256bd0be959`
+          * the expected checksum was recorded in this repository by prior
+            analysis BEFORE this acquisition workflow existed, so the
+            verification is against a value this job could not have chosen
+          * the file is committed **byte-identical**; it is never altered,
+            re-compressed or rewritten
+          * fetched by `.github/workflows/zenodo-l2-acquire.yml` because
+            `zenodo.org` is unreachable from the research container
+            (CONNECT -> 403)
+          EOF
+
+      - name: Structural census of the archive
+        run: |
+          python -m pip install -q pyarrow pandas
+          python - <<'PY' | tee data/zenodo_22084977/CENSUS.json
+          import json
+          import pyarrow.parquet as pq
+          f = "data/zenodo_22084977/updown_15m.parquet"
+          p = pq.ParquetFile(f)
+          sch = p.schema_arrow
+          out = {"rows": p.metadata.num_rows,
+                 "row_groups": p.metadata.num_row_groups,
+                 "columns": [{"name": n, "type": str(sch.field(n).type)}
+                             for n in sch.names]}
+          import pandas as pd
+          df = p.read_row_group(0).to_pandas()
+          out["first_row_group_rows"] = len(df)
+          for c in df.columns:
+              s = df[c]
+              try:
+                  out.setdefault("sample_ranges", {})[c] = {
+                      "min": str(s.min()), "max": str(s.max()),
+                      "nunique": int(s.nunique())}
+              except Exception:
+                  pass
+          print(json.dumps(out, indent=2, default=str))
+          PY
+
+      - name: Commit the archive under an allow-list
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in data/zenodo_22084977/updown_15m.parquet \
+                   data/zenodo_22084977/SHA256SUMS \
+                   data/zenodo_22084977/PROVENANCE.md \
+                   data/zenodo_22084977/CENSUS.json; do
+            if [ -e "$f" ]; then git add -- "$f"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "nothing acquired"; exit 0
+          fi
+          if git diff --cached --name-only \
+               | grep -qvE '^data/zenodo_22084977/'; then
+            echo "::error::refusing to commit outside the acquisition dir"
+            git diff --cached --name-only
+            exit 1
+          fi
+          git commit -m "data(polymarket): Zenodo 22084977 1s L2, checksum-verified [skip ci]"
+          for i in 1 2 3 4; do
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && \
+            git push -q origin "HEAD:${GITHUB_REF_NAME}" && break || sleep $((2**i))
+          done
