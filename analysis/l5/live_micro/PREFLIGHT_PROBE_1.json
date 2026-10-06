@@ -1,0 +1,52 @@
+{
+ "probe": "LIVE-L5-MICRO-1",
+ "owner_authorized_fingerprint": "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118",
+ "spec_fingerprint": "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118",
+ "market_family": "btc-updown-15m",
+ "gated_slug": "<not gated>",
+ "gates": [
+  {
+   "gate": "G1_FINGERPRINT_MATCHES_AUTHORIZATION",
+   "pass": true,
+   "authorized": "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118",
+   "computed": "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118"
+  },
+  {
+   "gate": "G2_OWNER_ARMING_KEYS_PRESENT",
+   "pass": false,
+   "keys_present": {
+    "PMUS_MICRO_LIVE": false,
+    "PMUS_MICRO_SESSION_ID": false,
+    "PMUS_MICRO_ARM": false,
+    "PMUS_MICRO_GATE_EVIDENCE": false
+   },
+   "armed": false,
+   "detail": "the owner's four PMUS_MICRO_* keys are the arming mechanism. The frozen spec asserts claude_may_not_set_these, so this runner reports them and never sets them."
+  },
+  {
+   "gate": "G3_SUBMISSION_CREDENTIALS_PRESENT",
+   "pass": false,
+   "credential_shaped_vars_present": 0,
+   "names_only": [],
+   "detail": "a real order needs authenticated API access and wallet signing. Values are never printed."
+  },
+  {
+   "gate": "G4_VENUE_REACHABLE",
+   "pass": false,
+   "error": "URLError: <urlopen error Tunnel connection failed: 403 Forbidden>"
+  }
+ ],
+ "VERDICT": "SKIP",
+ "blocking_gates": [
+  "G2_OWNER_ARMING_KEYS_PRESENT",
+  "G3_SUBMISSION_CREDENTIALS_PRESENT",
+  "G4_VENUE_REACHABLE"
+ ],
+ "orders_submitted": 0,
+ "wallet_signing": 0,
+ "capital_moved_usd": "0.00",
+ "lifecycle_states_reached": [],
+ "NO_GATE_LOOSENED": true,
+ "NO_PARAMETER_CHANGED_TO_OBTAIN_A_TRADE": true,
+ "detail": "every blocking gate is reported with its actual condition. Per the owner's authorization, a SKIP stops here and nothing is loosened automatically."
+}
