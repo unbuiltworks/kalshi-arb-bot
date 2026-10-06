@@ -1,0 +1,78 @@
+{
+  "maker_fraction": {
+    "value": 0.883,
+    "source": "analysis/l5/historical_l2/ZENODO_OVERLAP_FINDINGS.md",
+    "note": "2,795 of 3,166 overlap fills; recomputed figure pending a machine-readable artifact"
+  },
+  "fill_toxicity": {
+    "value": {
+      "mean": -0.0041,
+      "ci95": [
+        -0.0251,
+        0.0194
+      ],
+      "markets": 27,
+      "fills": 3069
+    },
+    "source": "analysis/l5/FILL_TOXICITY.json"
+  },
+  "two_outcome_burst_incidence_ge3": {
+    "value": 0.716,
+    "source": "analysis/l5/LADDER_V1.md",
+    "note": "156 of 218 bursts with >=3 fills"
+  },
+  "burst_both_outcomes_all": {
+    "value": 0.309,
+    "source": "analysis/l5/LADDER_V1.json"
+  },
+  "leg_qty_median": {
+    "value": 23.61,
+    "source": "analysis/l5/LADDER_V1.json"
+  },
+  "fill_class_pct": {
+    "value": {
+      "RESTING_BID_CONSISTENT": 62.0,
+      "MINT_OR_AT_ABOVE_ASK": 29.0,
+      "INSIDE_SPREAD": 9.0
+    },
+    "source": "analysis/l5/LADDER_V1.json"
+  },
+  "matched_pair_economics_usd": {
+    "value": 80652.14,
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
+  },
+  "residual_economics_usd": {
+    "value": -30654.03,
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
+  },
+  "pair_cost": {
+    "value": {
+      "n": 5100,
+      "min": 0.2485,
+      "p10": 0.8492,
+      "p25": 0.9195,
+      "median": 0.9679,
+      "p75": 1.0136,
+      "p90": 1.0933,
+      "max": 1.775,
+      "mean": 0.9711,
+      "sum": 4952.45
+    },
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
+  },
+  "matched_pct": {
+    "value": {
+      "n": 6252,
+      "min": 0.0,
+      "p10": 0.0,
+      "p25": 0.271,
+      "median": 0.7034,
+      "p75": 0.8797,
+      "p90": 0.954,
+      "max": 1.0,
+      "mean": 0.5778,
+      "sum": 3612.46
+    },
+    "source": "analysis/l5/EDGE_DECOMPOSITION.json"
+  }
+}
