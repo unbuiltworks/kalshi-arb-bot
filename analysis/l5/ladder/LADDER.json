@@ -1,0 +1,724 @@
+{
+ "protocol": "PREREGISTRATION_LADDER.md @ f07aec7c",
+ "G_STRIKE": {
+  "agreement": "10/12",
+  "bar": ">=11/12",
+  "VERDICT": "FAIL",
+  "consequence": "per the frozen protocol the strike-distance test is NOT IDENTIFIABLE and was NOT run",
+  "note": "the two mismatches are the two smallest proxy moves, -0.044% and -0.015%, i.e. inside the venue basis"
+ },
+ "bids_only": true,
+ "crossed_exposure_from_archive_flag": {
+  "1787274000": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787290200": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787296500": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787300100": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787305500": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787306400": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787307300": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787311800": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787362200": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787363100": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787365800": {
+   "up": 0.0,
+   "down": 0.0
+  },
+  "1787369400": {
+   "up": 0.0,
+   "down": 0.0
+  }
+ },
+ "Q1_irregular_sizes": {
+  "n_fills_total": 2795,
+  "volume_total_shares": 65204.4,
+  "n_irregular_fills": 2072,
+  "volume_irregular_shares": 43220.13,
+  "IRREGULAR_EXPLAINED_by_fill_count": 0.9097,
+  "IRREGULAR_EXPLAINED_by_share_volume": 0.8829,
+  "ALL_FILLS_EXPLAINED_by_count": 0.9156,
+  "ALL_FILLS_EXPLAINED_by_volume": 0.8853,
+  "unexplained_singleton_clips": 21,
+  "note": "count and volume are reported separately and never pooled; a singleton irregular fill with no clip context counts AGAINST the hypothesis"
+ },
+ "Q2_min_ladder_width_LOWER_BOUND": {
+  "per_window_outcome": {
+   "1787274000|up": {
+    "max_simultaneous_lower_bound": 5.0,
+    "median": 0.0,
+    "distinct_levels_in_window": 23
+   },
+   "1787274000|down": {
+    "max_simultaneous_lower_bound": 6.0,
+    "median": 0.0,
+    "distinct_levels_in_window": 30
+   },
+   "1787290200|up": {
+    "max_simultaneous_lower_bound": 14.0,
+    "median": 6.0,
+    "distinct_levels_in_window": 48
+   },
+   "1787290200|down": {
+    "max_simultaneous_lower_bound": 15.0,
+    "median": 8.0,
+    "distinct_levels_in_window": 54
+   },
+   "1787296500|up": {
+    "max_simultaneous_lower_bound": 10.0,
+    "median": 3.0,
+    "distinct_levels_in_window": 13
+   },
+   "1787296500|down": {
+    "max_simultaneous_lower_bound": 8.0,
+    "median": 3.0,
+    "distinct_levels_in_window": 20
+   },
+   "1787300100|up": {
+    "max_simultaneous_lower_bound": 13.0,
+    "median": 7.0,
+    "distinct_levels_in_window": 51
+   },
+   "1787300100|down": {
+    "max_simultaneous_lower_bound": 15.0,
+    "median": 7.0,
+    "distinct_levels_in_window": 48
+   },
+   "1787305500|up": {
+    "max_simultaneous_lower_bound": 11.0,
+    "median": 2.0,
+    "distinct_levels_in_window": 41
+   },
+   "1787305500|down": {
+    "max_simultaneous_lower_bound": 8.0,
+    "median": 2.0,
+    "distinct_levels_in_window": 42
+   },
+   "1787306400|up": {
+    "max_simultaneous_lower_bound": 7.0,
+    "median": 1.0,
+    "distinct_levels_in_window": 38
+   },
+   "1787306400|down": {
+    "max_simultaneous_lower_bound": 9.0,
+    "median": 1.0,
+    "distinct_levels_in_window": 51
+   },
+   "1787307300|up": {
+    "max_simultaneous_lower_bound": 7.0,
+    "median": 0.0,
+    "distinct_levels_in_window": 37
+   },
+   "1787307300|down": {
+    "max_simultaneous_lower_bound": 5.0,
+    "median": 1.0,
+    "distinct_levels_in_window": 40
+   },
+   "1787311800|up": {
+    "max_simultaneous_lower_bound": 5.0,
+    "median": 1.0,
+    "distinct_levels_in_window": 25
+   },
+   "1787311800|down": {
+    "max_simultaneous_lower_bound": 5.0,
+    "median": 1.0,
+    "distinct_levels_in_window": 23
+   },
+   "1787362200|up": {
+    "max_simultaneous_lower_bound": 7.0,
+    "median": 2.0,
+    "distinct_levels_in_window": 45
+   },
+   "1787362200|down": {
+    "max_simultaneous_lower_bound": 12.0,
+    "median": 2.0,
+    "distinct_levels_in_window": 41
+   },
+   "1787363100|up": {
+    "max_simultaneous_lower_bound": 6.0,
+    "median": 3.0,
+    "distinct_levels_in_window": 37
+   },
+   "1787363100|down": {
+    "max_simultaneous_lower_bound": 5.0,
+    "median": 0.0,
+    "distinct_levels_in_window": 42
+   },
+   "1787365800|up": {
+    "max_simultaneous_lower_bound": 13.0,
+    "median": 9.0,
+    "distinct_levels_in_window": 45
+   },
+   "1787365800|down": {
+    "max_simultaneous_lower_bound": 10.0,
+    "median": 5.0,
+    "distinct_levels_in_window": 51
+   },
+   "1787369400|up": {
+    "max_simultaneous_lower_bound": 5.0,
+    "median": 2.0,
+    "distinct_levels_in_window": 31
+   },
+   "1787369400|down": {
+    "max_simultaneous_lower_bound": 7.0,
+    "median": 2.0,
+    "distinct_levels_in_window": 32
+   }
+  },
+  "LOWER_BOUND_max_levels": {
+   "n": 24,
+   "min": 5.0,
+   "p10": 5.0,
+   "p25": 5.0,
+   "p50": 7.0,
+   "p75": 11.0,
+   "p90": 13.0,
+   "max": 15.0,
+   "mean": 8.666667,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "IS_A_LOWER_BOUND": "cancels and unfilled orders are invisible; this is a floor on ladder width, never observed resting orders"
+ },
+ "Q3_concurrency": {
+  "qualifying_ABA_returns": 109,
+  "windows_with_qualifying_return": 12,
+  "per_window": {
+   "1787274000": 3,
+   "1787290200": 6,
+   "1787296500": 19,
+   "1787300100": 7,
+   "1787305500": 6,
+   "1787306400": 14,
+   "1787307300": 8,
+   "1787311800": 20,
+   "1787362200": 10,
+   "1787363100": 4,
+   "1787365800": 9,
+   "1787369400": 3
+  },
+  "INDETERMINATE_SAME_SECOND": 144,
+  "resolution_caveat": "block timestamps are whole seconds; a same-second pair cannot distinguish concurrency from fast reposting and is NOT counted as evidence either way"
+ },
+ "Q4_ladder_width_and_0_06": {
+  "per_window_outcome": [
+   {
+    "key": "1787274000|up",
+    "best_level": 0.98,
+    "deepest_level": 0.45,
+    "width_dollars": 0.53,
+    "deepest_offset_ticks": 8,
+    "deepest_offset_dollars": 0.08,
+    "touch_travel_dollars": 0.559
+   },
+   {
+    "key": "1787274000|down",
+    "best_level": 0.56,
+    "deepest_level": 0.01,
+    "width_dollars": 0.55,
+    "deepest_offset_ticks": 4,
+    "deepest_offset_dollars": 0.04,
+    "touch_travel_dollars": 0.549
+   },
+   {
+    "key": "1787290200|up",
+    "best_level": 0.93,
+    "deepest_level": 0.23,
+    "width_dollars": 0.7,
+    "deepest_offset_ticks": 11,
+    "deepest_offset_dollars": 0.11,
+    "touch_travel_dollars": 0.76
+   },
+   {
+    "key": "1787290200|down",
+    "best_level": 0.76,
+    "deepest_level": 0.08,
+    "width_dollars": 0.68,
+    "deepest_offset_ticks": 36,
+    "deepest_offset_dollars": 0.36,
+    "touch_travel_dollars": 0.75
+   },
+   {
+    "key": "1787296500|up",
+    "best_level": 0.92,
+    "deepest_level": 0.77,
+    "width_dollars": 0.15,
+    "deepest_offset_ticks": 5,
+    "deepest_offset_dollars": 0.05,
+    "touch_travel_dollars": 0.569
+   },
+   {
+    "key": "1787296500|down",
+    "best_level": 0.42,
+    "deepest_level": 0.01,
+    "width_dollars": 0.41,
+    "deepest_offset_ticks": 9,
+    "deepest_offset_dollars": 0.09,
+    "touch_travel_dollars": 0.48
+   },
+   {
+    "key": "1787300100|up",
+    "best_level": 0.99,
+    "deepest_level": 0.39,
+    "width_dollars": 0.6,
+    "deepest_offset_ticks": 7,
+    "deepest_offset_dollars": 0.07,
+    "touch_travel_dollars": 0.619
+   },
+   {
+    "key": "1787300100|down",
+    "best_level": 0.6,
+    "deepest_level": 0.01,
+    "width_dollars": 0.59,
+    "deepest_offset_ticks": 9,
+    "deepest_offset_dollars": 0.09,
+    "touch_travel_dollars": 0.6
+   },
+   {
+    "key": "1787305500|up",
+    "best_level": 0.58,
+    "deepest_level": 0.01,
+    "width_dollars": 0.57,
+    "deepest_offset_ticks": 8,
+    "deepest_offset_dollars": 0.08,
+    "touch_travel_dollars": 0.589
+   },
+   {
+    "key": "1787305500|down",
+    "best_level": 0.97,
+    "deepest_level": 0.4,
+    "width_dollars": 0.57,
+    "deepest_offset_ticks": 7,
+    "deepest_offset_dollars": 0.07,
+    "touch_travel_dollars": 0.599
+   },
+   {
+    "key": "1787306400|up",
+    "best_level": 0.96,
+    "deepest_level": 0.18,
+    "width_dollars": 0.78,
+    "deepest_offset_ticks": 11,
+    "deepest_offset_dollars": 0.11,
+    "touch_travel_dollars": 0.81
+   },
+   {
+    "key": "1787306400|down",
+    "best_level": 0.81,
+    "deepest_level": 0.01,
+    "width_dollars": 0.8,
+    "deepest_offset_ticks": 5,
+    "deepest_offset_dollars": 0.05,
+    "touch_travel_dollars": 0.79
+   },
+   {
+    "key": "1787307300|up",
+    "best_level": 0.74,
+    "deepest_level": 0.01,
+    "width_dollars": 0.73,
+    "deepest_offset_ticks": 18,
+    "deepest_offset_dollars": 0.18,
+    "touch_travel_dollars": 0.769
+   },
+   {
+    "key": "1787307300|down",
+    "best_level": 0.99,
+    "deepest_level": 0.22,
+    "width_dollars": 0.77,
+    "deepest_offset_ticks": 12,
+    "deepest_offset_dollars": 0.12,
+    "touch_travel_dollars": 0.779
+   },
+   {
+    "key": "1787311800|up",
+    "best_level": 0.43,
+    "deepest_level": 0.01,
+    "width_dollars": 0.42,
+    "deepest_offset_ticks": 21,
+    "deepest_offset_dollars": 0.21,
+    "touch_travel_dollars": 0.539
+   },
+   {
+    "key": "1787311800|down",
+    "best_level": 0.96,
+    "deepest_level": 0.42,
+    "width_dollars": 0.54,
+    "deepest_offset_ticks": 4,
+    "deepest_offset_dollars": 0.04,
+    "touch_travel_dollars": 0.549
+   },
+   {
+    "key": "1787362200|up",
+    "best_level": 0.91,
+    "deepest_level": 0.01,
+    "width_dollars": 0.9,
+    "deepest_offset_ticks": 17,
+    "deepest_offset_dollars": 0.17,
+    "touch_travel_dollars": 0.91
+   },
+   {
+    "key": "1787362200|down",
+    "best_level": 0.77,
+    "deepest_level": 0.07,
+    "width_dollars": 0.7,
+    "deepest_offset_ticks": 11,
+    "deepest_offset_dollars": 0.11,
+    "touch_travel_dollars": 0.92
+   },
+   {
+    "key": "1787363100|up",
+    "best_level": 0.96,
+    "deepest_level": 0.19,
+    "width_dollars": 0.77,
+    "deepest_offset_ticks": 11,
+    "deepest_offset_dollars": 0.11,
+    "touch_travel_dollars": 0.819
+   },
+   {
+    "key": "1787363100|down",
+    "best_level": 0.78,
+    "deepest_level": 0.01,
+    "width_dollars": 0.77,
+    "deepest_offset_ticks": 7,
+    "deepest_offset_dollars": 0.07,
+    "touch_travel_dollars": 0.8
+   },
+   {
+    "key": "1787365800|up",
+    "best_level": 0.77,
+    "deepest_level": 0.03,
+    "width_dollars": 0.74,
+    "deepest_offset_ticks": 11,
+    "deepest_offset_dollars": 0.11,
+    "touch_travel_dollars": 0.96
+   },
+   {
+    "key": "1787365800|down",
+    "best_level": 0.96,
+    "deepest_level": 0.01,
+    "width_dollars": 0.95,
+    "deepest_offset_ticks": 44,
+    "deepest_offset_dollars": 0.44,
+    "touch_travel_dollars": 0.92
+   },
+   {
+    "key": "1787369400|up",
+    "best_level": 0.5,
+    "deepest_level": 0.01,
+    "width_dollars": 0.49,
+    "deepest_offset_ticks": 5,
+    "deepest_offset_dollars": 0.05,
+    "touch_travel_dollars": 0.58
+   },
+   {
+    "key": "1787369400|down",
+    "best_level": 0.98,
+    "deepest_level": 0.35,
+    "width_dollars": 0.63,
+    "deepest_offset_ticks": 13,
+    "deepest_offset_dollars": 0.13,
+    "touch_travel_dollars": 0.599
+   }
+  ],
+  "width_dollars": {
+   "n": 24,
+   "min": 0.15,
+   "p10": 0.42,
+   "p25": 0.54,
+   "p50": 0.63,
+   "p75": 0.77,
+   "p90": 0.78,
+   "max": 0.95,
+   "mean": 0.639167,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "deepest_offset_dollars": {
+   "n": 24,
+   "min": 0.04,
+   "p10": 0.05,
+   "p25": 0.07,
+   "p50": 0.09,
+   "p75": 0.12,
+   "p90": 0.18,
+   "max": 0.44,
+   "mean": 0.1225,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "deepest_offset_IQR": 0.05,
+  "spearman_touch_travel_vs_deepest_offset": {
+   "n": 24,
+   "rho": 0.4358,
+   "approx_p": 0.03232,
+   "direction": "+"
+  },
+  "VERDICT_0_06": "FILL_LOCATION_STATISTIC",
+  "bar": "IQR<=0.02 AND |rho|<0.30"
+ },
+ "R1_lattice_forced80": {
+  "mode": "FORCED_80",
+  "n_levels": 908,
+  "observed_share_on_lattice": 0.1333,
+  "baseline_uniform": 0.0165,
+  "baseline_empirical_fill_resample": 0.0573,
+  "baseline_phase_shifted_by_40": 0.0154,
+  "excess_ratio_vs_worst_baseline": 2.327,
+  "MEETS_R1_BAR_3x": false
+ },
+ "R2_lattice_empirical_partial": {
+  "mode": "EMPIRICAL_PARTIAL_CLIPS",
+  "n_levels": 908,
+  "observed_share_on_lattice": 0.1333,
+  "baseline_uniform": 0.0176,
+  "baseline_empirical_fill_resample": 0.0716,
+  "baseline_phase_shifted_by_40": 0.0154,
+  "excess_ratio_vs_worst_baseline": 1.862,
+  "MEETS_R1_BAR_3x": false
+ },
+ "R3_post_depletion_operations": {
+  "operations": {
+   "EXTEND_LADDER": 224,
+   "RECENTER": 89,
+   "REPLENISH": 16,
+   "WITHDRAW": 13
+  },
+  "per_window": {
+   "1787274000": {
+    "EXTEND_LADDER": 11,
+    "RECENTER": 1,
+    "REPLENISH": 3
+   },
+   "1787290200": {
+    "RECENTER": 13,
+    "EXTEND_LADDER": 29,
+    "REPLENISH": 2,
+    "WITHDRAW": 1
+   },
+   "1787296500": {
+    "EXTEND_LADDER": 18,
+    "RECENTER": 8,
+    "REPLENISH": 1,
+    "WITHDRAW": 1
+   },
+   "1787300100": {
+    "EXTEND_LADDER": 32,
+    "RECENTER": 14,
+    "WITHDRAW": 2,
+    "REPLENISH": 2
+   },
+   "1787305500": {
+    "RECENTER": 7,
+    "EXTEND_LADDER": 11,
+    "WITHDRAW": 1,
+    "REPLENISH": 1
+   },
+   "1787306400": {
+    "RECENTER": 5,
+    "EXTEND_LADDER": 14,
+    "WITHDRAW": 1
+   },
+   "1787307300": {
+    "EXTEND_LADDER": 17,
+    "RECENTER": 3,
+    "WITHDRAW": 2
+   },
+   "1787311800": {
+    "RECENTER": 12,
+    "EXTEND_LADDER": 27,
+    "REPLENISH": 3,
+    "WITHDRAW": 2
+   },
+   "1787362200": {
+    "RECENTER": 9,
+    "EXTEND_LADDER": 18,
+    "WITHDRAW": 1
+   },
+   "1787363100": {
+    "EXTEND_LADDER": 14,
+    "RECENTER": 4,
+    "REPLENISH": 1,
+    "WITHDRAW": 1
+   },
+   "1787365800": {
+    "RECENTER": 7,
+    "EXTEND_LADDER": 12,
+    "REPLENISH": 1,
+    "WITHDRAW": 1
+   },
+   "1787369400": {
+    "EXTEND_LADDER": 21,
+    "RECENTER": 6,
+    "REPLENISH": 2
+   }
+  },
+  "latency_to_next_attributable_fill_s": {
+   "n": 329,
+   "min": 0.0,
+   "p10": 0.0,
+   "p25": 0.0,
+   "p50": 3.0,
+   "p75": 13.0,
+   "p90": 26.0,
+   "max": 135.0,
+   "mean": 9.927052,
+   "share_negative": 0.0,
+   "share_zero": 0.2979,
+   "share_positive": 0.7021
+  },
+  "LATENCY_IS_AN_UPPER_BOUND": "unfilled order placement is unobservable, so the time to the next attributable FILL is an upper bound on replacement latency, never the replacement latency itself"
+ },
+ "R4_operations_vs_fills": {
+  "per_window": {
+   "1787274000": {
+    "fills": 141,
+    "operations": 83,
+    "ratio": 0.5887
+   },
+   "1787290200": {
+    "fills": 342,
+    "operations": 209,
+    "ratio": 0.6111
+   },
+   "1787296500": {
+    "fills": 202,
+    "operations": 127,
+    "ratio": 0.6287
+   },
+   "1787300100": {
+    "fills": 383,
+    "operations": 250,
+    "ratio": 0.6527
+   },
+   "1787305500": {
+    "fills": 241,
+    "operations": 155,
+    "ratio": 0.6432
+   },
+   "1787306400": {
+    "fills": 238,
+    "operations": 166,
+    "ratio": 0.6975
+   },
+   "1787307300": {
+    "fills": 218,
+    "operations": 142,
+    "ratio": 0.6514
+   },
+   "1787311800": {
+    "fills": 212,
+    "operations": 126,
+    "ratio": 0.5943
+   },
+   "1787362200": {
+    "fills": 216,
+    "operations": 146,
+    "ratio": 0.6759
+   },
+   "1787363100": {
+    "fills": 169,
+    "operations": 125,
+    "ratio": 0.7396
+   },
+   "1787365800": {
+    "fills": 257,
+    "operations": 180,
+    "ratio": 0.7004
+   },
+   "1787369400": {
+    "fills": 176,
+    "operations": 111,
+    "ratio": 0.6307
+   }
+  },
+  "windows_meeting_0.5_bar": 0,
+  "of_windows": 12,
+  "MEETS_R4_BAR": false
+ },
+ "ENVELOPE": {
+  "n_windows": 12,
+  "models": {},
+  "DEGENERACY": "E2 is identical to the probability-following model because contract price IS probability; the fixed-around-0.50 model is nested in E1. A win by E2 is ONE result, not two.",
+  "LOWO_median_L1_center": {
+   "E1_fixed_absolute_range": 0.204152,
+   "E2_fixed_distance_around_touch": 0.039589,
+   "E3_inventory_dependent": 0.039516
+  },
+  "held_out_wins": {
+   "E1_fixed_absolute_range": 0,
+   "E2_fixed_distance_around_touch": 7,
+   "E3_inventory_dependent": 5
+  },
+  "best": "E3_inventory_dependent",
+  "next_best": "E2_fixed_distance_around_touch",
+  "relative_improvement": 0.0018,
+  "width": {
+   "n": 3232,
+   "min": 0.0,
+   "p10": 0.02,
+   "p25": 0.04,
+   "p50": 0.070001,
+   "p75": 0.13,
+   "p90": 0.22,
+   "max": 0.95,
+   "mean": 0.105176,
+   "share_negative": 0.0,
+   "share_zero": 0.0189,
+   "share_positive": 0.9811
+  },
+  "VERDICT": "NOT_DISCRIMINATED",
+  "bar": ">=20% better than next best AND >=9/12 held-out wins"
+ },
+ "MODELS_prepositioned_vs_reactive": {
+  "level_age_at_first_fill_s": {
+   "n": 1807,
+   "min": -469.0,
+   "p10": 1.0,
+   "p25": 34.0,
+   "p50": 198.0,
+   "p75": 501.0,
+   "p90": 700.0,
+   "max": 859.0,
+   "mean": 274.986718,
+   "share_negative": 0.0758,
+   "share_zero": 0.0166,
+   "share_positive": 0.9076
+  },
+  "share_age_ge_30s": 0.7609,
+  "qualifying_ABA_windows": 12,
+  "PRE_POSITIONED_BAR_MET": true,
+  "REACTIVE_BAR_MET": false,
+  "VERDICT": "PRE_POSITIONED",
+  "METRIC_LIMITATION_DISCLOSED": "level age is a WEAKER discriminator than the protocol assumed. Once a level is reachable, a pre-positioned order fills at once (age ~0) and a reactive repost fills after a short lag (age small) -- both produce short ages, so a short-age result does not separate the models. The A->B->A test carries the discriminating weight. Reported as frozen, not re-specified."
+ }
+}
