@@ -1,0 +1,135 @@
+{
+  "accounting": "public market-data recording; no order was sent; nothing here is realized profit",
+  "book_states": {
+    "EMPTY": 192,
+    "ONE_SIDED": 329,
+    "TWO_SIDED": 316
+  },
+  "checks": {
+    "btc15m_window_seen": true,
+    "down_instrument_probed": true,
+    "down_leg_derived_present": true,
+    "pair_cost_present": true,
+    "single_leg_spread_present": true,
+    "trade_prints_present": true,
+    "up_book_two_sided": true,
+    "up_ladder_has_sizes": true,
+    "venue_timestamps": true,
+    "window_poll_strike_resolved": true
+  },
+  "down_probe_replies": 3,
+  "examples": {
+    "down_probe_reply": {
+      "down_markets": [
+        "GEMI-BTC15M2610060415-DOWN",
+        "GEMI-BTC15M2610060430-DOWN",
+        "GEMI-BTC15M2610060445-DOWN",
+        "GEMI-BTC15M2610060500-DOWN"
+      ],
+      "kind": "down_probe",
+      "phase": "reply",
+      "raw": {
+        "error": {
+          "code": -1013,
+          "msg": "Invalid stream name: gemi-btc15m2610060415-down@depth20"
+        },
+        "id": "dn",
+        "status": 400
+      },
+      "t_ns": 1791259981012778113
+    },
+    "p_trade": {
+      "E_ns": 1791260846684441088,
+      "buyer_is_maker": true,
+      "kind": "p_trade",
+      "market": "GEMI-BTC15M2610060430-UP",
+      "price": "0.2600",
+      "qty": "400.00",
+      "t_ns": 1791260846701033372,
+      "trade_id": 1893456012244251
+    },
+    "strike_resolved": {
+      "availableAt": "2026-10-06T04:00:00.000Z",
+      "kind": "strike_resolved",
+      "market": "GEMI-BTC15M2610060415-UP",
+      "note": "window rows carry strike:null before availableAt; this is the re-read value",
+      "resolved_lag_s": 661.3030416965485,
+      "strike": "85476.31",
+      "strike_type": "reference",
+      "t_ns": 1791259861303040247,
+      "ticker": "BTC15M2610060415"
+    },
+    "two_sided_pair": {
+      "derived": true,
+      "down_ask": [
+        "0.5",
+        "400.00"
+      ],
+      "down_bid": [
+        "0.39",
+        "400.00"
+      ],
+      "market": "GEMI-BTC15M2610060430-UP",
+      "pair_cost": 1.1099999999999999,
+      "single_leg_spread": 0.10999999999999999,
+      "up_ask": [
+        "0.61",
+        "400.00"
+      ],
+      "up_bid": [
+        "0.5",
+        "400.00"
+      ]
+    },
+    "window_poll_strike": {
+      "availableAt": "2026-10-06T04:00:00.000Z",
+      "market": "GEMI-BTC15M2610060415-UP",
+      "strike": "85476.31"
+    }
+  },
+  "kinds": {
+    "book_ctrl": 3,
+    "book_open": 1,
+    "down_probe": 6,
+    "index_ctrl": 3,
+    "index_open": 1,
+    "index_price": 1200,
+    "index_subscribe": 3,
+    "p_depth": 223,
+    "p_snapshot": 900,
+    "p_trade": 1,
+    "pair_snapshot": 837,
+    "recorder_start": 1,
+    "recorder_stop": 1,
+    "settlement": 5,
+    "strike_resolved": 3,
+    "subscribe": 2,
+    "unsubscribe": 1,
+    "window": 7,
+    "window_poll": 609
+  },
+  "missing": [],
+  "pair_market_count": 2,
+  "pair_markets": [
+    "GEMI-BTC15M2610060415-UP",
+    "GEMI-BTC15M2610060430-UP"
+  ],
+  "pass": true,
+  "path": "data/gemini_btc15m_research/btc15m_rec_20261006T041100Z.jsonl",
+  "reading": "down_leg_derived_present is the point of this recorder: the disqualifying BTC15M file had 23,318 UP rows and 0 DOWN rows, so no complement leg existed at all. A DOWN leg here is DERIVED from the raw UP ladder and labelled as such; down_probe records what the venue says about a separate DOWN instrument.",
+  "requirements": {
+    "btc15m_window_seen": "at least one BTC15M window listed",
+    "down_instrument_probed": "a down_probe row: the venue was asked whether a separate -DOWN instrument exists",
+    "down_leg_derived_present": "a pair_snapshot carrying a derived DOWN bid and ask -- the complement leg the disqualifying file never had",
+    "pair_cost_present": "a pair_snapshot with a numeric two-leg pair cost",
+    "single_leg_spread_present": "a pair_snapshot with a numeric single-leg spread, recorded separately from pair cost",
+    "trade_prints_present": "at least one p_trade row (venue print tape)",
+    "up_book_two_sided": "a pair_snapshot whose book_state is TWO_SIDED",
+    "up_ladder_has_sizes": "a pair_snapshot with a priced level AND a size on both UP sides",
+    "venue_timestamps": "a p_depth row carrying a venue E timestamp",
+    "window_poll_strike_resolved": "a window_poll (or strike_resolved) row with a NON-NULL strike -- the authoritative strike that arrives after availableAt, not the null first listing"
+  },
+  "rows": 3807,
+  "single_leg_spread_median": 0.10999999999999999,
+  "single_leg_spread_n": 316
+}
