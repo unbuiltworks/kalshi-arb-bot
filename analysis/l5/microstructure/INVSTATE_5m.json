@@ -1,0 +1,523 @@
+{
+ "endpoint": "E2 future inventory state",
+ "protocol": "PREREGISTRATION_OVERNIGHT.md",
+ "contract_length": "5m",
+ "n_windows": 23,
+ "n_states": 3682,
+ "par_pair_legs_included_in_inventory": true,
+ "horizons": {
+  "10": {
+   "n": 3682,
+   "UNDERPOWERED": false,
+   "models": {
+    "B1_persistence": {
+     "MAE": 22.404,
+     "median_AE": 0.0
+    },
+    "B2_frozen_rate": {
+     "MAE": 22.404,
+     "median_AE": 0.0
+    },
+    "M1_own_recent_rate": {
+     "MAE": 34.667,
+     "median_AE": 26.332
+    },
+    "M2_tte_conditional_rate": {
+     "MAE": 22.404,
+     "median_AE": 0.0
+    }
+   },
+   "best_baseline_MAE": 22.404,
+   "best_model": "M2_tte_conditional_rate",
+   "best_model_MAE": 22.404,
+   "improvement_vs_best_baseline": 0.0,
+   "MEETS_20PCT_BAR": false,
+   "windows_where_model_beats_baseline": 0,
+   "windows_total": 23,
+   "MEETS_8_OF_12_BAR": false,
+   "per_window": {
+    "btc-updown-5m-1787271900": {
+     "n": 237,
+     "model_MAE": 52.279,
+     "baseline_MAE": 52.279,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787272500": {
+     "n": 109,
+     "model_MAE": 48.094,
+     "baseline_MAE": 48.094,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787280000": {
+     "n": 64,
+     "model_MAE": 56.25,
+     "baseline_MAE": 56.25,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787281500": {
+     "n": 166,
+     "model_MAE": 23.068,
+     "baseline_MAE": 23.068,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787283600": {
+     "n": 234,
+     "model_MAE": 14.635,
+     "baseline_MAE": 14.635,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787287200": {
+     "n": 235,
+     "model_MAE": 27.246,
+     "baseline_MAE": 27.246,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787287500": {
+     "n": 102,
+     "model_MAE": 29.251,
+     "baseline_MAE": 29.251,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787292300": {
+     "n": 235,
+     "model_MAE": 23.911,
+     "baseline_MAE": 23.911,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787296800": {
+     "n": 117,
+     "model_MAE": 64.71,
+     "baseline_MAE": 64.71,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787300100": {
+     "n": 165,
+     "model_MAE": 30.347,
+     "baseline_MAE": 30.347,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787310600": {
+     "n": 99,
+     "model_MAE": 0.0,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787310900": {
+     "n": 55,
+     "model_MAE": 55.68,
+     "baseline_MAE": 55.68,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787312400": {
+     "n": 81,
+     "model_MAE": 0.0,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787314200": {
+     "n": 97,
+     "model_MAE": 21.004,
+     "baseline_MAE": 21.004,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787321100": {
+     "n": 234,
+     "model_MAE": 3.419,
+     "baseline_MAE": 3.419,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787349900": {
+     "n": 85,
+     "model_MAE": 0.0,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787356500": {
+     "n": 234,
+     "model_MAE": 7.05,
+     "baseline_MAE": 7.05,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787357100": {
+     "n": 114,
+     "model_MAE": 0.0,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787365200": {
+     "n": 171,
+     "model_MAE": 36.289,
+     "baseline_MAE": 36.289,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787374800": {
+     "n": 232,
+     "model_MAE": 19.116,
+     "baseline_MAE": 19.116,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787558700": {
+     "n": 147,
+     "model_MAE": 0.0,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787565000": {
+     "n": 232,
+     "model_MAE": 20.996,
+     "baseline_MAE": 20.996,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787567400": {
+     "n": 237,
+     "model_MAE": 14.177,
+     "baseline_MAE": 14.177,
+     "improvement": 0.0
+    }
+   }
+  },
+  "30": {
+   "n": 3682,
+   "UNDERPOWERED": false,
+   "models": {
+    "B1_persistence": {
+     "MAE": 70.282,
+     "median_AE": 0.0
+    },
+    "B2_frozen_rate": {
+     "MAE": 70.282,
+     "median_AE": 0.0
+    },
+    "M1_own_recent_rate": {
+     "MAE": 82.226,
+     "median_AE": 75.0
+    },
+    "M2_tte_conditional_rate": {
+     "MAE": 76.143,
+     "median_AE": 34.68
+    }
+   },
+   "best_baseline_MAE": 70.282,
+   "best_model": "M2_tte_conditional_rate",
+   "best_model_MAE": 76.143,
+   "improvement_vs_best_baseline": -0.0834,
+   "MEETS_20PCT_BAR": false,
+   "windows_where_model_beats_baseline": 9,
+   "windows_total": 23,
+   "MEETS_8_OF_12_BAR": true,
+   "per_window": {
+    "btc-updown-5m-1787271900": {
+     "n": 237,
+     "model_MAE": 167.584,
+     "baseline_MAE": 172.648,
+     "improvement": 0.0293
+    },
+    "btc-updown-5m-1787272500": {
+     "n": 109,
+     "model_MAE": 133.133,
+     "baseline_MAE": 129.695,
+     "improvement": -0.0265
+    },
+    "btc-updown-5m-1787280000": {
+     "n": 64,
+     "model_MAE": 138.75,
+     "baseline_MAE": 140.625,
+     "improvement": 0.0133
+    },
+    "btc-updown-5m-1787281500": {
+     "n": 166,
+     "model_MAE": 72.433,
+     "baseline_MAE": 75.686,
+     "improvement": 0.043
+    },
+    "btc-updown-5m-1787283600": {
+     "n": 234,
+     "model_MAE": 50.969,
+     "baseline_MAE": 43.905,
+     "improvement": -0.1609
+    },
+    "btc-updown-5m-1787287200": {
+     "n": 235,
+     "model_MAE": 73.762,
+     "baseline_MAE": 77.592,
+     "improvement": 0.0494
+    },
+    "btc-updown-5m-1787287500": {
+     "n": 102,
+     "model_MAE": 86.382,
+     "baseline_MAE": 86.97,
+     "improvement": 0.0068
+    },
+    "btc-updown-5m-1787292300": {
+     "n": 235,
+     "model_MAE": 90.519,
+     "baseline_MAE": 94.993,
+     "improvement": 0.0471
+    },
+    "btc-updown-5m-1787296800": {
+     "n": 117,
+     "model_MAE": 174.813,
+     "baseline_MAE": 184.557,
+     "improvement": 0.0528
+    },
+    "btc-updown-5m-1787300100": {
+     "n": 165,
+     "model_MAE": 87.525,
+     "baseline_MAE": 91.04,
+     "improvement": 0.0386
+    },
+    "btc-updown-5m-1787310600": {
+     "n": 99,
+     "model_MAE": 37.929,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787310900": {
+     "n": 55,
+     "model_MAE": 184.495,
+     "baseline_MAE": 184.495,
+     "improvement": 0.0
+    },
+    "btc-updown-5m-1787312400": {
+     "n": 81,
+     "model_MAE": 38.789,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787314200": {
+     "n": 97,
+     "model_MAE": 63.322,
+     "baseline_MAE": 63.012,
+     "improvement": -0.0049
+    },
+    "btc-updown-5m-1787321100": {
+     "n": 234,
+     "model_MAE": 29.519,
+     "baseline_MAE": 10.256,
+     "improvement": -1.8781
+    },
+    "btc-updown-5m-1787349900": {
+     "n": 85,
+     "model_MAE": 38.567,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787356500": {
+     "n": 234,
+     "model_MAE": 22.345,
+     "baseline_MAE": 21.149,
+     "improvement": -0.0566
+    },
+    "btc-updown-5m-1787357100": {
+     "n": 114,
+     "model_MAE": 37.714,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787365200": {
+     "n": 171,
+     "model_MAE": 121.336,
+     "baseline_MAE": 124.892,
+     "improvement": 0.0285
+    },
+    "btc-updown-5m-1787374800": {
+     "n": 232,
+     "model_MAE": 58.227,
+     "baseline_MAE": 57.347,
+     "improvement": -0.0154
+    },
+    "btc-updown-5m-1787558700": {
+     "n": 147,
+     "model_MAE": 30.663,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787565000": {
+     "n": 232,
+     "model_MAE": 63.504,
+     "baseline_MAE": 62.987,
+     "improvement": -0.0082
+    },
+    "btc-updown-5m-1787567400": {
+     "n": 237,
+     "model_MAE": 61.561,
+     "baseline_MAE": 54.684,
+     "improvement": -0.1258
+    }
+   }
+  },
+  "60": {
+   "n": 3682,
+   "UNDERPOWERED": false,
+   "models": {
+    "B1_persistence": {
+     "MAE": 136.594,
+     "median_AE": 80.0
+    },
+    "B2_frozen_rate": {
+     "MAE": 137.786,
+     "median_AE": 103.0
+    },
+    "M1_own_recent_rate": {
+     "MAE": 144.724,
+     "median_AE": 141.34
+    },
+    "M2_tte_conditional_rate": {
+     "MAE": 132.048,
+     "median_AE": 140.352
+    }
+   },
+   "best_baseline_MAE": 136.594,
+   "best_model": "M2_tte_conditional_rate",
+   "best_model_MAE": 132.048,
+   "improvement_vs_best_baseline": 0.0333,
+   "MEETS_20PCT_BAR": false,
+   "windows_where_model_beats_baseline": 13,
+   "windows_total": 23,
+   "MEETS_8_OF_12_BAR": true,
+   "per_window": {
+    "btc-updown-5m-1787271900": {
+     "n": 237,
+     "model_MAE": 306.32,
+     "baseline_MAE": 324.645,
+     "improvement": 0.0564
+    },
+    "btc-updown-5m-1787272500": {
+     "n": 109,
+     "model_MAE": 153.575,
+     "baseline_MAE": 177.226,
+     "improvement": 0.1335
+    },
+    "btc-updown-5m-1787280000": {
+     "n": 64,
+     "model_MAE": 117.0,
+     "baseline_MAE": 145.625,
+     "improvement": 0.1966
+    },
+    "btc-updown-5m-1787281500": {
+     "n": 166,
+     "model_MAE": 69.795,
+     "baseline_MAE": 109.312,
+     "improvement": 0.3615
+    },
+    "btc-updown-5m-1787283600": {
+     "n": 234,
+     "model_MAE": 92.078,
+     "baseline_MAE": 87.81,
+     "improvement": -0.0486
+    },
+    "btc-updown-5m-1787287200": {
+     "n": 235,
+     "model_MAE": 105.511,
+     "baseline_MAE": 91.403,
+     "improvement": -0.1543
+    },
+    "btc-updown-5m-1787287500": {
+     "n": 102,
+     "model_MAE": 121.579,
+     "baseline_MAE": 121.716,
+     "improvement": 0.0011
+    },
+    "btc-updown-5m-1787292300": {
+     "n": 235,
+     "model_MAE": 167.323,
+     "baseline_MAE": 168.519,
+     "improvement": 0.0071
+    },
+    "btc-updown-5m-1787296800": {
+     "n": 117,
+     "model_MAE": 171.469,
+     "baseline_MAE": 218.351,
+     "improvement": 0.2147
+    },
+    "btc-updown-5m-1787300100": {
+     "n": 165,
+     "model_MAE": 111.197,
+     "baseline_MAE": 118.296,
+     "improvement": 0.06
+    },
+    "btc-updown-5m-1787310600": {
+     "n": 99,
+     "model_MAE": 160.201,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787310900": {
+     "n": 55,
+     "model_MAE": 188.68,
+     "baseline_MAE": 211.68,
+     "improvement": 0.1087
+    },
+    "btc-updown-5m-1787312400": {
+     "n": 81,
+     "model_MAE": 160.0,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787314200": {
+     "n": 97,
+     "model_MAE": 76.242,
+     "baseline_MAE": 79.549,
+     "improvement": 0.0416
+    },
+    "btc-updown-5m-1787321100": {
+     "n": 234,
+     "model_MAE": 118.605,
+     "baseline_MAE": 20.513,
+     "improvement": -4.782
+    },
+    "btc-updown-5m-1787349900": {
+     "n": 85,
+     "model_MAE": 160.0,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787356500": {
+     "n": 234,
+     "model_MAE": 62.902,
+     "baseline_MAE": 42.297,
+     "improvement": -0.4871
+    },
+    "btc-updown-5m-1787357100": {
+     "n": 114,
+     "model_MAE": 162.349,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787365200": {
+     "n": 171,
+     "model_MAE": 143.75,
+     "baseline_MAE": 169.54,
+     "improvement": 0.1521
+    },
+    "btc-updown-5m-1787374800": {
+     "n": 232,
+     "model_MAE": 86.56,
+     "baseline_MAE": 114.693,
+     "improvement": 0.2453
+    },
+    "btc-updown-5m-1787558700": {
+     "n": 147,
+     "model_MAE": 143.374,
+     "baseline_MAE": 0.0,
+     "improvement": null
+    },
+    "btc-updown-5m-1787565000": {
+     "n": 232,
+     "model_MAE": 115.407,
+     "baseline_MAE": 125.974,
+     "improvement": 0.0839
+    },
+    "btc-updown-5m-1787567400": {
+     "n": 237,
+     "model_MAE": 116.582,
+     "baseline_MAE": 115.443,
+     "improvement": -0.0099
+    }
+   }
+  }
+ },
+ "E2_POSITIVE": false,
+ "horizons_meeting_both_bars": 0,
+ "bar": "MAE beats the best baseline by >=20% at two of three horizons, n>=100 each, improvement reproducing in >=8 of 12 windows"
+}

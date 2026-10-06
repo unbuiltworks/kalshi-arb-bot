@@ -1,0 +1,454 @@
+{
+ "protocol": "PREREGISTRATION_OVERNIGHT.md",
+ "SETTLEMENT_INDEX": "UNAVAILABLE -- not in the Zenodo archive and not obtainable; no strike, no reference price, no index. Distance-from-strike is NOT derivable and is not derived.",
+ "RESOLUTION_LIMIT": "proxy is 1-minute: <=15 observations per 15m window, <=5 per 5m window",
+ "proxy_window": {
+  "first_utc": null,
+  "n_minutes": 7201
+ },
+ "S4_BTC15m": {
+  "proxy_source": "coinbase_exchange_BTC-USD_1m",
+  "proxy_label": "PROXY_NOT_SETTLEMENT_INDEX",
+  "proxy_coverage_clips": {
+   "in_range": 1936,
+   "out_of_range": 0
+  },
+  "n_clips": 1936,
+  "n_par_pair_transactions": 92,
+  "E4a_side_choice_vs_proxy_direction": {
+   "proxy_ret_1m": {
+    "n": 1934,
+    "share_proxy_move_up": 0.4633,
+    "base_rate_clip_on_up": 0.4762,
+    "observed_alignment": 0.5217,
+    "chance_alignment_if_independent": 0.5017,
+    "lift": 1.0398,
+    "interpretation": "lift>1 momentum-aligned, lift<1 contrarian"
+   },
+   "proxy_ret_3m": {
+    "n": 1921,
+    "share_proxy_move_up": 0.5804,
+    "base_rate_clip_on_up": 0.4753,
+    "observed_alignment": 0.5003,
+    "chance_alignment_if_independent": 0.496,
+    "lift": 1.0085,
+    "interpretation": "lift>1 momentum-aligned, lift<1 contrarian"
+   },
+   "proxy_ret_5m": {
+    "n": 1936,
+    "share_proxy_move_up": 0.5661,
+    "base_rate_clip_on_up": 0.4762,
+    "observed_alignment": 0.4979,
+    "chance_alignment_if_independent": 0.4969,
+    "lift": 1.0022,
+    "interpretation": "lift>1 momentum-aligned, lift<1 contrarian"
+   }
+  },
+  "E4b_clip_size_vs_proxy": {
+   "proxy_realized_vol_15m": {
+    "vs_frac_of_80": {
+     "n": 1936,
+     "rho": 0.0047,
+     "approx_p": 0.837867,
+     "direction": "+"
+    },
+    "vs_abs_move_frac_of_80": {
+     "n": 1936,
+     "rho": 0.0047,
+     "approx_p": 0.837867,
+     "direction": "+"
+    }
+   },
+   "proxy_ret_1m": {
+    "vs_frac_of_80": {
+     "n": 1936,
+     "rho": 0.0396,
+     "approx_p": 0.08117,
+     "direction": "+"
+    },
+    "vs_abs_move_frac_of_80": {
+     "n": 1936,
+     "rho": 0.052,
+     "approx_p": 0.022022,
+     "direction": "+"
+    }
+   },
+   "proxy_ret_5m": {
+    "vs_frac_of_80": {
+     "n": 1936,
+     "rho": -0.0429,
+     "approx_p": 0.059371,
+     "direction": "-"
+    },
+    "vs_abs_move_frac_of_80": {
+     "n": 1936,
+     "rho": 0.0403,
+     "approx_p": 0.076184,
+     "direction": "+"
+    }
+   }
+  },
+  "E4c_withdrawal_vs_proxy": {
+   "n_withdrawal": 24,
+   "n_continuation": 1912,
+   "proxy_realized_vol_15m": {
+    "withdrawal": {
+     "n": 24,
+     "min": 0.000417,
+     "p10": 0.000476,
+     "p25": 0.000526,
+     "p50": 0.000733,
+     "p75": 0.001362,
+     "p90": 0.001824,
+     "max": 0.002023,
+     "mean": 0.001064,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "continuation": {
+     "n": 1912,
+     "min": 0.00041,
+     "p10": 0.000525,
+     "p25": 0.000666,
+     "p50": 0.001011,
+     "p75": 0.001454,
+     "p90": 0.0017,
+     "max": 0.002049,
+     "mean": 0.00105,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": -0.0381,
+     "magnitude": "negligible",
+     "median_a": 0.001089,
+     "median_b": 0.001011
+    }
+   },
+   "proxy_ret_1m": {
+    "withdrawal": {
+     "n": 24,
+     "min": -0.003391,
+     "p10": -0.000654,
+     "p25": -0.000325,
+     "p50": 0.000201,
+     "p75": 0.000706,
+     "p90": 0.000764,
+     "max": 0.001221,
+     "mean": 0.00016,
+     "share_negative": 0.2917,
+     "share_zero": 0.0,
+     "share_positive": 0.7083
+    },
+    "continuation": {
+     "n": 1912,
+     "min": -0.004087,
+     "p10": -0.001159,
+     "p25": -0.000692,
+     "p50": -7.2e-05,
+     "p75": 0.000679,
+     "p90": 0.001352,
+     "max": 0.004496,
+     "mean": 2e-06,
+     "share_negative": 0.5392,
+     "share_zero": 0.001,
+     "share_positive": 0.4597
+    },
+    "cliffs_delta": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": 0.1828,
+     "magnitude": "small",
+     "median_a": 0.000217,
+     "median_b": -5.5e-05
+    }
+   },
+   "proxy_ret_5m": {
+    "withdrawal": {
+     "n": 24,
+     "min": -0.00336,
+     "p10": -0.001548,
+     "p25": -0.001343,
+     "p50": -6e-05,
+     "p75": 0.00133,
+     "p90": 0.00268,
+     "max": 0.003477,
+     "mean": 0.000302,
+     "share_negative": 0.5,
+     "share_zero": 0.0,
+     "share_positive": 0.5
+    },
+    "continuation": {
+     "n": 1912,
+     "min": -0.011887,
+     "p10": -0.002528,
+     "p25": -0.001167,
+     "p50": 0.000518,
+     "p75": 0.00182,
+     "p90": 0.003319,
+     "max": 0.008761,
+     "mean": 0.000359,
+     "share_negative": 0.4331,
+     "share_zero": 0.0,
+     "share_positive": 0.5669
+    },
+    "cliffs_delta": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": -0.0294,
+     "magnitude": "negligible",
+     "median_a": 0.000877,
+     "median_b": 0.000518
+    }
+   }
+  },
+  "E4d_par_pair_vs_proxy_vol": {
+   "par_pair": {
+    "n": 92,
+    "min": 0.000421,
+    "p10": 0.00048,
+    "p25": 0.000544,
+    "p50": 0.000703,
+    "p75": 0.001089,
+    "p90": 0.001621,
+    "max": 0.002023,
+    "mean": 0.000885,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "passive_clip": {
+    "n": 1936,
+    "min": 0.00041,
+    "p10": 0.000525,
+    "p25": 0.000666,
+    "p50": 0.001011,
+    "p75": 0.001454,
+    "p90": 0.0017,
+    "max": 0.002049,
+    "mean": 0.001051,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "cliffs_delta_pair_minus_clip": {
+    "n_a": 92,
+    "n_b": 1936,
+    "delta": -0.2438,
+    "magnitude": "small",
+    "median_a": 0.000703,
+    "median_b": 0.001011
+   }
+  }
+ },
+ "S4_BTC5m": {
+  "proxy_source": "coinbase_exchange_BTC-USD_1m",
+  "proxy_label": "PROXY_NOT_SETTLEMENT_INDEX",
+  "proxy_coverage_clips": {
+   "in_range": 177,
+   "out_of_range": 0
+  },
+  "n_clips": 177,
+  "n_par_pair_transactions": 48,
+  "E4a_side_choice_vs_proxy_direction": {
+   "proxy_ret_1m": {
+    "n": 177,
+    "share_proxy_move_up": 0.5198,
+    "base_rate_clip_on_up": 0.4633,
+    "observed_alignment": 0.4915,
+    "chance_alignment_if_independent": 0.4985,
+    "lift": 0.9859,
+    "interpretation": "lift>1 momentum-aligned, lift<1 contrarian"
+   },
+   "proxy_ret_3m": {
+    "n": 177,
+    "share_proxy_move_up": 0.5311,
+    "base_rate_clip_on_up": 0.4633,
+    "observed_alignment": 0.4915,
+    "chance_alignment_if_independent": 0.4977,
+    "lift": 0.9876,
+    "interpretation": "lift>1 momentum-aligned, lift<1 contrarian"
+   },
+   "proxy_ret_5m": {
+    "n": 177,
+    "share_proxy_move_up": 0.4859,
+    "base_rate_clip_on_up": 0.4633,
+    "observed_alignment": 0.5028,
+    "chance_alignment_if_independent": 0.501,
+    "lift": 1.0036,
+    "interpretation": "lift>1 momentum-aligned, lift<1 contrarian"
+   }
+  },
+  "E4b_clip_size_vs_proxy": {
+   "proxy_realized_vol_15m": {
+    "vs_frac_of_80": {
+     "n": 177,
+     "rho": 0.3866,
+     "approx_p": 0.0,
+     "direction": "+"
+    },
+    "vs_abs_move_frac_of_80": {
+     "n": 177,
+     "rho": 0.3866,
+     "approx_p": 0.0,
+     "direction": "+"
+    }
+   },
+   "proxy_ret_1m": {
+    "vs_frac_of_80": {
+     "n": 177,
+     "rho": -0.0618,
+     "approx_p": 0.414426,
+     "direction": "-"
+    },
+    "vs_abs_move_frac_of_80": {
+     "n": 177,
+     "rho": 0.224,
+     "approx_p": 0.002648,
+     "direction": "+"
+    }
+   },
+   "proxy_ret_5m": {
+    "vs_frac_of_80": {
+     "n": 177,
+     "rho": -0.0459,
+     "approx_p": 0.544837,
+     "direction": "-"
+    },
+    "vs_abs_move_frac_of_80": {
+     "n": 177,
+     "rho": 0.2235,
+     "approx_p": 0.002713,
+     "direction": "+"
+    }
+   }
+  },
+  "E4c_withdrawal_vs_proxy": {
+   "n_withdrawal": 46,
+   "n_continuation": 131,
+   "proxy_realized_vol_15m": {
+    "withdrawal": {
+     "n": 46,
+     "min": 0.000392,
+     "p10": 0.000436,
+     "p25": 0.000478,
+     "p50": 0.000915,
+     "p75": 0.001323,
+     "p90": 0.001776,
+     "max": 0.002023,
+     "mean": 0.000996,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "continuation": {
+     "n": 131,
+     "min": 0.000345,
+     "p10": 0.000384,
+     "p25": 0.000474,
+     "p50": 0.000554,
+     "p75": 0.001078,
+     "p90": 0.001145,
+     "max": 0.001723,
+     "mean": 0.00075,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": 0.2658,
+     "magnitude": "small",
+     "median_a": 0.000915,
+     "median_b": 0.000554
+    }
+   },
+   "proxy_ret_1m": {
+    "withdrawal": {
+     "n": 46,
+     "min": -0.001625,
+     "p10": -0.000946,
+     "p25": -0.000648,
+     "p50": -1e-06,
+     "p75": 0.000527,
+     "p90": 0.000911,
+     "max": 0.002827,
+     "mean": 6.7e-05,
+     "share_negative": 0.5217,
+     "share_zero": 0.0,
+     "share_positive": 0.4783
+    },
+    "continuation": {
+     "n": 131,
+     "min": -0.001884,
+     "p10": -0.000758,
+     "p25": -0.000263,
+     "p50": 2.3e-05,
+     "p75": 0.000357,
+     "p90": 0.000687,
+     "max": 0.000926,
+     "mean": -1.7e-05,
+     "share_negative": 0.4656,
+     "share_zero": 0.0,
+     "share_positive": 0.5344
+    },
+    "cliffs_delta": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": 0.0355,
+     "magnitude": "negligible",
+     "median_a": -1e-06,
+     "median_b": 2.3e-05
+    }
+   },
+   "proxy_ret_5m": {
+    "withdrawal": {
+     "n": 46,
+     "min": -0.007512,
+     "p10": -0.004209,
+     "p25": -0.001335,
+     "p50": -1e-06,
+     "p75": 0.000595,
+     "p90": 0.002309,
+     "max": 0.005166,
+     "mean": -0.00028,
+     "share_negative": 0.5217,
+     "share_zero": 0.0,
+     "share_positive": 0.4783
+    },
+    "continuation": {
+     "n": 131,
+     "min": -0.006699,
+     "p10": -0.001255,
+     "p25": -0.000697,
+     "p50": -1e-06,
+     "p75": 0.001486,
+     "p90": 0.002106,
+     "max": 0.003109,
+     "mean": 0.000104,
+     "share_negative": 0.5115,
+     "share_zero": 0.0,
+     "share_positive": 0.4885
+    },
+    "cliffs_delta": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": -0.1012,
+     "magnitude": "negligible",
+     "median_a": -1e-06,
+     "median_b": -1e-06
+    }
+   }
+  },
+  "E4d_par_pair_vs_proxy_vol": {
+   "n_a": 48,
+   "n_b": 177,
+   "VERDICT": "INSUFFICIENT_SAMPLE_min_50"
+  }
+ }
+}

@@ -1,0 +1,1792 @@
+{
+ "protocol": "PREREGISTRATION_OVERNIGHT.md",
+ "S7_transaction_templates_15m": {
+  "atomicity_source": "TRANSACTION HASH, never a shared second",
+  "n_transactions": 2872,
+  "n_fills": 3166,
+  "COLLAPSE_RATIO_fills_per_transaction": 1.102,
+  "apparent_actions_collapsing": 0.0929,
+  "by_template": {
+   "T1_SINGLE_LEG": {
+    "transactions": 2638,
+    "fills": 2638,
+    "fill_share": 0.8332,
+    "shares": 56769.4,
+    "volume_share": 0.7235
+   },
+   "T3_MULTI_LEVEL_SAME_OUTCOME": {
+    "transactions": 89,
+    "fills": 178,
+    "fill_share": 0.0562,
+    "shares": 8896.7,
+    "volume_share": 0.1134
+   },
+   "T2_PAR_PAIR_equal_qty_complementary": {
+    "transactions": 92,
+    "fills": 184,
+    "fill_share": 0.0581,
+    "shares": 7625.9,
+    "volume_share": 0.0972
+   },
+   "T5_BOTH_OUTCOMES_OTHER": {
+    "transactions": 53,
+    "fills": 166,
+    "fill_share": 0.0524,
+    "shares": 5176.7,
+    "volume_share": 0.066
+   }
+  },
+  "role_mix_by_template": {
+   "T1_SINGLE_LEG": {
+    "maker": 2617,
+    "taker": 21
+   },
+   "T2_PAR_PAIR_equal_qty_complementary": {
+    "taker": 92
+   },
+   "T3_MULTI_LEVEL_SAME_OUTCOME": {
+    "maker": 89
+   },
+   "T5_BOTH_OUTCOMES_OTHER": {
+    "taker": 53
+   }
+  }
+ },
+ "S6_clip_consumption_15m": {
+  "by_next_event": {
+   "then_APPARENT_WITHDRAWAL": {
+    "n": 12,
+    "fraction_of_80_consumed": {
+     "n": 12,
+     "min": 0.09575,
+     "p10": 0.44425,
+     "p25": 1.0,
+     "p50": 1.0,
+     "p75": 1.0,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.878333,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 12,
+     "min": 7.66,
+     "p10": 35.54,
+     "p25": 80.0,
+     "p50": 80.0,
+     "p75": 80.0,
+     "p90": 80.0,
+     "max": 80.0,
+     "mean": 70.266667,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   },
+   "then_NEW_LEVEL": {
+    "n": 1118,
+    "fraction_of_80_consumed": {
+     "n": 1118,
+     "min": 0.00025,
+     "p10": 0.009375,
+     "p25": 0.069375,
+     "p50": 0.271739,
+     "p75": 0.75675,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.410578,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 1118,
+     "min": 0.02,
+     "p10": 0.75,
+     "p25": 5.55,
+     "p50": 21.739129,
+     "p75": 60.54,
+     "p90": 80.0,
+     "max": 160.0,
+     "mean": 33.695949,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   },
+   "then_OPPOSITE_SIDE": {
+    "n": 701,
+    "fraction_of_80_consumed": {
+     "n": 701,
+     "min": 0.00025,
+     "p10": 0.0625,
+     "p25": 0.150301,
+     "p50": 0.441375,
+     "p75": 0.9625,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.509019,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 701,
+     "min": 0.02,
+     "p10": 5.0,
+     "p25": 12.024094,
+     "p50": 35.31,
+     "p75": 77.0,
+     "p90": 80.0,
+     "max": 306.18,
+     "mean": 43.083453,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   },
+   "then_SAME_PRICE_REPLENISH": {
+    "n": 105,
+    "fraction_of_80_consumed": {
+     "n": 105,
+     "min": 0.00025,
+     "p10": 0.00025,
+     "p25": 0.05,
+     "p50": 0.129167,
+     "p75": 0.325,
+     "p90": 0.67225,
+     "max": 1.0,
+     "mean": 0.248448,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 105,
+     "min": 0.02,
+     "p10": 0.02,
+     "p25": 4.0,
+     "p50": 10.333332,
+     "p75": 26.0,
+     "p90": 53.78,
+     "max": 119.1,
+     "mean": 20.248188,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   }
+  },
+  "all_clips_fraction_of_80": {
+   "n": 1936,
+   "min": 0.00025,
+   "p10": 0.0225,
+   "p25": 0.094333,
+   "p50": 0.314375,
+   "p75": 0.83425,
+   "p90": 1.0,
+   "max": 1.0,
+   "mean": 0.440328,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "share_of_clips_reaching_80": 0.1937,
+  "multi_fill_clips": 613,
+  "multi_fill_clips_summing_to_80": 113,
+  "share_of_multi_fill_clips_that_exhaust_80": 0.1843,
+  "named_examples_are_exhaustion_not_sizing": "6+74, 50+30 and 78.54+1.46 all total exactly 80.00, and 113 of 613 multi-fill clips do the same. A sequence that sums to the lattice value is consumption of one clip, not two independent sizing decisions."
+ },
+ "S5_ladder_geometry_15m": {
+  "ticks_below_touch_at_clip_start": {
+   "n": 1926,
+   "min": -21.0,
+   "p10": -2.0,
+   "p25": -1.0,
+   "p50": 0.0,
+   "p75": 2.0,
+   "p90": 4.0,
+   "max": 44.0,
+   "mean": 0.903946,
+   "share_negative": 0.2804,
+   "share_zero": 0.2586,
+   "share_positive": 0.4611
+  },
+  "tick_gap_between_consecutive_levels_same_side": {
+   "n": 1765,
+   "min": 0.0,
+   "p10": 1.0,
+   "p25": 1.0,
+   "p50": 2.0,
+   "p75": 4.0,
+   "p90": 8.0,
+   "max": 52.0,
+   "mean": 3.602833,
+   "share_negative": 0.0,
+   "share_zero": 0.0017,
+   "share_positive": 0.9983
+  },
+  "distance_from_0_50": {
+   "n": 1936,
+   "min": 0.0,
+   "p10": 0.05,
+   "p25": 0.12,
+   "p50": 0.25,
+   "p75": 0.37,
+   "p90": 0.43,
+   "max": 0.49,
+   "mean": 0.246142,
+   "share_negative": 0.0,
+   "share_zero": 0.0165,
+   "share_positive": 0.9835
+  },
+  "mean_UP_price_plus_mean_DOWN_price_per_window": {
+   "n": 12,
+   "min": 0.9264,
+   "p10": 0.933,
+   "p25": 0.9499,
+   "p50": 0.9765,
+   "p75": 1.0021,
+   "p90": 1.0102,
+   "max": 1.0356,
+   "mean": 0.97995,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "max_simultaneous_distinct_levels_per_window": {
+   "n": 12,
+   "min": 3.0,
+   "p10": 3.0,
+   "p25": 3.0,
+   "p50": 3.0,
+   "p75": 3.0,
+   "p90": 4.0,
+   "max": 4.0,
+   "mean": 3.25,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "spacing_by_probability_band": {
+   "p<0.25": {
+    "n": 478,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 1.0,
+    "p75": 2.0,
+    "p90": 5.0,
+    "max": 44.0,
+    "mean": 2.711297,
+    "share_negative": 0.0,
+    "share_zero": 0.0021,
+    "share_positive": 0.9979
+   },
+   "p<0.50": {
+    "n": 395,
+    "min": 1.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 3.0,
+    "p75": 6.0,
+    "p90": 12.0,
+    "max": 52.0,
+    "mean": 4.891139,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "p<0.75": {
+    "n": 498,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 2.0,
+    "p75": 5.0,
+    "p90": 10.0,
+    "max": 40.0,
+    "mean": 4.277108,
+    "share_negative": 0.0,
+    "share_zero": 0.002,
+    "share_positive": 0.998
+   },
+   "p>=0.75": {
+    "n": 394,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 1.0,
+    "p75": 3.0,
+    "p90": 5.0,
+    "max": 48.0,
+    "mean": 2.540609,
+    "share_negative": 0.0,
+    "share_zero": 0.0025,
+    "share_positive": 0.9975
+   }
+  },
+  "spacing_by_inventory_imbalance": {
+   "balanced": {
+    "n": 122,
+    "min": 1.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 2.0,
+    "p75": 5.0,
+    "p90": 10.0,
+    "max": 31.0,
+    "mean": 3.97541,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "heavy_down": {
+    "n": 1098,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 2.0,
+    "p75": 4.0,
+    "p90": 8.0,
+    "max": 52.0,
+    "mean": 3.62204,
+    "share_negative": 0.0,
+    "share_zero": 0.0018,
+    "share_positive": 0.9982
+   },
+   "heavy_up": {
+    "n": 545,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 2.0,
+    "p75": 4.0,
+    "p90": 8.0,
+    "max": 33.0,
+    "mean": 3.480734,
+    "share_negative": 0.0,
+    "share_zero": 0.0018,
+    "share_positive": 0.9982
+   }
+  },
+  "WIDTH_IS_A_LOWER_BOUND": "unfilled and cancelled orders are unobservable, so every level count here is a floor on the ladder, never its width"
+ },
+ "S3_withdrawal_15m": {
+  "n_continuation": 1912,
+  "n_apparent_withdrawal": 24,
+  "variables_ranked_by_effect_size": {
+   "tte_s": {
+    "continuation": {
+     "n": 1912,
+     "min": 41.0,
+     "p10": 137.0,
+     "p25": 236.0,
+     "p50": 483.0,
+     "p75": 699.0,
+     "p90": 815.0,
+     "max": 894.0,
+     "mean": 473.325837,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 35.0,
+     "p10": 47.0,
+     "p25": 57.0,
+     "p50": 92.0,
+     "p75": 177.0,
+     "p90": 221.0,
+     "max": 243.0,
+     "mean": 119.916667,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": -0.8216,
+     "magnitude": "large",
+     "median_a": 102.0,
+     "median_b": 485.0
+    }
+   },
+   "secs_after_open": {
+    "continuation": {
+     "n": 1912,
+     "min": 6.0,
+     "p10": 84.0,
+     "p25": 201.0,
+     "p50": 415.0,
+     "p75": 664.0,
+     "p90": 763.0,
+     "max": 859.0,
+     "mean": 426.674163,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 657.0,
+     "p10": 675.0,
+     "p25": 706.0,
+     "p50": 798.0,
+     "p75": 838.0,
+     "p90": 850.0,
+     "max": 865.0,
+     "mean": 780.083333,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": 0.8216,
+     "magnitude": "large",
+     "median_a": 808.0,
+     "median_b": 417.0
+    }
+   },
+   "inv_same_side": {
+    "continuation": {
+     "n": 1912,
+     "min": 1.961,
+     "p10": 265.371,
+     "p25": 697.37,
+     "p50": 1347.287,
+     "p75": 2098.174,
+     "p90": 2872.631,
+     "max": 4622.473,
+     "mean": 1481.463046,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 1255.857,
+     "p10": 2129.019,
+     "p25": 2359.016,
+     "p50": 2707.748,
+     "p75": 3297.863,
+     "p90": 3974.212,
+     "max": 4782.473,
+     "mean": 2951.78475,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": 0.7422,
+     "magnitude": "large",
+     "median_a": 2841.446,
+     "median_b": 1347.763
+    }
+   },
+   "matched": {
+    "continuation": {
+     "n": 1912,
+     "min": 0.0,
+     "p10": 179.099,
+     "p25": 618.619,
+     "p50": 1257.635,
+     "p75": 2015.638,
+     "p90": 2732.355,
+     "max": 4474.019,
+     "mean": 1396.553694,
+     "share_negative": 0.0,
+     "share_zero": 0.0277,
+     "share_positive": 0.9723
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 1220.317,
+     "p10": 2036.019,
+     "p25": 2261.658,
+     "p50": 2564.913,
+     "p75": 2948.527,
+     "p90": 3814.212,
+     "max": 4554.019,
+     "mean": 2763.620542,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": 0.7156,
+     "magnitude": "large",
+     "median_a": 2707.748,
+     "median_b": 1257.635
+    }
+   },
+   "frac_of_80_consumed": {
+    "continuation": {
+     "n": 1912,
+     "min": 0.0003,
+     "p10": 0.0219,
+     "p25": 0.0924,
+     "p50": 0.3125,
+     "p75": 0.8171,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.436547,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 0.069,
+     "p10": 0.25,
+     "p25": 0.3324,
+     "p50": 1.0,
+     "p75": 1.0,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.741792,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": 0.4761,
+     "magnitude": "large",
+     "median_a": 1.0,
+     "median_b": 0.3125
+    }
+   },
+   "residual": {
+    "continuation": {
+     "n": 1912,
+     "min": 0.114,
+     "p10": 20.402,
+     "p25": 53.837,
+     "p50": 115.504,
+     "p75": 196.533,
+     "p90": 300.576,
+     "max": 856.257,
+     "mean": 143.841354,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 10.244,
+     "p10": 54.006,
+     "p25": 119.606,
+     "p50": 228.454,
+     "p75": 373.242,
+     "p90": 533.242,
+     "max": 912.097,
+     "mean": 292.82275,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": 0.4479,
+     "magnitude": "medium",
+     "median_a": 234.557,
+     "median_b": 115.564
+    }
+   },
+   "elapsed_since_prev_same_side_s": {
+    "continuation": {
+     "n": 1888,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 4.0,
+     "p75": 11.0,
+     "p90": 24.0,
+     "max": 135.0,
+     "mean": 8.942797,
+     "share_negative": 0.0,
+     "share_zero": 0.2579,
+     "share_positive": 0.7421
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 1.0,
+     "p50": 9.0,
+     "p75": 18.0,
+     "p90": 36.0,
+     "max": 117.0,
+     "mean": 18.125,
+     "share_negative": 0.0,
+     "share_zero": 0.125,
+     "share_positive": 0.875
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1888,
+     "delta": 0.2233,
+     "magnitude": "small",
+     "median_a": 12.0,
+     "median_b": 4.0
+    }
+   },
+   "clip_duration_s": {
+    "continuation": {
+     "n": 1912,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 2.0,
+     "max": 13.0,
+     "mean": 0.449268,
+     "share_negative": 0.0,
+     "share_zero": 0.8421,
+     "share_positive": 0.1579
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.0,
+     "max": 6.0,
+     "mean": 0.25,
+     "share_negative": 0.0,
+     "share_zero": 0.9583,
+     "share_positive": 0.0417
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": -0.1113,
+     "magnitude": "negligible",
+     "median_a": 0.0,
+     "median_b": 0.0
+    }
+   },
+   "spread": {
+    "continuation": {
+     "n": 1901,
+     "min": -0.37,
+     "p10": 0.01,
+     "p25": 0.01,
+     "p50": 0.01,
+     "p75": 0.01,
+     "p90": 0.01,
+     "max": 0.06,
+     "mean": 0.001985,
+     "share_negative": 0.0594,
+     "share_zero": 0.0231,
+     "share_positive": 0.9174
+    },
+    "apparent_withdrawal": {
+     "n": 14,
+     "min": 0.0,
+     "p10": 0.001,
+     "p25": 0.01,
+     "p50": 0.01,
+     "p75": 0.01,
+     "p90": 0.01,
+     "max": 0.01,
+     "mean": 0.008643,
+     "share_negative": 0.0,
+     "share_zero": 0.0714,
+     "share_positive": 0.9286
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 14,
+     "n_b": 1901,
+     "delta": -0.0844,
+     "magnitude": "negligible",
+     "median_a": 0.01,
+     "median_b": 0.01
+    }
+   },
+   "depth_at_my_price": {
+    "continuation": {
+     "n": 1911,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 80.0,
+     "p75": 236.0,
+     "p90": 531.5,
+     "max": 8942.0,
+     "mean": 320.926724,
+     "share_negative": 0.0,
+     "share_zero": 0.3872,
+     "share_positive": 0.6128
+    },
+    "apparent_withdrawal": {
+     "n": 23,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 259.0,
+     "p90": 475.98,
+     "max": 10484.65,
+     "mean": 630.476957,
+     "share_negative": 0.0,
+     "share_zero": 0.5217,
+     "share_positive": 0.4783
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 23,
+     "n_b": 1911,
+     "delta": -0.0715,
+     "magnitude": "negligible",
+     "median_a": 0.0,
+     "median_b": 80.0
+    }
+   },
+   "price": {
+    "continuation": {
+     "n": 1912,
+     "min": 0.01,
+     "p10": 0.1,
+     "p25": 0.22,
+     "p50": 0.5,
+     "p75": 0.72,
+     "p90": 0.87,
+     "max": 0.98,
+     "mean": 0.485962,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 24,
+     "min": 0.01,
+     "p10": 0.01,
+     "p25": 0.01,
+     "p50": 0.1,
+     "p75": 0.96,
+     "p90": 0.98,
+     "max": 0.99,
+     "mean": 0.47625,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 24,
+     "n_b": 1912,
+     "delta": -0.0361,
+     "magnitude": "negligible",
+     "median_a": 0.59,
+     "median_b": 0.5
+    }
+   },
+   "depth_at_touch": {
+    "continuation": {
+     "n": 1903,
+     "min": 0.28,
+     "p10": 15.0,
+     "p25": 45.24,
+     "p50": 103.03,
+     "p75": 181.2,
+     "p90": 360.78,
+     "max": 8174.06,
+     "mean": 335.010494,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 17,
+     "min": 5.0,
+     "p10": 15.0,
+     "p25": 32.42,
+     "p50": 100.0,
+     "p75": 475.98,
+     "p90": 1380.4,
+     "max": 10484.65,
+     "mean": 911.472941,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 17,
+     "n_b": 1903,
+     "delta": 0.0293,
+     "magnitude": "negligible",
+     "median_a": 100.0,
+     "median_b": 103.03
+    }
+   }
+  },
+  "WHAT_THE_ARCHIVE_CANNOT_IDENTIFY": "absence of a later fill on a side is NOT proof no L5 order existed there. The archive shows executions and anonymous depth; an order that rested and was never hit, and any cancel, are invisible. 'Apparent withdrawal' means only that no further fill on that side was observed in this window."
+ },
+ "S7_transaction_templates_5m": {
+  "atomicity_source": "TRANSACTION HASH, never a shared second",
+  "n_transactions": 132,
+  "n_fills": 373,
+  "COLLAPSE_RATIO_fills_per_transaction": 2.826,
+  "apparent_actions_collapsing": 0.6461,
+  "by_template": {
+   "T5_BOTH_OUTCOMES_OTHER": {
+    "transactions": 73,
+    "fills": 248,
+    "fill_share": 0.6649,
+    "shares": 7724.5,
+    "volume_share": 0.631
+   },
+   "T2_PAR_PAIR_equal_qty_complementary": {
+    "transactions": 48,
+    "fills": 96,
+    "fill_share": 0.2574,
+    "shares": 3523.0,
+    "volume_share": 0.2878
+   },
+   "T4_MULTI_LEVEL_BOTH_OUTCOMES": {
+    "transactions": 6,
+    "fills": 24,
+    "fill_share": 0.0643,
+    "shares": 735.8,
+    "volume_share": 0.0601
+   },
+   "T1_SINGLE_LEG": {
+    "transactions": 5,
+    "fills": 5,
+    "fill_share": 0.0134,
+    "shares": 258.2,
+    "volume_share": 0.0211
+   }
+  },
+  "role_mix_by_template": {
+   "T1_SINGLE_LEG": {
+    "taker": 5
+   },
+   "T2_PAR_PAIR_equal_qty_complementary": {
+    "taker": 48
+   },
+   "T4_MULTI_LEVEL_BOTH_OUTCOMES": {
+    "taker": 6
+   },
+   "T5_BOTH_OUTCOMES_OTHER": {
+    "taker": 73
+   }
+  }
+ },
+ "S6_clip_consumption_5m": {
+  "by_next_event": {
+   "then_APPARENT_WITHDRAWAL": {
+    "n": 23,
+    "fraction_of_80_consumed": {
+     "n": 23,
+     "min": 0.1875,
+     "p10": 0.394375,
+     "p25": 0.5625,
+     "p50": 0.9375,
+     "p75": 1.0,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.76738,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 23,
+     "min": 15.0,
+     "p10": 31.55,
+     "p25": 45.0,
+     "p50": 75.0,
+     "p75": 80.0,
+     "p90": 80.0,
+     "max": 82.731324,
+     "mean": 61.59594,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   },
+   "then_NEW_LEVEL": {
+    "n": 19,
+    "fraction_of_80_consumed": {
+     "n": 19,
+     "min": 0.027125,
+     "p10": 0.040375,
+     "p25": 0.075,
+     "p50": 0.1875,
+     "p75": 0.3125,
+     "p90": 0.9375,
+     "max": 1.0,
+     "mean": 0.324862,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 19,
+     "min": 2.17,
+     "p10": 3.23,
+     "p25": 6.0,
+     "p50": 15.0,
+     "p75": 25.0,
+     "p90": 75.0,
+     "max": 80.842104,
+     "mean": 26.033282,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   },
+   "then_OPPOSITE_SIDE": {
+    "n": 125,
+    "fraction_of_80_consumed": {
+     "n": 125,
+     "min": 0.03,
+     "p10": 0.133875,
+     "p25": 0.365,
+     "p50": 0.690689,
+     "p75": 1.0,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.659734,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 125,
+     "min": 2.4,
+     "p10": 10.71,
+     "p25": 29.2,
+     "p50": 55.2551,
+     "p75": 80.0,
+     "p90": 80.0,
+     "max": 101.126759,
+     "mean": 53.314975,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   },
+   "then_SAME_PRICE_REPLENISH": {
+    "n": 10,
+    "fraction_of_80_consumed": {
+     "n": 10,
+     "min": 0.0625,
+     "p10": 0.0625,
+     "p25": 0.117875,
+     "p50": 0.125,
+     "p75": 0.148,
+     "p90": 0.1785,
+     "max": 0.6575,
+     "mean": 0.178525,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "shares": {
+     "n": 10,
+     "min": 5.0,
+     "p10": 5.0,
+     "p25": 9.43,
+     "p50": 10.0,
+     "p75": 11.84,
+     "p90": 14.28,
+     "max": 52.6,
+     "mean": 14.282,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   }
+  },
+  "all_clips_fraction_of_80": {
+   "n": 177,
+   "min": 0.027125,
+   "p10": 0.09625,
+   "p25": 0.262875,
+   "p50": 0.625,
+   "p75": 1.0,
+   "p90": 1.0,
+   "max": 1.0,
+   "mean": 0.610588,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "share_of_clips_reaching_80": 0.3446,
+  "multi_fill_clips": 55,
+  "multi_fill_clips_summing_to_80": 18,
+  "share_of_multi_fill_clips_that_exhaust_80": 0.3273,
+  "named_examples_are_exhaustion_not_sizing": "6+74, 50+30 and 78.54+1.46 all total exactly 80.00, and 18 of 55 multi-fill clips do the same. A sequence that sums to the lattice value is consumption of one clip, not two independent sizing decisions."
+ },
+ "S5_ladder_geometry_5m": {
+  "ticks_below_touch_at_clip_start": {
+   "n": 142,
+   "min": -44.0,
+   "p10": -9.0,
+   "p25": -2.0,
+   "p50": 0.0,
+   "p75": 4.0,
+   "p90": 12.0,
+   "max": 84.0,
+   "mean": 1.950704,
+   "share_negative": 0.4155,
+   "share_zero": 0.1268,
+   "share_positive": 0.4577
+  },
+  "tick_gap_between_consecutive_levels_same_side": {
+   "n": 118,
+   "min": 0.0,
+   "p10": 1.0,
+   "p25": 4.0,
+   "p50": 10.0,
+   "p75": 23.0,
+   "p90": 41.0,
+   "max": 70.0,
+   "mean": 16.627119,
+   "share_negative": 0.0,
+   "share_zero": 0.0169,
+   "share_positive": 0.9831
+  },
+  "distance_from_0_50": {
+   "n": 177,
+   "min": 0.0,
+   "p10": 0.07,
+   "p25": 0.16,
+   "p50": 0.32,
+   "p75": 0.41,
+   "p90": 0.45,
+   "max": 0.48,
+   "mean": 0.286282,
+   "share_negative": 0.0,
+   "share_zero": 0.0169,
+   "share_positive": 0.9831
+  },
+  "mean_UP_price_plus_mean_DOWN_price_per_window": {
+   "n": 23,
+   "min": 0.935,
+   "p10": 0.9848,
+   "p25": 1.0,
+   "p50": 1.0,
+   "p75": 1.0,
+   "p90": 1.0172,
+   "max": 1.1008,
+   "mean": 1.003648,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "max_simultaneous_distinct_levels_per_window": {
+   "n": 23,
+   "min": 1.0,
+   "p10": 1.0,
+   "p25": 1.0,
+   "p50": 1.0,
+   "p75": 1.0,
+   "p90": 2.0,
+   "max": 5.0,
+   "mean": 1.347826,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "spacing_by_probability_band": {
+   "p<0.25": {
+    "n": 31,
+    "min": 1.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 5.0,
+    "p75": 10.0,
+    "p90": 25.0,
+    "max": 62.0,
+    "mean": 10.387097,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "p<0.50": {
+    "n": 28,
+    "min": 1.0,
+    "p10": 2.0,
+    "p25": 7.0,
+    "p50": 16.0,
+    "p75": 30.0,
+    "p90": 45.0,
+    "max": 62.0,
+    "mean": 21.214286,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "p<0.75": {
+    "n": 28,
+    "min": 1.0,
+    "p10": 5.0,
+    "p25": 12.0,
+    "p50": 23.0,
+    "p75": 30.0,
+    "p90": 49.0,
+    "max": 62.0,
+    "mean": 24.285714,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "p>=0.75": {
+    "n": 31,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 6.0,
+    "p75": 11.0,
+    "p90": 23.0,
+    "max": 70.0,
+    "mean": 11.806452,
+    "share_negative": 0.0,
+    "share_zero": 0.0645,
+    "share_positive": 0.9355
+   }
+  },
+  "spacing_by_inventory_imbalance": {
+   "balanced": {
+    "n": 67,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 4.0,
+    "p50": 10.0,
+    "p75": 23.0,
+    "p90": 28.0,
+    "max": 41.0,
+    "mean": 13.358209,
+    "share_negative": 0.0,
+    "share_zero": 0.0149,
+    "share_positive": 0.9851
+   },
+   "heavy_down": {
+    "n": 15,
+    "min": 2.0,
+    "p10": 2.0,
+    "p25": 4.0,
+    "p50": 12.0,
+    "p75": 37.0,
+    "p90": 62.0,
+    "max": 70.0,
+    "mean": 25.533333,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "heavy_up": {
+    "n": 36,
+    "min": 0.0,
+    "p10": 1.0,
+    "p25": 2.0,
+    "p50": 10.0,
+    "p75": 30.0,
+    "p90": 50.0,
+    "max": 62.0,
+    "mean": 19.0,
+    "share_negative": 0.0,
+    "share_zero": 0.0278,
+    "share_positive": 0.9722
+   }
+  },
+  "WIDTH_IS_A_LOWER_BOUND": "unfilled and cancelled orders are unobservable, so every level count here is a floor on the ladder, never its width"
+ },
+ "S3_withdrawal_5m": {
+  "n_continuation": 131,
+  "n_apparent_withdrawal": 46,
+  "variables_ranked_by_effect_size": {
+   "tte_s": {
+    "continuation": {
+     "n": 131,
+     "min": 32.0,
+     "p10": 59.0,
+     "p25": 78.0,
+     "p50": 123.0,
+     "p75": 168.0,
+     "p90": 291.0,
+     "max": 294.0,
+     "mean": 139.030534,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 15.0,
+     "p10": 35.0,
+     "p25": 59.0,
+     "p50": 80.0,
+     "p75": 140.0,
+     "p90": 173.0,
+     "max": 233.0,
+     "mean": 101.913043,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": -0.2775,
+     "magnitude": "small",
+     "median_a": 80.0,
+     "median_b": 123.0
+    }
+   },
+   "secs_after_open": {
+    "continuation": {
+     "n": 131,
+     "min": 6.0,
+     "p10": 9.0,
+     "p25": 132.0,
+     "p50": 177.0,
+     "p75": 222.0,
+     "p90": 241.0,
+     "max": 268.0,
+     "mean": 160.969466,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 67.0,
+     "p10": 127.0,
+     "p25": 156.0,
+     "p50": 220.0,
+     "p75": 234.0,
+     "p90": 265.0,
+     "max": 285.0,
+     "mean": 198.086957,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": 0.2775,
+     "magnitude": "small",
+     "median_a": 220.0,
+     "median_b": 177.0
+    }
+   },
+   "depth_at_touch": {
+    "continuation": {
+     "n": 108,
+     "min": 0.59,
+     "p10": 21.0,
+     "p25": 36.12,
+     "p50": 155.08,
+     "p75": 295.05,
+     "p90": 680.33,
+     "max": 1488.61,
+     "mean": 246.217778,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 34,
+     "min": 5.0,
+     "p10": 22.18,
+     "p25": 111.01,
+     "p50": 245.0,
+     "p75": 397.33,
+     "p90": 607.16,
+     "max": 1225.65,
+     "mean": 322.141176,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 34,
+     "n_b": 108,
+     "delta": 0.2214,
+     "magnitude": "small",
+     "median_a": 253.26,
+     "median_b": 158.33
+    }
+   },
+   "frac_of_80_consumed": {
+    "continuation": {
+     "n": 131,
+     "min": 0.0271,
+     "p10": 0.0833,
+     "p25": 0.2051,
+     "p50": 0.5605,
+     "p75": 1.0,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.577935,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 0.03,
+     "p10": 0.2696,
+     "p25": 0.4766,
+     "p50": 0.7362,
+     "p75": 1.0,
+     "p90": 1.0,
+     "max": 1.0,
+     "mean": 0.703585,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": 0.1912,
+     "magnitude": "small",
+     "median_a": 0.7362,
+     "median_b": 0.5605
+    }
+   },
+   "elapsed_since_prev_same_side_s": {
+    "continuation": {
+     "n": 99,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 4.0,
+     "p50": 14.0,
+     "p75": 39.0,
+     "p90": 93.0,
+     "max": 198.0,
+     "mean": 32.191919,
+     "share_negative": 0.0,
+     "share_zero": 0.1919,
+     "share_positive": 0.8081
+    },
+    "apparent_withdrawal": {
+     "n": 32,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 8.0,
+     "p50": 27.0,
+     "p75": 60.0,
+     "p90": 71.0,
+     "max": 217.0,
+     "mean": 37.40625,
+     "share_negative": 0.0,
+     "share_zero": 0.1875,
+     "share_positive": 0.8125
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 32,
+     "n_b": 99,
+     "delta": 0.1824,
+     "magnitude": "small",
+     "median_a": 28.0,
+     "median_b": 14.0
+    }
+   },
+   "depth_at_my_price": {
+    "continuation": {
+     "n": 110,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 212.6,
+     "p90": 422.16,
+     "max": 1273.1,
+     "mean": 147.310091,
+     "share_negative": 0.0,
+     "share_zero": 0.5364,
+     "share_positive": 0.4636
+    },
+    "apparent_withdrawal": {
+     "n": 34,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 5.0,
+     "p75": 346.47,
+     "p90": 631.3,
+     "max": 2117.54,
+     "mean": 234.998824,
+     "share_negative": 0.0,
+     "share_zero": 0.4706,
+     "share_positive": 0.5294
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 34,
+     "n_b": 110,
+     "delta": 0.1045,
+     "magnitude": "negligible",
+     "median_a": 91.0,
+     "median_b": 0.0
+    }
+   },
+   "spread": {
+    "continuation": {
+     "n": 107,
+     "min": -0.52,
+     "p10": -0.2,
+     "p25": 0.01,
+     "p50": 0.01,
+     "p75": 0.01,
+     "p90": 0.01,
+     "max": 0.05,
+     "mean": -0.028598,
+     "share_negative": 0.1308,
+     "share_zero": 0.0093,
+     "share_positive": 0.8598
+    },
+    "apparent_withdrawal": {
+     "n": 34,
+     "min": -0.79,
+     "p10": -0.44,
+     "p25": 0.01,
+     "p50": 0.01,
+     "p75": 0.01,
+     "p90": 0.01,
+     "max": 0.02,
+     "mean": -0.064706,
+     "share_negative": 0.1765,
+     "share_zero": 0.0,
+     "share_positive": 0.8235
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 34,
+     "n_b": 107,
+     "delta": -0.0907,
+     "magnitude": "negligible",
+     "median_a": 0.01,
+     "median_b": 0.01
+    }
+   },
+   "residual": {
+    "continuation": {
+     "n": 131,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 10.44,
+     "p50": 33.0,
+     "p75": 64.78,
+     "p90": 101.127,
+     "max": 186.617,
+     "mean": 42.792832,
+     "share_negative": 0.0,
+     "share_zero": 0.1527,
+     "share_positive": 0.8473
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 5.0,
+     "p50": 44.51,
+     "p75": 80.0,
+     "p90": 85.0,
+     "max": 147.232,
+     "mean": 48.013478,
+     "share_negative": 0.0,
+     "share_zero": 0.2174,
+     "share_positive": 0.7826
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": 0.0612,
+     "magnitude": "negligible",
+     "median_a": 45.0,
+     "median_b": 33.0
+    }
+   },
+   "matched": {
+    "continuation": {
+     "n": 131,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 47.76,
+     "p50": 103.55,
+     "p75": 210.434,
+     "p90": 318.13,
+     "max": 675.71,
+     "mean": 149.272611,
+     "share_negative": 0.0,
+     "share_zero": 0.1527,
+     "share_positive": 0.8473
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 49.77,
+     "p50": 80.0,
+     "p75": 183.55,
+     "p90": 318.13,
+     "max": 704.91,
+     "mean": 148.907391,
+     "share_negative": 0.0,
+     "share_zero": 0.1522,
+     "share_positive": 0.8478
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": -0.0352,
+     "magnitude": "negligible",
+     "median_a": 80.0,
+     "median_b": 103.55
+    }
+   },
+   "clip_duration_s": {
+    "continuation": {
+     "n": 131,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.0,
+     "max": 4.0,
+     "mean": 0.061069,
+     "share_negative": 0.0,
+     "share_zero": 0.9847,
+     "share_positive": 0.0153
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 0.0,
+     "p10": 0.0,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.0,
+     "max": 0.0,
+     "mean": 0.0,
+     "share_negative": 0.0,
+     "share_zero": 1.0,
+     "share_positive": 0.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": -0.0153,
+     "magnitude": "negligible",
+     "median_a": 0.0,
+     "median_b": 0.0
+    }
+   },
+   "price": {
+    "continuation": {
+     "n": 131,
+     "min": 0.02,
+     "p10": 0.1,
+     "p25": 0.24,
+     "p50": 0.48,
+     "p75": 0.75,
+     "p90": 0.9,
+     "max": 0.98,
+     "mean": 0.492738,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 0.02,
+     "p10": 0.04,
+     "p25": 0.09,
+     "p50": 0.49,
+     "p75": 0.91,
+     "p90": 0.96,
+     "max": 0.98,
+     "mean": 0.499345,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": 0.008,
+     "magnitude": "negligible",
+     "median_a": 0.49759,
+     "median_b": 0.48
+    }
+   },
+   "inv_same_side": {
+    "continuation": {
+     "n": 131,
+     "min": 3.23,
+     "p10": 45.92,
+     "p25": 80.0,
+     "p50": 143.23,
+     "p75": 258.4,
+     "p90": 398.36,
+     "max": 697.253,
+     "mean": 183.718099,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "apparent_withdrawal": {
+     "n": 46,
+     "min": 38.13,
+     "p10": 67.49,
+     "p25": 80.0,
+     "p50": 130.0,
+     "p75": 240.255,
+     "p90": 354.8,
+     "max": 726.453,
+     "mean": 189.533261,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    },
+    "cliffs_delta_withdrawal_minus_continuation": {
+     "n_a": 46,
+     "n_b": 131,
+     "delta": 0.0056,
+     "magnitude": "negligible",
+     "median_a": 133.23,
+     "median_b": 143.23
+    }
+   }
+  },
+  "WHAT_THE_ARCHIVE_CANNOT_IDENTIFY": "absence of a later fill on a side is NOT proof no L5 order existed there. The archive shows executions and anonymous depth; an order that rested and was never hit, and any cancel, are invisible. 'Apparent withdrawal' means only that no further fill on that side was observed in this window."
+ },
+ "S9_80_share_stability": {
+  "BTC15m": {
+   "lattice": {
+    "n_clips": 1936,
+    "at_80": 305,
+    "share_at_80": 0.1575,
+    "local_background_expectation": 12.0,
+    "excess_ratio": 25.42,
+    "p90_of_totals": 80.0,
+    "max": 306.18
+   },
+   "by_session_day": {
+    "08-21": {
+     "n_clips": 1312,
+     "at_80": 212,
+     "share_at_80": 0.1616,
+     "local_background_expectation": 10.0,
+     "excess_ratio": 21.2,
+     "p90_of_totals": 80.0,
+     "max": 306.18
+    },
+    "08-22": {
+     "n_clips": 624,
+     "at_80": 93,
+     "share_at_80": 0.149,
+     "local_background_expectation": 2.0,
+     "excess_ratio": 46.5,
+     "p90_of_totals": 80.0,
+     "max": 160.0
+    }
+   },
+   "fill_only_arithmetic": {
+    "LABEL": "FILL-ONLY SIZING ARITHMETIC, not latent clips",
+    "n_fills": 3166,
+    "max_single_fill": 100.0,
+    "fills_at_or_above_80": 275,
+    "fills_above_100": 0,
+    "quantiles": {
+     "n": 3166,
+     "min": 0.02,
+     "p10": 0.526314,
+     "p25": 5.0,
+     "p50": 13.0,
+     "p75": 39.72,
+     "p90": 77.0,
+     "max": 100.0,
+     "mean": 24.784806,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   }
+  },
+  "BTC5m": {
+   "lattice": {
+    "n_clips": 177,
+    "at_80": 51,
+    "share_at_80": 0.2881,
+    "local_background_expectation": 1.67,
+    "excess_ratio": 30.6,
+    "p90_of_totals": 80.0,
+    "max": 101.126759
+   },
+   "by_session_day": {
+    "08-21": {
+     "n_clips": 130,
+     "at_80": 42,
+     "share_at_80": 0.3231,
+     "local_background_expectation": 1.0,
+     "excess_ratio": 42.0,
+     "p90_of_totals": 80.0,
+     "max": 101.126759
+    },
+    "08-22": {
+     "n_clips": 25,
+     "at_80": 4,
+     "share_at_80": 0.16,
+     "local_background_expectation": 0.67,
+     "excess_ratio": 6.0,
+     "p90_of_totals": 80.0,
+     "max": 82.731324
+    },
+    "08-24": {
+     "n_clips": 22,
+     "at_80": 5,
+     "share_at_80": 0.2273,
+     "local_background_expectation": 0.0,
+     "excess_ratio": null,
+     "p90_of_totals": 80.0,
+     "max": 80.0
+    }
+   },
+   "fill_only_arithmetic": {
+    "LABEL": "FILL-ONLY SIZING ARITHMETIC, not latent clips",
+    "n_fills": 373,
+    "max_single_fill": 82.7313,
+    "fills_at_or_above_80": 65,
+    "fills_above_100": 0,
+    "quantiles": {
+     "n": 373,
+     "min": 0.75,
+     "p10": 5.0,
+     "p25": 9.26,
+     "p50": 21.57,
+     "p75": 54.52,
+     "p90": 80.0,
+     "max": 82.731324,
+     "mean": 32.81914,
+     "share_negative": 0.0,
+     "share_zero": 0.0,
+     "share_positive": 1.0
+    }
+   }
+  },
+  "scope_limit": "Latent-clip reconstruction needs the book, so it exists ONLY inside the 2026-08-21..24 Zenodo overlap. Outside it, L5 history is fills without a contemporaneous ladder, which supports labelled sizing arithmetic and NOT latent-clip claims."
+ }
+}
