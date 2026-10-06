@@ -1,0 +1,671 @@
+{
+ "protocol": "PREREGISTRATION_COMPLETION.md @ b9bd217a",
+ "DEGENERACY_ESTABLISHED_BEFORE_RESULTS": "'equal shares' and 'maximum matched fraction' are the SAME objective: matched_fraction = 2*min(w,1-w) is maximised exactly at w=0.5. A win by O1 is one result, not two.",
+ "T1_extend_vs_compress": {
+  "n_EXTENDS": 922,
+  "n_COMPRESSES": 847,
+  "n_NEUTRAL": 167,
+  "variables": {
+   "acquisition_price": {
+    "aggregate": {
+     "n_a": 922,
+     "n_b": 847,
+     "delta": -0.3873,
+     "magnitude": "medium",
+     "median_a": 0.37,
+     "median_b": 0.61
+    },
+    "extends_median": 0.37,
+    "compresses_median": 0.61,
+    "n_windows_evaluable": 12,
+    "windows_agreeing_in_sign": 10,
+    "MEETS_T1_BAR": true
+   },
+   "marginal_eventual_pair_cost": {
+    "aggregate": {
+     "n_a": 915,
+     "n_b": 845,
+     "delta": -0.0561,
+     "magnitude": "negligible",
+     "median_a": 1.0,
+     "median_b": 1.0
+    },
+    "extends_median": 1.0,
+    "compresses_median": 1.0,
+    "n_windows_evaluable": 12,
+    "windows_agreeing_in_sign": 9,
+    "MEETS_T1_BAR": false
+   },
+   "cumulative_matched_pair_cost_before": {
+    "aggregate": {
+     "n_a": 876,
+     "n_b": 837,
+     "delta": -0.03,
+     "magnitude": "negligible",
+     "median_a": 0.990031,
+     "median_b": 0.991317
+    },
+    "extends_median": 0.989955,
+    "compresses_median": 0.991317,
+    "n_windows_evaluable": 12,
+    "windows_agreeing_in_sign": 7,
+    "MEETS_T1_BAR": false
+   },
+   "prob_of_acquired_side": {
+    "aggregate": {
+     "n_a": 915,
+     "n_b": 839,
+     "delta": -0.3745,
+     "magnitude": "medium",
+     "median_a": 0.385,
+     "median_b": 0.61
+    },
+    "extends_median": 0.385,
+    "compresses_median": 0.61,
+    "n_windows_evaluable": 12,
+    "windows_agreeing_in_sign": 10,
+    "MEETS_T1_BAR": true
+   },
+   "residual_before": {
+    "aggregate": {
+     "n_a": 922,
+     "n_b": 847,
+     "delta": -0.1751,
+     "magnitude": "small",
+     "median_a": 102.0107,
+     "median_b": 128.9996
+    },
+    "extends_median": 101.9162,
+    "compresses_median": 128.9996,
+    "n_windows_evaluable": 12,
+    "windows_agreeing_in_sign": 12,
+    "MEETS_T1_BAR": false
+   },
+   "tte_s": {
+    "aggregate": {
+     "n_a": 922,
+     "n_b": 847,
+     "delta": 0.0015,
+     "magnitude": "negligible",
+     "median_a": 476.0,
+     "median_b": 479.0
+    },
+    "extends_median": 474.0,
+    "compresses_median": 479.0,
+    "n_windows_evaluable": 12,
+    "windows_agreeing_in_sign": 7,
+    "MEETS_T1_BAR": false
+   }
+  }
+ },
+ "T2_extend_sourced_completion_cost": {
+  "per_window": {
+   "btc-updown-15m-1787290200": {
+    "n_extend_sourced_shares": 3551,
+    "n_compress_sourced_shares": 184,
+    "median_pair_cost_extend_sourced": 0.99,
+    "median_pair_cost_compress_sourced": 0.98,
+    "extend_cheaper_by": -0.01,
+    "cliffs_delta": {
+     "n_a": 3551,
+     "n_b": 184,
+     "delta": 0.0434,
+     "magnitude": "negligible",
+     "median_a": 0.99,
+     "median_b": 0.98
+    }
+   },
+   "btc-updown-15m-1787296500": {
+    "n_extend_sourced_shares": 2527,
+    "n_compress_sourced_shares": 99,
+    "median_pair_cost_extend_sourced": 1.0,
+    "median_pair_cost_compress_sourced": 1.0,
+    "extend_cheaper_by": 0.0,
+    "cliffs_delta": {
+     "n_a": 2527,
+     "n_b": 99,
+     "delta": 0.247,
+     "magnitude": "small",
+     "median_a": 1.0,
+     "median_b": 1.0
+    }
+   },
+   "btc-updown-15m-1787300100": {
+    "n_extend_sourced_shares": 4274,
+    "n_compress_sourced_shares": 108,
+    "median_pair_cost_extend_sourced": 1.0,
+    "median_pair_cost_compress_sourced": 0.98,
+    "extend_cheaper_by": -0.02,
+    "cliffs_delta": {
+     "n_a": 4274,
+     "n_b": 108,
+     "delta": 0.1399,
+     "magnitude": "negligible",
+     "median_a": 1.0,
+     "median_b": 0.98
+    }
+   },
+   "btc-updown-15m-1787305500": {
+    "n_extend_sourced_shares": 2433,
+    "n_compress_sourced_shares": 129,
+    "median_pair_cost_extend_sourced": 0.99,
+    "median_pair_cost_compress_sourced": 1.08,
+    "extend_cheaper_by": 0.09,
+    "cliffs_delta": {
+     "n_a": 2433,
+     "n_b": 129,
+     "delta": -0.5205,
+     "magnitude": "large",
+     "median_a": 0.99,
+     "median_b": 1.08
+    }
+   },
+   "btc-updown-15m-1787306400": {
+    "n_extend_sourced_shares": 2543,
+    "n_compress_sourced_shares": 41,
+    "median_pair_cost_extend_sourced": 0.97,
+    "median_pair_cost_compress_sourced": 1.0,
+    "extend_cheaper_by": 0.03,
+    "cliffs_delta": {
+     "n_a": 2543,
+     "n_b": 41,
+     "delta": -0.1936,
+     "magnitude": "small",
+     "median_a": 0.97,
+     "median_b": 1.0
+    }
+   },
+   "btc-updown-15m-1787307300": {
+    "n_extend_sourced_shares": 2092,
+    "n_compress_sourced_shares": 35,
+    "median_pair_cost_extend_sourced": 1.01,
+    "median_pair_cost_compress_sourced": 1.05,
+    "extend_cheaper_by": 0.04,
+    "cliffs_delta": {
+     "n_a": 2092,
+     "n_b": 35,
+     "delta": -0.1588,
+     "magnitude": "small",
+     "median_a": 1.01,
+     "median_b": 1.05
+    }
+   },
+   "btc-updown-15m-1787311800": {
+    "n_extend_sourced_shares": 3237,
+    "n_compress_sourced_shares": 113,
+    "median_pair_cost_extend_sourced": 0.99,
+    "median_pair_cost_compress_sourced": 1.01,
+    "extend_cheaper_by": 0.02,
+    "cliffs_delta": {
+     "n_a": 3237,
+     "n_b": 113,
+     "delta": -0.5646,
+     "magnitude": "large",
+     "median_a": 0.99,
+     "median_b": 1.01
+    }
+   },
+   "btc-updown-15m-1787362200": {
+    "n_extend_sourced_shares": 2465,
+    "n_compress_sourced_shares": 119,
+    "median_pair_cost_extend_sourced": 0.97,
+    "median_pair_cost_compress_sourced": 0.99,
+    "extend_cheaper_by": 0.02,
+    "cliffs_delta": {
+     "n_a": 2465,
+     "n_b": 119,
+     "delta": -0.0351,
+     "magnitude": "negligible",
+     "median_a": 0.97,
+     "median_b": 0.99
+    }
+   },
+   "btc-updown-15m-1787363100": {
+    "n_extend_sourced_shares": 1674,
+    "n_compress_sourced_shares": 131,
+    "median_pair_cost_extend_sourced": 0.98,
+    "median_pair_cost_compress_sourced": 0.98,
+    "extend_cheaper_by": 0.0,
+    "cliffs_delta": {
+     "n_a": 1674,
+     "n_b": 131,
+     "delta": 0.1246,
+     "magnitude": "negligible",
+     "median_a": 0.98,
+     "median_b": 0.98
+    }
+   },
+   "btc-updown-15m-1787365800": {
+    "n_extend_sourced_shares": 2306,
+    "n_compress_sourced_shares": 51,
+    "median_pair_cost_extend_sourced": 1.02,
+    "median_pair_cost_compress_sourced": 1.09,
+    "extend_cheaper_by": 0.07,
+    "cliffs_delta": {
+     "n_a": 2306,
+     "n_b": 51,
+     "delta": -0.1017,
+     "magnitude": "negligible",
+     "median_a": 1.02,
+     "median_b": 1.09
+    }
+   },
+   "btc-updown-15m-1787369400": {
+    "n_extend_sourced_shares": 2021,
+    "n_compress_sourced_shares": 37,
+    "median_pair_cost_extend_sourced": 1.0,
+    "median_pair_cost_compress_sourced": 1.03,
+    "extend_cheaper_by": 0.03,
+    "cliffs_delta": {
+     "n_a": 2021,
+     "n_b": 37,
+     "delta": 0.0113,
+     "magnitude": "negligible",
+     "median_a": 1.0,
+     "median_b": 1.03
+    }
+   }
+  },
+  "n_windows": 11,
+  "windows_extend_cheaper_by_0.01": 7,
+  "median_advantage": 0.02,
+  "MEETS_T2_BAR": false
+ },
+ "T3_pair_cost_ceiling_discovery_confirmation": {
+  "ceiling": {
+   "discovery_window": "btc-updown-15m-1787300100",
+   "n_matched_shares": 4834,
+   "discovery_quantiles": {
+    "n": 4834,
+    "min": 0.75,
+    "p10": 0.91,
+    "p25": 0.95,
+    "p50": 0.99,
+    "p75": 1.05,
+    "p90": 1.12,
+    "max": 1.22,
+    "mean": 1.000339,
+    "share_negative": 0.0,
+    "share_zero": 0.0,
+    "share_positive": 1.0
+   },
+   "CEILING_C_p90": 1.12,
+   "note": "the protocol named p95; the shared quantile helper emits p90 and not p95, so p90 is used and reported as such rather than silently substituting a different statistic under the p95 label"
+  },
+  "confirmation": {
+   "btc-updown-15m-1787274000": {
+    "n_matched_shares": 1373,
+    "share_below_C": 0.6424,
+    "median_pair_cost": 1.05
+   },
+   "btc-updown-15m-1787290200": {
+    "n_matched_shares": 4448,
+    "share_below_C": 0.8438,
+    "median_pair_cost": 0.99
+   },
+   "btc-updown-15m-1787296500": {
+    "n_matched_shares": 3331,
+    "share_below_C": 0.9607,
+    "median_pair_cost": 1.0
+   },
+   "btc-updown-15m-1787305500": {
+    "n_matched_shares": 2662,
+    "share_below_C": 0.938,
+    "median_pair_cost": 0.99
+   },
+   "btc-updown-15m-1787306400": {
+    "n_matched_shares": 2988,
+    "share_below_C": 0.9163,
+    "median_pair_cost": 0.98
+   },
+   "btc-updown-15m-1787307300": {
+    "n_matched_shares": 2449,
+    "share_below_C": 0.8751,
+    "median_pair_cost": 1.01
+   },
+   "btc-updown-15m-1787311800": {
+    "n_matched_shares": 3687,
+    "share_below_C": 1.0,
+    "median_pair_cost": 0.99
+   },
+   "btc-updown-15m-1787362200": {
+    "n_matched_shares": 3562,
+    "share_below_C": 0.9531,
+    "median_pair_cost": 0.98
+   },
+   "btc-updown-15m-1787363100": {
+    "n_matched_shares": 2486,
+    "share_below_C": 0.9372,
+    "median_pair_cost": 0.99
+   },
+   "btc-updown-15m-1787365800": {
+    "n_matched_shares": 2959,
+    "share_below_C": 0.7878,
+    "median_pair_cost": 1.01
+   },
+   "btc-updown-15m-1787369400": {
+    "n_matched_shares": 2828,
+    "share_below_C": 0.9406,
+    "median_pair_cost": 1.0
+   }
+  },
+  "n_confirmation_windows": 11,
+  "windows_with_90pct_below_C": 7,
+  "MEETS_T3_BAR": false
+ },
+ "T4_which_objective": {
+  "n_windows": 12,
+  "terminal_matched_fraction": {
+   "n": 12,
+   "min": 0.75707,
+   "p10": 0.942953,
+   "p25": 0.945671,
+   "p50": 0.955226,
+   "p75": 0.976819,
+   "p90": 0.980964,
+   "max": 0.997933,
+   "mean": 0.946889,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "terminal_pair_cost": {
+   "n": 12,
+   "min": 0.938116,
+   "p10": 0.962565,
+   "p25": 0.965803,
+   "p50": 0.977712,
+   "p75": 0.992465,
+   "p90": 0.997635,
+   "max": 1.019537,
+   "mean": 0.981387,
+   "share_negative": 0.0,
+   "share_zero": 0.0,
+   "share_positive": 1.0
+  },
+  "terminal_w_up_IQR": 0.0355,
+  "terminal_pair_cost_IQR": 0.0267,
+  "spearman_pairCost_vs_matchedFraction": {
+   "n": 12,
+   "rho": -0.4196,
+   "approx_p": 0.179743,
+   "direction": "-"
+  },
+  "O1_equal_shares_AND_max_matched_fraction_SAME_OBJECTIVE": true,
+  "O3_SUPPORTED_rho_le_minus_0.50": false,
+  "O2_SUPPORTED_w_dispersed_cost_tight": false
+ },
+ "T5_time_vs_inventory_space": {
+  "time_space": {
+   "30|matched_fraction": {
+    "n": 12,
+    "median": 0.336412,
+    "IQR": 0.5277
+   },
+   "30|pair_cost": {
+    "n": 6,
+    "median": 0.996956,
+    "IQR": 0.0112
+   },
+   "60|matched_fraction": {
+    "n": 12,
+    "median": 0.719129,
+    "IQR": 0.3116
+   },
+   "60|pair_cost": {
+    "n": 9,
+    "median": 1.013157,
+    "IQR": 0.0277
+   },
+   "120|matched_fraction": {
+    "n": 12,
+    "median": 0.796467,
+    "IQR": 0.3537
+   },
+   "120|pair_cost": {
+    "n": 11,
+    "median": 0.984791,
+    "IQR": 0.0315
+   },
+   "300|matched_fraction": {
+    "n": 12,
+    "median": 0.93871,
+    "IQR": 0.0775
+   },
+   "300|pair_cost": {
+    "n": 12,
+    "median": 1.001321,
+    "IQR": 0.0549
+   },
+   "600|matched_fraction": {
+    "n": 12,
+    "median": 0.961796,
+    "IQR": 0.014
+   },
+   "600|pair_cost": {
+    "n": 12,
+    "median": 0.990857,
+    "IQR": 0.0349
+   },
+   "shutdown|matched_fraction": {
+    "n": 12,
+    "median": 0.955226,
+    "IQR": 0.0311
+   },
+   "shutdown|pair_cost": {
+    "n": 12,
+    "median": 0.976818,
+    "IQR": 0.0191
+   }
+  },
+  "inventory_space": {
+   "0.1|matched_fraction": {
+    "n": 12,
+    "median": 0.768318,
+    "IQR": 0.3454
+   },
+   "0.1|pair_cost": {
+    "n": 12,
+    "median": 0.973417,
+    "IQR": 0.0512
+   },
+   "0.25|matched_fraction": {
+    "n": 12,
+    "median": 0.919225,
+    "IQR": 0.1061
+   },
+   "0.25|pair_cost": {
+    "n": 12,
+    "median": 0.998451,
+    "IQR": 0.0763
+   },
+   "0.5|matched_fraction": {
+    "n": 12,
+    "median": 0.976211,
+    "IQR": 0.0387
+   },
+   "0.5|pair_cost": {
+    "n": 12,
+    "median": 0.980157,
+    "IQR": 0.0525
+   },
+   "0.75|matched_fraction": {
+    "n": 12,
+    "median": 0.969259,
+    "IQR": 0.0438
+   },
+   "0.75|pair_cost": {
+    "n": 12,
+    "median": 0.98073,
+    "IQR": 0.0347
+   },
+   "0.9|matched_fraction": {
+    "n": 12,
+    "median": 0.966552,
+    "IQR": 0.0175
+   },
+   "0.9|pair_cost": {
+    "n": 12,
+    "median": 0.975409,
+    "IQR": 0.0303
+   },
+   "1.0|matched_fraction": {
+    "n": 12,
+    "median": 0.955226,
+    "IQR": 0.0311
+   },
+   "1.0|pair_cost": {
+    "n": 12,
+    "median": 0.976818,
+    "IQR": 0.0191
+   }
+  },
+  "RETROSPECTIVE_ONLY": "inventory-space alignment normalises by the window's FINAL inventory and therefore uses future information. It describes what was optimised and can never be a live signal, which does not know its own final inventory.",
+  "comparison_matched_fraction": {
+   "median_IQR_time_space": 0.0775,
+   "median_IQR_inventory_space": 0.0387,
+   "ratio_inv_over_time": 0.4994,
+   "MEETS_T5_BAR_inv_lt_half_time": true
+  },
+  "comparison_pair_cost": {
+   "median_IQR_time_space": 0.0277,
+   "median_IQR_inventory_space": 0.0347,
+   "ratio_inv_over_time": 1.2527,
+   "MEETS_T5_BAR_inv_lt_half_time": false
+  }
+ },
+ "terminal_per_window": [
+  {
+   "market_slug": "btc-updown-15m-1787274000",
+   "shares_up": 1365.8566,
+   "shares_down": 2242.4137,
+   "final_acquired_inventory": 3608.2703,
+   "w_up": 0.378535,
+   "matched": 1365.8566,
+   "matched_fraction": 0.75707,
+   "terminal_pair_cost": 0.992465,
+   "cumulative_dollars": 1524.6611
+  },
+  {
+   "market_slug": "btc-updown-15m-1787290200",
+   "shares_up": 4430.8618,
+   "shares_down": 4804.104,
+   "final_acquired_inventory": 9234.9658,
+   "w_up": 0.479792,
+   "matched": 4430.8618,
+   "matched_fraction": 0.959584,
+   "terminal_pair_cost": 0.970375,
+   "cumulative_dollars": 4445.2025
+  },
+  {
+   "market_slug": "btc-updown-15m-1787296500",
+   "shares_up": 3330.6586,
+   "shares_down": 3733.6559,
+   "final_acquired_inventory": 7064.3144,
+   "w_up": 0.471477,
+   "matched": 3330.6586,
+   "matched_fraction": 0.942953,
+   "terminal_pair_cost": 1.000713,
+   "cumulative_dollars": 3385.0488
+  },
+  {
+   "market_slug": "btc-updown-15m-1787300100",
+   "shares_up": 4813.4389,
+   "shares_down": 5041.8925,
+   "final_acquired_inventory": 9855.3314,
+   "w_up": 0.48841,
+   "matched": 4813.4389,
+   "matched_fraction": 0.976819,
+   "terminal_pair_cost": 0.991077,
+   "cumulative_dollars": 4822.0773
+  },
+  {
+   "market_slug": "btc-updown-15m-1787305500",
+   "shares_up": 2760.0137,
+   "shares_down": 2656.8995,
+   "final_acquired_inventory": 5416.9132,
+   "w_up": 0.509518,
+   "matched": 2656.8995,
+   "matched_fraction": 0.980964,
+   "terminal_pair_cost": 0.977712,
+   "cumulative_dollars": 2629.2376
+  },
+  {
+   "market_slug": "btc-updown-15m-1787306400",
+   "shares_up": 2943.108,
+   "shares_down": 3177.6648,
+   "final_acquired_inventory": 6120.7728,
+   "w_up": 0.480839,
+   "matched": 2943.108,
+   "matched_fraction": 0.961679,
+   "terminal_pair_cost": 0.962565,
+   "cumulative_dollars": 2917.9279
+  },
+  {
+   "market_slug": "btc-updown-15m-1787307300",
+   "shares_up": 2648.3405,
+   "shares_down": 2420.8277,
+   "final_acquired_inventory": 5069.1682,
+   "w_up": 0.522441,
+   "matched": 2420.8277,
+   "matched_fraction": 0.955118,
+   "terminal_pair_cost": 0.988837,
+   "cumulative_dollars": 2473.546
+  },
+  {
+   "market_slug": "btc-updown-15m-1787311800",
+   "shares_up": 4106.2328,
+   "shares_down": 3687.1582,
+   "final_acquired_inventory": 7793.391,
+   "w_up": 0.526887,
+   "matched": 3687.1582,
+   "matched_fraction": 0.946227,
+   "terminal_pair_cost": 0.971812,
+   "cumulative_dollars": 3625.2788
+  },
+  {
+   "market_slug": "btc-updown-15m-1787362200",
+   "shares_up": 3668.3625,
+   "shares_down": 3548.7569,
+   "final_acquired_inventory": 7217.1194,
+   "w_up": 0.508286,
+   "matched": 3548.7569,
+   "matched_fraction": 0.983428,
+   "terminal_pair_cost": 0.938116,
+   "cumulative_dollars": 3396.6917
+  },
+  {
+   "market_slug": "btc-updown-15m-1787363100",
+   "shares_up": 2472.3649,
+   "shares_down": 2482.6089,
+   "final_acquired_inventory": 4954.9739,
+   "w_up": 0.498966,
+   "matched": 2472.3649,
+   "matched_fraction": 0.997933,
+   "terminal_pair_cost": 0.997635,
+   "cumulative_dollars": 2470.5655
+  },
+  {
+   "market_slug": "btc-updown-15m-1787365800",
+   "shares_up": 2949.8613,
+   "shares_down": 3226.3947,
+   "final_acquired_inventory": 6176.2559,
+   "w_up": 0.477613,
+   "matched": 2949.8613,
+   "matched_fraction": 0.955226,
+   "terminal_pair_cost": 0.965803,
+   "cumulative_dollars": 3011.1211
+  },
+  {
+   "market_slug": "btc-updown-15m-1787369400",
+   "shares_up": 2816.7857,
+   "shares_down": 3140.4328,
+   "final_acquired_inventory": 5957.2185,
+   "w_up": 0.472836,
+   "matched": 2816.7857,
+   "matched_fraction": 0.945671,
+   "terminal_pair_cost": 1.019537,
+   "cumulative_dollars": 3129.4725
+  }
+ ]
+}
