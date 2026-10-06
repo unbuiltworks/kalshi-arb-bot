@@ -1,0 +1,4741 @@
+{
+ "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+ "spec_commit": "28c619df",
+ "is_predictor": false,
+ "zero_capital": true,
+ "orders_submitted": 0,
+ "orders_signed": 0,
+ "source": {
+  "kind": "RECORDED_TAPE",
+  "path": "/tmp/claude-0/-home-user-kalshi-arb-bot/6097e3a7-6e63-5966-9551-0d9d2f12d9cc/scratchpad/synth5.jsonl"
+ },
+ "cohort_required": 25,
+ "cohort_completed": 5,
+ "gate": {
+  "n_markets_done": 5,
+  "breaches": [
+   {
+    "condition": "two_sided_evidenced_acquisition_below",
+    "threshold": 0.2,
+    "observed": 0.0
+   }
+  ],
+  "halt": true,
+  "NOTE": "a breach halts collection and is reported as a measurement result. It is NEVER grounds for retuning a placement parameter and re-running."
+ },
+ "markout_horizons": [
+  1,
+  5,
+  10,
+  30,
+  60
+ ],
+ "NOT_A_CLAIM_ABOUT_L5": "the 0.96 reservation is OUR pair-economics constraint, not a reproduction of L5. Running pair-cost control was REFUTED.",
+ "markets": [
+  {
+   "market_slug": "synth-cheap_pair-00",
+   "M1_evidenced_fills": 2,
+   "M2_two_sided_evidenced_acquisition": false,
+   "M3_matched_fraction": 0.0,
+   "M4_residual": 40.0,
+   "M4_residual_cap": 80.0,
+   "M5_acquisition_pair_cost": null,
+   "M6_queue_ahead": {
+    "n": 4,
+    "mean": 82.5
+   },
+   "M6_resting_time_s": {
+    "n": 4,
+    "mean": 194.5
+   },
+   "M7_markout_t_plus_1": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_5": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_10": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_30": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_60": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M8_capital_tied_up_usdc": 17.4,
+   "M9_withdrawal_reasons": {
+    "FILLED": 2,
+    "WINDOW_END": 2
+   },
+   "M10_hypothetical_fees_SEPARATE": 0.68754,
+   "M10_rebates_counted": false,
+   "ledger_counts": {
+    "EVIDENCED_FILL": 2,
+    "UNCERTAIN": 0,
+    "NO_FILL": 2
+   },
+   "n_orders": 4,
+   "n_stand_downs": 0,
+   "reservation_stand_downs": 0,
+   "crossed_snapshot_share": 0.0,
+   "bbo_staleness_breach_share": 0.0,
+   "bbo_freshness_bound_s": 2.0,
+   "orders_submitted": 0,
+   "orders_signed": 0,
+   "complement_never_observed": false,
+   "n_snapshots": 780,
+   "span_s": 389.0,
+   "orders": [
+    {
+     "order_id": "s3-hypo-000001",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-00",
+     "outcome": "up",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 1.0,
+       "depth_before": 100.0,
+       "depth_after": 99.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 2.0,
+       "depth_before": 99.0,
+       "depth_after": 98.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 3.0,
+       "depth_before": 98.0,
+       "depth_after": 97.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 4.0,
+       "depth_before": 97.0,
+       "depth_after": 96.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 5.0,
+       "depth_before": 96.0,
+       "depth_after": 95.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 6.0,
+       "depth_before": 95.0,
+       "depth_after": 94.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 7.0,
+       "depth_before": 94.0,
+       "depth_after": 93.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 8.0,
+       "depth_before": 93.0,
+       "depth_after": 92.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 9.0,
+       "depth_before": 92.0,
+       "depth_after": 91.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 10.0,
+       "depth_before": 91.0,
+       "depth_after": 90.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 11.0,
+       "depth_before": 90.0,
+       "depth_after": 89.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 12.0,
+       "depth_before": 89.0,
+       "depth_after": 88.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 13.0,
+       "depth_before": 88.0,
+       "depth_after": 87.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 14.0,
+       "depth_before": 87.0,
+       "depth_after": 86.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 15.0,
+       "depth_before": 86.0,
+       "depth_after": 85.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 16.0,
+       "depth_before": 85.0,
+       "depth_after": 84.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 17.0,
+       "depth_before": 84.0,
+       "depth_after": 83.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 18.0,
+       "depth_before": 83.0,
+       "depth_after": 82.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 19.0,
+       "depth_before": 82.0,
+       "depth_after": 81.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 20.0,
+       "depth_before": 81.0,
+       "depth_after": 80.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 21.0,
+       "depth_before": 80.0,
+       "depth_after": 79.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 22.0,
+       "depth_before": 79.0,
+       "depth_after": 78.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 23.0,
+       "depth_before": 78.0,
+       "depth_after": 77.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 24.0,
+       "depth_before": 77.0,
+       "depth_after": 76.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 25.0,
+       "depth_before": 76.0,
+       "depth_after": 75.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 26.0,
+       "depth_before": 75.0,
+       "depth_after": 74.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 27.0,
+       "depth_before": 74.0,
+       "depth_after": 73.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 28.0,
+       "depth_before": 73.0,
+       "depth_after": 72.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 29.0,
+       "depth_before": 72.0,
+       "depth_after": 71.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 30.0,
+       "depth_before": 71.0,
+       "depth_after": 70.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 31.0,
+       "depth_before": 70.0,
+       "depth_after": 69.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 32.0,
+       "depth_before": 69.0,
+       "depth_after": 68.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 33.0,
+       "depth_before": 68.0,
+       "depth_after": 67.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 34.0,
+       "depth_before": 67.0,
+       "depth_after": 66.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 35.0,
+       "depth_before": 66.0,
+       "depth_after": 65.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 36.0,
+       "depth_before": 65.0,
+       "depth_after": 64.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 37.0,
+       "depth_before": 64.0,
+       "depth_after": 63.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 38.0,
+       "depth_before": 63.0,
+       "depth_after": 62.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 39.0,
+       "depth_before": 62.0,
+       "depth_after": 61.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 40.0,
+       "depth_before": 61.0,
+       "depth_after": 60.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 41.0,
+       "depth_before": 60.0,
+       "depth_after": 59.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 42.0,
+       "depth_before": 59.0,
+       "depth_after": 58.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 43.0,
+       "depth_before": 58.0,
+       "depth_after": 57.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 44.0,
+       "depth_before": 57.0,
+       "depth_after": 56.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 45.0,
+       "depth_before": 56.0,
+       "depth_after": 55.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 46.0,
+       "depth_before": 55.0,
+       "depth_after": 54.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 47.0,
+       "depth_before": 54.0,
+       "depth_after": 53.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 48.0,
+       "depth_before": 53.0,
+       "depth_after": 52.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 49.0,
+       "depth_before": 52.0,
+       "depth_after": 51.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 50.0,
+       "depth_before": 51.0,
+       "depth_after": 50.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 51.0,
+       "depth_before": 50.0,
+       "depth_after": 49.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 52.0,
+       "depth_before": 49.0,
+       "depth_after": 48.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 53.0,
+       "depth_before": 48.0,
+       "depth_after": 47.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 54.0,
+       "depth_before": 47.0,
+       "depth_after": 46.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 55.0,
+       "depth_before": 46.0,
+       "depth_after": 45.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 56.0,
+       "depth_before": 45.0,
+       "depth_after": 44.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 57.0,
+       "depth_before": 44.0,
+       "depth_after": 43.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 58.0,
+       "depth_before": 43.0,
+       "depth_after": 42.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 59.0,
+       "depth_before": 42.0,
+       "depth_after": 41.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 60.0,
+       "depth_before": 41.0,
+       "depth_after": 40.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 61.0,
+       "depth_before": 40.0,
+       "depth_after": 39.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 62.0,
+       "depth_before": 39.0,
+       "depth_after": 38.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 63.0,
+       "depth_before": 38.0,
+       "depth_after": 37.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 64.0,
+       "depth_before": 37.0,
+       "depth_after": 36.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 65.0,
+       "depth_before": 36.0,
+       "depth_after": 35.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 66.0,
+       "depth_before": 35.0,
+       "depth_after": 34.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 67.0,
+       "depth_before": 34.0,
+       "depth_after": 33.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 68.0,
+       "depth_before": 33.0,
+       "depth_after": 32.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 69.0,
+       "depth_before": 32.0,
+       "depth_after": 31.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 70.0,
+       "depth_before": 31.0,
+       "depth_after": 30.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 71.0,
+       "depth_before": 30.0,
+       "depth_after": 29.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 72.0,
+       "depth_before": 29.0,
+       "depth_after": 28.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 73.0,
+       "depth_before": 28.0,
+       "depth_after": 27.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 74.0,
+       "depth_before": 27.0,
+       "depth_after": 26.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 75.0,
+       "depth_before": 26.0,
+       "depth_after": 25.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 76.0,
+       "depth_before": 25.0,
+       "depth_after": 24.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 77.0,
+       "depth_before": 24.0,
+       "depth_after": 23.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 78.0,
+       "depth_before": 23.0,
+       "depth_after": 22.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 79.0,
+       "depth_before": 22.0,
+       "depth_after": 21.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 80.0,
+       "depth_before": 21.0,
+       "depth_after": 20.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 81.0,
+       "depth_before": 20.0,
+       "depth_after": 19.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 82.0,
+       "depth_before": 19.0,
+       "depth_after": 18.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 83.0,
+       "depth_before": 18.0,
+       "depth_after": 17.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 84.0,
+       "depth_before": 17.0,
+       "depth_after": 16.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 85.0,
+       "depth_before": 16.0,
+       "depth_after": 15.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 86.0,
+       "depth_before": 15.0,
+       "depth_after": 14.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 87.0,
+       "depth_before": 14.0,
+       "depth_after": 13.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 88.0,
+       "depth_before": 13.0,
+       "depth_after": 12.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 89.0,
+       "depth_before": 12.0,
+       "depth_after": 11.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 90.0,
+       "depth_before": 11.0,
+       "depth_after": 10.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 91.0,
+       "depth_before": 10.0,
+       "depth_after": 9.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 92.0,
+       "depth_before": 9.0,
+       "depth_after": 8.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 93.0,
+       "depth_before": 8.0,
+       "depth_after": 7.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 94.0,
+       "depth_before": 7.0,
+       "depth_after": 6.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 95.0,
+       "depth_before": 6.0,
+       "depth_after": 5.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 300.0,
+       "depth_before": 5.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 100.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4200 fell strictly below our 0.4500. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 300.0,
+     "resting_time_s": 300.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.45,
+      "t_plus_1": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 301.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 305.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 310.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 330.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 360.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 300.0
+    },
+    {
+     "order_id": "s3-hypo-000003",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-00",
+     "outcome": "up",
+     "placement_ts": 300.0,
+     "price": 0.42,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 50.0,
+     "queue_ahead_bounds": [
+      0.0,
+      50.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.42,
+      "ask": 0.43,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.42,
+       50.0
+      ]
+     ],
+     "depth_at_our_price": 50.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 301.0,
+       "depth_before": 50.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 50.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4000 fell strictly below our 0.4200. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 1.0,
+     "resting_time_s": 1.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.42,
+      "t_plus_1": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 302.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 306.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 311.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 331.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 361.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 301.0
+    },
+    {
+     "order_id": "s3-hypo-000004",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-00",
+     "outcome": "up",
+     "placement_ts": 301.0,
+     "price": 0.4,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 80.0,
+     "queue_ahead_bounds": [
+      0.0,
+      80.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.4,
+      "ask": 0.41,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.4,
+       80.0
+      ]
+     ],
+     "depth_at_our_price": 80.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 88.0,
+     "resting_time_s": 88.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    },
+    {
+     "order_id": "s3-hypo-000002",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-00",
+     "outcome": "down",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 389.0,
+     "resting_time_s": 389.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    }
+   ],
+   "stand_downs": []
+  },
+  {
+   "market_slug": "synth-cheap_pair-01",
+   "M1_evidenced_fills": 2,
+   "M2_two_sided_evidenced_acquisition": false,
+   "M3_matched_fraction": 0.0,
+   "M4_residual": 40.0,
+   "M4_residual_cap": 80.0,
+   "M5_acquisition_pair_cost": null,
+   "M6_queue_ahead": {
+    "n": 4,
+    "mean": 82.5
+   },
+   "M6_resting_time_s": {
+    "n": 4,
+    "mean": 194.5
+   },
+   "M7_markout_t_plus_1": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_5": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_10": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_30": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_60": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M8_capital_tied_up_usdc": 17.4,
+   "M9_withdrawal_reasons": {
+    "FILLED": 2,
+    "WINDOW_END": 2
+   },
+   "M10_hypothetical_fees_SEPARATE": 0.68754,
+   "M10_rebates_counted": false,
+   "ledger_counts": {
+    "EVIDENCED_FILL": 2,
+    "UNCERTAIN": 0,
+    "NO_FILL": 2
+   },
+   "n_orders": 4,
+   "n_stand_downs": 0,
+   "reservation_stand_downs": 0,
+   "crossed_snapshot_share": 0.0,
+   "bbo_staleness_breach_share": 0.0,
+   "bbo_freshness_bound_s": 2.0,
+   "orders_submitted": 0,
+   "orders_signed": 0,
+   "complement_never_observed": false,
+   "n_snapshots": 780,
+   "span_s": 389.0,
+   "orders": [
+    {
+     "order_id": "s3-hypo-000005",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-01",
+     "outcome": "up",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 1.0,
+       "depth_before": 100.0,
+       "depth_after": 99.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 2.0,
+       "depth_before": 99.0,
+       "depth_after": 98.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 3.0,
+       "depth_before": 98.0,
+       "depth_after": 97.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 4.0,
+       "depth_before": 97.0,
+       "depth_after": 96.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 5.0,
+       "depth_before": 96.0,
+       "depth_after": 95.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 6.0,
+       "depth_before": 95.0,
+       "depth_after": 94.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 7.0,
+       "depth_before": 94.0,
+       "depth_after": 93.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 8.0,
+       "depth_before": 93.0,
+       "depth_after": 92.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 9.0,
+       "depth_before": 92.0,
+       "depth_after": 91.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 10.0,
+       "depth_before": 91.0,
+       "depth_after": 90.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 11.0,
+       "depth_before": 90.0,
+       "depth_after": 89.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 12.0,
+       "depth_before": 89.0,
+       "depth_after": 88.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 13.0,
+       "depth_before": 88.0,
+       "depth_after": 87.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 14.0,
+       "depth_before": 87.0,
+       "depth_after": 86.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 15.0,
+       "depth_before": 86.0,
+       "depth_after": 85.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 16.0,
+       "depth_before": 85.0,
+       "depth_after": 84.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 17.0,
+       "depth_before": 84.0,
+       "depth_after": 83.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 18.0,
+       "depth_before": 83.0,
+       "depth_after": 82.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 19.0,
+       "depth_before": 82.0,
+       "depth_after": 81.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 20.0,
+       "depth_before": 81.0,
+       "depth_after": 80.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 21.0,
+       "depth_before": 80.0,
+       "depth_after": 79.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 22.0,
+       "depth_before": 79.0,
+       "depth_after": 78.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 23.0,
+       "depth_before": 78.0,
+       "depth_after": 77.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 24.0,
+       "depth_before": 77.0,
+       "depth_after": 76.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 25.0,
+       "depth_before": 76.0,
+       "depth_after": 75.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 26.0,
+       "depth_before": 75.0,
+       "depth_after": 74.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 27.0,
+       "depth_before": 74.0,
+       "depth_after": 73.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 28.0,
+       "depth_before": 73.0,
+       "depth_after": 72.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 29.0,
+       "depth_before": 72.0,
+       "depth_after": 71.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 30.0,
+       "depth_before": 71.0,
+       "depth_after": 70.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 31.0,
+       "depth_before": 70.0,
+       "depth_after": 69.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 32.0,
+       "depth_before": 69.0,
+       "depth_after": 68.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 33.0,
+       "depth_before": 68.0,
+       "depth_after": 67.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 34.0,
+       "depth_before": 67.0,
+       "depth_after": 66.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 35.0,
+       "depth_before": 66.0,
+       "depth_after": 65.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 36.0,
+       "depth_before": 65.0,
+       "depth_after": 64.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 37.0,
+       "depth_before": 64.0,
+       "depth_after": 63.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 38.0,
+       "depth_before": 63.0,
+       "depth_after": 62.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 39.0,
+       "depth_before": 62.0,
+       "depth_after": 61.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 40.0,
+       "depth_before": 61.0,
+       "depth_after": 60.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 41.0,
+       "depth_before": 60.0,
+       "depth_after": 59.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 42.0,
+       "depth_before": 59.0,
+       "depth_after": 58.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 43.0,
+       "depth_before": 58.0,
+       "depth_after": 57.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 44.0,
+       "depth_before": 57.0,
+       "depth_after": 56.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 45.0,
+       "depth_before": 56.0,
+       "depth_after": 55.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 46.0,
+       "depth_before": 55.0,
+       "depth_after": 54.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 47.0,
+       "depth_before": 54.0,
+       "depth_after": 53.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 48.0,
+       "depth_before": 53.0,
+       "depth_after": 52.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 49.0,
+       "depth_before": 52.0,
+       "depth_after": 51.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 50.0,
+       "depth_before": 51.0,
+       "depth_after": 50.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 51.0,
+       "depth_before": 50.0,
+       "depth_after": 49.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 52.0,
+       "depth_before": 49.0,
+       "depth_after": 48.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 53.0,
+       "depth_before": 48.0,
+       "depth_after": 47.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 54.0,
+       "depth_before": 47.0,
+       "depth_after": 46.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 55.0,
+       "depth_before": 46.0,
+       "depth_after": 45.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 56.0,
+       "depth_before": 45.0,
+       "depth_after": 44.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 57.0,
+       "depth_before": 44.0,
+       "depth_after": 43.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 58.0,
+       "depth_before": 43.0,
+       "depth_after": 42.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 59.0,
+       "depth_before": 42.0,
+       "depth_after": 41.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 60.0,
+       "depth_before": 41.0,
+       "depth_after": 40.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 61.0,
+       "depth_before": 40.0,
+       "depth_after": 39.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 62.0,
+       "depth_before": 39.0,
+       "depth_after": 38.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 63.0,
+       "depth_before": 38.0,
+       "depth_after": 37.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 64.0,
+       "depth_before": 37.0,
+       "depth_after": 36.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 65.0,
+       "depth_before": 36.0,
+       "depth_after": 35.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 66.0,
+       "depth_before": 35.0,
+       "depth_after": 34.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 67.0,
+       "depth_before": 34.0,
+       "depth_after": 33.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 68.0,
+       "depth_before": 33.0,
+       "depth_after": 32.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 69.0,
+       "depth_before": 32.0,
+       "depth_after": 31.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 70.0,
+       "depth_before": 31.0,
+       "depth_after": 30.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 71.0,
+       "depth_before": 30.0,
+       "depth_after": 29.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 72.0,
+       "depth_before": 29.0,
+       "depth_after": 28.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 73.0,
+       "depth_before": 28.0,
+       "depth_after": 27.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 74.0,
+       "depth_before": 27.0,
+       "depth_after": 26.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 75.0,
+       "depth_before": 26.0,
+       "depth_after": 25.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 76.0,
+       "depth_before": 25.0,
+       "depth_after": 24.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 77.0,
+       "depth_before": 24.0,
+       "depth_after": 23.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 78.0,
+       "depth_before": 23.0,
+       "depth_after": 22.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 79.0,
+       "depth_before": 22.0,
+       "depth_after": 21.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 80.0,
+       "depth_before": 21.0,
+       "depth_after": 20.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 81.0,
+       "depth_before": 20.0,
+       "depth_after": 19.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 82.0,
+       "depth_before": 19.0,
+       "depth_after": 18.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 83.0,
+       "depth_before": 18.0,
+       "depth_after": 17.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 84.0,
+       "depth_before": 17.0,
+       "depth_after": 16.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 85.0,
+       "depth_before": 16.0,
+       "depth_after": 15.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 86.0,
+       "depth_before": 15.0,
+       "depth_after": 14.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 87.0,
+       "depth_before": 14.0,
+       "depth_after": 13.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 88.0,
+       "depth_before": 13.0,
+       "depth_after": 12.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 89.0,
+       "depth_before": 12.0,
+       "depth_after": 11.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 90.0,
+       "depth_before": 11.0,
+       "depth_after": 10.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 91.0,
+       "depth_before": 10.0,
+       "depth_after": 9.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 92.0,
+       "depth_before": 9.0,
+       "depth_after": 8.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 93.0,
+       "depth_before": 8.0,
+       "depth_after": 7.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 94.0,
+       "depth_before": 7.0,
+       "depth_after": 6.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 95.0,
+       "depth_before": 6.0,
+       "depth_after": 5.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 300.0,
+       "depth_before": 5.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 100.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4200 fell strictly below our 0.4500. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 300.0,
+     "resting_time_s": 300.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.45,
+      "t_plus_1": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 301.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 305.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 310.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 330.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 360.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 300.0
+    },
+    {
+     "order_id": "s3-hypo-000007",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-01",
+     "outcome": "up",
+     "placement_ts": 300.0,
+     "price": 0.42,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 50.0,
+     "queue_ahead_bounds": [
+      0.0,
+      50.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.42,
+      "ask": 0.43,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.42,
+       50.0
+      ]
+     ],
+     "depth_at_our_price": 50.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 301.0,
+       "depth_before": 50.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 50.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4000 fell strictly below our 0.4200. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 1.0,
+     "resting_time_s": 1.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.42,
+      "t_plus_1": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 302.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 306.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 311.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 331.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 361.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 301.0
+    },
+    {
+     "order_id": "s3-hypo-000008",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-01",
+     "outcome": "up",
+     "placement_ts": 301.0,
+     "price": 0.4,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 80.0,
+     "queue_ahead_bounds": [
+      0.0,
+      80.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.4,
+      "ask": 0.41,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.4,
+       80.0
+      ]
+     ],
+     "depth_at_our_price": 80.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 88.0,
+     "resting_time_s": 88.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    },
+    {
+     "order_id": "s3-hypo-000006",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-01",
+     "outcome": "down",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 389.0,
+     "resting_time_s": 389.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    }
+   ],
+   "stand_downs": []
+  },
+  {
+   "market_slug": "synth-cheap_pair-02",
+   "M1_evidenced_fills": 2,
+   "M2_two_sided_evidenced_acquisition": false,
+   "M3_matched_fraction": 0.0,
+   "M4_residual": 40.0,
+   "M4_residual_cap": 80.0,
+   "M5_acquisition_pair_cost": null,
+   "M6_queue_ahead": {
+    "n": 4,
+    "mean": 82.5
+   },
+   "M6_resting_time_s": {
+    "n": 4,
+    "mean": 194.5
+   },
+   "M7_markout_t_plus_1": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_5": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_10": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_30": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_60": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M8_capital_tied_up_usdc": 17.4,
+   "M9_withdrawal_reasons": {
+    "FILLED": 2,
+    "WINDOW_END": 2
+   },
+   "M10_hypothetical_fees_SEPARATE": 0.68754,
+   "M10_rebates_counted": false,
+   "ledger_counts": {
+    "EVIDENCED_FILL": 2,
+    "UNCERTAIN": 0,
+    "NO_FILL": 2
+   },
+   "n_orders": 4,
+   "n_stand_downs": 0,
+   "reservation_stand_downs": 0,
+   "crossed_snapshot_share": 0.0,
+   "bbo_staleness_breach_share": 0.0,
+   "bbo_freshness_bound_s": 2.0,
+   "orders_submitted": 0,
+   "orders_signed": 0,
+   "complement_never_observed": false,
+   "n_snapshots": 780,
+   "span_s": 389.0,
+   "orders": [
+    {
+     "order_id": "s3-hypo-000009",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-02",
+     "outcome": "up",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 1.0,
+       "depth_before": 100.0,
+       "depth_after": 99.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 2.0,
+       "depth_before": 99.0,
+       "depth_after": 98.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 3.0,
+       "depth_before": 98.0,
+       "depth_after": 97.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 4.0,
+       "depth_before": 97.0,
+       "depth_after": 96.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 5.0,
+       "depth_before": 96.0,
+       "depth_after": 95.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 6.0,
+       "depth_before": 95.0,
+       "depth_after": 94.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 7.0,
+       "depth_before": 94.0,
+       "depth_after": 93.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 8.0,
+       "depth_before": 93.0,
+       "depth_after": 92.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 9.0,
+       "depth_before": 92.0,
+       "depth_after": 91.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 10.0,
+       "depth_before": 91.0,
+       "depth_after": 90.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 11.0,
+       "depth_before": 90.0,
+       "depth_after": 89.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 12.0,
+       "depth_before": 89.0,
+       "depth_after": 88.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 13.0,
+       "depth_before": 88.0,
+       "depth_after": 87.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 14.0,
+       "depth_before": 87.0,
+       "depth_after": 86.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 15.0,
+       "depth_before": 86.0,
+       "depth_after": 85.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 16.0,
+       "depth_before": 85.0,
+       "depth_after": 84.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 17.0,
+       "depth_before": 84.0,
+       "depth_after": 83.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 18.0,
+       "depth_before": 83.0,
+       "depth_after": 82.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 19.0,
+       "depth_before": 82.0,
+       "depth_after": 81.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 20.0,
+       "depth_before": 81.0,
+       "depth_after": 80.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 21.0,
+       "depth_before": 80.0,
+       "depth_after": 79.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 22.0,
+       "depth_before": 79.0,
+       "depth_after": 78.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 23.0,
+       "depth_before": 78.0,
+       "depth_after": 77.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 24.0,
+       "depth_before": 77.0,
+       "depth_after": 76.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 25.0,
+       "depth_before": 76.0,
+       "depth_after": 75.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 26.0,
+       "depth_before": 75.0,
+       "depth_after": 74.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 27.0,
+       "depth_before": 74.0,
+       "depth_after": 73.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 28.0,
+       "depth_before": 73.0,
+       "depth_after": 72.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 29.0,
+       "depth_before": 72.0,
+       "depth_after": 71.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 30.0,
+       "depth_before": 71.0,
+       "depth_after": 70.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 31.0,
+       "depth_before": 70.0,
+       "depth_after": 69.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 32.0,
+       "depth_before": 69.0,
+       "depth_after": 68.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 33.0,
+       "depth_before": 68.0,
+       "depth_after": 67.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 34.0,
+       "depth_before": 67.0,
+       "depth_after": 66.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 35.0,
+       "depth_before": 66.0,
+       "depth_after": 65.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 36.0,
+       "depth_before": 65.0,
+       "depth_after": 64.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 37.0,
+       "depth_before": 64.0,
+       "depth_after": 63.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 38.0,
+       "depth_before": 63.0,
+       "depth_after": 62.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 39.0,
+       "depth_before": 62.0,
+       "depth_after": 61.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 40.0,
+       "depth_before": 61.0,
+       "depth_after": 60.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 41.0,
+       "depth_before": 60.0,
+       "depth_after": 59.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 42.0,
+       "depth_before": 59.0,
+       "depth_after": 58.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 43.0,
+       "depth_before": 58.0,
+       "depth_after": 57.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 44.0,
+       "depth_before": 57.0,
+       "depth_after": 56.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 45.0,
+       "depth_before": 56.0,
+       "depth_after": 55.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 46.0,
+       "depth_before": 55.0,
+       "depth_after": 54.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 47.0,
+       "depth_before": 54.0,
+       "depth_after": 53.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 48.0,
+       "depth_before": 53.0,
+       "depth_after": 52.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 49.0,
+       "depth_before": 52.0,
+       "depth_after": 51.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 50.0,
+       "depth_before": 51.0,
+       "depth_after": 50.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 51.0,
+       "depth_before": 50.0,
+       "depth_after": 49.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 52.0,
+       "depth_before": 49.0,
+       "depth_after": 48.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 53.0,
+       "depth_before": 48.0,
+       "depth_after": 47.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 54.0,
+       "depth_before": 47.0,
+       "depth_after": 46.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 55.0,
+       "depth_before": 46.0,
+       "depth_after": 45.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 56.0,
+       "depth_before": 45.0,
+       "depth_after": 44.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 57.0,
+       "depth_before": 44.0,
+       "depth_after": 43.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 58.0,
+       "depth_before": 43.0,
+       "depth_after": 42.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 59.0,
+       "depth_before": 42.0,
+       "depth_after": 41.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 60.0,
+       "depth_before": 41.0,
+       "depth_after": 40.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 61.0,
+       "depth_before": 40.0,
+       "depth_after": 39.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 62.0,
+       "depth_before": 39.0,
+       "depth_after": 38.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 63.0,
+       "depth_before": 38.0,
+       "depth_after": 37.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 64.0,
+       "depth_before": 37.0,
+       "depth_after": 36.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 65.0,
+       "depth_before": 36.0,
+       "depth_after": 35.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 66.0,
+       "depth_before": 35.0,
+       "depth_after": 34.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 67.0,
+       "depth_before": 34.0,
+       "depth_after": 33.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 68.0,
+       "depth_before": 33.0,
+       "depth_after": 32.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 69.0,
+       "depth_before": 32.0,
+       "depth_after": 31.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 70.0,
+       "depth_before": 31.0,
+       "depth_after": 30.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 71.0,
+       "depth_before": 30.0,
+       "depth_after": 29.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 72.0,
+       "depth_before": 29.0,
+       "depth_after": 28.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 73.0,
+       "depth_before": 28.0,
+       "depth_after": 27.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 74.0,
+       "depth_before": 27.0,
+       "depth_after": 26.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 75.0,
+       "depth_before": 26.0,
+       "depth_after": 25.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 76.0,
+       "depth_before": 25.0,
+       "depth_after": 24.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 77.0,
+       "depth_before": 24.0,
+       "depth_after": 23.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 78.0,
+       "depth_before": 23.0,
+       "depth_after": 22.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 79.0,
+       "depth_before": 22.0,
+       "depth_after": 21.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 80.0,
+       "depth_before": 21.0,
+       "depth_after": 20.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 81.0,
+       "depth_before": 20.0,
+       "depth_after": 19.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 82.0,
+       "depth_before": 19.0,
+       "depth_after": 18.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 83.0,
+       "depth_before": 18.0,
+       "depth_after": 17.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 84.0,
+       "depth_before": 17.0,
+       "depth_after": 16.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 85.0,
+       "depth_before": 16.0,
+       "depth_after": 15.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 86.0,
+       "depth_before": 15.0,
+       "depth_after": 14.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 87.0,
+       "depth_before": 14.0,
+       "depth_after": 13.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 88.0,
+       "depth_before": 13.0,
+       "depth_after": 12.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 89.0,
+       "depth_before": 12.0,
+       "depth_after": 11.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 90.0,
+       "depth_before": 11.0,
+       "depth_after": 10.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 91.0,
+       "depth_before": 10.0,
+       "depth_after": 9.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 92.0,
+       "depth_before": 9.0,
+       "depth_after": 8.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 93.0,
+       "depth_before": 8.0,
+       "depth_after": 7.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 94.0,
+       "depth_before": 7.0,
+       "depth_after": 6.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 95.0,
+       "depth_before": 6.0,
+       "depth_after": 5.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 300.0,
+       "depth_before": 5.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 100.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4200 fell strictly below our 0.4500. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 300.0,
+     "resting_time_s": 300.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.45,
+      "t_plus_1": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 301.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 305.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 310.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 330.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 360.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 300.0
+    },
+    {
+     "order_id": "s3-hypo-000011",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-02",
+     "outcome": "up",
+     "placement_ts": 300.0,
+     "price": 0.42,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 50.0,
+     "queue_ahead_bounds": [
+      0.0,
+      50.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.42,
+      "ask": 0.43,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.42,
+       50.0
+      ]
+     ],
+     "depth_at_our_price": 50.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 301.0,
+       "depth_before": 50.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 50.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4000 fell strictly below our 0.4200. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 1.0,
+     "resting_time_s": 1.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.42,
+      "t_plus_1": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 302.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 306.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 311.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 331.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 361.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 301.0
+    },
+    {
+     "order_id": "s3-hypo-000012",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-02",
+     "outcome": "up",
+     "placement_ts": 301.0,
+     "price": 0.4,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 80.0,
+     "queue_ahead_bounds": [
+      0.0,
+      80.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.4,
+      "ask": 0.41,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.4,
+       80.0
+      ]
+     ],
+     "depth_at_our_price": 80.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 88.0,
+     "resting_time_s": 88.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    },
+    {
+     "order_id": "s3-hypo-000010",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-02",
+     "outcome": "down",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 389.0,
+     "resting_time_s": 389.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    }
+   ],
+   "stand_downs": []
+  },
+  {
+   "market_slug": "synth-cheap_pair-03",
+   "M1_evidenced_fills": 2,
+   "M2_two_sided_evidenced_acquisition": false,
+   "M3_matched_fraction": 0.0,
+   "M4_residual": 40.0,
+   "M4_residual_cap": 80.0,
+   "M5_acquisition_pair_cost": null,
+   "M6_queue_ahead": {
+    "n": 4,
+    "mean": 82.5
+   },
+   "M6_resting_time_s": {
+    "n": 4,
+    "mean": 194.5
+   },
+   "M7_markout_t_plus_1": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_5": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_10": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_30": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_60": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M8_capital_tied_up_usdc": 17.4,
+   "M9_withdrawal_reasons": {
+    "FILLED": 2,
+    "WINDOW_END": 2
+   },
+   "M10_hypothetical_fees_SEPARATE": 0.68754,
+   "M10_rebates_counted": false,
+   "ledger_counts": {
+    "EVIDENCED_FILL": 2,
+    "UNCERTAIN": 0,
+    "NO_FILL": 2
+   },
+   "n_orders": 4,
+   "n_stand_downs": 0,
+   "reservation_stand_downs": 0,
+   "crossed_snapshot_share": 0.0,
+   "bbo_staleness_breach_share": 0.0,
+   "bbo_freshness_bound_s": 2.0,
+   "orders_submitted": 0,
+   "orders_signed": 0,
+   "complement_never_observed": false,
+   "n_snapshots": 780,
+   "span_s": 389.0,
+   "orders": [
+    {
+     "order_id": "s3-hypo-000013",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-03",
+     "outcome": "up",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 1.0,
+       "depth_before": 100.0,
+       "depth_after": 99.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 2.0,
+       "depth_before": 99.0,
+       "depth_after": 98.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 3.0,
+       "depth_before": 98.0,
+       "depth_after": 97.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 4.0,
+       "depth_before": 97.0,
+       "depth_after": 96.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 5.0,
+       "depth_before": 96.0,
+       "depth_after": 95.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 6.0,
+       "depth_before": 95.0,
+       "depth_after": 94.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 7.0,
+       "depth_before": 94.0,
+       "depth_after": 93.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 8.0,
+       "depth_before": 93.0,
+       "depth_after": 92.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 9.0,
+       "depth_before": 92.0,
+       "depth_after": 91.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 10.0,
+       "depth_before": 91.0,
+       "depth_after": 90.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 11.0,
+       "depth_before": 90.0,
+       "depth_after": 89.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 12.0,
+       "depth_before": 89.0,
+       "depth_after": 88.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 13.0,
+       "depth_before": 88.0,
+       "depth_after": 87.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 14.0,
+       "depth_before": 87.0,
+       "depth_after": 86.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 15.0,
+       "depth_before": 86.0,
+       "depth_after": 85.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 16.0,
+       "depth_before": 85.0,
+       "depth_after": 84.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 17.0,
+       "depth_before": 84.0,
+       "depth_after": 83.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 18.0,
+       "depth_before": 83.0,
+       "depth_after": 82.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 19.0,
+       "depth_before": 82.0,
+       "depth_after": 81.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 20.0,
+       "depth_before": 81.0,
+       "depth_after": 80.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 21.0,
+       "depth_before": 80.0,
+       "depth_after": 79.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 22.0,
+       "depth_before": 79.0,
+       "depth_after": 78.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 23.0,
+       "depth_before": 78.0,
+       "depth_after": 77.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 24.0,
+       "depth_before": 77.0,
+       "depth_after": 76.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 25.0,
+       "depth_before": 76.0,
+       "depth_after": 75.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 26.0,
+       "depth_before": 75.0,
+       "depth_after": 74.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 27.0,
+       "depth_before": 74.0,
+       "depth_after": 73.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 28.0,
+       "depth_before": 73.0,
+       "depth_after": 72.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 29.0,
+       "depth_before": 72.0,
+       "depth_after": 71.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 30.0,
+       "depth_before": 71.0,
+       "depth_after": 70.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 31.0,
+       "depth_before": 70.0,
+       "depth_after": 69.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 32.0,
+       "depth_before": 69.0,
+       "depth_after": 68.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 33.0,
+       "depth_before": 68.0,
+       "depth_after": 67.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 34.0,
+       "depth_before": 67.0,
+       "depth_after": 66.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 35.0,
+       "depth_before": 66.0,
+       "depth_after": 65.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 36.0,
+       "depth_before": 65.0,
+       "depth_after": 64.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 37.0,
+       "depth_before": 64.0,
+       "depth_after": 63.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 38.0,
+       "depth_before": 63.0,
+       "depth_after": 62.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 39.0,
+       "depth_before": 62.0,
+       "depth_after": 61.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 40.0,
+       "depth_before": 61.0,
+       "depth_after": 60.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 41.0,
+       "depth_before": 60.0,
+       "depth_after": 59.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 42.0,
+       "depth_before": 59.0,
+       "depth_after": 58.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 43.0,
+       "depth_before": 58.0,
+       "depth_after": 57.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 44.0,
+       "depth_before": 57.0,
+       "depth_after": 56.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 45.0,
+       "depth_before": 56.0,
+       "depth_after": 55.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 46.0,
+       "depth_before": 55.0,
+       "depth_after": 54.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 47.0,
+       "depth_before": 54.0,
+       "depth_after": 53.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 48.0,
+       "depth_before": 53.0,
+       "depth_after": 52.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 49.0,
+       "depth_before": 52.0,
+       "depth_after": 51.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 50.0,
+       "depth_before": 51.0,
+       "depth_after": 50.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 51.0,
+       "depth_before": 50.0,
+       "depth_after": 49.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 52.0,
+       "depth_before": 49.0,
+       "depth_after": 48.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 53.0,
+       "depth_before": 48.0,
+       "depth_after": 47.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 54.0,
+       "depth_before": 47.0,
+       "depth_after": 46.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 55.0,
+       "depth_before": 46.0,
+       "depth_after": 45.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 56.0,
+       "depth_before": 45.0,
+       "depth_after": 44.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 57.0,
+       "depth_before": 44.0,
+       "depth_after": 43.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 58.0,
+       "depth_before": 43.0,
+       "depth_after": 42.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 59.0,
+       "depth_before": 42.0,
+       "depth_after": 41.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 60.0,
+       "depth_before": 41.0,
+       "depth_after": 40.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 61.0,
+       "depth_before": 40.0,
+       "depth_after": 39.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 62.0,
+       "depth_before": 39.0,
+       "depth_after": 38.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 63.0,
+       "depth_before": 38.0,
+       "depth_after": 37.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 64.0,
+       "depth_before": 37.0,
+       "depth_after": 36.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 65.0,
+       "depth_before": 36.0,
+       "depth_after": 35.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 66.0,
+       "depth_before": 35.0,
+       "depth_after": 34.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 67.0,
+       "depth_before": 34.0,
+       "depth_after": 33.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 68.0,
+       "depth_before": 33.0,
+       "depth_after": 32.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 69.0,
+       "depth_before": 32.0,
+       "depth_after": 31.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 70.0,
+       "depth_before": 31.0,
+       "depth_after": 30.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 71.0,
+       "depth_before": 30.0,
+       "depth_after": 29.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 72.0,
+       "depth_before": 29.0,
+       "depth_after": 28.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 73.0,
+       "depth_before": 28.0,
+       "depth_after": 27.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 74.0,
+       "depth_before": 27.0,
+       "depth_after": 26.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 75.0,
+       "depth_before": 26.0,
+       "depth_after": 25.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 76.0,
+       "depth_before": 25.0,
+       "depth_after": 24.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 77.0,
+       "depth_before": 24.0,
+       "depth_after": 23.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 78.0,
+       "depth_before": 23.0,
+       "depth_after": 22.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 79.0,
+       "depth_before": 22.0,
+       "depth_after": 21.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 80.0,
+       "depth_before": 21.0,
+       "depth_after": 20.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 81.0,
+       "depth_before": 20.0,
+       "depth_after": 19.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 82.0,
+       "depth_before": 19.0,
+       "depth_after": 18.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 83.0,
+       "depth_before": 18.0,
+       "depth_after": 17.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 84.0,
+       "depth_before": 17.0,
+       "depth_after": 16.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 85.0,
+       "depth_before": 16.0,
+       "depth_after": 15.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 86.0,
+       "depth_before": 15.0,
+       "depth_after": 14.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 87.0,
+       "depth_before": 14.0,
+       "depth_after": 13.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 88.0,
+       "depth_before": 13.0,
+       "depth_after": 12.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 89.0,
+       "depth_before": 12.0,
+       "depth_after": 11.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 90.0,
+       "depth_before": 11.0,
+       "depth_after": 10.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 91.0,
+       "depth_before": 10.0,
+       "depth_after": 9.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 92.0,
+       "depth_before": 9.0,
+       "depth_after": 8.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 93.0,
+       "depth_before": 8.0,
+       "depth_after": 7.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 94.0,
+       "depth_before": 7.0,
+       "depth_after": 6.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 95.0,
+       "depth_before": 6.0,
+       "depth_after": 5.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 300.0,
+       "depth_before": 5.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 100.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4200 fell strictly below our 0.4500. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 300.0,
+     "resting_time_s": 300.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.45,
+      "t_plus_1": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 301.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 305.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 310.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 330.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 360.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 300.0
+    },
+    {
+     "order_id": "s3-hypo-000015",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-03",
+     "outcome": "up",
+     "placement_ts": 300.0,
+     "price": 0.42,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 50.0,
+     "queue_ahead_bounds": [
+      0.0,
+      50.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.42,
+      "ask": 0.43,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.42,
+       50.0
+      ]
+     ],
+     "depth_at_our_price": 50.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 301.0,
+       "depth_before": 50.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 50.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4000 fell strictly below our 0.4200. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 1.0,
+     "resting_time_s": 1.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.42,
+      "t_plus_1": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 302.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 306.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 311.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 331.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 361.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 301.0
+    },
+    {
+     "order_id": "s3-hypo-000016",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-03",
+     "outcome": "up",
+     "placement_ts": 301.0,
+     "price": 0.4,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 80.0,
+     "queue_ahead_bounds": [
+      0.0,
+      80.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.4,
+      "ask": 0.41,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.4,
+       80.0
+      ]
+     ],
+     "depth_at_our_price": 80.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 88.0,
+     "resting_time_s": 88.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    },
+    {
+     "order_id": "s3-hypo-000014",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-03",
+     "outcome": "down",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 389.0,
+     "resting_time_s": 389.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    }
+   ],
+   "stand_downs": []
+  },
+  {
+   "market_slug": "synth-cheap_pair-04",
+   "M1_evidenced_fills": 2,
+   "M2_two_sided_evidenced_acquisition": false,
+   "M3_matched_fraction": 0.0,
+   "M4_residual": 40.0,
+   "M4_residual_cap": 80.0,
+   "M5_acquisition_pair_cost": null,
+   "M6_queue_ahead": {
+    "n": 4,
+    "mean": 82.5
+   },
+   "M6_resting_time_s": {
+    "n": 4,
+    "mean": 194.5
+   },
+   "M7_markout_t_plus_1": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_5": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_10": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_30": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M7_markout_t_plus_60": {
+    "n": 2,
+    "mean": -0.035,
+    "median": -0.02,
+    "n_unavailable": 0
+   },
+   "M8_capital_tied_up_usdc": 17.4,
+   "M9_withdrawal_reasons": {
+    "FILLED": 2,
+    "WINDOW_END": 2
+   },
+   "M10_hypothetical_fees_SEPARATE": 0.68754,
+   "M10_rebates_counted": false,
+   "ledger_counts": {
+    "EVIDENCED_FILL": 2,
+    "UNCERTAIN": 0,
+    "NO_FILL": 2
+   },
+   "n_orders": 4,
+   "n_stand_downs": 0,
+   "reservation_stand_downs": 0,
+   "crossed_snapshot_share": 0.0,
+   "bbo_staleness_breach_share": 0.0,
+   "bbo_freshness_bound_s": 2.0,
+   "orders_submitted": 0,
+   "orders_signed": 0,
+   "complement_never_observed": false,
+   "n_snapshots": 780,
+   "span_s": 389.0,
+   "orders": [
+    {
+     "order_id": "s3-hypo-000017",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-04",
+     "outcome": "up",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 1.0,
+       "depth_before": 100.0,
+       "depth_after": 99.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 2.0,
+       "depth_before": 99.0,
+       "depth_after": 98.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 3.0,
+       "depth_before": 98.0,
+       "depth_after": 97.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 4.0,
+       "depth_before": 97.0,
+       "depth_after": 96.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 5.0,
+       "depth_before": 96.0,
+       "depth_after": 95.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 6.0,
+       "depth_before": 95.0,
+       "depth_after": 94.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 7.0,
+       "depth_before": 94.0,
+       "depth_after": 93.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 8.0,
+       "depth_before": 93.0,
+       "depth_after": 92.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 9.0,
+       "depth_before": 92.0,
+       "depth_after": 91.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 10.0,
+       "depth_before": 91.0,
+       "depth_after": 90.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 11.0,
+       "depth_before": 90.0,
+       "depth_after": 89.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 12.0,
+       "depth_before": 89.0,
+       "depth_after": 88.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 13.0,
+       "depth_before": 88.0,
+       "depth_after": 87.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 14.0,
+       "depth_before": 87.0,
+       "depth_after": 86.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 15.0,
+       "depth_before": 86.0,
+       "depth_after": 85.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 16.0,
+       "depth_before": 85.0,
+       "depth_after": 84.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 17.0,
+       "depth_before": 84.0,
+       "depth_after": 83.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 18.0,
+       "depth_before": 83.0,
+       "depth_after": 82.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 19.0,
+       "depth_before": 82.0,
+       "depth_after": 81.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 20.0,
+       "depth_before": 81.0,
+       "depth_after": 80.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 21.0,
+       "depth_before": 80.0,
+       "depth_after": 79.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 22.0,
+       "depth_before": 79.0,
+       "depth_after": 78.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 23.0,
+       "depth_before": 78.0,
+       "depth_after": 77.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 24.0,
+       "depth_before": 77.0,
+       "depth_after": 76.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 25.0,
+       "depth_before": 76.0,
+       "depth_after": 75.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 26.0,
+       "depth_before": 75.0,
+       "depth_after": 74.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 27.0,
+       "depth_before": 74.0,
+       "depth_after": 73.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 28.0,
+       "depth_before": 73.0,
+       "depth_after": 72.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 29.0,
+       "depth_before": 72.0,
+       "depth_after": 71.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 30.0,
+       "depth_before": 71.0,
+       "depth_after": 70.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 31.0,
+       "depth_before": 70.0,
+       "depth_after": 69.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 32.0,
+       "depth_before": 69.0,
+       "depth_after": 68.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 33.0,
+       "depth_before": 68.0,
+       "depth_after": 67.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 34.0,
+       "depth_before": 67.0,
+       "depth_after": 66.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 35.0,
+       "depth_before": 66.0,
+       "depth_after": 65.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 36.0,
+       "depth_before": 65.0,
+       "depth_after": 64.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 37.0,
+       "depth_before": 64.0,
+       "depth_after": 63.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 38.0,
+       "depth_before": 63.0,
+       "depth_after": 62.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 39.0,
+       "depth_before": 62.0,
+       "depth_after": 61.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 40.0,
+       "depth_before": 61.0,
+       "depth_after": 60.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 41.0,
+       "depth_before": 60.0,
+       "depth_after": 59.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 42.0,
+       "depth_before": 59.0,
+       "depth_after": 58.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 43.0,
+       "depth_before": 58.0,
+       "depth_after": 57.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 44.0,
+       "depth_before": 57.0,
+       "depth_after": 56.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 45.0,
+       "depth_before": 56.0,
+       "depth_after": 55.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 46.0,
+       "depth_before": 55.0,
+       "depth_after": 54.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 47.0,
+       "depth_before": 54.0,
+       "depth_after": 53.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 48.0,
+       "depth_before": 53.0,
+       "depth_after": 52.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 49.0,
+       "depth_before": 52.0,
+       "depth_after": 51.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 50.0,
+       "depth_before": 51.0,
+       "depth_after": 50.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 51.0,
+       "depth_before": 50.0,
+       "depth_after": 49.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 52.0,
+       "depth_before": 49.0,
+       "depth_after": 48.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 53.0,
+       "depth_before": 48.0,
+       "depth_after": 47.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 54.0,
+       "depth_before": 47.0,
+       "depth_after": 46.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 55.0,
+       "depth_before": 46.0,
+       "depth_after": 45.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 56.0,
+       "depth_before": 45.0,
+       "depth_after": 44.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 57.0,
+       "depth_before": 44.0,
+       "depth_after": 43.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 58.0,
+       "depth_before": 43.0,
+       "depth_after": 42.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 59.0,
+       "depth_before": 42.0,
+       "depth_after": 41.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 60.0,
+       "depth_before": 41.0,
+       "depth_after": 40.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 61.0,
+       "depth_before": 40.0,
+       "depth_after": 39.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 62.0,
+       "depth_before": 39.0,
+       "depth_after": 38.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 63.0,
+       "depth_before": 38.0,
+       "depth_after": 37.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 64.0,
+       "depth_before": 37.0,
+       "depth_after": 36.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 65.0,
+       "depth_before": 36.0,
+       "depth_after": 35.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 66.0,
+       "depth_before": 35.0,
+       "depth_after": 34.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 67.0,
+       "depth_before": 34.0,
+       "depth_after": 33.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 68.0,
+       "depth_before": 33.0,
+       "depth_after": 32.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 69.0,
+       "depth_before": 32.0,
+       "depth_after": 31.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 70.0,
+       "depth_before": 31.0,
+       "depth_after": 30.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 71.0,
+       "depth_before": 30.0,
+       "depth_after": 29.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 72.0,
+       "depth_before": 29.0,
+       "depth_after": 28.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 73.0,
+       "depth_before": 28.0,
+       "depth_after": 27.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 74.0,
+       "depth_before": 27.0,
+       "depth_after": 26.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 75.0,
+       "depth_before": 26.0,
+       "depth_after": 25.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 76.0,
+       "depth_before": 25.0,
+       "depth_after": 24.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 77.0,
+       "depth_before": 24.0,
+       "depth_after": 23.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 78.0,
+       "depth_before": 23.0,
+       "depth_after": 22.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 79.0,
+       "depth_before": 22.0,
+       "depth_after": 21.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 80.0,
+       "depth_before": 21.0,
+       "depth_after": 20.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 81.0,
+       "depth_before": 20.0,
+       "depth_after": 19.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 82.0,
+       "depth_before": 19.0,
+       "depth_after": 18.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 83.0,
+       "depth_before": 18.0,
+       "depth_after": 17.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 84.0,
+       "depth_before": 17.0,
+       "depth_after": 16.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 85.0,
+       "depth_before": 16.0,
+       "depth_after": 15.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 86.0,
+       "depth_before": 15.0,
+       "depth_after": 14.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 87.0,
+       "depth_before": 14.0,
+       "depth_after": 13.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 88.0,
+       "depth_before": 13.0,
+       "depth_after": 12.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 89.0,
+       "depth_before": 12.0,
+       "depth_after": 11.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 90.0,
+       "depth_before": 11.0,
+       "depth_after": 10.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 91.0,
+       "depth_before": 10.0,
+       "depth_after": 9.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 92.0,
+       "depth_before": 9.0,
+       "depth_after": 8.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 93.0,
+       "depth_before": 8.0,
+       "depth_after": 7.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 94.0,
+       "depth_before": 7.0,
+       "depth_after": 6.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 95.0,
+       "depth_before": 6.0,
+       "depth_after": 5.0,
+       "our_estimated_position": 100.0
+      },
+      {
+       "t": 300.0,
+       "depth_before": 5.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 100.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4200 fell strictly below our 0.4500. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 300.0,
+     "resting_time_s": 300.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.45,
+      "t_plus_1": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 301.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 305.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 310.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 330.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.05,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 360.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 300.0
+    },
+    {
+     "order_id": "s3-hypo-000019",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-04",
+     "outcome": "up",
+     "placement_ts": 300.0,
+     "price": 0.42,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 50.0,
+     "queue_ahead_bounds": [
+      0.0,
+      50.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.42,
+      "ask": 0.43,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.42,
+       50.0
+      ]
+     ],
+     "depth_at_our_price": 50.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [
+      {
+       "t": 301.0,
+       "depth_before": 50.0,
+       "depth_after": 0.0,
+       "our_estimated_position": 50.0
+      }
+     ],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "EVIDENCED_FILL",
+     "fill_evidence_detail": "EVIDENCED_LEVEL_CONSUMED: best bid 0.4000 fell strictly below our 0.4200. SELECTION-BIASED: fires only on adverse movement.",
+     "partial_fill_estimate": 20.0,
+     "partial_fill_defensible": false,
+     "age_s": 1.0,
+     "resting_time_s": 1.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "FILLED",
+     "reservation_binding": false,
+     "markouts": {
+      "mark_source": "best_bid",
+      "mark_rationale": "bid is the exitable side and needs no ask, which the crossed-book defect corrupts",
+      "fill_price": 0.42,
+      "t_plus_1": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 302.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_5": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 306.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_10": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 311.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_30": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 331.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "t_plus_60": {
+       "markout": -0.02,
+       "mark_price": 0.4,
+       "staleness_s": 0.0,
+       "observation_ts": 361.0,
+       "crossed_at_mark": false,
+       "horizon_fully_elapsed": true,
+       "reason": null
+      },
+      "ledger": "EVIDENCED_FILL"
+     },
+     "closed_ts": 301.0
+    },
+    {
+     "order_id": "s3-hypo-000020",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-04",
+     "outcome": "up",
+     "placement_ts": 301.0,
+     "price": 0.4,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 80.0,
+     "queue_ahead_bounds": [
+      0.0,
+      80.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.4,
+      "ask": 0.41,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.4,
+       80.0
+      ]
+     ],
+     "depth_at_our_price": 80.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 88.0,
+     "resting_time_s": 88.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    },
+    {
+     "order_id": "s3-hypo-000018",
+     "spec_fingerprint": "8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df",
+     "market_slug": "synth-cheap_pair-04",
+     "outcome": "down",
+     "placement_ts": 0.0,
+     "price": 0.45,
+     "intended_quantity": 20.0,
+     "queue_ahead_estimate": 100.0,
+     "queue_ahead_bounds": [
+      0.0,
+      100.0
+     ],
+     "queue_ahead_observable": true,
+     "bbo_at_placement": {
+      "bid": 0.45,
+      "ask": 0.46,
+      "crossed": false
+     },
+     "full_depth_at_placement": [
+      [
+       0.45,
+       100.0
+      ]
+     ],
+     "depth_at_our_price": 100.0,
+     "price_distance_from_touch": 0.0,
+     "queue_depth_change_events": [],
+     "maintenance_reason": null,
+     "replacement_reason": null,
+     "predecessor_order_id": null,
+     "fill_evidence_class": "NO_FILL",
+     "fill_evidence_detail": null,
+     "partial_fill_estimate": null,
+     "partial_fill_defensible": false,
+     "age_s": 389.0,
+     "resting_time_s": 389.0,
+     "inventory_up": 40.0,
+     "inventory_down": 0.0,
+     "matched": 0.0,
+     "residual": 40.0,
+     "withdrawal_reason": "WINDOW_END",
+     "reservation_binding": false,
+     "markouts": {},
+     "closed_ts": 389.0
+    }
+   ],
+   "stand_downs": []
+  }
+ ]
+}
