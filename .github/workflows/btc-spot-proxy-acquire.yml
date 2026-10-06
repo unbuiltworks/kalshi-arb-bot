@@ -1,0 +1,179 @@
+# BTC SPOT 1-MINUTE SERIES for 2026-08-20..25 -- a PROXY, not the settlement index.
+#
+# RESEARCH ONLY. No credential, no order path, no venue write. It fetches a
+# public exchange candle series so the overnight study can test whether
+# underlying BTC state explains L5 behaviour that the prediction-market book
+# does not.
+#
+# WHAT THIS IS NOT. The Zenodo archive carries NO strike, NO reference price
+# and NO settlement index (its columns are market/token/outcome, the ladders,
+# best_bid/ask, crossed, captured_at, market_end_at, seconds_to_close). The
+# exact index Polymarket settles these up-down markets against is therefore
+# UNAVAILABLE to this study. A spot series from a different venue is a
+# DIFFERENT PRICE SOURCE and every artifact derived from it is labelled
+# PROXY_NOT_SETTLEMENT_INDEX. It supports return, velocity, realized
+# volatility and direction. It CANNOT support distance-from-strike, and no
+# such feature is derived from it.
+#
+# Coinbase first (sized history, 1m granularity, 300 candles per request);
+# Kraken as fallback. Binance is not used: it answered HTTP 451 from this
+# runner estate in prior work.
+name: btc-spot-proxy-acquire
+
+on:
+  push:
+    paths:
+      - '.github/btc_spot_proxy_request'
+
+concurrency:
+  group: btc-spot-proxy-acquire
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: REFUSE to run anywhere but the research branch
+        run: |
+          set -euo pipefail
+          [ "${GITHUB_REF_NAME}" = "claude/august-l5-forensic-replay-788cml" ] \
+            || { echo "::error::research branch only"; exit 1; }
+          echo "branch ok"
+
+      - name: Prove no credential and no order path
+        run: |
+          python - <<'PY'
+          import pathlib
+          wf = pathlib.Path(
+            ".github/workflows/btc-spot-proxy-acquire.yml").read_text()
+          bad = [n for n in ["secret" + "s.", "PRIVATE" + "_KEY",
+                             "place" + "_order", "create" + "_order",
+                             "send" + "_transaction"] if n in wf]
+          assert not bad, bad
+          print("no credential reference, no order path")
+          PY
+
+      - name: ASSERT prospective S1 untouched
+        run: |
+          python - <<'PY'
+          from src.polymarket_l5.owned_order_shadow import FINGERPRINT
+          assert FINGERPRINT == ("441c375e35cc2d588b075d7d9f6a740db7c92f95c1"
+                                 "0bf7ea76caf333fe24b6fe")
+          print("S1 verified:", FINGERPRINT)
+          PY
+
+      - name: Fetch the 1-minute series
+        run: |
+          mkdir -p data/btc_spot_proxy
+          python - <<'PY'
+          import json, time, urllib.request, datetime as dt
+          LO = dt.datetime(2026, 8, 20, tzinfo=dt.timezone.utc)
+          HI = dt.datetime(2026, 8, 25, tzinfo=dt.timezone.utc)
+          rows, src, errs = [], None, []
+
+          def get(u):
+              r = urllib.request.Request(u, headers={"User-Agent": "research"})
+              with urllib.request.urlopen(r, timeout=30) as f:
+                  return json.load(f)
+
+          # Coinbase: 300 candles max per call, granularity 60s
+          try:
+              cur, got = LO, []
+              while cur < HI:
+                  end = min(cur + dt.timedelta(minutes=300), HI)
+                  u = ("https://api.exchange.coinbase.com/products/BTC-USD/"
+                       "candles?granularity=60&start=%s&end=%s"
+                       % (cur.isoformat(), end.isoformat()))
+                  c = get(u)
+                  for k in c:
+                      got.append({"t": int(k[0]), "low": k[1], "high": k[2],
+                                  "open": k[3], "close": k[4], "volume": k[5]})
+                  cur = end
+                  time.sleep(0.35)
+              if got:
+                  rows, src = got, "coinbase_exchange_BTC-USD_1m"
+          except Exception as e:
+              errs.append("coinbase: %r" % (e,))
+
+          if not rows:
+              try:
+                  u = ("https://api.kraken.com/0/public/OHLC?pair=XBTUSD"
+                       "&interval=1&since=%d" % int(LO.timestamp()))
+                  d = get(u)
+                  for k in list(d["result"].values())[0]:
+                      rows.append({"t": int(k[0]), "open": k[1], "high": k[2],
+                                   "low": k[3], "close": k[4], "volume": k[6]})
+                  src = "kraken_XBTUSD_1m"
+              except Exception as e:
+                  errs.append("kraken: %r" % (e,))
+
+          rows = sorted({r["t"]: r for r in rows}.values(),
+                        key=lambda r: r["t"])
+          rows = [r for r in rows
+                  if LO.timestamp() <= r["t"] <= HI.timestamp()]
+          out = {
+              "LABEL": "PROXY_NOT_SETTLEMENT_INDEX",
+              "what_this_is_not": (
+                  "This is NOT the index Polymarket settles its BTC up-down "
+                  "markets against. That index is unavailable to this study: "
+                  "the Zenodo archive carries no strike, no reference price "
+                  "and no settlement index. Any feature derived here is a "
+                  "proxy from a DIFFERENT venue's spot market and is labelled "
+                  "as such. Distance-from-strike is NOT derivable and is not "
+                  "derived."),
+              "source": src, "errors": errs,
+              "n_minutes": len(rows),
+              "first_utc": (dt.datetime.fromtimestamp(
+                  rows[0]["t"], dt.timezone.utc).isoformat()
+                  if rows else None),
+              "last_utc": (dt.datetime.fromtimestamp(
+                  rows[-1]["t"], dt.timezone.utc).isoformat()
+                  if rows else None),
+              "rows": rows,
+          }
+          json.dump(out, open("data/btc_spot_proxy/btc_1m.json", "w"),
+                    indent=1)
+          print(json.dumps({k: v for k, v in out.items() if k != "rows"},
+                           indent=1))
+          PY
+
+      - name: Commit the proxy series
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -- data/btc_spot_proxy 2>/dev/null || true
+          if git diff --cached --quiet; then echo "nothing fetched"; exit 0; fi
+          if git diff --cached --name-only | grep -qvE '^data/btc_spot_proxy/'; then
+            echo "::error::outside the allow-list"; exit 1
+          fi
+          printf '%s\n' \
+            "data(proxy): BTC 1m spot series 2026-08-20..25 [skip ci]" \
+            "" \
+            "LABELLED PROXY_NOT_SETTLEMENT_INDEX. The Zenodo archive carries no" \
+            "strike, no reference price and no settlement index, so the exact" \
+            "settlement reference is unavailable. This is a different venue's" \
+            "spot market and supports return, velocity, realized volatility and" \
+            "direction only. Distance-from-strike is NOT derivable from it and" \
+            "is not derived." \
+            "" \
+            "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>" \
+            "Claude-Session: https://claude.ai/code/session_01UzBdAD7nfP8SBPk1bB3uDs" \
+            > /tmp/msg.txt
+          git commit -q -F /tmp/msg.txt
+          for i in 1 2 3 4; do
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && \
+            git push -q origin "HEAD:${GITHUB_REF_NAME}" && break || sleep $((2**i))
+          done
