@@ -122,3 +122,7 @@ analysis/gemini/info_edge/*/capacity_tape_*.jsonl
 # and nothing irreversible, which is exactly why a LIVE cohort's record is
 # pushed to a durable latch ref DURING the run and this is not.
 analysis/gemini/shadow_cohorts/
+
+# Shadow preflight tapes: single preregistration row, no observations.
+# Excluded so an empty tape cannot be mistaken for a zero-fill collection run.
+data/l5/shadow/shadow_*.jsonl
