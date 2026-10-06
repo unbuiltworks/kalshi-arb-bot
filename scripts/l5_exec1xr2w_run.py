@@ -1,4 +1,4 @@
-"""LIVE-L5-EXEC-1-XR entrypoint. THE RUNNER THAT MAKES THE ORDER.
+"""LIVE-L5-EXEC-1-XR2W entrypoint. THE RUNNER THAT MAKES THE ORDER.
 
 This is not a preflight. It calls `runner.run_experiment`, which is the same
 function that will place the authorized order once the owner installs the
@@ -24,7 +24,8 @@ from src import pmus_auth as A
 from analysis.l5.live_exec.ledger import ARM_KEYS, exec1_armed
 from analysis.l5.live_exec2 import latch as L
 from analysis.l5.live_exec3 import runner as RUN
-from analysis.l5.live_exec3 import spec as X
+from analysis.l5.live_exec5 import spec as X
+from analysis.l5.live_exec3 import spec as XR2PARENT
 from analysis.l5.live_exec2 import runner_spec as XR
 from analysis.l5.live_exec2 import spec as XSPEC
 from analysis.l5.live_exec import spec as E
@@ -56,7 +57,7 @@ def order_capable_processes() -> List[str]:
 
 
 def main() -> int:
-    print("LIVE-L5-EXEC-1-XR2 RUNNER", flush=True)
+    print("LIVE-L5-EXEC-1-XR2W RUNNER", flush=True)
     pre: Dict[str, Any] = {"probe": X.PROBE, "role": "RUNNER",
                            "started_utc": time.strftime(
                                "%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
@@ -67,13 +68,25 @@ def main() -> int:
         frozen = False
         pre["frozen_error"] = str(exc)
     pre["fingerprints"] = {
-        "xr2": X.fingerprint(), "xr2_authorized": X.XR2_FINGERPRINT,
-        "xr2_frozen": frozen,
-        "xr": XR.fingerprint(), "exec1x": XSPEC.fingerprint(),
-        "exec1": E.fingerprint(),
+        "xr2w": X.fingerprint(), "xr2w_authorized": X.XR2W_FINGERPRINT,
+        "xr2w_frozen": frozen,
+        # Parents, printed for lineage ONLY. Each is SUPERSEDED: the wire
+        # defect was in shared code, so none of them describes the code
+        # that would now run, and none of them can arm this build.
+        "SUPERSEDED_parents": {
+            "xr2": XR2PARENT.fingerprint(),
+            "xr": XR.fingerprint(),
+            "exec1x": XSPEC.fingerprint(),
+            "exec1": E.fingerprint(),
+        },
+        "superseded_must_not_be_rearmed":
+            X.SPEC["supersedes"]["must_not_be_rearmed"],
     }
+    pre["fingerprint_pin_policy"] = X.SPEC["fingerprint_pin"]
+    pre["wire_serialization"] = X.SPEC["wire_serialization"]
+    pre["lifecycle_classification"] = X.SPEC["lifecycle_classification"]
     pre["entrypoint"] = X.SPEC["entrypoint"]
-    pre["diff_from_xr"] = X.diff_report()
+    pre["diff_from_xr2"] = X.diff_report()
     pre["arming"] = {
         "keys_present": {k: bool(os.getenv(k, "").strip()) for k in ARM_KEYS},
         "armed": exec1_armed(),
@@ -94,7 +107,36 @@ def main() -> int:
     pre["railway"] = {k: os.getenv(k) for k in
                       ("RAILWAY_SERVICE_NAME", "RAILWAY_DEPLOYMENT_ID",
                        "RAILWAY_GIT_COMMIT_SHA")}
-    print("EXEC1XR2_PRE " + json.dumps(pre, default=str), flush=True)
+    # Prove the proven serializer is importable IN THIS IMAGE and produces
+    # the frozen wire shape. A missing COPY would otherwise surface as an
+    # ImportError at the decision point, seconds from the placement cutoff.
+    try:
+        from src import l5_order_body as _OB
+        from analysis.l5.live_exec5 import fixture_a5 as _F
+        _b = _OB.build(slug=_F.A5["slug"], side="DOWN", price="0.49",
+                       qty="0.01", post_only=True)
+        pre["serializer"] = {
+            "module": "src.l5_order_body", "importable": True,
+            "a5_fixture_body_matches": _b == _F.A5_CORRECTED_ORDER_BODY,
+            "preview_envelope_matches":
+                _OB.preview_envelope(_b) == _F.A5_CORRECTED_PREVIEW_REQUEST,
+            "quantity_type": type(_b["quantity"]).__name__,
+            "price": _b["price"],
+            "semantic_down_0_49_to_wire": {
+                "outcomeSide": _b["outcomeSide"], "action": _b["action"],
+                "price_value": _b["price"]["value"]},
+        }
+    except BaseException as exc:                               # noqa: BLE001
+        pre["serializer"] = {"module": "src.l5_order_body",
+                             "importable": False,
+                             "error": type(exc).__name__, "detail": str(exc)}
+    print("EXEC1XR2W_PRE " + json.dumps(pre, default=str), flush=True)
+
+    if not pre["serializer"].get("importable"):
+        print("REFUSING TO RUN: the proven serializer is not importable in "
+              "this image. That is the A5 defect's own failure mode and is "
+              "never worked around at runtime.", flush=True)
+        return 1
 
     if not frozen:
         print("REFUSING TO RUN: the spec is not frozen.", flush=True)
@@ -110,8 +152,8 @@ def main() -> int:
         max_preopen_wait_s=float(
             os.getenv("PMUS_EXEC1XR2_MAX_PREOPEN_WAIT_S", "")
             or RUN.MAX_PREOPEN_WAIT_S))
-    print("EXEC1XR2_SUMMARY " + json.dumps({
-        "probe": X.PROBE, "fingerprint": X.XR2_FINGERPRINT,
+    print("EXEC1XR2W_SUMMARY " + json.dumps({
+        "probe": X.PROBE, "fingerprint": X.XR2W_FINGERPRINT,
         "orders_submitted": rec.get("orders_submitted"),
         "stopped_at": rec.get("stopped_at"),
         "reached_final_gate": rec.get("reached_final_gate", False),

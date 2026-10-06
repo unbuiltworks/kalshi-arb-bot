@@ -1,12 +1,12 @@
-# LIVE-L5-EXEC-1-XR2. THE RUNNER. Order-capable, DISARMED.
+# LIVE-L5-EXEC-1-XR2W. THE RUNNER. Order-capable, DISARMED.
 #
-# CMD is the real runner, not a preflight: scripts.l5_exec1xr2_run calls
+# CMD is the real runner, not a preflight: scripts.l5_exec1xr2w_run calls
 # runner.run_experiment, the same function that places the authorized order.
 # DISARMED it walks the whole path and stops at the final pre-POST refusal
 # and says so, so this deployment tests the live entrypoint.
 #
 # Call graph to the POST:
-#   scripts.l5_exec1xr2_run:main
+#   scripts.l5_exec1xr2w_run:main
 #     -> analysis.l5.live_exec3.runner:run_experiment
 #       -> _await_window       (may start BEFORE the frozen window opens)
 #       -> _tte_guard          (recheck 2 and 3; the TTE invariant)
@@ -50,12 +50,16 @@ COPY analysis/l5/live_exec2/timing.py analysis/l5/live_exec2/timing.py
 COPY analysis/l5/live_exec2/runner.py analysis/l5/live_exec2/runner.py
 COPY analysis/l5/live_exec3/spec.py analysis/l5/live_exec3/spec.py
 COPY analysis/l5/live_exec3/runner.py analysis/l5/live_exec3/runner.py
+# XR2W: the ACTIVE frozen identity. The runner asserts and pins
+# THIS fingerprint, never XR2's superseded one.
+COPY analysis/l5/live_exec5/spec.py analysis/l5/live_exec5/spec.py
+COPY analysis/l5/live_exec5/fixture_a5.py analysis/l5/live_exec5/fixture_a5.py
 COPY analysis/l5/live_micro/spec.py analysis/l5/live_micro/spec.py
 COPY analysis/l5/live_micro/ledger.py analysis/l5/live_micro/ledger.py
 
 COPY scripts/__init__.py scripts/__init__.py
 COPY scripts/l5_exec1xr_meta.py scripts/l5_exec1xr_meta.py
-COPY scripts/l5_exec1xr2_run.py scripts/l5_exec1xr2_run.py
+COPY scripts/l5_exec1xr2w_run.py scripts/l5_exec1xr2w_run.py
 
 ENV PYTHONUNBUFFERED=1
-CMD ["python3", "-m", "scripts.l5_exec1xr2_run"]
+CMD ["python3", "-m", "scripts.l5_exec1xr2w_run"]

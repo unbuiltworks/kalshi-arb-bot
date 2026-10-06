@@ -28,9 +28,18 @@ from analysis.l5.live_exec2 import timing as T
 from analysis.l5.live_exec2.runner import (await_fresh_book, depth_ahead_at,
                                            opposite_touch, our_price,
                                            read_venue, venue_role)
-from analysis.l5.live_exec3.spec import (MAX_PREOPEN_WAIT_S, PROBE,
-                                         XR2_FINGERPRINT, assert_frozen,
-                                         fingerprint_pinned)
+# THE ACTIVE FROZEN IDENTITY. This runner is shared code, so the identity
+# it asserts and pins must be the identity of the build that is actually
+# authorizable -- never a superseded parent. XR2's `0f334019...042f` is
+# superseded by the XR2W wire correction and must not be armable, so the
+# probe name, the recorded fingerprint, `assert_frozen` and the
+# authorization pin all come from `live_exec5.spec`.
+#
+# `live_exec5.spec` imports `live_exec3.spec` (the parent SPEC it derives
+# from), never this module, so there is no import cycle.
+from analysis.l5.live_exec3.spec import MAX_PREOPEN_WAIT_S
+from analysis.l5.live_exec5.spec import PROBE, assert_frozen, fingerprint_pinned
+from analysis.l5.live_exec5.spec import XR2W_FINGERPRINT as XR2_FINGERPRINT
 from analysis.l5.live_micro.ledger import OrderRecord, markouts
 
 BOOK_WAIT_S = 90.0
@@ -430,4 +439,4 @@ def run_experiment(*, observe_s: float = OBSERVE_S,
                 bk.stop()
             except Exception:                                  # noqa: BLE001
                 pass
-        print("EXEC1XR2_RECORD " + json.dumps(rec, default=str), flush=True)
+        print("EXEC1XR2W_RECORD " + json.dumps(rec, default=str), flush=True)

@@ -125,6 +125,37 @@ DIFF: Dict[str, Any] = {
         "unknown_phase_is_never_resolved_by_guess": True,
     },
 
+    # Inherited verbatim from XR2 except for the two names that moved, so
+    # the spec cannot claim an entrypoint that no longer exists.
+    "entrypoint.module": "scripts.l5_exec1xr2w_run",
+    "entrypoint.call_graph_to_submit": [
+        "scripts.l5_exec1xr2w_run:main",
+        "analysis.l5.live_exec3.runner:run_experiment",
+        "analysis.l5.live_exec3.runner:_await_window   (pre-open wait)",
+        "analysis.l5.live_exec3.runner:_tte_guard      (recheck 2 and 3)",
+        "analysis.l5.live_exec2.orders:submit_one(guard=...)",
+        "  orders:order_body -> src.l5_order_body:build",
+        "  orders:preview_request -> src.l5_order_body:preview_envelope",
+        "  POST /v1/order/preview {'request': body}  (creates nothing)",
+        "  guard() -> analysis.l5.live_exec2.latch:consume -> guard()",
+        "analysis.l5.live_exec2.orders:BoundedOrderTransport.request"
+        " -> POST /v1/orders",
+    ],
+
+    "fingerprint_pin": {
+        "env": "PMUS_EXEC1_AUTHORIZED_FINGERPRINT",
+        "runner_verifies": "ITS_OWN_FINAL_XR2W_FINGERPRINT",
+        "runner_verifies_a_superseded_parent": False,
+        "xr2_fingerprint_is_armable": False,
+        "identity_source_module": "analysis.l5.live_exec5.spec",
+        "why": ("the runner is shared code, so the identity it asserts and "
+                "pins must be the identity of the build that is actually "
+                "authorizable. Pinning a superseded parent would let XR2's "
+                "fingerprint arm XR2W's code, which is the whole thing the "
+                "pin exists to prevent."),
+        "a_pin_naming_a_superseded_fingerprint_leaves_the_build_inert": True,
+    },
+
     "supersedes": {
         "reason": ("the defect was in shared code, so earlier fingerprints "
                    "no longer describe the code that would run"),
@@ -168,6 +199,11 @@ XR2W_INVARIANTS = tuple(
     ("lifecycle_classification.determined_by_reading_the_latch", False),
     ("lifecycle_classification.unknown_phase_is_never_resolved_by_guess",
      True),
+    ("entrypoint.module", "scripts.l5_exec1xr2w_run"),
+    ("fingerprint_pin.runner_verifies",
+     "ITS_OWN_FINAL_XR2W_FINGERPRINT"),
+    ("fingerprint_pin.runner_verifies_a_superseded_parent", False),
+    ("fingerprint_pin.xr2_fingerprint_is_armable", False),
     ("venue_error_capture.request_header_values_recorded", False),
     ("venue_error_capture.secrets_or_authentication_material_recorded",
      False),
@@ -211,7 +247,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 
 #: HARD-CODED LITERAL so assert_frozen() cannot be vacuous.
 XR2W_FINGERPRINT = \
-    "716e86ec92012d4cfd3ef8a9ac6a0c9de63a9c596f7d0a4a2542c50269e07064"
+    "ac6318d5fe986f629037edd129e08c70ff0031012070fd10cde1c67d0c9b2562"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

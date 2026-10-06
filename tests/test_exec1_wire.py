@@ -300,11 +300,14 @@ def test_xr2w_changes_nothing_economic():
     # only the keys this correction is allowed to touch
     assert set(r["keys_added"]) <= {"wire_serialization",
                                     "venue_error_capture",
-                                    "lifecycle_classification", "supersedes"}
+                                    "lifecycle_classification", "supersedes",
+                                    "fingerprint_pin"}
     assert set(r["keys_changed"]) <= {"probe", "spec_version",
                                       "derived_from_probe",
                                       "derived_from_fingerprint",
-                                      "correction_count", "correction"}
+                                      "correction_count", "correction",
+                                      "entrypoint.module",
+                                      "entrypoint.call_graph_to_submit"}
     assert r["keys_removed"] == []
 
 
@@ -341,7 +344,7 @@ def test_the_exec_image_copies_every_module_the_order_path_imports():
     import pathlib
 
     root = pathlib.Path(__file__).resolve().parents[1]
-    docker = (root / "deploy/l5_exec1xr2/Dockerfile").read_text()
+    docker = (root / "deploy/l5_exec1xr2w/Dockerfile").read_text()
     copied = {line.split()[1] for line in docker.splitlines()
               if line.startswith("COPY ")}
 

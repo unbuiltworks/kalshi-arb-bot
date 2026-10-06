@@ -23,6 +23,7 @@ from analysis.l5.live_exec2 import timing as T
 from analysis.l5.live_exec2.runner_spec import FINGERPRINT_PIN_ENV
 from analysis.l5.live_exec3 import runner as RUN
 from analysis.l5.live_exec3 import spec as X
+from analysis.l5.live_exec5 import spec as W
 
 SLUG = "cpc-btc-updown-15m-2026-10-06-1700z"
 SID = "xr2-test-session"
@@ -94,7 +95,10 @@ def _arm(monkeypatch, *, pin=True, slug=SLUG, sid=SID):
     monkeypatch.setenv("PMUS_EXEC1_ARM", sid)
     monkeypatch.setenv("PMUS_EXEC1_GATE_EVIDENCE", slug)
     if pin:
-        monkeypatch.setenv(FINGERPRINT_PIN_ENV, X.XR2_FINGERPRINT)
+        # The pin names the ACTIVE build's own fingerprint. XR2's is
+        # superseded and must not arm anything -- see
+        # test_the_superseded_xr2_fingerprint_cannot_arm_this_build.
+        monkeypatch.setenv(FINGERPRINT_PIN_ENV, W.XR2W_FINGERPRINT)
 
 
 class Clock:
@@ -525,3 +529,26 @@ def test_no_secret_appears_in_a_rejection_record(monkeypatch):
     for needle in ("Authorization", "Bearer", "api_secret", "PMUS_API_SECRET",
                    "Set-Cookie", "signature="):
         assert needle not in flat, needle
+
+
+def test_the_superseded_xr2_fingerprint_cannot_arm_this_build(monkeypatch):
+    """The pin exists to stop a build running under someone else's
+    authorization. A parent whose code has since been corrected is exactly
+    that case, so XR2's fingerprint must leave this build inert."""
+    _arm(monkeypatch, pin=False)
+    monkeypatch.setenv(FINGERPRINT_PIN_ENV, X.XR2_FINGERPRINT)
+    pin = W.fingerprint_pinned()
+    assert pin["set"] is True
+    assert pin["matches_this_build"] is False
+    assert pin["required"] == W.XR2W_FINGERPRINT
+    _, rec = _run_with(monkeypatch, [897.0] * 6)
+    assert rec["orders_submitted"] == 0
+    assert rec["stopped_at"] != "SUBMITTED"
+    assert L.state()["spent"] is False
+
+
+def test_the_runner_pins_its_own_identity_not_the_parents(monkeypatch):
+    assert RUN.PROBE == W.PROBE == "LIVE-L5-EXEC-1-XR2W"
+    assert RUN.XR2_FINGERPRINT == W.XR2W_FINGERPRINT
+    assert RUN.XR2_FINGERPRINT != X.XR2_FINGERPRINT
+    assert X.XR2_FINGERPRINT in W.SPEC["supersedes"]["must_not_be_rearmed"]
