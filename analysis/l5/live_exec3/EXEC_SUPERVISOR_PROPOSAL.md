@@ -164,3 +164,121 @@ needs no new fingerprint. My suggestion: run Attempt 5 to a terminal state on
 Option 0 first, so the one-order lifecycle is observed end to end on the
 artifact already authorized, and only then decide whether the standing
 supervisor is worth a new fingerprint.
+
+---
+
+# BUILT AND TESTED — XR3. Not deployed, not armed, not authorized.
+
+**Candidate fingerprint (placeholder owner key)**
+`6e7f5aedc5125e3bf4461f61267b16fb81e98397c2d5bb56dc7cde00118199a4`
+
+Derived from XR2 `0f334019…042f` → XR `f3e54d82…c5e9` → XR-X `d2f32276…6c79`
+→ EXEC-1 `b1dbe7f1…2e06`. All four re-verified at boot. `correction_count`
+stays **1** — XR2's TTE recheck is still the only behavioural correction in
+this lineage; XR3 adds none. Quantity 0.01, max loss $0.0099 unchanged, and
+a test asserts 15 whole subtrees (`size`, `orders`, `book`, `evidence`,
+`deadman`, `withdrawal`, `accounting`, `behaviour`, `side_rule`,
+`placement_rule`, `timing_explicit`, `tte_invariant`, `markouts`,
+`one_submission`, `cancellation`) are byte-identical to XR2.
+
+**This fingerprint is provisional.** `OWNER_PUBLIC_KEY_B64` is the
+placeholder, and the key is inside the hash — a test proves changing it
+changes the fingerprint. So supplying your real key produces the fingerprint
+you actually authorize. Until then the supervisor refuses to arm at all and
+says so at boot.
+
+## Files
+
+| file | role |
+|---|---|
+| `analysis/l5/live_exec4/spec.py` | XR3 spec, derived from XR2 by literal DIFF |
+| `analysis/l5/live_exec4/authz.py` | document schema, Ed25519 verification, nonce ledger |
+| `analysis/l5/live_exec4/supervisor.py` | the DISARMED idle loop |
+| `scripts/l5_exec1xr3_supervise.py` | entrypoint |
+| `tests/test_live_exec1xr3.py` | 112 tests |
+
+**502 tests pass** across seven suites. XR2 and everything below it is
+untouched — same files, same fingerprints.
+
+## The separation you asked for, enforced
+
+Two durable files in two directories, and neither fact is inferred from the
+other:
+
+* `/state/pmus-ws/exec1xr3_authz/` — **this authorization is spent**
+* `/state/pmus-ws/exec1x/` — **this session made its one submission attempt**
+  (unchanged `live_exec2.latch`)
+
+The authorization is consumed **before** the experiment, so a document whose
+outcome we cannot observe can never be replayed. The submission latch is
+consumed **immediately before the POST**, unchanged. Three tests pin the
+separation: consuming an authorization leaves the latch unspent; spending the
+latch does not free the authorization; and "authorized, gates refused, no
+order attempted" produces exactly a consumed authorization with an unspent
+latch — the correct record, not an ambiguous one.
+
+## Threat model
+
+| threat | control | tested |
+|---|---|---|
+| Claude mints an authorization | only the owner's **public** key is in the image; the private key never touches the service, repo or any Claude session | wrong-key and unsigned documents refused |
+| Claude edits a signed document | signature covers canonical JSON of every field | 5 fields tampered post-signing, all detected |
+| document reordered in transit | canonical sorted-key bytes | reordered document still verifies |
+| replay of an old authorization | durable single-use nonce, `O_CREAT|O_EXCL` | consume-then-replay refused; survives module reload |
+| stale authorization fires later | `not_before`/`not_after` required | not-yet-valid, expired and empty-window refused |
+| document widens the envelope | economics compared to the **frozen spec**, mismatch refused not obeyed | qty 1.00, qty 0.02, max-loss 1.00, max_orders 2 all refused **though correctly signed** |
+| document smuggles a side or a parameter | 7 forbidden fields; side derived from `sha256(slug\|session)` | each forbidden field refused |
+| document names a non-BTC15m market | slug regex | 4 bad slugs refused |
+| wrong build consumes a document | `spec_fingerprint` and `probe` must match | both refused |
+| unwritable ledger lets a replay through | `AuthzLedgerUnavailable`, fail closed | refused |
+| nonce file deleted to re-enable a document | no release/clear/reset/delete function exists in the module | asserted by source scan |
+| idle process still holds an order route | order transport constructed only inside `_run_one` | AST scan: no reference to `BoundedOrderTransport`, `submit_one`, `/v1/orders` outside `_run_one`, and no top-level import of the orders module |
+| unbounded experiments on a long-lived process | 4 per process, 4 per UTC day | cap refusal tested |
+| hostile or oversized document body | https-only, 8 KiB cap, JSON parse failure is a refusal | oversized, non-https, unreachable and garbage all stay DISARMED |
+| env projection leaks between experiments | the slug/session are projected onto the frozen runner's env for one call and restored in `finally` | restoration tested |
+
+## Failure modes, and what each one does
+
+| failure | behaviour |
+|---|---|
+| document URL unset | IDLE_DISARMED forever, logged each tick |
+| document unreachable / malformed / unsigned | IDLE_DISARMED, no consumption |
+| owner key is the placeholder | refuses to arm and says so at boot |
+| two processes race on the same document | `O_CREAT|O_EXCL` — one wins, the loser reports `RACED_ON_CONSUME` |
+| experiment raises | authorization already consumed, latch state untouched, terminal, back to idle |
+| AuthBook fails to start | supervisor stays DISARMED and each experiment's own ≤2.0 s book gate still applies independently |
+| volume unavailable | both ledgers fail closed; nothing is authorized |
+
+## Residual risk I am not hiding
+
+The order path exists continuously instead of ~70 seconds per attempt. The
+controls above are structural rather than advisory, but the honest summary is
+that XR3 trades a *shorter-lived* capability for a *faster* one. If that
+trade is not worth it, Option 0 remains available and needs no new
+fingerprint.
+
+## Migration / cutover plan
+
+1. **Attempt 5 reaches a terminal state on XR2.** Nothing below starts before
+   that; the live experiment stays singular.
+2. **You generate an Ed25519 keypair** and keep the private key off every
+   machine in this system. Hand over the base64 public key only.
+3. I set `OWNER_PUBLIC_KEY_B64`, recompute, and report the **real** XR3
+   fingerprint plus the re-run test suite. No other edit.
+4. **You authorize that fingerprint** (or decline).
+5. Deploy XR3 to `l5-live-probe-oneshot` with `PMUS_EXEC1_AUTHZ_URL` set and
+   **no** `PMUS_EXEC1_*` arming values. One deploy, once. Its boot log must
+   show `xr3_frozen: true`, `owner_public_key_supplied: true`, and
+   `IDLE_DISARMED` ticks.
+6. **Verify egress** to the document host from that boot log. If it is
+   blocked, stop and choose a permitted host — do not work around it.
+7. **Dry run**: you sign a document with `not_after` already in the past. The
+   supervisor must refuse it as `EXPIRED` and consume nothing. That proves the
+   live path end to end with zero risk.
+8. First real authorization: you sign a document for a chosen window; it goes
+   live within one poll interval.
+9. **Rollback** at any point is `restartPolicyType NEVER` plus redeploying the
+   XR2 Dockerfile — XR2 is untouched and still deployable at SHA `44cbdc81`.
+
+Step 7 is the one I would not skip. It is the only way to see the whole
+authorization path work before a document that could place an order exists.
