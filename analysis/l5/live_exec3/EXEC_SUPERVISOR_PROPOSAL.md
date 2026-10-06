@@ -282,3 +282,43 @@ fingerprint.
 
 Step 7 is the one I would not skip. It is the only way to see the whole
 authorization path work before a document that could place an order exists.
+
+---
+
+## Owner decision — 2026-10-06T21:52Z
+
+**XR3 is approved as the architecture direction. It remains build/test-only
+and undeployed.**
+
+Conditions recorded verbatim in effect:
+
+1. **Claude must not generate or possess the owner's Ed25519 private key.**
+   The owner generates and holds the private key entirely outside this
+   service and outside this repository. Claude receives the **public key
+   only**. No private key, seed, mnemonic, or key-generation command for the
+   owner identity appears anywhere in this codebase or in any session
+   transcript. `OWNER_PUBLIC_KEY_B64` currently holds the literal string
+   `OWNER_PUBLIC_KEY_NOT_YET_SUPPLIED` and is not a key.
+
+2. **The present XR3 fingerprint
+   `6e7f5aedc5125e3bf4461f61267b16fb81e98397c2d5bb56dc7cde00118199a4`
+   is explicitly NON-AUTHORIZABLE.** It hashes the placeholder. It must
+   never be armed, and an authorization naming it must be refused on sight.
+   Because the owner public key lives inside `SPEC` and therefore inside the
+   hash, inserting the real key *changes the fingerprint*. The new hash then
+   requires a fresh owner review and a fresh authorization before any
+   deployment.
+
+3. **XR3 replaces the redeploy-per-window mechanism only after Attempt 5
+   closes.** No part of the cutover may touch the in-flight Attempt 5.
+
+Cutover therefore resumes at step 1 of the plan above *after* the owner
+supplies a public key, not before.
+
+### Why the placeholder is safe to leave in the tree
+
+With `OWNER_PUBLIC_KEY_NOT_YET_SUPPLIED` as the key material, every
+signature verification fails, so every authorization document is refused
+and `_run_one` is unreachable. The build is inert by construction rather
+than by configuration. It is also undeployed, so no process anywhere is
+running it.
