@@ -1,0 +1,527 @@
+{
+ "contract_length": "5m",
+ "question": "what resting clips and levels are most consistent with the observed partial-fill sequence?",
+ "clip_break_rules": {
+  "B1": "price change on that outcome",
+  "B2": "time gap > gap_s",
+  "B3": "observable size at the price INCREASED between fills (replenishment)"
+ },
+ "gap_sweep": {
+  "gap_2": {
+   "gap_s": 2,
+   "n_clips": 269,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.2156,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 202,
+    "B2_TIME_GAP": 8,
+    "END_OF_WINDOW": 46,
+    "B3_REPLENISHED": 13
+   },
+   "clip_total_quantiles": {
+    "n": 269,
+    "min": 1.0,
+    "p10": 6.0,
+    "p25": 15.0,
+    "p50": 44.84,
+    "p75": 80.0,
+    "p90": 80.0,
+    "p99": 100.0,
+    "max": 101.1268
+   },
+   "clustering": {
+    "n_clips": 269,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 12,
+      "in_background_band": 12,
+      "expected_from_background": 4.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0446
+     },
+     "20": {
+      "at_target": 16,
+      "in_background_band": 13,
+      "expected_from_background": 4.33,
+      "excess_ratio": 3.69,
+      "share_of_all_clips": 0.0595
+     },
+     "25": {
+      "at_target": 5,
+      "in_background_band": 10,
+      "expected_from_background": 3.33,
+      "excess_ratio": 1.5,
+      "share_of_all_clips": 0.0186
+     },
+     "40": {
+      "at_target": 6,
+      "in_background_band": 2,
+      "expected_from_background": 0.67,
+      "excess_ratio": 9.0,
+      "share_of_all_clips": 0.0223
+     },
+     "50": {
+      "at_target": 5,
+      "in_background_band": 9,
+      "expected_from_background": 3.0,
+      "excess_ratio": 1.67,
+      "share_of_all_clips": 0.0186
+     },
+     "60": {
+      "at_target": 3,
+      "in_background_band": 3,
+      "expected_from_background": 1.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0112
+     },
+     "75": {
+      "at_target": 2,
+      "in_background_band": 1,
+      "expected_from_background": 0.33,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0074
+     },
+     "80": {
+      "at_target": 74,
+      "in_background_band": 7,
+      "expected_from_background": 2.33,
+      "excess_ratio": 31.71,
+      "share_of_all_clips": 0.2751
+     },
+     "100": {
+      "at_target": 2,
+      "in_background_band": 0,
+      "expected_from_background": 0.0,
+      "excess_ratio": "inf",
+      "share_of_all_clips": 0.0074
+     }
+    },
+    "max_clip_total": 101.126759,
+    "clips_over_100": 2,
+    "clips_at_exactly_100": 2,
+    "share_integer_totals": 0.5279
+   }
+  },
+  "gap_5": {
+   "gap_s": 5,
+   "n_clips": 267,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.221,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 202,
+    "B2_TIME_GAP": 6,
+    "END_OF_WINDOW": 46,
+    "B3_REPLENISHED": 13
+   },
+   "clip_total_quantiles": {
+    "n": 267,
+    "min": 1.0,
+    "p10": 6.0,
+    "p25": 15.0,
+    "p50": 45.0,
+    "p75": 80.0,
+    "p90": 80.0,
+    "p99": 100.0,
+    "max": 101.1268
+   },
+   "clustering": {
+    "n_clips": 267,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 12,
+      "in_background_band": 12,
+      "expected_from_background": 4.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0449
+     },
+     "20": {
+      "at_target": 16,
+      "in_background_band": 11,
+      "expected_from_background": 3.67,
+      "excess_ratio": 4.36,
+      "share_of_all_clips": 0.0599
+     },
+     "25": {
+      "at_target": 4,
+      "in_background_band": 10,
+      "expected_from_background": 3.33,
+      "excess_ratio": 1.2,
+      "share_of_all_clips": 0.015
+     },
+     "40": {
+      "at_target": 6,
+      "in_background_band": 3,
+      "expected_from_background": 1.0,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0225
+     },
+     "50": {
+      "at_target": 5,
+      "in_background_band": 9,
+      "expected_from_background": 3.0,
+      "excess_ratio": 1.67,
+      "share_of_all_clips": 0.0187
+     },
+     "60": {
+      "at_target": 3,
+      "in_background_band": 3,
+      "expected_from_background": 1.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0112
+     },
+     "75": {
+      "at_target": 2,
+      "in_background_band": 1,
+      "expected_from_background": 0.33,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0075
+     },
+     "80": {
+      "at_target": 74,
+      "in_background_band": 7,
+      "expected_from_background": 2.33,
+      "excess_ratio": 31.71,
+      "share_of_all_clips": 0.2772
+     },
+     "100": {
+      "at_target": 2,
+      "in_background_band": 0,
+      "expected_from_background": 0.0,
+      "excess_ratio": "inf",
+      "share_of_all_clips": 0.0075
+     }
+    },
+    "max_clip_total": 101.126759,
+    "clips_over_100": 2,
+    "clips_at_exactly_100": 2,
+    "share_integer_totals": 0.5318
+   }
+  },
+  "gap_10": {
+   "gap_s": 10,
+   "n_clips": 267,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.221,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 202,
+    "B2_TIME_GAP": 6,
+    "END_OF_WINDOW": 46,
+    "B3_REPLENISHED": 13
+   },
+   "clip_total_quantiles": {
+    "n": 267,
+    "min": 1.0,
+    "p10": 6.0,
+    "p25": 15.0,
+    "p50": 45.0,
+    "p75": 80.0,
+    "p90": 80.0,
+    "p99": 100.0,
+    "max": 101.1268
+   },
+   "clustering": {
+    "n_clips": 267,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 12,
+      "in_background_band": 12,
+      "expected_from_background": 4.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0449
+     },
+     "20": {
+      "at_target": 16,
+      "in_background_band": 11,
+      "expected_from_background": 3.67,
+      "excess_ratio": 4.36,
+      "share_of_all_clips": 0.0599
+     },
+     "25": {
+      "at_target": 4,
+      "in_background_band": 10,
+      "expected_from_background": 3.33,
+      "excess_ratio": 1.2,
+      "share_of_all_clips": 0.015
+     },
+     "40": {
+      "at_target": 6,
+      "in_background_band": 3,
+      "expected_from_background": 1.0,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0225
+     },
+     "50": {
+      "at_target": 5,
+      "in_background_band": 9,
+      "expected_from_background": 3.0,
+      "excess_ratio": 1.67,
+      "share_of_all_clips": 0.0187
+     },
+     "60": {
+      "at_target": 3,
+      "in_background_band": 3,
+      "expected_from_background": 1.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0112
+     },
+     "75": {
+      "at_target": 2,
+      "in_background_band": 1,
+      "expected_from_background": 0.33,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0075
+     },
+     "80": {
+      "at_target": 74,
+      "in_background_band": 7,
+      "expected_from_background": 2.33,
+      "excess_ratio": 31.71,
+      "share_of_all_clips": 0.2772
+     },
+     "100": {
+      "at_target": 2,
+      "in_background_band": 0,
+      "expected_from_background": 0.0,
+      "excess_ratio": "inf",
+      "share_of_all_clips": 0.0075
+     }
+    },
+    "max_clip_total": 101.126759,
+    "clips_over_100": 2,
+    "clips_at_exactly_100": 2,
+    "share_integer_totals": 0.5318
+   }
+  },
+  "gap_30": {
+   "gap_s": 30,
+   "n_clips": 264,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.2273,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 202,
+    "B3_REPLENISHED": 14,
+    "END_OF_WINDOW": 46,
+    "B2_TIME_GAP": 2
+   },
+   "clip_total_quantiles": {
+    "n": 264,
+    "min": 1.0,
+    "p10": 6.0,
+    "p25": 15.0,
+    "p50": 45.0,
+    "p75": 80.0,
+    "p90": 80.0,
+    "p99": 100.0,
+    "max": 181.8947
+   },
+   "clustering": {
+    "n_clips": 264,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 12,
+      "in_background_band": 12,
+      "expected_from_background": 4.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0455
+     },
+     "20": {
+      "at_target": 15,
+      "in_background_band": 11,
+      "expected_from_background": 3.67,
+      "excess_ratio": 4.09,
+      "share_of_all_clips": 0.0568
+     },
+     "25": {
+      "at_target": 4,
+      "in_background_band": 10,
+      "expected_from_background": 3.33,
+      "excess_ratio": 1.2,
+      "share_of_all_clips": 0.0152
+     },
+     "40": {
+      "at_target": 6,
+      "in_background_band": 2,
+      "expected_from_background": 0.67,
+      "excess_ratio": 9.0,
+      "share_of_all_clips": 0.0227
+     },
+     "50": {
+      "at_target": 5,
+      "in_background_band": 9,
+      "expected_from_background": 3.0,
+      "excess_ratio": 1.67,
+      "share_of_all_clips": 0.0189
+     },
+     "60": {
+      "at_target": 3,
+      "in_background_band": 4,
+      "expected_from_background": 1.33,
+      "excess_ratio": 2.25,
+      "share_of_all_clips": 0.0114
+     },
+     "75": {
+      "at_target": 2,
+      "in_background_band": 1,
+      "expected_from_background": 0.33,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0076
+     },
+     "80": {
+      "at_target": 73,
+      "in_background_band": 7,
+      "expected_from_background": 2.33,
+      "excess_ratio": 31.29,
+      "share_of_all_clips": 0.2765
+     },
+     "100": {
+      "at_target": 2,
+      "in_background_band": 0,
+      "expected_from_background": 0.0,
+      "excess_ratio": "inf",
+      "share_of_all_clips": 0.0076
+     }
+    },
+    "max_clip_total": 181.894724,
+    "clips_over_100": 2,
+    "clips_at_exactly_100": 2,
+    "share_integer_totals": 0.5341
+   }
+  },
+  "gap_inf": {
+   "gap_s": null,
+   "n_clips": 263,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.2319,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 202,
+    "B3_REPLENISHED": 15,
+    "END_OF_WINDOW": 46
+   },
+   "clip_total_quantiles": {
+    "n": 263,
+    "min": 1.0,
+    "p10": 6.0,
+    "p25": 15.0,
+    "p50": 45.92,
+    "p75": 80.0,
+    "p90": 80.0,
+    "p99": 100.0,
+    "max": 181.8947
+   },
+   "clustering": {
+    "n_clips": 263,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 12,
+      "in_background_band": 12,
+      "expected_from_background": 4.0,
+      "excess_ratio": 3.0,
+      "share_of_all_clips": 0.0456
+     },
+     "20": {
+      "at_target": 15,
+      "in_background_band": 10,
+      "expected_from_background": 3.33,
+      "excess_ratio": 4.5,
+      "share_of_all_clips": 0.057
+     },
+     "25": {
+      "at_target": 4,
+      "in_background_band": 10,
+      "expected_from_background": 3.33,
+      "excess_ratio": 1.2,
+      "share_of_all_clips": 0.0152
+     },
+     "40": {
+      "at_target": 6,
+      "in_background_band": 2,
+      "expected_from_background": 0.67,
+      "excess_ratio": 9.0,
+      "share_of_all_clips": 0.0228
+     },
+     "50": {
+      "at_target": 5,
+      "in_background_band": 9,
+      "expected_from_background": 3.0,
+      "excess_ratio": 1.67,
+      "share_of_all_clips": 0.019
+     },
+     "60": {
+      "at_target": 3,
+      "in_background_band": 4,
+      "expected_from_background": 1.33,
+      "excess_ratio": 2.25,
+      "share_of_all_clips": 0.0114
+     },
+     "75": {
+      "at_target": 2,
+      "in_background_band": 1,
+      "expected_from_background": 0.33,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0076
+     },
+     "80": {
+      "at_target": 72,
+      "in_background_band": 7,
+      "expected_from_background": 2.33,
+      "excess_ratio": 30.86,
+      "share_of_all_clips": 0.2738
+     },
+     "100": {
+      "at_target": 2,
+      "in_background_band": 1,
+      "expected_from_background": 0.33,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0076
+     }
+    },
+    "max_clip_total": 181.894724,
+    "clips_over_100": 2,
+    "clips_at_exactly_100": 2,
+    "share_integer_totals": 0.5323
+   }
+  }
+ },
+ "no_pnl_optimized": true,
+ "per_clip_table": {
+  "path": "CLIPS_5m.jsonl",
+  "gap_s": 10,
+  "n": 267,
+  "note": "gap_s=10 is the middle of the swept range and is used only for the dumped table; every verdict is reported across the whole sweep"
+ },
+ "placement_time_bounds": {
+  "what": "earliest archived second at which size existed CONTINUOUSLY at the clip's price through to its first fill, relative to the market open. NEGATIVE means the price was already quoted before the nominal open.",
+  "upper_bound_on_placement_not_proof_of_ownership": true,
+  "n_with_a_bound": 131,
+  "n_without": 136,
+  "quantiles": {
+   "n": 131,
+   "min": -60.0,
+   "p10": -59.0,
+   "p25": -57.0,
+   "p50": 38.0,
+   "p75": 160.0,
+   "p90": 219.0,
+   "p99": 246.0,
+   "max": 280.0
+  },
+  "share_present_before_open": 0.4427,
+  "share_continuity_reaches_archive_start": 0.2172,
+  "apparent_presence_before_first_fill_s": {
+   "n": 131,
+   "min": 0.0,
+   "p10": 2.0,
+   "p25": 16.0,
+   "p50": 67.0,
+   "p75": 208.0,
+   "p90": 283.0,
+   "p99": 303.0,
+   "max": 319.0
+  }
+ }
+}

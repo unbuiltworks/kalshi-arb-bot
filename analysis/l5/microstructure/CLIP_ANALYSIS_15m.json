@@ -1,0 +1,527 @@
+{
+ "contract_length": "15m",
+ "question": "what resting clips and levels are most consistent with the observed partial-fill sequence?",
+ "clip_break_rules": {
+  "B1": "price change on that outcome",
+  "B2": "time gap > gap_s",
+  "B3": "observable size at the price INCREASED between fills (replenishment)"
+ },
+ "gap_sweep": {
+  "gap_2": {
+   "gap_s": 2,
+   "n_clips": 2214,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.2638,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 1931,
+    "B3_REPLENISHED": 81,
+    "B2_TIME_GAP": 178,
+    "END_OF_WINDOW": 24
+   },
+   "clip_total_quantiles": {
+    "n": 2214,
+    "min": 0.02,
+    "p10": 2.0,
+    "p25": 7.1061,
+    "p50": 24.0,
+    "p75": 64.39,
+    "p90": 80.0,
+    "p99": 125.5556,
+    "max": 184.75
+   },
+   "clustering": {
+    "n_clips": 2214,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 88,
+      "in_background_band": 163,
+      "expected_from_background": 54.33,
+      "excess_ratio": 1.62,
+      "share_of_all_clips": 0.0397
+     },
+     "20": {
+      "at_target": 72,
+      "in_background_band": 91,
+      "expected_from_background": 30.33,
+      "excess_ratio": 2.37,
+      "share_of_all_clips": 0.0325
+     },
+     "25": {
+      "at_target": 39,
+      "in_background_band": 85,
+      "expected_from_background": 28.33,
+      "excess_ratio": 1.38,
+      "share_of_all_clips": 0.0176
+     },
+     "40": {
+      "at_target": 35,
+      "in_background_band": 39,
+      "expected_from_background": 13.0,
+      "excess_ratio": 2.69,
+      "share_of_all_clips": 0.0158
+     },
+     "50": {
+      "at_target": 21,
+      "in_background_band": 48,
+      "expected_from_background": 16.0,
+      "excess_ratio": 1.31,
+      "share_of_all_clips": 0.0095
+     },
+     "60": {
+      "at_target": 27,
+      "in_background_band": 40,
+      "expected_from_background": 13.33,
+      "excess_ratio": 2.02,
+      "share_of_all_clips": 0.0122
+     },
+     "75": {
+      "at_target": 18,
+      "in_background_band": 51,
+      "expected_from_background": 17.0,
+      "excess_ratio": 1.06,
+      "share_of_all_clips": 0.0081
+     },
+     "80": {
+      "at_target": 351,
+      "in_background_band": 35,
+      "expected_from_background": 11.67,
+      "excess_ratio": 30.09,
+      "share_of_all_clips": 0.1585
+     },
+     "100": {
+      "at_target": 8,
+      "in_background_band": 3,
+      "expected_from_background": 1.0,
+      "excess_ratio": 8.0,
+      "share_of_all_clips": 0.0036
+     }
+    },
+    "max_clip_total": 184.75,
+    "clips_over_100": 32,
+    "clips_at_exactly_100": 5,
+    "share_integer_totals": 0.4503
+   }
+  },
+  "gap_5": {
+   "gap_s": 5,
+   "n_clips": 2144,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.2854,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 1931,
+    "B3_REPLENISHED": 91,
+    "B2_TIME_GAP": 98,
+    "END_OF_WINDOW": 24
+   },
+   "clip_total_quantiles": {
+    "n": 2144,
+    "min": 0.02,
+    "p10": 2.02,
+    "p25": 7.66,
+    "p50": 25.0,
+    "p75": 66.74,
+    "p90": 80.0,
+    "p99": 138.9432,
+    "max": 306.18
+   },
+   "clustering": {
+    "n_clips": 2144,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 83,
+      "in_background_band": 151,
+      "expected_from_background": 50.33,
+      "excess_ratio": 1.65,
+      "share_of_all_clips": 0.0387
+     },
+     "20": {
+      "at_target": 68,
+      "in_background_band": 86,
+      "expected_from_background": 28.67,
+      "excess_ratio": 2.37,
+      "share_of_all_clips": 0.0317
+     },
+     "25": {
+      "at_target": 39,
+      "in_background_band": 80,
+      "expected_from_background": 26.67,
+      "excess_ratio": 1.46,
+      "share_of_all_clips": 0.0182
+     },
+     "40": {
+      "at_target": 34,
+      "in_background_band": 37,
+      "expected_from_background": 12.33,
+      "excess_ratio": 2.76,
+      "share_of_all_clips": 0.0159
+     },
+     "50": {
+      "at_target": 24,
+      "in_background_band": 47,
+      "expected_from_background": 15.67,
+      "excess_ratio": 1.53,
+      "share_of_all_clips": 0.0112
+     },
+     "60": {
+      "at_target": 27,
+      "in_background_band": 41,
+      "expected_from_background": 13.67,
+      "excess_ratio": 1.98,
+      "share_of_all_clips": 0.0126
+     },
+     "75": {
+      "at_target": 16,
+      "in_background_band": 51,
+      "expected_from_background": 17.0,
+      "excess_ratio": 0.94,
+      "share_of_all_clips": 0.0075
+     },
+     "80": {
+      "at_target": 344,
+      "in_background_band": 38,
+      "expected_from_background": 12.67,
+      "excess_ratio": 27.16,
+      "share_of_all_clips": 0.1604
+     },
+     "100": {
+      "at_target": 8,
+      "in_background_band": 4,
+      "expected_from_background": 1.33,
+      "excess_ratio": 6.0,
+      "share_of_all_clips": 0.0037
+     }
+    },
+    "max_clip_total": 306.18,
+    "clips_over_100": 39,
+    "clips_at_exactly_100": 5,
+    "share_integer_totals": 0.4496
+   }
+  },
+  "gap_10": {
+   "gap_s": 10,
+   "n_clips": 2102,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.2983,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 1931,
+    "B3_REPLENISHED": 109,
+    "B2_TIME_GAP": 38,
+    "END_OF_WINDOW": 24
+   },
+   "clip_total_quantiles": {
+    "n": 2102,
+    "min": 0.02,
+    "p10": 2.04,
+    "p25": 7.84,
+    "p50": 25.3556,
+    "p75": 69.7727,
+    "p90": 80.0,
+    "p99": 139.7267,
+    "max": 306.18
+   },
+   "clustering": {
+    "n_clips": 2102,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 79,
+      "in_background_band": 145,
+      "expected_from_background": 48.33,
+      "excess_ratio": 1.63,
+      "share_of_all_clips": 0.0376
+     },
+     "20": {
+      "at_target": 67,
+      "in_background_band": 86,
+      "expected_from_background": 28.67,
+      "excess_ratio": 2.34,
+      "share_of_all_clips": 0.0319
+     },
+     "25": {
+      "at_target": 40,
+      "in_background_band": 75,
+      "expected_from_background": 25.0,
+      "excess_ratio": 1.6,
+      "share_of_all_clips": 0.019
+     },
+     "40": {
+      "at_target": 33,
+      "in_background_band": 37,
+      "expected_from_background": 12.33,
+      "excess_ratio": 2.68,
+      "share_of_all_clips": 0.0157
+     },
+     "50": {
+      "at_target": 22,
+      "in_background_band": 45,
+      "expected_from_background": 15.0,
+      "excess_ratio": 1.47,
+      "share_of_all_clips": 0.0105
+     },
+     "60": {
+      "at_target": 29,
+      "in_background_band": 39,
+      "expected_from_background": 13.0,
+      "excess_ratio": 2.23,
+      "share_of_all_clips": 0.0138
+     },
+     "75": {
+      "at_target": 16,
+      "in_background_band": 51,
+      "expected_from_background": 17.0,
+      "excess_ratio": 0.94,
+      "share_of_all_clips": 0.0076
+     },
+     "80": {
+      "at_target": 339,
+      "in_background_band": 39,
+      "expected_from_background": 13.0,
+      "excess_ratio": 26.08,
+      "share_of_all_clips": 0.1613
+     },
+     "100": {
+      "at_target": 7,
+      "in_background_band": 5,
+      "expected_from_background": 1.67,
+      "excess_ratio": 4.2,
+      "share_of_all_clips": 0.0033
+     }
+    },
+    "max_clip_total": 306.18,
+    "clips_over_100": 46,
+    "clips_at_exactly_100": 5,
+    "share_integer_totals": 0.4467
+   }
+  },
+  "gap_30": {
+   "gap_s": 30,
+   "n_clips": 2084,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.3047,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 1931,
+    "B3_REPLENISHED": 121,
+    "B2_TIME_GAP": 8,
+    "END_OF_WINDOW": 24
+   },
+   "clip_total_quantiles": {
+    "n": 2084,
+    "min": 0.02,
+    "p10": 2.0408,
+    "p25": 7.96,
+    "p50": 25.9727,
+    "p75": 70.0,
+    "p90": 80.0,
+    "p99": 141.38,
+    "max": 306.18
+   },
+   "clustering": {
+    "n_clips": 2084,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 79,
+      "in_background_band": 144,
+      "expected_from_background": 48.0,
+      "excess_ratio": 1.65,
+      "share_of_all_clips": 0.0379
+     },
+     "20": {
+      "at_target": 66,
+      "in_background_band": 84,
+      "expected_from_background": 28.0,
+      "excess_ratio": 2.36,
+      "share_of_all_clips": 0.0317
+     },
+     "25": {
+      "at_target": 40,
+      "in_background_band": 73,
+      "expected_from_background": 24.33,
+      "excess_ratio": 1.64,
+      "share_of_all_clips": 0.0192
+     },
+     "40": {
+      "at_target": 34,
+      "in_background_band": 35,
+      "expected_from_background": 11.67,
+      "excess_ratio": 2.91,
+      "share_of_all_clips": 0.0163
+     },
+     "50": {
+      "at_target": 21,
+      "in_background_band": 43,
+      "expected_from_background": 14.33,
+      "excess_ratio": 1.47,
+      "share_of_all_clips": 0.0101
+     },
+     "60": {
+      "at_target": 29,
+      "in_background_band": 40,
+      "expected_from_background": 13.33,
+      "excess_ratio": 2.17,
+      "share_of_all_clips": 0.0139
+     },
+     "75": {
+      "at_target": 16,
+      "in_background_band": 51,
+      "expected_from_background": 17.0,
+      "excess_ratio": 0.94,
+      "share_of_all_clips": 0.0077
+     },
+     "80": {
+      "at_target": 335,
+      "in_background_band": 39,
+      "expected_from_background": 13.0,
+      "excess_ratio": 25.77,
+      "share_of_all_clips": 0.1607
+     },
+     "100": {
+      "at_target": 7,
+      "in_background_band": 5,
+      "expected_from_background": 1.67,
+      "excess_ratio": 4.2,
+      "share_of_all_clips": 0.0034
+     }
+    },
+    "max_clip_total": 306.18,
+    "clips_over_100": 48,
+    "clips_at_exactly_100": 5,
+    "share_integer_totals": 0.4448
+   }
+  },
+  "gap_inf": {
+   "gap_s": null,
+   "n_clips": 2082,
+   "fills_per_clip_p50": 1,
+   "multi_fill_clip_share": 0.306,
+   "close_reasons": {
+    "B1_PRICE_CHANGE": 1931,
+    "B3_REPLENISHED": 127,
+    "END_OF_WINDOW": 24
+   },
+   "clip_total_quantiles": {
+    "n": 2082,
+    "min": 0.02,
+    "p10": 2.0408,
+    "p25": 7.96,
+    "p50": 25.9727,
+    "p75": 70.0,
+    "p90": 80.0,
+    "p99": 141.38,
+    "max": 306.18
+   },
+   "clustering": {
+    "n_clips": 2082,
+    "eps_shares": 0.75,
+    "targets": {
+     "10": {
+      "at_target": 79,
+      "in_background_band": 144,
+      "expected_from_background": 48.0,
+      "excess_ratio": 1.65,
+      "share_of_all_clips": 0.0379
+     },
+     "20": {
+      "at_target": 66,
+      "in_background_band": 83,
+      "expected_from_background": 27.67,
+      "excess_ratio": 2.39,
+      "share_of_all_clips": 0.0317
+     },
+     "25": {
+      "at_target": 41,
+      "in_background_band": 72,
+      "expected_from_background": 24.0,
+      "excess_ratio": 1.71,
+      "share_of_all_clips": 0.0197
+     },
+     "40": {
+      "at_target": 34,
+      "in_background_band": 35,
+      "expected_from_background": 11.67,
+      "excess_ratio": 2.91,
+      "share_of_all_clips": 0.0163
+     },
+     "50": {
+      "at_target": 21,
+      "in_background_band": 43,
+      "expected_from_background": 14.33,
+      "excess_ratio": 1.47,
+      "share_of_all_clips": 0.0101
+     },
+     "60": {
+      "at_target": 29,
+      "in_background_band": 40,
+      "expected_from_background": 13.33,
+      "excess_ratio": 2.17,
+      "share_of_all_clips": 0.0139
+     },
+     "75": {
+      "at_target": 16,
+      "in_background_band": 51,
+      "expected_from_background": 17.0,
+      "excess_ratio": 0.94,
+      "share_of_all_clips": 0.0077
+     },
+     "80": {
+      "at_target": 334,
+      "in_background_band": 39,
+      "expected_from_background": 13.0,
+      "excess_ratio": 25.69,
+      "share_of_all_clips": 0.1604
+     },
+     "100": {
+      "at_target": 7,
+      "in_background_band": 5,
+      "expected_from_background": 1.67,
+      "excess_ratio": 4.2,
+      "share_of_all_clips": 0.0034
+     }
+    },
+    "max_clip_total": 306.18,
+    "clips_over_100": 49,
+    "clips_at_exactly_100": 5,
+    "share_integer_totals": 0.4448
+   }
+  }
+ },
+ "no_pnl_optimized": true,
+ "per_clip_table": {
+  "path": "CLIPS_15m.jsonl",
+  "gap_s": 10,
+  "n": 2102,
+  "note": "gap_s=10 is the middle of the swept range and is used only for the dumped table; every verdict is reported across the whole sweep"
+ },
+ "placement_time_bounds": {
+  "what": "earliest archived second at which size existed CONTINUOUSLY at the clip's price through to its first fill, relative to the market open. NEGATIVE means the price was already quoted before the nominal open.",
+  "upper_bound_on_placement_not_proof_of_ownership": true,
+  "n_with_a_bound": 1309,
+  "n_without": 793,
+  "quantiles": {
+   "n": 1309,
+   "min": -60.0,
+   "p10": -55.0,
+   "p25": 27.0,
+   "p50": 263.0,
+   "p75": 563.0,
+   "p90": 714.0,
+   "p99": 834.0,
+   "max": 855.0
+  },
+  "share_present_before_open": 0.1818,
+  "share_continuity_reaches_archive_start": 0.1056,
+  "apparent_presence_before_first_fill_s": {
+   "n": 1309,
+   "min": 0.0,
+   "p10": 2.0,
+   "p25": 6.0,
+   "p50": 31.0,
+   "p75": 123.0,
+   "p90": 363.0,
+   "p99": 805.0,
+   "max": 917.0
+  }
+ }
+}
