@@ -1,0 +1,214 @@
+{
+ "protocol": "PREREGISTRATION_NOREBATE.md @ 3fb8fccb",
+ "NOT_OUR_REALIZED_PROFIT": "this is L5's own historical cash under a rebates=$0 accounting. It is not our realized profit and is not a forecast.",
+ "COVERAGE_HOLE": "May, June and July 2026 are entirely absent (activity feed hit the 5000-offset cap). A hole, not a zero. No $/day divides by calendar span.",
+ "fee_identity": {
+  "model": "0.07*p*(1-p) per share, embedded in usdcSize",
+  "n_buys": 75862,
+  "n_buys_actually_charged": 12136,
+  "share_of_buys_charged": 0.16,
+  "pooled_median_abs_deviation": 0.08526,
+  "VERDICT_POOLED": "UNCONFIRMED_artifact_of_pooling_fee_free_buys",
+  "charged_only_median_abs_deviation": 0.0,
+  "charged_only_median_ratio_resid_over_model": 1.0,
+  "VERDICT_ON_CHARGED_BUYS": "FEE_IDENTITY_CONFIRMED",
+  "total_reconstructed_fees_usd": 3993.43,
+  "NOTE": "fees appear ONLY in the incentive era; March and April buys carry no fee at all"
+ },
+ "observed_incentives_ONLY_4_DAYS": {
+  "per_day_usd": {
+   "2026-04-21": 29.94,
+   "2026-08-29": 3220.34,
+   "2026-08-30": 3744.81,
+   "2026-08-31": 3343.34
+  },
+  "by_type_usd": {
+   "MAKER_REBATE": 3909.3,
+   "TAKER_REBATE": 587.32,
+   "REWARD": 5841.8
+  },
+  "CORPUS_TOTAL_UNIDENTIFIABLE": true
+ },
+ "ERAS": {
+  "E1_GENUINELY_PRE_REBATE": {
+   "era": "E1_GENUINELY_PRE_REBATE",
+   "N_events": 211,
+   "observed_days": 17,
+   "first_day": "2026-03-19",
+   "last_day": "2026-04-20",
+   "total_usd": -168.46,
+   "per_event_usd": -0.7984,
+   "per_OBSERVED_day_usd": -9.91,
+   "median_event_usd": -0.7562,
+   "win_rate": 0.4834,
+   "bootstrap": {
+    "n": 211,
+    "resamples": 10000,
+    "CI95_total": [
+     -731.84,
+     391.63
+    ],
+    "share_of_resamples_positive": 0.2759
+   },
+   "max_drawdown_usd": -415.65,
+   "concentration": {
+    "top1_share_of_total": -0.342,
+    "top5_share_of_total": -1.6121,
+    "top10_share_of_total": -2.848,
+    "net_excluding_top1_usd": -226.09,
+    "net_excluding_top5_usd": -440.05,
+    "worst1_event_usd": -89.25,
+    "worst5_sum_usd": -335.44,
+    "worst10_sum_usd": -497.08,
+    "net_excluding_worst1_usd": -79.21,
+    "net_excluding_worst5_usd": 166.98
+   },
+   "components_usd": {
+    "matched_pair_economics": 884.42,
+    "directional_residual": -1052.89,
+    "charged_fees": 0.0,
+    "rebates_rewards": 0.0
+   },
+   "ROBUSTNESS": "BROAD"
+  },
+  "E2_EARLY_REBATE": {
+   "era": "E2_EARLY_REBATE",
+   "N_events": 5,
+   "observed_days": 1,
+   "first_day": "2026-04-21",
+   "last_day": "2026-04-21",
+   "total_usd": -1855.08,
+   "per_event_usd": -371.0155,
+   "per_OBSERVED_day_usd": -1855.08,
+   "median_event_usd": -303.2665,
+   "win_rate": 0.0,
+   "bootstrap": {
+    "n": 5,
+    "resamples": 10000,
+    "CI95_total": [
+     -2877.81,
+     -881.54
+    ],
+    "share_of_resamples_positive": 0.0
+   },
+   "max_drawdown_usd": -1855.08,
+   "concentration": {
+    "top1_share_of_total": 0.0614,
+    "top5_share_of_total": 1.0,
+    "top10_share_of_total": 1.0,
+    "net_excluding_top1_usd": -1741.22,
+    "net_excluding_top5_usd": 0.0,
+    "worst1_event_usd": -750.64,
+    "worst5_sum_usd": -1855.08,
+    "worst10_sum_usd": -1855.08,
+    "net_excluding_worst1_usd": -1104.44,
+    "net_excluding_worst5_usd": 0.0
+   },
+   "components_usd": {
+    "matched_pair_economics": 141.44,
+    "directional_residual": -1996.52,
+    "charged_fees": 0.0,
+    "rebates_rewards": 0.0
+   },
+   "ROBUSTNESS": "BROAD"
+  },
+  "E3_INCENTIVE_ERA": {
+   "era": "E3_INCENTIVE_ERA",
+   "N_events": 2002,
+   "observed_days": 4,
+   "first_day": "2026-08-28",
+   "last_day": "2026-08-31",
+   "total_usd": -721.99,
+   "per_event_usd": -0.3606,
+   "per_OBSERVED_day_usd": -180.5,
+   "median_event_usd": 2.3464,
+   "win_rate": 0.5689,
+   "bootstrap": {
+    "n": 2002,
+    "resamples": 10000,
+    "CI95_total": [
+     -7030.89,
+     6055.83
+    ],
+    "share_of_resamples_positive": 0.4169
+   },
+   "max_drawdown_usd": -5265.67,
+   "concentration": {
+    "top1_share_of_total": -1.6713,
+    "top5_share_of_total": -5.625,
+    "top10_share_of_total": -8.1348,
+    "net_excluding_top1_usd": -1928.64,
+    "net_excluding_top5_usd": -4783.16,
+    "worst1_event_usd": -816.71,
+    "worst5_sum_usd": -2147.6,
+    "worst10_sum_usd": -3341.19,
+    "net_excluding_worst1_usd": 94.72,
+    "net_excluding_worst5_usd": 1425.61
+   },
+   "components_usd": {
+    "matched_pair_economics": 21542.38,
+    "directional_residual": -22264.37,
+    "charged_fees": 3993.43,
+    "rebates_rewards": 0.0
+   },
+   "ROBUSTNESS": "LOSS_CONCENTRATED_many_small_wins_few_large_losses"
+  }
+ },
+ "FULL_CORPUS": {
+  "era": "FULL_CORPUS",
+  "N_events": 2218,
+  "observed_days": 22,
+  "first_day": "2026-03-19",
+  "last_day": "2026-08-31",
+  "total_usd": -2745.53,
+  "per_event_usd": -1.2378,
+  "per_OBSERVED_day_usd": -124.8,
+  "median_event_usd": 1.926,
+  "win_rate": 0.5595,
+  "bootstrap": {
+   "n": 2218,
+   "resamples": 10000,
+   "CI95_total": [
+    -9507.69,
+    4155.42
+   ],
+   "share_of_resamples_positive": 0.2134
+  },
+  "max_drawdown_usd": -5265.67,
+  "concentration": {
+   "top1_share_of_total": -0.4395,
+   "top5_share_of_total": -1.4792,
+   "top10_share_of_total": -2.1392,
+   "net_excluding_top1_usd": -3952.18,
+   "net_excluding_top5_usd": -6806.71,
+   "worst1_event_usd": -816.71,
+   "worst5_sum_usd": -2854.09,
+   "worst10_sum_usd": -4208.9,
+   "net_excluding_worst1_usd": -1928.82,
+   "net_excluding_worst5_usd": 108.55
+  },
+  "components_usd": {
+   "matched_pair_economics": 22568.25,
+   "directional_residual": -25313.78,
+   "charged_fees": 3993.43,
+   "rebates_rewards": 0.0
+  },
+  "ROBUSTNESS": "LOSS_CONCENTRATED_many_small_wins_few_large_losses"
+ },
+ "monthly_net_usd": {
+  "2026-03": -119.41,
+  "2026-04": -1904.13,
+  "2026-08": -721.99
+ },
+ "weekly_net_usd": {
+  "2026-W11": 0.13,
+  "2026-W12": -17.31,
+  "2026-W13": -140.62,
+  "2026-W14": 75.58,
+  "2026-W15": -169.79,
+  "2026-W16": -1771.52,
+  "2026-W34": -2608.15,
+  "2026-W35": 1886.16
+ },
+ "n_markets": 2218
+}
