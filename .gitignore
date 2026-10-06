@@ -132,3 +132,4 @@ data/l5/shadow/shadow_*.jsonl
 # have been ignored) and swept these in; the -f is gone and this is belt and
 # braces.
 analysis/l5/august_replay/__pycache__/
+analysis/l5/microstructure/__pycache__/

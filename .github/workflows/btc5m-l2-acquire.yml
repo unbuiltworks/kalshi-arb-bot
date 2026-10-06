@@ -1,0 +1,167 @@
+# BTC5m HISTORICAL L2 + L5's OWN BTC5m FILLS. Read-only, credential-free.
+#
+# HISTORICAL MICROSTRUCTURE STUDY ONLY. No shadow, no live, no order path.
+# Prospective S1 is asserted unchanged and never written.
+#
+# WHY CI: zenodo.org and polygon.drpc.org both answer CONNECT -> 403 from the
+# research container.
+#
+# PROVENANCE IS WEAKER FOR THIS FILE AND THE JOB SAYS SO. The 15m archive had
+# a sha256 recorded in this repository before any acquisition workflow
+# existed. For updown_5m.parquet no such hash exists, so it is verified
+# STRUCTURALLY against the figures prior analysis recorded in
+# analysis/l5/BOOK_ACQUISITION.md -- 167,941 rows, 471 markets, and a
+# captured_at range of 2026-08-21 00:15:48 .. 2026-08-24 11:44:59 -- and the
+# sha256 we obtain is RECORDED so future runs can verify against it. A
+# structural match is not a cryptographic one and the artifact labels it.
+name: btc5m-l2-acquire
+
+on:
+  push:
+    paths:
+      - '.github/btc5m_l2_request'
+
+concurrency:
+  group: btc5m-l2-acquire
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: REFUSE to run anywhere but the research branch
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_NAME}" != "claude/august-l5-forensic-replay-788cml" ]; then
+            echo "::error::this job runs only on the research branch"; exit 1
+          fi
+          echo "branch ok: ${GITHUB_REF_NAME}"
+
+      - name: Prove no credential and no order path
+        run: |
+          python - <<'PY'
+          import pathlib
+          wf = pathlib.Path(
+            ".github/workflows/btc5m-l2-acquire.yml").read_text()
+          needles = ["secret" + "s.", "GEMINI" + "_", "KALSHI" + "_",
+                     "PRIVATE" + "_KEY", "place" + "_order",
+                     "create" + "_order", "send" + "_transaction"]
+          bad = [n for n in needles if n in wf]
+          assert not bad, "forbidden token in workflow: %s" % bad
+          print("no credential reference, no order path")
+          PY
+
+      - name: Install read deps only
+        run: python -m pip install -q pyarrow pandas pytest
+
+      - name: ASSERT prospective S1 is untouched
+        run: |
+          python - <<'PY'
+          from src.polymarket_l5.owned_order_shadow import FINGERPRINT
+          assert FINGERPRINT == ("441c375e35cc2d588b075d7d9f6a740db7c92f95c1"
+                                 "0bf7ea76caf333fe24b6fe"), "S1 CHANGED"
+          print("frozen S1 verified:", FINGERPRINT)
+          PY
+
+      - name: Download updown_5m.parquet
+        run: |
+          set -euo pipefail
+          mkdir -p data/zenodo_22084977
+          U=https://zenodo.org/records/22084977/files/updown_5m.parquet
+          A=https://zenodo.org/record/22084977/files/updown_5m.parquet
+          curl -fL --retry 5 --retry-delay 4 --max-time 900 \
+               -o data/zenodo_22084977/updown_5m.parquet "$U?download=1" \
+            || curl -fL --retry 5 --retry-delay 4 --max-time 900 \
+               -o data/zenodo_22084977/updown_5m.parquet "$A?download=1"
+          ls -la data/zenodo_22084977/
+
+      - name: VERIFY structurally against figures recorded before this job
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, hashlib
+          import pyarrow.parquet as pq
+          f = "data/zenodo_22084977/updown_5m.parquet"
+          sha = hashlib.sha256(open(f, "rb").read()).hexdigest()
+          pf = pq.ParquetFile(f)
+          d = pq.read_table(f, columns=["market_slug", "captured_at"]).to_pydict()
+          rows = pf.metadata.num_rows
+          mk = len(set(d["market_slug"]))
+          lo = min(d["captured_at"]).strftime("%Y-%m-%d %H:%M:%S")
+          hi = max(d["captured_at"]).strftime("%Y-%m-%d %H:%M:%S")
+          EXP = {"rows": 167941, "markets": 471,
+                 "lo": "2026-08-21 00:15:48", "hi": "2026-08-24 11:44:59"}
+          got = {"rows": rows, "markets": mk, "lo": lo, "hi": hi}
+          print("expected (recorded in BOOK_ACQUISITION.md):", EXP)
+          print("got                                      :", got)
+          bad = {k: (EXP[k], got[k]) for k in EXP if EXP[k] != got[k]}
+          assert not bad, "STRUCTURAL MISMATCH -- refusing: %s" % bad
+          open("data/zenodo_22084977/PROVENANCE_5m.md", "w").write(
+            "# Provenance -- updown_5m.parquet\\n\\n"
+            "* source: Zenodo record **22084977**, file `updown_5m.parquet`\\n"
+            "* licence: **CC-BY-4.0**\\n"
+            "* sha256 (RECORDED BY THIS JOB, not verified against a prior "
+            "value): `%s`\\n"
+            "* **verification was STRUCTURAL, not cryptographic.** No sha256 "
+            "for this file existed in the repository beforehand, so it was "
+            "checked against the figures prior analysis recorded in "
+            "analysis/l5/BOOK_ACQUISITION.md: rows=%d, markets=%d, "
+            "captured_at %s .. %s -- all four matched exactly. A structural "
+            "match is weaker than a hash match and this study labels it so.\\n"
+            "* committed byte-identical; never altered or re-compressed\\n"
+            % (sha, rows, mk, lo, hi))
+          json.dump({"file": "updown_5m.parquet", "sha256": sha, **got,
+                     "verification": "STRUCTURAL_NOT_CRYPTOGRAPHIC"},
+                    open("data/zenodo_22084977/CENSUS_5m.json", "w"), indent=1)
+          print("sha256 recorded:", sha)
+          PY
+          sha256sum data/zenodo_22084977/updown_5m.parquet \
+            | sed 's/ .*/  updown_5m.parquet/' >> data/zenodo_22084977/SHA256SUMS
+
+      - name: Commit the 5m archive
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/august_replay_commit.sh "data(polymarket): Zenodo 22084977 BTC5m 1s L2, structurally verified"
+
+      - name: Resolution audit across BOTH contract lengths
+        run: |
+          mkdir -p analysis/l5/microstructure
+          python -m analysis.l5.microstructure.resolution_audit \
+            --parquet "BTC15m=data/zenodo_22084977/updown_15m.parquet" \
+            --parquet "BTC5m=data/zenodo_22084977/updown_5m.parquet" \
+            --out analysis/l5/microstructure/L2_RESOLUTION.json 2>&1 | tail -30
+
+      - name: Backfill L5's own BTC5m fills, by TOKEN ID, 300s windows
+        run: |
+          python -m analysis.l5.historical_l2.backfill \
+            --parquet data/zenodo_22084977/updown_5m.parquet \
+            --window-s 300 --contract-length 5m \
+            --out analysis/l5/microstructure/l5_backfill_5m.json 2>&1 | tail -60
+
+      - name: Real block timestamps for the BTC5m fills
+        run: |
+          python -m analysis.l5.historical_l2.block_times \
+            --backfill analysis/l5/microstructure/l5_backfill_5m.json \
+            --out analysis/l5/microstructure/block_times_5m.json 2>&1 | tail -20
+
+      - name: Commit the 5m evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/august_replay_commit.sh "evidence(5m): L5 BTC5m fills, real block times, resolution audit"

@@ -116,15 +116,25 @@ def main(argv=None) -> int:
     ap.add_argument("--parquet", required=True)
     ap.add_argument("--out", default="analysis/l5/historical_l2/l5_backfill.json")
     ap.add_argument("--max-windows", type=int, default=0)
+    ap.add_argument("--window-s", type=int, default=900,
+                    help=("contract length in seconds. Default 900 keeps the "
+                          "original BTC15m behaviour byte-identical; pass "
+                          "300 for BTC5m."))
+    ap.add_argument("--contract-length", default=None,
+                    help="filter the parquet to this contract_length, e.g. 5m")
     a = ap.parse_args(argv)
 
     import pyarrow.parquet as pq
-    t = pq.read_table(a.parquet, columns=["coin", "market_slug", "token_id",
-                                          "outcome", "market_end_at"])
+    cols = ["coin", "market_slug", "token_id", "outcome", "market_end_at"]
+    if a.contract_length:
+        cols.append("contract_length")
+    t = pq.read_table(a.parquet, columns=cols)
     d = t.to_pydict()
     wins: Dict[str, Dict[str, Any]] = {}
     for i, c in enumerate(d["coin"]):
         if c != "btc":
+            continue
+        if a.contract_length and d["contract_length"][i] != a.contract_length:
             continue
         s = d["market_slug"][i]
         w = wins.setdefault(s, {"tokens": {}, "end": d["market_end_at"][i]})
@@ -132,17 +142,18 @@ def main(argv=None) -> int:
     slugs = sorted(wins)
     if a.max_windows:
         slugs = slugs[:a.max_windows]
-    print(f"{len(slugs)} BTC15m windows from the parquet", flush=True)
+    print(f"{len(slugs)} windows from the parquet "
+          f"(window={a.window_s}s)", flush=True)
 
     start0 = int(slugs[0].rsplit("-", 1)[1])
-    end0 = int(slugs[-1].rsplit("-", 1)[1]) + 900
+    end0 = int(slugs[-1].rsplit("-", 1)[1]) + a.window_s
     clock = Clock(*_anchors(start0, end0))
     print(f"clock: {clock.rate:.4f}s/block", flush=True)
 
     out = []
     for n, s in enumerate(slugs, 1):
         st = int(s.rsplit("-", 1)[1])
-        r = fills_for_window(s, st, st + 900, clock,
+        r = fills_for_window(s, st, st + a.window_s, clock,
                              tokens=list(wins[s]["tokens"]))
         r["tokens"] = wins[s]["tokens"]
         out.append(r)
@@ -151,6 +162,8 @@ def main(argv=None) -> int:
     tot = sum(r["n_fills"] for r in out)
     holes = sum(r["chunk_holes"] for r in out)
     rep = {"windows": len(out), "total_l5_fills": tot, "chunk_holes": holes,
+           "window_s": a.window_s,
+           "contract_length_filter": a.contract_length,
            "rows": out,
            "labels": ("chain-derived, joined to the dataset by TOKEN ID. A "
                       "failed chunk is a HOLE and is never counted as an "

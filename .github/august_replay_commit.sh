@@ -5,7 +5,7 @@
 # output onto an authorized lineage.
 set -uo pipefail
 MSG="${1:?commit message required}"
-ALLOW='^(analysis/l5/august_replay/|data/zenodo_22084977/)'
+ALLOW='^(analysis/l5/august_replay/|analysis/l5/microstructure/|data/zenodo_22084977/)'
 
 if [ "${GITHUB_REF_NAME:-}" != "claude/august-l5-forensic-replay-788cml" ]; then
   echo "::error::refusing to commit on ${GITHUB_REF_NAME:-<none>}"; exit 1
@@ -17,9 +17,11 @@ fi
 # pattern, so the study's own copies were never ignored and the -f bought
 # nothing -- while sweeping __pycache__/*.pyc into the archive commit, which
 # IS ignored and has no business in an evidence commit.
-git add -- analysis/l5/august_replay data/zenodo_22084977 2>/dev/null || true
+git add -- analysis/l5/august_replay analysis/l5/microstructure \
+  data/zenodo_22084977 2>/dev/null || true
 git rm -r -q --cached --ignore-unmatch \
-  analysis/l5/august_replay/__pycache__ 2>/dev/null || true
+  analysis/l5/august_replay/__pycache__ \
+  analysis/l5/microstructure/__pycache__ 2>/dev/null || true
 
 if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
 if git diff --cached --name-only | grep -qvE "$ALLOW"; then

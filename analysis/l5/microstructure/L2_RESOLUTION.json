@@ -1,0 +1,100 @@
+{
+ "purpose": "establish the archive's true temporal resolution before any microstructure claim",
+ "no_interpolation_anywhere": true,
+ "archives": [
+  {
+   "label": "BTC15m",
+   "file": "updown_15m.parquet",
+   "coin": "btc",
+   "captured_at_dtype": "timestamp[us, tz=UTC]",
+   "rows_total_file": 239310,
+   "rows_for_coin": 37980,
+   "contract_lengths_present": {
+    "15m": 37980
+   },
+   "distinct_tokens": 66,
+   "PRECISION": {
+    "distinct_microsecond_values": 1,
+    "microsecond_histogram_top5": [
+     [
+      0,
+      37980
+     ]
+    ],
+    "all_microseconds_zero": true,
+    "gcd_of_inter_observation_gaps_s": 1,
+    "verdict": "WHOLE SECONDS: the column is microsecond-capable but every microsecond is zero, so no sub-second state exists to preserve"
+   },
+   "DUPLICATE_TIMESTAMPS": {
+    "same_token_same_second_identical_ladder": 0,
+    "same_token_same_second_DIFFERENT_ladder": 0,
+    "note": "differing rows at the same second are UNORDERABLE from the archive alone; an event-driven replay must declare them rather than pick an order"
+   },
+   "UPDATE_FREQUENCY": {
+    "n_gaps": 37914,
+    "gap_s_p05": 1,
+    "gap_s_p50": 1,
+    "gap_s_p90": 3,
+    "gap_s_p95": 6,
+    "gap_s_p99": 11,
+    "gap_s_max": 226,
+    "gap_1s_share": 0.8162,
+    "gaps_over_60s": 8,
+    "gaps_over_60s_share": 0.000211,
+    "gap_histogram_top10": [
+     [
+      1,
+      30945
+     ],
+     [
+      2,
+      2678
+     ],
+     [
+      3,
+      973
+     ],
+     [
+      4,
+      718
+     ],
+     [
+      5,
+      680
+     ],
+     [
+      6,
+      588
+     ],
+     [
+      7,
+      338
+     ],
+     [
+      8,
+      268
+     ],
+     [
+      9,
+      180
+     ],
+     [
+      10,
+      124
+     ]
+    ]
+   },
+   "SNAPSHOT_OR_EVENT_DRIVEN": {
+    "consecutive_pairs_compared": 37914,
+    "consecutive_with_IDENTICAL_ladders": 90,
+    "identical_share": 0.002374,
+    "verdict": "EVENT-DRIVEN (written on change): consecutive rows almost never repeat a ladder, so a GAP MEANS THE BOOK DID NOT MOVE and the last row is the current state"
+   },
+   "DEPTH": {
+    "bid_levels_p50": 49,
+    "bid_levels_p95": 110,
+    "bid_levels_max": 128
+   }
+  }
+ ]
+}
