@@ -1,0 +1,7 @@
+S3 prospective cohort request
+
+frozen spec : 8b20a25936d3b3a406403f6424eff30d3360d22f188b28a10644f356b65287df
+spec commit : 28c619df
+requested   : 2026-10-06T13:16:30Z
+mode        : ZERO CAPITAL. read-only public endpoints. no orders, no signing.
+reservation : 0.96, UNCHANGED, despite expected substantial stand-down.
