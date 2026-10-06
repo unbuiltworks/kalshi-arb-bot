@@ -1,0 +1,796 @@
+{
+ "purpose": "select ONE complete August BTC15m window for the forensic replay, on criteria defined WITHOUT reference to S1 performance",
+ "criteria_are_s1_independent": true,
+ "s1_imported_here": false,
+ "gates": {
+  "G1": "all 900 seconds resolvable on BOTH tokens, carry <= 60s",
+  "G2": "L5 fills in every one of 5 equal 180s sub-intervals",
+  "G3": "L5 fills in window >= 50 (ranking key)",
+  "G4": "both RESTING_BID_CONSISTENT and mint-consistent present",
+  "G5": "zero chunk holes in the chain scan"
+ },
+ "windows_considered": 12,
+ "windows_passing": 9,
+ "selected": "btc-updown-15m-1787300100",
+ "selection_rank_key": "n_fills_in_window desc, then slug asc",
+ "rows": [
+  {
+   "market_slug": "btc-updown-15m-1787274000",
+   "window_start_utc": 1787274000,
+   "window_end_utc": 1787274900,
+   "tokens": {
+    "88168024926615299762915745134404456008926950205482700560123893248136441143968": "Down",
+    "96130134142585380589598164875912050078764872810076261184365024885646777572261": "Up"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 145,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "88168024926615299762915745134404456008926950205482700560123893248136441143968": {
+      "rows_in_window": 118,
+      "max_gap_s": 16.0,
+      "first_row_ts": 1787274003.0,
+      "last_row_ts": 1787274897.0
+     },
+     "96130134142585380589598164875912050078764872810076261184365024885646777572261": {
+      "rows_in_window": 118,
+      "max_gap_s": 16.0,
+      "first_row_ts": 1787274003.0,
+      "last_row_ts": 1787274897.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 145,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     29,
+     72,
+     34,
+     10,
+     0
+    ],
+    "L5_ACTIVE_THROUGHOUT": false,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 39,
+     "RESTING_BID_CONSISTENT": 106
+    },
+    "n_resting_bid_consistent": 106,
+    "n_mint_consistent": 39,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": false,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": false
+  },
+  {
+   "market_slug": "btc-updown-15m-1787290200",
+   "window_start_utc": 1787290200,
+   "window_end_utc": 1787291100,
+   "tokens": {
+    "68053599192034332996506097228923479102527860498493114785335945798323495083552": "Up",
+    "77468821864231965147674736663234589747070173571123419346521510279572623008571": "Down"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 379,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "68053599192034332996506097228923479102527860498493114785335945798323495083552": {
+      "rows_in_window": 192,
+      "max_gap_s": 17.0,
+      "first_row_ts": 1787290205.0,
+      "last_row_ts": 1787291097.0
+     },
+     "77468821864231965147674736663234589747070173571123419346521510279572623008571": {
+      "rows_in_window": 192,
+      "max_gap_s": 17.0,
+      "first_row_ts": 1787290205.0,
+      "last_row_ts": 1787291097.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 379,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     76,
+     63,
+     31,
+     102,
+     107
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 143,
+     "RESTING_BID_CONSISTENT": 223,
+     "INSIDE_SPREAD_IMPROVED_THE_TOUCH": 13
+    },
+    "n_resting_bid_consistent": 223,
+    "n_mint_consistent": 143,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787296500",
+   "window_start_utc": 1787296500,
+   "window_end_utc": 1787297400,
+   "tokens": {
+    "111391172532666726255234677943994769989466496466524244292211629245520313007849": "Up",
+    "83382632747033594820713281397104619098400094322040539972729369852260944440831": "Down"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 245,
+   "coverage": {
+    "seconds_resolvable": 735,
+    "seconds_total": 900,
+    "unresolved_seconds": [
+     1787297185,
+     1787297186,
+     1787297187,
+     1787297188,
+     1787297189,
+     1787297190,
+     1787297191,
+     1787297192,
+     1787297193,
+     1787297194,
+     1787297195,
+     1787297196,
+     1787297197,
+     1787297198,
+     1787297199,
+     1787297200,
+     1787297201,
+     1787297202,
+     1787297203,
+     1787297204
+    ],
+    "n_unresolved": 165,
+    "COMPLETE_L2_COVERAGE": false,
+    "per_token": {
+     "111391172532666726255234677943994769989466496466524244292211629245520313007849": {
+      "rows_in_window": 72,
+      "max_gap_s": 226.0,
+      "first_row_ts": 1787296505.0,
+      "last_row_ts": 1787297393.0
+     },
+     "83382632747033594820713281397104619098400094322040539972729369852260944440831": {
+      "rows_in_window": 72,
+      "max_gap_s": 226.0,
+      "first_row_ts": 1787296505.0,
+      "last_row_ts": 1787297393.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 245,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     129,
+     50,
+     34,
+     32,
+     0
+    ],
+    "L5_ACTIVE_THROUGHOUT": false,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "RESTING_BID_CONSISTENT": 163,
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 76,
+     "INSIDE_SPREAD_IMPROVED_THE_TOUCH": 2,
+     "NO_BOOK": 4
+    },
+    "n_resting_bid_consistent": 163,
+    "n_mint_consistent": 76,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": false,
+    "G2_l5_active_throughout": false,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": false
+  },
+  {
+   "market_slug": "btc-updown-15m-1787300100",
+   "window_start_utc": 1787300100,
+   "window_end_utc": 1787301000,
+   "tokens": {
+    "1850913401628293007994621867496115006695624924039532983681522971528992487442": "Down",
+    "57006202117550541518521961689036825756655221835821437576802607839503907636078": "Up"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 398,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "1850913401628293007994621867496115006695624924039532983681522971528992487442": {
+      "rows_in_window": 105,
+      "max_gap_s": 19.0,
+      "first_row_ts": 1787300102.0,
+      "last_row_ts": 1787300994.0
+     },
+     "57006202117550541518521961689036825756655221835821437576802607839503907636078": {
+      "rows_in_window": 105,
+      "max_gap_s": 19.0,
+      "first_row_ts": 1787300102.0,
+      "last_row_ts": 1787300994.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 398,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     85,
+     89,
+     38,
+     102,
+     84
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "RESTING_BID_CONSISTENT": 305,
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 91,
+     "INSIDE_SPREAD_IMPROVED_THE_TOUCH": 1,
+     "NO_BOOK": 1
+    },
+    "n_resting_bid_consistent": 305,
+    "n_mint_consistent": 91,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787305500",
+   "window_start_utc": 1787305500,
+   "window_end_utc": 1787306400,
+   "tokens": {
+    "12058521546134409639599734692337965366177254906196152500500691588607977849795": "Up",
+    "52654791214784241373087337558451000589277208516309514032416274652398466639092": "Down"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 246,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "12058521546134409639599734692337965366177254906196152500500691588607977849795": {
+      "rows_in_window": 201,
+      "max_gap_s": 11.0,
+      "first_row_ts": 1787305502.0,
+      "last_row_ts": 1787306394.0
+     },
+     "52654791214784241373087337558451000589277208516309514032416274652398466639092": {
+      "rows_in_window": 201,
+      "max_gap_s": 11.0,
+      "first_row_ts": 1787305502.0,
+      "last_row_ts": 1787306394.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 246,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     74,
+     70,
+     41,
+     53,
+     8
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "RESTING_BID_CONSISTENT": 176,
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 64,
+     "INSIDE_SPREAD_IMPROVED_THE_TOUCH": 3,
+     "NO_BOOK": 3
+    },
+    "n_resting_bid_consistent": 176,
+    "n_mint_consistent": 64,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787306400",
+   "window_start_utc": 1787306400,
+   "window_end_utc": 1787307300,
+   "tokens": {
+    "14416592340950540945801608693393189139119239491754781295018014596076520942196": "Down",
+    "50830420171160670624154433620588972779081471015448116738439344157061154820801": "Up"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 268,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "14416592340950540945801608693393189139119239491754781295018014596076520942196": {
+      "rows_in_window": 121,
+      "max_gap_s": 14.0,
+      "first_row_ts": 1787306400.0,
+      "last_row_ts": 1787307295.0
+     },
+     "50830420171160670624154433620588972779081471015448116738439344157061154820801": {
+      "rows_in_window": 121,
+      "max_gap_s": 14.0,
+      "first_row_ts": 1787306400.0,
+      "last_row_ts": 1787307295.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 268,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     21,
+     48,
+     44,
+     99,
+     56
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "RESTING_BID_CONSISTENT": 203,
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 65
+    },
+    "n_resting_bid_consistent": 203,
+    "n_mint_consistent": 65,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787307300",
+   "window_start_utc": 1787307300,
+   "window_end_utc": 1787308200,
+   "tokens": {
+    "72725167458857066535088887580151392707918501129306890140232660058418276225226": "Down",
+    "95815248540219353140033614986271110424319486519533240272288918593877833451835": "Up"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 236,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "72725167458857066535088887580151392707918501129306890140232660058418276225226": {
+      "rows_in_window": 112,
+      "max_gap_s": 17.0,
+      "first_row_ts": 1787307301.0,
+      "last_row_ts": 1787308195.0
+     },
+     "95815248540219353140033614986271110424319486519533240272288918593877833451835": {
+      "rows_in_window": 112,
+      "max_gap_s": 17.0,
+      "first_row_ts": 1787307301.0,
+      "last_row_ts": 1787308195.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 236,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     48,
+     63,
+     39,
+     83,
+     3
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 57,
+     "RESTING_BID_CONSISTENT": 179
+    },
+    "n_resting_bid_consistent": 179,
+    "n_mint_consistent": 56,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787311800",
+   "window_start_utc": 1787311800,
+   "window_end_utc": 1787312700,
+   "tokens": {
+    "109883474150629705400022168192615903490304320580514845817582910765392958324615": "Up",
+    "41507143742792454373653280927870272713827782437572162399865647865584746441666": "Down"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 238,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "109883474150629705400022168192615903490304320580514845817582910765392958324615": {
+      "rows_in_window": 153,
+      "max_gap_s": 60.0,
+      "first_row_ts": 1787311800.0,
+      "last_row_ts": 1787312698.0
+     },
+     "41507143742792454373653280927870272713827782437572162399865647865584746441666": {
+      "rows_in_window": 153,
+      "max_gap_s": 60.0,
+      "first_row_ts": 1787311800.0,
+      "last_row_ts": 1787312698.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 238,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     108,
+     68,
+     44,
+     18,
+     0
+    ],
+    "L5_ACTIVE_THROUGHOUT": false,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "RESTING_BID_CONSISTENT": 176,
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 62
+    },
+    "n_resting_bid_consistent": 176,
+    "n_mint_consistent": 62,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": false,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": false
+  },
+  {
+   "market_slug": "btc-updown-15m-1787362200",
+   "window_start_utc": 1787362200,
+   "window_end_utc": 1787363100,
+   "tokens": {
+    "17746763795151727267079145295136524064764795102982981086288601338416705891841": "Up",
+    "59053489467876473663117833937156827384125133966597880426907837418755083118605": "Down"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 281,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "17746763795151727267079145295136524064764795102982981086288601338416705891841": {
+      "rows_in_window": 206,
+      "max_gap_s": 14.0,
+      "first_row_ts": 1787362200.0,
+      "last_row_ts": 1787363099.0
+     },
+     "59053489467876473663117833937156827384125133966597880426907837418755083118605": {
+      "rows_in_window": 206,
+      "max_gap_s": 14.0,
+      "first_row_ts": 1787362200.0,
+      "last_row_ts": 1787363099.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 281,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     25,
+     70,
+     43,
+     63,
+     80
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "RESTING_BID_CONSISTENT": 184,
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 91,
+     "INSIDE_SPREAD_IMPROVED_THE_TOUCH": 4,
+     "NO_BOOK": 2
+    },
+    "n_resting_bid_consistent": 184,
+    "n_mint_consistent": 91,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787363100",
+   "window_start_utc": 1787363100,
+   "window_end_utc": 1787364000,
+   "tokens": {
+    "58306571321996642443082328026865114876781946299719081948677288788696652860269": "Up",
+    "97885698076066508844285778783112795919487711812945544986608533083132069283171": "Down"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 208,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "58306571321996642443082328026865114876781946299719081948677288788696652860269": {
+      "rows_in_window": 228,
+      "max_gap_s": 15.0,
+      "first_row_ts": 1787363100.0,
+      "last_row_ts": 1787363999.0
+     },
+     "97885698076066508844285778783112795919487711812945544986608533083132069283171": {
+      "rows_in_window": 228,
+      "max_gap_s": 15.0,
+      "first_row_ts": 1787363100.0,
+      "last_row_ts": 1787363999.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 208,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     18,
+     30,
+     33,
+     53,
+     74
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "RESTING_BID_CONSISTENT": 145,
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 62,
+     "NO_BOOK": 1
+    },
+    "n_resting_bid_consistent": 145,
+    "n_mint_consistent": 62,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787365800",
+   "window_start_utc": 1787365800,
+   "window_end_utc": 1787366700,
+   "tokens": {
+    "30759864932560425919287214608833322211597767159071052497377749806186627746233": "Up",
+    "72266249524686852361660408215949777627474075494275628649972582568231543523912": "Down"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 302,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "30759864932560425919287214608833322211597767159071052497377749806186627746233": {
+      "rows_in_window": 149,
+      "max_gap_s": 18.0,
+      "first_row_ts": 1787365802.0,
+      "last_row_ts": 1787366697.0
+     },
+     "72266249524686852361660408215949777627474075494275628649972582568231543523912": {
+      "rows_in_window": 149,
+      "max_gap_s": 18.0,
+      "first_row_ts": 1787365802.0,
+      "last_row_ts": 1787366697.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 302,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     41,
+     64,
+     38,
+     60,
+     99
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 94,
+     "RESTING_BID_CONSISTENT": 202,
+     "INSIDE_SPREAD_IMPROVED_THE_TOUCH": 5,
+     "NO_BOOK": 1
+    },
+    "n_resting_bid_consistent": 202,
+    "n_mint_consistent": 94,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  },
+  {
+   "market_slug": "btc-updown-15m-1787369400",
+   "window_start_utc": 1787369400,
+   "window_end_utc": 1787370300,
+   "tokens": {
+    "71881000607989322244571190852705184623007523731075259717556038672733236182123": "Down",
+    "82043716617473588632854672808816246807298402218334971927981070244663300404685": "Up"
+   },
+   "chunk_holes": 0,
+   "n_fills_total_chain": 220,
+   "coverage": {
+    "seconds_resolvable": 900,
+    "seconds_total": 900,
+    "unresolved_seconds": [],
+    "n_unresolved": 0,
+    "COMPLETE_L2_COVERAGE": true,
+    "per_token": {
+     "71881000607989322244571190852705184623007523731075259717556038672733236182123": {
+      "rows_in_window": 155,
+      "max_gap_s": 18.0,
+      "first_row_ts": 1787369403.0,
+      "last_row_ts": 1787370298.0
+     },
+     "82043716617473588632854672808816246807298402218334971927981070244663300404685": {
+      "rows_in_window": 155,
+      "max_gap_s": 18.0,
+      "first_row_ts": 1787369403.0,
+      "last_row_ts": 1787370298.0
+     }
+    }
+   },
+   "activity": {
+    "n_fills_in_window": 220,
+    "subinterval_width_s": 180,
+    "fills_per_subinterval": [
+     44,
+     24,
+     34,
+     77,
+     41
+    ],
+    "L5_ACTIVE_THROUGHOUT": true,
+    "SUBSTANTIAL": true
+   },
+   "mechanisms": {
+    "classes": {
+     "AT_OR_ABOVE_ASK_NOT_MEASURABLE": 80,
+     "RESTING_BID_CONSISTENT": 137,
+     "NO_BOOK": 3
+    },
+    "n_resting_bid_consistent": 137,
+    "n_mint_consistent": 80,
+    "BOTH_MECHANISMS_PRESENT": true
+   },
+   "gates": {
+    "G1_complete_l2_coverage": true,
+    "G2_l5_active_throughout": true,
+    "G3_substantial_activity": true,
+    "G4_both_mechanisms": true,
+    "G5_zero_chunk_holes": true
+   },
+   "PASSES_ALL_GATES": true
+  }
+ ]
+}
