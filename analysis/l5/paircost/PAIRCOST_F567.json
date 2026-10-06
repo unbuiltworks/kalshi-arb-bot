@@ -1,0 +1,261 @@
+{
+ "protocol": "PREREGISTRATION_PAIRCOST.md @ 118571f3",
+ "FAIRNESS_NOTE": "every quantity below is put through the SAME running-mean transform, and NULL_M's own cumulative pair cost is included. The RAW marginal series is reported ONLY as a tautology guard, to show how much of any 'cumulative is smoother' result is just the averaging.",
+ "F5_LOWO_target": {
+  "per_window": {
+   "btc-updown-15m-1787274000": {
+    "LOWO_fitted_target_from_other_11": 0.977712,
+    "frozen_target": 0.98,
+    "abs_difference": 0.002288,
+    "held_out_terminal": 0.992465,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787290200": {
+    "LOWO_fitted_target_from_other_11": 0.988837,
+    "frozen_target": 0.98,
+    "abs_difference": 0.008837,
+    "held_out_terminal": 0.970375,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787296500": {
+    "LOWO_fitted_target_from_other_11": 0.977712,
+    "frozen_target": 0.98,
+    "abs_difference": 0.002288,
+    "held_out_terminal": 1.000713,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787300100": {
+    "LOWO_fitted_target_from_other_11": 0.977712,
+    "frozen_target": 0.98,
+    "abs_difference": 0.002288,
+    "held_out_terminal": 0.991077,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787305500": {
+    "LOWO_fitted_target_from_other_11": 0.988837,
+    "frozen_target": 0.98,
+    "abs_difference": 0.008837,
+    "held_out_terminal": 0.977712,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787306400": {
+    "LOWO_fitted_target_from_other_11": 0.988837,
+    "frozen_target": 0.98,
+    "abs_difference": 0.008837,
+    "held_out_terminal": 0.962565,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787307300": {
+    "LOWO_fitted_target_from_other_11": 0.977712,
+    "frozen_target": 0.98,
+    "abs_difference": 0.002288,
+    "held_out_terminal": 0.988837,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787311800": {
+    "LOWO_fitted_target_from_other_11": 0.988837,
+    "frozen_target": 0.98,
+    "abs_difference": 0.008837,
+    "held_out_terminal": 0.971812,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787362200": {
+    "LOWO_fitted_target_from_other_11": 0.988837,
+    "frozen_target": 0.98,
+    "abs_difference": 0.008837,
+    "held_out_terminal": 0.938116,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787363100": {
+    "LOWO_fitted_target_from_other_11": 0.977712,
+    "frozen_target": 0.98,
+    "abs_difference": 0.002288,
+    "held_out_terminal": 0.997635,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787365800": {
+    "LOWO_fitted_target_from_other_11": 0.988837,
+    "frozen_target": 0.98,
+    "abs_difference": 0.008837,
+    "held_out_terminal": 0.965803,
+    "frozen_target_within_band_of_LOWO_fit": true
+   },
+   "btc-updown-15m-1787369400": {
+    "LOWO_fitted_target_from_other_11": 0.977712,
+    "frozen_target": 0.98,
+    "abs_difference": 0.002288,
+    "held_out_terminal": 1.019537,
+    "frozen_target_within_band_of_LOWO_fit": true
+   }
+  },
+  "max_abs_difference_from_frozen_0.98": 0.008837,
+  "median_abs_difference": 0.005562,
+  "SURVIVES_LOWO": true
+ },
+ "F6_F7_aggregate": {
+  "F6_dispersion_cumulative_running_pair_cost": {
+   "n": 12,
+   "median": 0.0242,
+   "min": 0.01391,
+   "max": 0.049473
+  },
+  "F6_dispersion_cumulative_marginal_pair_cost": {
+   "n": 12,
+   "median": 0.003452,
+   "min": 0.002555,
+   "max": 0.008306
+  },
+  "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": {
+   "n": 12,
+   "median": 0.029818,
+   "min": 0.022107,
+   "max": 0.078253
+  },
+  "F6_dispersion_cumulative_NULL_M_pair_cost": {
+   "n": 12,
+   "median": 0.001251,
+   "min": 0.0,
+   "max": 0.092939
+  },
+  "F7_dispersion_cumulative_matched_fraction": {
+   "n": 12,
+   "median": 0.101319,
+   "min": 0.033428,
+   "max": 0.142047
+  },
+  "F7_dispersion_cumulative_share_allocation_w_up": {
+   "n": 12,
+   "median": 0.111988,
+   "min": 0.056837,
+   "max": 0.149141
+  },
+  "F7_dispersion_cumulative_price": {
+   "n": 12,
+   "median": 0.039227,
+   "min": 0.018445,
+   "max": 0.144824
+  }
+ },
+ "per_window": {
+  "btc-updown-15m-1787274000": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.049473,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.004314,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.022107,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.0,
+   "F7_dispersion_cumulative_matched_fraction": 0.134266,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.134462,
+   "F7_dispersion_cumulative_price": 0.081984,
+   "n_actions": 83
+  },
+  "btc-updown-15m-1787290200": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.017176,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.008306,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.070008,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.004329,
+   "F7_dispersion_cumulative_matched_fraction": 0.07945,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.082357,
+   "F7_dispersion_cumulative_price": 0.060016,
+   "n_actions": 240
+  },
+  "btc-updown-15m-1787296500": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.022621,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.007464,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.028157,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.001251,
+   "F7_dispersion_cumulative_matched_fraction": 0.134454,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.136646,
+   "F7_dispersion_cumulative_price": 0.087391,
+   "n_actions": 158
+  },
+  "btc-updown-15m-1787300100": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.015949,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.00284,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.026138,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.000622,
+   "F7_dispersion_cumulative_matched_fraction": 0.14059,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.14117,
+   "F7_dispersion_cumulative_price": 0.030755,
+   "n_actions": 258
+  },
+  "btc-updown-15m-1787305500": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.01391,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.002555,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.025807,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.000923,
+   "F7_dispersion_cumulative_matched_fraction": 0.13375,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.147048,
+   "F7_dispersion_cumulative_price": 0.022673,
+   "n_actions": 153
+  },
+  "btc-updown-15m-1787306400": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.028709,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.003152,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.028984,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.003956,
+   "F7_dispersion_cumulative_matched_fraction": 0.074974,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.082498,
+   "F7_dispersion_cumulative_price": 0.039227,
+   "n_actions": 185
+  },
+  "btc-updown-15m-1787307300": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.033148,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.002888,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.039277,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.023018,
+   "F7_dispersion_cumulative_matched_fraction": 0.137514,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.144287,
+   "F7_dispersion_cumulative_price": 0.037133,
+   "n_actions": 148
+  },
+  "btc-updown-15m-1787311800": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.025294,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.00696,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.04278,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.092939,
+   "F7_dispersion_cumulative_matched_fraction": 0.142047,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.149141,
+   "F7_dispersion_cumulative_price": 0.038826,
+   "n_actions": 131
+  },
+  "btc-updown-15m-1787362200": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.033712,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.003421,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.033411,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.000149,
+   "F7_dispersion_cumulative_matched_fraction": 0.101319,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.111988,
+   "F7_dispersion_cumulative_price": 0.144824,
+   "n_actions": 190
+  },
+  "btc-updown-15m-1787363100": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.024889,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.003452,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.033397,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.000335,
+   "F7_dispersion_cumulative_matched_fraction": 0.069061,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.056837,
+   "F7_dispersion_cumulative_price": 0.041996,
+   "n_actions": 159
+  },
+  "btc-updown-15m-1787365800": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.0242,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.006333,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.078253,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.001262,
+   "F7_dispersion_cumulative_matched_fraction": 0.091265,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.10124,
+   "F7_dispersion_cumulative_price": 0.051107,
+   "n_actions": 216
+  },
+  "btc-updown-15m-1787369400": {
+   "F6_dispersion_cumulative_running_pair_cost": 0.014367,
+   "F6_dispersion_cumulative_marginal_pair_cost": 0.006373,
+   "F6_dispersion_RAW_marginal_pair_cost_TAUTOLOGY_GUARD": 0.029818,
+   "F6_dispersion_cumulative_NULL_M_pair_cost": 0.002039,
+   "F7_dispersion_cumulative_matched_fraction": 0.033428,
+   "F7_dispersion_cumulative_share_allocation_w_up": 0.057307,
+   "F7_dispersion_cumulative_price": 0.018445,
+   "n_actions": 150
+  }
+ }
+}
