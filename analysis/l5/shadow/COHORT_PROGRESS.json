@@ -1,11 +1,15 @@
 {
   "terminal_status_counts": {
     "INCOMPLETE": 27,
-    "NO_ELIGIBLE_MARKET": 57
+    "NO_ELIGIBLE_MARKET": 114
   },
   "COMPLETE_markets": 0,
   "cohort_target": 25,
   "evidenced_fills": 0,
   "uncertain_fills": 0,
-  "note": "uncertain fills are excluded from primary economics; missing data is never a zero fill"
+  "non_counting_statuses": {
+    "INCOMPLETE": 27,
+    "NO_ELIGIBLE_MARKET": 114
+  },
+  "note": "only COMPLETE counts toward the cohort. uncertain fills are excluded from primary economics; missing data, a stale listing or a collector error is never a zero fill"
 }
