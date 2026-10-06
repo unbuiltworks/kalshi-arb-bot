@@ -23,8 +23,13 @@ from analysis.l5.live_micro.ledger import (assert_disarmed_or_owner_armed,
 from analysis.l5.live_micro.spec import (MICRO_FINGERPRINT, SPEC,
                                          assert_frozen, fingerprint)
 
-AUTHORIZED_FINGERPRINT = \
+#: PROBE 1's authorized fingerprint, preserved for the record. It returned
+#: INFRASTRUCTURE SKIP and is NOT the current spec.
+PROBE_1_FINGERPRINT = \
     "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118"
+#: v2 carries the instrument fixes. It is NOT YET AUTHORIZED, so the
+#: fingerprint gate reports AWAITING_AUTHORIZATION rather than PASS.
+AUTHORIZED_FINGERPRINT = None
 GATEWAY = "https://gateway.polymarket.us"
 ARM_KEYS = ("PMUS_MICRO_LIVE", "PMUS_MICRO_SESSION_ID", "PMUS_MICRO_ARM",
             "PMUS_MICRO_GATE_EVIDENCE")
@@ -34,9 +39,16 @@ CRED_HINTS = ("PMUS_API", "PMUS_KEY", "PMUS_SECRET", "PRIVATE_KEY",
 
 def gate_fingerprint() -> Dict[str, Any]:
     got = fingerprint()
-    ok = got == AUTHORIZED_FINGERPRINT == MICRO_FINGERPRINT
-    return {"gate": "G1_FINGERPRINT_MATCHES_AUTHORIZATION", "pass": ok,
-            "authorized": AUTHORIZED_FINGERPRINT, "computed": got}
+    internally_consistent = got == MICRO_FINGERPRINT
+    return {"gate": "G1_FINGERPRINT", "pass": False,
+            "status": "AWAITING_AUTHORIZATION",
+            "spec_internally_consistent": internally_consistent,
+            "computed_v2": got,
+            "probe_1_authorized_fingerprint": PROBE_1_FINGERPRINT,
+            "probe_1_outcome": "INFRASTRUCTURE SKIP / NO SUBMISSION",
+            "detail": ("v2 fixes instrumentation only; trading and risk "
+                       "behaviour are unchanged. It has NOT been authorized, "
+                       "so this gate deliberately does not pass.")}
 
 
 def gate_arming() -> Dict[str, Any]:

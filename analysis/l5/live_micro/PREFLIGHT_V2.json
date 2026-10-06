@@ -1,0 +1,112 @@
+{
+ "probe": "LIVE-L5-MICRO-1 v2",
+ "mode": "READ_ONLY_PREFLIGHT",
+ "orders_submitted": 0,
+ "wallet_signing": 0,
+ "capital_moved_usd": "0.00",
+ "credentials_moved_or_printed": false,
+ "micro_keys_set": false,
+ "s3_altered": false,
+ "actual_tick": "0.01",
+ "tick_source": "venue field `orderPriceMinTickSize`, per market",
+ "tick_authority": "pmus_micro_executor: accept the venue's grid and validate the price against THAT rather than against a constant",
+ "minimumTradeQty": "0.01",
+ "min_qty_passes_frozen_lt_1": true,
+ "minimum_executable_dollars": {
+  "at_observed_price_0_46": "0.0046",
+  "range_over_tick_grid": [
+   "0.0001",
+   "0.0099"
+  ],
+  "within_per_market_cap": true,
+  "per_market_cap_usd": "0.05"
+ },
+ "authenticated_realtime_bbo": {
+  "source": "l5_pmus_auth_book.AuthBook",
+  "mechanism": "authenticated markets WebSocket, the same stream and parser the evidence recorder uses; push stream with per-frame receipt timestamps",
+  "staleness_bound_s": 2.0,
+  "bound_provenance": "REUSED, not invented: l5_preview_gate.BOOK_MAX_AGE_S = 2.0, whose own comment reads 'the frozen rule's own snapshot bound is 2.0s; this is the same discipline applied to the order path and is deliberately not looser'",
+  "gate_function": "l5_preview_gate.fresh_two_sided",
+  "age_basis": "time since the socket last delivered ANY frame (stream_age_s), not since the last book CHANGE -- a push stream sends nothing when nothing changes",
+  "LIVE_AGE_MEASURED_THIS_RUN": null,
+  "why_none": "the AuthBook socket cannot be opened from this container: the network policy denies the venue. Age is measured at the decision point ON THE HOST, and fails closed above 2.0 s."
+ },
+ "gateway_vs_realtime_discrepancy": {
+  "gateway_source": "GATEWAY /v1/markets/{slug}/bbo (pmus_q1_executor.fresh_bbo)",
+  "measured_staleness": "~30 s",
+  "worst_observed_disagreement": "0.19 (gateway YES 0.84/0.85 vs auth 0.65/0.66)",
+  "consequence_when_used": "rested ~20 ticks off the real touch -> PROBE_FAILURE",
+  "status_in_v2": "FORBIDDEN as a placement or markout source"
+ },
+ "maker_taker_observability": {
+  "status": "OBSERVABLE",
+  "authoritative_source": "venue trade object: `passiveExecution` vs `aggressorExecution`, selected by the trade's `isAggressor`",
+  "wrong_field_that_caused_the_v1_conclusion": "`aggressor` -- a boolean that cannot resolve a role",
+  "corroboration": "25 credited prints already recovered with our_side=passiveExecution",
+  "submitted_post_only_kept_separate": true,
+  "post_only_never_implies_maker": true
+ },
+ "fee_observability": {
+  "status": "OBSERVABLE",
+  "authoritative_source": "venue `commissionNotionalCollected` on OUR execution object, signed: negative = credited to us",
+  "order_ack_fields_seen_live": [
+   "commissionNotionalTotalCollected",
+   "commissionsBasisPoints",
+   "makerCommissionsBasisPoints"
+  ],
+  "market_field_seen_live": "feeCoefficient (observed 0.0695 on BTC15m)",
+  "modeled_fee_reported_as_actual": false
+ },
+ "unrelated_executors": {
+  "per_service": {
+   "l5-live-probe-oneshot": {
+    "verdict": "DISARMED",
+    "evidence_quote": "CASE1_PROBE_REPORT {\"outcome\":\"REFUSED\",\"refusal\":\"NOT_ARMED: PMUS_Q1_LIVE must be exactly 'YES', and PMUS_Q1_SESSION_ID, PMUS_Q1_ARM and PMUS_CASE1_ARM must all equal the same session id\"}",
+    "method": "the service's own self-announced arming boolean; no variable VALUE was read",
+    "secrets_read": false
+   },
+   "pmus-q1-executor": {
+    "verdict": "UNKNOWN",
+    "evidence_quote": null,
+    "method": "the service's own self-announced arming boolean; no variable VALUE was read",
+    "secrets_read": false
+   },
+   "l5-pmus-live": {
+    "verdict": "UNKNOWN",
+    "evidence_quote": null,
+    "method": "the service's own self-announced arming boolean; no variable VALUE was read",
+    "secrets_read": false
+   },
+   "pmus-ws-evidence-recorder": {
+    "verdict": "DISARMED",
+    "evidence_quote": "L5_MODE {\"mode\":\"AUDIT_ONLY\",\"armed\":\"\",\"live\":\"\",\"post_capable\":false}",
+    "method": "the service's own self-announced arming boolean; no variable VALUE was read",
+    "secrets_read": false
+   }
+  },
+  "n_armed": 0,
+  "n_disarmed": 2,
+  "n_unknown": 2,
+  "RAILWAY_LIST_VARIABLES_USED": false,
+  "WHY_NOT": "it returns values, and these services hold PMUS_API_SECRET_KEY; variable NAMES came from describe-service, which does not return values"
+ },
+ "proposed_host": {
+  "platform": "Railway",
+  "project": "arb-ev-wallet-shadow",
+  "environment": "production",
+  "service": "l5-live-probe-oneshot (84aa9999)",
+  "why": "credentials already present, restartPolicyType NEVER matching the frozen no-auto-restart rule, durable volume at /state/pmus-ws, and it already executed a real authenticated PMUS order",
+  "recorder_rejected_as_host": "its deploy workflow refuses any image referencing pmus_micro_executor -- a deliberate safety boundary",
+  "micro_keys_independent": "that service carries no PMUS_MICRO_* variable, so arming micro arms nothing else"
+ },
+ "maximum_market_loss_usd": "0.05",
+ "maximum_directional_exposure": {
+  "dollars": "0.02",
+  "shares": "equal to the actual first-fill quantity"
+ },
+ "risk_envelope_unchanged_from_probe_1": true,
+ "new_frozen_fingerprint": "0522b0dac3fc5dec5ec0a01c6dbbb6369fde3f7062cede16f965fdfc459d1b31",
+ "probe_1_fingerprint_preserved": "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118",
+ "spec_internally_consistent": true,
+ "AUTHORIZATION_STATUS": "NOT REQUESTED -- see outstanding items"
+}

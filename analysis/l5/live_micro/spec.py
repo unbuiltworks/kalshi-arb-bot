@@ -31,7 +31,17 @@ MARKOUT_HORIZONS = (1, 5, 10, 30, 60)      # seconds, plus settlement
 
 SPEC: Dict[str, Any] = {
     "probe": PROBE,
-    "spec_version": 1,
+    "spec_version": 2,
+    "supersedes": {
+        "probe": "PROBE_1_INFRASTRUCTURE_SKIP",
+        "fingerprint":
+            "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118",
+        "outcome": "INFRASTRUCTURE SKIP / NO SUBMISSION",
+        "preserved_at": "analysis/l5/live_micro/spec_probe1_frozen.py",
+        "note": ("trading and risk behaviour are UNCHANGED from v1. Only "
+                 "instrumentation was fixed: tick source, BBO source and "
+                 "venue role/fee fields."),
+    },
     "armed_by_default": False,
     "is_new_strategy": False,
     "objective": ("measure real execution of the evidence-supported L5 "
@@ -58,8 +68,21 @@ SPEC: Dict[str, Any] = {
         "note": ("the quantity is whatever the venue minimum and the ~$0.01 "
                  "target imply; it is NOT a chosen size and is never "
                  "scaled to recover a loss"),
-        "tick_required": "0.005",
-        "fail_closed_on_other_tick": True,
+        # FIX 1. v1 required tick == 0.005, which the venue does not serve
+        # on BTC15m (actual 0.01) and which the production executor had
+        # ALREADY abandoned: its own comment records that a hardcoded
+        # equality check "REFUSED EVERY SPORTS MARKET ... the live path
+        # could not have placed a sports order at all". The authoritative
+        # source is the venue's per-market field, validated as a GRID.
+        "tick_source": "venue field `orderPriceMinTickSize`, per market",
+        "tick_authority": ("pmus_micro_executor: accept the venue's grid "
+                           "and validate the price against THAT rather "
+                           "than against a constant"),
+        "tick_universal_constant": None,
+        "fail_closed_if_tick_absent": True,
+        "fail_closed_if_tick_implausible": "tick <= 0 or tick >= 1",
+        "fail_closed_if_price_off_grid": "(price / tick) % 1 != 0",
+        "observed_tick_btc15m_2026_10_06": "0.01",
     },
 
     # ---------------- (3) max loss in one market ----------------
@@ -131,6 +154,33 @@ SPEC: Dict[str, Any] = {
         "no_leave_behind_persistence_assumed": True,
         "provenance_no_persistence": ("persistence was "
                                       "CONSISTENT_WITH_REPOSTING"),
+
+        # FIX 2, highest priority. v1 named no BBO source, so the default
+        # path was pmus_q1_executor.fresh_bbo -> GATEWAY /v1/markets/{slug}
+        # /bbo, which this repo's own live probe measured at ~30 s stale
+        # with a 19-cent disagreement against the authenticated book, and
+        # which made that probe rest ~20 ticks off the real touch and
+        # self-classify PROBE_FAILURE.
+        "bbo_source": "l5_pmus_auth_book.AuthBook",
+        "bbo_mechanism": ("authenticated markets WebSocket, the same stream "
+                          "and parser the evidence recorder uses; push "
+                          "stream with per-frame receipt timestamps"),
+        "bbo_source_forbidden": ("gateway /v1/markets/{slug}/bbo -- "
+                                 "measured ~30 s stale"),
+        "staleness_bound_s": 2.0,
+        "staleness_bound_provenance": (
+            "REUSED, not invented: l5_preview_gate.BOOK_MAX_AGE_S = 2.0, "
+            "whose own comment reads 'the frozen rule's own snapshot bound "
+            "is 2.0s; this is the same discipline applied to the order path "
+            "and is deliberately not looser'"),
+        "staleness_gate_function": "l5_preview_gate.fresh_two_sided",
+        "staleness_measured_at": "the decision point, not a periodic preflight",
+        "staleness_age_basis": (
+            "time since the socket last delivered ANY frame (stream_age_s), "
+            "not since the last book CHANGE -- a push stream sends nothing "
+            "when nothing changes"),
+        "fail_closed_if_stale": True,
+        "fail_closed_if_not_two_sided": True,
     },
     "withdrawal": {
         "tte_shutdown_s": 120,
@@ -142,6 +192,30 @@ SPEC: Dict[str, Any] = {
     "evidence": {
         "touch_equals_fill": False,
         "fill_requires": "venue-reported fill on our own order id",
+
+        # FIX 3. The prior probe concluded maker/taker was unobservable
+        # because `aggressor` is a BOOLEAN. It had read the wrong field.
+        # The venue nests the two executions of a trade and names which is
+        # ours, and the incentive audit already recovered 25 credited
+        # prints this way.
+        "liquidity_role_source": (
+            "venue trade object: `passiveExecution` vs "
+            "`aggressorExecution`, selected by the trade's `isAggressor`"),
+        "liquidity_role_field_forbidden": (
+            "`aggressor` -- a boolean that cannot resolve a role"),
+        "submitted_post_only": "RECORDED SEPARATELY, never used to infer role",
+        "venue_confirmed_liquidity_role": "from the venue only, else UNRESOLVED",
+        "post_only_never_implies_maker": True,
+
+        "fee_source": (
+            "venue `commissionNotionalCollected` on OUR execution object, "
+            "signed: negative = credited to us"),
+        "fee_order_ack_fields": ["commissionNotionalTotalCollected",
+                                 "commissionsBasisPoints",
+                                 "makerCommissionsBasisPoints"],
+        "fee_market_field": "feeCoefficient (observed 0.0695 on BTC15m)",
+        "modeled_fee_may_be_reported_as_actual": False,
+        "modeled_fee_label_if_used": "MODELLED_NOT_ACTUAL",
         "maker_taker_classification": "recorded from the venue, never assumed",
         "queue_information_recorded_where_observable": True,
         "rewards_counted": "ONLY when actually credited, on their own line",
@@ -202,7 +276,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 # HARD-CODED LITERAL: deriving it from SPEC at import would make the guard
 # vacuous, recomputing the value it compares against.
 MICRO_FINGERPRINT = \
-    "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118"
+    "0522b0dac3fc5dec5ec0a01c6dbbb6369fde3f7062cede16f965fdfc459d1b31"
 
 
 def assert_frozen() -> None:

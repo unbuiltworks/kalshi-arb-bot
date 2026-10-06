@@ -11,7 +11,8 @@ from analysis.l5.live_micro.spec import (LIFECYCLE, MARKOUT_HORIZONS, SPEC,
                                          MICRO_FINGERPRINT, assert_frozen,
                                          fingerprint)
 
-FP = "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118"
+FP = "0522b0dac3fc5dec5ec0a01c6dbbb6369fde3f7062cede16f965fdfc459d1b31"
+PROBE_1_FP = "69904fd4e64bcc62093ce70c1b63b5d825548f5d495eda63744fc91169919118"
 
 
 # ---------------- frozen spec ----------------
@@ -49,6 +50,85 @@ def test_reported_envelope_values(path, expected):
     for k in path:
         node = node[k]
     assert node == expected
+
+
+def test_probe_1_fingerprint_is_preserved_and_unrunnable():
+    """The authorized PROBE_1 record must survive verbatim and must not run."""
+    from analysis.l5.live_micro import spec_probe1_frozen as p1
+    assert p1.PROBE_1_FINGERPRINT == PROBE_1_FP
+    assert p1.fingerprint(p1.SPEC) == PROBE_1_FP, "archive must reproduce it"
+    assert p1.ARCHIVE_LABEL == "PROBE_1_INFRASTRUCTURE_SKIP"
+    with pytest.raises(SystemExit):
+        p1.assert_frozen()
+
+
+def test_v2_changed_instrumentation_only_not_risk():
+    """Every risk value must be byte-identical to the authorized PROBE_1."""
+    from analysis.l5.live_micro import spec_probe1_frozen as p1
+    for section, keys in (
+            ("per_market_risk", ("cumulative_first_leg_notional_cap_usd",
+                                 "max_gross_pair_capital_usd",
+                                 "MAX_DOLLARS_LOSABLE_IN_ONE_MARKET_USD")),
+            ("directional_bound", ("max_residual_shares",
+                                   "max_residual_dollars_usd",
+                                   "no_martingale",
+                                   "no_averaging_up_to_recover")),
+            ("daily_limit", ("daily_realized_loss_stop_usd",)),
+            ("orders", ("max_simultaneous_resting_orders", "maker_only",
+                        "taker_permitted", "partial_fills_permitted")),
+            ("withdrawal", ("tte_shutdown_s",)),
+            ("market", ("markets_concurrent", "series")),
+            ("deadman", ("mechanism", "on_every_exit_path",
+                         "no_auto_restart", "no_auto_scaling")),
+    ):
+        for k in keys:
+            assert SPEC[section][k] == p1.SPEC[section][k], (section, k)
+    assert SPEC["placement"]["offset_from_touch_ticks"] == 0
+    assert SPEC["armed_by_default"] is False
+
+
+def test_tick_is_the_venue_grid_not_a_constant():
+    assert SPEC["quantity"]["tick_universal_constant"] is None
+    assert "orderPriceMinTickSize" in SPEC["quantity"]["tick_source"]
+    assert SPEC["quantity"]["fail_closed_if_tick_absent"] is True
+    assert SPEC["quantity"]["fail_closed_if_price_off_grid"]
+
+
+def test_stale_gateway_bbo_is_forbidden_and_bound_is_reused():
+    pl = SPEC["placement"]
+    assert pl["bbo_source"] == "l5_pmus_auth_book.AuthBook"
+    assert "gateway" in pl["bbo_source_forbidden"]
+    assert pl["staleness_bound_s"] == 2.0
+    assert "REUSED, not invented" in pl["staleness_bound_provenance"]
+    assert "BOOK_MAX_AGE_S" in pl["staleness_bound_provenance"]
+    assert pl["fail_closed_if_stale"] is True
+
+
+def test_post_only_never_implies_maker():
+    ev = SPEC["evidence"]
+    assert ev["post_only_never_implies_maker"] is True
+    assert "passiveExecution" in ev["liquidity_role_source"]
+    assert "`aggressor`" in ev["liquidity_role_field_forbidden"]
+    assert ev["submitted_post_only"].startswith("RECORDED SEPARATELY")
+
+
+def test_modeled_fee_is_never_reported_as_actual():
+    ev = SPEC["evidence"]
+    assert ev["modeled_fee_may_be_reported_as_actual"] is False
+    assert "commissionNotionalCollected" in ev["fee_source"]
+    assert ev["modeled_fee_label_if_used"] == "MODELLED_NOT_ACTUAL"
+
+
+def test_arming_audit_reads_no_secret_and_redacts():
+    from analysis.l5.live_micro.arming_audit import classify, report
+    c = classify(['{"outcome":"REFUSED","refusal":"NOT_ARMED: ..."}'])
+    assert c["verdict"] == "DISARMED" and c["secrets_read"] is False
+    leak = classify(['{"armed": false, "k":"MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ"}'])
+    assert leak["evidence_quote"] == "REDACTED_SECRET_SHAPED"
+    assert classify([])["verdict"] == "UNKNOWN"
+    r = report({"a": [], "b": ['{"armed": true}']})
+    assert r["RAILWAY_LIST_VARIABLES_USED"] is False
+    assert r["n_unknown"] == 1 and r["n_armed"] == 1
 
 
 def test_s3_is_not_touched_by_this_probe():
