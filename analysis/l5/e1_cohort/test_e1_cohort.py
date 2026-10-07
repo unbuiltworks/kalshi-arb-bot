@@ -199,6 +199,33 @@ FORBIDDEN = ("marketSlug", "ORDER_TYPE_LIMIT", "ORDER_ACTION_BUY",
              "manualOrderIndicator", "OUTCOME_SIDE_")
 
 
+def code_only(path):
+    """Source with every docstring and comment removed, so a scan looks at
+    what the module DOES rather than what it says about itself. A call
+    graph that NAMES `{'request': body}` is documentation; a module that
+    BUILDS one is a duplicate serializer."""
+    import ast
+    src = open(path, encoding="utf8").read()
+    tree = ast.parse(src)
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef,
+                             ast.AsyncFunctionDef, ast.ClassDef)):
+            d = ast.get_docstring(node, clean=False)
+            if d:
+                docstrings.add(d)
+    out = []
+    for ln in src.splitlines():
+        st = ln.strip()
+        if st.startswith("#"):
+            continue
+        out.append(ln)
+    text = "\n".join(out)
+    for d in docstrings:
+        text = text.replace(d, "")
+    return text
+
+
 def test_no_file_in_this_package_contains_a_duplicate_serializer():
     """A duplicate serializer caused the A5 HTTP 400, and the repository
     records the same bug happening twice. No file here may build a body."""
@@ -209,10 +236,17 @@ def test_no_file_in_this_package_contains_a_duplicate_serializer():
         if name == os.path.basename(__file__):
             # this test file names the tokens in order to forbid them
             continue
-        text = open(os.path.join(HERE, name), encoding="utf8").read()
+        text = code_only(os.path.join(HERE, name))
         hits = [tok for tok in FORBIDDEN if tok in text]
-        if re.search(r'["\']request["\']\s*:', text):
-            hits.append('bare "request": envelope key')
+        # a line of PROSE naming the wire call (a call-graph entry) is
+        # documentation, not a serializer. Only a constructed envelope
+        # counts.
+        envelope_lines = [ln for ln in text.splitlines()
+                          if re.search(r'["\']request["\']\s*:', ln)
+                          and "POST /v1/order" not in ln]
+        if envelope_lines:
+            hits.append('bare "request": envelope key: %s'
+                        % envelope_lines[:2])
         if hits:
             offenders[name] = hits
     assert offenders == {}, offenders
@@ -1724,13 +1758,6 @@ def test_parity_the_latch_is_the_ONLY_behavioural_difference():
     assert SP.SPEC["xr2w_parity"]["xr2w_modified"] is False
 
 
-def test_the_superseded_fingerprint_must_not_be_rearmed():
-    assert SP.SPEC["supersedes_e1"]["must_not_be_rearmed"] == [
-        "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c"]
-    assert SP.E1_FINGERPRINT not in \
-        SP.SPEC["supersedes_e1"]["must_not_be_rearmed"]
-
-
 # ------------------------------------------------- venue errors: SAFETY only
 
 def test_venue_error_stop_is_a_safety_stop_and_records_exact_errors():
@@ -1755,6 +1782,219 @@ def test_venue_error_stop_is_a_safety_stop_and_records_exact_errors():
     assert len(snap["venue_error_log"]) == 5
     assert SP.SPEC["venue_error_stop"]["consecutive_errors"] == 5
     assert SP.SPEC["venue_error_stop"]["automatic_retry"] is False
+
+
+# ===========================================================================
+# THE ENTRYPOINT REGRESSION. THIS IS THE TEST THAT WAS MISSING.
+#
+# Before this existed, 95 tests here and 731 across the lineage all passed
+# while SPEC["entrypoint"] still named `scripts.l5_exec1xr2w_run` with a call
+# graph through `live_exec3.runner:run_experiment` and XR2W's SINGLE-SLOT
+# latch. Arming "per the spec" would have launched XR2W's ONE-ORDER probe and
+# measured nothing. Every test passed because every test started from the E1
+# runner's own functions -- never from the DECLARED entrypoint.
+#
+# So these tests START FROM SPEC["entrypoint"], resolve it the way an
+# operator would, and DRIVE IT THROUGH MULTIPLE PLACEMENTS against a fake
+# transport. Import resolution alone cannot distinguish a correctly wired
+# cohort from a one-order runner, which is precisely how this was missed.
+# ===========================================================================
+
+def _resolve_declared_entrypoint():
+    """Resolve SPEC's declared entrypoint exactly as an operator would,
+    reading the spec rather than hard-coding what we hope it says."""
+    import importlib
+    mod_name = SP.SPEC["entrypoint"]["module"]
+    mod = importlib.import_module(mod_name)
+    call = SP.SPEC["entrypoint"]["callable"]
+    cmod, cfn = call.split(":")
+    fn = getattr(importlib.import_module(cmod), cfn)
+    dmod, dfn = SP.SPEC["entrypoint"]["cohort_driver"].split(":")
+    driver = getattr(importlib.import_module(dmod), dfn)
+    return mod, fn, driver
+
+
+def test_the_declared_entrypoint_exists_and_is_executable():
+    mod, fn, driver = _resolve_declared_entrypoint()
+    assert mod.__name__ == "scripts.l5_e1_cohort_run"
+    assert callable(fn) and callable(driver)
+    # it is a real module file with a __main__ guard, not a description
+    src = open(mod.__file__, encoding="utf8").read()
+    assert '__name__ == "__main__"' in src
+    assert "sys.exit(main(" in src
+
+
+def test_the_declared_entrypoint_names_the_E1_COHORT_not_XR2W():
+    """THE DEFECT, asserted directly. This fails on bfcff9ca and 110a4fc4."""
+    ep = SP.SPEC["entrypoint"]
+    assert ep["module"] == "scripts.l5_e1_cohort_run"
+    assert ep["module"] != "scripts.l5_exec1xr2w_run"
+    assert ep["inherited_from_the_parent"] is False
+    assert "entrypoint" in SP.DIFF, \
+        "entrypoint MUST be in the DIFF or it is inherited from XR2W"
+    graph = " | ".join(ep["call_graph_to_submit"])
+    assert "analysis.l5.e1_cohort.runner:run_cohort" in graph
+    assert "analysis.l5.e1_cohort.latch:consume_attempt" in graph
+    # and the proven primitives are still reached
+    assert "src.l5_order_body:build" in graph
+    assert "src.l5_preview_gate:require_echo" in graph
+    assert "BoundedOrderTransport.request" in graph
+
+
+NEGATIVE_TARGETS = ("scripts.l5_exec1xr2w_run",
+                    "analysis.l5.live_exec3.runner:run_experiment",
+                    "analysis.l5.live_exec2.latch:consume",
+                    "analysis.l5.live_exec2.orders:submit_one")
+
+
+def test_NEGATIVE_the_declared_path_cannot_reach_xr2w_runner_or_latch():
+    """The declared execution path must not resolve to XR2W's experiment
+    runner or XR2W's SINGLE-SLOT latch."""
+    ep = SP.SPEC["entrypoint"]
+    assert list(ep["MUST_NOT_RESOLVE_TO"]) == list(NEGATIVE_TARGETS)
+    assert ep["enters_xr2w_experiment_runner"] is False
+    assert ep["enters_xr2w_single_slot_latch"] is False
+    graph = " | ".join(ep["call_graph_to_submit"])
+    for bad in NEGATIVE_TARGETS:
+        assert bad not in graph, bad
+    assert "live_exec3" not in graph
+    # the entrypoint module and the E1 runner import NEITHER XR2W's
+    # experiment runner NOR its single-slot latch
+    mod, _, _ = _resolve_declared_entrypoint()
+    for path in (mod.__file__, os.path.join(HERE, "runner.py"),
+                 os.path.join(HERE, "latch.py")):
+        code = code_only(path)
+        assert "live_exec3" not in code, path
+        assert "from analysis.l5.live_exec2 import latch" not in code, path
+        assert "live_exec2.latch" not in code, path
+        assert "latch.consume(" not in code, path
+    # E1's latch module is its own, and its consume functions are not
+    # XR2W's
+    import analysis.l5.live_exec2.latch as XRL
+    assert L.consume_attempt is not getattr(XRL, "consume", None)
+    assert L.__name__ == "analysis.l5.e1_cohort.latch"
+
+
+def test_NEGATIVE_run_cohort_never_calls_xr2w_single_slot_consume(monkeypatch):
+    """Belt and braces: make XR2W's single-slot latch EXPLODE if touched,
+    then drive the cohort. It must complete without touching it."""
+    import analysis.l5.live_exec2.latch as XRL
+
+    def boom(*a, **k):
+        raise AssertionError("XR2W's SINGLE-SLOT latch was consumed")
+
+    monkeypatch.setattr(XRL, "consume", boom)
+    import analysis.l5.live_exec3.runner as XR3
+
+    def boom2(*a, **k):
+        raise AssertionError("XR2W's experiment runner was entered")
+
+    monkeypatch.setattr(XR3, "run_experiment", boom2, raising=False)
+    monkeypatch.setattr(O, "submit_one", boom, raising=False)
+    monkeypatch.setattr(O, "armed_env_summary",
+                        lambda: {"armed": True, "keys_present": {}})
+    monkeypatch.setattr(O, "assert_frozen", lambda *a, **k: None)
+    seen = []
+
+    class T(FakeTransport):
+        def request(self, m, p, b=None, base=None):
+            seen.append(p)
+            return FakeTransport.request(self, m, p, b, base)
+
+    _, _, run_cohort = _resolve_declared_entrypoint()
+    out = run_cohort(snapshot_provider=lambda: snapshot(),
+                     transport_factory=T, now_fn=lambda: NOW,
+                     max_iterations=5)
+    assert out["placement_count"] >= 2
+    assert out["entered_xr2w_experiment_runner"] is False
+    assert out["entered_xr2w_single_slot_latch"] is False
+    assert seen.count(O.SUBMIT_PATH) >= 2
+
+
+def test_ENTRYPOINT_EXECUTION_order_2_reaches_the_fake_transport(armed):
+    """THE CRITICAL REQUIREMENT, taken literally. Start from the DECLARED
+    entrypoint, drive MULTIPLE placements through a fake transport, and
+    PROVE ORDER #2 REACHED IT -- in a second, DISTINCT named latch slot.
+
+    A one-order runner passes import resolution and FAILS THIS.
+    """
+    posts = []
+
+    class Counting(FakeTransport):
+        def request(self, m, p, b=None, base=None):
+            out = FakeTransport.request(self, m, p, b, base)
+            if p == O.SUBMIT_PATH:
+                posts.append({"n": len(posts) + 1,
+                              "quantity": b["quantity"],
+                              "price": b["price"]["value"],
+                              "post_only": b["participateDontInitiate"]})
+            return out
+
+    _, _, run_cohort = _resolve_declared_entrypoint()
+    tr = ST.CohortTracker()
+    out = run_cohort(snapshot_provider=lambda: snapshot(), tracker=tr,
+                     transport_factory=Counting, now_fn=lambda: NOW,
+                     max_iterations=4)
+
+    # ORDER #2 REACHED THE FAKE TRANSPORT
+    assert len(posts) >= 2, posts
+    assert posts[1]["n"] == 2
+    assert posts[0]["quantity"] == posts[1]["quantity"] == 0.13
+    assert all(p["post_only"] is True for p in posts)
+
+    # TWO DISTINCT NAMED LATCH SLOTS
+    assert out["placement_count"] >= 2
+    assert out["distinct_latch_slots"] == out["placement_count"]
+    slots = [p["slot"] for p in out["placements"]]
+    assert slots[:2] == [0, 1], slots
+    paths = [p["latch_path"] for p in out["placements"]]
+    assert len(set(paths)) == len(paths)
+    for i, pth in enumerate(paths):
+        assert ".s%02d." % i in pth and ".first_leg." in pth
+        assert os.path.exists(pth)
+    assert L.window_state(window=0)["attempts_spent"] == len(paths)
+
+    # the tracker counted every one of them
+    assert tr.placements == out["placement_count"]
+    assert out["latch_kind"] == "BOUNDED_COUNT_NAMED_SLOTS"
+
+
+def test_ENTRYPOINT_EXECUTION_respects_the_20_per_window_bound(armed):
+    """Driven from the declared entrypoint, the cohort stops at 20 in a
+    window -- it does not stop at ONE, and it does not run past 20."""
+    _, _, run_cohort = _resolve_declared_entrypoint()
+    out = run_cohort(snapshot_provider=lambda: snapshot(),
+                     transport_factory=FakeTransport, now_fn=lambda: NOW,
+                     max_iterations=40)
+    assert out["placement_count"] == 20, out["placement_count"]
+    assert L.window_state(window=0)["exhausted"] is True
+    assert sorted(p["slot"] for p in out["placements"]) == list(range(20))
+    assert any("WINDOW" in r or "EXPOSURE" in r
+               for rec in out["refusals"] for r in rec["refusals"])
+
+
+def test_ENTRYPOINT_EXECUTION_main_is_disarmed_and_places_nothing(capsys):
+    """The declared entrypoint's own main(), run for real. It must refuse."""
+    _, main, _ = _resolve_declared_entrypoint()
+    rc = main([])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert '"REFUSED": "DISARMED"' in out
+    assert SP.E1_FINGERPRINT in out
+    assert "no latch slot was claimed" in out
+    # nothing was spent
+    assert L.window_state(window=0)["attempts_spent"] == 0
+
+
+def test_both_superseded_fingerprints_must_not_be_rearmed():
+    must_not = SP.SPEC["supersedes_e1"]["must_not_be_rearmed"]
+    assert must_not == [
+        "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
+        "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a"]
+    assert SP.E1_FINGERPRINT not in must_not
+    reasons = SP.SPEC["supersedes_e1"]["reasons"]
+    assert set(reasons) == set(must_not)
+    assert "single-slot" in reasons[must_not[1]]
 
 
 # -------------------------------------------------------------------- boot
@@ -1782,8 +2022,22 @@ def test_no_network_is_reachable_from_these_tests():
     lines = [ln for ln in src.splitlines() if "transport_factory" + "=" in ln
              and "splitlines" not in ln and "def " not in ln]
     assert lines, "no submissions are exercised at all"
+    # every factory this file passes is the FakeTransport or a subclass of
+    # it -- checked at RUNTIME against the resolved object, not by name
     for ln in lines:
-        assert "Fake" in ln or "lambda: t" in ln, ln
+        name = ln.split("transport_factory" + "=")[1].split(",")[0]
+        name = name.strip().rstrip(")")
+        if name.startswith("lambda"):
+            continue
+        obj = globals().get(name)
+        if obj is not None:
+            assert isinstance(obj, type) and issubclass(obj, FakeTransport), ln
+            continue
+        # a class defined locally inside a test: it must subclass
+        # FakeTransport, which the source states explicitly
+        assert "class %s(FakeTransport)" % name in src, ln
+    # and the only lambdas close over FakeTransport instances
+    assert "lambda: t" in src
 
 
 def test_the_manifest_exists_has_the_header_and_the_eight_items():

@@ -216,6 +216,66 @@ DIFF: Dict[str, Any] = {
 
     "experiment_class": "MECHANICS MEASUREMENT COHORT, not a profit probe",
 
+    # ----------------------------------------------------------------------
+    # THE ENTRYPOINT. This key MUST be in the DIFF. Inheriting it from XR2W
+    # was a DEFECT: the deep-copy fixed the aliasing and then faithfully
+    # copied a value that needed to change, so the spec still named
+    # `scripts.l5_exec1xr2w_run` and a call graph through
+    # `live_exec3.runner:run_experiment` and XR2W's SINGLE-SLOT latch.
+    # Arming "per the spec" would have launched XR2W's ONE-ORDER probe and
+    # measured nothing. Same class as the old fingerprint-pin bug: a shared
+    # value that describes the parent, silently inherited by the child.
+    # ----------------------------------------------------------------------
+    "entrypoint": {
+        "module": "scripts.l5_e1_cohort_run",
+        "callable": "analysis.l5.e1_cohort.runner:main",
+        "cohort_driver": "analysis.l5.e1_cohort.runner:run_cohort",
+        "executes_the_real_runner": True,
+        "is_preflight_only": False,
+        "disarmed_behaviour": (
+            "boots, asserts the frozen spec, prints the preflight and the "
+            "DISARMED refusal, and returns 0 WITHOUT requesting a "
+            "snapshot, claiming a latch slot or reaching an order "
+            "endpoint"),
+        "call_graph_to_submit": [
+            "scripts.l5_e1_cohort_run:__main__",
+            "analysis.l5.e1_cohort.runner:main",
+            "analysis.l5.e1_cohort.runner:boot -> spec:assert_frozen",
+            "analysis.l5.e1_cohort.runner:run_cohort   (MANY attempts)",
+            "analysis.l5.e1_cohort.runner:e1_preflight -> :eligible",
+            "analysis.l5.e1_cohort.runner:submit_first_leg",
+            "analysis.l5.e1_cohort.runner:_submit_once",
+            "  orders:order_body -> src.l5_order_body:build",
+            "  orders:preview_request -> src.l5_order_body:preview_envelope",
+            "  POST /v1/order/preview {'request': body}  (creates nothing)",
+            "  src.l5_preview_gate:require_echo",
+            "  analysis.l5.e1_cohort.latch:consume_attempt"
+            "   (E1 BOUNDED NAMED-SLOT latch)",
+            "analysis.l5.live_exec2.orders:BoundedOrderTransport.request"
+            " -> POST /v1/orders",
+            "analysis.l5.e1_cohort.runner:submit_complement",
+            "  analysis.l5.e1_cohort.latch:consume_complement"
+            "   (named TRANCHE slot)",
+        ],
+        "reaches_e1_cohort_runner": True,
+        "reaches_e1_bounded_named_slot_latch": True,
+        "reaches_proven_xr2w_order_primitives": True,
+        "MUST_NOT_RESOLVE_TO": [
+            "scripts.l5_exec1xr2w_run",
+            "analysis.l5.live_exec3.runner:run_experiment",
+            "analysis.l5.live_exec2.latch:consume",
+            "analysis.l5.live_exec2.orders:submit_one",
+        ],
+        "enters_xr2w_experiment_runner": False,
+        "enters_xr2w_single_slot_latch": False,
+        "inherited_from_the_parent": False,
+        "why_this_key_must_be_in_the_DIFF": (
+            "the parent's entrypoint describes the parent's experiment. A "
+            "child that inherits it declares an execution path that runs "
+            "somebody else's probe, and no amount of testing the child's "
+            "own functions will notice -- which is exactly what happened."),
+    },
+
     "authorization": {
         "state": "NOT_AUTHORIZED",
         "armed": False,
@@ -313,7 +373,18 @@ DIFF: Dict[str, Any] = {
                    "silently leaving an 0.08 residual."),
         "must_not_be_rearmed": [
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
+            "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
         ],
+        "reasons": {
+            "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
+                ("the complement sized to only the first partial, so later "
+                 "first-leg fills fell silently into residual"),
+            "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a":
+                ("entrypoint still named XR2W's single-order path, so "
+                 "arming per the spec would have run XR2W's one-order "
+                 "probe through the single-slot latch and measured "
+                 "nothing"),
+        },
     },
 
     "xr2w_parity": {
@@ -729,7 +800,23 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("venue_error_stop.consecutive_errors", 5),
     ("venue_error_stop.automatic_retry", False),
     ("supersedes_e1.must_not_be_rearmed",
-     ["110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c"]),
+     ["110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
+      "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a"]),
+    ("entrypoint.module", "scripts.l5_e1_cohort_run"),
+    ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
+    ("entrypoint.cohort_driver",
+     "analysis.l5.e1_cohort.runner:run_cohort"),
+    ("entrypoint.reaches_e1_cohort_runner", True),
+    ("entrypoint.reaches_e1_bounded_named_slot_latch", True),
+    ("entrypoint.reaches_proven_xr2w_order_primitives", True),
+    ("entrypoint.enters_xr2w_experiment_runner", False),
+    ("entrypoint.enters_xr2w_single_slot_latch", False),
+    ("entrypoint.inherited_from_the_parent", False),
+    ("entrypoint.MUST_NOT_RESOLVE_TO",
+     ["scripts.l5_exec1xr2w_run",
+      "analysis.l5.live_exec3.runner:run_experiment",
+      "analysis.l5.live_exec2.latch:consume",
+      "analysis.l5.live_exec2.orders:submit_one"]),
     ("pair_cost.ceiling_usd", "0.96"),
     ("pair_cost.fee_inclusive", True),
     ("pair_cost.fee_schedule_fingerprint", FEE_SCHEDULE_FINGERPRINT),
@@ -811,7 +898,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a"
+    "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

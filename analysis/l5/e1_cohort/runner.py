@@ -39,13 +39,16 @@ WHAT IT REUSES AND DOES NOT DUPLICATE
 from __future__ import annotations
 
 import copy
+import json
+import time
 from decimal import ROUND_DOWN, Decimal as D
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         MAX_ATTEMPTS_PER_WINDOW,
                                         MAX_COMPLEMENT_TRANCHES,
+                                        MAX_PLACEMENTS,
                                         MAX_FIRST_LEG_PRICE,
                                         PAIR_COST_CEILING, PROBE, SPEC,
                                         VENUE_MIN_QTY, VENUE_TICK, WINDOWS,
@@ -616,6 +619,135 @@ def account_first_leg(*, cumulative_filled_qty: Any,
             "unaccounted_qty": str(cum - comp - residual),
             "RULE": "every filled share is COMPLEMENTED or RESIDUAL, never "
                     "neither and never silently"}
+
+
+# ------------------------------------------------------------- the cohort
+
+def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
+               = None, recorder: Any = None,
+               transport_factory: Any = O.BoundedOrderTransport,
+               now_fn: Any = None, max_iterations: Optional[int] = None
+               ) -> Dict[str, Any]:
+    """Drive the cohort: MANY bounded attempts, under the E1 named-slot latch.
+
+    THIS IS THE THING THAT WAS MISSING, and its absence was the defect. The
+    frozen spec's `entrypoint` was inherited verbatim from XR2W and still
+    named `scripts.l5_exec1xr2w_run` with a call graph through
+    `live_exec3.runner:run_experiment` and XR2W's SINGLE-SLOT latch. Arming
+    "per the spec" would have launched XR2W's ONE-ORDER probe and measured
+    nothing. The deep-copy fixed the aliasing and then faithfully copied a
+    value that needed to change -- the same class of bug as the old
+    fingerprint-pin defect, and loud about nothing.
+
+    IT CHANGES NO STRATEGY. Every gate, bound, price, quantity, tranche and
+    stopping rule is the one already frozen: this function only ITERATES
+    what `eligible()` and `submit_first_leg()` already decide, and stops the
+    moment the tracker says stop. It adds no rule and relaxes none.
+
+    `snapshot_provider` is a zero-argument callable returning the next
+    decision-time snapshot, or None when there is nothing to decide on. It
+    is the seam the offline tests drive, and in production it is fed by the
+    websocket timing authority.
+    """
+    assert_frozen()
+    tracker = tracker if tracker is not None else CohortTracker()
+    now_fn = now_fn or time.time
+    placements: List[Dict[str, Any]] = []
+    refusals: List[Dict[str, Any]] = []
+    stopped_because: Optional[str] = None
+    it = 0
+    limit = MAX_PLACEMENTS * 4 if max_iterations is None else max_iterations
+    while it < limit:
+        it += 1
+        v = tracker.verdict()
+        if v["stopped"]:
+            stopped_because = "VERDICT_%s%s" % (
+                v["verdict"],
+                ":" + str(v.get("truncation_cause") or ""))
+            break
+        snap = snapshot_provider()
+        if snap is None:
+            stopped_because = "SNAPSHOT_PROVIDER_EXHAUSTED"
+            break
+        checks = e1_preflight(snap, tracker, now=now_fn())
+        if not checks["ok"]:
+            refusals.append({"iteration": it,
+                             "refusals": checks["refusals"]})
+            continue
+        try:
+            out = submit_first_leg(snap, tracker, now=now_fn(),
+                                   transport_factory=transport_factory)
+        except Ineligible as exc:
+            refusals.append({"iteration": it, "refusals": [str(exc)]})
+            continue
+        except O.PreviewRejected as exc:
+            # the latch is UNTOUCHED: a preview creates nothing.
+            tracker.record_venue_error(detail={"phase": "PREVIEW",
+                                               "detail": exc.detail})
+            refusals.append({"iteration": it,
+                             "refusals": ["PREVIEW_REJECTED"]})
+            continue
+        except O.SubmissionAmbiguous as exc:
+            # NEVER retried. The cohort stops and the venue is reconciled.
+            stopped_because = "AMBIGUOUS_SUBMISSION_RECONCILE_VENUE_STATE"
+            refusals.append({"iteration": it,
+                             "refusals": ["AMBIGUOUS_SUBMISSION"],
+                             "detail": exc.detail})
+            break
+        tracker.record_venue_ok()
+        placements.append({"iteration": it, "window": out["e1_window"],
+                           "slot": out["e1_latch_slot"]["slot"],
+                           "latch_path": out["e1_latch_slot"]["path"],
+                           "order_id": out["order_id"]})
+        if recorder is not None:
+            recorder.record_event(
+                window=out["e1_window"], slot=out["e1_latch_slot"]["slot"],
+                event="FIRST_LEG_SUBMITTED",
+                detail={"order_id": out["order_id"],
+                        "latch_path": out["e1_latch_slot"]["path"]})
+    return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
+            "iterations": it, "placements": placements,
+            "placement_count": len(placements),
+            "distinct_latch_slots": len({p["latch_path"]
+                                         for p in placements}),
+            "refusals": refusals,
+            "stopped_because": stopped_because,
+            "tracker": tracker.snapshot(),
+            "latch_kind": "BOUNDED_COUNT_NAMED_SLOTS",
+            "entered_xr2w_experiment_runner": False,
+            "entered_xr2w_single_slot_latch": False,
+            "LANGUAGE": "SUBMITTED is not a fill"}
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """THE E1 ENTRYPOINT, and what `SPEC['entrypoint'].module` names.
+
+    DISARMED. It boots, asserts the frozen spec, prints the preflight and
+    the DISARMED refusal, and RETURNS WITHOUT PLACING ANYTHING. Arming is
+    the owner's and nothing here acquires it.
+    """
+    rep = boot()
+    rep["eligibility_without_a_snapshot"] = (
+        "no snapshot is requested while disarmed; the arming gate is "
+        "checked first and refuses")
+    print(json.dumps(rep, indent=1, sort_keys=True, default=str))
+    if not O.armed_env_summary().get("armed"):
+        print(json.dumps({
+            "REFUSED": "DISARMED",
+            "probe": PROBE, "fingerprint": E1_FINGERPRINT,
+            "why": ("the owner's arming gate is not set. No snapshot was "
+                    "requested, no latch slot was claimed, no order "
+                    "endpoint was reached."),
+            "superseded_must_not_be_rearmed":
+                copy.deepcopy(SPEC["supersedes_e1"]["must_not_be_rearmed"]),
+        }, indent=1, sort_keys=True))
+        return 0
+    # Unreachable while disarmed. Left explicit so the declared call graph
+    # is the real one rather than a description of one.
+    raise SystemExit(
+        "COHORT-E1-LIVE: the arming gate is set but this build still "
+        "requires the owner's authorized manifest and session id. Refusing "
+        "to run rather than guessing.")
 
 
 # -------------------------------------------------------------------- boot
