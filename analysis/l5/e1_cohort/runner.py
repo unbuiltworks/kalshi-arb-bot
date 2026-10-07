@@ -48,11 +48,13 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import time
 from decimal import ROUND_DOWN, Decimal as D
 from typing import Any, Dict, List, Mapping, Optional
 
 from analysis.l5.e1_cohort import arming as A
+from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         MAX_ATTEMPTS_PER_WINDOW,
@@ -489,8 +491,9 @@ def _submit_once(t: Any, *, slug: str, outcome_side: str, price: Any,
 
 def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
                      *, now: float,
-                     transport_factory: Any = O.BoundedOrderTransport
-                     ) -> Dict[str, Any]:
+                     transport_factory: Any = O.BoundedOrderTransport,
+                     session_auth: Any = None,
+                     progress: Any = None) -> Dict[str, Any]:
     """Preview, echo-check, consume a NAMED latch slot, POST once.
 
     Every byte of that sequence is `analysis.l5.live_exec2.orders.submit_one`,
@@ -509,6 +512,17 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
         raise Ineligible("E1 refused the attempt: %s" % checks["refusals"])
     window = checks["e1"]["window"]
     slug = snapshot["market"]
+    # BOUNDARY 2: the SPECIFIC RESOLVED SLUG and both token ids, enforced
+    # immediately before the submission and BEFORE any transport exists.
+    # A slug the frozen selector did not produce in this authorized session
+    # is refused here, not discovered at the venue.
+    auth_result = None
+    if session_auth is not None:
+        auth_result = session_auth.enforce_before_submission(
+            slug=slug, pin=snapshot.get("pin") or {},
+            token_up=(snapshot.get("first_leg") or {}).get("token_id"),
+            token_down=(snapshot.get("complement") or {}).get("token_id"),
+            role="first_leg")
     side = snapshot["first_leg"]["side"]
     price = snapshot["first_leg_price"]
     qty = snapshot.get("qty", FIRST_LEG_QTY)
@@ -536,14 +550,20 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
                 window=window, notional_usd=D(str(qty)) * D(str(price)))
     out["e1_latch_slot"] = holder["slot"]
     out["e1_window"] = window
+    out["e1_authorization"] = auth_result
+    if progress is not None and "slot" in holder:
+        progress.record_placement(window_index=window,
+                                  slot=holder["slot"]["slot"],
+                                  notional_usd=D(str(qty)) * D(str(price)),
+                                  slug=slug)
     return out
 
 
 def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
                       first_leg_filled_qty: Any, tracker: CohortTracker,
                       already_complemented_qty: Any = "0",
-                      transport_factory: Any = O.BoundedOrderTransport
-                      ) -> Dict[str, Any]:
+                      transport_factory: Any = O.BoundedOrderTransport,
+                      session_auth: Any = None) -> Dict[str, Any]:
     """Rules C1..C10. Submit ONE tranche, sized so the complement quantity
     equals the CUMULATIVE first-leg fill.
 
@@ -588,6 +608,15 @@ def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
                 "fully_accounted": True,
                 "LABEL": "NO ORDER -- the shortfall is recorded as RESIDUAL"}
     side = snapshot["complement"]["side"]
+    # a COMPLEMENT may only belong to the ALREADY-AUTHORIZED first-leg
+    # market. It cannot independently select another.
+    comp_auth = None
+    if session_auth is not None:
+        comp_auth = session_auth.authorize_complement(
+            slug=snapshot["market"],
+            first_leg_pin=snapshot.get("pin") or {},
+            token_up=(snapshot.get("first_leg") or {}).get("token_id"),
+            token_down=(snapshot.get("complement") or {}).get("token_id"))
     holder: Dict[str, Any] = {}
 
     def _take_slot() -> Dict[str, Any]:
@@ -609,6 +638,7 @@ def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
                 "e1_complement_qty": str(q),
                 "e1_tranche_index": spent,
                 "e1_latch_slot": holder["slot"],
+                "e1_authorization": comp_auth,
                 "sized_to_cumulative_filled_qty": True,
                 "sized_to_only_the_first_partial": False,
                 "residual_qty": "0", "fully_accounted": True})
@@ -637,7 +667,8 @@ def account_first_leg(*, cumulative_filled_qty: Any,
 def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                = None, recorder: Any = None,
                transport_factory: Any = O.BoundedOrderTransport,
-               now_fn: Any = None, max_iterations: Optional[int] = None
+               now_fn: Any = None, max_iterations: Optional[int] = None,
+               session_auth: Any = None, progress: Any = None
                ) -> Dict[str, Any]:
     """Drive the cohort: MANY bounded attempts, under the E1 named-slot latch.
 
@@ -687,7 +718,20 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             continue
         try:
             out = submit_first_leg(snap, tracker, now=now_fn(),
-                                   transport_factory=transport_factory)
+                                   transport_factory=transport_factory,
+                                   session_auth=session_auth,
+                                   progress=progress)
+        except AUTH.NotAuthorized as exc:
+            # refused BEFORE transport. Not a venue error and not a
+            # placement; recorded and the window moves on.
+            refusals.append({"iteration": it,
+                             "refusals": ["NOT_AUTHORIZED:%s" % exc]})
+            if recorder is not None:
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="SUBMISSION_REFUSED_NOT_AUTHORIZED",
+                    detail={"slug": snap.get("market"), "why": str(exc)})
+            continue
         except Ineligible as exc:
             refusals.append({"iteration": it, "refusals": [str(exc)]})
             continue
@@ -716,8 +760,17 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 event="FIRST_LEG_SUBMITTED",
                 detail={"order_id": out["order_id"],
                         "latch_path": out["e1_latch_slot"]["path"]})
+    if progress is not None and stopped_because:
+        v = tracker.verdict()
+        progress.record_cohort_stopped(
+            verdict=v["verdict"],
+            truncation_cause=v.get("truncation_cause"))
     return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
             "iterations": it, "placements": placements,
+            "windows_used": (progress.windows_used()
+                             if progress is not None else None),
+            "authorized_slugs": (session_auth.slugs()
+                                 if session_auth is not None else None),
             "placement_count": len(placements),
             "distinct_latch_slots": len({p["latch_path"]
                                          for p in placements}),
@@ -730,8 +783,43 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             "LANGUAGE": "SUBMITTED is not a fill"}
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def _default_provider_factory(*, progress: Any, session_auth: Any,
+                              recorder: Any) -> Any:
+    """The production provider. Imported lazily so the DISARMED path does
+    not construct a book client at all."""
+    from analysis.l5.e1_cohort.provider import LiveWindowProvider
+    from analysis.l5.e1_cohort.live_book import book_fn, health_fn
+    return LiveWindowProvider(progress=progress, session_auth=session_auth,
+                              book_fn=book_fn, health_fn=health_fn,
+                              recorder=recorder)
+
+
+def _default_progress_factory(state_dir: str) -> Any:
+    from analysis.l5.e1_cohort.progress import CohortProgress
+    return CohortProgress(state_dir)
+
+
+def _default_auth_factory(state_dir: str) -> Any:
+    return AUTH.SessionAuthorization(state_dir)
+
+
+def _default_recorder_factory(state_dir: str) -> Any:
+    from analysis.l5.e1_cohort.recorder import Recorder
+    return Recorder(os.path.join(state_dir, "tape"))
+
+
+def main(argv: Optional[List[str]] = None, *,
+         provider_factory: Any = _default_provider_factory,
+         progress_factory: Any = _default_progress_factory,
+         auth_factory: Any = _default_auth_factory,
+         recorder_factory: Any = _default_recorder_factory,
+         transport_factory: Any = O.BoundedOrderTransport) -> int:
     """THE E1 ENTRYPOINT, and what `SPEC['entrypoint'].module` names.
+
+    The factory arguments exist so the OFFLINE TEST CAN DRIVE THIS EXACT
+    FUNCTION with a fake provider, fake credentials and a fake transport.
+    Their defaults are the production ones, so the tested path and the
+    deployed path are the same function and the same control flow.
 
     DISARMED. It boots, asserts the frozen spec, prints the preflight and
     the DISARMED refusal, and RETURNS WITHOUT PLACING ANYTHING. Arming is
@@ -753,12 +841,64 @@ def main(argv: Optional[List[str]] = None) -> int:
                 copy.deepcopy(SPEC["supersedes_e1"]["must_not_be_rearmed"]),
         }, indent=1, sort_keys=True))
         return 0
-    # Unreachable while disarmed. Left explicit so the declared call graph
-    # is the real one rather than a description of one.
-    raise SystemExit(
-        "COHORT-E1-LIVE: the arming gate is set but this build still "
-        "requires the owner's authorized manifest and session id. Refusing "
-        "to run rather than guessing.")
+    # ---------------------------------------------------------------
+    # THE ARMED PATH. This used to be a bare `raise SystemExit`, which
+    # meant the declared production path terminated BEFORE run_cohort:
+    # setting the PMUS_E1_* keys would have produced twelve empty
+    # windows and measured nothing. It now builds the live provider and
+    # reaches run_cohort, and a test drives exactly this function with a
+    # complete arming environment across two windows.
+    # ---------------------------------------------------------------
+    pin = A.fingerprint_pinned(E1_FINGERPRINT)
+    if not pin["matches_this_build"]:
+        print(json.dumps({
+            "REFUSED": "FINGERPRINT_NOT_PINNED_TO_THIS_BUILD",
+            "required": E1_FINGERPRINT, "pin_present": pin["set"],
+            "why": ("the owner must pin %s to THIS build. A pin naming a "
+                    "superseded fingerprint leaves the build inert."
+                    % A.FINGERPRINT_PIN_ENV),
+            "superseded_must_not_be_rearmed":
+                copy.deepcopy(SPEC["supersedes_e1"]["must_not_be_rearmed"]),
+        }, indent=1, sort_keys=True))
+        return 2
+    gate = AUTH.series_authorized()
+    if not gate["matches_authorized_series"]:
+        print(json.dumps({
+            "REFUSED": "SERIES_GATE_NOT_SET",
+            "authorized_series": gate["authorized_series"],
+            "why": ("the owner's %s must name the authorized series. Only "
+                    "markets the frozen BTC15m selector produces during "
+                    "this session may be traded, and the exact resolved "
+                    "slug is re-enforced before every submission."
+                    % AUTH.GATE_EVIDENCE_ENV),
+        }, indent=1, sort_keys=True))
+        return 2
+
+    # DURABLE PROGRESS FIRST. A restart RESUMES: the window, placement and
+    # risk counters are rehydrated from the volume before anything else,
+    # so a restarted process cannot be handed a fresh cohort.
+    state_dir = L.LATCH_DIR
+    prog = progress_factory(state_dir)
+    auth = auth_factory(state_dir)
+    tracker = CohortTracker()
+    rehydrated = prog.rehydrate(tracker)
+    rec = recorder_factory(state_dir) if recorder_factory else None
+    provider = provider_factory(progress=prog, session_auth=auth,
+                               recorder=rec)
+    print(json.dumps({"ARMED": True, "probe": PROBE,
+                      "fingerprint": E1_FINGERPRINT,
+                      "rehydrated": rehydrated,
+                      "progress": prog.report(),
+                      "authorization": auth.report(),
+                      "entering": "run_cohort"},
+                     indent=1, sort_keys=True, default=str))
+    out = run_cohort(snapshot_provider=provider, tracker=tracker,
+                     recorder=rec, transport_factory=transport_factory,
+                     session_auth=auth, progress=prog)
+    out["provider"] = provider.report()
+    out["progress"] = prog.report()
+    print(json.dumps(out, indent=1, sort_keys=True, default=str))
+    return 0
 
 
 # -------------------------------------------------------------------- boot

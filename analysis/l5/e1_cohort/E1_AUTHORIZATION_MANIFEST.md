@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310
+cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -414,8 +414,8 @@ additive and touches nothing of XR2W's.
 | `PMUS_E1_LIVE` | must be `YES` |
 | `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
 | `PMUS_E1_ARM` | must equal the session id |
-| `PMUS_E1_GATE_EVIDENCE` | must equal the exact market slug |
-| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310` |
+| `PMUS_E1_GATE_EVIDENCE` | must equal the authorized **series** `btc-updown-15m`; the exact resolved slug is re-enforced before every submission |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60` |
 
 **None of these is set.** Reporting is BOOLEAN ONLY — `armed_env_summary()`
 returns presence flags and never a value, asserted by test.
@@ -461,6 +461,78 @@ about to receive credentials. The two provable claims are:
    `require_echo` precedes the latch, which precedes the POST, and a
    refused echo means no POST at all.
 
+## 10.3 THE LIVE PRODUCTION PATH
+
+`e11fc1ab…` declared a production path it did not have. The armed branch is
+now wired end to end, and a test drives **this exact function** armed:
+
+```
+Railway entrypoint   scripts.l5_e1_cohort_run:__main__
+ -> runner:main  [ARMED BRANCH]
+      arming:fingerprint_pinned      PMUS_E1_AUTHORIZED_FINGERPRINT
+      authorization:series_authorized PMUS_E1_GATE_EVIDENCE
+      progress:CohortProgress.rehydrate      <- RESTART RESUMES
+      authorization:SessionAuthorization
+ -> provider:LiveWindowProvider
+      selector:select_window -> src.l5_market_binding:fetch_binding
+      authorization:authorize_selected       <- BOUNDARY 1 (series)
+      provider:assert_ws_both_tokens_healthy
+      live_book -> src.l5_clob_ws            <- TIMING AUTHORITY
+ -> runner:eligible
+ -> runner:run_cohort                        <- MANY attempts
+ -> authorization:enforce_before_submission  <- BOUNDARY 2 (exact slug
+                                                 + both tokens, before
+                                                 any transport)
+ -> latch:consume_attempt                    <- E1 NAMED-SLOT LATCH
+ -> orders:BoundedOrderTransport.request     <- PROVEN XR2W PRIMITIVES
+```
+
+**Reused, not rebuilt:** `src/l5_market_binding.py` for BTC15m market and
+token resolution (it already refuses unidentified windows), and
+`src/l5_clob_ws.py` for the proven two-token websocket. **No second
+discovery stack and no second book stack** — asserted by test.
+
+### Authorization semantics, fixed rather than weakened
+
+A single static `PMUS_E1_GATE_EVIDENCE=<slug>` cannot authorize twelve
+windows. **The slug check is NOT deleted** — deleting it would make this
+spec state a rule the code does not enforce, the defect class that
+superseded three fingerprints. Instead there are now **two** boundaries,
+both narrower than the original:
+
+1. **SESSION** — `PMUS_E1_GATE_EVIDENCE` names the authorized **series**
+   (`btc-updown-15m`). Only markets the **frozen BTC15m selector** produced
+   during this authorized session may be traded; the session ledger is
+   append-only and a slug is never removed.
+2. **PER SUBMISSION** — the **specific resolved slug and BOTH token ids**
+   are enforced immediately before **every** first-leg submission, before
+   any transport exists.
+
+A **complement** may only belong to its own first leg's already-authorized
+market; `authorize_complement` refuses any other, so the complement path
+has no route to a market of its own.
+
+**Per window the raw tape records:** selected slug, market id, both token
+ids, selection provenance, and the authorization result.
+
+### Durable progress
+
+State lives on `/state/pmus-ws/e1_cohort`, append-only, with **no reset
+path** (no `remove`/`unlink`/`rmtree`/`rmdir`/`rename`/`truncate`/`"w"` in
+the module — asserted). On boot the cohort **rehydrates** windows used,
+placements, window exposure, realized loss and unresolved residuals, so
+**a restart resumes and never resets**. Twelve restarts do not grant twelve
+cohorts — asserted by test. XR2W's spent A6 latch at
+`/state/pmus-ws/exec1x` stays untouched; it is evidence.
+
+### Fails closed
+
+Stale-window rollover; websocket loss before submission; a silent token;
+REST offered as timing authority; a derived complement offered as a second
+token; book for another market; slug or token mismatch; selector refusal;
+window-budget exhaustion. Each yields **no snapshot at all**, never a
+degraded one.
+
 ## 11. Preconditions the owner must still supply
 
 1. **authorization, in the owner's own words**;
@@ -468,7 +540,7 @@ about to receive credentials. The two provable claims are:
    id, and **Claude never clears a latch**;
 3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
 4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
-   `e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310`;
+   `cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many
@@ -516,6 +588,7 @@ their reasons, asserted by test.
 | `110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c` | the complement sized to only the first partial, so later first-leg fills fell silently into residual |
 | `bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a` | **`entrypoint` still named XR2W's single-order path**, so arming per the spec would have run XR2W's one-order probe through the single-slot latch and measured nothing |
 | `f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4` | **it consumed XR2W's `PMUS_EXEC1_*` namespace and XR2W's latch directory**, so a legacy value on `l5-live-probe-oneshot` could have participated in arming E1 — and it implied a network-incapability E1 does not have |
+| `e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310` | **its ARMED path terminated BEFORE `run_cohort`** — `main()`'s armed branch was a bare `raise SystemExit`, no `snapshot_provider` existed, and setting the `PMUS_E1_*` keys would have produced twelve empty windows |
 
 ## 12.1 The entrypoint, and the defect it closes
 
@@ -569,7 +642,7 @@ one-order runner fails while passing import resolution.
 
 | artifact | path |
 |---|---|
-| frozen spec `e11fc1ab…4310` | `analysis/l5/e1_cohort/spec.py` |
+| frozen spec `cdc63519…ae60` | `analysis/l5/e1_cohort/spec.py` |
 | bounded-count named-slot latch | `analysis/l5/e1_cohort/latch.py` |
 | append-only recorder + chain reconstructor | `analysis/l5/e1_cohort/recorder.py` |
 | stopping rules + forward-looking bound | `analysis/l5/e1_cohort/stopping.py` |

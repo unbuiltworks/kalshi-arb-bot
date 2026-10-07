@@ -216,6 +216,82 @@ DIFF: Dict[str, Any] = {
 
     "experiment_class": "MECHANICS MEASUREMENT COHORT, not a profit probe",
 
+    "live_provider": {
+        "module": "analysis.l5.e1_cohort.provider",
+        "class": "LiveWindowProvider",
+        "armed_main_reaches_run_cohort": True,
+        "armed_main_is_a_bare_raise": False,
+        "reuses_not_rebuilds": [
+            "src.l5_market_binding (BTC15m market + token resolution)",
+            "src.l5_clob_ws (the proven two-token websocket)",
+        ],
+        "built_another_discovery_stack": False,
+        "built_another_book_stack": False,
+        "series_pinned": "btc-updown-15m",
+        "per_window_market_resolution": True,
+        "market_is_pinned_before_an_order_is_possible": True,
+        "windows_sequenced": WINDOWS,
+        "windows_are_distinct": True,
+        "degraded_snapshot_is_ever_returned": False,
+        "fails_closed_on": [
+            "selector refusal (unidentified window)",
+            "authorization refusal",
+            "websocket both-token health not proven for the SELECTED market",
+            "stale-window rollover",
+            "websocket loss before submission",
+            "slug or token mismatch",
+            "book for another market",
+        ],
+        "timing_authority": "websocket_strict",
+        "rest_is_sufficient_timing_authority": False,
+        "derived_complement_is_a_second_token": False,
+    },
+
+    "cohort_authorization": {
+        "module": "analysis.l5.e1_cohort.authorization",
+        "problem": (
+            "a single static PMUS_E1_GATE_EVIDENCE=<slug> cannot authorize "
+            "a 12-window rolling cohort: twelve slugs, one env value."),
+        "wrong_fix_not_taken": (
+            "deleting the slug check would make this spec state a rule the "
+            "code does not enforce, which is the defect class that "
+            "superseded three fingerprints"),
+        "boundary_1_session": (
+            "PMUS_E1_GATE_EVIDENCE names the authorized SERIES. Only "
+            "markets the FROZEN BTC15m SELECTOR produced during this "
+            "authorized session may be traded."),
+        "boundary_2_per_submission": (
+            "the SPECIFIC RESOLVED SLUG and BOTH TOKEN IDS are enforced "
+            "immediately before EVERY first-leg submission, before any "
+            "transport exists."),
+        "slug_check_deleted": False,
+        "is_stricter_than_one_static_slug": True,
+        "session_ledger_is_append_only": True,
+        "a_slug_is_never_removed": False,
+        "complement_may_select_its_own_market": False,
+        "complement_inherits_the_first_leg_authorization": True,
+        "recorded_per_window_in_the_raw_tape": [
+            "selected slug", "market id", "both token ids",
+            "selection provenance", "authorization result",
+        ],
+    },
+
+    "durable_progress": {
+        "module": "analysis.l5.e1_cohort.progress",
+        "state_dir": "/state/pmus-ws/e1_cohort",
+        "append_only": True,
+        "a_restart_resumes": True,
+        "a_restart_resets_counters": False,
+        "a_restart_grants_another_12_windows": False,
+        "rehydrates": ["windows used", "placements", "window exposure",
+                       "realized loss", "unresolved residuals"],
+        "reset_path_exists": False,
+        "fails_closed_if_unwritable": True,
+        "why": ("counters in memory bound a PROCESS, not a COHORT. A "
+                "container that restarted twelve times would otherwise get "
+                "twelve fresh cohorts with every counter reading zero."),
+    },
+
     # ----------------------------------------------------------------------
     # THE ENTRYPOINT. This key MUST be in the DIFF. Inheriting it from XR2W
     # was a DEFECT: the deep-copy fixed the aliasing and then faithfully
@@ -241,9 +317,22 @@ DIFF: Dict[str, Any] = {
             "scripts.l5_e1_cohort_run:__main__",
             "analysis.l5.e1_cohort.runner:main",
             "analysis.l5.e1_cohort.runner:boot -> spec:assert_frozen",
+            "analysis.l5.e1_cohort.runner:main [ARMED BRANCH]",
+            "  arming:fingerprint_pinned  (PMUS_E1_AUTHORIZED_FINGERPRINT)",
+            "  authorization:series_authorized  (PMUS_E1_GATE_EVIDENCE)",
+            "  progress:CohortProgress -> :rehydrate  (RESTART RESUMES)",
+            "  authorization:SessionAuthorization  (session ledger)",
+            "  provider:LiveWindowProvider",
+            "    selector:select_window"
+            " -> src.l5_market_binding:fetch_binding",
+            "    authorization:authorize_selected   (BOUNDARY 1, series)",
+            "    provider:assert_ws_both_tokens_healthy",
+            "    live_book:health_fn/book_fn -> src.l5_clob_ws",
             "analysis.l5.e1_cohort.runner:run_cohort   (MANY attempts)",
             "analysis.l5.e1_cohort.runner:e1_preflight -> :eligible",
             "analysis.l5.e1_cohort.runner:submit_first_leg",
+            "  authorization:enforce_before_submission"
+            "   (BOUNDARY 2, EXACT SLUG + BOTH TOKENS, before transport)",
             "analysis.l5.e1_cohort.runner:_submit_once",
             "  orders:order_body -> src.l5_order_body:build",
             "  orders:preview_request -> src.l5_order_body:preview_envelope",
@@ -254,6 +343,8 @@ DIFF: Dict[str, Any] = {
             "analysis.l5.live_exec2.orders:BoundedOrderTransport.request"
             " -> POST /v1/orders",
             "analysis.l5.e1_cohort.runner:submit_complement",
+            "  authorization:authorize_complement"
+            "   (inherits the first leg's market; cannot select one)",
             "  analysis.l5.e1_cohort.latch:consume_complement"
             "   (named TRANCHE slot)",
         ],
@@ -408,6 +499,7 @@ DIFF: Dict[str, Any] = {
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
             "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
             "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
+            "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
         ],
         "reasons": {
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
@@ -424,6 +516,11 @@ DIFF: Dict[str, Any] = {
                  "l5-live-probe-oneshot could have participated in arming "
                  "E1, and it implied a network-incapability it does not "
                  "have"),
+            "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310":
+                ("its ARMED production path terminated BEFORE run_cohort: "
+                 "main()'s armed branch was a bare `raise SystemExit`, no "
+                 "snapshot_provider existed, and setting the PMUS_E1_* "
+                 "keys would have produced twelve empty windows"),
         },
     },
 
@@ -842,6 +939,25 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("complement.max_tranches", 13),
     ("complement."
      "uncomplementable_quantity_is_explicitly_recorded_residual", True),
+    ("live_provider.armed_main_reaches_run_cohort", True),
+    ("live_provider.armed_main_is_a_bare_raise", False),
+    ("live_provider.built_another_discovery_stack", False),
+    ("live_provider.built_another_book_stack", False),
+    ("live_provider.series_pinned", "btc-updown-15m"),
+    ("live_provider.windows_sequenced", 12),
+    ("live_provider.degraded_snapshot_is_ever_returned", False),
+    ("live_provider.rest_is_sufficient_timing_authority", False),
+    ("live_provider.derived_complement_is_a_second_token", False),
+    ("cohort_authorization.slug_check_deleted", False),
+    ("cohort_authorization.is_stricter_than_one_static_slug", True),
+    ("cohort_authorization.complement_may_select_its_own_market", False),
+    ("cohort_authorization."
+     "complement_inherits_the_first_leg_authorization", True),
+    ("durable_progress.a_restart_resumes", True),
+    ("durable_progress.a_restart_resets_counters", False),
+    ("durable_progress.a_restart_grants_another_12_windows", False),
+    ("durable_progress.reset_path_exists", False),
+    ("durable_progress.fails_closed_if_unwritable", True),
     ("network.network_capable", True),
     ("network.claims_to_be_network_incapable", False),
     ("network.tests_make_zero_network_calls", True),
@@ -860,7 +976,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("supersedes_e1.must_not_be_rearmed",
      ["110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
       "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
-      "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4"]),
+      "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
+      "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310"]),
     ("entrypoint.module", "scripts.l5_e1_cohort_run"),
     ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
     ("entrypoint.cohort_driver",
@@ -957,7 +1074,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310"
+    "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

@@ -236,8 +236,10 @@ def test_no_file_in_this_package_contains_a_duplicate_serializer():
     for name in sorted(os.listdir(HERE)):
         if not name.endswith(".py"):
             continue
-        if name == os.path.basename(__file__):
-            # this test file names the tokens in order to forbid them
+        if name.startswith("test_"):
+            # test files NAME these tokens deliberately: this one to
+            # forbid them, and test_e1_live_path.py to assert what the
+            # PROVEN serializer put on the wire. Neither builds a body.
             continue
         text = code_only(os.path.join(HERE, name))
         hits = [tok for tok in FORBIDDEN if tok in text]
@@ -1940,12 +1942,13 @@ def test_the_real_latch_dirs_are_distinct_and_share_the_volume(monkeypatch):
     assert iso["e1_deletes_resets_or_renames_anything"] is False
 
 
-def test_all_three_superseded_fingerprints_are_structurally_non_armable():
+def test_all_superseded_fingerprints_are_structurally_non_armable():
     must_not = SP.SPEC["supersedes_e1"]["must_not_be_rearmed"]
     assert must_not == [
         "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
         "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
-        "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4"]
+        "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
+        "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this
