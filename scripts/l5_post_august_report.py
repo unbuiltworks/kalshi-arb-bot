@@ -938,6 +938,29 @@ def write_md(o):
     W("   mix, completion is still partial, residual is still carried. The")
     W("   OPEN -> EXTEND -> COMPLETE/SWITCH motif is intact after `REWARD` ended.")
     W()
+    # The strongest single piece of evidence: a whole month in which REWARD is
+    # zero on days we actually fetched, while MAKER_REBATE pays every one.
+    oct_p = per.get("MONTH_2026-10")
+    if oct_p and not cov["days_missing_in_span"]:
+        W("5. **The cleanest cut: October.** Every October day in this window is")
+        W("   OBSERVED -- no gaps -- and across them `REWARD` pays **$0.00** while")
+        W("   `MAKER_REBATE` pays **$%s** and `TAKER_REBATE` **$%s**. So the"
+          % (n(oct_p["l5_maker_rebate_usd"]), n(oct_p["l5_taker_rebate_usd"])))
+        W("   August program's absence is a *measured zero on fetched days*, not an")
+        W("   inference from a hole in our coverage -- and L5 traded **%s fills over"
+          % n(oct_p["fills"], 0))
+        W("   %s events** through it anyway." % n(oct_p["events"], 0))
+        W()
+        W("   Month over month the behaviour barely moves: median pair cost")
+        W("   %s (Sep) -> %s (Oct), completion %s -> %s, EXTEND share %s -> %s."
+          % (n(per["MONTH_2026-09"]["pair_cost_median"], 4),
+             n(oct_p["pair_cost_median"], 4),
+             pct(per["MONTH_2026-09"]["completion_rate"]),
+             pct(oct_p["completion_rate"]),
+             pct(per["MONTH_2026-09"]["act_mix"].get("EXTEND", {}).get("frac")),
+             pct(oct_p["act_mix"].get("EXTEND", {}).get("frac"))))
+        W("   **The subsidy mix changed; the policy did not.**")
+        W()
     W("**What changed** is therefore not the posture but its *subsidy mix*: a")
     W("market-level TWAP liquidity program fell away and an account-level maker-rebate")
     W("program carried the economics. The earlier repo claim that \"the reward")
@@ -956,11 +979,23 @@ def write_md(o):
       % cov["post_august_day_count"])
     W("public evidence gets.")
     W()
+    if not cov["days_missing_in_span"]:
+        W("Coverage is **gapless**: every one of the %d calendar days from %s to %s"
+          % (cov["calendar_days_in_span"], cov["calendar_span"][0],
+             cov["calendar_span"][1]))
+        W("is observed, with **0 failed envelopes and 0 truncated windows**. So the")
+        W("stream conclusion does not rest on an unfetched interval -- there is none.")
+        W()
     W("*Low-confidence part, and the honest limits:*")
     W()
-    W("- **%d calendar day(s) inside the observed span were never fetched.** A stream"
-      % len(cov["days_missing_in_span"]))
-    W("  could have restarted and stopped inside a gap without appearing here.")
+    if cov["days_missing_in_span"]:
+        W("- **%d calendar day(s) inside the observed span were never fetched.** A"
+          % len(cov["days_missing_in_span"]))
+        W("  stream could have restarted and stopped inside a gap unseen.")
+    else:
+        W("- **The window ends %s.** Nothing here says what happens after it; a"
+          % cov["calendar_span"][1])
+        W("  program can end the day after a harvest.")
     W("- **No maker/taker role exists on this tape.** The claim \"only a maker credit")
     W("  explains above-$0.96 pair completion\" is an *inference from pricing*, not a")
     W("  measurement of L5's liquidity role. `execution.isAggressor` does not exist;")

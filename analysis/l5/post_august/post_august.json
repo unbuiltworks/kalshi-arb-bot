@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-10-07T04:31:49.815160+00:00",
+  "generated_utc": "2026-10-07T04:41:43.424624+00:00",
   "subject": {
     "handle": "l5Zn1bWoM8eTsK",
     "proxy_wallet": "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
@@ -14,44 +14,51 @@
   ],
   "ingest": {
     "sources": {
+      "post_august:l5_activity_post_august_20261007T043152Z.jsonl.gz": 270885,
       "sep2026:l5_activity_sep2026_raw.json.gz": 144394,
       "sep2026:l5_activity_sep2223_raw.json.gz": 16982,
       "sep2325:l5_sep23_25_daily.json": 17074,
       "ops:activity_20260901.jsonl": 5
     },
-    "records_seen": 188922,
+    "records_seen": 459808,
     "records_malformed": 0,
     "records_bad_numeric": 0,
-    "records_with_name_field": 188922,
+    "records_with_name_field": 459808,
     "records_without_name_field": 0,
     "records_contradicting_identity": 0,
-    "records_nonhex_conditionid": 36,
-    "records_empty_slug": 34,
+    "records_nonhex_conditionid": 82,
+    "records_empty_slug": 80,
     "trades_unresolved_slug": 0,
     "trades_unresolved_epoch": 0,
     "trades_bad_numeric": 0,
-    "duplicates_dropped": 10467,
+    "duplicates_dropped": 10468,
     "collisions_differing_fields": 0,
     "collision_examples": [],
     "dup_by_pair": {
+      "post_august:l5_activity_post_august_20261007T043152Z.jsonl.gz|post_august:l5_activity_post_august_20261007T043152Z.jsonl.gz": 1,
       "sep2026:l5_activity_sep2223_raw.json.gz|sep2325:l5_sep23_25_daily.json": 6101,
       "sep2026:l5_activity_sep2026_raw.json.gz|ops:activity_20260901.jsonl": 4366
     },
     "type_counts": {
-      "TRADE": 173921,
-      "REDEEM": 4500,
-      "MAKER_REBATE": 14,
-      "TAKER_REBATE": 14,
+      "TRADE": 437827,
+      "REDEEM": 11433,
+      "MAKER_REBATE": 37,
+      "TAKER_REBATE": 37,
       "REWARD": 6
     },
     "kept_by_src": {
+      "post_august:l5_activity_post_august_20261007T043152Z.jsonl.gz": 270885,
       "sep2026:l5_activity_sep2026_raw.json.gz": 144394,
       "sep2026:l5_activity_sep2223_raw.json.gz": 16982,
       "sep2325:l5_sep23_25_daily.json": 17074,
       "ops:activity_20260901.jsonl": 5
     },
-    "envelopes": {},
-    "envelope_statuses": {},
+    "envelopes": {
+      "post_august:l5_activity_post_august_20261007T043152Z.jsonl.gz": 1360
+    },
+    "envelope_statuses": {
+      "200": 1360
+    },
     "failed_envelopes": [],
     "truncation_flags": [],
     "dedupe_key": "(transactionHash, conditionId, outcomeIndex, timestamp, str(price), str(size), type)"
@@ -68,18 +75,6 @@
       "2026-09-08",
       "2026-09-09",
       "2026-09-10",
-      "2026-09-22",
-      "2026-09-23",
-      "2026-09-24",
-      "2026-09-25"
-    ],
-    "post_august_day_count": 14,
-    "calendar_span": [
-      "2026-09-01",
-      "2026-09-25"
-    ],
-    "calendar_days_in_span": 25,
-    "days_missing_in_span": [
       "2026-09-11",
       "2026-09-12",
       "2026-09-13",
@@ -90,8 +85,31 @@
       "2026-09-18",
       "2026-09-19",
       "2026-09-20",
-      "2026-09-21"
+      "2026-09-21",
+      "2026-09-22",
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25",
+      "2026-09-26",
+      "2026-09-27",
+      "2026-09-28",
+      "2026-09-29",
+      "2026-09-30",
+      "2026-10-01",
+      "2026-10-02",
+      "2026-10-03",
+      "2026-10-04",
+      "2026-10-05",
+      "2026-10-06",
+      "2026-10-07"
     ],
+    "post_august_day_count": 37,
+    "calendar_span": [
+      "2026-09-01",
+      "2026-10-07"
+    ],
+    "calendar_days_in_span": 37,
+    "days_missing_in_span": [],
     "events_per_day": {
       "2026-09-01": 541,
       "2026-09-02": 470,
@@ -103,10 +121,33 @@
       "2026-09-08": 376,
       "2026-09-09": 328,
       "2026-09-10": 227,
+      "2026-09-11": 411,
+      "2026-09-12": 441,
+      "2026-09-13": 464,
+      "2026-09-14": 367,
+      "2026-09-15": 385,
+      "2026-09-16": 343,
+      "2026-09-17": 356,
+      "2026-09-18": 348,
+      "2026-09-19": 340,
+      "2026-09-20": 400,
+      "2026-09-21": 330,
       "2026-09-22": 375,
       "2026-09-23": 326,
       "2026-09-24": 269,
-      "2026-09-25": 256
+      "2026-09-25": 256,
+      "2026-09-26": 499,
+      "2026-09-27": 240,
+      "2026-09-28": 261,
+      "2026-09-29": 325,
+      "2026-09-30": 391,
+      "2026-10-01": 401,
+      "2026-10-02": 378,
+      "2026-10-03": 534,
+      "2026-10-04": 464,
+      "2026-10-05": 368,
+      "2026-10-06": 423,
+      "2026-10-07": 73
     },
     "fills_per_day": {
       "2026-09-01": 16621,
@@ -119,99 +160,122 @@
       "2026-09-08": 12607,
       "2026-09-09": 12917,
       "2026-09-10": 10371,
+      "2026-09-11": 14527,
+      "2026-09-12": 19582,
+      "2026-09-13": 14732,
+      "2026-09-14": 14226,
+      "2026-09-15": 13023,
+      "2026-09-16": 9889,
+      "2026-09-17": 8735,
+      "2026-09-18": 11833,
+      "2026-09-19": 9410,
+      "2026-09-20": 11148,
+      "2026-09-21": 9496,
       "2026-09-22": 10584,
       "2026-09-23": 9599,
       "2026-09-24": 7516,
-      "2026-09-25": 5397
+      "2026-09-25": 5397,
+      "2026-09-26": 16650,
+      "2026-09-27": 14340,
+      "2026-09-28": 8966,
+      "2026-09-29": 8311,
+      "2026-09-30": 8982,
+      "2026-10-01": 8618,
+      "2026-10-02": 9184,
+      "2026-10-03": 15657,
+      "2026-10-04": 12076,
+      "2026-10-05": 10985,
+      "2026-10-06": 11327,
+      "2026-10-07": 2209
     }
   },
   "totals": {
-    "rows_loaded_all": 178455,
-    "rows_post_august": 178455,
-    "fills_post_august": 173921,
-    "events_post_august": 5446
+    "rows_loaded_all": 449340,
+    "rows_post_august": 449340,
+    "fills_post_august": 437827,
+    "events_post_august": 13988
   },
   "periods": {
     "MONTH_2026-09": {
-      "days": 14,
+      "days": 30,
       "day_first": "2026-09-01",
-      "day_last": "2026-09-25",
-      "events": 5446,
-      "fills": 173921,
-      "notional_usd": 2061013.8281640047,
-      "matched_shares": 1870637.4442589995,
-      "matched_notional_usd": 1805692.2414161994,
-      "matched_locked_ex_fee_ex_incentive_usd": 64945.202842798055,
-      "pair_cost_median": 0.9650993076291614,
-      "pair_cost_p10": 0.7765365136206126,
-      "pair_cost_p90": 1.2315102311240185,
-      "pairs_measured": 3016,
-      "pairs_le_0_96": 1430,
-      "pairs_le_0_96_frac": 0.47413793103448276,
-      "pairs_le_1_00_frac": 0.6555039787798409,
-      "matched_share_of_gross": 0.8522851314121185,
-      "residual_share_of_gross": 0.14771486858788152,
-      "term_resid_frac_median": 0.620327121869146,
+      "day_last": "2026-09-30",
+      "events": 11347,
+      "fills": 367771,
+      "notional_usd": 4403301.923165013,
+      "matched_shares": 4001139.728512997,
+      "matched_notional_usd": 3862403.0607008655,
+      "matched_locked_ex_fee_ex_incentive_usd": 138736.66781214287,
+      "pair_cost_median": 0.9671008767506711,
+      "pair_cost_p10": 0.7953279357685881,
+      "pair_cost_p90": 1.2434343315123264,
+      "pairs_measured": 5710,
+      "pairs_le_0_96": 2618,
+      "pairs_le_0_96_frac": 0.4584938704028021,
+      "pairs_le_1_00_frac": 0.6612959719789843,
+      "matched_share_of_gross": 0.8537909968511672,
+      "residual_share_of_gross": 0.14620900314883278,
+      "term_resid_frac_median": 0.9368163092833478,
       "peak_resid_median": 80.0,
-      "events_with_terminal_residual_frac": 0.9876973925817113,
+      "events_with_terminal_residual_frac": 0.9888957433682912,
       "spread_capture_usd": null,
-      "l5_maker_rebate_usd": 15056.2434,
-      "l5_taker_rebate_usd": 1348.8330999999998,
+      "l5_maker_rebate_usd": 32122.63810000001,
+      "l5_taker_rebate_usd": 2277.994,
       "l5_reward_usd": 8229.6599,
-      "l5_maker_rebate_n": 14,
-      "l5_taker_rebate_n": 14,
+      "l5_maker_rebate_n": 30,
+      "l5_taker_rebate_n": 30,
       "l5_reward_n": 6,
-      "taker_fee_upper_bound_usd": 43603.86529999799,
-      "maker_rebate_upper_bound_usd": 8754.848500000751,
-      "fills_priced": 173921,
-      "fills_date_ambiguous": 33096,
+      "taker_fee_upper_bound_usd": 95545.04060001402,
+      "maker_rebate_upper_bound_usd": 18810.987700001322,
+      "fills_priced": 367771,
+      "fills_date_ambiguous": 139645,
       "fills_unpriceable": 0,
-      "l5_redeem_usd": 2052728.9777600002,
-      "l5_redeem_n": 4500,
+      "l5_redeem_usd": 4395038.732012,
+      "l5_redeem_n": 9245,
       "act_mix": {
         "EXTEND": {
-          "n": 122617,
-          "frac": 0.705015495541079
+          "n": 260410,
+          "frac": 0.7080764932525947
         },
         "COMPLEMENT": {
-          "n": 27466,
-          "frac": 0.1579222750559162
+          "n": 57527,
+          "frac": 0.1564207074511041
         },
         "SWITCH": {
-          "n": 18392,
-          "frac": 0.10574916197583961
+          "n": 38487,
+          "frac": 0.10464936060755198
         },
         "OPEN": {
-          "n": 5446,
-          "frac": 0.031313067427165206
+          "n": 11347,
+          "frac": 0.03085343868874925
         }
       },
-      "extend_per_event": 22.515056922511935,
-      "switch_per_event": 3.377157546823357,
-      "complement_per_event": 5.043334557473375,
-      "completion_rate": 0.5538009548292324,
-      "t_to_match_s_median": 54.0,
-      "first_price_median": 0.58,
-      "first_favored_frac": 0.654425266250459,
-      "first_tte_s_median": 237.0,
-      "mean_size_median": 30.2925,
-      "notional_per_event": 378.4454330084474,
+      "extend_per_event": 22.949678329073762,
+      "switch_per_event": 3.3918216268617254,
+      "complement_per_event": 5.06979818454217,
+      "completion_rate": 0.5032167092623601,
+      "t_to_match_s_median": 52.0,
+      "first_price_median": 0.5800000056,
+      "first_favored_frac": 0.6601744954613554,
+      "first_tte_s_median": 234,
+      "mean_size_median": 30.43,
+      "notional_per_event": 388.0586871565183,
       "category_mix": {
         "crypto_updown:BTC/5m": {
-          "events": 2601,
-          "frac": 0.47759823723834005
+          "events": 5140,
+          "frac": 0.45298316735701066
         },
         "crypto_updown:BTC/15m": {
-          "events": 1189,
-          "frac": 0.2183253764230628
+          "events": 2704,
+          "frac": 0.23830087247730677
         },
         "crypto_updown:ETH/5m": {
-          "events": 1119,
-          "frac": 0.2054719059860448
+          "events": 2381,
+          "frac": 0.2098351987309421
         },
         "crypto_updown:ETH/15m": {
-          "events": 537,
-          "frac": 0.09860448035255233
+          "events": 1122,
+          "frac": 0.09888076143474046
         }
       },
       "days_represented": [
@@ -225,92 +289,200 @@
         "2026-09-08",
         "2026-09-09",
         "2026-09-10",
+        "2026-09-11",
+        "2026-09-12",
+        "2026-09-13",
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+        "2026-09-18",
+        "2026-09-19",
+        "2026-09-20",
+        "2026-09-21",
         "2026-09-22",
         "2026-09-23",
         "2026-09-24",
-        "2026-09-25"
+        "2026-09-25",
+        "2026-09-26",
+        "2026-09-27",
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30"
+      ]
+    },
+    "MONTH_2026-10": {
+      "days": 7,
+      "day_first": "2026-10-01",
+      "day_last": "2026-10-07",
+      "events": 2641,
+      "fills": 70056,
+      "notional_usd": 632167.8272329995,
+      "matched_shares": 561547.585424,
+      "matched_notional_usd": 539491.4374521868,
+      "matched_locked_ex_fee_ex_incentive_usd": 22056.147971813152,
+      "pair_cost_median": 0.964934919472346,
+      "pair_cost_p10": 0.7540719210525271,
+      "pair_cost_p90": 1.3111889587154304,
+      "pairs_measured": 1310,
+      "pairs_le_0_96": 626,
+      "pairs_le_0_96_frac": 0.4778625954198473,
+      "pairs_le_1_00_frac": 0.6351145038167939,
+      "matched_share_of_gross": 0.8404080755429317,
+      "residual_share_of_gross": 0.15959192445706824,
+      "term_resid_frac_median": 1.0,
+      "peak_resid_median": 60.83,
+      "events_with_terminal_residual_frac": 0.9833396440742143,
+      "spread_capture_usd": null,
+      "l5_maker_rebate_usd": 2700.1529,
+      "l5_taker_rebate_usd": 521.9908,
+      "l5_reward_usd": 0.0,
+      "l5_maker_rebate_n": 7,
+      "l5_taker_rebate_n": 7,
+      "l5_reward_n": 0,
+      "taker_fee_upper_bound_usd": 15239.432499999923,
+      "maker_rebate_upper_bound_usd": 2741.134900000065,
+      "fills_priced": 70056,
+      "fills_date_ambiguous": 1238,
+      "fills_unpriceable": 0,
+      "l5_redeem_usd": 637881.159868,
+      "l5_redeem_n": 2188,
+      "act_mix": {
+        "EXTEND": {
+          "n": 50710,
+          "frac": 0.7238494918351034
+        },
+        "COMPLEMENT": {
+          "n": 10325,
+          "frac": 0.14738209432454036
+        },
+        "SWITCH": {
+          "n": 6380,
+          "frac": 0.0910700011419436
+        },
+        "OPEN": {
+          "n": 2641,
+          "frac": 0.037698412698412696
+        }
+      },
+      "extend_per_event": 19.201060204468003,
+      "switch_per_event": 2.415751609238925,
+      "complement_per_event": 3.909503975766755,
+      "completion_rate": 0.49602423324498296,
+      "t_to_match_s_median": 70.0,
+      "first_price_median": 0.6,
+      "first_favored_frac": 0.7020068156001514,
+      "first_tte_s_median": 254,
+      "mean_size_median": 28.073333333333334,
+      "notional_per_event": 239.36684105755376,
+      "category_mix": {
+        "crypto_updown:BTC/5m": {
+          "events": 1269,
+          "frac": 0.4804998106777736
+        },
+        "crypto_updown:BTC/15m": {
+          "events": 563,
+          "frac": 0.21317682695948503
+        },
+        "crypto_updown:ETH/5m": {
+          "events": 548,
+          "frac": 0.20749716016660355
+        },
+        "crypto_updown:ETH/15m": {
+          "events": 261,
+          "frac": 0.09882620219613783
+        }
+      },
+      "days_represented": [
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04",
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07"
       ]
     },
     "REGIME_2026-08-19_ON": {
-      "days": 14,
+      "days": 37,
       "day_first": "2026-09-01",
-      "day_last": "2026-09-25",
-      "events": 5446,
-      "fills": 173921,
-      "notional_usd": 2061013.8281640047,
-      "matched_shares": 1870637.4442589995,
-      "matched_notional_usd": 1805692.2414161994,
-      "matched_locked_ex_fee_ex_incentive_usd": 64945.202842798055,
-      "pair_cost_median": 0.9650993076291614,
-      "pair_cost_p10": 0.7765365136206126,
-      "pair_cost_p90": 1.2315102311240185,
-      "pairs_measured": 3016,
-      "pairs_le_0_96": 1430,
-      "pairs_le_0_96_frac": 0.47413793103448276,
-      "pairs_le_1_00_frac": 0.6555039787798409,
-      "matched_share_of_gross": 0.8522851314121185,
-      "residual_share_of_gross": 0.14771486858788152,
-      "term_resid_frac_median": 0.620327121869146,
+      "day_last": "2026-10-07",
+      "events": 13988,
+      "fills": 437827,
+      "notional_usd": 5035469.750398003,
+      "matched_shares": 4562687.313936987,
+      "matched_notional_usd": 4401894.498153048,
+      "matched_locked_ex_fee_ex_incentive_usd": 160792.81578395597,
+      "pair_cost_median": 0.9667869403961575,
+      "pair_cost_p10": 0.7875599070138808,
+      "pair_cost_p90": 1.2609383649356378,
+      "pairs_measured": 7020,
+      "pairs_le_0_96": 3244,
+      "pairs_le_0_96_frac": 0.4621082621082621,
+      "pairs_le_1_00_frac": 0.6564102564102564,
+      "matched_share_of_gross": 0.852120953252969,
+      "residual_share_of_gross": 0.14787904674703106,
+      "term_resid_frac_median": 0.954660466978705,
       "peak_resid_median": 80.0,
-      "events_with_terminal_residual_frac": 0.9876973925817113,
+      "events_with_terminal_residual_frac": 0.9878467257649414,
       "spread_capture_usd": null,
-      "l5_maker_rebate_usd": 15056.2434,
-      "l5_taker_rebate_usd": 1348.8330999999998,
+      "l5_maker_rebate_usd": 34822.79100000001,
+      "l5_taker_rebate_usd": 2799.9847999999997,
       "l5_reward_usd": 8229.6599,
-      "l5_maker_rebate_n": 14,
-      "l5_taker_rebate_n": 14,
+      "l5_maker_rebate_n": 37,
+      "l5_taker_rebate_n": 37,
       "l5_reward_n": 6,
-      "taker_fee_upper_bound_usd": 43603.86529999799,
-      "maker_rebate_upper_bound_usd": 8754.848500000751,
-      "fills_priced": 173921,
-      "fills_date_ambiguous": 33096,
+      "taker_fee_upper_bound_usd": 110784.47310002758,
+      "maker_rebate_upper_bound_usd": 21552.1226000006,
+      "fills_priced": 437827,
+      "fills_date_ambiguous": 140883,
       "fills_unpriceable": 0,
-      "l5_redeem_usd": 2052728.9777600002,
-      "l5_redeem_n": 4500,
+      "l5_redeem_usd": 5032919.891879999,
+      "l5_redeem_n": 11433,
       "act_mix": {
         "EXTEND": {
-          "n": 122617,
-          "frac": 0.705015495541079
+          "n": 311120,
+          "frac": 0.7106003056001572
         },
         "COMPLEMENT": {
-          "n": 27466,
-          "frac": 0.1579222750559162
+          "n": 67852,
+          "frac": 0.154974453379988
         },
         "SWITCH": {
-          "n": 18392,
-          "frac": 0.10574916197583961
+          "n": 44867,
+          "frac": 0.10247654895655134
         },
         "OPEN": {
-          "n": 5446,
-          "frac": 0.031313067427165206
+          "n": 13988,
+          "frac": 0.031948692063303544
         }
       },
-      "extend_per_event": 22.515056922511935,
-      "switch_per_event": 3.377157546823357,
-      "complement_per_event": 5.043334557473375,
-      "completion_rate": 0.5538009548292324,
-      "t_to_match_s_median": 54.0,
-      "first_price_median": 0.58,
-      "first_favored_frac": 0.654425266250459,
+      "extend_per_event": 22.24192164712611,
+      "switch_per_event": 3.207535030025736,
+      "complement_per_event": 4.850729196454104,
+      "completion_rate": 0.5018587360594795,
+      "t_to_match_s_median": 55.0,
+      "first_price_median": 0.59,
+      "first_favored_frac": 0.6680726336860165,
       "first_tte_s_median": 237.0,
-      "mean_size_median": 30.2925,
-      "notional_per_event": 378.4454330084474,
+      "mean_size_median": 30.0,
+      "notional_per_event": 359.98496928781833,
       "category_mix": {
         "crypto_updown:BTC/5m": {
-          "events": 2601,
-          "frac": 0.47759823723834005
+          "events": 6409,
+          "frac": 0.45817843866171004
         },
         "crypto_updown:BTC/15m": {
-          "events": 1189,
-          "frac": 0.2183253764230628
+          "events": 3267,
+          "frac": 0.2335573348584501
         },
         "crypto_updown:ETH/5m": {
-          "events": 1119,
-          "frac": 0.2054719059860448
+          "events": 2929,
+          "frac": 0.2093937660852159
         },
         "crypto_updown:ETH/15m": {
-          "events": 537,
-          "frac": 0.09860448035255233
+          "events": 1383,
+          "frac": 0.09887046039462397
         }
       },
       "days_represented": [
@@ -324,10 +496,33 @@
         "2026-09-08",
         "2026-09-09",
         "2026-09-10",
+        "2026-09-11",
+        "2026-09-12",
+        "2026-09-13",
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+        "2026-09-18",
+        "2026-09-19",
+        "2026-09-20",
+        "2026-09-21",
         "2026-09-22",
         "2026-09-23",
         "2026-09-24",
-        "2026-09-25"
+        "2026-09-25",
+        "2026-09-26",
+        "2026-09-27",
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04",
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07"
       ]
     }
   },
@@ -458,6 +653,138 @@
       },
       "observed": true
     },
+    "2026-09-11": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1424.6663,
+      "TAKER_REBATE": 55.0677,
+      "REDEEM": 186038.19,
+      "n": {
+        "REDEEM": 335,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-12": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1584.515,
+      "TAKER_REBATE": 62.2348,
+      "REDEEM": 278275.31,
+      "n": {
+        "REDEEM": 355,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-13": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 2470.8555,
+      "TAKER_REBATE": 101.2088,
+      "REDEEM": 191049.92,
+      "n": {
+        "REDEEM": 369,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-14": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1463.7672,
+      "TAKER_REBATE": 80.3821,
+      "REDEEM": 182173.96,
+      "n": {
+        "REDEEM": 291,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-15": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1409.5819,
+      "TAKER_REBATE": 53.2598,
+      "REDEEM": 186752.73,
+      "n": {
+        "REDEEM": 297,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-16": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1437.431,
+      "TAKER_REBATE": 61.8604,
+      "REDEEM": 128250.47,
+      "n": {
+        "REDEEM": 272,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-17": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 943.5715,
+      "TAKER_REBATE": 46.5426,
+      "REDEEM": 125008.96,
+      "n": {
+        "REDEEM": 282,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-18": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 903.3437,
+      "TAKER_REBATE": 56.0196,
+      "REDEEM": 182925.2,
+      "n": {
+        "REDEEM": 284,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-19": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1337.6178,
+      "TAKER_REBATE": 52.9285,
+      "REDEEM": 126681.41,
+      "n": {
+        "REDEEM": 275,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-20": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 914.2308,
+      "TAKER_REBATE": 51.2606,
+      "REDEEM": 148296.76,
+      "n": {
+        "REDEEM": 321,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-21": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1088.183,
+      "TAKER_REBATE": 58.4597,
+      "REDEEM": 155556.31,
+      "n": {
+        "REDEEM": 263,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
     "2026-09-22": {
       "REWARD": 0.0,
       "MAKER_REBATE": 1104.4749,
@@ -505,6 +832,150 @@
         "MAKER_REBATE": 1
       },
       "observed": true
+    },
+    "2026-09-26": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 475.5243,
+      "TAKER_REBATE": 58.8574,
+      "REDEEM": 182978.19,
+      "n": {
+        "REDEEM": 406,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-27": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 766.8871,
+      "TAKER_REBATE": 102.3849,
+      "REDEEM": 88534.36,
+      "n": {
+        "REDEEM": 213,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-28": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 411.6033,
+      "TAKER_REBATE": 25.7265,
+      "REDEEM": 57000.66,
+      "n": {
+        "REDEEM": 207,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-29": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 228.3633,
+      "TAKER_REBATE": 26.5858,
+      "REDEEM": 54823.92,
+      "n": {
+        "REDEEM": 263,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-30": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 206.253,
+      "TAKER_REBATE": 36.3817,
+      "REDEEM": 67963.42,
+      "n": {
+        "REDEEM": 312,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-10-01": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 248.8946,
+      "TAKER_REBATE": 52.4881,
+      "REDEEM": 74863.84,
+      "n": {
+        "REDEEM": 323,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-10-02": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 270.3689,
+      "TAKER_REBATE": 58.612,
+      "REDEEM": 83069.67,
+      "n": {
+        "REDEEM": 313,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-10-03": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 337.3974,
+      "TAKER_REBATE": 69.7807,
+      "REDEEM": 141790.32,
+      "n": {
+        "REDEEM": 457,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-10-04": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 544.9312,
+      "TAKER_REBATE": 135.8482,
+      "REDEEM": 106661.35,
+      "n": {
+        "REDEEM": 382,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-10-05": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 438.3567,
+      "TAKER_REBATE": 86.0116,
+      "REDEEM": 100967.86,
+      "n": {
+        "REDEEM": 311,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-10-06": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 413.9366,
+      "TAKER_REBATE": 51.2794,
+      "REDEEM": 107306.09,
+      "n": {
+        "REDEEM": 342,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-10-07": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 446.2675,
+      "TAKER_REBATE": 67.9708,
+      "REDEEM": 23222.03,
+      "n": {
+        "REDEEM": 60,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
     }
   },
   "incentive_streams": {
@@ -532,13 +1003,36 @@
         "2026-09-08",
         "2026-09-09",
         "2026-09-10",
+        "2026-09-11",
+        "2026-09-12",
+        "2026-09-13",
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+        "2026-09-18",
+        "2026-09-19",
+        "2026-09-20",
+        "2026-09-21",
         "2026-09-22",
         "2026-09-23",
         "2026-09-24",
-        "2026-09-25"
+        "2026-09-25",
+        "2026-09-26",
+        "2026-09-27",
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04",
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07"
       ],
-      "last_paying_day": "2026-09-25",
-      "total_usd": 15056.2434
+      "last_paying_day": "2026-10-07",
+      "total_usd": 34822.79100000001
     },
     "TAKER_REBATE": {
       "paying_days": [
@@ -552,13 +1046,36 @@
         "2026-09-08",
         "2026-09-09",
         "2026-09-10",
+        "2026-09-11",
+        "2026-09-12",
+        "2026-09-13",
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+        "2026-09-18",
+        "2026-09-19",
+        "2026-09-20",
+        "2026-09-21",
         "2026-09-22",
         "2026-09-23",
         "2026-09-24",
-        "2026-09-25"
+        "2026-09-25",
+        "2026-09-26",
+        "2026-09-27",
+        "2026-09-28",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-01",
+        "2026-10-02",
+        "2026-10-03",
+        "2026-10-04",
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-07"
       ],
-      "last_paying_day": "2026-09-25",
-      "total_usd": 1348.8330999999998
+      "last_paying_day": "2026-10-07",
+      "total_usd": 2799.9847999999997
     },
     "note": "L5's OWN credited incentive cashflows, observed in the public feed. Never netted into trading P&L, never annualized for us, and NOT evidence that any equivalent program applies to our account. A stream shows zero on a day only if that day was OBSERVED -- check `observed`."
   },

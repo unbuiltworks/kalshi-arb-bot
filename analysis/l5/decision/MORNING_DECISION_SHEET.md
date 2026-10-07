@@ -167,6 +167,45 @@ residual, it cannot evaluate it); whether a complement would have filled
 better later (one patience path, not the distribution); or that post-only
 guaranteed a maker role (absent `isAggressor` stays UNRESOLVED).
 
+## 4b. FORENSIC — where did `qty = 1.00` come from?
+
+Asked and answered from source. **It is an implementation design choice for
+observability, bounded by a sub-dollar loss ceiling.** Specifically *not*
+any of the other three candidates:
+
+| candidate origin | verdict | evidence |
+|---|---|---|
+| preregistered economic constraint | **NO** | `BOUND_PROVENANCE["FIRST_LEG_QTY"]` carries `fitted: False` and says in its own words *"Chosen for observability of partial fills, **not for expectancy**."* |
+| venue constraint | **NO** | the venue minimum is **0.01** and its grid is 0.01; nothing at the venue requires or suggests 1.00 |
+| historical L5 sizing | **NO** | `analysis/l5/stage6/bounds.py` contains **no reference to L5's own sizes at all** — grep for `L5` in it returns nothing, and no size-distribution study is cited |
+| arbitrary implementation choice | **partly — but reasoned, not arbitrary** | the stated reason is that 1.00 share yields **100 distinguishable partial-fill states** on the 0.01 grid, where 0.01 share yields one, so a partial fill cannot be told from a full one |
+
+The documented reasoning, verbatim from `bounds.py`: XR2W's 0.01 *"was
+right for a one-leg wire test. It is the WRONG size for this experiment,
+and not because bigger is better"* — at 0.01 every rebate figure is
+structurally $0.00 and partial fills are unobservable.
+
+### The sharp observation this forensic produces
+
+**1.00 share sits in a dead zone.** It is deliberately *below* the rebate
+cent floor of **1.62** shares (`REBATE_IS_ASSUMED_ZERO`), so it is:
+
+- large enough to observe partial fills (100 states), **but**
+- too small to observe rebate economics **at all** ($0.00 by rounding), and
+- 100× the loss exposure of 0.01
+
+So the chosen size buys partial-fill resolution and pays for it in dollars,
+while still forgoing the rebate measurement that **1.62** would supply for
+roughly 62% more risk. Whether that trade is right is a judgment about
+*what we are trying to learn*, which is exactly the question §9's
+measurement protocol frames.
+
+**Per instruction, the size is NOT changed tonight.** The frozen
+1.00-share candidate and its INCONCLUSIVE / DO-NOT-AUTHORIZE verdict stand
+exactly as they are. This is a finding for your review, not an action.
+
+---
+
 ## 5. Historical / shadow evidence — **DOES NOT SUPPORT AUTHORIZATION**
 
 Lane 5's verdict, from `analysis/l5/stage6_validation/
