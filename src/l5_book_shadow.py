@@ -927,6 +927,31 @@ class BookShadowCollector:
         except Exception:                                      # noqa: BLE001
             pass
 
+    def resume_activity_window(self) -> Optional[float]:
+        """Carry an OPEN availability window across a process restart.
+
+        READ-ONLY over the tape. Without this the window is per-process:
+        a restart forgets that activity was down, so the CLOSE edge is
+        never written and the interval has a start with no end -- which is
+        exactly the silence that must never be mistaken for zero fills.
+        The earliest OPEN since the last CLOSE is the true start, so a
+        chain of restarts still yields ONE interval, not several.
+        """
+        since: Optional[float] = None
+        for row in self.tape.read_all():
+            if row.get("kind") != "activity_availability":
+                continue
+            if row.get("edge") == "CLOSE":
+                since = None
+            elif row.get("edge") == "OPEN" and since is None:
+                v = row.get("since_unix")
+                if isinstance(v, (int, float)):
+                    since = float(v)
+        if since is not None and self._activity_down_since is None:
+            self._activity_down_since = since
+            self._activity_failures = max(self._activity_failures, 1)
+        return self._activity_down_since
+
     def emit_boot_inventory(self) -> Dict[str, Any]:
         """READ-ONLY inventory of what is already on the volume, logged at
         boot. Proves pre-restart parts coexist with post-restart ones
@@ -1138,6 +1163,9 @@ class BookShadowCollector:
         # READ-ONLY, once, before the loop: what is already on the volume.
         # This is how a restart proves the earlier parts survived.
         self.emit_boot_inventory()
+        # An interval that began before this process must still be
+        # closed by it, or it has a start and no end.
+        self.resume_activity_window()
         last_discovery = 0.0
         last_activity = 0.0
         last_heartbeat = 0.0

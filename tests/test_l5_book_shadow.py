@@ -668,3 +668,42 @@ def test_activity_join_proof_joins_on_the_token_id(tmp_path):
     # An unjoined row is reported, never silently dropped.
     assert rep["activity_rows_without_a_recorded_book"] == 1
     assert "NOT that the book was unchanged" in rep["MEANING"]
+
+
+def test_an_open_activity_window_survives_a_restart(tmp_path):
+    """A window with a start and no end is the silence this label exists
+    to prevent, so the OPEN edge must outlive the process that wrote it."""
+    first = _collector(tmp_path)
+    first._activity_down_since = 1_700_000_000.0
+    first._activity_failures = 3
+    first._emit_activity_window("OPEN")
+
+    # A fresh process over the SAME tape.
+    second = _collector(tmp_path)
+    assert second._activity_down_since is None
+    assert second.resume_activity_window() == 1_700_000_000.0
+
+    # ...and it can now close the interval it did not open.
+    second._emit_activity_window("CLOSE")
+    edges = [(r["edge"], r["since_unix"]) for r in second.tape.read_all()
+             if r.get("kind") == "activity_availability"]
+    assert edges == [("OPEN", 1_700_000_000.0), ("CLOSE", 1_700_000_000.0)]
+
+
+def test_a_closed_window_is_not_reopened_by_a_later_restart(tmp_path):
+    col = _collector(tmp_path)
+    col._activity_down_since = 1_700_000_000.0
+    col._emit_activity_window("OPEN")
+    col._emit_activity_window("CLOSE")
+    assert _collector(tmp_path).resume_activity_window() is None
+
+
+def test_a_chain_of_restarts_yields_one_interval_not_several(tmp_path):
+    col = _collector(tmp_path)
+    col._activity_down_since = 1_700_000_000.0
+    col._emit_activity_window("OPEN")
+    second = _collector(tmp_path)
+    second.resume_activity_window()
+    second._emit_activity_window("OPEN")        # a restart re-announces
+    # The EARLIEST open is still the true start of the interval.
+    assert _collector(tmp_path).resume_activity_window() == 1_700_000_000.0
