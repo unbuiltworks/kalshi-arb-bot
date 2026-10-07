@@ -590,3 +590,44 @@ def test_the_boot_inventory_is_read_only_and_sees_prior_parts(tmp_path):
     assert after == before
     assert sum((tmp_path / "raw" / n).stat().st_size
                for n in after) == bytes_before
+
+
+# ===================== activity identity (the A-ingestion root cause)
+#
+# Live evidence, deployment b08498b1, 2026-10-07T04:03:03Z:
+#   status 400, body {"error":"required query param 'user' not provided"}
+#   endpoint https://data-api.polymarket.com/activity?limit=<v>&type=<v>&user=<v>
+# The parameter WAS present. data-api validates `user` as an address and
+# reports a non-address as ABSENT, so the handle default was indistinguishable
+# from a missing parameter at the HTTP layer. These tests pin both halves.
+
+def test_activity_identity_default_is_the_proxy_wallet_not_the_handle():
+    assert bs.L5_ADDRESS_DEFAULT == \
+        "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
+    assert bs.is_wallet_address(bs.L5_ADDRESS_DEFAULT)
+    # The handle survives for labelling and must never be the sent identity.
+    assert bs.L5_HANDLE == "l5zn1bwom8etsk"
+    assert not bs.is_wallet_address(bs.L5_HANDLE)
+
+
+def test_activity_sends_the_wallet_as_user():
+    sent = {}
+
+    class _F:
+        def get(self, url, params=None):
+            sent["url"] = url
+            sent["params"] = dict(params or {})
+            return []
+
+    bs.PolymarketVenue(_F()).l5_activity(limit=7)
+    assert sent["url"].endswith("/activity")
+    assert sent["params"]["user"] == bs.L5_ADDRESS_DEFAULT
+    assert bs.is_wallet_address(sent["params"]["user"])
+
+
+def test_boot_gate_refuses_a_non_address_activity_identity():
+    bad = bs.boot_gate(forbidden=(), l5_address="l5zn1bwom8etsk")
+    assert bad["ok"] is False
+    assert "activity_identity_is_wallet_address" in bad["blocking_failures"]
+    good = bs.boot_gate(forbidden=(), l5_address=bs.L5_ADDRESS_DEFAULT)
+    assert good["ok"] is True

@@ -90,6 +90,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import ssl
 import sys
 import time
@@ -115,7 +116,25 @@ PMUS_GATEWAY = "https://gateway.polymarket.us"
 VENUE_POLY = "polymarket"
 VENUE_PMUS = "pmus"
 
-L5_ADDRESS_DEFAULT = "l5zn1bwom8etsk"
+#: data-api keys the activity feed on the PROXY WALLET, not the profile
+#: handle. Passing the handle returns HTTP 400 {"error":"required query
+#: param 'user' not provided"} -- the venue validates the parameter as an
+#: address and reports a non-address as ABSENT, which is why the earlier
+#: handle default looked like a missing parameter rather than a wrong one.
+#: Same convention already recorded in src/l5_5m_coverage/run.py.
+L5_ADDRESS_DEFAULT = "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
+#: Kept for labelling only. Never sent as `user`.
+L5_HANDLE = "l5zn1bwom8etsk"
+
+
+def is_wallet_address(value: str) -> bool:
+    """A 0x-prefixed 20-byte hex address, and nothing else.
+
+    The guard exists because the venue's own error for a handle is
+    indistinguishable from a missing parameter, so a wrong identity is
+    silent at the HTTP layer and must be refused here instead.
+    """
+    return bool(re.fullmatch(r"0x[0-9a-fA-F]{40}", value or ""))
 
 UA = {"User-Agent": "l5-book-shadow (read-only research collector)"}
 
@@ -190,7 +209,8 @@ def credential_presence() -> Dict[str, bool]:
     return {name: bool(os.environ.get(name)) for name in CREDENTIAL_ENVS}
 
 
-def boot_gate(forbidden: Iterable[str] = FORBIDDEN_MODULES) -> Dict[str, Any]:
+def boot_gate(forbidden: Iterable[str] = FORBIDDEN_MODULES,
+              l5_address: str = L5_ADDRESS_DEFAULT) -> Dict[str, Any]:
     """Blocking boot gate, same rule as `scripts/l5_exec1_boot_preflight.py`:
     STRUCTURAL REFUSAL, not a flag. Returns a result dict; `ok` False means
     the process must exit non-zero without issuing a request.
@@ -206,6 +226,16 @@ def boot_gate(forbidden: Iterable[str] = FORBIDDEN_MODULES) -> Dict[str, Any]:
             "pass": True,
             "detail": {"reported": "presence_only",
                        "present": credential_presence()},
+            "blocking": True,
+        },
+        "activity_identity_is_wallet_address": {
+            "pass": is_wallet_address(l5_address),
+            "detail": {"value_shape": ("0x40hex" if
+                                       is_wallet_address(l5_address)
+                                       else "NOT_AN_ADDRESS"),
+                       "why": "data-api reports a non-address `user` as a "
+                              "MISSING parameter (HTTP 400), so a wrong "
+                              "identity is silent at the HTTP layer"},
             "blocking": True,
         },
         "role_is_observation_only": {
@@ -1146,7 +1176,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="evaluate the boot gate and exit")
     args = ap.parse_args(argv)
 
-    gate = boot_gate()
+    gate = boot_gate(l5_address=os.environ.get(
+        ENV_L5_ADDRESS, L5_ADDRESS_DEFAULT))
     print(json.dumps(gate, sort_keys=True), flush=True)
     if not gate["ok"]:
         print("BOOT GATE FAILED: %s -- refusing to start"
