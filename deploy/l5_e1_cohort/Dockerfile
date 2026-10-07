@@ -104,8 +104,10 @@ COPY analysis/l5/measurement/     analysis/l5/measurement/
 
 COPY scripts/l5_e1_cohort_run.py  scripts/l5_e1_cohort_run.py
 # READ-ONLY live readiness proof. Not the entrypoint, so it is outside the
-# closure below; it imports no transport, latch, order body or credential
-# module and checks sys.modules to prove it.
+# closure below. It imports no latch, order body or preview gate and
+# checks sys.modules to prove it. It DOES use credentials, because the
+# only PMUS decision feed is an authenticated socket -- signing is not
+# ordering, and the script says so rather than implying otherwise.
 COPY scripts/l5_e1_ws_readiness_check.py  scripts/l5_e1_ws_readiness_check.py
 # PHASE 1 PMUS IDENTITY PROOF. Read-only GETs plus exactly one
 # /v1/order/preview; refuses POST /v1/orders structurally and proves via
@@ -124,6 +126,27 @@ ENV PYTHONUNBUFFERED=1
 RUN python3 -c "import scripts.l5_e1_cohort_run as m; \
 from analysis.l5.e1_cohort.spec import E1_FINGERPRINT, assert_frozen; \
 assert_frozen(); print('BUILD OK fingerprint', E1_FINGERPRINT)"
+
+# BUILD-TIME PROOF THAT THE SECOND ORDER-CAPABLE STACK IS INERT.
+#
+# `src/pmus_q1_executor.py` is in this image because it is in AuthBook's
+# transitive closure, and it can place and cancel orders from its own
+# PMUS_Q1_* namespace. Two facts make it unreachable, and both are proven
+# HERE rather than asserted in a comment:
+#
+#   1. importing E1's entrypoint does not load it at all (pmus_book
+#      imports AuthBook lazily, inside start());
+#   2. E1 REFUSES TO BOOT if any Q1 live/arming authorization is present.
+#
+# If either stops being true, the BUILD fails.
+RUN python3 -c "import sys; import scripts.l5_e1_cohort_run; \
+assert 'src.pmus_q1_executor' not in sys.modules, 'Q1 EXECUTOR LOADED BY E1'; \
+import os; from analysis.l5.e1_cohort import arming as A; \
+os.environ['PMUS_Q1_LIVE'] = 'YES'; \
+r = 0; \
+exec('try:\n A.assert_no_foreign_executor_authorization()\nexcept SystemExit:\n r = 1'); \
+assert r == 1, 'E1 DID NOT REFUSE TO BOOT BESIDE AN ARMED Q1'; \
+print('BUILD OK q1 inert and boot-refused')"
 
 # BUILD-TIME PROOF THAT THIS IMAGE CAN SIGN. The assertion above cannot
 # establish it -- a lazy import is invisible to it -- which is exactly how
