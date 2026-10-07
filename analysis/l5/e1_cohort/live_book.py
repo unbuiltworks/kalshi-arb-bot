@@ -27,6 +27,18 @@ from src import l5_clob_ws as WS
 _LOCK = threading.Lock()
 _FEEDS: Dict[str, "TwoTokenFeed"] = {}
 
+# WHY A PER-FEED LOCK AND NOT `_LOCK`.
+#
+# `_LOCK` guards a DIFFERENT invariant: the one-feed-per-slug registry, and
+# `feed_for` holds it while calling `f.start(...)`. Taking the same lock on
+# the per-frame publish path would make a collector thread's `observe()`
+# contend with registry construction, serialise unrelated markets through
+# one global, and put a lock held across thread startup on the same path as
+# a lock taken by the thread being started. Each feed therefore owns its
+# book lock. The owner's requirement is that the mutation and the reads stop
+# being consistent BY ACCIDENT; that is what a lock around the publish and
+# around each read delivers, and the registry lock is left to its own job.
+
 
 class TwoTokenFeed:
     """One collector for one pinned market, holding the latest top of book.
@@ -80,6 +92,10 @@ class TwoTokenFeed:
         self.tokens = {str(pin["token_up"]): "UP",
                        str(pin["token_down"]): "DOWN"}
         self.root = root
+        #: guards `top`, `last_update`, `last_seen` and the frame counters.
+        #: Reentrant because `observe` holds it across `_set_top`, which is
+        #: also reachable directly from the tests.
+        self._book_lock = threading.RLock()
         self.top: Dict[str, Dict[str, Any]] = {}
         #: when each token's TOP OF BOOK was last updated. Distinct from
         #: `last_seen`: a frame that arrives and is refused, or that
@@ -121,6 +137,15 @@ class TwoTokenFeed:
     def _set_top(self, tok: str, *, best_bid: Any, best_ask: Any,
                  size_at_best_bid: Optional[Any], source: str,
                  size_reason: Optional[str] = None) -> None:
+        with self._book_lock:
+            self._set_top_locked(
+                tok, best_bid=best_bid, best_ask=best_ask,
+                size_at_best_bid=size_at_best_bid, source=source,
+                size_reason=size_reason)
+
+    def _set_top_locked(self, tok: str, *, best_bid: Any, best_ask: Any,
+                        size_at_best_bid: Optional[Any], source: str,
+                        size_reason: Optional[str] = None) -> None:
         cur = dict(self.top.get(tok) or {})
         bb, ba = self._num(best_bid), self._num(best_ask)
         if bb is None and ba is None:
@@ -169,7 +194,17 @@ class TwoTokenFeed:
 
         Two frame shapes, both real. Anything else is counted as
         unrecognised rather than guessed at.
+
+        ONE FRAME IS ONE TRANSACTION. A `price_change` carries an entry PER
+        TOKEN, so publishing it per-entry without a lock lets a reader see
+        the UP leg of this frame beside the DOWN leg of the previous one.
+        The whole publish is therefore held under the book lock, and the
+        readers take the same lock, so a reader never sees half a frame.
         """
+        with self._book_lock:
+            self._observe_locked(item)
+
+    def _observe_locked(self, item: Any) -> None:
         if not isinstance(item, dict):
             return
         self.frames += 1
@@ -270,8 +305,17 @@ class TwoTokenFeed:
 
     # ------------------------------------------------------------ answers
     def book(self) -> Dict[str, Any]:
-        up = dict(self.top.get(str(self.pin["token_up"])) or {})
-        down = dict(self.top.get(str(self.pin["token_down"])) or {})
+        """Both legs from ONE instant.
+
+        These were two unsynchronised dict lookups, which is the same
+        failure class as the frame-shape bug: a writer landing between them
+        returned a FRESH leg beside an OLDER one, and `book_unix` is the
+        max of the two, so the stale leg was served under the fresh
+        timestamp. The pair is now copied under the lock in one go.
+        """
+        with self._book_lock:
+            up = dict(self.top.get(str(self.pin["token_up"])) or {})
+            down = dict(self.top.get(str(self.pin["token_down"])) or {})
         newest = max([v.get("book_unix", 0) for v in (up, down)] or [0])
         return {"market": self.market, "up": up, "down": down,
                 "book_unix": newest or None,
@@ -295,7 +339,17 @@ class TwoTokenFeed:
         while the other token is busy.
         """
         up, down = str(self.pin["token_up"]), str(self.pin["token_down"])
-        fresh = {t: self.last_update.get(t) for t in (up, down)}
+        # ONE instant, for the same reason as `book`. These were four
+        # separate reads of state a collector thread is writing, so the
+        # freshness this certifies could belong to no single moment.
+        with self._book_lock:
+            fresh = {t: self.last_update.get(t) for t in (up, down)}
+            last_update = dict(self.last_update)
+            last_seen = dict(self.last_seen)
+            frames = self.frames
+            frames_applied = self.frames_applied
+            frames_refused = self.frames_refused_other_market
+            frames_unrecognised = self.frames_unrecognised
         return {"market": self.market,
                 "condition_id": self.condition_id,
                 "timing_authority": WS.TIMING_WEBSOCKET,
@@ -305,15 +359,14 @@ class TwoTokenFeed:
                 # last TOP-OF-BOOK UPDATE, not the last frame seen
                 "tokens_last_seen_unix": {t: v for t, v in fresh.items()
                                           if v is not None},
-                "tokens_last_book_update_unix": dict(self.last_update),
-                "tokens_last_frame_unix": dict(self.last_seen),
+                "tokens_last_book_update_unix": last_update,
+                "tokens_last_frame_unix": last_seen,
                 "staleness_is_per_token_book_update": True,
                 "staleness_depends_on_silence_alone": False,
-                "frames": self.frames,
-                "frames_applied": self.frames_applied,
-                "frames_refused_other_market":
-                    self.frames_refused_other_market,
-                "frames_unrecognised": self.frames_unrecognised,
+                "frames": frames,
+                "frames_applied": frames_applied,
+                "frames_refused_other_market": frames_refused,
+                "frames_unrecognised": frames_unrecognised,
                 "ws_url": self.ws_url,
                 "derived_complement": False,
                 "rest_role": WS.TIMING_REST}
