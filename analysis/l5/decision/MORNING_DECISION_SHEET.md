@@ -70,59 +70,53 @@ reachability/same-second evidence and were not reinterpreted.
 
 ---
 
-## 2. What happened to L5 after August — **the posture did NOT end**
+## 2. What happened to L5 after August — **AUDITED**: posture survived, but it is shrinking
 
-**No, L5 did not abandon subsidy harvesting.** There were never one reward
-program but **three**, on three separate payout clocks — and the largest
-one never stopped:
+**The headline survives an independent source audit; three of the supporting
+claims did not.** Full audit: `analysis/l5/post_august/REBATE_SOURCE_AUDIT.md`.
 
-| stream | paying days | last payout | post-Aug total |
-|---|---|---|---|
-| `REWARD` (the August liquidity pool) | 6 | **2026-09-06** | $8,229.66 |
-| **`MAKER_REBATE`** (account-level) | **37** | **2026-10-07 — still paying**| **$34,822.79** |
-| `TAKER_REBATE` | 37 | 2026-10-07 | $2,799.98 |
+**What verified.** $34,822.79 is **CREDITED, $0.00 modeled** — a bare sum of
+the venue's own `usdcSize` over `type=MAKER_REBATE` rows, present on 82/82
+raw incentive rows, each carrying its own on-chain `transactionHash`. No
+theta, price or rate arithmetic anywhere in the incentive path, so
+CLAUDE.md's "not until credited and source-accounted" rule is met and the
+number may be stated. An independent loader reproduced all three stream
+totals and the entire 37-day per-day table **to the cent**. Identity is
+*stronger* than first claimed: 459,808/459,808 rows carry both `name` and
+`proxyWallet`, zero nameless, zero contradicting. `REWARD`'s post-09-06
+zeros are **measured**, not gaps (184 explicit HTTP-200 `type=REWARD`
+envelopes returning 0 rows). No double counting: the 09-23 harvest-seam
+overlap was real and correctly handled (exactly 2 duplicates, both caught);
+streams are disjoint by txHash.
 
-October is the clean cut: every October day observed with **no gaps**,
-`REWARD` a **measured $0.00** throughout, and L5 still traded 70,056 fills
-over 2,641 events. Behavior barely moved — median pair cost 0.9671 →
-0.9649, completion 50.3% → 49.6%, EXTEND share 70.8% → 72.4%. **The subsidy
-mix changed; the policy did not.**
+**What I had wrong, and now correct:**
 
-Coverage: **449,340 rows / 437,827 TRADE fills**, all **37 calendar days**
-2026-09-01 → 2026-10-07 with **zero unobserved days**, 0 failed envelopes,
-10,468 duplicates and **0 collisions with differing fields**.
+| claim | correction |
+|---|---|
+| "`MAKER_REBATE` is the **largest** stream" | **INVALID — different windows.** 37 paying days vs 6. On `REWARD`'s own 6 paying days: **REWARD $8,229.66 vs MAKER_REBATE $6,261.74** — REWARD 1.31× larger, and larger per paying day ($1,371.61 vs $1,043.62) and per notional (83.8 vs 63.8 bps). It is the **surviving** stream, not the larger one. |
+| (unstated) | **It is DECAYING.** $1,043.62/day and 63.8 bps in early September → **$385.74/day and 42.7 bps in October**. Rebate/day fell **63%** against a 38% fall in notional/day, so this is not just thinner volume. Peak 09-13 $2,470.86 → 10-07 $446.27. |
+| "0 truncated windows, all 37 days" | attested for **23 of 37**. The three pre-existing harvests carry no truncation record, so their fill counts are strictly **floors**. Low materiality for incentives (one credit/day for 37 consecutive days is self-checking). |
+| "a maker rebate **is** what makes above-$0.96 rational" | **does not hold.** The report's own arithmetic undercuts it: the ex-fee pair leg locks ~3.32¢/pair-share, **3.5× the entire $45,852.44 incentive stack**. No rebate is *required* for the pricing to be rational. |
 
-### The implication that matters for copying
+**Newly surfaced:** the credited $34,822.79 is **1.62× the modeled all-maker
+ceiling** of $21,552.12 (maker theta 0.0125 on every fill). Not a
+double-count — the two are never summed — but it means **L5's rebate rate is
+not reconstructible from the frozen public schedule.** We cannot even size
+what he is getting.
 
-Post-August, `REGIME_2026-08-19_ON` alone: matched share 85.2%, median pair
-cost **0.9668**, and only **46.2% completing ≤ $0.96**. So **L5 routinely
-completes pairs above our fee-safe line**, and the economics that make that
-rational are a **maker rebate that is unconfirmed for our account**.
+Also settled and now closed: the `realizedPnl`-includes-commission question
+is **moot** — a full field inventory shows no `realizedPnl`, `commission` or
+`fee` field exists on this feed at all.
 
-> **The latest behavior is NOT safe to copy at face value.** Spring
-> discipline's `<= 0.96` target stays as-is, and near-$1 tolerance stays
-> locked. This is now evidence-backed rather than conservative by default.
+### What this does to "not safe to copy"
 
-**The decisive unknown:** maker/taker role is not on L5's tape (the role-ish
-field is `CHAIN_TOPIC_POSITION`, and `execution.isAggressor` does not
-exist). Ex-incentive the matched book is therefore somewhere between
-comfortably profitable (mostly maker) and nearly fee-dead (mostly taker) —
-every fee figure is an explicit opposite-corner bound, $0–$110,784. That
-gap is exactly what decides copyability, and we cannot close it from public
-data.
+**It stands, and the reason gets stronger — but drop the rebate-dependence
+inference.** Keep the two measurements: (i) L5 receives a credited rebate we
+have not source-confirmed for ourselves at any rate and **cannot even
+size**; (ii) whether his pair leg survives fees turns on an unobservable
+maker/taker split, which brackets his keep between ~$160,793 and ~$50,008.
 
-Confidence: **moderate-to-high** on the stream question (read off credited
-cashflow rows, gapless coverage). **LOW** on "is the latest behavior worth
-copying" — deliberately stated as a separate claim.
-
-Two overreaches the lane caught in its own work: it first wrote that
-incentives were the larger term (they are not — the ex-fee matched-pair lock
-$160,793 is ~3.5× the entire credited incentive stack $45,852), and it
-first claimed above-$0.96 completion *proved* subsidy dependence, when it
-is an inference from pricing rather than a measurement. Both corrected
-visibly. Two of the seven required accounting components — directional
-residual P&L and spread capture — are **UNAVAILABLE**, so the total is
-unmeasured rather than estimated.
+`<= 0.96` stays as it is; near-$1 tolerance stays locked.
 
 ## 3. S3 verdict — **INSUFFICIENT**, and the instrument is the finding
 
