@@ -524,3 +524,69 @@ def test_from_env_reads_every_documented_name(monkeypatch, tmp_path):
     assert c.max_markets == 12
     assert c.pacer.worst_case_rpm() == pytest.approx(120.0)
     assert c.poly is not None and c.pmus is not None
+
+
+# ---------------- activity-failure observability and the BOOK_ONLY window
+
+def test_describe_http_failure_exposes_status_endpoint_and_body():
+    import io
+    import urllib.error
+    exc = urllib.error.HTTPError(
+        "https://data-api.polymarket.com/activity?user=abc&limit=100",
+        404, "Not Found",
+        {"Content-Type": "application/json", "Set-Cookie": "s=secret"},
+        io.BytesIO(b'{"error":"user not found"}'))
+    d = bs.describe_http_failure(exc)
+    assert d["status"] == 404
+    assert d["error_class"] == "HTTPError"
+    assert "user not found" in d["body"]
+    # endpoint keeps the path and the PARAM NAMES, never the values
+    assert d["endpoint"].startswith(
+        "https://data-api.polymarket.com/activity?")
+    assert "limit=<v>" in d["endpoint"] and "user=<v>" in d["endpoint"]
+    assert "abc" not in d["endpoint"]
+    # headers are allowlisted, so a cookie cannot ride along
+    assert "set-cookie" not in d["headers_safe"]
+    assert d["headers_safe"]["content-type"] == "application/json"
+
+
+def test_describe_http_failure_handles_a_non_http_error():
+    d = bs.describe_http_failure(OSError("tunnel refused"))
+    assert d["error_class"] == "OSError"
+    assert d["status"] is None and d["body"] is None
+
+
+def test_a_book_only_window_is_marked_at_both_edges(tmp_path):
+    col = _collector(tmp_path)
+    col._activity_down_since = None
+    col._emit_activity_window("OPEN")
+    col._activity_down_since = 1_700_000_000.0
+    col._emit_activity_window("CLOSE")
+    rows = [r for r in col.tape.read_all()
+            if r.get("kind") == "activity_availability"]
+    assert [r["edge"] for r in rows] == ["OPEN", "CLOSE"]
+    assert rows[0]["state"] == "BOOK_ONLY_ACTIVITY_UNAVAILABLE"
+    assert rows[1]["state"] == "ACTIVITY_RECOVERED"
+    # the whole point: the gap may never read as a zero-fill observation
+    for r in rows:
+        assert "NOT a zero-fill observation" in r["MEANING"]
+
+
+def test_the_boot_inventory_is_read_only_and_sees_prior_parts(tmp_path):
+    first = _collector(tmp_path)
+    first.emit(bs.envelope(venue="polymarket", market="m", token="t",
+                           outcome="up", feed="clob_rest_book",
+                           selector="series", kind="book"))
+    before = sorted(p.name for p in (tmp_path / "raw").glob("*.jsonl"))
+    bytes_before = sum((tmp_path / "raw" / n).stat().st_size for n in before)
+    assert before, "a part must exist before the simulated restart"
+
+    second = _collector(tmp_path)          # the "restart"
+    inv = second.emit_boot_inventory()
+    assert inv["raw_parts_present_at_boot"] == before
+    assert inv["raw_bytes_at_boot"] == bytes_before
+    # read-only: the inventory must not add, remove or shrink anything
+    after = sorted(p.name for p in (tmp_path / "raw").glob("*.jsonl"))
+    assert after == before
+    assert sum((tmp_path / "raw" / n).stat().st_size
+               for n in after) == bytes_before

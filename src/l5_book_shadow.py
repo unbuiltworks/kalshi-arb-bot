@@ -422,6 +422,57 @@ class ReadOnlyFetcher:
             raise
 
 
+#: Response headers safe to record. Allowlist, not denylist: a header the
+#: venue starts returning tomorrow is dropped until it is listed, which is
+#: the direction that cannot leak.
+ACTIVITY_UNAVAILABLE_LABEL = "BOOK_ONLY_ACTIVITY_UNAVAILABLE"
+
+SAFE_RESPONSE_HEADERS = ("content-type", "content-length", "date",
+                         "x-request-id", "retry-after", "server")
+
+
+def describe_http_failure(exc: BaseException) -> dict:
+    """Status, endpoint, sanitized body and exception class for a failed
+    GET. There are no credentials in this process, so nothing here can
+    carry one; the body is truncated and the headers allowlisted anyway."""
+    out = {"error_class": type(exc).__name__, "status": None,
+           "reason": None, "endpoint": None, "body": None,
+           "headers_safe": {}}
+    url = getattr(exc, "url", None) or getattr(exc, "filename", None)
+    if isinstance(url, str):
+        # path + QUERY PARAM NAMES only; values are dropped so a future
+        # parameterisation cannot write anything sensitive into the tape.
+        try:
+            parts = urllib.parse.urlsplit(url)
+            names = sorted({k for k, _ in urllib.parse.parse_qsl(parts.query)})
+            out["endpoint"] = "%s://%s%s?%s" % (
+                parts.scheme, parts.netloc, parts.path,
+                "&".join("%s=<v>" % n for n in names))
+        except ValueError:
+            out["endpoint"] = "<unparseable>"
+    code = getattr(exc, "code", None)
+    if isinstance(code, int):
+        out["status"] = code
+    reason = getattr(exc, "reason", None)
+    if reason is not None:
+        out["reason"] = str(reason)[:200]
+    read = getattr(exc, "read", None)
+    if callable(read):
+        try:
+            out["body"] = read()[:600].decode("utf8", "replace")
+        except (OSError, ValueError):
+            out["body"] = "<unreadable>"
+    hdrs = getattr(exc, "headers", None)
+    if hdrs is not None:
+        try:
+            out["headers_safe"] = {k.lower(): str(v)[:200]
+                                   for k, v in hdrs.items()
+                                   if k.lower() in SAFE_RESPONSE_HEADERS}
+        except AttributeError:
+            pass
+    return out
+
+
 OUTBOUND_FRAME_KEYS = frozenset({"subscribe", "unsubscribe", "heartbeat",
                                  "type", "assets_ids", "auth", "action"})
 OUTBOUND_ACTIONS = frozenset({"subscribe", "unsubscribe", "heartbeat", "ping",
@@ -748,6 +799,62 @@ class BookShadowCollector:
         self.seen_activity: set = set()
         self.cycles = 0
         self.started = time.time()
+        #: BOOK_ONLY_ACTIVITY_UNAVAILABLE bookkeeping. A gap in L5 activity
+        #: must never read downstream as "L5 did nothing"; the window is
+        #: written ON THE TAPE with explicit start and end.
+        self._activity_down_since: Optional[float] = None
+        self._activity_failures = 0
+
+    def _emit_activity_window(self, edge: str) -> None:
+        """Mark the BOOK_ONLY period explicitly, at both edges."""
+        row = envelope(venue=VENUE_POLY, market="-", token=None,
+                       outcome=None, feed="supervisor",
+                       selector=",".join(self.selectors),
+                       kind="activity_availability")
+        row["state"] = ACTIVITY_UNAVAILABLE_LABEL if edge == "OPEN" \
+            else "ACTIVITY_RECOVERED"
+        row["edge"] = edge
+        row["since_utc"] = (
+            None if self._activity_down_since is None
+            else datetime.fromtimestamp(
+                self._activity_down_since,
+                tz=timezone.utc).isoformat())
+        row["since_unix"] = self._activity_down_since
+        row["consecutive_failures"] = self._activity_failures
+        row["MEANING"] = (
+            "between OPEN and CLOSE this tape carries BOOK rows only. "
+            "Missing L5 activity in that interval is UNMEASURED, NOT a "
+            "zero-fill observation, and must not be analysed as one.")
+        try:
+            self.emit(row)
+        except Exception:                                      # noqa: BLE001
+            pass
+
+    def emit_boot_inventory(self) -> Dict[str, Any]:
+        """READ-ONLY inventory of what is already on the volume, logged at
+        boot. Proves pre-restart parts coexist with post-restart ones
+        without mutating the tape."""
+        inv: Dict[str, Any] = {"root": str(self.tape.root)}
+        try:
+            raw = sorted(p.name for p in (self.tape.root / "raw").glob("*.jsonl"))
+            inv["raw_parts_present_at_boot"] = raw
+            inv["raw_parts_count"] = len(raw)
+            inv["raw_bytes_at_boot"] = sum(
+                (self.tape.root / "raw" / n).stat().st_size for n in raw)
+        except OSError as exc:
+            inv["raw_error"] = type(exc).__name__
+        try:
+            cov = self.tape.root / "derived" / "token_coverage.json"
+            inv["token_coverage_present"] = cov.exists()
+            if cov.exists():
+                d = json.loads(cov.read_text() or "{}")
+                inv["both_tokens_ok"] = d.get("both_tokens_ok")
+                inv["defective_markets"] = d.get("defective_markets")
+        except (OSError, ValueError) as exc:
+            inv["token_coverage_error"] = type(exc).__name__
+        self.log("BOOT INVENTORY " + json.dumps(inv, sort_keys=True,
+                                                default=str))
+        return inv
 
     # -- emission -------------------------------------------------------
     def emit(self, row: Dict[str, Any]) -> None:
@@ -921,6 +1028,9 @@ class BookShadowCollector:
         """Forever when `minutes <= 0`, the convention every sibling
         collector in deploy/ uses. Never exits on a transient error."""
         end = float("inf") if minutes <= 0 else time.time() + minutes * 60.0
+        # READ-ONLY, once, before the loop: what is already on the volume.
+        # This is how a restart proves the earlier parts survived.
+        self.emit_boot_inventory()
         last_discovery = 0.0
         last_activity = 0.0
         last_heartbeat = 0.0
@@ -937,9 +1047,31 @@ class BookShadowCollector:
                       and now - last_activity >= self.activity_interval_s):
                     try:
                         self._emit_activity(self.poly.l5_activity())
+                        if self._activity_down_since is not None:
+                            self._emit_activity_window("CLOSE")
+                            self._activity_down_since = None
                     except Exception as exc:                   # noqa: BLE001
+                        # "HTTPError" alone cost a diagnosis once already
+                        # (Attempt 5's 400). Record the STATUS, the
+                        # ENDPOINT and the venue's own BODY, sanitized.
+                        d = describe_http_failure(exc)
+                        row = envelope(venue=VENUE_POLY, market="-",
+                                       token=None, outcome=None,
+                                       feed=PolymarketVenue.activity_feed,
+                                       selector=SELECTOR_L5_ACTIVE,
+                                       kind="activity_error")
+                        row.update(d)
+                        row["ANALYSIS_WARNING"] = ACTIVITY_UNAVAILABLE_LABEL
+                        try:
+                            self.emit(row)
+                        except Exception:                      # noqa: BLE001
+                            pass
+                        self._activity_failures += 1
+                        if self._activity_down_since is None:
+                            self._activity_down_since = time.time()
+                            self._emit_activity_window("OPEN")
                         self.log("activity poll failed: %s"
-                                 % type(exc).__name__)
+                                 % json.dumps(d, sort_keys=True))
                     last_activity = now
                 self.poll_books()
                 if now - last_heartbeat >= self.heartbeat_s:
