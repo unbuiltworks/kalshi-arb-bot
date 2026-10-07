@@ -40,3 +40,29 @@ def _fast_ws_readiness(monkeypatch):
     monkeypatch.setattr(P, "WS_READY_TIMEOUT_S", TEST_TIMEOUT_S)
     monkeypatch.setattr(P, "WS_READY_POLL_S", TEST_POLL_S)
     yield
+
+
+#: The production credential contract, satisfied with a key that belongs to
+#: nobody. Production HAS credentials; their absence is the exceptional case
+#: and belongs in the tests that are about it, not in every other test's
+#: environment. So the default here is "present and usable", and
+#: `test_e1_local_fault_taxonomy.py` removes them explicitly.
+#:
+#: This fixture exists because the 2026-10-07 incident was invisible to a
+#: green suite: the armed tests used a fake transport that never signs, so
+#: nothing exercised the signing contract at all.
+@pytest.fixture(autouse=True)
+def _production_credential_contract(monkeypatch):
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from src import pmus_auth as A
+    k = ed25519.Ed25519PrivateKey.generate()
+    raw = k.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption())
+    monkeypatch.setenv(A.KEY_ENV, "e1-suite-key-id")
+    monkeypatch.setenv(A.SECRET_ENV, base64.b64encode(raw).decode())
+    monkeypatch.delenv("PMUS_API_SECRET", raising=False)
+    yield

@@ -56,6 +56,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from analysis.l5.e1_cohort import arming as A
 from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import latch as L
+from analysis.l5.e1_cohort import local_faults as LF
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         MAX_ATTEMPTS_PER_WINDOW,
                                         MAX_COMPLEMENT_TRANCHES,
@@ -449,6 +450,14 @@ def _submit_once(t: Any, *, slug: str, outcome_side: str, price: Any,
     except O.MutationRefused:
         raise
     except Exception as exc:                                   # noqa: BLE001
+        # IS THIS OURS OR THE VENUE'S? Decided by RE-RUNNING the signing
+        # contract, not by guessing from the exception type: the same class
+        # can be a local config fault or a post-network decode failure.
+        # If signing is still broken, the fault is deterministic and local,
+        # it reached no venue, and it must NOT be counted as a venue error.
+        local = LF.classify_preview_exception(exc)
+        if local is not None:
+            raise local from None
         raise O.PreviewRejected(
             "the preview call failed before any order could exist: %s: %s"
             % (type(exc).__name__, exc),
@@ -698,6 +707,50 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
     refusals: List[Dict[str, Any]] = []
     stopped_because: Optional[str] = None
     it = 0
+
+    # THE LOCAL CONTRACT, CHECKED BEFORE A SINGLE WINDOW IS OPENED.
+    #
+    # On 2026-10-07 the cohort opened window 0, asked for a preview, and
+    # discovered 20.8 ms later that this process could not sign anything --
+    # `cryptography` was not in the image. It spent five iterations finding
+    # that out and recorded it as a venue error storm. Signing is local
+    # arithmetic: it can be proven BEFORE the venue, before a window, and
+    # before a snapshot is even requested. So it is.
+    #
+    # No network, no venue, no order body, no latch. If it fails, the
+    # cohort fails closed ONCE, says exactly what broke with every secret
+    # value subtracted, and stops.
+    try:
+        signing_proof: Any = LF.verify_signing_contract()
+    except LF.LocalExecutionFault as fault:
+        detail = LF.redact_detail(fault.detail)
+        tracker.record_local_execution_fault(detail=detail)
+        if recorder is not None:
+            recorder.record_event(
+                window=-1, slot=-1, event="LOCAL_EXECUTION_FAULT",
+                detail={"message_redacted": LF.redact(fault), **detail})
+        v = tracker.verdict()
+        if progress is not None:
+            progress.record_cohort_stopped(
+                verdict=v["verdict"],
+                truncation_cause=v.get("truncation_cause"))
+        return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
+                "iterations": 0, "placements": [], "placement_count": 0,
+                "windows_used": (progress.windows_used()
+                                 if progress is not None else None),
+                "refusals": [{"iteration": 0,
+                              "refusals": ["LOCAL_EXECUTION_FAULT"],
+                              "detail": detail}],
+                "stopped_because": "LOCAL_EXECUTION_FAULT",
+                "local_execution_fault": detail,
+                "windows_opened": 0,
+                "transport_constructed": False,
+                "venue_contacted": False,
+                "latch_slots_consumed": 0,
+                "counted_as_venue_errors": 0,
+                "tracker": tracker.snapshot(),
+                "signing_proof": None,
+                "LANGUAGE": "a local fault is not a venue error"}
     limit = MAX_PLACEMENTS * 4 if max_iterations is None else max_iterations
     while it < limit:
         it += 1
@@ -735,6 +788,23 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
         except Ineligible as exc:
             refusals.append({"iteration": it, "refusals": [str(exc)]})
             continue
+        except LF.LocalExecutionFault as fault:
+            # DEFENCE IN DEPTH. The contract was proven above, so reaching
+            # here means it broke DURING the cohort -- a credential rotated
+            # away mid-run, say. Still ours, still deterministic, still not
+            # the venue: fail closed on the first one.
+            detail = LF.redact_detail(fault.detail)
+            tracker.record_local_execution_fault(detail=detail)
+            if recorder is not None:
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="LOCAL_EXECUTION_FAULT",
+                    detail={"message_redacted": LF.redact(fault), **detail})
+            refusals.append({"iteration": it,
+                             "refusals": ["LOCAL_EXECUTION_FAULT"],
+                             "detail": detail})
+            stopped_because = "LOCAL_EXECUTION_FAULT"
+            break
         except O.PreviewRejected as exc:
             # the latch is UNTOUCHED: a preview creates nothing.
             tracker.record_venue_error(detail={"phase": "PREVIEW",
@@ -777,6 +847,7 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             "refusals": refusals,
             "stopped_because": stopped_because,
             "tracker": tracker.snapshot(),
+            "signing_proof": signing_proof,
             "latch_kind": "BOUNDED_COUNT_NAMED_SLOTS",
             "entered_xr2w_experiment_runner": False,
             "entered_xr2w_single_slot_latch": False,
@@ -898,6 +969,13 @@ def main(argv: Optional[List[str]] = None, *,
     out["provider"] = provider.report()
     out["progress"] = prog.report()
     print(json.dumps(out, indent=1, sort_keys=True, default=str))
+    if out.get("stopped_because") == "LOCAL_EXECUTION_FAULT":
+        # A DISTINCT NON-ZERO EXIT. The restart policy is NEVER, so this
+        # does not relaunch anything -- it makes the deployment read as
+        # FAILED instead of as a clean run that placed nothing, which is
+        # the difference between "our config is broken" and "the market
+        # was never eligible". The 2026-10-07 run exited 0.
+        return 3
     return 0
 
 

@@ -143,6 +143,12 @@ TRUNCATION_DESIGN_HARD = "DESIGN_HARD_TRUNCATION_4310"
 TRUNCATION_SAFETY = "SAFETY_INVARIANT_VIOLATION"
 TRUNCATION_VENUE_STORM = "VENUE_ERROR_STORM"
 TRUNCATION_AMBIGUOUS = "AMBIGUOUS_SUBMISSION_RECONCILE_VENUE_STATE"
+#: A DETERMINISTIC fault in OUR OWN process -- a missing dependency, an
+#: unset or unusable credential, a signing failure. It is NOT
+#: TRUNCATION_VENUE_STORM and must never be recorded as one: on
+#: 2026-10-07 the two were conflated and the tape blamed a venue that had
+#: never been contacted. It fails closed on the FIRST occurrence.
+TRUNCATION_LOCAL_FAULT = "LOCAL_EXECUTION_FAULT"
 TRUNCATION_NONE = None
 
 #: The four disclaimers outcome 2 carries as FIELDS, so they cannot be
@@ -271,6 +277,8 @@ class CohortTracker:
         self.ambiguous_submissions = 0
         self.venue_errors = 0
         self.consecutive_venue_errors = 0
+        self.local_execution_faults = 0
+        self.local_execution_fault_log: List[Dict[str, Any]] = []
         self.safety_violations: List[str] = []
         self.per_share_expectancy_upper_usd: Optional[D] = None
         self.estimand8_reconciled_without_unattributed = False
@@ -465,6 +473,23 @@ class CohortTracker:
              "is_a_safety_observation": True,
              "is_an_economic_threshold": False})
 
+    def record_local_execution_fault(self, detail: Any = None) -> None:
+        """A LOCAL fault. Counted SEPARATELY from venue errors, and stopping
+        on the first one is the point: a missing dependency or an unusable
+        key fails identically on every subsequent attempt, so four more
+        tries buy no information and spend four of an authorized 240.
+
+        It deliberately does NOT touch `consecutive_venue_errors`. A local
+        fault must not be able to manufacture a VENUE_ERROR_STORM, which is
+        precisely what happened at 2026-10-07T16:48:58Z.
+        """
+        self.local_execution_faults += 1
+        self.local_execution_fault_log.append(
+            {"n": self.local_execution_faults, "detail": detail,
+             "retried": False, "is_a_venue_error": False,
+             "reached_the_venue": False,
+             "stops_on_first_occurrence": True})
+
     def record_venue_ok(self) -> None:
         self.consecutive_venue_errors = 0
 
@@ -500,6 +525,9 @@ class CohortTracker:
         if self.safety_violations:
             out.append("SAFETY_INVARIANT_VIOLATION:%s"
                        % "; ".join(self.safety_violations))
+        if self.local_execution_faults:
+            out.append("LOCAL_EXECUTION_FAULT_%d_FAIL_CLOSED"
+                       % self.local_execution_faults)
         if self.consecutive_venue_errors >= self.VENUE_ERROR_STORM:
             out.append("VENUE_ERROR_STORM_%d_CONSECUTIVE"
                        % self.consecutive_venue_errors)
@@ -559,6 +587,9 @@ class CohortTracker:
             if s.startswith("FORWARD_LOOKING_COMMITTED_LOSS") or \
                     s.startswith("COHORT_REALIZED_LOSS_AT_OR_ABOVE"):
                 return TRUNCATION_RISK_LIMIT
+        for s in stops:
+            if s.startswith("LOCAL_EXECUTION_FAULT"):
+                return TRUNCATION_LOCAL_FAULT
         for s in stops:
             if "EXPOSURE_AT_OR_ABOVE" in s:
                 return TRUNCATION_WINDOW_EXPOSURE
@@ -707,6 +738,10 @@ class CohortTracker:
                 "unattributed_cashflows": self.unattributed_cashflows,
                 "ambiguous_submissions": self.ambiguous_submissions,
                 "venue_errors": self.venue_errors,
+                "local_execution_faults": self.local_execution_faults,
+                "local_execution_fault_log":
+                    list(self.local_execution_fault_log),
+                "a_local_fault_is_never_a_venue_error": True,
                 "safety_violations": list(self.safety_violations),
                 "venue_error_log": list(self.venue_error_log),
                 "venue_error_stop_is_a_safety_stop": True,

@@ -15,8 +15,9 @@
 # /state/pmus-ws/exec1x is NOT touched; it is evidence.
 #
 # The COPY list below is the TRANSITIVE AST IMPORT CLOSURE of
-# scripts/l5_e1_cohort_run.py, computed rather than guessed -- 37 first-party
-# files. A missing COPY is invisible until the container starts, and in this
+# scripts/l5_e1_cohort_run.py, computed rather than guessed -- 38 first-party
+# files (local_faults.py joined it with the error-taxonomy fix). A
+# missing COPY is invisible until the container starts, and in this
 # repository that has already cost a failed deploy three times (most recently
 # src/l5_market_binding.py, which entered the closure when authorization.py
 # began importing selector.py AFTER the list was computed), so the final RUN
@@ -28,6 +29,26 @@
 # without a COPY fails the SUITE, not the deploy.
 FROM python:3.11-slim
 WORKDIR /app
+
+# THE RUNTIME DEPENDENCY, AND THE DEFECT OF 2026-10-07 16:48:58Z.
+#
+# This image used to install NOTHING. `python:3.11-slim` ships only
+# packaging/pip/setuptools/wheel, proven on the deployed container, and
+# `cryptography` is the single third-party module E1 needs: every
+# authenticated PMUS request is Ed25519-signed by `src.pmus_auth`.
+#
+# It went unnoticed because the import is LAZY -- it lives inside
+# `signed_headers`, not at module scope -- so importing the entrypoint loads
+# zero third-party modules and the build-time import assertion below passed
+# while the image could not sign anything. The first authenticated request
+# is the PREVIEW, immediately after WINDOW_OPENED, so the failure surfaced
+# at the worst possible moment and wearing the wrong name: five
+# `PreviewRejected` in 20.8 ms, recorded as VENUE_ERROR_STORM against a
+# venue that had never been contacted.
+#
+# PINNED to the version the test suite actually runs against, so "green
+# locally" and "works in the image" are claims about the same library.
+RUN pip install --no-cache-dir cryptography==49.0.0
 
 COPY src/__init__.py              src/__init__.py
 COPY src/l5_book_shadow.py        src/l5_book_shadow.py
@@ -65,5 +86,19 @@ ENV PYTHONUNBUFFERED=1
 RUN python3 -c "import scripts.l5_e1_cohort_run as m; \
 from analysis.l5.e1_cohort.spec import E1_FINGERPRINT, assert_frozen; \
 assert_frozen(); print('BUILD OK fingerprint', E1_FINGERPRINT)"
+
+# BUILD-TIME PROOF THAT THIS IMAGE CAN SIGN. The assertion above cannot
+# establish it -- a lazy import is invisible to it -- which is exactly how
+# the missing dependency reached production. So sign something here, with a
+# THROWAWAY generated key and no credential present, and fail the BUILD if
+# the signing stack is absent or unusable.
+RUN python3 -c "\
+from cryptography.hazmat.primitives.asymmetric import ed25519; \
+import base64, cryptography; \
+k = ed25519.Ed25519PrivateKey.generate(); \
+msg = b'1700000000GET/v1/_e1_local_signing_selftest'; \
+sig = base64.b64encode(k.sign(msg)); \
+assert len(base64.b64decode(sig)) == 64, 'Ed25519 signature is not 64 bytes'; \
+print('BUILD OK signing cryptography', cryptography.__version__)"
 
 CMD ["python3", "-m", "scripts.l5_e1_cohort_run"]

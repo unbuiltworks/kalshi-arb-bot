@@ -152,11 +152,34 @@ def arm(monkeypatch, sid="e1-live-test-session"):
     monkeypatch.setenv("PMUS_E1_ARM", sid)
     monkeypatch.setenv("PMUS_E1_GATE_EVIDENCE", AUTH.AUTHORIZED_SERIES)
     monkeypatch.setenv(AR.FINGERPRINT_PIN_ENV, SP.E1_FINGERPRINT)
-    # fake credentials: present but meaningless, and never used because the
-    # transport is a fake
-    monkeypatch.setenv("PMUS_API_KEY_ID", "fake-key-id")
-    monkeypatch.setenv("PMUS_API_SECRET", "fake-secret")
+    # THE PRODUCTION CREDENTIAL CONTRACT, with a THROWAWAY key.
+    #
+    # This used to set `PMUS_API_SECRET`, which NO CODE READS -- the real
+    # name is `PMUS_API_SECRET_KEY` -- and it did not matter, because
+    # FakeTransport never signs anything. That gap is how the 2026-10-07
+    # incident stayed invisible to a green suite: the armed path was tested
+    # end to end without ever exercising the signing contract.
+    #
+    # So the armed harness now satisfies the SAME contract production does,
+    # with a key generated here and belonging to nobody.
+    monkeypatch.setenv("PMUS_API_KEY_ID", "e1-test-key-id")
+    monkeypatch.setenv("PMUS_API_SECRET_KEY", throwaway_secret_b64())
+    monkeypatch.delenv("PMUS_API_SECRET", raising=False)
     return sid
+
+
+def throwaway_secret_b64() -> str:
+    """A real, usable, worthless Ed25519 seed. `pmus_auth` takes the first
+    32 bytes of the decoded value as the private seed."""
+    import base64
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives import serialization
+    k = ed25519.Ed25519PrivateKey.generate()
+    raw = k.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption())
+    return base64.b64encode(raw).decode()
 
 
 def drive_main(monkeypatch, tmp_path, *, clock, starts, health=None,
