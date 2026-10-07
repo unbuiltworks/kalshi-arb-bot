@@ -21,6 +21,37 @@ posteriors and NEVER reported as FAIL or as a result. So a stop returns
 
   STOP  cohort realized loss >= $5.00
   STOP  window exposure >= $1.56
+
+THE FORWARD-LOOKING $5.00 INVARIANT
+-----------------------------------
+A realized-only stop is a stop that fires AFTER the money is gone. The
+owner's risk-control requirement replaces it with a bound evaluated at
+EVERY decision and EVERY submission:
+
+    realized_cohort_loss
+  + maximum remaining loss on ALL currently unresolved residual inventory
+  + maximum loss of THE ATTEMPT ABOUT TO BE SUBMITTED
+  <= $5.00
+
+An unresolved residual's maximum remaining loss is `filled_qty x
+fill_price`: the worst case is that it settles worthless. The prospective
+attempt's cap is `0.13 x 0.60 = $0.078`. The third term is counted BEFORE
+submitting -- the strict reading -- so $5.00 is a TRUE CEILING and not a
+ceiling plus one attempt.
+
+ONLY a CONFIRMED settled win may reduce the realized component. FOUR
+THINGS MAY NOT, and each is an explicit refusal recorded in
+`refused_reducers` rather than a convention: mark-to-market value;
+expected or projected settlement; an unfilled or resting complement;
+pending, accrued or estimated rebates. A test asserts that each one leaves
+the bound exactly where it was.
+
+`MAX_EXPOSURE_PER_WINDOW_USD = $1.56` remains an INDEPENDENT hard limit.
+Both bind simultaneously and neither substitutes for the other: the window
+bound caps how fast, the forward-looking bound caps how much.
+
+The consequence, stated plainly: the unrestricted $18.72 cohort worst case
+is now UNREACHABLE. See `effective_worst_case()`.
   STOP  any safety-invariant violation
   STOP  venue error storm
   STOP  ambiguous submission -- NEVER retried; venue state is reconciled
@@ -48,11 +79,13 @@ import math
 from decimal import Decimal as D
 from typing import Any, Dict, List, Optional
 
-from analysis.l5.e1_cohort.spec import (MAX_ATTEMPTS_PER_WINDOW,
+from analysis.l5.e1_cohort.spec import (ABSOLUTE_WORST_CASE_USD,
+                                        FIRST_LEG_QTY,
+                                        MAX_ATTEMPTS_PER_WINDOW,
                                         MAX_COHORT_REALIZED_LOSS_USD,
                                         MAX_EXPOSURE_PER_WINDOW_USD,
-                                        MAX_PLACEMENTS, PROBE, WINDOWS,
-                                        assert_frozen)
+                                        MAX_FIRST_LEG_PRICE, MAX_PLACEMENTS,
+                                        PROBE, WINDOWS, assert_frozen)
 from analysis.l5.measurement import cohort_design as CD
 
 #: Read from the design, not chosen here.
@@ -69,6 +102,11 @@ ECONOMICS_FORECLOSURE_USD_PER_SHARE = \
 PLACEMENT_GATE = 385
 BINDING_FILL_GATE = CD.e1_binding_gates()["fill_gate"]
 HARD_TRUNCATION = CD.e1_hard_truncation_placements()                  # 4310
+
+#: ARITHMETIC: 0.13 x 0.60. The maximum loss of ONE attempt -- the first leg
+#: filling in full at the frozen ceiling, the complement never filling, the
+#: residual settling worthless.
+PER_ATTEMPT_MAX_LOSS_USD = (FIRST_LEG_QTY * MAX_FIRST_LEG_PRICE)       # 0.078
 
 VERDICT_PASS = "PASS"
 VERDICT_FAIL = "FAIL"
@@ -127,6 +165,41 @@ def project_feasibility() -> Dict[str, Any]:
     }
 
 
+def effective_worst_case() -> Dict[str, Any]:
+    """The worst case AFTER the forward-looking invariant, with the
+    arithmetic shown. The unrestricted $18.72 is unreachable."""
+    return {
+        "unrestricted_cohort_worst_case_usd": str(ABSOLUTE_WORST_CASE_USD),
+        "unrestricted_arithmetic":
+            "12 windows x 20 attempts x 0.13 shares x $0.60 = $18.72",
+        "unrestricted_is_REACHABLE": False,
+        "why_unreachable": (
+            "the forward-looking invariant is evaluated BEFORE every "
+            "submission and counts the attempt about to be made, so the "
+            "sum realized + unresolved-residual-max + this-attempt-max can "
+            "never be allowed to exceed $5.00. Reaching $18.72 would "
+            "require passing through $5.00, and the attempt that would "
+            "cross it is refused."),
+        "effective_cohort_worst_case_usd":
+            str(MAX_COHORT_REALIZED_LOSS_USD),
+        "effective_arithmetic": (
+            "realized_loss + SUM(unresolved residual filled_qty x "
+            "fill_price) + (1 x 0.13 x $0.60 = $0.078) <= $5.00, checked at "
+            "every decision and every submission. The last permitted "
+            "attempt is the one whose inclusion still satisfies the "
+            "inequality, so the bound is never exceeded -- not even by one "
+            "attempt."),
+        "per_attempt_max_loss_usd": str(PER_ATTEMPT_MAX_LOSS_USD),
+        "per_attempt_arithmetic": "0.13 x $0.60 = $0.078",
+        "independent_per_window_bound_usd":
+            str(MAX_EXPOSURE_PER_WINDOW_USD),
+        "per_window_arithmetic": "20 x 0.13 x $0.60 = $1.56",
+        "both_bind_simultaneously": True,
+        "neither_substitutes_for_the_other": True,
+        "reduced_only_by": "a CONFIRMED settled win",
+    }
+
+
 class SafetyViolation(RuntimeError):
     """A safety invariant was violated. Hard automatic stop."""
 
@@ -162,6 +235,14 @@ class CohortTracker:
         self.estimand8_reconciled_without_unattributed = False
         self.stopped = False
         self.stop_reason: Optional[str] = None
+        #: UNRESOLVED residual inventory, keyed (window, slot). A residual is
+        #: unresolved until its settlement cashflow is CONFIRMED, and its
+        #: maximum remaining loss is filled_qty x fill_price -- the worst
+        #: case, which is that it settles worthless.
+        self.residuals: Dict[Any, Dict[str, Any]] = {}
+        #: every attempt to reduce the bound by something that may not
+        #: reduce it, recorded rather than silently ignored.
+        self.refused_reducers: List[Dict[str, Any]] = []
 
     # ----------------------------------------------------------- observations
     def record_placement(self, *, window: int, notional_usd: Any) -> None:
@@ -192,11 +273,129 @@ class CohortTracker:
             self.non_completions += 1
             self.consecutive_non_completion += 1
 
-    def record_confirmed_cash(self, *, amount_usd: Any) -> None:
-        """Only a settlement-confirmed cashflow moves the loss counter."""
+    def record_confirmed_cash(self, *, amount_usd: Any,
+                              key: Any = None) -> None:
+        """Only a SETTLEMENT-CONFIRMED cashflow moves the realized component.
+
+        A loss raises it. A WIN lowers it -- and a confirmed settled win is
+        the ONLY thing permitted to lower it. `key`, when given, resolves
+        that residual so it stops consuming forward-looking headroom.
+        """
         amt = D(str(amount_usd))
         if amt < 0:
             self.realized_loss_usd += -amt
+        elif amt > 0:
+            self.realized_loss_usd -= amt
+            if self.realized_loss_usd < 0:
+                self.realized_loss_usd = D("0")
+        if key is not None:
+            self.resolve_residual(key=key)
+
+    # ------------------------------------------- forward-looking loss bound
+    def open_residual(self, *, window: int, slot: int, filled_qty: Any,
+                      fill_price_usd: Any) -> Dict[str, Any]:
+        """Register UNRESOLVED residual inventory.
+
+        Its maximum remaining loss is `filled_qty x fill_price`: the worst
+        case is that it settles worthless. It consumes forward-looking
+        headroom from the moment it exists until its settlement cashflow is
+        CONFIRMED.
+        """
+        q = D(str(filled_qty))
+        px = D(str(fill_price_usd))
+        rec = {"window": window, "slot": slot, "filled_qty": str(q),
+               "fill_price_usd": str(px),
+               "max_remaining_loss_usd": str(q * px),
+               "resolved": False,
+               "resolution_requires": "CONFIRMED_SETTLEMENT_CASHFLOW"}
+        self.residuals[(window, slot)] = rec
+        return rec
+
+    def resolve_residual(self, *, key: Any) -> None:
+        """A residual leaves the forward-looking sum ONLY on confirmed
+        settlement cash. Nothing else resolves it."""
+        rec = self.residuals.get(tuple(key) if isinstance(key, list) else key)
+        if rec is not None:
+            rec["resolved"] = True
+
+    def unresolved_residual_max_loss_usd(self) -> D:
+        return sum((D(r["max_remaining_loss_usd"])
+                    for r in self.residuals.values()
+                    if not r["resolved"]), D("0"))
+
+    # --- the four things that MAY NOT reduce the bound, as explicit
+    # --- refusals rather than conventions. Each records the attempt and
+    # --- returns the bound UNCHANGED.
+    def _refuse_reducer(self, kind: str, detail: Any) -> Dict[str, Any]:
+        before = self.forward_looking_loss_usd()
+        self.refused_reducers.append(
+            {"kind": kind, "detail": detail,
+             "bound_before_usd": str(before),
+             "bound_after_usd": str(before),
+             "moved_the_bound": False,
+             "why": ("only a CONFIRMED settled win may reduce the realized "
+                     "component of the forward-looking bound")})
+        return self.refused_reducers[-1]
+
+    def offer_mark_to_market(self, value_usd: Any) -> Dict[str, Any]:
+        """REFUSED. A mark is not cash."""
+        return self._refuse_reducer("MARK_TO_MARKET", str(value_usd))
+
+    def offer_expected_settlement(self, value_usd: Any) -> Dict[str, Any]:
+        """REFUSED. An expectation is not a settlement."""
+        return self._refuse_reducer("EXPECTED_OR_PROJECTED_SETTLEMENT",
+                                    str(value_usd))
+
+    def offer_resting_complement(self, *, window: int, slot: int,
+                                 price_usd: Any) -> Dict[str, Any]:
+        """REFUSED. An unfilled or resting complement hedges nothing."""
+        return self._refuse_reducer(
+            "UNFILLED_OR_RESTING_COMPLEMENT",
+            {"window": window, "slot": slot, "price_usd": str(price_usd)})
+
+    def offer_pending_rebate(self, value_usd: Any) -> Dict[str, Any]:
+        """REFUSED. A pending, accrued or estimated rebate is not credited,
+        and at 0.13 shares it is structurally $0.00 anyway."""
+        return self._refuse_reducer("PENDING_ACCRUED_OR_ESTIMATED_REBATE",
+                                    str(value_usd))
+
+    def forward_looking_loss_usd(self,
+                                 *, prospective_attempts: int = 0) -> D:
+        """realized + max remaining loss on ALL unresolved residuals
+        + max loss of the attempt(s) about to be submitted."""
+        return (self.realized_loss_usd
+                + self.unresolved_residual_max_loss_usd()
+                + D(prospective_attempts) * PER_ATTEMPT_MAX_LOSS_USD)
+
+    def forward_looking_report(self, *, prospective_attempts: int = 1
+                               ) -> Dict[str, Any]:
+        total = self.forward_looking_loss_usd(
+            prospective_attempts=prospective_attempts)
+        return {
+            "realized_cohort_loss_usd": str(self.realized_loss_usd),
+            "unresolved_residual_max_loss_usd":
+                str(self.unresolved_residual_max_loss_usd()),
+            "unresolved_residuals": len(
+                [r for r in self.residuals.values() if not r["resolved"]]),
+            "prospective_attempts": prospective_attempts,
+            "per_attempt_max_loss_usd": str(PER_ATTEMPT_MAX_LOSS_USD),
+            "prospective_attempt_max_loss_usd":
+                str(D(prospective_attempts) * PER_ATTEMPT_MAX_LOSS_USD),
+            "forward_looking_total_usd": str(total),
+            "ceiling_usd": str(MAX_COHORT_REALIZED_LOSS_USD),
+            "within_ceiling": total <= MAX_COHORT_REALIZED_LOSS_USD,
+            "may_be_reduced_only_by": "a CONFIRMED settled win",
+            "may_never_reduce_it": [
+                "mark-to-market value",
+                "expected or projected settlement",
+                "an unfilled or resting complement",
+                "pending, accrued or estimated rebates",
+            ],
+            "refused_reducers": list(self.refused_reducers),
+            "window_bound_usd": str(MAX_EXPOSURE_PER_WINDOW_USD),
+            "window_bound_binds_independently": True,
+            "theoretical_18_72_is_reachable": False,
+        }
 
     def record_post_cancel_ack_fill(self) -> None:
         self.post_cancel_ack_fills += 1
@@ -228,6 +427,14 @@ class CohortTracker:
         if self.realized_loss_usd >= MAX_COHORT_REALIZED_LOSS_USD:
             out.append("COHORT_REALIZED_LOSS_AT_OR_ABOVE_%s"
                        % MAX_COHORT_REALIZED_LOSS_USD)
+        # the FORWARD-LOOKING bound with ZERO prospective attempts: realized
+        # plus everything already at risk. If that alone reaches the ceiling
+        # the cohort is over, whatever else is true.
+        committed = self.forward_looking_loss_usd(prospective_attempts=0)
+        if committed >= MAX_COHORT_REALIZED_LOSS_USD:
+            out.append(
+                "FORWARD_LOOKING_COMMITTED_LOSS_%s_AT_OR_ABOVE_%s"
+                % (committed, MAX_COHORT_REALIZED_LOSS_USD))
         for w, x in self.window_exposure_usd.items():
             if x >= MAX_EXPOSURE_PER_WINDOW_USD:
                 out.append("WINDOW_%d_EXPOSURE_AT_OR_ABOVE_%s"
@@ -259,11 +466,27 @@ class CohortTracker:
                               MAX_ATTEMPTS_PER_WINDOW))
         if self.placements >= MAX_PLACEMENTS:
             reasons.append("COHORT_PLACEMENT_CAP_%d" % MAX_PLACEMENTS)
+        # THE FORWARD-LOOKING $5.00 INVARIANT, counting the attempt ABOUT TO
+        # BE SUBMITTED. Strict reading of the owner's wording: no new first
+        # leg if it COULD take the quantity above $5.00, so the prospective
+        # attempt is included BEFORE submitting and $5.00 is a true ceiling
+        # rather than a ceiling plus one attempt.
+        fwd = self.forward_looking_report(prospective_attempts=1)
+        if not fwd["within_ceiling"]:
+            reasons.append(
+                "FORWARD_LOOKING_LOSS_BOUND: realized %s + unresolved "
+                "residual max %s + this attempt %s = %s > %s"
+                % (fwd["realized_cohort_loss_usd"],
+                   fwd["unresolved_residual_max_loss_usd"],
+                   fwd["prospective_attempt_max_loss_usd"],
+                   fwd["forward_looking_total_usd"], fwd["ceiling_usd"]))
         v = self.verdict()
         if v["verdict"] != VERDICT_CONTINUE:
             reasons.append("VERDICT_IS_%s" % v["verdict"])
         return {"ok": not reasons, "refusals": reasons,
                 "projected_window_exposure_usd": str(projected),
+                "forward_looking": fwd,
+                "window_bound_binds_independently": True,
                 "verdict": v["verdict"]}
 
     # -------------------------------------------------------------- verdict
@@ -394,4 +617,7 @@ class CohortTracker:
                 "venue_errors": self.venue_errors,
                 "safety_violations": list(self.safety_violations),
                 "hard_stops": self.hard_stops(),
+                "forward_looking": self.forward_looking_report(
+                    prospective_attempts=1),
+                "effective_worst_case": effective_worst_case(),
                 "verdict": self.verdict()}

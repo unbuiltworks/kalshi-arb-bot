@@ -95,8 +95,14 @@ WINDOWS = 12
 #: ARITHMETIC: 12 x 20 x 0.13 x 0.60.
 ABSOLUTE_WORST_CASE_USD = D("18.72")
 
-#: A HARD AUTOMATIC STOP, tighter than the worst case.
+#: A HARD AUTOMATIC STOP, tighter than the worst case. Since the owner's
+#: risk-control change it is enforced FORWARD-LOOKING rather than on
+#: realized loss alone -- see `analysis.l5.e1_cohort.stopping`.
 MAX_COHORT_REALIZED_LOSS_USD = D("5.00")
+
+#: ARITHMETIC: 0.13 x 0.60. The maximum loss of ONE attempt, and the third
+#: term of the forward-looking invariant.
+PER_ATTEMPT_MAX_LOSS_USD = D("0.078")
 
 MAX_OUTSTANDING_ORDERS = 1
 VENUE_TICK = D("0.01")
@@ -144,6 +150,11 @@ def _check_arithmetic() -> None:
     if MAX_FIRST_LEG_PRICE >= PAIR_COST_CEILING:
         raise SystemExit("COHORT-E1-LIVE: the first-leg ceiling must leave "
                          "room under the pair-cost ceiling")
+    if PER_ATTEMPT_MAX_LOSS_USD != FIRST_LEG_QTY * MAX_FIRST_LEG_PRICE:
+        raise SystemExit(
+            "COHORT-E1-LIVE: PER_ATTEMPT_MAX_LOSS_USD is not 0.13 x 0.60: "
+            "%s != %s" % (PER_ATTEMPT_MAX_LOSS_USD,
+                          FIRST_LEG_QTY * MAX_FIRST_LEG_PRICE))
     if FIRST_LEG_QTY < VENUE_MIN_QTY or FIRST_LEG_QTY % VENUE_TICK != 0:
         raise SystemExit("COHORT-E1-LIVE: quantity is off the venue grid")
 
@@ -201,6 +212,45 @@ DIFF: Dict[str, Any] = {
             "AUTHORIZED_WINDOW_CEILING_USD": "the owner's hard limit",
             "MAX_COHORT_REALIZED_LOSS_USD": "hard stop, tighter than worst",
         },
+    },
+
+    "forward_looking_loss_bound": {
+        "evaluated_at": ["EVERY_DECISION", "EVERY_SUBMISSION"],
+        "invariant": (
+            "realized_cohort_loss + maximum_remaining_loss_on_ALL_"
+            "currently_unresolved_residual_inventory + maximum_loss_of_THE_"
+            "ATTEMPT_ABOUT_TO_BE_SUBMITTED <= 5.00"),
+        "ceiling_usd": str(MAX_COHORT_REALIZED_LOSS_USD),
+        "realized_only": False,
+        "why_not_realized_only": (
+            "a realized-only stop fires after the money is gone. This one "
+            "refuses the submission that COULD cross the ceiling."),
+        "prospective_attempt_is_counted_before_submitting": True,
+        "is_a_true_ceiling_not_a_ceiling_plus_one_attempt": True,
+        "per_attempt_max_loss_usd": str(PER_ATTEMPT_MAX_LOSS_USD),
+        "per_attempt_arithmetic": "0.13 x 0.60 = 0.078",
+        "residual_max_remaining_loss_rule": (
+            "filled_qty x fill_price -- the worst case, which is that the "
+            "residual settles worthless"),
+        "residual_is_unresolved_until": "CONFIRMED_SETTLEMENT_CASHFLOW",
+        "may_reduce_the_realized_component": [
+            "a settled win whose settlement/cashflow is CONFIRMED",
+        ],
+        "may_never_reduce_the_bound": [
+            "mark-to-market value",
+            "expected or projected settlement",
+            "an unfilled or resting complement",
+            "pending, accrued or estimated rebates",
+        ],
+        "forbidden_reducers_are_explicit_refusals_not_conventions": True,
+        "per_window_bound_usd": str(MAX_EXPOSURE_PER_WINDOW_USD),
+        "per_window_bound_binds_independently": True,
+        "both_bounds_bind_simultaneously": True,
+        "neither_bound_substitutes_for_the_other": True,
+        "unrestricted_worst_case_usd": str(ABSOLUTE_WORST_CASE_USD),
+        "unrestricted_worst_case_is_reachable": False,
+        "effective_worst_case_usd": str(MAX_COHORT_REALIZED_LOSS_USD),
+        "module": "analysis.l5.e1_cohort.stopping",
     },
 
     "rebates": {
@@ -486,6 +536,26 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("cohort_bounds.max_cohort_realized_loss_usd", "5.00"),
     ("cohort_bounds.max_outstanding_orders", 1),
     ("cohort_bounds.parameters_were_tuned_here", False),
+    ("forward_looking_loss_bound.ceiling_usd", "5.00"),
+    ("forward_looking_loss_bound.realized_only", False),
+    ("forward_looking_loss_bound."
+     "prospective_attempt_is_counted_before_submitting", True),
+    ("forward_looking_loss_bound."
+     "is_a_true_ceiling_not_a_ceiling_plus_one_attempt", True),
+    ("forward_looking_loss_bound.per_attempt_max_loss_usd", "0.078"),
+    ("forward_looking_loss_bound.residual_is_unresolved_until",
+     "CONFIRMED_SETTLEMENT_CASHFLOW"),
+    ("forward_looking_loss_bound."
+     "forbidden_reducers_are_explicit_refusals_not_conventions", True),
+    ("forward_looking_loss_bound.per_window_bound_usd", "1.56"),
+    ("forward_looking_loss_bound.per_window_bound_binds_independently",
+     True),
+    ("forward_looking_loss_bound.both_bounds_bind_simultaneously", True),
+    ("forward_looking_loss_bound.neither_bound_substitutes_for_the_other",
+     True),
+    ("forward_looking_loss_bound.unrestricted_worst_case_is_reachable",
+     False),
+    ("forward_looking_loss_bound.effective_worst_case_usd", "5.00"),
     ("rebates.structurally_zero", True),
     ("rebates.sized_for_rebates", False),
     ("rebates.rebates_are_recorded_from_the_venue_never_modelled", True),
