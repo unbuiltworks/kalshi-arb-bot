@@ -178,15 +178,63 @@ claiming the parse rule is now established from venue data, the one
 mechanism that could have produced a wrong number is fixed and pinned by
 test, and the fail-closed paths are confirmed on real data.
 
-## 6. Still outstanding
+## 6. The second defect this work uncovered
+
+**`websockets` was missing from the E1 image.** `l5_pmus_auth_book`
+imports it *inside* `AuthBook._run`, so the Dockerfile's build-time
+import assertion passed with it absent. Deployment `cc131f76`,
+2026-10-07T22:19:53Z:
+
+```
+Exception in thread auth-book:
+  File "/app/src/l5_pmus_auth_book.py", line 346, in _run
+    import websockets
+ModuleNotFoundError: No module named 'websockets'
+```
+
+**E1's decision feed could never have connected.** It fails closed — no
+connected book, so `health()` refuses and no window opens — but it also
+could never have traded, and it would have spent the cohort's remaining
+windows as feed-not-ready terminals.
+
+**A disarmed validation structurally could not catch it**, because a
+disarmed boot never starts the feed. The earlier "zero DNS lookups"
+result was a clean reading on a build that could not have streamed a
+book. That claim bounded what E1 does *not* do; it said nothing about
+the feed working.
+
+Fixed with exact pins (`cryptography==49.0.0 websockets==17.2`), a build
+step that imports both **by name**, and
+`test_every_lazily_imported_third_party_module_is_installed`, which walks
+the whole closure's function bodies and requires the Dockerfile to
+install every non-stdlib module it finds. It finds exactly those two —
+the two that have shipped missing — and nothing else.
+
+## 7. Still outstanding
 
 A **two-sided** reading, so the agreement can be stated with both a bid
-and an ask. The capture above is one-sided by nature of its timing. The
-probe now waits for a window opening to get one; until that reading
-exists, the ask side of the comparison rests on the ladder-ordering and
-complement proofs above rather than on a direct two-route match.
+and an ask from the same instant. The capture above is one-sided by
+nature of its timing (+842s, near expiry).
 
-## 7. Accounting
+Two venue facts make this harder than it sounds, both measured:
+
+* **near expiry the book collapses** — `offers: []`, `bestAsk: null` —
+  so a late window has no ask to compare;
+* **at window open `/v1/markets/{slug}/bbo` returns 404** while
+  `/v1/events/slug/{event}` already resolves the market. The market
+  resource is not served the instant the window opens. The probe now
+  retries and records a refusal instead of crashing, and never invents a
+  payload.
+
+Until that reading exists, the **ask** side of the comparison rests on
+the ladder-ordering proof and the complement arithmetic above, not on a
+direct two-route match. **The bid side is settled** by three independent
+readings.
+
+The instrument is in the image and ready; it needs one run that lands on
+a genuinely two-sided window.
+
+## 8. Accounting
 
 **historical replay → shadow → live probe → submitted → filled →
 settled → realized**
