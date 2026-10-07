@@ -45,7 +45,18 @@ from typing import Any, Dict, List, Optional
 from analysis.l5.e1_cohort.spec import (MAX_ATTEMPTS_PER_WINDOW,
                                         MAX_COMPLEMENT_TRANCHES, PROBE,
                                         WINDOWS, assert_frozen)
-from analysis.l5.live_exec2.spec import LATCH_DIR
+from analysis.l5.e1_cohort.arming import SESSION_ID_ENV, session_id
+from analysis.l5.live_exec2.spec import LATCH_DIR as XR2W_LATCH_DIR
+
+#: E1's OWN state directory. It may share the mounted volume
+#: `/state/pmus-ws` because that is operationally convenient, but it is a
+#: DIFFERENT directory from XR2W's `exec1x`, and every E1 file is further
+#: prefixed `e1.`. XR2W's SPENT A6 latch is EVIDENCE: nothing in this
+#: module deletes, resets, renames, reads or writes it.
+LATCH_DIR = "/state/pmus-ws/e1_cohort"
+
+#: belt and braces for the boot assertion below.
+E1_FILE_PREFIX = "e1."
 
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -72,12 +83,13 @@ class LatchUnavailable(RuntimeError):
 
 
 def _session_id() -> str:
-    sid = os.getenv("PMUS_EXEC1_SESSION_ID", "").strip()
+    sid = session_id()
     if not sid:
         raise LatchUnavailable(
-            "PMUS_EXEC1_SESSION_ID is not set; the cohort latch has no "
-            "session to scope itself to. This is an OWNER value and no code "
-            "in this package sets it.")
+            "%s is not set; the cohort latch has no session to scope "
+            "itself to. This is an OWNER value in E1's OWN namespace "
+            "(PMUS_E1_*), and no code in this package sets it. E1 does NOT "
+            "read PMUS_EXEC1_SESSION_ID." % SESSION_ID_ENV)
     return sid
 
 
@@ -126,6 +138,55 @@ def slot_path(*, window: int, slot: int, role: str = ROLE_FIRST_LEG,
     return os.path.join(
         LATCH_DIR, "%s.w%02d.s%02d.%s.t%02d.submitted"
         % (_stem(sid), window, slot, role, tranche))
+
+
+def assert_no_collision_with_xr2w(session_id_override: Optional[str] = None
+                                  ) -> Dict[str, Any]:
+    """BOOT ASSERTION: no E1 slot can resolve into XR2W's latch directory.
+
+    XR2W's spent A6 latch is EVIDENCE. E1 must be unable to spend it, unable
+    to be refused by it, and unable to touch it. This proves the first two
+    structurally -- by showing that EVERY slot path E1 can generate lies
+    under E1's own directory and nowhere near XR2W's -- and the third is
+    true because no function in this module names XR2W's directory except
+    to assert this.
+    """
+    e1_dir = os.path.realpath(LATCH_DIR)
+    xr_dir = os.path.realpath(XR2W_LATCH_DIR)
+    if e1_dir == xr_dir or e1_dir.startswith(xr_dir.rstrip("/") + "/"):
+        raise LatchUnavailable(
+            "E1's latch directory %s collides with XR2W's %s. XR2W's spent "
+            "A6 latch is evidence and must be unreachable from here."
+            % (e1_dir, xr_dir))
+    sid = session_id_override or session_id() or "boot-assertion-probe"
+    checked = []
+    for w in range(WINDOWS):
+        for i in range(MAX_ATTEMPTS_PER_WINDOW):
+            for role in ROLES:
+                for tr in (0, MAX_COMPLEMENT_TRANCHES - 1):
+                    p = os.path.realpath(
+                        slot_path(window=w, slot=i, role=role, tranche=tr,
+                                  session_id=sid))
+                    if p == xr_dir or os.path.dirname(p) == xr_dir \
+                            or p.startswith(xr_dir.rstrip("/") + "/"):
+                        raise LatchUnavailable(
+                            "E1 slot %s resolves into XR2W's latch "
+                            "directory %s" % (p, xr_dir))
+                    if not os.path.basename(p).startswith(E1_FILE_PREFIX):
+                        raise LatchUnavailable(
+                            "E1 slot %s is not prefixed %r"
+                            % (p, E1_FILE_PREFIX))
+                    checked.append(p)
+    return {"ok": True, "e1_latch_dir": e1_dir,
+            "xr2w_latch_dir": xr_dir,
+            "shares_the_mounted_volume": (
+                os.path.dirname(e1_dir) == os.path.dirname(xr_dir)),
+            "directories_are_distinct": True,
+            "slot_paths_checked": len(checked),
+            "every_slot_prefixed": E1_FILE_PREFIX,
+            "no_e1_slot_resolves_to_the_xr2w_latch": True,
+            "xr2w_a6_latch_is_evidence_and_is_never_touched": True,
+            "e1_deletes_resets_or_renames_anything": False}
 
 
 def window_state(*, window: int,

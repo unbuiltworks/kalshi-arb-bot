@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a
+f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -406,7 +406,7 @@ without both tokens streaming.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_EXEC1_*` arming keys, naming the exact market slug;
 4. `PMUS_EXEC1_AUTHORIZED_FINGERPRINT` =
-   `bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a`;
+   `f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many
@@ -446,18 +446,67 @@ identical route allow/refuse set, identical route sequence
 
 ### SUPERSEDED — MUST NOT BE ARMED
 
+Both are recorded in-spec under `supersedes_e1.must_not_be_rearmed` with
+their reasons, asserted by test.
+
+| fingerprint | why it is superseded |
+|---|---|
+| `110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c` | the complement sized to only the first partial, so later first-leg fills fell silently into residual |
+| `bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a` | **`entrypoint` still named XR2W's single-order path**, so arming per the spec would have run XR2W's one-order probe through the single-slot latch and measured nothing |
+
+## 12.1 The entrypoint, and the defect it closes
+
+`SPEC['entrypoint']` on `bfcff9ca…` was **inherited verbatim from XR2W**. It
+named `scripts.l5_exec1xr2w_run` with a call graph through
+`live_exec3.runner:run_experiment` and XR2W's **single-slot** latch, and
+there was no E1 entrypoint in `scripts/` at all. The deep-copy fixed the
+aliasing and then faithfully copied a value that **needed to change** — the
+same class of bug as the old XR2W fingerprint-pin defect.
+
+**95 tests here and 731 across the lineage passed while that was true**,
+because every test started from the E1 runner's own functions and never from
+the declared entrypoint. That gap is what the new regression tests close.
+
 ```
-110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c
+DECLARED ENTRYPOINT      scripts.l5_e1_cohort_run:__main__
+  -> analysis.l5.e1_cohort.runner:main
+  -> analysis.l5.e1_cohort.runner:boot -> spec:assert_frozen
+  -> E1 COHORT RUNNER    analysis.l5.e1_cohort.runner:run_cohort  (MANY)
+       -> :e1_preflight -> :eligible
+       -> :submit_first_leg -> :_submit_once
+            PROVEN XR2W PRIMITIVES
+              orders:order_body       -> src.l5_order_body:build
+              orders:preview_request  -> src.l5_order_body:preview_envelope
+              src.l5_preview_gate:require_echo
+  -> E1 NAMED-SLOT LATCH analysis.l5.e1_cohort.latch:consume_attempt
+  -> PROVEN XR2W TRANSPORT
+       orders:BoundedOrderTransport.request -> POST /v1/orders
+  -> :submit_complement -> latch:consume_complement  (named TRANCHE slot)
 ```
 
-Superseded because the complement accounting was **corrected**: quantity now
-tracks the CUMULATIVE first-leg fill rather than only the first partial.
+**MUST NOT RESOLVE TO** — a negative assertion in the spec and in test:
+`scripts.l5_exec1xr2w_run`,
+`analysis.l5.live_exec3.runner:run_experiment`,
+`analysis.l5.live_exec2.latch:consume`,
+`analysis.l5.live_exec2.orders:submit_one`.
+
+Enforced three ways: the declared call graph contains none of them; the
+entrypoint, runner and latch sources (docstrings and comments stripped)
+import neither `live_exec3` nor XR2W's latch; and a test monkeypatches
+XR2W's `latch.consume`, `live_exec3.runner.run_experiment` and
+`orders.submit_one` to **raise**, then drives the cohort to completion.
+
+**The entrypoint is exercised, not merely resolved.** A test resolves
+`SPEC['entrypoint']` the way an operator would, drives it through multiple
+placements against a fake transport, and proves **order #2 reached the
+transport** in a **second, distinct named latch slot** — the check a
+one-order runner fails while passing import resolution.
 
 ## 13. Provenance
 
 | artifact | path |
 |---|---|
-| frozen spec `bfcff9ca…006a` | `analysis/l5/e1_cohort/spec.py` |
+| frozen spec `f6b4a89f…f8b4` | `analysis/l5/e1_cohort/spec.py` |
 | bounded-count named-slot latch | `analysis/l5/e1_cohort/latch.py` |
 | append-only recorder + chain reconstructor | `analysis/l5/e1_cohort/recorder.py` |
 | stopping rules + forward-looking bound | `analysis/l5/e1_cohort/stopping.py` |

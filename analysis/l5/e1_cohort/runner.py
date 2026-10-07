@@ -44,6 +44,7 @@ import time
 from decimal import ROUND_DOWN, Decimal as D
 from typing import Any, Dict, List, Mapping, Optional
 
+from analysis.l5.e1_cohort import arming as A
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         MAX_ATTEMPTS_PER_WINDOW,
@@ -290,10 +291,12 @@ def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
     network call. `ok` False means NO ORDER and NO LATCH CONSUMPTION."""
     assert_frozen()
     r = []
-    arming = O.armed_env_summary()
+    arming = A.armed_env_summary()
     if not arming.get("armed"):
         r.append("E1_DISARMED")
-    pin = snapshot.get("fingerprint_pinned") or {}
+    pin = snapshot.get("fingerprint_pinned")
+    if pin is None:
+        pin = A.fingerprint_pinned(E1_FINGERPRINT)
     if not pin.get("matches_this_build"):
         r.append("E1_FINGERPRINT_NOT_PINNED_TO_THIS_BUILD")
 
@@ -731,7 +734,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "no snapshot is requested while disarmed; the arming gate is "
         "checked first and refuses")
     print(json.dumps(rep, indent=1, sort_keys=True, default=str))
-    if not O.armed_env_summary().get("armed"):
+    if not A.armed_env_summary().get("armed"):
         print(json.dumps({
             "REFUSED": "DISARMED",
             "probe": PROBE, "fingerprint": E1_FINGERPRINT,
@@ -759,7 +762,8 @@ def boot() -> Dict[str, Any]:
     rep.update({
         "diff_report": diff_report(),
         "feasibility": project_feasibility(),
-        "arming": O.armed_env_summary(),
+        "arming": A.armed_env_summary(),
+        "latch_isolation": L.assert_no_collision_with_xr2w(),
         # the latch is NOT read here: reading it needs the owner's session
         # id, and boot() must not require an owner value to run.
         "latch": {"kind": copy.deepcopy(SPEC["latch"]["kind"]),
