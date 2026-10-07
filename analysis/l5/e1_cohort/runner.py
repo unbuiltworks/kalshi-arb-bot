@@ -296,6 +296,107 @@ def _ws_ok(ws: Mapping[str, Any], *, now: float) -> list:
     return bad
 
 
+# ----------------------------------------------- E8: the book must be real
+
+#: a probability price lives strictly inside (0, 1]. Named rather than
+#: inlined so the bound is legible next to the refusals that use it.
+ONE_DOLLAR = D("1")
+
+
+def finite_decimal(x: Any) -> Optional[D]:
+    """`x` as a FINITE Decimal, or None.
+
+    `D(str(x))` IS NOT A VALIDATION. Decimal accepts "NaN", "sNaN",
+    "Infinity" and "-Infinity" as perfectly valid literals, and a Decimal
+    NaN then raises InvalidOperation the moment it meets `<` or `%`. So
+    every price and size that enters eligibility comes through here, and a
+    value that is absent, unparseable or non-finite becomes None -- which
+    the callers turn into an explicit refusal rather than arithmetic.
+    """
+    if x is None or (isinstance(x, str) and not x.strip()):
+        return None
+    try:
+        d = D(str(x).strip())
+    except Exception:                                          # noqa: BLE001
+        return None
+    return d if d.is_finite() else None
+
+
+def e8_book_executable(snapshot: Mapping[str, Any]) -> list:
+    """E8, WHICH THE FROZEN SPEC DECLARED AND THE CODE NEVER IMPLEMENTED.
+
+    `spec.py` has promised since the beginning that "the book must be
+    two-sided and executable on both tokens". Nothing evaluated it. The
+    only adjacent check, `_ws_ok`, tests PRESENCE -- `best_bid in (None,
+    "")` -- and the string "0.00" is neither.
+
+    On 2026-10-07T20:39:36Z that gap put a real order on the wire. The
+    first-leg book was bid 0.00 / ask 0.01, a dead book pinned to the
+    floor, and E9's four clauses all passed on it: the price equalled the
+    best bid, 0.00 is on the 0.01 tick, 0.00 <= the $0.60 ceiling, and
+    0.00 < 0.01 so it could not cross. E1 serialized
+    `price: {"currency": "USD", "value": "0.00"}` and sent it. A zero bid
+    is not a cheap maker opportunity; it is the absence of a market.
+
+    So executability is now asserted explicitly, for BOTH tokens, and an
+    unexecutable book is refused BEFORE preview and therefore before any
+    latch slot can be claimed. This does NOT touch the $0.60 ceiling, the
+    tick, the would-cross rule or any economic bound -- it adds the floor
+    those rules always assumed was there.
+    """
+    bad: list = []
+    for name, side in (("FIRST_LEG", snapshot.get("first_leg") or {}),
+                       ("COMPLEMENT", snapshot.get("complement") or {})):
+        raw_bid = side.get("best_bid")
+        raw_ask = side.get("best_ask")
+        if raw_bid is None or (isinstance(raw_bid, str)
+                               and not raw_bid.strip()):
+            bad.append("E8_%s_BID_ABSENT" % name)
+            continue
+        if raw_ask is None or (isinstance(raw_ask, str)
+                               and not raw_ask.strip()):
+            bad.append("E8_%s_ASK_ABSENT" % name)
+            continue
+        bid = finite_decimal(raw_bid)
+        ask = finite_decimal(raw_ask)
+        if bid is None:
+            bad.append("E8_%s_BID_NOT_FINITE:%r" % (name, raw_bid))
+            continue
+        if ask is None:
+            bad.append("E8_%s_ASK_NOT_FINITE:%r" % (name, raw_ask))
+            continue
+        if bid <= 0:
+            bad.append("E8_%s_BID_NOT_POSITIVE:%s" % (name, bid))
+        if ask <= 0:
+            bad.append("E8_%s_ASK_NOT_POSITIVE:%s" % (name, ask))
+        if ask <= bid:
+            bad.append("E8_%s_BOOK_CROSSED_OR_LOCKED:%s>=%s"
+                       % (name, bid, ask))
+        if bid >= ONE_DOLLAR or ask > ONE_DOLLAR:
+            bad.append("E8_%s_PRICE_OUT_OF_RANGE:%s/%s" % (name, bid, ask))
+    # DEPTH, WHEN THE FEED REPORTS IT. A size that is present and zero,
+    # negative or non-finite is a refusal.
+    #
+    # ABSENCE IS DELIBERATELY NOT A REFUSAL, and this is a judgement I am
+    # flagging rather than burying. Requiring the size to be present would
+    # be stricter, but I have not established that the venue feed always
+    # populates it, and a mandatory field the feed sometimes omits would
+    # make E1 permanently ineligible -- safe, but silently so, which is
+    # its own failure. The proven defect was a zero PRICE, and that is
+    # refused above unconditionally. Turning absence into a refusal is a
+    # one-line change if the owner wants the stricter rule.
+    fl = snapshot.get("first_leg") or {}
+    raw_sz = fl.get("size_at_our_price")
+    if raw_sz is not None and not (isinstance(raw_sz, str)
+                                   and not raw_sz.strip()):
+        sz = finite_decimal(raw_sz)
+        if sz is None:
+            bad.append("E8_FIRST_LEG_SIZE_NOT_FINITE:%r" % (raw_sz,))
+        elif sz <= 0:
+            bad.append("E8_FIRST_LEG_SIZE_NOT_POSITIVE:%s" % sz)
+    return bad
+
+
 def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
              *, now: float) -> Dict[str, Any]:
     """Rules E1..E12, all evaluated and reported together, before any
@@ -325,8 +426,28 @@ def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
     if snapshot.get("our_open_residual"):
         r.append("E3_OUR_RESIDUAL_IS_OPEN")
 
-    price = D(str(snapshot.get("first_leg_price", "0")))
-    qty = D(str(snapshot.get("qty", FIRST_LEG_QTY)))
+    # THE PRICE IS VALIDATED BEFORE IT IS USED. A non-finite Decimal
+    # raises InvalidOperation on `<` and `%`, so an unchecked price would
+    # crash eligibility rather than refuse the attempt, and a missing one
+    # used to default silently to "0" -- which is how a zero price became
+    # eligible instead of impossible.
+    raw_price = snapshot.get("first_leg_price")
+    price = finite_decimal(raw_price)
+    if raw_price is None or (isinstance(raw_price, str)
+                             and not raw_price.strip()):
+        r.append("E9_PRICE_ABSENT")
+    elif price is None:
+        r.append("E9_PRICE_NOT_FINITE:%r" % (raw_price,))
+    elif price <= 0:
+        r.append("E9_PRICE_NOT_POSITIVE:%s" % price)
+    if price is None:
+        # a safe sentinel purely so the remaining arithmetic cannot raise.
+        # `r` is already non-empty, so this attempt is refused regardless.
+        price = D("0")
+    qty = finite_decimal(snapshot.get("qty", FIRST_LEG_QTY))
+    if qty is None:
+        r.append("QTY_NOT_FINITE:%r" % (snapshot.get("qty"),))
+        qty = FIRST_LEG_QTY
     if qty != FIRST_LEG_QTY:
         r.append("QTY_NOT_THE_FROZEN_0.13:%s" % qty)
     notional = qty * price
@@ -335,29 +456,48 @@ def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
     if not gate["ok"]:
         r.extend(gate["refusals"])
 
+    r.extend(e8_book_executable(snapshot))
+
     fl = (snapshot.get("first_leg") or {})
     best_bid = fl.get("best_bid")
     best_ask = fl.get("best_ask")
-    if best_bid is None or D(str(price)) != D(str(best_bid)):
+    # EVERY COMPARISON GOES THROUGH finite_decimal. These three clauses
+    # used to convert with a bare `D(str(x))`, which raises
+    # InvalidOperation on "abc", "" or "sNaN" -- so a malformed book made
+    # eligibility CRASH instead of refuse. A crash mid-cohort is strictly
+    # worse than a refusal: it skips the recording and the stopping rules.
+    # E8 above has already refused any value that cannot be compared, so
+    # these clauses simply decline to compare it a second time.
+    bid_d = finite_decimal(best_bid)
+    ask_d = finite_decimal(best_ask)
+    if bid_d is None or price != bid_d:
         r.append("E9_NOT_AT_SAME_SIDE_BEST_BID:%s!=%s" % (price, best_bid))
     if price % VENUE_TICK != 0:
         r.append("E9_OFF_TICK:%s" % price)
     if price > MAX_FIRST_LEG_PRICE:
         r.append("E9_PRICE_ABOVE_CEILING:%s" % price)
-    if best_ask is not None and price >= D(str(best_ask)):
+    if ask_d is not None and price >= ask_d:
         r.append("E9_WOULD_CROSS:%s>=%s" % (price, best_ask))
 
     r.extend("E7_" + x for x in _ws_ok(snapshot.get("ws_state") or {},
                                        now=now))
 
     comp = None
-    try:
-        comp = complement_price(
-            first_leg_price=price, qty=qty,
-            complement_best_bid=(snapshot.get("complement")
-                                 or {}).get("best_bid", "0"))
-    except ComplementInfeasible as exc:
-        r.append("E10_COMPLEMENT_INFEASIBLE:%s" % exc)
+    raw_comp_bid = (snapshot.get("complement") or {}).get("best_bid")
+    if raw_comp_bid is None or (isinstance(raw_comp_bid, str)
+                                and not raw_comp_bid.strip()):
+        # it used to default to "0", which quietly priced the complement
+        # against a book that was not there.
+        r.append("E10_COMPLEMENT_BID_ABSENT")
+    elif finite_decimal(raw_comp_bid) is None:
+        r.append("E10_COMPLEMENT_BID_NOT_FINITE:%r" % (raw_comp_bid,))
+    else:
+        try:
+            comp = complement_price(
+                first_leg_price=price, qty=qty,
+                complement_best_bid=raw_comp_bid)
+        except ComplementInfeasible as exc:
+            r.append("E10_COMPLEMENT_INFEASIBLE:%s" % exc)
 
     if tracker.safety_violations:
         r.append("E12_SAFETY_INVARIANT_VIOLATION")
