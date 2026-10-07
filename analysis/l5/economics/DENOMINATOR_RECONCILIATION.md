@@ -1,8 +1,30 @@
 # Denominator reconciliation — my independent cross-check
 
-Written BEFORE the full breakeven surface lands, deliberately, so the two
-can be compared rather than one being used to confirm the other. If the
-surface disagrees with anything here, the disagreement is the finding.
+> ## SUPERSEDED IN PART — read `PMUS_BREAKEVEN_SURFACE.md` §2 first
+>
+> **What held:** Ground 1. `−71.7 bp` is a CHANGE, not a LEVEL; the level is
+> `−30.4 bp`; and pair turnover ≈ pair cost, so no 2× correction applies to a
+> per-pair rebate. The full surface reached both independently and the two
+> agree.
+>
+> **What did NOT hold: my `−30.4 + 62.5 = +32.1 bp` arithmetic. It is NOT
+> LEGITIMATE and I was wrong to publish it as "mathematically positive".**
+> I missed that L5's R4 carries **fees of −62.1 bp of turnover**, so he paid
+> **taker** fees on a material share of that turnover. A maker rebate and a
+> taker fee cannot both be earned on the same fill, so adding a full
+> both-legs-maker 62.5 bp to a −30.4 bp figure partly *produced by taker
+> legs* double-counts the same notional. Worse, an all-maker counterfactual
+> does not hold L5's completion rate fixed — **the taker completions are
+> precisely what produced it.**
+>
+> The comparison can only be made on an all-maker sub-population with its own
+> measured completion rate and its own turnover, and **we do not hold that
+> measurement.** The arithmetic is available and tempting; that is exactly
+> why it is the single most likely source of a false positive here, and I
+> walked into it.
+>
+> Everything below is kept unedited as the record of the cross-check,
+> including the error.
 
 ## The error waiting to be made, and it is a factor-of-2.4 one
 
