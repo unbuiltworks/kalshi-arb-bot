@@ -1,0 +1,278 @@
+{
+  "label": "PMUS_INCENTIVES_CURRENT_V1",
+  "generated_utc": "2026-10-07T00:55:00Z",
+  "lane": "C",
+  "read_only": true,
+  "constraints_honored": {
+    "no_git_command_run": true,
+    "no_order_placed_or_signed_or_previewed": true,
+    "get_only": true,
+    "s3_untouched": true,
+    "live_exec_and_deploy_and_railway_untouched": true,
+    "no_credential_value_printed": true
+  },
+  "access": {
+    "pmus_credential_present_in_container": false,
+    "pmus_live_account_read_attempted": false,
+    "docs_polymarket_us_reachable": false,
+    "egress_block_evidence": "curl CONNECT tunnel failed response 403; agentproxy recentRelayFailures connect_rejected docs.polymarket.us:443; WebFetch EGRESS_BLOCKED",
+    "fallback": "committed verbatim venue doc captures (2026-09-10) + WebSearch extended (2026-10-07) labelled SECONDARY"
+  },
+  "brief_corrections": [
+    {
+      "claim_in_brief": "maker-rebate credits on POST /v1/transfers, type AdminCredit, purpose 'Predictions maker rebate', SEVEN credits totalling $0.51 against $52.2573 maker notional = 97.59 bps",
+      "verdict": "CONFIRMED AS FACT BUT MIS-VENUED",
+      "correct_venue": "gemini",
+      "why": "/v1/transfers, /v1/tradevolume, /v1/notionalvolume, AdminCredit and eid are Gemini API surfaces; sources are developer.gemini.com/prediction-markets/maker-rebate-program and gemini.com/fees/predictions",
+      "bucket": "ACTUALLY_CREDITED",
+      "source": "REBATE_ECONOMICS_1.md; REBATE_APPLICABILITY_1.md; analysis/gemini/rebate_reconciliation_20260921T175241Z.json",
+      "retrieved_utc": "2026-10-07T00:30:00Z"
+    },
+    {
+      "claim_in_brief": "/v1/transfers carries no order id, symbol or fill linkage so attribution is WINDOW level only",
+      "verdict": "TRUE FOR GEMINI, FALSE FOR PMUS MAKER REBATES",
+      "why": "on PMUS the maker rebate is a negative commissionNotionalCollected on our own execution, attributable to the fill; only PMUS liquidity REWARD payouts are ACTIVITY_TYPE_TRANSFER and those carry no market/order reference",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "analysis/l5/incentives/TRANSFER_2PT51.md; src/pmus_incentive_audit.py",
+      "retrieved_utc": "2026-10-07T00:35:00Z"
+    },
+    {
+      "claim_in_brief": "a prior finding records SEVEN credits totalling $0.51 as our account record",
+      "verdict": "PMUS TOTAL IS LARGER AND SEPARATE",
+      "correction": "PMUS account lifetime to 2026-09-14: maker rebates $9.14 over 737 credited fills of 1174; liquidity rewards $7.04 via 3 transfers; confirmed incentives $16.18",
+      "bucket": "ACTUALLY_CREDITED",
+      "source": "analysis/l5/incentives/TRANSFER_2PT51.md Ledger C",
+      "retrieved_utc": "2026-10-07T00:35:00Z"
+    }
+  ],
+  "answers": [
+    {
+      "q": 1,
+      "question": "current maker commission / rebate mechanics",
+      "answer": "Makers pay no commission. Maker rebate = round_half_even(0.0125 * C * p * (1-p), $0.01), Theta = -0.0125, max rebate $0.31 per 100 contracts at p=0.50, credited at fill time, banker's rounding to the cent, effective exchange-wide from 12 AM ET Wed 2026-07-01.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "docs.polymarket.us/fees, quoted verbatim in analysis/l5/PMUS_SPORTS_INCENTIVES.md",
+      "retrieved_utc": "2026-09-10T17:14:00Z"
+    },
+    {
+      "q": 1,
+      "question": "change since capture",
+      "answer": "Taker theta raised exchange-wide to 0.0695 (max $1.74/100 contracts) effective 2026-10-01; maker rebate Theta = -0.0125 UNCHANGED. The PMUS maker rebate is an absolute coefficient, not a share of the taker fee, so the taker rise does not raise our rebate. src/pmus_incentive_audit.py still pins TAKER_RATE=0.06 and is stale (not edited: read-only lane).",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "WebSearch extended, summarising docs.polymarket.us/fees (host egress-blocked, SECONDARY)",
+      "retrieved_utc": "2026-10-07T00:32:00Z"
+    },
+    {
+      "q": 2,
+      "question": "programs that exist today",
+      "answer": "Open: Deposit Incentive, Refer-A-Friend, Volume Incentive (taker), Liquidity Incentive (resting orders). Coming Soon: Daily Trading Incentive, Deposit and Trading Incentive. Application: Market Maker Program, Referral Incentive. Plus the exchange-wide maker rebate as a fee-schedule term.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "data/pmus/sports_incentives_2026-09-10/doc_incentives_overview.md (verbatim docs.polymarket.us/incentives/overview); still the live set per 2026-10-07 search",
+      "retrieved_utc": "2026-09-10T17:09:00Z"
+    },
+    {
+      "q": 3,
+      "question": "eligibility criteria",
+      "answer": "Maker rebate: no enrolment, any passive fill, whole quotable price band 0.01-0.99, NO 0.20-0.80 band (that band is Gemini's). Liquidity Incentive: Open, no signup, but a side only qualifies if aggregate resting size reaches Target Size and the exchange walks from best price outward - if Target Size is reached before your level you score zero. Volume Incentive: taker-side notional only, trades between 3c and 97c inclusive, $500 notional minimum in the published NBA instance - unreachable for us because we are maker-only. Market Maker Program: application, contractual, never applied for. Daily Trading / Deposit+Trading: Coming Soon, unavailable.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "doc_incentives_liquidity.md; doc_incentives_volume.md; REBATE_APPLICABILITY_1.md (for the Gemini band distinction)",
+      "retrieved_utc": "2026-09-10T17:20:00Z"
+    },
+    {
+      "q": 4,
+      "question": "calculation formula",
+      "answer": "Maker rebate 0.0125*C*p*(1-p) cent-rounded; as a rate of maker notional this equals 0.0125*(1-p) = 87.5 bps at p=0.30, 75.0 at 0.40, 62.5 at 0.50, 50.0 at 0.60, 37.5 at 0.70, absolute ceiling 125 bps as p->0. Liquidity Incentive: Score = DiscountFactor^(ticks from best) * OrderSize, random 1-second book snapshots, each side independently normalized to 1.0 per snapshot provided Target Size is met; derived payout = Pool * X/(X+D) * duty / (2M). Volume Incentive: your share of total eligible taker notional times the pool.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "docs.polymarket.us/fees; doc_incentives_liquidity.md; derivation in analysis/l5/PMUS_SPORTS_INCENTIVES.md",
+      "retrieved_utc": "2026-09-10T17:14:00Z"
+    },
+    {
+      "q": 5,
+      "question": "caps and tiers",
+      "answer": "Maker rebate: max $0.31 per 100 contracts; hard per-fill cent floor - raw below $0.005 pays $0.00 (OBSERVED on 6 of our prints); no tiers, no volume ladder, no 30-day notional tier. Liquidity Incentive: no per-person cap ('purely proportional to your share of the total score') but rewards under $1.00 are not paid out; Target Size is a gate not a cap. Volume Incentive: pool-capped per contract, $500 notional minimum in the published instance.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "docs.polymarket.us/fees; doc_incentives_liquidity.md; doc_incentives_volume.md; analysis/l5/PMUS_INCENTIVE_BREAKEVEN.md",
+      "retrieved_utc": "2026-09-10T17:20:00Z"
+    },
+    {
+      "q": 6,
+      "question": "market / category restrictions",
+      "answer": "Our primary capture states the schedule 'applies symmetrically across all contract types' with NO per-category variation - sports, crypto and politics charged and rebated identically. CONFLICT: 2026-10-07 third-party pages assert per-category taker thetas on PMUS (tech/mentions 0.04, sports 0.05, politics ~0.04, crypto 0.07; maxima $1.00-$1.75 per 100 shares) and separately quote a '20%/25% of matched taker fee' maker rebate split by category - the latter is Polymarket INTERNATIONAL's Maker Rebates Program (help.polymarket.com/articles/13364471), a different venue, and is not imported. Unresolvable from here. Liquidity Incentive coverage IS strongly category-shaped: of the live sports slate, MONEYLINE 174/175, SPREAD 5682/7362, TOTAL 3690/5050, PROP 7036/12952, DRAWABLE_OUTCOME 27/49 carry an ACTIVE program.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE_with_UNKNOWN_conflict",
+      "source": "analysis/l5/PMUS_SPORTS_INCENTIVES.md (primary, 2026-09-10); WebSearch extended (SECONDARY, 2026-10-07); GET /v1/incentives?symbols=... census over 33517 open sports markets",
+      "retrieved_utc": "2026-10-07T00:40:00Z"
+    },
+    {
+      "q": 7,
+      "question": "does BTC15m (series btc-updown-15m) qualify",
+      "answer": "MAKER REBATE: YES - exchange-wide, no category carve-out, no enrolment; a BTC15m maker fill earns 0.0125*C*p*(1-p) cent-floored. LIQUIDITY INCENTIVE: no active program found. Nearest direct evidence is reward_state.json - every up/down series (BTC/ETH/SOL/XRP/HYPE/BNB/DOGE at 5m/15m/4h) reads reward_state EXPIRED, rewards_daily_rate null, in_sampling_rewards_list false, and sampling_markets_containing_updown 0 of a 17562-market sweep - BUT that artifact is venue polymarket_international, not PMUS. PMUS-side evidence is weaker and points the same way: our_traded_slugs_programs.json returns with_programs 0 for all 239 slugs we have traded/observed/ranked, and published_programs_covering_our_markets = 0 in all five audits. VOLUME INCENTIVE: NO, structurally - maker-only means zero taker notional.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE_for_rebate__UNKNOWN_for_liquidity_program",
+      "source": "analysis/l5/evidence/PMI_REWARD_STATE_2026-09-10/reward_state.json (2026-09-10T14:45:33Z); data/pmus/sports_incentives_2026-09-10/our_traded_slugs_programs.json (2026-09-10T17:18:23Z, gateway.polymarket.us/v1/incentives); analysis/l5/PMUS_INCENTIVE_BREAKEVEN.md",
+      "retrieved_utc": "2026-09-10T17:18:23Z"
+    },
+    {
+      "q": 8,
+      "question": "do sports or other PMUS categories qualify differently",
+      "answer": "Yes, and the entire difference is in the liquidity program, not the rebate. Sports liquidity programs are ACTIVE and large; crypto up/down liquidity rewards are expired/absent. Measured at our working size of 12 contracts against real books (61 programs, 2026-09-10T17:29Z): nfl_player_props_live_20260902 pool $28,500 / 1314 markets -> $10.40 at 100% duty; nfl_period_spreads_live_20260904 $5.55; nfl_period_spreads_day_of $2.77; nfl_props_early $2.70; cfb_t2_ml_live $2.27; ufc_prelim_moneyline_live $1.41. 6 of 46 clear the $1.00 minimum at 100% duty; 40 do not clear it at all so their correct expected value is exactly $0.00. These are ESTIMATES and upper bounds (depth sampled Thursday afternoon for Sunday live pools; our duty cycle is near zero by design at maker_rest_max_s 5.0 and one outstanding order; the 1/(2M) term punishes one-market-at-a-time).",
+      "bucket": "ESTIMATED",
+      "source": "analysis/l5/PMUS_SPORTS_INCENTIVES.md; data/pmus/sports_incentives_2026-09-10/{depth.json,econ_shared_12.json,live_sports_programs.json.gz}",
+      "retrieved_utc": "2026-09-10T17:29:00Z"
+    },
+    {
+      "q": 9,
+      "question": "payout timing and mechanism",
+      "answer": "Maker rebate: credited at fill time as a negative commissionNotionalCollected on our own execution; immediate, per fill, no minimum beyond cent rounding. Liquidity Incentive: 'calculated within 5 business days of each time period ending and credited to your account within 2 business days of the end of that calculation'; 'Rewards under $1.00 are not paid out'; arrives as ACTIVITY_TYPE_TRANSFER, currency USD, description 'liquidity reward payout', status ACCOUNT_BALANCE_CHANGE_STATUS_COMPLETED, with empty metadata and NO market/order/fill reference - attribution to markets only by matching /v1/incentives/earnings rows. Volume Incentive: pool settlement per contract; never credited to us.",
+      "bucket": "PUBLISHED_PROGRAM_ELIGIBLE",
+      "source": "doc_incentives_liquidity.md; analysis/l5/incentives/TRANSFER_2PT51.md",
+      "retrieved_utc": "2026-09-10T17:20:00Z"
+    },
+    {
+      "q": 10,
+      "question": "what OUR ACCOUNT HAS ACTUALLY BEEN CREDITED",
+      "answer": "PMUS account lifetime 2026-08-14 -> 2026-09-14T22:59:21.565847915Z: maker rebates $9.14 over 737 credited fills of 1174; liquidity rewards PAID $7.04 via 3 transfers (CCRG00G5T00Q $2.88 2026-09-09T12:28:25Z, CD6Q1RAG000Q $1.65 2026-09-10T13:14:05Z, CG78P5C0000Q $2.51 2026-09-14T22:39:20Z) settling 44 PAID earnings rows; taker rebates $0.00; Volume Incentive $0.00. CONFIRMED INCENTIVES $16.18. Excluded: rewards PENDING $0.70 (11 rows) and SKIPPED $1.37 (24 rows) - accrued not credited; the $10.00 ISV goodwill credit CAVGFQ5ZA00M (2026-09-06 outage remediation) - neither trading P&L nor an incentive; the $9.31 formula estimate - corroborates the $9.14 and is never counted. Verified narrower sub-cohorts (not additive): 25 credited prints 2026-09-06/07 = $0.4200 on 119.49 contracts / $56.8624 notional = 73.9 bps, $0.00351/share, with 6 same-session prints of 0.11-1.41 shares credited $0.00 by the cent floor; 20 sports fills settling 2026-09-10 = $0.1700 credited vs $0.17 modelled, exact market-for-market, on $30.9563 basis = 54.9 bps. GEMINI, separate venue: 7 AdminCredit transfers, $0.51, eids 368822540373/368823437387/368824547191/368825667773/368827790024/368835478761/368835488128, on $52.2573 maker notional = 97.59 bps, attribution UNATTRIBUTED/WINDOW_LEVEL. Combined venue-confirmed incentive cash across both venues: $16.69.",
+      "bucket": "ACTUALLY_CREDITED",
+      "source": "analysis/l5/incentives/TRANSFER_2PT51.md; analysis/l5/venue_rebate_credits.json; analysis/l5/VENUE_INCENTIVE_RECONCILIATION.md; analysis/l5/PMUS_SPORTS_INCENTIVES.md; analysis/gemini/rebate_reconciliation_20260921T175241Z.json",
+      "retrieved_utc": "2026-09-14T22:59:21Z"
+    }
+  ],
+  "buckets": {
+    "PUBLISHED_PROGRAM_ELIGIBLE": {
+      "maker_rebate_theta": -0.0125,
+      "maker_rebate_formula": "round_half_even(0.0125*C*p*(1-p), 0.01)",
+      "maker_rebate_max_per_100_contracts_usd": 0.31,
+      "maker_rebate_rate_of_notional_formula": "0.0125*(1-p)",
+      "maker_commission_charged_to_makers_usd": 0.0,
+      "taker_theta_effective_2026_10_01": 0.0695,
+      "taker_theta_in_our_code": 0.06,
+      "taker_theta_code_stale": true,
+      "rounding": "banker's rounding (round half to even) to $0.01",
+      "cent_floor_behavior": "raw below $0.005 pays $0.00",
+      "eligible_price_band": "0.01-0.99 (whole quotable band); NO 0.20-0.80 band on PMUS",
+      "liquidity_program_min_payout_usd": 1.0,
+      "liquidity_program_per_person_cap": null,
+      "volume_program_eligible_side": "taker only",
+      "volume_program_price_band": "0.03-0.97 inclusive",
+      "source": "docs.polymarket.us/fees + /incentives/* verbatim captures",
+      "retrieved_utc": "2026-09-10T17:09:00Z-17:32:00Z"
+    },
+    "ESTIMATED": {
+      "note": "modelled only; never counted as income anywhere",
+      "maker_rebate_rate_of_notional_bps_by_price": {"0.30": 87.5, "0.40": 75.0, "0.50": 62.5, "0.60": 50.0, "0.70": 37.5},
+      "absolute_rate_ceiling_bps": 125.0,
+      "liquidity_reward_at_12_contracts_100pct_duty_usd": {"clearing_1usd_minimum": 6, "not_clearing": 40, "range_of_clearing": [1.41, 10.4]},
+      "gemini_accrual_on_our_five_fills_usd": 0.000132,
+      "gemini_paid_on_those_fills_usd": 0.0,
+      "source": "published formulas applied to our own fills and to measured books",
+      "retrieved_utc": "2026-09-10T17:29:00Z"
+    },
+    "ACTUALLY_CREDITED": {
+      "pmus": {
+        "window": "2026-08-14 -> 2026-09-14T22:59:21.565847915Z",
+        "maker_rebates_usd": 9.14,
+        "maker_rebate_credited_fills": 737,
+        "maker_rebate_total_fills_in_walk": 1174,
+        "liquidity_rewards_paid_usd": 7.04,
+        "liquidity_reward_transfers": [
+          {"id": "CCRG00G5T00Q", "utc": "2026-09-09T12:28:25.392786335Z", "usd": 2.88},
+          {"id": "CD6Q1RAG000Q", "utc": "2026-09-10T13:14:05.538549390Z", "usd": 1.65},
+          {"id": "CG78P5C0000Q", "utc": "2026-09-14T22:39:20.206118633Z", "usd": 2.51}
+        ],
+        "taker_rebates_usd": 0.0,
+        "volume_program_usd": 0.0,
+        "confirmed_incentives_total_usd": 16.18,
+        "excluded_pending_usd": 0.70,
+        "excluded_skipped_usd": 1.37,
+        "excluded_isv_goodwill_usd": 10.0,
+        "excluded_isv_goodwill_id": "CAVGFQ5ZA00M",
+        "subcohort_25_prints": {"credits_usd": 0.42, "contracts": 119.49, "notional_usd": 56.8624, "bps_of_notional": 73.9, "per_share_usd": 0.00351, "zero_credited_prints": 6},
+        "subcohort_20_sports_fills": {"credits_usd": 0.17, "modelled_usd": 0.17, "basis_usd": 30.9563, "bps_of_notional": 54.9, "match": "exact market-for-market"},
+        "attribution": {"maker_rebate": "FILL_LEVEL", "liquidity_reward": "PROGRAM_AND_ACCOUNT_CERTAIN__MARKET_NOT_YET__FILL_NEVER"},
+        "bucket": "ACTUALLY_CREDITED",
+        "source": "analysis/l5/incentives/TRANSFER_2PT51.md; analysis/l5/venue_rebate_credits.json; analysis/l5/PMUS_SPORTS_INCENTIVES.md",
+        "retrieved_utc": "2026-09-14T22:59:21Z"
+      },
+      "gemini_DIFFERENT_VENUE": {
+        "credits": 7,
+        "total_usd": 0.51,
+        "maker_notional_usd": 52.2573,
+        "cross_check_mytrades_usd": 52.2604,
+        "bps_of_notional": 97.59,
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "eids": [368822540373, 368823437387, 368824547191, 368825667773, 368827790024, 368835478761, 368835488128],
+        "attribution_confidence": "UNATTRIBUTED (WINDOW_LEVEL)",
+        "transferable_to_pmus": false,
+        "bucket": "ACTUALLY_CREDITED",
+        "source": "REBATE_ECONOMICS_1.md; analysis/gemini/rebate_reconciliation_20260921T175241Z.json",
+        "retrieved_utc": "2026-09-21T17:52:41Z"
+      },
+      "combined_both_venues_usd": 16.69
+    },
+    "UNKNOWN": [
+      {"item": "live docs.polymarket.us / polymarket.us/rewards text as of 2026-10-07", "why": "egress policy denies the host (403 CONNECT)", "bucket": "UNKNOWN", "source": "agentproxy status", "retrieved_utc": "2026-10-07T00:25:29Z"},
+      {"item": "whether PMUS now varies theta by category, and whether maker rebate Theta varies with it", "why": "our primary capture says no variation; third-party pages say the taker side does; host blocked", "bucket": "UNKNOWN", "source": "conflict between PMUS_SPORTS_INCENTIVES.md and 2026-10-07 WebSearch", "retrieved_utc": "2026-10-07T00:40:00Z"},
+      {"item": "whether btc-updown-15m carries a live PMUS Liquidity Incentive program today", "why": "the direct reward_state artifact is polymarket_international; PMUS evidence is a zero over 239 unrelated slugs; the settling read GET /v1/incentives?symbols=btc-updown-15m-* is egress-blocked", "bucket": "UNKNOWN", "source": "reward_state.json; our_traded_slugs_programs.json", "retrieved_utc": "2026-09-10T17:18:23Z"},
+      {"item": "our account's credited incentives after 2026-09-14T22:59:21Z", "why": "no PMUS credential in this container and no later audit artifact committed; three weeks unmeasured - a hole, not a zero", "bucket": "UNKNOWN", "source": "container env scan (presence boolean only)", "retrieved_utc": "2026-10-07T00:28:00Z"},
+      {"item": "live-period liquidity-program depth", "why": "the 61-program depth sample was taken when no NFL/CFB/UFC event was live; genuinely missing, not estimated", "bucket": "UNKNOWN", "source": "analysis/l5/PMUS_SPORTS_INCENTIVES.md", "retrieved_utc": "2026-09-10T17:29:00Z"},
+      {"item": "whether trade.realizedPnl is already net of commissionNotionalCollected", "why": "a $9.14 double-count risk; the settling test (reconstruct one settled market from fills vs realizedPnl) has not been run", "bucket": "UNKNOWN", "source": "analysis/l5/incentives/TRANSFER_2PT51.md", "retrieved_utc": "2026-09-14T22:59:21Z"},
+      {"item": "whether the Market Maker Program would accept us and on what terms", "why": "application-only, contractual, unpublished; never applied for", "bucket": "UNKNOWN", "source": "doc_incentives_overview.md", "retrieved_utc": "2026-09-10T17:09:00Z"},
+      {"item": "which program paid L5's $35,228 of MAKER_REBATE", "why": "no program identifier appears on an activity row", "bucket": "UNKNOWN", "source": "analysis/l5/incentives/L5_INCENTIVE_CLASSIFICATION_V1.md", "retrieved_utc": "2026-10-07T00:35:00Z"}
+    ]
+  },
+  "l5_transferability": {
+    "verdict": "NOT_TRANSFERABLE",
+    "l5_observed_streams_usd": {"MAKER_REBATE": 35228.32, "TAKER_REBATE": 7525.73, "REWARD": 28797.69, "total": 71551.74},
+    "l5_observed_incentive_days_usd": {"2026-04-21": 29.94, "2026-08-29": 3220.34, "2026-08-30": 3744.81, "2026-08-31": 3343.34},
+    "reasons": [
+      "different account: the venue publishes no per-market reward row for another trader, so any split is invented",
+      "different venue: L5 settles in pUSD on Polymarket international (eth_call name() = 'Polymarket USD', symbol() = 'pUSD'); ours is Polymarket US",
+      "different program era: L5's REWARD stream exists only in 2026-08 and the up/down liquidity programs we can observe read EXPIRED by 2026-09-10",
+      "different scale and shape: L5's MAKER_REBATE credits are daily pool distributions posted at 00:00 UTC; our PMUS maker rebate is a per-fill commission credit - VENUE_INCENTIVE_RECONCILIATION.md records that comparing the two directly was a category error once already"
+    ],
+    "what_is_transferable": "the mechanism, not the magnitude: a persistent incremental maker policy generates maker notional, and PMUS maker notional earns 0.0125*(1-p) of itself at fill time with no enrolment",
+    "bucket": "UNKNOWN_for_magnitude__PUBLISHED_for_mechanism",
+    "source": "analysis/l5/incentives/L5_INCENTIVE_CLASSIFICATION_V1.md; analysis/l5/VENUE_INCENTIVE_RECONCILIATION.md; analysis/l5/norebate/Q1_NOREBATE.json; analysis/l5/CANON_ECONOMICS.md",
+    "retrieved_utc": "2026-10-07T00:45:00Z"
+  },
+  "breakeven": {
+    "see": "analysis/l5/incentives/BREAKEVEN_INCENTIVE.md",
+    "denominator_note": "maker notional proxied by sum of buy_debits over Q1_EVENTS.jsonl; L5 is effectively buy-only (2 SELL in 760817 trades) but did receive TAKER_REBATE, so the true maker denominator is smaller and every required-bps figure is an UNDERSTATEMENT",
+    "cohorts": [
+      {"cohort": "FULL_CORPUS", "events": 2218, "observed_days": 22, "net_ex_incentives_usd": -2745.53, "buy_notional_usd": 766992.94, "notional_per_day_usd": 34863.32, "required_usd_per_day": 124.80, "required_bps": 35.8, "implied_avg_fill_price": 0.714, "reachable_under_published_formula": true},
+      {"cohort": "E1_GENUINELY_PRE_REBATE", "events": 211, "observed_days": 17, "net_ex_incentives_usd": -168.46, "buy_notional_usd": 28123.54, "notional_per_day_usd": 1654.33, "required_usd_per_day": 9.91, "required_bps": 59.9, "implied_avg_fill_price": 0.521, "reachable_under_published_formula": true, "note": "only just - needs full formula rate at p~0.52, maker-only, every fill above the cent floor"},
+      {"cohort": "E3_INCENTIVE_ERA", "events": 2002, "observed_days": 4, "net_ex_incentives_usd": -721.99, "buy_notional_usd": 737014.32, "notional_per_day_usd": 184253.58, "required_usd_per_day": 180.50, "required_bps": 9.8, "implied_avg_fill_price": 0.922, "reachable_under_published_formula": true, "note": "trivial rate only because it traded $184k/day"},
+      {"cohort": "E2_EARLY_REBATE", "events": 5, "observed_days": 1, "net_ex_incentives_usd": -1855.08, "buy_notional_usd": 1855.08, "notional_per_day_usd": 1855.08, "required_usd_per_day": 1855.08, "required_bps": 10000.0, "implied_avg_fill_price": null, "reachable_under_published_formula": false, "note": "lost 100% of debits; no rebate at any rate recovers a total loss"}
+    ],
+    "target_480_per_day": {
+      "formula": "maker notional per day = 480 / rate",
+      "at_125_0_bps_absolute_max_unreachable": 38400,
+      "at_87_5_bps_p030": 54857,
+      "at_73_9_bps_our_measured_pmus": 64953,
+      "at_62_5_bps_p050": 76800,
+      "at_54_9_bps_our_measured_pmus_sports": 87432,
+      "at_97_59_bps_GEMINI_NOT_TRANSFERABLE": 49185
+    },
+    "our_current_scale": {
+      "session_notional_cap_usd": 7.50,
+      "rebate_at_cap_at_73_9_bps_usd_per_day": 0.055,
+      "gap_factor_to_64953": 8660,
+      "lifetime_confirmed_incentives_usd": 16.18,
+      "lifetime_account_days": 32,
+      "lifetime_incentive_run_rate_usd_per_day": 0.506,
+      "multiple_of_run_rate_to_reach_480_per_day": 949
+    },
+    "verdict_on_97_59_bps": "NOT SUFFICIENT AND NOT THE RIGHT LEVER. It is Gemini, not PMUS. Against the PMUS formula it is an ordinary rate, sitting between p=0.30 (87.5 bps) and p=0.20 (100 bps). Raising our rate from the measured 73.9 to 97.59 bps would cut the notional needed for $480/day from $64,953 to $49,185 - a 24% improvement on a requirement we miss by ~8,700x. Rate optimisation cannot close a notional gap of that size. At 73.9 bps a single -$3.90 directional residual costs $528 of maker notional to repay.",
+    "bucket": "ESTIMATED_counterfactual_on_OBSERVED_inputs",
+    "source": "analysis/l5/norebate/Q1_NOREBATE.json + Q1_EVENTS.jsonl; our credited cohorts; docs.polymarket.us/fees formula",
+    "retrieved_utc": "2026-10-07T00:50:00Z"
+  },
+  "venue_recommendation": {
+    "btc15m": {"maker_rebate": "available, identical rate to every other category", "liquidity_program": "none found live", "verdict": "fine for rebate capture, zero program capture"},
+    "sports": {"maker_rebate": "identical rate per our primary capture", "liquidity_program": "ACTIVE and large", "verdict": "the only lane with program money available to us, BUT it pays for resting breadth across many markets sampled every second - our engine rests ~5s, holds one outstanding order, works one market at a time and chases fills, so duty is ~0 by design and the 1/(2M) term pays a single-market participant 1/2628th of a 1314-market pool; 40 of 46 sampled programs do not clear the $1.00 minimum at 100% duty"},
+    "conclusion": "BTC15m is not the wrong venue for incentive capture - on the maker rebate, the only incentive we have ever been credited at scale, it is identical to everywhere else. Sports is the only lane with a second incentive stream, and capturing it would require a different engine (breadth, duty, passive resting that does not want to fill), contradicting the current one-market fill-seeking maker-first spring discipline. Switching category to chase it is a strategy change, not a parameter change, and nothing here authorises it.",
+    "bucket": "ESTIMATED",
+    "source": "analysis/l5/PMUS_SPORTS_INCENTIVES.md; reward_state.json; our_traded_slugs_programs.json",
+    "retrieved_utc": "2026-09-10T17:29:00Z"
+  }
+}
