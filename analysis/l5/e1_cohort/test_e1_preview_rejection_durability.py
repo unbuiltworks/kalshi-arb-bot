@@ -156,9 +156,15 @@ def test_every_required_field_is_present_and_populated(monkeypatch, tmp_path):
     assert d["request_method"] == "POST"
     assert d["request_path"] == R.O.PREVIEW_PATH
     # identity
-    assert d["slug"].startswith("btc-updown-15m-")
-    assert d["token_up"] and d["token_down"]
-    assert d["token_up"] != d["token_down"]
+    assert d["slug"].startswith("cpc-btc-updown-15m-")
+    assert d["identity"] == "slug_plus_outcome_side"
+    assert d["ctf_token_ids_used"] is False
+    assert d["outcome_up"] and d["outcome_down"]
+    assert d["outcome_up"] != d["outcome_down"]
+    # the token fields are present as EXPLICIT NULLS, so a reader can
+    # tell "no token was used" from "the field is missing"
+    assert "token_up" in d and d["token_up"] is None
+    assert "token_down" in d and d["token_down"] is None
     # E1's decision before serialization
     assert d["e1_outcome_side"] == "UP"
     assert d["e1_price_local"] == "0.50"

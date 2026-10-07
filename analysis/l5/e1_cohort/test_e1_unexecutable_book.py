@@ -199,12 +199,27 @@ def test_a_stale_book_is_still_refused(monkeypatch, tmp_path):
     assert any(x.startswith("E7_BOOK_STALE") for x in r), r
 
 
-def test_a_wrong_token_book_is_refused_by_the_provider():
-    """Token identity is the provider's gate, not eligibility's, and it
-    returns no snapshot at all -- so nothing can reach preview."""
-    src = open("analysis/l5/e1_cohort/provider.py").read()
-    assert "TOKEN_MISMATCH_" in src
-    assert "BOOK_IS_FOR_ANOTHER_MARKET" in src
+def test_a_wrong_market_book_is_refused_by_the_provider():
+    """Market identity is the provider's gate, not eligibility's, and it
+    returns no snapshot at all -- so nothing can reach preview.
+
+    ON PMUS the identity to match is the SLUG and the OUTCOME SIDE, not a
+    CTF token id: a PMUS order carries no token id, so a token check here
+    would assert a Polymarket.com fact about a Polymarket US order. The
+    behaviour is proven end to end in
+    `test_e1_live_path.py::test_FAILS_CLOSED_wrong_market_or_wrong_outcome`;
+    this is the structural half.
+    """
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "pmus_provider.py"), encoding="utf8").read()
+    for refusal in ("BOOK_IS_FOR_ANOTHER_MARKET",
+                    "LEG_SLUG_MISMATCH_",
+                    "OUTCOME_MISMATCH_FIRST_LEG",
+                    "OUTCOME_MISMATCH_COMPLEMENT",
+                    "TIMING_AUTHORITY_IS_NOT_THE_PMUS_AUTHENTICATED_WS",
+                    "REST_CLAIMED_AS_TIMING_AUTHORITY"):
+        assert refusal in src, refusal
 
 
 # ============ NOTHING UNEXECUTABLE REACHES PREVIEW OR A LATCH ===========

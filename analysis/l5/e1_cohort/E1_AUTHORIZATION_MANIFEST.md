@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486
+9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -415,7 +415,7 @@ additive and touches nothing of XR2W's.
 | `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
 | `PMUS_E1_ARM` | must equal the session id |
 | `PMUS_E1_GATE_EVIDENCE` | must equal the authorized **series** `btc-updown-15m`; the exact resolved slug is re-enforced before every submission |
-| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486` |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920` |
 
 **None of these is set.** Reporting is BOOLEAN ONLY — `armed_env_summary()`
 returns presence flags and never a value, asserted by test.
@@ -563,7 +563,7 @@ degraded one.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
 4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
-   `481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486`;
+   `9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many
@@ -613,6 +613,7 @@ their reasons, asserted by test.
 | `f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4` | **it consumed XR2W's `PMUS_EXEC1_*` namespace and XR2W's latch directory**, so a legacy value on `l5-live-probe-oneshot` could have participated in arming E1 — and it implied a network-incapability E1 does not have |
 | `e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310` | **its ARMED path terminated BEFORE `run_cohort`** — `main()`'s armed branch was a bare `raise SystemExit`, no `snapshot_provider` existed, and setting the `PMUS_E1_*` keys would have produced twelve empty windows |
 | `cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60` | **`live_book` parsed a frame shape the venue does not send** — it dropped 11,438 of 11,523 real frames (99.3%), so the top of book populated once and never moved, and health reported HEALTHY while serving that stale book. **It failed OPEN** |
+| `481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486` | **it ordered POLYMARKET.COM identity to POLYMARKET US**: the market was discovered on `gamma-api.polymarket.com`, pinned as two CTF token ids and streamed over Polymarket.com's public CLOB websocket, then serialized into an order to `api.polymarket.us`, which answered **Market not found** five times. It also treated an **absent first-leg bid as `0.00`** and therefore as a cheap maker opportunity |
 
 ## 12.1 The entrypoint, and the defect it closes
 
@@ -666,7 +667,7 @@ one-order runner fails while passing import resolution.
 
 | artifact | path |
 |---|---|
-| frozen spec `481d1d3f…2486` | `analysis/l5/e1_cohort/spec.py` |
+| frozen spec `9db0d2a7…d920` | `analysis/l5/e1_cohort/spec.py` |
 | bounded-count named-slot latch | `analysis/l5/e1_cohort/latch.py` |
 | append-only recorder + chain reconstructor | `analysis/l5/e1_cohort/recorder.py` |
 | stopping rules + forward-looking bound | `analysis/l5/e1_cohort/stopping.py` |

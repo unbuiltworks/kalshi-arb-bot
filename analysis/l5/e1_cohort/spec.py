@@ -217,75 +217,99 @@ DIFF: Dict[str, Any] = {
     "experiment_class": "MECHANICS MEASUREMENT COHORT, not a profit probe",
 
     "live_provider": {
-        "module": "analysis.l5.e1_cohort.provider",
-        "class": "LiveWindowProvider",
+        "module": "analysis.l5.e1_cohort.pmus_provider",
+        "class": "PmusWindowProvider",
+        "venue": "polymarket_us",
         "armed_main_reaches_run_cohort": True,
         "armed_main_is_a_bare_raise": False,
         "reuses_not_rebuilds": [
-            "src.l5_market_binding (BTC15m market + token resolution)",
-            "src.l5_clob_ws (the proven two-token websocket)",
+            "src.l5_pmus_transport (canonical PMUS slug + resolve_market)",
+            "src.l5_pmus_auth_book (the proven PMUS authenticated book, "
+            "used UNMODIFIED -- no websocket core is vendored)",
         ],
         "built_another_discovery_stack": False,
         "built_another_book_stack": False,
-        "series_pinned": "btc-updown-15m",
+        "series_pinned": "cpc-btc-updown-15m",
+        "market_identity": "slug_plus_outcome_side",
+        "ctf_token_ids_are_pmus_identity": False,
         "per_window_market_resolution": True,
         "market_is_pinned_before_an_order_is_possible": True,
         "windows_sequenced": WINDOWS,
         "windows_are_distinct": True,
+        "an_already_consumed_window_start_can_be_reopened": False,
+        "a_window_whose_end_has_passed_can_be_opened": False,
         "degraded_snapshot_is_ever_returned": False,
         "fails_closed_on": [
             "selector refusal (unidentified window)",
             "authorization refusal",
-            "websocket both-token health not proven for the SELECTED market",
+            "the PMUS book not proven usable for the SELECTED slug",
             "stale-window rollover",
-            "websocket loss before submission",
-            "slug or token mismatch",
+            "a window whose end has already passed",
+            "book loss before submission",
+            "slug or outcome-side mismatch",
             "book for another market",
+            "a timing authority that is not the PMUS authenticated book",
+            "an absent, zero, non-finite or crossed executable price",
         ],
-        "timing_authority": "websocket_strict",
+        "timing_authority": "pmus_authenticated_ws_strict",
         "rest_is_sufficient_timing_authority": False,
-        "derived_complement_is_a_second_token": False,
+        "rest_role": "discovery_and_cross_check_only",
+        "authbook_failure_may_fall_back_to_rest": False,
+        # ON PMUS THERE IS ONE QUOTED BOOK PER MARKET, and the NO side is
+        # its arithmetic complement (NO bid = 1 - YES ask). That is the
+        # venue's own convention, not a shortcut: there is no second feed
+        # to subscribe to. The Polymarket.com-era invariant asserted the
+        # opposite because there WERE two token books there.
+        "derived_complement_is_a_second_feed": False,
+        "derived_complement_is_the_venue_convention": True,
+        "defect_this_replaces": (
+            "E1 discovered its market on gamma-api.polymarket.com, pinned "
+            "two CTF token ids and streamed Polymarket.com's public CLOB "
+            "websocket, then serialized that identity into an order to "
+            "api.polymarket.us. PMUS answered 'Market not found' five "
+            "times. Polymarket.com and Polymarket US are DIFFERENT "
+            "VENUES: PMUS names a market "
+            "cpc-btc-updown-15m-YYYY-MM-DD-HHMMz plus an outcomeSide, and "
+            "has no CTF token ids at all. Proven by authenticated preview "
+            "on 2026-10-07: the PMUS-native slug was ACCEPTED (HTTP 200, "
+            "ORDER_STATE_PENDING_NEW) where the Polymarket.com slug was "
+            "not recognized."),
     },
 
-    "live_book": {
-        "module": "analysis.l5.e1_cohort.live_book",
-        "collector": "src.l5_clob_ws",
-        "frame_shapes_handled": ["price_change", "book_snapshot"],
-        "price_change_is_the_dominant_shape": True,
-        "real_frame_census": {
-            "source": "proven probe deployment 90fa9013, market "
-                      "btc-updown-15m-1791372600",
-            "frames_total": 11523,
-            "book_snapshots": 2,
-            "price_change": 11438,
-        },
-        "price_change_carries_a_top_level_asset_id": False,
-        "price_change_carries_top_level_bids_or_asks": False,
-        "price_change_payload_is_nested_in": "price_changes",
-        "best_bid_ask_read_directly_from_the_entry": True,
-        "best_bid_ask_derived_from_ladder_levels": False,
-        "frame_market_is_verified_against_the_pin": True,
-        "a_frame_for_another_market_is_refused": True,
-        "size_is_invented_when_absent": False,
-        "size_from_price_change_used_only_when": (
-            "the changed price IS the best bid and the side is BUY; a "
-            "price_change's size is at the CHANGED price, which is usually "
-            "not the best bid"),
-        "size_from_snapshot_ladder_is_real_queue_depth": True,
-        "unknown_size_is_reported_with_its_reason": True,
-        "staleness_is_per_token_book_update": True,
+    "decision_feed": {
+        "module": "analysis.l5.e1_cohort.pmus_book",
+        "class": "PmusDecisionFeed",
+        "collector": "src.l5_pmus_auth_book",
+        "collector_is_vendored_or_reimplemented": False,
+        "venue": "polymarket_us",
+        "transport": "PMUS authenticated websocket",
+        "identity": "slug_plus_outcome_side",
+        "ctf_token_ids_used": False,
+        # ONE QUOTED BOOK PER MARKET. AuthBook returns a snapshot only
+        # when it is connected AND the book is two-sided, so "no snapshot"
+        # is itself the fail-closed answer.
+        "a_snapshot_requires_a_connected_two_sided_book": True,
+        "max_book_age_s": 5.0,
+        "staleness_is_the_authenticated_stream_age": True,
         "staleness_depends_on_silence_alone": False,
-        "complement_is_derived_from_the_other_token": False,
+        "source_must_be_the_authenticated_ws": True,
+        "a_rest_sourced_snapshot_is_refused": True,
+        "complement_is_the_arithmetic_complement_of_the_same_book": True,
+        "complement_convention": "NO bid = 1 - YES ask; NO ask = 1 - YES bid",
+        "complement_is_a_second_feed": False,
+        "size_is_invented_when_absent": False,
+        "unknown_size_is_reported_with_its_reason": True,
+        "a_book_for_another_slug_is_refused": True,
+        "stall_and_resubscribe_semantics_are_authbooks_own": True,
         "defect_this_replaces": (
-            "the first parser looked for a top-level asset_id with "
-            "top-level bids/asks, which a price_change does not have. It "
-            "dropped 11,438 of 11,523 real frames, so the top of book "
-            "populated once at subscription and never moved -- and it "
-            "reported HEALTHY while serving that frozen book. It failed "
-            "OPEN, the only failure mode in this build that pointed the "
-            "wrong way."),
-        "tested_against_real_captured_frames": True,
-        "test": "analysis/l5/e1_cohort/test_e1_live_book.py",
+            "the Polymarket.com-era book parsed `price_change` frames from "
+            "the public CLOB websocket for two CTF token ids. Those frames "
+            "describe a venue E1 does not trade on, so a healthy, fresh, "
+            "correctly parsed book was still the WRONG MARKET'S book. The "
+            "parser defect it fixed (11,438 of 11,523 frames dropped, "
+            "reporting HEALTHY while serving a frozen top of book) is "
+            "preserved as history in the Polymarket.com-era tapes."),
+        "tested": "analysis/l5/e1_cohort/test_e1_pmus_feed_and_selector.py",
     },
 
     "cohort_authorization": {
@@ -302,9 +326,12 @@ DIFF: Dict[str, Any] = {
             "markets the FROZEN BTC15m SELECTOR produced during this "
             "authorized session may be traded."),
         "boundary_2_per_submission": (
-            "the SPECIFIC RESOLVED SLUG and BOTH TOKEN IDS are enforced "
-            "immediately before EVERY first-leg submission, before any "
-            "transport exists."),
+            "the SPECIFIC RESOLVED PMUS SLUG and BOTH OUTCOME SIDES are "
+            "enforced immediately before EVERY first-leg submission, "
+            "before any transport exists. Token ids are NOT checked here, "
+            "because a PMUS order carries none: checking one would be "
+            "checking a Polymarket.com fact about a Polymarket US order, "
+            "which is the defect that produced 'Market not found'."),
         "slug_check_deleted": False,
         "is_stricter_than_one_static_slug": True,
         "session_ledger_is_append_only": True,
@@ -312,8 +339,9 @@ DIFF: Dict[str, Any] = {
         "complement_may_select_its_own_market": False,
         "complement_inherits_the_first_leg_authorization": True,
         "recorded_per_window_in_the_raw_tape": [
-            "selected slug", "market id", "both token ids",
+            "selected PMUS slug", "market id", "both outcome sides",
             "selection provenance", "authorization result",
+            "the pmus book health that authorized the window",
         ],
     },
 
@@ -363,17 +391,20 @@ DIFF: Dict[str, Any] = {
             "  authorization:series_authorized  (PMUS_E1_GATE_EVIDENCE)",
             "  progress:CohortProgress -> :rehydrate  (RESTART RESUMES)",
             "  authorization:SessionAuthorization  (session ledger)",
-            "  provider:LiveWindowProvider",
-            "    selector:select_window"
-            " -> src.l5_market_binding:fetch_binding",
+            "  pmus_provider:PmusWindowProvider",
+            "    pmus_selector:select_window"
+            " -> pmus_identity:slug_for + :resolve"
+            " -> src.l5_pmus_transport:resolve_market",
             "    authorization:authorize_selected   (BOUNDARY 1, series)",
-            "    provider:assert_ws_both_tokens_healthy",
-            "    live_book:health_fn/book_fn -> src.l5_clob_ws",
+            "    pmus_provider:await_pmus_book_ready",
+            "    pmus_book:PmusDecisionFeed.health/.book"
+            " -> src.l5_pmus_auth_book:AuthBook",
             "analysis.l5.e1_cohort.runner:run_cohort   (MANY attempts)",
             "analysis.l5.e1_cohort.runner:e1_preflight -> :eligible",
             "analysis.l5.e1_cohort.runner:submit_first_leg",
             "  authorization:enforce_before_submission"
-            "   (BOUNDARY 2, EXACT SLUG + BOTH TOKENS, before transport)",
+            "   (BOUNDARY 2, EXACT PMUS SLUG + BOTH OUTCOME SIDES, "
+            "before transport)",
             "analysis.l5.e1_cohort.runner:_submit_once",
             "  orders:order_body -> src.l5_order_body:build",
             "  orders:preview_request -> src.l5_order_body:preview_envelope",
@@ -542,6 +573,7 @@ DIFF: Dict[str, Any] = {
             "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
             "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
             "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
+            "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
         ],
         "reasons": {
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
@@ -569,6 +601,8 @@ DIFF: Dict[str, Any] = {
                  "top of book populated once and never moved, and health "
                  "reported HEALTHY while serving that stale book. It "
                  "failed OPEN."),
+            "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486":
+                ("it discovered and identified its market on POLYMARKET.COM -- gamma-api.polymarket.com plus two CTF token ids, streamed over Polymarket.com's public CLOB websocket -- and then serialized that identity into an order to api.polymarket.us, which answered \"Market not found\". It also treated an ABSENT first-leg bid as 0.00 and therefore as a cheap maker opportunity"),
         },
     },
 
@@ -635,10 +669,15 @@ DIFF: Dict[str, Any] = {
             "strictly below $5.00.",
             "E6 projected window exposure after this attempt must remain "
             "strictly below $1.56.",
-            "E7 the live two-token websocket must be streaming BOTH tokens "
-            "with a strict-timing book fresher than the frozen bound. REST "
-            "is reachability only and may NEVER order the tape.",
-            "E8 the book must be two-sided and executable on both tokens.",
+            "E7 the PMUS AUTHENTICATED book for the pinned slug must be "
+            "streaming, two-sided and fresher than the frozen bound, and "
+            "its source must be that authenticated socket. REST is "
+            "discovery and cross-check only and may NEVER order the tape; "
+            "an AuthBook failure may not fall back to REST.",
+            "E8 the book must be two-sided and EXECUTABLE on both the YES "
+            "side and its arithmetic complement: a price that is absent, "
+            "zero, negative, non-finite, out of (0,1), or crossed is "
+            "INELIGIBLE, not a cheap maker opportunity.",
             "E9 the first-leg price must be at the same-side best bid "
             "(offset 0), on the 0.01 tick, at most $0.60, and strictly "
             "below the live ask so a post-only order cannot take.",
@@ -659,7 +698,11 @@ DIFF: Dict[str, Any] = {
             "C1 the complement is placed only after the first leg reports a "
             "fill, and is sized to the ACTUAL filled quantity, never to the "
             "placed quantity.",
-            "C2 the complement is the opposite token of the same market.",
+            "C2 the complement is the OPPOSITE OUTCOME SIDE of the same "
+            "PMUS market -- the same slug, outcomeSide inverted. On PMUS "
+            "it is quoted as the arithmetic complement of the one book "
+            "(NO bid = 1 - YES ask), which is the venue's own convention "
+            "and not a second feed.",
             "C3 the complement price is the highest price on the 0.01 tick "
             "that keeps the fee-inclusive combined pair cost at or below "
             "$0.96 per share, and that is also at or below the same-side "
@@ -714,15 +757,24 @@ DIFF: Dict[str, Any] = {
     },
 
     "timing_authority": {
-        "authority": "websocket_strict",
-        "module": "src/l5_clob_ws.py",
-        "endpoint": "wss://ws-subscriptions-clob.polymarket.com/ws/market",
-        "both_tokens_required": True,
-        "live_verified": True,
-        "live_verified_frames": [11438, 11433],
-        "rest_role": "rest_same_second_reachability",
+        "authority": "pmus_authenticated_ws_strict",
+        "module": "src/l5_pmus_auth_book.py",
+        "venue": "polymarket_us",
+        "transport": "PMUS authenticated websocket",
+        "a_connected_two_sided_book_is_required": True,
+        "rest_role": "discovery_and_cross_check_only",
         "rest_may_order_the_tape": False,
-        "ordering_key": "recv_monotonic_ns",
+        "rest_is_sufficient_timing_authority": False,
+        "authbook_failure_may_fall_back_to_rest": False,
+        "stall_s": 10.0,
+        "resubscribe_slow_s": 30.0,
+        "stall_semantics_are_authbooks_own": True,
+        "superseded_authority": (
+            "websocket_strict over "
+            "wss://ws-subscriptions-clob.polymarket.com/ws/market, which "
+            "is POLYMARKET.COM's feed. It was correctly implemented and "
+            "live-verified on 11,438 frames, and it was still the wrong "
+            "venue's book for an order sent to api.polymarket.us."),
     },
 
     "latch": {
@@ -845,7 +897,8 @@ DIFF: Dict[str, Any] = {
         "append_only": True,
         "provenance_on_every_row": True,
         "per_eligible_attempt": [
-            "the exact live two-token websocket book state at decision time",
+            "the exact PMUS authenticated book state at decision time, "
+            "naming the slug it belongs to",
             "first-leg side, price, quantity",
             "queue/touch state: size resting AT our price and AHEAD of it",
             "submitted / acknowledged / resting timestamps",
@@ -991,21 +1044,36 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("live_provider.armed_main_is_a_bare_raise", False),
     ("live_provider.built_another_discovery_stack", False),
     ("live_provider.built_another_book_stack", False),
-    ("live_provider.series_pinned", "btc-updown-15m"),
+    ("live_provider.series_pinned", "cpc-btc-updown-15m"),
+    ("live_provider.market_identity", "slug_plus_outcome_side"),
+    ("live_provider.ctf_token_ids_are_pmus_identity", False),
     ("live_provider.windows_sequenced", 12),
+    ("live_provider.windows_are_distinct", True),
+    ("live_provider."
+     "an_already_consumed_window_start_can_be_reopened", False),
+    ("live_provider.a_window_whose_end_has_passed_can_be_opened", False),
     ("live_provider.degraded_snapshot_is_ever_returned", False),
+    ("live_provider.timing_authority", "pmus_authenticated_ws_strict"),
     ("live_provider.rest_is_sufficient_timing_authority", False),
-    ("live_provider.derived_complement_is_a_second_token", False),
-    ("live_book.price_change_carries_a_top_level_asset_id", False),
-    ("live_book.best_bid_ask_read_directly_from_the_entry", True),
-    ("live_book.best_bid_ask_derived_from_ladder_levels", False),
-    ("live_book.frame_market_is_verified_against_the_pin", True),
-    ("live_book.a_frame_for_another_market_is_refused", True),
-    ("live_book.size_is_invented_when_absent", False),
-    ("live_book.staleness_is_per_token_book_update", True),
-    ("live_book.staleness_depends_on_silence_alone", False),
-    ("live_book.complement_is_derived_from_the_other_token", False),
-    ("live_book.tested_against_real_captured_frames", True),
+    ("live_provider.rest_role", "discovery_and_cross_check_only"),
+    ("live_provider.authbook_failure_may_fall_back_to_rest", False),
+    ("live_provider.derived_complement_is_a_second_feed", False),
+    ("live_provider.derived_complement_is_the_venue_convention", True),
+    ("decision_feed.collector", "src.l5_pmus_auth_book"),
+    ("decision_feed.collector_is_vendored_or_reimplemented", False),
+    ("decision_feed.ctf_token_ids_used", False),
+    ("decision_feed.a_snapshot_requires_a_connected_two_sided_book", True),
+    ("decision_feed.source_must_be_the_authenticated_ws", True),
+    ("decision_feed.a_rest_sourced_snapshot_is_refused", True),
+    ("decision_feed.staleness_is_the_authenticated_stream_age", True),
+    ("decision_feed.staleness_depends_on_silence_alone", False),
+    ("decision_feed."
+     "complement_is_the_arithmetic_complement_of_the_same_book", True),
+    ("decision_feed.complement_is_a_second_feed", False),
+    ("decision_feed.size_is_invented_when_absent", False),
+    ("decision_feed.a_book_for_another_slug_is_refused", True),
+    ("decision_feed.stall_and_resubscribe_semantics_are_authbooks_own",
+     True),
     ("cohort_authorization.slug_check_deleted", False),
     ("cohort_authorization.is_stricter_than_one_static_slug", True),
     ("cohort_authorization.complement_may_select_its_own_market", False),
@@ -1036,7 +1104,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
       "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
       "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
-      "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60"]),
+      "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
+      "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486"]),
     ("entrypoint.module", "scripts.l5_e1_cohort_run"),
     ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
     ("entrypoint.cohort_driver",
@@ -1056,8 +1125,10 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("pair_cost.fee_inclusive", True),
     ("pair_cost.fee_schedule_fingerprint", FEE_SCHEDULE_FINGERPRINT),
     ("pair_cost.a_pair_above_the_ceiling_is_REFUSED_not_discounted", True),
-    ("timing_authority.authority", "websocket_strict"),
-    ("timing_authority.both_tokens_required", True),
+    ("timing_authority.authority", "pmus_authenticated_ws_strict"),
+    ("timing_authority.a_connected_two_sided_book_is_required", True),
+    ("timing_authority.rest_is_sufficient_timing_authority", False),
+    ("timing_authority.authbook_failure_may_fall_back_to_rest", False),
     ("timing_authority.rest_may_order_the_tape", False),
     ("latch.kind", "BOUNDED_COUNT_NAMED_SLOTS"),
     ("latch.slots_per_window", 20),
@@ -1133,7 +1204,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486"
+    "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

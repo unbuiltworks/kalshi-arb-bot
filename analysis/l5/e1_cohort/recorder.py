@@ -59,7 +59,11 @@ VENUE_MONEY_SOURCES = ("venue_fill_report", "venue_fee_statement",
                        "venue_rebate_credit", "venue_settlement_statement",
                        "venue_balance_statement_with_source_identity")
 
-TIMING_WEBSOCKET = "websocket_strict"
+#: PMUS's OWN authenticated book is the only acceptable timing authority.
+#: It was "websocket_strict" (Polymarket.com's CLOB) until E1's identity
+#: was corrected: a feed for a venue we do not trade cannot time our
+#: orders, which is how "Market not found" reached production.
+TIMING_WEBSOCKET = "pmus_authenticated_ws_strict"
 TIMING_REST = "rest_same_second_reachability"
 
 
@@ -153,17 +157,27 @@ class Recorder:
                 "the decision-time book state must carry "
                 "timing_authority=%r. REST is reachability only and may "
                 "never order the tape." % TIMING_WEBSOCKET)
-        if not ws_state.get("both_tokens_streaming"):
+        # THE PMUS EQUIVALENT OF THE OLD BOTH-TOKENS GATE. Polymarket.com
+        # had two token books, so "both streaming" was the condition. PMUS
+        # quotes ONE book per market and derives the other side
+        # arithmetically, so the condition is that the AUTHENTICATED book
+        # for the PINNED MARKET is streaming. Nothing is relaxed: there is
+        # no second feed to be streaming.
+        if not ws_state.get("pinned_market_streaming"):
             raise RecorderRefused(
-                "an attempt may not be recorded without both tokens "
-                "streaming on the live two-token websocket")
+                "an attempt may not be recorded without the PMUS "
+                "authenticated book for the pinned market streaming")
+        if ws_state.get("rest_is_sufficient_timing_authority") is True:
+            raise RecorderRefused(
+                "an attempt may not be recorded against a book state that "
+                "claims REST is sufficient timing authority")
         row = envelope(kind="attempt")
         row.update({
             "window": window,
             "slot": slot,
             "market": market,
             "label": label,
-            # the exact live two-token websocket state at decision time
+            # the exact PMUS authenticated book state at decision time
             "ws_state_at_decision": dict(ws_state),
             # side, price, quantity
             "first_leg": dict(first_leg),

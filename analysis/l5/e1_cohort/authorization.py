@@ -21,7 +21,7 @@ THE FIX: TWO BOUNDARIES INSTEAD OF ONE, BOTH NARROWER THAN THE ORIGINAL.
   2. PER-SUBMISSION BOUNDARY. Immediately before EVERY first-leg
      submission, the specific RESOLVED slug is enforced against the pin for
      that window. Not the series, not the session ledger -- the exact slug
-     and both exact token ids.
+     and both exact PMUS outcome sides.
 
 Together these are STRICTER than one static slug: the original authorized
 one slug for an unbounded number of orders, and this authorizes one series
@@ -43,7 +43,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 from analysis.l5.e1_cohort import arming as A
-from analysis.l5.e1_cohort import selector as SEL
+from analysis.l5.e1_cohort import pmus_identity as PI
+from analysis.l5.e1_cohort import pmus_selector as SEL
 
 GATE_EVIDENCE_ENV = "PMUS_E1_GATE_EVIDENCE"
 
@@ -135,12 +136,25 @@ class SessionAuthorization:
             raise NotAuthorized(
                 "pin names series %r, not the authorized %r"
                 % (pin.get("series"), AUTHORIZED_SERIES))
-        SEL._check_series(pin.get("slug"), pin.get("window_start"))
+        # PMUS IDENTITY, ASSERTED. A Polymarket.com slug cannot be
+        # authorized here: `assert_pmus_slug` refuses anything that is not
+        # cpc-btc-updown-15m-YYYY-MM-DD-HHMMz, which is what the venue
+        # answered "Market not found" about.
+        try:
+            PI.assert_pmus_slug(pin.get("slug"))
+        except ValueError as exc:
+            raise NotAuthorized(str(exc)) from None
+        if PI.slug_start(str(pin["slug"])) != int(pin["window_start"]):
+            raise NotAuthorized(
+                "slug %r does not name window %s" % (pin.get("slug"),
+                                                     pin.get("window_start")))
         row = {"session_id": self.session_id,
                "slug": str(pin["slug"]),
                "market_id": str(pin["market_id"]),
-               "token_up": str(pin["token_up"]),
-               "token_down": str(pin["token_down"]),
+               "outcome_up": str(pin["outcome_up"]),
+               "outcome_down": str(pin["outcome_down"]),
+               "identity": "slug_plus_outcome_side",
+               "ctf_token_ids_used": False,
                "window_start": int(pin["window_start"]),
                "series": AUTHORIZED_SERIES,
                "selection_provenance": pin.get("selection_provenance"),
@@ -165,15 +179,25 @@ class SessionAuthorization:
 
     # --------------------------------------------- boundary 2, per submit
     def enforce_before_submission(self, *, slug: str, pin: Dict[str, Any],
-                                  token_up: Optional[str] = None,
-                                  token_down: Optional[str] = None,
+                                  outcome_up: Optional[str] = None,
+                                  outcome_down: Optional[str] = None,
                                   role: str = "first_leg") -> Dict[str, Any]:
         """Boundary 2. Called immediately before EVERY submission.
 
-        Enforces the SPECIFIC RESOLVED SLUG and both token ids against the
-        pin for this window, and requires that slug to be one this session
-        authorized. Fails CLOSED on every mismatch.
+        Enforces the SPECIFIC RESOLVED PMUS SLUG and both outcome sides
+        against the pin for this window, and requires that slug to be one
+        this session authorized. Fails CLOSED on every mismatch.
+
+        TOKEN IDS ARE GONE FROM THIS BOUNDARY, because a PMUS order has
+        none: it names a marketSlug and an outcomeSide. Checking a CTF
+        token id here would be checking a Polymarket.com fact about a
+        Polymarket US order, which is precisely the defect that produced
+        "Market not found".
         """
+        try:
+            PI.assert_pmus_slug(slug)
+        except ValueError as exc:
+            raise NotAuthorized(str(exc)) from None
         if not SEL.is_selected_slug(slug, pin):
             raise NotAuthorized(
                 "slug %r is not the pinned market for this window (%r). "
@@ -186,11 +210,12 @@ class SessionAuthorization:
         known = self._pins[str(slug)]
         for name, got, want in (("market_id", pin.get("market_id"),
                                  known["market_id"]),
-                                ("token_up", token_up or pin.get("token_up"),
-                                 known["token_up"]),
-                                ("token_down",
-                                 token_down or pin.get("token_down"),
-                                 known["token_down"])):
+                                ("outcome_up",
+                                 outcome_up or pin.get("outcome_up"),
+                                 known["outcome_up"]),
+                                ("outcome_down",
+                                 outcome_down or pin.get("outcome_down"),
+                                 known["outcome_down"])):
             if str(got) != str(want):
                 raise NotAuthorized(
                     "%s mismatch for %s: %r is not the authorized %r. "
@@ -202,16 +227,18 @@ class SessionAuthorization:
             raise NotAuthorized("E1 is no longer armed")
         return {"ok": True, "slug": str(slug), "role": role,
                 "market_id": known["market_id"],
-                "token_up": known["token_up"],
-                "token_down": known["token_down"],
+                "outcome_up": known["outcome_up"],
+                "outcome_down": known["outcome_down"],
+                "identity": "slug_plus_outcome_side",
+                "ctf_token_ids_used": False,
                 "authorization_result": "AUTHORIZED_FOR_SUBMISSION",
                 "checked_at_unix": time.time(),
-                "boundary": "PER_SUBMISSION_EXACT_SLUG_AND_TOKENS"}
+                "boundary": "PER_SUBMISSION_EXACT_SLUG_AND_OUTCOMES"}
 
     def authorize_complement(self, *, slug: str,
                              first_leg_pin: Dict[str, Any],
-                             token_up: Optional[str] = None,
-                             token_down: Optional[str] = None
+                             outcome_up: Optional[str] = None,
+                             outcome_down: Optional[str] = None
                              ) -> Dict[str, Any]:
         """A complement may ONLY belong to the already-authorized first-leg
         market. It cannot independently select another."""
@@ -221,8 +248,8 @@ class SessionAuthorization:
                 "first-leg market %r, not %r. The complement path cannot "
                 "select a market." % (first_leg_pin.get("slug"), slug))
         out = self.enforce_before_submission(
-            slug=slug, pin=first_leg_pin, token_up=token_up,
-            token_down=token_down, role="complement")
+            slug=slug, pin=first_leg_pin, outcome_up=outcome_up,
+            outcome_down=outcome_down, role="complement")
         out["inherits_first_leg_authorization"] = True
         out["complement_selected_its_own_market"] = False
         return out

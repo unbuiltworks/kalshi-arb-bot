@@ -51,26 +51,48 @@ WORKDIR /app
 RUN pip install --no-cache-dir cryptography==49.0.0
 
 COPY src/__init__.py              src/__init__.py
-COPY src/l5_book_shadow.py        src/l5_book_shadow.py
-COPY src/l5_clob_ws.py            src/l5_clob_ws.py
-COPY src/l5_market_binding.py     src/l5_market_binding.py
 COPY src/l5_order_body.py         src/l5_order_body.py
 COPY src/l5_preview_gate.py       src/l5_preview_gate.py
 COPY src/pmus_auth.py             src/pmus_auth.py
-# PMUS-NATIVE MARKET IDENTITY. `l5_pmus_transport` carries the proven
-# BTC15m slug regex and `resolve_market`, which already knows that
-# /v1/market/slug/ 404s for these windows while /v1/events/slug/ serves
-# them. Its closure adds these four files and NO order-capable executor --
-# it imports `pmus_auth` (GET-only), not `pmus_q1_executor`. Checked
-# deliberately: importing `src.l5_pmus_auth_book` instead would drag in
-# EIGHTEEN files including pmus_q1_executor's place_limit_buy and
-# run_campaign, putting a second armed execution stack in this image.
+# PMUS-NATIVE MARKET IDENTITY AND DECISION FEED. `l5_pmus_transport`
+# carries the proven BTC15m slug regex and `resolve_market`, which already
+# knows that /v1/market/slug/ 404s for these windows while /v1/events/slug/
+# serves them. `l5_pmus_auth_book` is the proven AUTHENTICATED book -- the
+# only decision feed PMUS has -- and it is reused UNMODIFIED rather than
+# re-implemented.
+#
+# ITS CLOSURE DRAGS IN pmus_q1_executor, DELIBERATELY ACCEPTED. That module
+# can place and cancel orders, so a second order-capable stack is present
+# in this image. Two things make it unreachable rather than merely unused:
+# importing it performs no network, order, cancel or campaign action (tests
+# prove it, statically and by import), and E1 REFUSES TO BOOT if any
+# PMUS_Q1_* live/arming authorization is present in the environment
+# (`arming.assert_no_foreign_executor_authorization`). E1 calls nothing in
+# it; only E1's own named latch and order path is reachable.
 COPY src/l5_pmus_transport.py     src/l5_pmus_transport.py
 COPY src/l5_live_execution.py     src/l5_live_execution.py
 COPY src/l5_faithful_translation.py  src/l5_faithful_translation.py
 COPY src/l5_execution_translations.py  src/l5_execution_translations.py
 COPY src/pmus_fee_schedule.py     src/pmus_fee_schedule.py
 COPY src/pmus_fees.py             src/pmus_fees.py
+COPY src/l5_pmus_auth_book.py  src/l5_pmus_auth_book.py
+COPY src/l5_shadow_scoring.py  src/l5_shadow_scoring.py
+COPY src/l5_venue_adapter.py  src/l5_venue_adapter.py
+COPY src/pmus_l5_action_shadow.py  src/pmus_l5_action_shadow.py
+COPY src/pmus_l5_fidelity_live.py  src/pmus_l5_fidelity_live.py
+COPY src/pmus_l5_multi_shadow.py  src/pmus_l5_multi_shadow.py
+COPY src/pmus_l5_persistence_v2.py  src/pmus_l5_persistence_v2.py
+COPY src/pmus_priority_queue.py  src/pmus_priority_queue.py
+COPY src/pmus_q1_executor.py  src/pmus_q1_executor.py
+COPY src/pmus_sports_collector.py  src/pmus_sports_collector.py
+COPY src/pmus_sports_l5_decision.py  src/pmus_sports_l5_decision.py
+COPY src/pmus_status_report.py  src/pmus_status_report.py
+COPY src/pmus_ws_evidence_recorder.py  src/pmus_ws_evidence_recorder.py
+COPY src/polymarket_l5/__init__.py  src/polymarket_l5/__init__.py
+COPY src/polymarket_l5/action_model.py  src/polymarket_l5/action_model.py
+COPY src/polymarket_l5/action_model_v2.py  src/polymarket_l5/action_model_v2.py
+COPY src/polymarket_l5/config.py  src/polymarket_l5/config.py
+COPY src/polymarket_l5/transfer_backtest.py  src/polymarket_l5/transfer_backtest.py
 
 COPY analysis/l5/e1_cohort/       analysis/l5/e1_cohort/
 COPY analysis/l5/live_exec/       analysis/l5/live_exec/

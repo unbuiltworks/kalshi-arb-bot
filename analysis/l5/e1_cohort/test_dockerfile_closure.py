@@ -136,11 +136,26 @@ def test_dockerfile_copies_every_imported_module():
     )
 
 
-def test_market_binding_regression():
-    """The exact module whose absence failed deployment d05d30b4."""
+def test_the_pmus_identity_and_book_modules_are_in_the_image():
+    """The PMUS-native replacement for the market-binding regression.
+
+    `src/l5_market_binding.py` was the module whose absence failed
+    deployment d05d30b4, and it is a POLYMARKET.COM module: E1 no longer
+    imports it, so pinning it here would pin a dependency the production
+    path does not have. The modules that must now be present are the PMUS
+    ones the decision path actually imports.
+    """
     closure = import_closure()
-    assert "src/l5_market_binding.py" in closure
-    assert _is_covered("src/l5_market_binding.py", copied_prefixes())
+    prefixes = copied_prefixes()
+    for mod in ("src/l5_pmus_transport.py",        # identity / resolution
+                "src/l5_pmus_auth_book.py",        # the decision feed
+                "src/pmus_auth.py"):               # signing
+        assert mod in closure, mod
+        assert _is_covered(mod, prefixes), mod
+    # and the Polymarket.com venue modules are GONE from the closure
+    for gone in ("src/l5_market_binding.py", "src/l5_clob_ws.py",
+                 "src/l5_book_shadow.py"):
+        assert gone not in closure, gone
 
 
 def test_namespace_packages_are_created():

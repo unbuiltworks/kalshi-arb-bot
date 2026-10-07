@@ -1,23 +1,22 @@
 """Keep the suite fast without weakening the production readiness bound.
 
-The live readiness wait is 20s by design. Pre-existing tests drive a feed
-that is never ready and assert an immediate refusal, so with the real bound
-each of them would sit for 20s and the suite would take an hour.
+The live readiness wait is 20s by design. Tests drive a feed that is never
+ready and assert an immediate refusal, so with the real bound each of them
+would sit for 20s and the suite would take an hour.
 
 So the BOUND is shrunk for tests, and only the bound. The readiness
-SEQUENCING -- start, poll, require frames for both exact token ids, verify
-freshness, classify the timeout -- is the production code either way, and
-the tests that care about sequencing pass their own explicit values rather
-than relying on this.
+SEQUENCING -- start the PMUS book, poll until THIS slug's book is
+connected, two-sided and fresh, classify the timeout as a feed failure
+rather than a market refusal -- is the production code either way.
 
-`provider` reads these two module values at CALL time precisely so this
-fixture can work without a default argument freezing them at import.
+`pmus_provider` reads these two module values at CALL time precisely so
+this fixture can work without a default argument freezing them at import.
 """
 from __future__ import annotations
 
 import pytest
 
-from analysis.l5.e1_cohort import provider as P
+from analysis.l5.e1_cohort import pmus_provider as P
 
 #: the real production values, asserted below so this file cannot quietly
 #: become the reason a shipped build waits the wrong amount of time.

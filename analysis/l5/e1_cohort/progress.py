@@ -112,16 +112,30 @@ class CohortProgress:
 
     # -------------------------------------------------------------- record
     def record_window_opened(self, *, window_index: int, window_start: int,
-                             slug: str, market_id: str, token_up: str,
-                             token_down: str,
+                             slug: str, market_id: str,
+                             outcome_up: Any = None,
+                             outcome_down: Any = None,
+                             token_up: Any = None,
+                             token_down: Any = None,
                              selection_provenance: Any = None,
                              authorization_result: Any = None
                              ) -> Dict[str, Any]:
         """One DISTINCT window consumed. This is what a restart cannot
-        undo: a window opened is a window spent, forever."""
+        undo: a window opened is a window spent, forever.
+
+        IDENTITY FIELDS. `outcome_up`/`outcome_down` are PMUS's own
+        identity for a side. `token_up`/`token_down` are the CTF ids the
+        Polymarket.com era recorded; they remain accepted and default to
+        None so the EXISTING ROWS on the volume stay readable, but the
+        PMUS path writes outcomes and leaves them null. The fold reads
+        session_id, event, slug and window_start, none of which moved.
+        """
         return self._append(EV_WINDOW_OPENED, window_index=window_index,
                             window_start=window_start, slug=slug,
-                            market_id=market_id, token_up=token_up,
+                            market_id=market_id,
+                            outcome_up=outcome_up,
+                            outcome_down=outcome_down,
+                            token_up=token_up,
                             token_down=token_down,
                             selection_provenance=selection_provenance,
                             authorization_result=authorization_result)

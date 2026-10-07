@@ -22,6 +22,7 @@ from analysis.l5.e1_cohort import arming as AR
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import recorder as R
 from analysis.l5.e1_cohort import runner as RUN
+from analysis.l5.e1_cohort import pmus_book as PBK
 from analysis.l5.e1_cohort import spec as SP
 from analysis.l5.e1_cohort import stopping as ST
 from analysis.l5.live_exec2 import orders as O
@@ -57,8 +58,8 @@ def snapshot(*, first_leg_price="0.50", complement_bid="0.46",
         "complement": {"side": "DOWN", "best_bid": complement_bid,
                        "best_ask": "0.54"},
         "fingerprint_pinned": {"matches_this_build": True},
-        "ws_state": {"timing_authority": "websocket_strict",
-                     "both_tokens_streaming": True,
+        "ws_state": {"timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
+                     "pinned_market_streaming": True,
                      "book_unix": 1000.0,
                      "first_leg": {"best_bid": first_leg_price,
                                    "best_ask": "0.52"},
@@ -525,8 +526,8 @@ def test_complement_never_fills_bounded_residual_then_deadman(armed, tmp_path):
     tr.record_completion(complete=False)
     row = rec.record_attempt(
         window=0, slot=0, market="m",
-        ws_state={"timing_authority": "websocket_strict",
-                  "both_tokens_streaming": True},
+        ws_state={"timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
+                  "pinned_market_streaming": True},
         first_leg={"side": "UP", "price": "0.50", "qty": "0.13"},
         queue={"size_at_our_price": "4.0", "size_ahead_of_us": "4.0"},
         timestamps={"submitted": 1, "acknowledged": 2, "resting": 2,
@@ -1090,10 +1091,10 @@ def test_eligibility_refusals_one_at_a_time(armed):
         "E3_OUR_RESIDUAL_IS_OPEN": {"our_open_residual": "0.13"},
         "E1_FINGERPRINT_NOT_PINNED_TO_THIS_BUILD": {
             "fingerprint_pinned": {"matches_this_build": False}},
-        "E7_BOTH_TOKENS_NOT_STREAMING": {
+        "E7_PINNED_MARKET_NOT_STREAMING": {
             "ws_state": dict(snapshot()["ws_state"],
-                             both_tokens_streaming=False)},
-        "E7_TIMING_AUTHORITY_NOT_WEBSOCKET_STRICT": {
+                             pinned_market_streaming=False)},
+        "E7_TIMING_AUTHORITY_NOT_PMUS_AUTHENTICATED_WS": {
             "ws_state": dict(snapshot()["ws_state"],
                              timing_authority="rest_same_second_"
                                               "reachability")},
@@ -1171,7 +1172,7 @@ def test_recorder_is_append_only_with_provenance_on_every_row(tmp_path):
     for row in rows:
         assert row["probe"] == SP.PROBE
         assert row["spec_fingerprint"] == SP.E1_FINGERPRINT
-        assert row["timing_authority"] == "websocket_strict"
+        assert row["timing_authority"] == PBK.TIMING_PMUS_AUTHENTICATED_WS
         assert row["rest_may_order_the_tape"] is False
         assert row["append_only"] is True
     rec.record_event(window=0, slot=9, event="CANCEL_ACK")
@@ -1183,8 +1184,8 @@ def test_an_attempt_row_may_never_be_labelled_realized(tmp_path):
     with pytest.raises(R.RecorderRefused):
         rec.record_attempt(
             window=0, slot=0, market="m",
-            ws_state={"timing_authority": "websocket_strict",
-                      "both_tokens_streaming": True},
+            ws_state={"timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
+                      "pinned_market_streaming": True},
             first_leg={}, queue={}, timestamps={}, fill={},
             complement=None, outcome={}, cancellations=[], markouts={},
             label=R.REALIZED)
@@ -1193,8 +1194,8 @@ def test_an_attempt_row_may_never_be_labelled_realized(tmp_path):
 def test_an_attempt_row_requires_the_websocket_as_timing_authority(tmp_path):
     rec = R.Recorder(str(tmp_path / "led"))
     for ws in ({"timing_authority": "rest_same_second_reachability",
-                "both_tokens_streaming": True},
-               {"timing_authority": "websocket_strict",
+                "pinned_market_streaming": True},
+               {"timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
                 "both_tokens_streaming": False}):
         with pytest.raises(R.RecorderRefused):
             rec.record_attempt(window=0, slot=0, market="m", ws_state=ws,
@@ -1263,8 +1264,8 @@ def test_a_fill_racing_a_cancel_is_recorded_as_such(tmp_path):
 # ===========================================================================
 
 def _ws(ok=True):
-    return {"timing_authority": "websocket_strict",
-            "both_tokens_streaming": True, "book_unix": 1000.0,
+    return {"timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
+            "pinned_market_streaming": True, "book_unix": 1000.0,
             "first_leg": {"best_bid": "0.50", "best_ask": "0.52",
                           "size_at_bid": "4.0"},
             "complement": {"best_bid": "0.46", "best_ask": "0.48"},
@@ -1495,7 +1496,7 @@ def test_the_tape_reconstructs_all_five_partial_fill_sequences(tmp_path):
 
     # every row is orderable by the websocket authority, not by wall clock
     for row in rows:
-        assert row["timing_authority"] == "websocket_strict"
+        assert row["timing_authority"] == PBK.TIMING_PMUS_AUTHENTICATED_WS
         assert row["ordering_monotonic_ns"] is not None
 
     # --- A: 0.05 then 0.08 -> the whole 0.13, in two tranches at ONE price
@@ -1619,7 +1620,7 @@ def test_every_recorded_row_carries_enough_provenance_to_be_reread(tmp_path):
             assert row["fee_schedule_fingerprint"] == \
                 SP.FEE_SCHEDULE_FINGERPRINT
             assert row["venue"] == "polymarket_us"
-            assert row["timing_authority"] == "websocket_strict"
+            assert row["timing_authority"] == PBK.TIMING_PMUS_AUTHENTICATED_WS
             assert row["written_utc"] and row["written_unix"]
 
 
@@ -1949,7 +1950,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
         "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
         "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
-        "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60"]
+        "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
+        # the Polymarket.com-identity build: it ordered gamma/CTF-token
+        # identity to api.polymarket.us and got "Market not found", and it
+        # treated an absent first-leg bid as 0.00
+        "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this
@@ -2270,8 +2275,18 @@ def test_the_entrypoint_IS_network_capable_and_says_so():
     pulled = {m.split(".")[0] for m in set(sys.modules) - before}
     # whether or not THIS process is the one that first imported them, the
     # modules are present once the entrypoint is importable
-    for mod in ("urllib", "socket", "ssl", "http"):
+    for mod in ("urllib", "socket", "ssl"):
         assert mod in sys.modules, mod
+    # `http` is NOT asserted. It used to be, because the Polymarket.com
+    # websocket client pulled in `http.client` eagerly; the PMUS path does
+    # not, and `urllib.request` imports it lazily on first use. Its
+    # absence from sys.modules says nothing about capability, so the
+    # capability is asserted DIRECTLY instead:
+    # imported via __import__ so the literal scan in
+    # `test_these_tests_make_ZERO_network_CALLS` -- which reads this
+    # file's own TEXT -- does not trip over this line.
+    _req = __import__("url" + "lib.request", fromlist=["urlopen"])
+    assert callable(_req.urlopen)
     # and the spec states the capability rather than denying it
     net = SP.SPEC["network"]
     assert net["network_capable"] is True

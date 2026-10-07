@@ -38,8 +38,11 @@ WHAT IT REUSES AND DOES NOT DUPLICATE
   0.13. `e1_preflight()` below is E1's own refusal set; it is a SUPERSET of
   the shared one on every check the two share, and it never relaxes one.
   Nothing in `live_exec2` is edited to accommodate E1.
-* `src.l5_clob_ws` is the timing authority. REST is reachability only and
-  may never order the tape.
+* `src.l5_pmus_auth_book` (via `pmus_book`) is the timing authority: PMUS's
+  OWN authenticated book for the PMUS slug being ordered. PMUS REST is
+  discovery and cross-check only and may never order the tape. The
+  Polymarket.com CLOB websocket is NOT in this path -- it timed a venue
+  E1 does not trade, which is how "Market not found" happened.
 * `src.pmus_fee_schedule` is the fee source. Fees in the PAIR-COST GATE are
   modelled-forward and labelled so; fees in the LEDGER are the venue's own
   reported numbers and nothing else.
@@ -68,7 +71,7 @@ from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         diff_report)
 from analysis.l5.e1_cohort.stopping import CohortTracker, project_feasibility
 from analysis.l5.live_exec2 import orders as O
-from src import l5_clob_ws as WS
+from analysis.l5.e1_cohort import pmus_book as PBK
 from src import l5_preview_gate as G
 from src import pmus_fee_schedule as FEE
 
@@ -278,11 +281,21 @@ def complement_tranche(*, cumulative_first_leg_filled_qty: Any,
 # -------------------------------------------------------------- eligibility
 
 def _ws_ok(ws: Mapping[str, Any], *, now: float) -> list:
+    """E7: the decision feed must be the PMUS authenticated websocket, for
+    the pinned market, fresh, and two-sided on both outcome sides.
+
+    `both_tokens_streaming` is gone with the CTF tokens. PMUS quotes a
+    market ONCE; the question is whether THAT market's book is streaming.
+    """
     bad = []
-    if ws.get("timing_authority") != WS.TIMING_WEBSOCKET:
-        bad.append("TIMING_AUTHORITY_NOT_WEBSOCKET_STRICT")
-    if not ws.get("both_tokens_streaming"):
-        bad.append("BOTH_TOKENS_NOT_STREAMING")
+    if ws.get("timing_authority") != PBK.TIMING_PMUS_AUTHENTICATED_WS:
+        bad.append("TIMING_AUTHORITY_NOT_PMUS_AUTHENTICATED_WS")
+    if not ws.get("pinned_market_streaming"):
+        bad.append("PINNED_MARKET_NOT_STREAMING")
+    if ws.get("rest_is_sufficient_timing_authority") is True:
+        bad.append("REST_CLAIMED_AS_TIMING_AUTHORITY")
+    if ws.get("ctf_token_ids_used") is True:
+        bad.append("CTF_TOKEN_IDS_IN_THE_DECISION_PATH")
     t = ws.get("book_unix")
     if t is None:
         bad.append("BOOK_HAS_NO_TIMESTAMP")
@@ -669,8 +682,9 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     if session_auth is not None:
         auth_result = session_auth.enforce_before_submission(
             slug=slug, pin=snapshot.get("pin") or {},
-            token_up=(snapshot.get("first_leg") or {}).get("token_id"),
-            token_down=(snapshot.get("complement") or {}).get("token_id"),
+            outcome_up=(snapshot.get("first_leg") or {}).get("outcome_side"),
+            outcome_down=(snapshot.get("complement")
+                          or {}).get("outcome_side"),
             role="first_leg")
     side = snapshot["first_leg"]["side"]
     price = snapshot["first_leg_price"]
@@ -764,8 +778,9 @@ def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
         comp_auth = session_auth.authorize_complement(
             slug=snapshot["market"],
             first_leg_pin=snapshot.get("pin") or {},
-            token_up=(snapshot.get("first_leg") or {}).get("token_id"),
-            token_down=(snapshot.get("complement") or {}).get("token_id"))
+            outcome_up=(snapshot.get("first_leg") or {}).get("outcome_side"),
+            outcome_down=(snapshot.get("complement")
+                          or {}).get("outcome_side"))
     holder: Dict[str, Any] = {}
 
     def _take_slot() -> Dict[str, Any]:
@@ -863,20 +878,24 @@ def preview_rejection_record(snapshot: Mapping[str, Any],
         "request_method": detail.get("method"),
         "request_path": detail.get("path"),
         "sent_envelope_key": detail.get("sent_envelope_key"),
-        # ---- market and token identity
+        # ---- PMUS market identity: slug + outcome sides. NO TOKEN IDS,
+        # because a PMUS order carries none. `token_up`/`token_down` stay
+        # in the record as explicit nulls so a reader of the mixed tape
+        # can tell "no token was used" from "the field is missing".
         "slug": snapshot.get("market"),
-        "market_id": pin.get("market_id") or pin.get("condition_id"),
+        "market_id": pin.get("market_id"),
         "window_start": pin.get("window_start"),
         "window_end": pin.get("window_end"),
-        "token_up": str(pin.get("token_up")) if pin.get("token_up")
-                    is not None else None,
-        "token_down": str(pin.get("token_down")) if pin.get("token_down")
-                      is not None else None,
+        "outcome_up": pin.get("outcome_up"),
+        "outcome_down": pin.get("outcome_down"),
+        "identity": "slug_plus_outcome_side",
+        "ctf_token_ids_used": False,
+        "token_up": None,
+        "token_down": None,
         # ---- what E1 decided, BEFORE serialization
         "e1_outcome_side": fl.get("side"),
-        "e1_first_leg_token_id": (str(fl.get("token_id"))
-                                  if fl.get("token_id") is not None
-                                  else None),
+        "e1_first_leg_outcome_side": fl.get("outcome_side"),
+        "e1_first_leg_token_id": None,
         "e1_complement_side": cp.get("side"),
         "e1_price_local": str(snapshot.get("first_leg_price")),
         "e1_qty_local": str(snapshot.get("qty", FIRST_LEG_QTY)),
@@ -1116,12 +1135,14 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
 
 def _default_provider_factory(*, progress: Any, session_auth: Any,
                               recorder: Any) -> Any:
-    """The production provider. Imported lazily so the DISARMED path does
-    not construct a book client at all."""
-    from analysis.l5.e1_cohort.provider import LiveWindowProvider
-    from analysis.l5.e1_cohort.live_book import book_fn, health_fn
-    return LiveWindowProvider(progress=progress, session_auth=session_auth,
-                              book_fn=book_fn, health_fn=health_fn,
+    """The production provider: PMUS identity, PMUS's own book.
+
+    Imported lazily so the DISARMED path constructs no feed at all. The
+    Polymarket.com two-token CLOB provider it replaces is gone from this
+    package -- it proved freshness on a venue E1 does not trade.
+    """
+    from analysis.l5.e1_cohort.pmus_provider import PmusWindowProvider
+    return PmusWindowProvider(progress=progress, session_auth=session_auth,
                               recorder=recorder)
 
 
@@ -1262,7 +1283,7 @@ def boot() -> Dict[str, Any]:
                   "NOTE": ("read with latch.cohort_state() once the owner "
                            "has set a session id")},
         "fee_schedule_fingerprint": FEE.FINGERPRINT,
-        "timing_authority": WS.TIMING_WEBSOCKET,
+        "timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
         "AUTHORIZATION": "NOT AUTHORIZED. NOT ARMED. NO OWNER VALUE SET.",
         "NO_ORDER_WILL_BE_PLACED": True,
     })
