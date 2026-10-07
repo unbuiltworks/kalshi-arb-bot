@@ -626,6 +626,25 @@ def summarize(rows: List[Dict[str, Any]], params: Params,
         return cluster_bootstrap({k: v for k, v in d.items() if v[1]},
                                  2000, 20260821)
 
+    l1w = [r["leg1_wait_s"] for r in filled1
+           if r["leg1_wait_s"] is not None]
+    matched = [r for r in filled1 if r["pair_verdict"] == "MATCHED_PROVABLE"]
+    mcost = [r["pair_cost_maker"] for r in matched
+             if r.get("leg2_maker_bucket") == "WOULD_FILL"]
+    # Historical-replay expectancy per provable-first-leg state. A matched
+    # pair locks (1 - pair cost) per contract; an unmatched first leg is
+    # valued at settlement. THIS IS REPLAY, NOT REALIZED, NOT SHADOW.
+    exp = []
+    for r in filled1:
+        if r["pair_verdict"] == "MATCHED_PROVABLE":
+            c = r.get("pair_cost_taker_fee_incl")
+            if r.get("leg2_maker_bucket") == "WOULD_FILL":
+                c = r["pair_cost_maker"]
+            if c is None:
+                continue
+            exp.append((1.0 - c) * params.qty)
+        elif r.get("residual_settle_pnl_usd") is not None:
+            exp.append(r["residual_settle_pnl_usd"])
     res_wait = [r["leg2_maker_wait_s"] for r in filled1
                 if r.get("leg2_maker_bucket") == "WOULD_FILL"
                 and r.get("leg2_maker_wait_s") is not None]
@@ -670,6 +689,32 @@ def summarize(rows: List[Dict[str, Any]], params: Params,
             "NOTE": ("this subset is the LEVEL_CONSUMED adverse-selected "
                      "subset documented in analysis/l5/august_replay/"
                      "S2_FINDINGS.md section 2, NOT a representative sample"),
+        },
+        "leg1_time_to_level_consumed_s": {
+            "n": len(l1w), "p50": q(l1w, .5), "p75": q(l1w, .75),
+            "p90": q(l1w, .9), "p99": q(l1w, .99),
+            "max": round(max(l1w), 2) if l1w else None,
+            "NOTE": ("how long the horizon had to run before the touch fell "
+                     "through our price. A long tail here means WOULD_FILL "
+                     "is being earned by HORIZON LENGTH, i.e. by the market "
+                     "moving against us, which is the LEVEL_CONSUMED bias "
+                     "itself and not a benign maker fill."),
+        },
+        "matched_pair_cost_maker_leg2": {
+            "n": len(mcost), "p50": q(mcost, .5), "p05": q(mcost, .05),
+            "p95": q(mcost, .95),
+            "max": round(max(mcost), 4) if mcost else None,
+            "all_at_or_below_ceiling": (max(mcost) <= params.pair_cost_ceiling
+                                        + 1e-9) if mcost else None,
+        },
+        "replay_expectancy_per_provable_first_leg_usd": {
+            "n": len(exp),
+            "mean": round(sum(exp) / len(exp), 6) if exp else None,
+            "total": round(sum(exp), 4) if exp else None,
+            "LABEL": "HISTORICAL_REPLAY_ONLY_NOT_REALIZED_NOT_SHADOW",
+            "NOTE": ("computed over the adverse-selected provable subset "
+                     "only; the UNKNOWABLE states carry no expectancy "
+                     "estimate and are NOT imputed."),
         },
         "residual_persistence_s_maker_complement": {
             "n": len(res_wait), "p50": q(res_wait, .5), "p75": q(res_wait, .75),
