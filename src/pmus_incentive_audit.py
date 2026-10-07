@@ -40,11 +40,29 @@ TRADE_TYPES = ("ACTIVITY_TYPE_TRADE", "ACTIVITY_TYPE_POSITION_RESOLUTION",
                "ACTIVITY_TYPE_ACCOUNT_DEPOSIT", "ACTIVITY_TYPE_ACCOUNT_WITHDRAWAL")
 CREDIT_WORDS = ("REBATE", "REWARD", "INCENTIVE", "CREDIT", "BONUS", "REFERRAL")
 FEE_WORDS = ("fee", "rebate", "commission", "reward", "incentive", "credit")
-# docs.polymarket.us/fees: taker 0.06 * C * p * (1-p); maker rebate
-# 0.0125 * C * p * (1-p) credited at fill; fees rounded to the nearest
-# cent, banker's rounding; small trades round to $0.00
-TAKER_RATE = D("0.06")
-MAKER_REBATE_RATE = D("0.0125")
+# docs.polymarket.us/fees: fee = theta * C * p * (1-p), rounded to the
+# nearest cent with banker's rounding; small trades round to $0.00.
+#
+# ACCOUNTING CORRECTION (separately fingerprinted). `TAKER_RATE = D("0.06")`
+# used to live here as a scalar and was stale: PMUS republished the taker
+# coefficient at 0.0695. A scalar is also the wrong shape, because this
+# account's fill corpus straddles the change and a straddling corpus cannot
+# be priced by one number. The schedule is therefore EFFECTIVE-DATED and
+# FROZEN in `src/pmus_fee_schedule.py` (sha256
+# ecc240bd...1629, `assert_frozen()`), and a fill is priced by the schedule
+# in force AT ITS OWN TIMESTAMP via `fee_schedule.price_fill`.
+#
+# THE MAKER COEFFICIENT DID NOT MOVE (-0.0125 before and after), so NO
+# maker-rebate figure in this module changes: not the credited $9.14, not
+# `estimated_rebate_on_our_fills`, not the 1.62-share cent floor. The
+# correction affects TAKER cost accounting only, and this account is
+# maker-only by owner rule. See
+# analysis/l5/incentives/FEE_SCHEDULE_CORRECTION.md.
+from src import pmus_fee_schedule as fee_schedule
+
+fee_schedule.assert_frozen()
+#: time-invariant across every schedule entry, which the frozen object asserts
+MAKER_REBATE_RATE = fee_schedule.maker_theta()
 CENT = D("0.01")
 # every reward row must reach the log: attribution of a payout to its markets
 # is impossible from a truncated list, and Railway splits at 80 KiB which the
@@ -706,8 +724,27 @@ def incentive_audit(t: q1.Transport) -> dict:
         "rebate_at_our_size": rebate_at(D("0.02"), typical),
         "rebate_at_l5_p50_size": rebate_at(D("10"), typical),
         "min_shares_for_one_cent_rebate_at_p0.45": min_qty_for_nonzero_rebate(typical),
-        "taker_fee_at_l5_p50_size": str(_cents(TAKER_RATE * D("10") * typical * (D(1) - typical))),
-        "source": "docs.polymarket.us/fees: 0.06 / 0.0125 * C * p * (1-p), banker's rounding to the cent",
+        # EFFECTIVE-DATED, both eras shown: one scalar cannot describe a
+        # corpus that straddles the 2026-09-17 taker change, and quoting
+        # only "now" would silently re-rate older evidence.
+        "taker_fee_at_l5_p50_size": str(
+            fee_schedule.taker_fee(typical, D("10"), cents=True)),
+        "taker_fee_at_l5_p50_size_by_schedule": {
+            e["effective_from_utc"]: {
+                "taker_theta": e["taker_theta"],
+                "maker_rebate_theta": e["maker_rebate_theta"],
+                "taker_fee_usd": str(fee_schedule.taker_fee(
+                    typical, D("10"),
+                    when=fee_schedule.parse_ts(e["effective_from_utc"]),
+                    cents=True)),
+                "maker_rebate_usd": str(fee_schedule.maker_rebate(
+                    typical, D("10"),
+                    when=fee_schedule.parse_ts(e["effective_from_utc"]),
+                    cents=True)),
+            }
+            for e in fee_schedule.SCHEDULE["entries"]},
+        "fee_schedule": fee_schedule.provenance(),
+        "source": "docs.polymarket.us/fees: fee = theta * C * p * (1-p), banker's rounding to the cent; theta from the frozen effective-dated schedule",
     }
     e, a = out.get("earnings") or {}, out.get("activities") or {}
     observed_total = e.get("total_usd") if e.get("ok") else None
