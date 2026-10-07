@@ -118,3 +118,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           bash .github/post_august_commit.sh "data(l5): post-August public activity harvest (Sep 11-21, Sep 26-present)"
+
+      # A fetch that succeeds and then fails to persist is worse than a fetch
+      # that fails loudly: the job goes green while the evidence is discarded
+      # with the runner. This step makes that impossible to miss.
+      - name: PROVE the harvest actually persisted
+        run: |
+          set -euo pipefail
+          n=$(git ls-files 'data/l5/raw/post_august/*.jsonl.gz' | wc -l)
+          echo "tracked harvest files: $n"
+          git ls-files 'data/l5/raw/post_august/' | sed 's/^/  /'
+          if [ "$n" -eq 0 ]; then
+            echo "::error::harvest produced data but NOTHING was committed -- \
+          the evidence would be lost with this runner. Failing the job."
+            exit 1
+          fi
