@@ -57,6 +57,18 @@ COPY src/l5_market_binding.py     src/l5_market_binding.py
 COPY src/l5_order_body.py         src/l5_order_body.py
 COPY src/l5_preview_gate.py       src/l5_preview_gate.py
 COPY src/pmus_auth.py             src/pmus_auth.py
+# PMUS-NATIVE MARKET IDENTITY. `l5_pmus_transport` carries the proven
+# BTC15m slug regex and `resolve_market`, which already knows that
+# /v1/market/slug/ 404s for these windows while /v1/events/slug/ serves
+# them. Its closure adds these four files and NO order-capable executor --
+# it imports `pmus_auth` (GET-only), not `pmus_q1_executor`. Checked
+# deliberately: importing `src.l5_pmus_auth_book` instead would drag in
+# EIGHTEEN files including pmus_q1_executor's place_limit_buy and
+# run_campaign, putting a second armed execution stack in this image.
+COPY src/l5_pmus_transport.py     src/l5_pmus_transport.py
+COPY src/l5_live_execution.py     src/l5_live_execution.py
+COPY src/l5_faithful_translation.py  src/l5_faithful_translation.py
+COPY src/l5_execution_translations.py  src/l5_execution_translations.py
 COPY src/pmus_fee_schedule.py     src/pmus_fee_schedule.py
 COPY src/pmus_fees.py             src/pmus_fees.py
 
@@ -73,6 +85,10 @@ COPY scripts/l5_e1_cohort_run.py  scripts/l5_e1_cohort_run.py
 # closure below; it imports no transport, latch, order body or credential
 # module and checks sys.modules to prove it.
 COPY scripts/l5_e1_ws_readiness_check.py  scripts/l5_e1_ws_readiness_check.py
+# PHASE 1 PMUS IDENTITY PROOF. Read-only GETs plus exactly one
+# /v1/order/preview; refuses POST /v1/orders structurally and proves via
+# sys.modules that no Polymarket.com venue module was loaded.
+COPY scripts/l5_e1_pmus_identity_proof.py  scripts/l5_e1_pmus_identity_proof.py
 
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
