@@ -1948,7 +1948,8 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
         "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
         "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
-        "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310"]
+        "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
+        "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

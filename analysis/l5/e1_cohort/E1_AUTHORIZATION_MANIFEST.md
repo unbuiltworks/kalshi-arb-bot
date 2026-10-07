@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60
+481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -415,7 +415,7 @@ additive and touches nothing of XR2W's.
 | `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
 | `PMUS_E1_ARM` | must equal the session id |
 | `PMUS_E1_GATE_EVIDENCE` | must equal the authorized **series** `btc-updown-15m`; the exact resolved slug is re-enforced before every submission |
-| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60` |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486` |
 
 **None of these is set.** Reporting is BOOLEAN ONLY — `armed_env_summary()`
 returns presence flags and never a value, asserted by test.
@@ -525,6 +525,29 @@ placements, window exposure, realized loss and unresolved residuals, so
 cohorts — asserted by test. XR2W's spent A6 latch at
 `/state/pmus-ws/exec1x` stays untouched; it is evidence.
 
+### The live book, against REAL frames
+
+The proven probe captured **11,523** frames on `btc-updown-15m-1791372600`:
+**2** book snapshots and **11,438** `price_change` events. A `price_change`
+has **no top-level `asset_id`, no `bids` and no `asks`** — the payload is
+nested in `price_changes`, one entry per token, each carrying `best_bid`
+and `best_ask` directly. Both shapes are now handled first-class, with the
+bests read **directly from the entry**, and the frame's top-level `market`
+(the condition id) **verified against the pin** so a stray subscription
+cannot update the cache.
+
+**Size is never invented.** A snapshot's ladder gives real queue depth at
+the best bid. A `price_change`'s `size` is at the *changed* price — 0.01
+and 0.99 in the captured frame, while the bests were 0.67 and 0.32 — so it
+is used **only** when the changed price *is* the best bid on the BUY side,
+and otherwise `size_at_our_price` is `None` with its reason recorded.
+
+**Staleness is per-token book update, not silence.** A token whose top of
+book has not moved within the freshness bound reads unhealthy **even while
+frames pour in for the other token** — asserted by a test that snapshots
+both, then runs 60 s of `price_change` for one token only and requires the
+other to be refused.
+
 ### Fails closed
 
 Stale-window rollover; websocket loss before submission; a silent token;
@@ -540,7 +563,7 @@ degraded one.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
 4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
-   `cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60`;
+   `481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many
@@ -589,6 +612,7 @@ their reasons, asserted by test.
 | `bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a` | **`entrypoint` still named XR2W's single-order path**, so arming per the spec would have run XR2W's one-order probe through the single-slot latch and measured nothing |
 | `f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4` | **it consumed XR2W's `PMUS_EXEC1_*` namespace and XR2W's latch directory**, so a legacy value on `l5-live-probe-oneshot` could have participated in arming E1 — and it implied a network-incapability E1 does not have |
 | `e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310` | **its ARMED path terminated BEFORE `run_cohort`** — `main()`'s armed branch was a bare `raise SystemExit`, no `snapshot_provider` existed, and setting the `PMUS_E1_*` keys would have produced twelve empty windows |
+| `cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60` | **`live_book` parsed a frame shape the venue does not send** — it dropped 11,438 of 11,523 real frames (99.3%), so the top of book populated once and never moved, and health reported HEALTHY while serving that stale book. **It failed OPEN** |
 
 ## 12.1 The entrypoint, and the defect it closes
 
@@ -642,7 +666,7 @@ one-order runner fails while passing import resolution.
 
 | artifact | path |
 |---|---|
-| frozen spec `cdc63519…ae60` | `analysis/l5/e1_cohort/spec.py` |
+| frozen spec `481d1d3f…2486` | `analysis/l5/e1_cohort/spec.py` |
 | bounded-count named-slot latch | `analysis/l5/e1_cohort/latch.py` |
 | append-only recorder + chain reconstructor | `analysis/l5/e1_cohort/recorder.py` |
 | stopping rules + forward-looking bound | `analysis/l5/e1_cohort/stopping.py` |

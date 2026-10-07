@@ -247,6 +247,47 @@ DIFF: Dict[str, Any] = {
         "derived_complement_is_a_second_token": False,
     },
 
+    "live_book": {
+        "module": "analysis.l5.e1_cohort.live_book",
+        "collector": "src.l5_clob_ws",
+        "frame_shapes_handled": ["price_change", "book_snapshot"],
+        "price_change_is_the_dominant_shape": True,
+        "real_frame_census": {
+            "source": "proven probe deployment 90fa9013, market "
+                      "btc-updown-15m-1791372600",
+            "frames_total": 11523,
+            "book_snapshots": 2,
+            "price_change": 11438,
+        },
+        "price_change_carries_a_top_level_asset_id": False,
+        "price_change_carries_top_level_bids_or_asks": False,
+        "price_change_payload_is_nested_in": "price_changes",
+        "best_bid_ask_read_directly_from_the_entry": True,
+        "best_bid_ask_derived_from_ladder_levels": False,
+        "frame_market_is_verified_against_the_pin": True,
+        "a_frame_for_another_market_is_refused": True,
+        "size_is_invented_when_absent": False,
+        "size_from_price_change_used_only_when": (
+            "the changed price IS the best bid and the side is BUY; a "
+            "price_change's size is at the CHANGED price, which is usually "
+            "not the best bid"),
+        "size_from_snapshot_ladder_is_real_queue_depth": True,
+        "unknown_size_is_reported_with_its_reason": True,
+        "staleness_is_per_token_book_update": True,
+        "staleness_depends_on_silence_alone": False,
+        "complement_is_derived_from_the_other_token": False,
+        "defect_this_replaces": (
+            "the first parser looked for a top-level asset_id with "
+            "top-level bids/asks, which a price_change does not have. It "
+            "dropped 11,438 of 11,523 real frames, so the top of book "
+            "populated once at subscription and never moved -- and it "
+            "reported HEALTHY while serving that frozen book. It failed "
+            "OPEN, the only failure mode in this build that pointed the "
+            "wrong way."),
+        "tested_against_real_captured_frames": True,
+        "test": "analysis/l5/e1_cohort/test_e1_live_book.py",
+    },
+
     "cohort_authorization": {
         "module": "analysis.l5.e1_cohort.authorization",
         "problem": (
@@ -500,6 +541,7 @@ DIFF: Dict[str, Any] = {
             "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
             "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
             "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
+            "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
         ],
         "reasons": {
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
@@ -521,6 +563,12 @@ DIFF: Dict[str, Any] = {
                  "main()'s armed branch was a bare `raise SystemExit`, no "
                  "snapshot_provider existed, and setting the PMUS_E1_* "
                  "keys would have produced twelve empty windows"),
+            "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60":
+                ("live_book parsed a frame shape the venue does not send: "
+                 "it dropped 11,438 of 11,523 real frames (99.3%), so the "
+                 "top of book populated once and never moved, and health "
+                 "reported HEALTHY while serving that stale book. It "
+                 "failed OPEN."),
         },
     },
 
@@ -948,6 +996,16 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("live_provider.degraded_snapshot_is_ever_returned", False),
     ("live_provider.rest_is_sufficient_timing_authority", False),
     ("live_provider.derived_complement_is_a_second_token", False),
+    ("live_book.price_change_carries_a_top_level_asset_id", False),
+    ("live_book.best_bid_ask_read_directly_from_the_entry", True),
+    ("live_book.best_bid_ask_derived_from_ladder_levels", False),
+    ("live_book.frame_market_is_verified_against_the_pin", True),
+    ("live_book.a_frame_for_another_market_is_refused", True),
+    ("live_book.size_is_invented_when_absent", False),
+    ("live_book.staleness_is_per_token_book_update", True),
+    ("live_book.staleness_depends_on_silence_alone", False),
+    ("live_book.complement_is_derived_from_the_other_token", False),
+    ("live_book.tested_against_real_captured_frames", True),
     ("cohort_authorization.slug_check_deleted", False),
     ("cohort_authorization.is_stricter_than_one_static_slug", True),
     ("cohort_authorization.complement_may_select_its_own_market", False),
@@ -977,7 +1035,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
      ["110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
       "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
       "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
-      "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310"]),
+      "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
+      "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60"]),
     ("entrypoint.module", "scripts.l5_e1_cohort_run"),
     ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
     ("entrypoint.cohort_driver",
@@ -1074,7 +1133,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60"
+    "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:
