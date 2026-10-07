@@ -12,6 +12,17 @@ Service `l5-book-shadow`, project `l5-book-shadow-public`, pinned by SHA to
 `84e277297`. Public-data-only project: no credentials, no order-capable
 module, mutation-incapable boot gate passing 4/4.
 
+**Overnight accumulation, 6h 8m uptime, 1,000 cycles:**
+
+| | |
+|---|---|
+| two-token book rows | **69,840** |
+| L5 activity rows | **2,163** (2,690 on the full tape incl. pre-restart) |
+| markets / tokens | 35 / **70** — `single_token_markets: []` throughout |
+| `http_429` | **0** |
+| measured request rate | **197.1 RPM** against the 240 cap |
+| BOOK_ONLY intervals | **one, closed** — no new outage all night |
+
 All five required live-proof items, from the deployed heartbeat:
 
 | requirement | observed |
@@ -373,8 +384,111 @@ Concretely, in priority order:
 Nothing about Stage-6's code needs changing. What it needs is a measurement
 instrument good enough to judge it.
 
-### Standing boundaries honored overnight
+## 9. Sequential live measurement protocol — DESIGNED, **NOT AUTHORIZED**
 
-No live orders. No parameter tuning. No evidence deleted. S3 untouched
-until it terminated on its own. XR2W, its spec and its fingerprint
-untouched. A6 untouched.
+`analysis/l5/measurement/SEQUENTIAL_MEASUREMENT_PROTOCOL.md`, with an
+offline calculator and 28 passing tests. It answers the question "how
+quickly could our own tiny orders resolve the 95.58% UNKNOWABLE?" — and
+**recommends no size**, by design.
+
+### Stopping gates
+
+| estimand | method | expected n | worst case |
+|---|---|---:|---:|
+| E1 first-leg fill probability | Beta(1,1) posterior width 0.10 | 139 placements | **385** |
+| E2 completion \| fill | truncated SPRT, 0.6772 vs 0.7873 | **81–89 fills** | 385 |
+| E3 time-to-completion p90 | Kaplan–Meier + order-statistic CI, ε=0.05 | 139 | → 206 fills |
+| E4 residual duration p90 | same | 139 | → **431 fills — binding** |
+| E5 per-share economics ±$0.02 | — | — | 261 fills |
+
+The SPRT is the elegant part: it tests the *actual* decision — is completion
+above or below the 78.73% break-even — and under either truth it expects
+**~85 fills**, against 1,537 for a blind ±0.025 interval.
+
+### Worst-case dollars, all four sizes
+
+Per placement, `qty × $0.60`: **$0.0060 / $0.0600 / $0.6000 / $0.9720**.
+To reach **all** gates, cascaded through the unknown fill rate:
+
+| `p_fill` | placements | 0.01 | 0.10 | **1.00** | 1.62 |
+|---|---:|---:|---:|---:|---:|
+| 0.10 | 4,310 | $25.86 | $258.60 | **$2,586.00** | $4,189.32 |
+| 0.25 | 1,724 | $10.34 | $103.44 | **$1,034.40** | $1,675.73 |
+| 0.50 | 862 | $5.17 | $51.72 | **$517.20** | $837.86 |
+| 0.87 | 496 | $2.98 | $29.76 | **$297.60** | $482.11 |
+
+The spread *is* the headline: the cost of the full programme is uncertain by
+more than an order of magnitude, because it depends on the very quantity
+E1 exists to measure. The 0.87 row is the cheapest and **least credible** —
+it is the biased proxy's rate.
+
+### The rebate cliff is PRICE-DEPENDENT — sharper than we assumed
+
+`ROUND_HALF_EVEN` sends exactly $0.005 to **$0.00**, so the floor is strict.
+And the minimum rebate-bearing size *moves with price*:
+
+| `p` | min contracts |
+|---|---:|
+| 0.50 | 1.61 (global minimum) |
+| 0.45 / 0.55 | **1.62** ← the figure `bounds.py` quotes |
+| 0.60 | **1.67** |
+| 0.30 | **1.91** |
+
+So **1.62 earns a rebate only for `p ∈ [0.45, 0.55]`**. Covering the whole
+first-leg range `p ≤ 0.60` needs **≥ 1.91 shares**. Your "first
+rebate-bearing size ≥ 1.62" is right at the money but not across the band —
+worth knowing before choosing.
+
+**0.01 and 0.10 are structurally rebate-blind at every price** — $0.00
+always, not "measured imprecisely". And 0.01 is the venue grid itself, so it
+has exactly one fill state: a partial fill is indistinguishable from a full
+one.
+
+### The honest framing
+
+Every size resolves the UNKNOWABLE problem — owning the order is what does
+that, not its size. Every size measures E1–E5 per share. **0.01 buys 100×
+the observations per dollar at risk.** What the small sizes cannot buy is
+*partial-fill structure* and *rebate economics*.
+
+So the question is not "which size" but **"which questions, in which
+order"** — and a two-stage design (cheap sizes for the probabilities, a
+rebate-bearing size only once the probabilities justify it) is available
+without being recommended here.
+
+### What it cannot establish
+
+Queue-position *mechanism* (only outcomes); that our fill rate equals L5's;
+anything about sizes we do not run; and — the one I would weigh heaviest —
+**a tiny order's fill probability need not transfer to a realistic one.**
+Queue priority is price-then-time, so size should not affect *whether* we
+are filled, but it does affect how much of the level must be consumed. The
+document states where transfer holds and where it does not, and labels its
+one extrapolation a model rather than a measurement.
+
+---
+
+### Standing boundaries — verified held, all night
+
+| boundary | status |
+|---|---|
+| live orders placed | **ZERO** |
+| dollars at risk overnight | **$0.00** |
+| Stage-6 | **DISARMED**, `armed: False`, no owner value set, no order-capable image deployed |
+| XR2W executor, spec, fingerprint | **untouched** (asserted by a test) |
+| A6 | **FILLED but NOT REALIZED** — settlement unresolved |
+| evidence deleted | **none** |
+| parameters tuned or fitted against a result | **none** |
+| S3 | untouched until it terminated on its own |
+
+### Open items for you, in priority order
+
+1. **The latent freeze bug.** `_apply` shared mutable state with `DIFF` in
+   the *inherited* derivation pattern, so a frozen `SPEC` could be mutated
+   in place with the fingerprint assertion still passing. S6P deep-copies;
+   the older specs want checking. I did not touch XR2W on a hunch overnight.
+2. **The `qty = 1.00` decision** — §4b. A dead zone between partial-fill
+   observability and rebate observability. Unchanged per instruction.
+3. **Prove the websocket** from the deployed host; my first hostname did not
+   exist, and the endpoint cannot be settled from this container.
+4. **Choose the measurement question order** — §9 — which implies the size.
