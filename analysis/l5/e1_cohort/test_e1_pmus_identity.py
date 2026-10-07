@@ -151,3 +151,69 @@ def test_the_serializer_accepts_the_pmus_slug_unchanged():
                     post_only=True)
     assert body["marketSlug"] == slug
     assert PI.is_pmus_btc15m_slug(body["marketSlug"])
+
+
+# ========== THE BBO SEMANTIC READER, PINNED TO THE PROVEN LINEAGE ========
+#
+# `scripts/l5_e1_bbo_semantics_probe.proven_lineage_read` REPRODUCES
+# `pmus_q1_executor.fresh_bbo`'s field selection rather than importing it,
+# because importing that module would put an order-capable stack into a
+# read-only probe. A reproduction can drift from its original, so it is
+# pinned here against the original's own SOURCE.
+
+def test_the_probes_reader_is_the_proven_lineages_reader():
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))))
+    exec_src = open(os.path.join(root, "src", "pmus_q1_executor.py"),
+                    encoding="utf8").read()
+    # the executor reads marketData.bestBid.value / bestAsk.value
+    assert '"bid": (md.get("bestBid") or {}).get("value")' in exec_src
+    assert '"ask": (md.get("bestAsk") or {}).get("value")' in exec_src
+
+    probe_src = open(os.path.join(root, "scripts",
+                                  "l5_e1_bbo_semantics_probe.py"),
+                     encoding="utf8").read()
+    assert '"bid": (md.get("bestBid") or {}).get("value")' in probe_src
+    assert '"ask": (md.get("bestAsk") or {}).get("value")' in probe_src
+    assert 'md = bbo_raw.get("marketData") or {}' in probe_src
+
+
+def test_the_probe_cannot_construct_or_send_an_order():
+    """Structural: the probe names no order endpoint and no POST."""
+    import ast
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))))
+    src = open(os.path.join(root, "scripts",
+                            "l5_e1_bbo_semantics_probe.py"),
+               encoding="utf8").read()
+    tree = ast.parse(src)
+    code = src
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef,
+                             ast.AsyncFunctionDef, ast.ClassDef)):
+            d = ast.get_docstring(node, clean=False)
+            if d:
+                code = code.replace(d, "")
+    code = "\n".join(ln for ln in code.splitlines()
+                     if not ln.strip().startswith("#"))
+    # The probe's OWN DENYLIST names the order-capable modules in order to
+    # assert their absence from sys.modules, so those lines are excluded.
+    # Naming a module in order to forbid it is the opposite of the hazard
+    # being searched for -- the same exemption `pmus_identity` gets for
+    # owning FORBIDDEN_HOSTS.
+    denylist_start = code.index("FORBIDDEN_MODULES = (")
+    denylist_end = code.index(")", denylist_start)
+    code = code[:denylist_start] + code[denylist_end:]
+    for forbidden in ("POST", "/v1/order", "l5_order_body",
+                      "l5_preview_gate", "consume_attempt("):
+        assert forbidden not in code, forbidden
+    # the denylist itself must still name them, or the sys.modules
+    # assertion would be checking nothing
+    for named in ("analysis.l5.live_exec2.orders", "src.l5_preview_gate",
+                  "src.pmus_q1_executor"):
+        assert named in src, named
+    # and it REPLACES the latch consumers with raises before any work
+    assert "L.consume_attempt = _refuse" in src
+    assert "L.consume_complement = _refuse" in src

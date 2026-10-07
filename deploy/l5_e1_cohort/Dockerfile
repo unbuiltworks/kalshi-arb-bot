@@ -113,6 +113,12 @@ COPY scripts/l5_e1_ws_readiness_check.py  scripts/l5_e1_ws_readiness_check.py
 # /v1/order/preview; refuses POST /v1/orders structurally and proves via
 # sys.modules that no Polymarket.com venue module was loaded.
 COPY scripts/l5_e1_pmus_identity_proof.py  scripts/l5_e1_pmus_identity_proof.py
+# BBO SEMANTIC PROBE. Read-only: three independent readings of the same
+# slug (REST /bbo, REST /book, the authenticated AuthBook feed) compared
+# against each other and against the proven lineage's reader. It replaces
+# the E1 latch's consume functions with raises before doing any work, and
+# proves via sys.modules that no order-capable module was loaded.
+COPY scripts/l5_e1_bbo_semantics_probe.py  scripts/l5_e1_bbo_semantics_probe.py
 
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
