@@ -18,6 +18,7 @@ from decimal import Decimal as D
 
 import pytest
 
+from analysis.l5.e1_cohort import arming as AR
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import recorder as R
 from analysis.l5.e1_cohort import runner as RUN
@@ -36,7 +37,7 @@ def _isolated_latch(monkeypatch, tmp_path):
     """Every test gets its own latch directory and session id. Nothing in
     these tests can touch a real latch."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "latch"))
-    monkeypatch.setenv("PMUS_EXEC1_SESSION_ID", "offline-test-session")
+    monkeypatch.setenv("PMUS_E1_SESSION_ID", "offline-test-session")
     yield
 
 
@@ -105,7 +106,9 @@ def armed(monkeypatch):
     """Pretends the owner armed it, INSIDE THE TEST PROCESS ONLY, so the
     eligibility and submission paths can be exercised. No real key is set
     and nothing leaves the process."""
-    monkeypatch.setattr(O, "armed_env_summary",
+    monkeypatch.setattr(AR, "armed_env_summary",
+                        lambda: {"armed": True, "keys_present": {}})
+    monkeypatch.setattr(RUN.A, "armed_env_summary",
                         lambda: {"armed": True, "keys_present": {}})
     monkeypatch.setattr(O, "assert_frozen", lambda *a, **k: None)
     yield
@@ -628,7 +631,7 @@ def test_latch_slots_are_never_released_on_failure():
 
 
 def test_latch_fails_closed_without_a_session_id(monkeypatch):
-    monkeypatch.delenv("PMUS_EXEC1_SESSION_ID", raising=False)
+    monkeypatch.delenv("PMUS_E1_SESSION_ID", raising=False)
     with pytest.raises(L.LatchUnavailable):
         L.consume_attempt(window=0, slug="m", side="UP", price="0.50",
                           qty="0.13")
@@ -1758,6 +1761,211 @@ def test_parity_the_latch_is_the_ONLY_behavioural_difference():
     assert SP.SPEC["xr2w_parity"]["xr2w_modified"] is False
 
 
+# ====== NEGATIVE ISOLATION PROOFS: E1 vs XR2W namespaces and state ========
+
+LEGACY_XR2W_ENV = ("PMUS_EXEC1_LIVE", "PMUS_EXEC1_SESSION_ID",
+                   "PMUS_EXEC1_ARM", "PMUS_EXEC1_GATE_EVIDENCE",
+                   "PMUS_EXEC1_AUTHORIZED_FINGERPRINT")
+
+
+def test_a_legacy_PMUS_EXEC1_values_ALONE_cannot_arm_E1(monkeypatch):
+    """PROOF (a). Set ALL FIVE legacy keys to valid-looking values -- the
+    exact shape `l5-live-probe-oneshot` already carries for XR2W -- and E1
+    must still refuse. Booleans only; no value is ever reported."""
+    for k in LEGACY_XR2W_ENV:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("PMUS_EXEC1_LIVE", "YES")
+    monkeypatch.setenv("PMUS_EXEC1_SESSION_ID", "legacy-xr2w-session")
+    monkeypatch.setenv("PMUS_EXEC1_ARM", "legacy-xr2w-session")
+    monkeypatch.setenv("PMUS_EXEC1_GATE_EVIDENCE", "btc-updown-15m-TEST")
+    monkeypatch.setenv("PMUS_EXEC1_AUTHORIZED_FINGERPRINT",
+                       SP.E1_FINGERPRINT)
+    # E1's own namespace is empty
+    for k in AR.ARM_KEYS + (AR.FINGERPRINT_PIN_ENV,):
+        monkeypatch.delenv(k, raising=False)
+
+    assert AR.armed() is False
+    g = AR.may_submit("btc-updown-15m-TEST")
+    assert g["armed"] is False and g["may_submit"] is False
+    assert g["reads_pmus_exec1"] is False
+    assert "PMUS_E1_" in g["refusal"]
+    summ = AR.armed_env_summary()
+    assert summ["armed"] is False
+    assert all(v is False for v in summ["keys_present"].values())
+    assert summ["reads_pmus_exec1_namespace"] is False
+    # BOOLEANS ONLY: no env VALUE appears anywhere in the report
+    blob = json.dumps(summ)
+    for v in ("legacy-xr2w-session", "btc-updown-15m-TEST"):
+        assert v not in blob
+    # and the runner refuses end to end
+    el = RUN.eligible(snapshot(), ST.CohortTracker(), now=NOW)
+    assert el["ok"] is False
+    assert "E1_DISARMED" in el["refusals"]
+    # the arming module never even names the legacy keys in a read path
+    code = code_only(os.path.join(HERE, "arming.py"))
+    for k in ("PMUS_EXEC1_LIVE", "PMUS_EXEC1_ARM",
+              "PMUS_EXEC1_GATE_EVIDENCE"):
+        assert code.count(k) <= 1, k      # at most the never-read manifest
+    assert "getenv(\"PMUS_EXEC1" not in code
+
+
+def test_b_the_xr2w_spent_latch_can_neither_spend_nor_refuse_an_E1_slot(
+        tmp_path, monkeypatch):
+    """PROOF (b). Plant a SPENT XR2W latch exactly where A6's lives. E1 must
+    neither be refused by it nor able to spend it."""
+    import analysis.l5.live_exec2.latch as XRL
+    xr_dir = tmp_path / "exec1x"
+    xr_dir.mkdir()
+    monkeypatch.setattr(XRL, "LATCH_DIR", str(xr_dir))
+    monkeypatch.setattr(L, "XR2W_LATCH_DIR", str(xr_dir))
+    monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
+    monkeypatch.setenv("PMUS_EXEC1_SESSION_ID", "a6-session")
+    # the REAL path XR2W itself computes, not a guessed filename
+    spent = XRL.latch_path("a6-session")
+    with open(spent, "w", encoding="utf8") as fh:
+        json.dump({"probe": "LIVE-L5-EXEC-1-XR2W",
+                   "A6": "FILLED, settlement unresolved"}, fh)
+    assert XRL.state("a6-session")["spent"] is True
+
+    monkeypatch.setenv("PMUS_E1_SESSION_ID", "e1-session")
+    # the spent XR2W latch does NOT refuse E1
+    assert L.window_state(window=0)["exhausted"] is False
+    rec = L.consume_attempt(window=0, slug="m", side="UP", price="0.50",
+                            qty="0.13")
+    assert rec["slot"] == 0
+    assert L.window_state(window=0)["attempts_spent"] == 1
+    # E1 cannot spend XR2W's: its slot is elsewhere entirely
+    assert os.path.realpath(rec["path"]) != os.path.realpath(spent)
+    assert os.path.dirname(os.path.realpath(rec["path"])) != \
+        os.path.realpath(str(xr_dir))
+    # XR2W's latch is still exactly as spent as it was
+    assert XRL.state("a6-session")["spent"] is True
+    # and the boot assertion agrees
+    iso = L.assert_no_collision_with_xr2w()
+    assert iso["ok"] is True
+    assert iso["directories_are_distinct"] is True
+    assert iso["no_e1_slot_resolves_to_the_xr2w_latch"] is True
+
+
+def test_c_E1_state_operations_cannot_alter_the_xr2w_latch(tmp_path,
+                                                           monkeypatch):
+    """PROOF (c). Bytes AND mtime of XR2W's latch, unchanged across a full
+    E1 slot lifecycle. XR2W's A6 latch is EVIDENCE."""
+    import analysis.l5.live_exec2.latch as XRL
+    xr_dir = tmp_path / "exec1x"
+    xr_dir.mkdir()
+    monkeypatch.setattr(XRL, "LATCH_DIR", str(xr_dir))
+    monkeypatch.setattr(L, "XR2W_LATCH_DIR", str(xr_dir))
+    monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
+    monkeypatch.setenv("PMUS_EXEC1_SESSION_ID", "a6-session")
+    evidence = XRL.latch_path("a6-session")
+    with open(evidence, "w", encoding="utf8") as fh:
+        json.dump({"A6": "FILLED, settlement unresolved, NOT REALIZED"}, fh,
+                  sort_keys=True)
+    old_mtime = os.stat(evidence).st_mtime_ns
+    old_bytes = open(evidence, "rb").read()
+    old_listing = sorted(os.listdir(xr_dir))
+
+    monkeypatch.setenv("PMUS_E1_SESSION_ID", "e1-session")
+    # a FULL E1 lifecycle: attempts, complement tranches, reads, boot
+    for i in range(3):
+        L.consume_attempt(window=0, slug="m", side="UP", price="0.50",
+                          qty="0.13")
+    L.consume_complement(window=0, slot=0, slug="m", side="DOWN",
+                         price="0.46", qty="0.05", tranche=0)
+    L.consume_complement(window=0, slot=0, slug="m", side="DOWN",
+                         price="0.46", qty="0.08", tranche=1)
+    L.window_state(window=0)
+    L.cohort_state()
+    L.complement_tranches_spent(window=0, slot=0)
+    L.assert_no_collision_with_xr2w()
+
+    assert open(evidence, "rb").read() == old_bytes
+    assert os.stat(evidence).st_mtime_ns == old_mtime
+    assert sorted(os.listdir(xr_dir)) == old_listing
+    assert os.path.exists(evidence)
+    # E1 wrote only into its own directory
+    e1_files = os.listdir(str(tmp_path / "e1_cohort"))
+    assert len(e1_files) == 5
+    assert all(f.startswith("e1.") for f in e1_files)
+    # no function in E1's latch module deletes anything
+    code = code_only(os.path.join(HERE, "latch.py"))
+    for destructive in ("os.remove", "os.unlink", "shutil.rmtree",
+                        "os.rmdir", "os.rename", "truncate"):
+        assert destructive not in code, destructive
+
+
+def test_d_xr2w_four_captured_hashes_still_match():
+    """PROOF (d)."""
+    import hashlib
+    for rel, want in XR2W_SOURCE_SHA256_16.items():
+        got = hashlib.sha256(
+            open(os.path.join(REPO, rel), "rb").read()).hexdigest()[:16]
+        assert got == want, "%s moved: %s != %s" % (rel, got, want)
+    from analysis.l5.live_exec5 import spec as X
+    X.assert_frozen()
+
+
+def test_the_boot_assertion_refuses_a_colliding_latch_dir(monkeypatch):
+    """The boot assertion must actually fire, not merely exist."""
+    monkeypatch.setattr(L, "LATCH_DIR", "/state/pmus-ws/exec1x")
+    monkeypatch.setattr(L, "XR2W_LATCH_DIR", "/state/pmus-ws/exec1x")
+    with pytest.raises(L.LatchUnavailable) as ei:
+        L.assert_no_collision_with_xr2w("probe")
+    assert "collides" in str(ei.value)
+    # a subdirectory of XR2W's is also refused
+    monkeypatch.setattr(L, "LATCH_DIR", "/state/pmus-ws/exec1x/e1")
+    with pytest.raises(L.LatchUnavailable):
+        L.assert_no_collision_with_xr2w("probe")
+
+
+def test_the_real_latch_dirs_are_distinct_and_share_the_volume(monkeypatch):
+    # the PRODUCTION values, read from the unpatched constants, so this is
+    # not fooled by the autouse tmpdir redirect
+    assert L.DEFAULT_LATCH_DIR == "/state/pmus-ws/e1_cohort"
+    assert L.DEFAULT_XR2W_LATCH_DIR == "/state/pmus-ws/exec1x"
+    assert L.DEFAULT_LATCH_DIR != L.DEFAULT_XR2W_LATCH_DIR
+    assert os.path.dirname(L.DEFAULT_LATCH_DIR) == \
+        os.path.dirname(L.DEFAULT_XR2W_LATCH_DIR) == "/state/pmus-ws"
+    assert SP.SPEC["latch"]["namespace_dir"] == L.DEFAULT_LATCH_DIR
+    monkeypatch.setattr(L, "LATCH_DIR", L.DEFAULT_LATCH_DIR)
+    monkeypatch.setattr(L, "XR2W_LATCH_DIR", L.DEFAULT_XR2W_LATCH_DIR)
+    iso = L.assert_no_collision_with_xr2w("probe")
+    assert iso["e1_latch_dir"] == "/state/pmus-ws/e1_cohort"
+    assert iso["xr2w_latch_dir"] == "/state/pmus-ws/exec1x"
+    assert iso["directories_are_distinct"] is True
+    assert iso["shares_the_mounted_volume"] is True
+    assert iso["slot_paths_checked"] == 12 * 20 * 2 * 2
+    assert iso["xr2w_a6_latch_is_evidence_and_is_never_touched"] is True
+    assert iso["e1_deletes_resets_or_renames_anything"] is False
+
+
+def test_all_three_superseded_fingerprints_are_structurally_non_armable():
+    must_not = SP.SPEC["supersedes_e1"]["must_not_be_rearmed"]
+    assert must_not == [
+        "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
+        "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
+        "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4"]
+    assert SP.E1_FINGERPRINT not in must_not
+    assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
+    # STRUCTURALLY non-armable: pinning any of them does not match this
+    # build, so the pin leaves the build inert
+    for old in must_not:
+        pin = AR.fingerprint_pinned(SP.E1_FINGERPRINT)
+        assert pin["required"] == SP.E1_FINGERPRINT != old
+        import os as _os
+        prev = _os.environ.get(AR.FINGERPRINT_PIN_ENV)
+        _os.environ[AR.FINGERPRINT_PIN_ENV] = old
+        try:
+            assert AR.fingerprint_pinned(
+                SP.E1_FINGERPRINT)["matches_this_build"] is False
+        finally:
+            if prev is None:
+                _os.environ.pop(AR.FINGERPRINT_PIN_ENV, None)
+            else:
+                _os.environ[AR.FINGERPRINT_PIN_ENV] = prev
+
+
 # ------------------------------------------------- venue errors: SAFETY only
 
 def test_venue_error_stop_is_a_safety_stop_and_records_exact_errors():
@@ -1891,7 +2099,7 @@ def test_NEGATIVE_run_cohort_never_calls_xr2w_single_slot_consume(monkeypatch):
 
     monkeypatch.setattr(XR3, "run_experiment", boom2, raising=False)
     monkeypatch.setattr(O, "submit_one", boom, raising=False)
-    monkeypatch.setattr(O, "armed_env_summary",
+    monkeypatch.setattr(RUN.A, "armed_env_summary",
                         lambda: {"armed": True, "keys_present": {}})
     monkeypatch.setattr(O, "assert_frozen", lambda *a, **k: None)
     seen = []
@@ -1984,17 +2192,6 @@ def test_ENTRYPOINT_EXECUTION_main_is_disarmed_and_places_nothing(capsys):
     assert "no latch slot was claimed" in out
     # nothing was spent
     assert L.window_state(window=0)["attempts_spent"] == 0
-
-
-def test_both_superseded_fingerprints_must_not_be_rearmed():
-    must_not = SP.SPEC["supersedes_e1"]["must_not_be_rearmed"]
-    assert must_not == [
-        "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
-        "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a"]
-    assert SP.E1_FINGERPRINT not in must_not
-    reasons = SP.SPEC["supersedes_e1"]["reasons"]
-    assert set(reasons) == set(must_not)
-    assert "single-slot" in reasons[must_not[1]]
 
 
 # -------------------------------------------------------------------- boot

@@ -1,9 +1,17 @@
 """The E1 cohort runner. FROZEN. DISARMED. NOT AUTHORIZED.
 
 NO LIVE ORDER IS PLACED BY ANY PATH IN THIS MODULE AS IT STANDS. The arming
-gate is the owner's `analysis.l5.live_exec.ledger.may_submit`, no owner value
-is set, and nothing here sets one. `boot()` reports the arming state and
-`eligible()` refuses on it; it does not acquire it.
+gate is `analysis.l5.e1_cohort.arming.may_submit`, which reads E1's OWN
+`PMUS_E1_*` namespace and NEVER `PMUS_EXEC1_*`. No owner value is set and
+nothing here sets one. `boot()` reports the arming state and `eligible()`
+refuses on it; neither acquires it.
+
+E1 IS NETWORK-CAPABLE, AND THAT IS CORRECT. Its job is to place real
+orders, and XR2W's proven `orders.py` uses `urllib`, so importing the
+production entrypoint pulls http, socket, ssl and the urllib family.
+NOTHING HERE CLAIMS OTHERWISE. The provable claims are that the offline
+tests make zero network CALLS, and that the transport is reachable only
+through the preview-echo gate and the E1 named-slot latch.
 
 WHAT THIS MODULE IS
 -------------------

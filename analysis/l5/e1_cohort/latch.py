@@ -55,6 +55,11 @@ from analysis.l5.live_exec2.spec import LATCH_DIR as XR2W_LATCH_DIR
 #: module deletes, resets, renames, reads or writes it.
 LATCH_DIR = "/state/pmus-ws/e1_cohort"
 
+#: the SAME value, kept unpatched so a test can assert the real production
+#: directories are distinct even while it redirects LATCH_DIR to a tmpdir.
+DEFAULT_LATCH_DIR = "/state/pmus-ws/e1_cohort"
+DEFAULT_XR2W_LATCH_DIR = XR2W_LATCH_DIR
+
 #: belt and braces for the boot assertion below.
 E1_FILE_PREFIX = "e1."
 

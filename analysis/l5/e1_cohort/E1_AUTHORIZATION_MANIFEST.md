@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4
+e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -399,14 +399,76 @@ with a lossy one.**
 **refuses** an attempt row that says otherwise, and refuses one recorded
 without both tokens streaming.
 
+## 10.1 AUTHORIZATION RECORD — dedicated namespaces
+
+**E1 reads `PMUS_E1_*` ONLY. It does not read `PMUS_EXEC1_*` at any point,
+for any purpose.** The service `l5-live-probe-oneshot` already carries
+`PMUS_EXEC1_LIVE` / `_SESSION_ID` / `_ARM` / `_GATE_EVIDENCE` /
+`_AUTHORIZED_FINGERPRINT` for XR2W, so sharing the namespace would let a
+legacy value participate in arming E1. Two experiments, two namespaces.
+**XR2W is completely unchanged** — `analysis/l5/e1_cohort/arming.py` is
+additive and touches nothing of XR2W's.
+
+| E1 key | role |
+|---|---|
+| `PMUS_E1_LIVE` | must be `YES` |
+| `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
+| `PMUS_E1_ARM` | must equal the session id |
+| `PMUS_E1_GATE_EVIDENCE` | must equal the exact market slug |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310` |
+
+**None of these is set.** Reporting is BOOLEAN ONLY — `armed_env_summary()`
+returns presence flags and never a value, asserted by test.
+
+### Latch / state namespace
+
+E1 uses the existing `/state/pmus-ws` mounted volume, in its **own**
+directory, with every file further prefixed `e1.`:
+
+```
+E1    /state/pmus-ws/e1_cohort/e1.<sid>.<digest>.wNN.sNN.<role>.tNN.submitted
+XR2W  /state/pmus-ws/exec1x/<sid>.<digest>.submitted      <- A6. EVIDENCE.
+```
+
+**BOOT ASSERTION:** `latch:assert_no_collision_with_xr2w()` runs on every
+boot and enumerates **960** slot paths (12 windows × 20 slots × 2 roles × 2
+tranche bounds), proving none resolves into XR2W's directory and every one
+carries the `e1.` prefix. It refuses a colliding directory, including a
+subdirectory of XR2W's — asserted by a test that makes it fire.
+
+**XR2W's spent A6 latch is EVIDENCE and is never touched.** Nothing in
+E1's latch module contains `os.remove`, `os.unlink`, `shutil.rmtree`,
+`os.rmdir`, `os.rename` or `truncate` — asserted by source scan — and a
+test holds XR2W's latch bytes **and mtime** constant across a full E1 slot
+lifecycle.
+
+## 10.2 NETWORK CAPABILITY — stated plainly
+
+**E1 IS NETWORK-CAPABLE. This is necessary and correct.** Its job is to
+place real orders, and XR2W's proven `orders.py` uses `urllib`, so
+importing the production entrypoint pulls `http`, `http.client`, `socket`,
+`ssl`, `urllib`, `urllib.error`, `urllib.parse`, `urllib.request` and
+`urllib.response` — verified, 9 modules.
+
+**Nothing in this artifact claims E1 cannot reach the network.** A false
+safety claim is worse than an acknowledged capability, and this build is
+about to receive credentials. The two provable claims are:
+
+1. **the offline tests make ZERO network CALLS** — `urlopen` trapped, 0
+   calls across the suite; every transport is a fake;
+2. **the real transport is reachable ONLY through the preview-echo gate and
+   the E1 named-slot latch** — asserted structurally: in `_submit_once`,
+   `require_echo` precedes the latch, which precedes the POST, and a
+   refused echo means no POST at all.
+
 ## 11. Preconditions the owner must still supply
 
 1. **authorization, in the owner's own words**;
-2. `PMUS_EXEC1_SESSION_ID` — scopes the latch; a fresh cohort needs a fresh
+2. `PMUS_E1_SESSION_ID` — scopes the latch; a fresh cohort needs a fresh
    id, and **Claude never clears a latch**;
-3. the four `PMUS_EXEC1_*` arming keys, naming the exact market slug;
-4. `PMUS_EXEC1_AUTHORIZED_FINGERPRINT` =
-   `f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4`;
+3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
+4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
+   `e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many
@@ -453,6 +515,7 @@ their reasons, asserted by test.
 |---|---|
 | `110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c` | the complement sized to only the first partial, so later first-leg fills fell silently into residual |
 | `bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a` | **`entrypoint` still named XR2W's single-order path**, so arming per the spec would have run XR2W's one-order probe through the single-slot latch and measured nothing |
+| `f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4` | **it consumed XR2W's `PMUS_EXEC1_*` namespace and XR2W's latch directory**, so a legacy value on `l5-live-probe-oneshot` could have participated in arming E1 — and it implied a network-incapability E1 does not have |
 
 ## 12.1 The entrypoint, and the defect it closes
 
@@ -506,7 +569,7 @@ one-order runner fails while passing import resolution.
 
 | artifact | path |
 |---|---|
-| frozen spec `f6b4a89f…f8b4` | `analysis/l5/e1_cohort/spec.py` |
+| frozen spec `e11fc1ab…4310` | `analysis/l5/e1_cohort/spec.py` |
 | bounded-count named-slot latch | `analysis/l5/e1_cohort/latch.py` |
 | append-only recorder + chain reconstructor | `analysis/l5/e1_cohort/recorder.py` |
 | stopping rules + forward-looking bound | `analysis/l5/e1_cohort/stopping.py` |

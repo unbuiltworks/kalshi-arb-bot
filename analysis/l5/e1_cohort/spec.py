@@ -407,6 +407,7 @@ DIFF: Dict[str, Any] = {
         "must_not_be_rearmed": [
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
             "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
+            "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
         ],
         "reasons": {
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
@@ -417,6 +418,12 @@ DIFF: Dict[str, Any] = {
                  "arming per the spec would have run XR2W's one-order "
                  "probe through the single-slot latch and measured "
                  "nothing"),
+            "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4":
+                ("it consumed XR2W's PMUS_EXEC1_* authorization namespace "
+                 "and XR2W's latch directory, so a legacy value on "
+                 "l5-live-probe-oneshot could have participated in arming "
+                 "E1, and it implied a network-incapability it does not "
+                 "have"),
         },
     },
 
@@ -852,7 +859,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("venue_error_stop.automatic_retry", False),
     ("supersedes_e1.must_not_be_rearmed",
      ["110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
-      "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a"]),
+      "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a",
+      "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4"]),
     ("entrypoint.module", "scripts.l5_e1_cohort_run"),
     ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
     ("entrypoint.cohort_driver",
@@ -949,7 +957,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4"
+    "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:
