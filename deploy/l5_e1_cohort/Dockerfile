@@ -138,6 +138,15 @@ COPY scripts/l5_e1_bbo_semantics_probe.py  scripts/l5_e1_bbo_semantics_probe.py
 # network, no credential, no transport, no order module, proven by a
 # sys.modules check after the work.
 COPY scripts/l5_e1_bbo_recover.py  scripts/l5_e1_bbo_recover.py
+# THE TWO-SIDED BBO PROOF. Read-only. Waits for a live state with BOTH
+# an executable bid and ask, then adjudicates FOUR readings of the same
+# slug at one instant: REST /bbo, REST /book top levels, the RAW
+# authenticated WS frame (captured by wrapping AuthBook.ingest from the
+# outside, so it is the venue's own bytes and not a restatement of the
+# fold), and the AuthBook snapshot. On the FIRST two-sided state found it
+# reports agreement or DISAGREEMENT and stops -- it does not hunt for a
+# result.
+COPY scripts/l5_e1_bbo_twosided_proof.py  scripts/l5_e1_bbo_twosided_proof.py
 
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
