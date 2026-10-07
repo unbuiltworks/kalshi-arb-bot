@@ -134,6 +134,10 @@ COPY scripts/l5_e1_pmus_identity_proof.py  scripts/l5_e1_pmus_identity_proof.py
 # the E1 latch's consume functions with raises before doing any work, and
 # proves via sys.modules that no order-capable module was loaded.
 COPY scripts/l5_e1_bbo_semantics_probe.py  scripts/l5_e1_bbo_semantics_probe.py
+# READ BACK the captures from the volume. Opens files and prints; no
+# network, no credential, no transport, no order module, proven by a
+# sys.modules check after the work.
+COPY scripts/l5_e1_bbo_recover.py  scripts/l5_e1_bbo_recover.py
 
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
