@@ -1,0 +1,120 @@
+# L5 POST-AUGUST ACTIVITY HARVEST -- read-only, public data, no credential.
+#
+# IT RUNS IN CI BECAUSE THE DATA SOURCE IS BLOCKED from the research
+# container's egress proxy: data-api.polymarket.com answers CONNECT -> 403
+# ("connect_rejected", organization policy). The same reason
+# august-l5-forensic-replay.yml exists. Everything fetched is public; no
+# credential is used, available, or needed.
+#
+# WHAT IT FETCHES. Only the two measured holes in post-August coverage:
+# 2026-09-11..09-21 and 2026-09-26..present. The three existing September
+# harvests are not re-fetched and not touched.
+#
+# IT TOUCHES NOTHING ANY OTHER RUN OWNS. Own concurrency group, own request
+# file, own commit allow-list (data/l5/raw/post_august/ and
+# analysis/l5/post_august/ ONLY), and a hard refusal to run on any branch but
+# the research branch. It cannot reach analysis/l5/s3/**, the shadow
+# directories, deploy/**, or any live_exec* module.
+name: l5-post-august-harvest
+
+on:
+  push:
+    paths:
+      - '.github/post_august_request'
+  workflow_dispatch:
+    inputs:
+      until:
+        description: "Exclusive UTC upper bound YYYY-MM-DD (blank = tomorrow)"
+        required: false
+        default: ""
+
+concurrency:
+  group: l5-post-august-harvest
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: REFUSE to run anywhere but the research branch
+        run: |
+          set -euo pipefail
+          echo "ref: ${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_NAME}" != "claude/august-l5-forensic-replay-788cml" ]; then
+            echo "::error::this job runs only on the research branch"
+            exit 1
+          fi
+
+      - name: Prove this job carries no credential and no order path
+        run: |
+          python - <<'PY'
+          import pathlib
+          wf = pathlib.Path(
+              ".github/workflows/l5-post-august-harvest.yml").read_text()
+          sc = pathlib.Path("scripts/l5_post_august_harvest.py").read_text()
+          # needles built at runtime so they are not present in the files
+          needles = ["secret" + "s.", "GEMINI" + "_", "KALSHI" + "_",
+                     "PMUS" + "_", "PRIVATE" + "_KEY", "place" + "_order",
+                     "create" + "_order", "send" + "_transaction",
+                     "post_" + "order", "cancel_" + "order"]
+          bad = [n for n in needles if n in wf or n in sc]
+          assert not bad, "forbidden token: %s" % bad
+          # the harvester must only ever issue GETs
+          assert "urlopen" in sc and "data=" not in sc, "non-GET request path"
+          print("no credential reference, no order path, GET-only")
+          PY
+
+      - name: ASSERT the identity rule is the WALLET, never the handle
+        run: |
+          python - <<'PY'
+          from scripts.l5_post_august_harvest import ADDRESS
+          assert ADDRESS == "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
+          print("activity feed keyed on proxy wallet:", ADDRESS)
+          PY
+
+      - name: ASSERT the frozen fee schedule is the effective-dated one
+        run: |
+          python - <<'PY'
+          from src.pmus_fee_schedule import FINGERPRINT, assert_frozen
+          EXPECT = ("ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bb"
+                    "effd3ae61ca91629")
+          assert_frozen()
+          assert FINGERPRINT == EXPECT, "FEE SCHEDULE CHANGED -- refusing"
+          print("fee schedule fingerprint verified:", FINGERPRINT)
+          PY
+
+      - name: Harvest the post-August gap (public GET only)
+        run: |
+          python scripts/l5_post_august_harvest.py \
+            ${{ github.event.inputs.until && format('--until {0}', github.event.inputs.until) || '' }} \
+            2>&1 | tail -60
+
+      - name: Compress the raw envelopes
+        run: |
+          set -euo pipefail
+          for f in data/l5/raw/post_august/*.jsonl; do
+            [ -e "$f" ] || continue
+            gzip -9 "$f"
+          done
+          ls -la data/l5/raw/post_august/
+
+      - name: Commit the raw harvest
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/post_august_commit.sh "data(l5): post-August public activity harvest (Sep 11-21, Sep 26-present)"

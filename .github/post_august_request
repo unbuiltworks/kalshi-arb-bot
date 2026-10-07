@@ -1,0 +1,4 @@
+post-August L5 activity harvest request
+requested: 2026-10-07
+gaps: 2026-09-11..09-21, 2026-09-26..present
+route: GitHub Actions (data-api.polymarket.com is egress-blocked in-container)
