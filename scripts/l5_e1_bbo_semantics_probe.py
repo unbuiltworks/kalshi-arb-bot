@@ -152,12 +152,27 @@ def _dec(x: Any) -> Optional[D]:
 # ------------------------------------------------------------------- reads
 
 def read_rest(slug: str) -> Dict[str, Any]:
+    """REST /bbo and /book, each tolerant of a 404.
+
+    MEASURED, NOT GUESSED. Run at +5s into a brand-new window, this
+    crashed with `urllib.error.HTTPError: HTTP Error 404` from
+    `/v1/markets/{slug}/bbo` -- even though `/v1/events/slug/{event}` had
+    already resolved the market a moment earlier. The MARKET resource is
+    not served the instant the window opens; the EVENT is. That matches
+    `l5_pmus_transport`'s own note that `/v1/market/slug/` 404s for these
+    windows while `/v1/events/slug/` carries them.
+
+    This is a defect in the PROBE, not in E1: E1's decision path never
+    calls /bbo -- it reads AuthBook -- and REST here is a cross-check
+    only. So the cross-check retries and, failing that, records the
+    refusal instead of taking the process down.
+    """
     from analysis.l5.e1_cohort import pmus_identity as PI
     t = PI.read_only_transport()
     t0 = time.time()
-    bbo_raw = PI.bbo(slug, t)
+    bbo_raw = _tolerant(PI.bbo, slug, t)
     t1 = time.time()
-    book_raw = PI.book(slug, t)
+    book_raw = _tolerant(PI.book, slug, t)
     t2 = time.time()
     return {"bbo": {"t": t0, "elapsed_s": round(t1 - t0, 3),
                     "raw": bbo_raw,
@@ -166,6 +181,29 @@ def read_rest(slug: str) -> Dict[str, Any]:
                      "raw": book_raw,
                      "candidates": candidates(book_raw),
                      "ladders": ladders(book_raw)}}
+
+
+def _tolerant(fn: Any, slug: str, t: Any, tries: int = 4,
+              pause: float = 15.0) -> Dict[str, Any]:
+    """Call a read-only REST reader, retrying a transient refusal.
+
+    It NEVER raises and it never invents a payload: on exhaustion it
+    returns a record naming the refusal, so a comparison built on it
+    reads INCONCLUSIVE rather than silently comparing against {}.
+    """
+    last = None
+    for i in range(tries):
+        try:
+            got = fn(slug, t)
+            if isinstance(got, dict) and got:
+                return got
+            last = "EMPTY_BODY"
+        except Exception as exc:                            # noqa: BLE001
+            last = "%s: %s" % (type(exc).__name__, exc)
+        if i < tries - 1:
+            time.sleep(pause)
+    return {"REST_READ_REFUSED": last, "attempts": tries,
+            "this_is_a_cross_check_not_the_decision_feed": True}
 
 
 def ladders(payload: Any) -> Dict[str, Any]:
@@ -276,6 +314,12 @@ def _frame_evidence(feed: Any, slug: str) -> Dict[str, Any]:
 
 def compare(rest: Dict[str, Any], ws: Dict[str, Any]) -> Dict[str, Any]:
     bbo_raw = rest["bbo"]["raw"]
+    if "REST_READ_REFUSED" in (bbo_raw or {}):
+        return {"VERDICT": "INCONCLUSIVE: the REST cross-check was "
+                           "refused, so there is nothing to compare "
+                           "against",
+                "rest_read_refused": bbo_raw.get("REST_READ_REFUSED"),
+                "bid_agrees": None, "ask_agrees": None}
     proven = proven_lineage_read(bbo_raw)
     snap = ws.get("snapshot") or {}
     skew = abs(ws["t"] - rest["bbo"]["t"])
