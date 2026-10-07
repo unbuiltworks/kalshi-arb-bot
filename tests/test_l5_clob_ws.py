@@ -223,3 +223,30 @@ def test_the_default_url_is_only_a_candidate_until_proven():
     # The dead hostname must not come back.
     assert not any("ws-subscribe.polymarket.com" in u
                    for u in ws.WS_URL_CANDIDATES)
+
+
+def test_discovery_unpacks_the_selection_tuple(monkeypatch):
+    """Regression: select_l5_active returns (selections, actions).
+
+    Iterating the tuple itself yields two lists, neither with .tokens, so
+    every market reads as single-token and the probe refuses -- which is
+    exactly what happened on the first Railway probe.
+    """
+    import scripts.l5_clob_ws_run as runner
+    from src.l5_book_shadow import Selection
+
+    sel = Selection(venue="polymarket", market="btc-15m-x",
+                    tokens=[{"token": "A", "outcome": "Up"},
+                            {"token": "B", "outcome": "Down"}],
+                    selector="l5_active", why="test")
+    monkeypatch.setattr(runner, "select_l5_active",
+                        lambda *a, **k: ([sel], []), raising=False)
+    import src.l5_book_shadow as _bs
+    monkeypatch.setattr(_bs, "select_l5_active",
+                        lambda *a, **k: ([sel], []))
+    monkeypatch.setattr(_bs.PolymarketVenue, "__init__",
+                        lambda self, *a, **k: None)
+
+    market, tokens = runner.discover_two_token_market()
+    assert market == "btc-15m-x"
+    assert tokens == {"A": "Up", "B": "Down"}

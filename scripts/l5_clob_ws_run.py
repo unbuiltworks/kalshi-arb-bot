@@ -30,7 +30,12 @@ def discover_two_token_market():
                                     poly_tokens, select_l5_active)
     venue = PolymarketVenue(ReadOnlyFetcher(Pacer()))
     try:
-        selections = select_l5_active(venue, limit=100, max_markets=8)
+        # select_l5_active returns a TUPLE (selections, raw_actions) -- not a
+        # list. Iterating the tuple yields two LISTS, neither of which has a
+        # .tokens attribute, so every market silently looked single-token
+        # and the probe refused. Unpack it.
+        selections, _actions = select_l5_active(venue, limit=100,
+                                                max_markets=8)
     except Exception as exc:                                  # noqa: BLE001
         print("discovery failed: %s: %s"
               % (type(exc).__name__, str(exc)[:200]), flush=True)
