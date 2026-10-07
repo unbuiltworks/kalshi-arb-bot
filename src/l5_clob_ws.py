@@ -62,9 +62,33 @@ SCHEMA_VERSION = "l5_clob_ws/1"
 TIMING_WEBSOCKET = "websocket_strict"
 TIMING_REST = "rest_same_second_reachability"
 
-#: UNCONFIRMED until a live SubscriptionProof row exists. Overridable so a
-#: venue change is a configuration change, never a code guess.
-DEFAULT_WS_URL = "wss://ws-subscribe.polymarket.com/ws/market"
+#: UNVERIFIED. Overridable so a venue change is a configuration change,
+#: never a code guess.
+#:
+#: DNS evidence, this container, 2026-10-07T04:4xZ:
+#:   ws-subscribe.polymarket.com        NXDOMAIN  <- my first guess. WRONG.
+#:   ws-subscribe-clob.polymarket.com   NXDOMAIN
+#:   ws.polymarket.com                  NXDOMAIN
+#:   stream.polymarket.com              NXDOMAIN
+#:   ws-live-data.polymarket.com        172.64.153.51   resolves
+#:   clob.polymarket.com                172.64.153.51   resolves
+#: clob/gamma/github all resolve, so this is the HOSTNAME being wrong
+#: rather than the container's DNS being restricted.
+#:
+#: A handshake against BOTH resolving candidates returns HTTP 403 from this
+#: container's egress proxy -- the same 403 it returns for
+#: data-api.polymarket.com, which works fine from Railway. So the endpoint
+#: CANNOT be settled from here and must be probed from the deployed host.
+#:
+#: Until SubscriptionProof.status reads PROVEN on a deployed probe this is
+#: a CANDIDATE, not a contract, and no websocket row may be treated as a
+#: strict-timing observation.
+WS_URL_CANDIDATES = (
+    "wss://ws-live-data.polymarket.com/ws/market",
+    "wss://clob.polymarket.com/ws/market",
+    "wss://ws-live-data.polymarket.com",
+)
+DEFAULT_WS_URL = WS_URL_CANDIDATES[0]
 ENV_WS_URL = "CLOB_WS_URL"
 
 #: Until this is proven live, a gap in frames is UNMEASURED, not quiet.

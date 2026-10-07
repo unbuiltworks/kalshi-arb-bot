@@ -204,3 +204,22 @@ def test_subscribe_names_both_tokens_on_one_socket(tmp_path):
     sub = [f for f in client.sent if f["kind"] == "subscribe"]
     assert len(sub) == 1
     assert sorted(sub[0]["payload"]["assets_ids"]) == ["tokA", "tokB"]
+
+
+def test_the_default_url_is_only_a_candidate_until_proven():
+    """The first hostname I wrote did not exist (NXDOMAIN).
+
+    So the default is recorded as one of several CANDIDATES, each a
+    resolving host, and nothing downstream may treat a websocket row as a
+    strict-timing observation until a deployed SubscriptionProof reads
+    PROVEN. A plausible-looking constant is not a venue contract.
+    """
+    assert ws.DEFAULT_WS_URL in ws.WS_URL_CANDIDATES
+    assert len(ws.WS_URL_CANDIDATES) >= 2
+    for url in ws.WS_URL_CANDIDATES:
+        parsed = ws.parse_ws_url(url)
+        assert parsed["secure"] is True
+        assert parsed["host"].endswith("polymarket.com")
+    # The dead hostname must not come back.
+    assert not any("ws-subscribe.polymarket.com" in u
+                   for u in ws.WS_URL_CANDIDATES)

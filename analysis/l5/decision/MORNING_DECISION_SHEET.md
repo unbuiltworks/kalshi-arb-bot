@@ -59,13 +59,59 @@ reachability/same-second evidence and were not reinterpreted.
 
 ---
 
-## 2. New L5 activity since the canonical corpus — **PENDING** (Lane 3)
+## 2. What happened to L5 after August — **the posture did NOT end**
 
-The decisive question: the August reward program disappeared — did L5
-abandon or change the subsidy-harvesting posture afterward? This governs
-whether the *latest* behavior is worth copying at all.
+**No, L5 did not abandon subsidy harvesting.** There were never one reward
+program but **three**, on three separate payout clocks — and the largest
+one never stopped:
 
----
+| stream | paying days | last payout | post-Aug total |
+|---|---|---|---|
+| `REWARD` (the August liquidity pool) | 6 | **2026-09-06** | $8,229.66 |
+| **`MAKER_REBATE`** (account-level) | **37** | **2026-10-07 — still paying**| **$34,822.79** |
+| `TAKER_REBATE` | 37 | 2026-10-07 | $2,799.98 |
+
+October is the clean cut: every October day observed with **no gaps**,
+`REWARD` a **measured $0.00** throughout, and L5 still traded 70,056 fills
+over 2,641 events. Behavior barely moved — median pair cost 0.9671 →
+0.9649, completion 50.3% → 49.6%, EXTEND share 70.8% → 72.4%. **The subsidy
+mix changed; the policy did not.**
+
+Coverage: **449,340 rows / 437,827 TRADE fills**, all **37 calendar days**
+2026-09-01 → 2026-10-07 with **zero unobserved days**, 0 failed envelopes,
+10,468 duplicates and **0 collisions with differing fields**.
+
+### The implication that matters for copying
+
+Post-August, `REGIME_2026-08-19_ON` alone: matched share 85.2%, median pair
+cost **0.9668**, and only **46.2% completing ≤ $0.96**. So **L5 routinely
+completes pairs above our fee-safe line**, and the economics that make that
+rational are a **maker rebate that is unconfirmed for our account**.
+
+> **The latest behavior is NOT safe to copy at face value.** Spring
+> discipline's `<= 0.96` target stays as-is, and near-$1 tolerance stays
+> locked. This is now evidence-backed rather than conservative by default.
+
+**The decisive unknown:** maker/taker role is not on L5's tape (the role-ish
+field is `CHAIN_TOPIC_POSITION`, and `execution.isAggressor` does not
+exist). Ex-incentive the matched book is therefore somewhere between
+comfortably profitable (mostly maker) and nearly fee-dead (mostly taker) —
+every fee figure is an explicit opposite-corner bound, $0–$110,784. That
+gap is exactly what decides copyability, and we cannot close it from public
+data.
+
+Confidence: **moderate-to-high** on the stream question (read off credited
+cashflow rows, gapless coverage). **LOW** on "is the latest behavior worth
+copying" — deliberately stated as a separate claim.
+
+Two overreaches the lane caught in its own work: it first wrote that
+incentives were the larger term (they are not — the ex-fee matched-pair lock
+$160,793 is ~3.5× the entire credited incentive stack $45,852), and it
+first claimed above-$0.96 completion *proved* subsidy dependence, when it
+is an inference from pricing rather than a measurement. Both corrected
+visibly. Two of the seven required accounting components — directional
+residual P&L and spread capture — are **UNAVAILABLE**, so the total is
+unmeasured rather than estimated.
 
 ## 3. S3 verdict — **INSUFFICIENT**, and the instrument is the finding
 
