@@ -144,15 +144,27 @@ verdict**: on the generous, biased-favorable standard the protocol loses
 money; on the strict standard it cannot be evaluated at all. Neither is a
 case for risking capital.
 
-## 6. Maximum dollars at risk — **$0.00 live tonight**
+## 6. Maximum dollars at risk
 
-No live order was placed overnight, by instruction. No owner value is set;
-no order-capable image is deployed. **A6 remains FILLED but NOT REALIZED** —
-settlement unresolved. At 0.01 shares the PMUS maker rebate is structurally
-$0.00 after the hard cent floor (below 1.62 shares), so A6's liquidity-role
-ambiguity does not affect its rebate economics.
+**Overnight: $0.00.** No live order placed, no owner value set, no
+order-capable image deployed. **A6 remains FILLED but NOT REALIZED** —
+settlement unresolved.
 
----
+**If a Stage-6 cohort were authorized** — note the size, which is NOT the
+0.01 of A6:
+
+| bound | value |
+|---|---|
+| quantity | **1.00 share** (Lane 4's frozen `bounds.py`, not 0.01) |
+| first-leg price ceiling | 0.60 |
+| pair ceiling | 0.96 fee-inclusive |
+| worst residual, one session | **$0.60** notional, **−$0.60** at settlement — Lane 4's arithmetic bound, confirmed empirically |
+| worst drawdown, one probe per market serially (n = 727) | **max DD $13.22**, final −$5.71, longest losing streak 3 |
+| maker rebate | **$0.00** by structure (cent floor at 1.00 share) |
+
+`MAX_DAILY_REALIZED_LOSS_USD = $0.60` holds only on "no automatic repeat" —
+which is the first assumption a *cohort* retires. That is the bound to
+scrutinize before authorizing repeats, not the per-session one.
 
 ## 7. Exact live authorization proposed — **NONE. I recommend against it.**
 
@@ -168,8 +180,25 @@ it comes out **below break-even** — 67.72% against the 78.73% required, and
 be testing the thesis; it would be paying to find out what the data already
 declines to support.
 
-What would change my answer: a fill standard that is *queue-aware* rather
-than book-only. That is exactly what tonight's new evidence is for — see §8.
+**Two caveats I will not let my own verdict overstate**, both raised by the
+lane itself:
+
+1. The selection bias runs **against** the policy, so this does **not**
+   prove Stage-6 unprofitable. "We cannot measure it" forbids "it loses
+   money" from being stated that strongly.
+2. The result is **cross-venue**: the archive is Polymarket international
+   while the fee schedule, rebate floor and grid are PMUS.
+
+Also: all 28,062 evaluable states fall inside `REGIME_2026-08-19_ON`, and
+the three earlier canonical regimes have **zero** evaluable states — so
+pre-08-19 Stage-6 behavior cannot be validated with the data we hold at
+all. The whole evaluable universe is **2.1% of L5's 166-day span**, a
+ceiling rather than a sampling choice.
+
+What would change my answer: a **queue-aware** fill standard rather than a
+book-only one. Historical L2 replay is exhausted — more of it will not move
+this. Only owning the orders, or a print-bearing archive, can supply it.
+See §8.
 
 ## 8. The single highest-value thing to do next
 
