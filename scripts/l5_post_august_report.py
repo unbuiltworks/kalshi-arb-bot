@@ -867,11 +867,32 @@ def write_md(o):
 
     rw = inc["REWARD"]["last_paying_day"]
     mk = inc["MAKER_REBATE"]["last_paying_day"]
+    # The verdict is DERIVED, never hardcoded: it must follow the cashflow rows
+    # even if a later harvest changes them.
+    maker_outlived = bool(rw and mk and mk > rw)
+    maker_days_after = [d for d in inc["MAKER_REBATE"]["paying_days"]
+                        if rw and d > rw]
+    maker_is_largest = (inc["MAKER_REBATE"]["total_usd"]
+                        >= max(inc["REWARD"]["total_usd"],
+                               inc["TAKER_REBATE"]["total_usd"]))
     W("### 3.2 Answer")
     W()
-    W("**L5 did NOT abandon the subsidy-harvesting posture. One of three subsidy")
-    W("streams ended; the largest one continued, and the trading posture tracked the")
-    W("stream that kept paying rather than the one that stopped.**")
+    if maker_outlived:
+        W("**L5 did NOT abandon the subsidy-harvesting posture. One of three subsidy")
+        W("streams ended; a %s one continued for %d further observed day(s), and the"
+          % ("larger" if maker_is_largest else "separate", len(maker_days_after)))
+        W("trading posture tracked the stream that kept paying rather than the one")
+        W("that stopped.**")
+    elif rw and mk:
+        W("**CHANGED ANSWER -- the data no longer supports \"the posture survived\".**")
+        W("`MAKER_REBATE` does not outlive `REWARD` in this harvest (last maker")
+        W("payout %s vs last reward payout %s). Treat the subsidy as having lapsed"
+          % (mk, rw))
+        W("and re-examine before relying on any of the continuation reasoning below.")
+    else:
+        W("**INCONCLUSIVE on the observed rows.** At least one incentive stream has")
+        W("no observed payout in this window, so the end-of-program comparison that")
+        W("the answer depends on cannot be made. Do not read a verdict into this.")
     W()
     W("The evidence, in order:")
     W()
@@ -879,7 +900,10 @@ def write_md(o):
     W("   payout **%s**. It paid a short trailing tail into September and ceased." % rw)
     W("2. **`MAKER_REBATE` did not stop.** It is an *account-level* program on its own")
     W("   payout clock, last observed **%s**, and it never depended on the August" % mk)
-    W("   liquidity pool. It is the **largest** incentive stream in the post-August")
+    W("   liquidity pool. It kept paying on **%d observed day(s) after `REWARD`'s"
+      % len(maker_days_after))
+    W("   final payout**, and it is the **%s** incentive stream in the post-August"
+      % ("largest" if maker_is_largest else "longest-running"))
     W("   window ($%s vs $%s of `REWARD`)."
       % (n(inc["MAKER_REBATE"]["total_usd"]), n(inc["REWARD"]["total_usd"])))
     W("3. **The pricing posture did not retreat to a cheaper, subsidy-free line.**")
