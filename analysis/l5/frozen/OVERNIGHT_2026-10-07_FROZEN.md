@@ -31,10 +31,17 @@ deleted. No parameter tuned or fitted against a result.
 - `derived/activity_windows.json` **understates** the BOOK_ONLY outage by
   29 min 52 s: the OPEN edge could not be written before the code that
   writes it shipped at 04:03. Exclude the TRUE bound above.
-- The **frozen-SPEC mutation bug**: the inherited `_apply` shared mutable
-  state with `DIFF`, so a frozen `SPEC` could be mutated in place with the
-  fingerprint assertion still passing. S6P deep-copies; prior specs are
-  under audit in `analysis/l5/audit/FROZEN_SPEC_MUTATION_AUDIT.md`.
+- The **frozen-SPEC aliasing bug** — **AUDITED, and I had overstated it.**
+  The aliasing is real in 5 specs (`d2f32276`, `f3e54d82`, `0f334019`,
+  `ac6318d5`, `6e7f5aed`), but `assert_frozen()` **FAILS on every one**
+  after an in-place mutation, because the alias is between `SPEC` and
+  `DIFF` and `SPEC` is what gets fingerprinted. Every fingerprint in the
+  repo is a hard-coded literal; there is no runtime-only case. My claim
+  that the assertion "would still pass" was WRONG. The genuine silent
+  finding is `diff_report()`, which reads `DIFF` under NO assertion while
+  runners print it as the authoritative derivation record. Exposure is
+  LATENT (nothing mutates a spec today) and nothing deployed is at risk.
+  See `analysis/l5/audit/FROZEN_SPEC_MUTATION_AUDIT.md`.
 - `qty = 1.00` is an observability choice (`fitted: False`), not economics,
   not a venue constraint, and not L5's sizing. It sits below the rebate
   floor.

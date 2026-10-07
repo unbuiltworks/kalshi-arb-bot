@@ -477,10 +477,26 @@ one extrapolation a model rather than a measurement.
 
 ### Open items for you, in priority order
 
-1. **The latent freeze bug.** `_apply` shared mutable state with `DIFF` in
-   the *inherited* derivation pattern, so a frozen `SPEC` could be mutated
-   in place with the fingerprint assertion still passing. S6P deep-copies;
-   the older specs want checking. I did not touch XR2W on a hunch overnight.
+1. **The freeze bug — audited, and less severe than I said.** The aliasing
+   is real in **5 specs**, but `assert_frozen()` **FAILS on all five** after
+   an in-place mutation: the alias is between `SPEC` and `DIFF`, and `SPEC`
+   is what `fingerprint()` serializes, so corrupting `DIFF` necessarily
+   moves the sha off the literal. **Every fingerprint in the repo is a
+   hard-coded literal** — that discipline is what contains the bug, and my
+   "assertion still passes" claim was wrong.
+   The real silent finding is **`diff_report()`**: it reads `DIFF` under
+   **no assertion**, and the runners print it as the authoritative
+   derivation record. A fingerprint mismatch is loud; a falsified
+   `keys_added`/`keys_changed` is not — and that is precisely what an
+   operator reads to find out *why* a freeze failed.
+   Exposure is **latent**: nothing mutates a spec today, but the runners
+   hand aliased objects out **by reference** (`pre["wire_serialization"] =
+   X.SPEC[...]` in three scripts), so one future line annotating `pre`
+   would be a live runner writing into a frozen spec *after* its check
+   passed. Nothing deployed is at risk. Recommended fix, unapplied:
+   deep-copy at the three runner embed sites — touches scripts not specs,
+   changes no fingerprint, closes the only live route. **Do not touch
+   XR2W**: deployed, independently verified, carries A6, and inert.
 2. **The `qty = 1.00` decision** — §4b. A dead zone between partial-fill
    observability and rebate observability. Unchanged per instruction.
 3. **Prove the websocket** from the deployed host; my first hostname did not
