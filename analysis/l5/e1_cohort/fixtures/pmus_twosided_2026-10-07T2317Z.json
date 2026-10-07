@@ -1,0 +1,63 @@
+{
+ "LABEL": "REAL TWO-SIDED PMUS READINGS, CAPTURED READ-ONLY. VERDICT: DISAGREEMENT. Not pinned as an agreement fixture, because it is not one.",
+ "provenance": {
+  "venue": "polymarket_us",
+  "slug": "cpc-btc-updown-15m-2026-10-07-2315z",
+  "T_utc": "2026-10-07T23:17:00Z",
+  "seconds_into_window": 119.2,
+  "deployment": "7f8b36f4-883c-43a3-89a2-2fe8c3274b48",
+  "probe": "scripts/l5_e1_bbo_twosided_proof.py",
+  "artifact_sha": "f88d3e1f55fddf88a1c9b2acb3f6d9df9e691950",
+  "read_only": true,
+  "venue_post": "none",
+  "order_submitted": false,
+  "latch_touched": false,
+  "cohort_advanced": false
+ },
+ "verdict": "DISAGREEMENT: STOP",
+ "readings": {
+  "1_rest_bbo": {"bid": null, "ask": null,
+                 "path": "marketData.bestBid/.bestAsk",
+                 "status": "REFUSED -- the /bbo read did not return a body"},
+  "2_rest_book_top": {"bid": "0.8100", "ask": "0.8200",
+                      "path": "marketData.bids[0]/.offers[0]"},
+  "3_raw_ws_frame": {"bid": "0.8200", "ask": "0.8300",
+                     "path": "the ingested frame's own bids[0]/offers[0]"},
+  "4_authbook_snapshot": {"bid": "0.8200", "ask": "0.8300",
+                          "path": "AuthBook.snapshot()"}
+ },
+ "what_agrees": {
+  "readings_3_and_4": "EXACTLY: 0.8200 / 0.8300. The raw websocket frame and AuthBook's fold of it are identical on both sides, so AuthBook's PARSE of the authenticated feed is correct for this state.",
+  "ladder_ordering": "both sides monotonic best-first in BOTH routes: REST /book bids 0.8100,0.8000,0.7900,0.7800,0.7700 and offers 0.8200,0.8300,0.8400,0.8500,0.8600",
+  "ws_has_no_best_field": "confirmed again: frame keys are exactly [bids, marketSlug, offers, state, stats, transactTime] with bestBid and bestAsk both null",
+  "both_books_uncrossed": true
+ },
+ "what_disagrees": {
+  "rest_book_vs_ws": "one tick on BOTH sides: REST /book 0.8100/0.8200 against WS 0.8200/0.8300",
+  "rest_bbo": "absent entirely"
+ },
+ "why_this_is_not_yet_a_parse_verdict": [
+  "THE INSTRUMENT'S SKEW METRIC WAS WRONG. `skew_s` was computed from the /bbo read's START time, not from the /book read's time. The /bbo read was refused after 3 attempts with 3s pauses, and /book was read only AFTER that, so the /book reading is roughly 6-9 SECONDS LATER than the websocket snapshot -- while the probe reported skew_s 0.0 and contemporaneous true. The reported contemporaneity is not trustworthy for reading 2.",
+  "A BTC15m BOOK MOVES CONSTANTLY AT +119s. An earlier capture on this venue recorded 103 book_updates in 45 seconds. A one-tick move over several seconds is ordinary market behaviour, not evidence of a parse defect.",
+  "THE DEPTH COUNTS ALSO DIFFER: the WS frame carried 17 offers, REST /book carried 18, which is itself consistent with two different instants rather than two readings of one instant.",
+  "SO THE HONEST STATUS IS: readings 3 and 4 agree and are the ones E1 actually decides on; reading 2 is not established as contemporaneous; reading 1 is missing. This run CANNOT distinguish 'the book moved' from 'REST and WS disagree', and per the standing instruction a disagreement means STOP rather than interpret."
+ ],
+ "rest_book_ladders": {
+  "bid": {"n_levels": 35, "level_0": "0.8100", "level_0_qty": "2800.4900",
+          "first_5": ["0.8100", "0.8000", "0.7900", "0.7800", "0.7700"],
+          "level_0_is_the_best": true, "monotonic_best_first": true},
+  "offer": {"n_levels": 18, "level_0": "0.8200", "level_0_qty": "515.7400",
+            "first_5": ["0.8200", "0.8300", "0.8400", "0.8500", "0.8600"],
+            "level_0_is_the_best": true, "monotonic_best_first": true}
+ },
+ "raw_ws_frame_shape": {
+  "slug": "cpc-btc-updown-15m-2026-10-07-2315z",
+  "keys": ["bids", "marketSlug", "offers", "state", "stats", "transactTime"],
+  "n_bids": 35, "n_offers": 17,
+  "bid0": {"px": {"value": "0.8200", "currency": "USD"}, "price": null, "qty": "1508.4300"},
+  "offer0": {"px": {"value": "0.8300", "currency": "USD"}, "price": null, "qty": "1718.7500"},
+  "bestBid": null, "bestAsk": null,
+  "state": "MARKET_STATE_OPEN"
+ },
+ "NOT_A_REGRESSION_FIXTURE": "This file is EVIDENCE, not a pinned expectation. Pinning a disagreement as a regression test would encode an unresolved question as correct behaviour."
+}
