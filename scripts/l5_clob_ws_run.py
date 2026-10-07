@@ -19,6 +19,35 @@ ENV_TOKEN_UP = "CLOB_WS_TOKEN_UP"
 ENV_TOKEN_DOWN = "CLOB_WS_TOKEN_DOWN"
 
 
+def discover_two_token_market():
+    """One live market quoting BOTH outcome tokens. Read-only.
+
+    Uses the collector's own venue/discovery/pacer code so the probe cannot
+    drift from what the REST arm actually tracks, and cannot exceed the
+    shared request ceiling.
+    """
+    from src.l5_book_shadow import (Pacer, PolymarketVenue, ReadOnlyFetcher,
+                                    poly_tokens, select_l5_active)
+    venue = PolymarketVenue(ReadOnlyFetcher(Pacer()))
+    try:
+        selections = select_l5_active(venue, limit=100, max_markets=8)
+    except Exception as exc:                                  # noqa: BLE001
+        print("discovery failed: %s: %s"
+              % (type(exc).__name__, str(exc)[:200]), flush=True)
+        return "", {}
+    for sel in selections:
+        # Selection.tokens is [{"token": <id>, "outcome": <label>}, ...] --
+        # a LIST of dicts, not a mapping. Read it as the collector writes it.
+        rows = [t for t in (getattr(sel, "tokens", None) or [])
+                if isinstance(t, dict) and t.get("token")]
+        if len(rows) >= 2:
+            pairs = {str(r["token"]): str(r.get("outcome") or "")
+                     for r in rows[:2]}
+            if len(pairs) == 2:
+                return str(getattr(sel, "market", "") or ""), pairs
+    return "", {}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--probe-seconds", type=float, default=20.0)
@@ -42,10 +71,17 @@ def main(argv=None) -> int:
         if tid:
             tokens[tid] = outcome
     if len(tokens) != 2 or not market:
-        print("REFUSED: need %s plus BOTH %s and %s; a single-token "
-              "subscription cannot answer a two-token timing question"
-              % (ENV_MARKET, ENV_TOKEN_UP, ENV_TOKEN_DOWN), flush=True)
+        # Nothing was pinned, so discover a two-token market with the
+        # collector's OWN discovery code rather than hardcoding ids that
+        # would be stale within the hour. Read-only, GET-only, and it
+        # reuses the same pacer ceiling.
+        market, tokens = discover_two_token_market()
+    if len(tokens) != 2 or not market:
+        print("REFUSED: need a market with BOTH token ids; a single-token "
+              "subscription cannot answer a two-token timing question",
+              flush=True)
         return 2
+    print("PROBE TARGET market=%s tokens=%s" % (market, tokens), flush=True)
 
     rep = probe(market, tokens, root, seconds=args.probe_seconds)
     print(json.dumps(rep, sort_keys=True)[:4000], flush=True)
