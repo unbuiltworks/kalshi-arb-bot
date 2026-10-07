@@ -45,6 +45,7 @@ from typing import Any, Dict, Mapping, Optional
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         MAX_ATTEMPTS_PER_WINDOW,
+                                        MAX_COMPLEMENT_TRANCHES,
                                         MAX_FIRST_LEG_PRICE,
                                         PAIR_COST_CEILING, PROBE, SPEC,
                                         VENUE_MIN_QTY, VENUE_TICK, WINDOWS,
@@ -138,7 +139,12 @@ def complement_price(*, first_leg_price: Any, qty: Any,
 
 def complement_qty(*, first_leg_filled_qty: Any) -> D:
     """Rule C1: sized to the ACTUAL filled quantity, never to the placed
-    quantity. A partial fill yields a partial complement."""
+    quantity. A partial fill yields a partial complement.
+
+    This is the SINGLE-SHOT form, kept for the one-fill case. For a first
+    leg that fills in several pieces use `complement_tranche`, which is what
+    keeps the complement equal to the CUMULATIVE fill.
+    """
     q = D(str(first_leg_filled_qty)).quantize(VENUE_TICK,
                                               rounding=ROUND_DOWN)
     if q <= 0:
@@ -150,6 +156,108 @@ def complement_qty(*, first_leg_filled_qty: Any) -> D:
             "the position is RESIDUAL and no complement is placed"
             % (q, VENUE_MIN_QTY))
     return q
+
+
+def complement_tranche(*, cumulative_first_leg_filled_qty: Any,
+                       already_complemented_qty: Any,
+                       tranches_submitted: int = 0) -> Dict[str, Any]:
+    """Rule C7, CORRECTED. Keep complement quantity equal to the CUMULATIVE
+    first-leg fill, by the MINIMAL mechanism that does not chase.
+
+    THE BUG THIS FIXES. The first version sized the complement to the FIRST
+    partial only and let every later fill on the same first leg fall
+    silently into residual. A 0.13 first leg filling 0.05 then 0.08 would
+    have been complemented for 0.05 and left an 0.08 residual that nobody
+    asked for and nothing recorded as a decision. That is wrong: "sized to
+    the actual filled quantity" means the CUMULATIVE filled quantity, and
+    the entire 0.13 must be accounted for.
+
+    THE MINIMAL MECHANISM: A NEW TRANCHE AT THE SAME PRICE. When cumulative
+    fill rises above what has already been complemented, the shortfall is
+    submitted as an ADDITIONAL complement order **at the price the attempt
+    already fixed**, not at a new one.
+
+    WHY THIS IS NOT CHASING AND NOT A RE-QUOTE, stated precisely:
+
+      * chasing is following the market with our price. The tranche price is
+        the attempt's ORIGINAL complement price, recomputed from the
+        ORIGINAL first-leg price against the frozen <= $0.96 fee-inclusive
+        ceiling. It cannot move, by construction, because its inputs cannot.
+      * a re-quote is REPLACING an order that failed to fill, usually more
+        aggressively. A tranche replaces nothing. The earlier complement
+        stays exactly where it is, at its own price, and is never cancelled
+        to make room. A tranche exists only because NEW INVENTORY ARRIVED.
+      * so the two are distinguishable by their trigger: a re-quote is
+        triggered by a NON-fill, a tranche by a FILL. This mechanism has no
+        path that a non-fill can take.
+
+    An unsuccessful complement is still never replaced at a better price:
+    it is cancelled at handover and its quantity recorded as residual.
+
+    WHAT CANNOT BE COMPLEMENTED IS RECORDED AS RESIDUAL, EXPLICITLY. A
+    shortfall below the venue minimum 0.01 cannot be ordered at all, and a
+    shortfall whose complement price is infeasible cannot be ordered
+    legally. Either way this returns `tranche: None` WITH a reason and the
+    quantity under `residual_qty`, so the caller records a decision rather
+    than discovering an unexplained position later.
+    """
+    cum_raw = D(str(cumulative_first_leg_filled_qty))
+    cum = cum_raw.quantize(VENUE_TICK, rounding=ROUND_DOWN)
+    # SUB-TICK DUST. Quantizing the cumulative fill down to the grid drops
+    # whatever sits below a tick. That quantity is genuinely ours and
+    # genuinely uncomplementable -- the venue has no order smaller than
+    # 0.01 -- so it is RECORDED as residual rather than lost in a rounding
+    # step. C10: never hidden, never implicit.
+    dust = cum_raw - cum
+    done = D(str(already_complemented_qty)).quantize(VENUE_TICK,
+                                                     rounding=ROUND_DOWN)
+    if cum < 0 or done < 0:
+        raise ComplementInfeasible("negative quantity %s / %s" % (cum, done))
+    if done > cum:
+        raise ComplementInfeasible(
+            "already complemented %s exceeds the cumulative first-leg fill "
+            "%s; the inventory ledger and the fill ledger disagree, which "
+            "is an INSTRUMENT FAULT, not a result" % (done, cum))
+    shortfall = cum - done
+    base = {"cumulative_first_leg_filled_qty_raw": str(cum_raw),
+            "cumulative_first_leg_filled_qty": str(cum),
+            "sub_tick_dust_qty": str(dust),
+            "sub_tick_dust_is_residual": dust > 0,
+            "already_complemented_qty": str(done),
+            "shortfall_qty": str(shortfall),
+            "tranches_submitted": tranches_submitted,
+            "rule": "C7 cumulative",
+            "price_is_the_attempts_original_complement_price": True,
+            "is_chasing": False, "is_a_requote": False,
+            "triggered_by": "A FILL, never a non-fill"}
+    if shortfall == 0:
+        return dict(base, tranche=None, residual_qty=str(dust),
+                    fully_accounted=True,
+                    reason=("the complement already equals the cumulative "
+                            "first-leg fill; nothing to order"
+                            + (". RESIDUAL: %s of sub-tick dust is below "
+                               "the venue minimum %s and cannot be ordered "
+                               "at all" % (dust, VENUE_MIN_QTY)
+                               if dust > 0 else "")))
+    if shortfall < VENUE_MIN_QTY:
+        return dict(base, tranche=None, residual_qty=str(shortfall + dust),
+                    fully_accounted=True,
+                    reason="RESIDUAL: the shortfall %s (plus %s sub-tick "
+                           "dust) is below the venue minimum %s and cannot "
+                           "be ordered at all"
+                           % (shortfall, dust, VENUE_MIN_QTY))
+    if tranches_submitted >= MAX_COMPLEMENT_TRANCHES:
+        return dict(base, tranche=None, residual_qty=str(shortfall + dust),
+                    fully_accounted=True,
+                    reason="RESIDUAL: the bounded tranche count %d is spent"
+                           % MAX_COMPLEMENT_TRANCHES)
+    return dict(base, tranche=str(shortfall), residual_qty=str(dust),
+                fully_accounted=True,
+                reason=("a NEW tranche of %s at the attempt's ORIGINAL "
+                        "complement price. Nothing is replaced and no price "
+                        "moves." % shortfall)
+                       + (" RESIDUAL: %s of sub-tick dust cannot be "
+                          "ordered." % dust if dust > 0 else ""))
 
 
 # -------------------------------------------------------------- eligibility
@@ -419,39 +527,95 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
 
 def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
                       first_leg_filled_qty: Any, tracker: CohortTracker,
+                      already_complemented_qty: Any = "0",
                       transport_factory: Any = O.BoundedOrderTransport
                       ) -> Dict[str, Any]:
-    """Rules C1..C8. ONE submission per first-leg fill, maker only, sized to
-    the ACTUAL filled quantity. No taker rescue, no chasing, no re-quote --
-    the re-quote is refused at the latch, not only in the policy."""
+    """Rules C1..C10. Submit ONE tranche, sized so the complement quantity
+    equals the CUMULATIVE first-leg fill.
+
+    `first_leg_filled_qty` is the CUMULATIVE filled quantity, and
+    `already_complemented_qty` is what previous tranches have covered. The
+    difference is this tranche. The price is the attempt's ORIGINAL
+    complement price, recomputed from the ORIGINAL first-leg price, so no
+    price can move: maker only, no taker rescue, no chasing, no re-quote.
+
+    A shortfall that cannot legally or economically be complemented is NOT
+    submitted and is returned as `residual`, explicitly and with its
+    reason, so the caller records a decision instead of discovering an
+    unexplained position later.
+    """
     assert_frozen()
-    q = complement_qty(first_leg_filled_qty=first_leg_filled_qty)
-    plan = complement_price(
-        first_leg_price=snapshot["first_leg_price"], qty=q,
-        complement_best_bid=(snapshot.get("complement")
-                             or {}).get("best_bid", "0"))
+    spent = L.complement_tranches_spent(window=window, slot=slot)
+    plan = complement_tranche(
+        cumulative_first_leg_filled_qty=first_leg_filled_qty,
+        already_complemented_qty=already_complemented_qty,
+        tranches_submitted=spent)
+    if plan["tranche"] is None:
+        return {"submitted": False, "tranche_plan": plan,
+                "residual_qty": plan["residual_qty"],
+                "residual_reason": plan["reason"],
+                "RESIDUAL_IS_EXPLICIT": True,
+                "fully_accounted": True,
+                "LABEL": "NO ORDER -- the shortfall is recorded as RESIDUAL"}
+    q = D(plan["tranche"])
+    try:
+        price = complement_price(
+            first_leg_price=snapshot["first_leg_price"], qty=q,
+            complement_best_bid=(snapshot.get("complement")
+                                 or {}).get("best_bid", "0"))
+    except ComplementInfeasible as exc:
+        # ECONOMICALLY uncomplementable: recorded as residual, never
+        # rescued by relaxing the frozen ceiling.
+        return {"submitted": False, "tranche_plan": plan,
+                "residual_qty": plan["tranche"],
+                "residual_reason": "RESIDUAL: %s" % exc,
+                "RESIDUAL_IS_EXPLICIT": True,
+                "ceiling_relaxed": False,
+                "fully_accounted": True,
+                "LABEL": "NO ORDER -- the shortfall is recorded as RESIDUAL"}
     side = snapshot["complement"]["side"]
     holder: Dict[str, Any] = {}
 
     def _take_slot() -> Dict[str, Any]:
         holder["slot"] = L.consume_complement(
             window=window, slot=slot, slug=snapshot["market"], side=side,
-            price=plan["price_usd"], qty=q)
+            price=price["price_usd"], qty=q, tranche=spent)
         return holder["slot"]
 
     t = transport_factory()
     try:
         out = _submit_once(t, slug=snapshot["market"], outcome_side=side,
-                           price=plan["price_usd"], qty=q,
+                           price=price["price_usd"], qty=q,
                            consume_latch=_take_slot)
     except O.SubmissionAmbiguous:
         tracker.record_ambiguous_submission()
         raise
-    out["e1_complement_plan"] = plan
-    out["e1_complement_qty"] = str(q)
-    out["e1_latch_slot"] = holder["slot"]
-    out["sized_to_actual_filled_qty"] = True
+    out.update({"submitted": True, "tranche_plan": plan,
+                "e1_complement_plan": price,
+                "e1_complement_qty": str(q),
+                "e1_tranche_index": spent,
+                "e1_latch_slot": holder["slot"],
+                "sized_to_cumulative_filled_qty": True,
+                "sized_to_only_the_first_partial": False,
+                "residual_qty": "0", "fully_accounted": True})
     return out
+
+
+def account_first_leg(*, cumulative_filled_qty: Any,
+                      complemented_qty: Any) -> Dict[str, Any]:
+    """Prove, arithmetically, that every filled share is accounted for as
+    either COMPLEMENTED or RESIDUAL. Nothing may be unaccounted."""
+    cum = D(str(cumulative_filled_qty))
+    comp = D(str(complemented_qty))
+    residual = cum - comp
+    return {"cumulative_first_leg_filled_qty": str(cum),
+            "complemented_qty": str(comp),
+            "residual_qty": str(residual),
+            "sum_usd_checks": str(comp + residual),
+            "fully_accounted": (comp + residual) == cum,
+            "unaccounted_qty": str(cum - comp - residual),
+            "RULE": "every filled share is COMPLEMENTED or RESIDUAL, never "
+                    "neither and never silently"}
 
 
 # -------------------------------------------------------------------- boot

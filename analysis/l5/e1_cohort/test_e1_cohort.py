@@ -24,6 +24,7 @@ from analysis.l5.e1_cohort import runner as RUN
 from analysis.l5.e1_cohort import spec as SP
 from analysis.l5.e1_cohort import stopping as ST
 from analysis.l5.live_exec2 import orders as O
+from src import l5_order_body as OB
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -270,13 +271,173 @@ def test_partial_first_leg_fill_sizes_the_complement_to_the_actual_fill(armed):
                                 first_leg_filled_qty="0.07",
                                 tracker=ST.CohortTracker(),
                                 transport_factory=lambda: t)
+    assert out["submitted"] is True
     assert out["e1_complement_qty"] == "0.07"
-    assert out["sized_to_actual_filled_qty"] is True
+    assert out["sized_to_cumulative_filled_qty"] is True
+    assert out["sized_to_only_the_first_partial"] is False
     submitted = [c for c in t.calls if c[1] == O.SUBMIT_PATH]
     assert len(submitted) == 1
     assert submitted[0][2]["quantity"] == 0.07
-    # NOT the placed 0.13
-    assert submitted[0][2]["quantity"] != 0.13
+    assert submitted[0][2]["quantity"] != 0.13      # NOT the placed qty
+
+
+# ============ THE CORRECTED CUMULATIVE COMPLEMENT ACCOUNTING (C7/C9/C10) ===
+
+def test_005_then_008_accounts_for_the_whole_013():
+    """THE BUG THAT WAS FIXED. The first version complemented 0.05 and left
+    an 0.08 residual nobody decided on. The whole 0.13 must be accounted."""
+    a = RUN.complement_tranche(cumulative_first_leg_filled_qty="0.05",
+                               already_complemented_qty="0",
+                               tranches_submitted=0)
+    assert a["tranche"] == "0.05" and D(a["residual_qty"]) == D("0")
+    b = RUN.complement_tranche(cumulative_first_leg_filled_qty="0.13",
+                               already_complemented_qty="0.05",
+                               tranches_submitted=1)
+    assert b["tranche"] == "0.08", "the LATER 0.08 must be complemented too"
+    assert D(b["residual_qty"]) == D("0")
+    # and the accounting closes exactly
+    acct = RUN.account_first_leg(cumulative_filled_qty="0.13",
+                                 complemented_qty="0.13")
+    assert acct["fully_accounted"] is True
+    assert acct["residual_qty"] == "0.00"
+    assert D(acct["unaccounted_qty"]) == D("0")
+    # nothing is left over once both tranches are in
+    c = RUN.complement_tranche(cumulative_first_leg_filled_qty="0.13",
+                               already_complemented_qty="0.13",
+                               tranches_submitted=2)
+    assert c["tranche"] is None and D(c["residual_qty"]) == D("0")
+    assert "already equals" in c["reason"]
+
+
+def test_repeated_partials_are_each_accounted():
+    """0.01 at a time, thirteen times. Every share is complemented."""
+    done = D("0")
+    tranches = 0
+    for i in range(1, 14):
+        cum = (D("0.01") * i)
+        plan = RUN.complement_tranche(
+            cumulative_first_leg_filled_qty=cum,
+            already_complemented_qty=done, tranches_submitted=tranches)
+        assert plan["tranche"] == str(D("0.01")), (i, plan)
+        done += D(plan["tranche"])
+        tranches += 1
+    assert done == D("0.13")
+    assert RUN.account_first_leg(cumulative_filled_qty="0.13",
+                                 complemented_qty=done)["fully_accounted"]
+    assert tranches == SP.MAX_COMPLEMENT_TRANCHES == 13
+
+
+def test_a_tranche_is_not_chasing_and_not_a_requote():
+    """The price cannot move: it is recomputed from the ORIGINAL first-leg
+    price, and the trigger is a FILL, never a non-fill."""
+    first = RUN.complement_price(first_leg_price="0.50", qty="0.05",
+                                 complement_best_bid="0.46")
+    # the market moved against us; the tranche price is unchanged because
+    # it is capped by the ORIGINAL first-leg price and the frozen ceiling
+    later = RUN.complement_price(first_leg_price="0.50", qty="0.08",
+                                 complement_best_bid="0.46")
+    assert first["price_usd"] == later["price_usd"]
+    plan = RUN.complement_tranche(cumulative_first_leg_filled_qty="0.13",
+                                  already_complemented_qty="0.05",
+                                  tranches_submitted=1)
+    assert plan["is_chasing"] is False
+    assert plan["is_a_requote"] is False
+    assert plan["triggered_by"] == "A FILL, never a non-fill"
+    assert plan["price_is_the_attempts_original_complement_price"] is True
+    assert SP.SPEC["complement"]["tranche_trigger"] == \
+        "A_FILL_NEVER_A_NON_FILL"
+
+
+def test_an_unfillable_complement_is_never_replaced_more_aggressively():
+    """A NON-fill produces no tranche at all: the mechanism has no path a
+    non-fill can take."""
+    # cumulative fill unchanged -> no tranche, whatever happened to the
+    # complement that is resting
+    plan = RUN.complement_tranche(cumulative_first_leg_filled_qty="0.05",
+                                  already_complemented_qty="0.05",
+                                  tranches_submitted=1)
+    assert plan["tranche"] is None
+    assert SP.SPEC["complement"]["requote"] is False
+    assert SP.SPEC["complement"]["chasing"] is False
+
+
+def test_sub_tick_dust_is_EXPLICITLY_residual_and_never_rounded_away():
+    """C10. A cumulative fill off the grid leaves dust below the venue
+    minimum. It is OURS and it is uncomplementable, so it is RECORDED as
+    residual rather than lost in a quantize step."""
+    plan = RUN.complement_tranche(
+        cumulative_first_leg_filled_qty="0.135",
+        already_complemented_qty="0.13", tranches_submitted=1)
+    assert plan["tranche"] is None
+    assert plan["sub_tick_dust_qty"] == "0.005"
+    assert plan["sub_tick_dust_is_residual"] is True
+    assert D(plan["residual_qty"]) == D("0.005")
+    assert "RESIDUAL" in plan["reason"] and "dust" in plan["reason"]
+    # dust riding alongside a real tranche is still reported
+    p2 = RUN.complement_tranche(cumulative_first_leg_filled_qty="0.137",
+                                already_complemented_qty="0.05",
+                                tranches_submitted=1)
+    assert p2["tranche"] == "0.08"
+    assert D(p2["residual_qty"]) == D("0.007")
+    assert "dust" in p2["reason"]
+    # nothing is unaccounted: tranche + dust + done == the raw fill
+    assert (D(p2["tranche"]) + D(p2["residual_qty"])
+            + D(p2["already_complemented_qty"])) == D("0.137")
+    # a clean on-grid shortfall has no dust
+    p3 = RUN.complement_tranche(cumulative_first_leg_filled_qty="0.10",
+                                already_complemented_qty="0.09",
+                                tranches_submitted=1)
+    assert p3["tranche"] == "0.01" and D(p3["residual_qty"]) == 0
+    assert p3["sub_tick_dust_is_residual"] is False
+
+
+def test_an_economically_uncomplementable_shortfall_is_residual(armed):
+    """A shortfall whose complement price is infeasible under the frozen
+    $0.96 ceiling is recorded as RESIDUAL, not rescued."""
+    snap = snapshot(first_leg_price="0.60", complement_bid="0.00",
+                    first_leg={"side": "UP", "best_bid": "0.60",
+                               "best_ask": "0.62"})
+    out = RUN.submit_complement(window=0, slot=0, snapshot=snap,
+                                first_leg_filled_qty="0.13",
+                                tracker=ST.CohortTracker(),
+                                transport_factory=FakeTransport)
+    assert out["submitted"] is False
+    assert out["residual_qty"] == "0.13"
+    assert out["RESIDUAL_IS_EXPLICIT"] is True
+    assert out["ceiling_relaxed"] is False
+    assert "RESIDUAL" in out["residual_reason"]
+
+
+def test_an_inconsistent_ledger_is_an_instrument_fault():
+    with pytest.raises(RUN.ComplementInfeasible) as ei:
+        RUN.complement_tranche(cumulative_first_leg_filled_qty="0.05",
+                               already_complemented_qty="0.13")
+    assert "INSTRUMENT FAULT" in str(ei.value)
+
+
+def test_two_tranches_submit_as_two_orders_at_the_same_price(armed):
+    snap = snapshot()
+    tr = ST.CohortTracker()
+    t1 = FakeTransport()
+    a = RUN.submit_complement(window=0, slot=0, snapshot=snap,
+                              first_leg_filled_qty="0.05",
+                              already_complemented_qty="0", tracker=tr,
+                              transport_factory=lambda: t1)
+    t2 = FakeTransport()
+    b = RUN.submit_complement(window=0, slot=0, snapshot=snap,
+                              first_leg_filled_qty="0.13",
+                              already_complemented_qty="0.05", tracker=tr,
+                              transport_factory=lambda: t2)
+    assert a["e1_complement_qty"] == "0.05"
+    assert b["e1_complement_qty"] == "0.08"
+    assert a["e1_tranche_index"] == 0 and b["e1_tranche_index"] == 1
+    # SAME price on the wire: no price moved
+    pa = [c for c in t1.calls if c[1] == O.SUBMIT_PATH][0][2]["price"]
+    pb = [c for c in t2.calls if c[1] == O.SUBMIT_PATH][0][2]["price"]
+    assert pa == pb
+    # two DISTINCT latch slots, so neither is a re-quote of the other
+    assert a["e1_latch_slot"]["path"] != b["e1_latch_slot"]["path"]
+    assert L.complement_tranches_spent(window=0, slot=0) == 2
 
 
 def test_a_fill_below_the_venue_minimum_is_residual_not_a_complement():
@@ -286,16 +447,24 @@ def test_a_fill_below_the_venue_minimum_is_residual_not_a_complement():
         RUN.complement_qty(first_leg_filled_qty="0")
 
 
-def test_no_requote_the_second_complement_is_refused_at_the_latch(armed):
-    snap = snapshot()
+def test_no_requote_the_same_tranche_is_refused_at_the_latch(armed):
+    """Re-submitting the SAME tranche is refused by the latch, not merely by
+    policy. A LATER tranche is a different slot and is permitted, because
+    its trigger is a new fill."""
     tr = ST.CohortTracker()
-    RUN.submit_complement(window=0, slot=3, snapshot=snap,
-                          first_leg_filled_qty="0.13", tracker=tr,
-                          transport_factory=FakeTransport)
+    L.consume_complement(window=0, slot=3, slug="m", side="DOWN",
+                         price="0.46", qty="0.13", tranche=0)
     with pytest.raises(L.LatchSpent):
-        RUN.submit_complement(window=0, slot=3, snapshot=snap,
-                              first_leg_filled_qty="0.13", tracker=tr,
-                              transport_factory=FakeTransport)
+        L.consume_complement(window=0, slot=3, slug="m", side="DOWN",
+                             price="0.46", qty="0.13", tranche=0)
+    # tranche 1 is a DIFFERENT named slot
+    L.consume_complement(window=0, slot=3, slug="m", side="DOWN",
+                         price="0.46", qty="0.01", tranche=1)
+    assert L.complement_tranches_spent(window=0, slot=3) == 2
+    # and the tranche count is bounded by the venue grid
+    with pytest.raises(L.LatchUnavailable):
+        L.consume_complement(window=0, slot=3, slug="m", side="DOWN",
+                             price="0.46", qty="0.01", tranche=13)
 
 
 def test_spec_forbids_taker_rescue_chasing_and_requote():
@@ -1168,6 +1337,209 @@ def test_the_raw_tape_yields_the_whole_estimation_chain(tmp_path):
     assert sorted(chain["timings"]["time_to_completion_s"]) == [11.0, 40.0]
 
 
+# --- THE FIVE PARTIAL-FILL SEQUENCES, in the RAW-TAPE tests -------------
+
+SEQ_A = "0.05_then_0.08"
+SEQ_B = "repeated_partials"
+SEQ_C = "complement_partials"
+SEQ_D = "cancellation_race"
+SEQ_E = "first_leg_fill_while_complement_outstanding"
+
+
+def _record_five_sequences(rec):
+    """All five sequences the owner requires, written to the tape as the
+    runner would, so each can be reconstructed AFTER THE FACT."""
+
+    # --- A: 0.05 then 0.08. Two complement tranches, SAME price, whole
+    # --- 0.13 accounted for.
+    for i, (cum, tranche) in enumerate(((("0.05"), "0.05"),
+                                        (("0.13"), "0.08"))):
+        rec.record_event(window=0, slot=0, event="FIRST_LEG_PARTIAL_FILL",
+                         venue_ts="2026-10-07T00:00:0%dZ" % (i + 1),
+                         monotonic_ns=1000 + i,
+                         detail={"sequence": SEQ_A, "fill_qty": tranche,
+                                 "cumulative_filled_qty": cum})
+        rec.record_event(window=0, slot=0, event="COMPLEMENT_TRANCHE_SUBMIT",
+                         venue_ts="2026-10-07T00:00:0%dZ" % (i + 2),
+                         monotonic_ns=1010 + i,
+                         detail={"sequence": SEQ_A, "tranche_index": i,
+                                 "qty": tranche, "price": "0.46",
+                                 "cumulative_complemented_qty": cum,
+                                 "is_a_requote": False,
+                                 "is_chasing": False,
+                                 "triggered_by": "FILL"})
+
+    # --- B: repeated partials, 0.01 x 13.
+    for i in range(13):
+        cum = str(D("0.01") * (i + 1))
+        rec.record_event(window=0, slot=1, event="FIRST_LEG_PARTIAL_FILL",
+                         venue_ts="2026-10-07T00:01:%02dZ" % i,
+                         monotonic_ns=2000 + i,
+                         detail={"sequence": SEQ_B, "fill_qty": "0.01",
+                                 "cumulative_filled_qty": cum})
+        rec.record_event(window=0, slot=1, event="COMPLEMENT_TRANCHE_SUBMIT",
+                         venue_ts="2026-10-07T00:01:%02dZ" % i,
+                         monotonic_ns=2050 + i,
+                         detail={"sequence": SEQ_B, "tranche_index": i,
+                                 "qty": "0.01", "price": "0.46",
+                                 "cumulative_complemented_qty": cum})
+
+    # --- C: complement PARTIALS. The complement itself fills in pieces, so
+    # --- the uncovered remainder is residual.
+    for i, (q, cum) in enumerate((("0.03", "0.03"), ("0.04", "0.07"))):
+        rec.record_event(window=0, slot=2, event="COMPLEMENT_PARTIAL_FILL",
+                         venue_ts="2026-10-07T00:02:0%dZ" % i,
+                         monotonic_ns=3000 + i,
+                         detail={"sequence": SEQ_C, "fill_qty": q,
+                                 "cumulative_complement_filled_qty": cum,
+                                 "complement_placed_qty": "0.13"})
+    rec.record_event(window=0, slot=2, event="COMPLEMENT_NO_FURTHER_FILL",
+                     venue_ts="2026-10-07T00:02:30Z", monotonic_ns=3100,
+                     detail={"sequence": SEQ_C,
+                             "uncovered_qty": "0.06",
+                             "recorded_as": "RESIDUAL",
+                             "requoted_more_aggressively": False})
+
+    # --- D: a cancellation RACE. A fill lands after the cancel ack.
+    rec.record_event(window=0, slot=3, event="CANCEL_SUBMIT",
+                     venue_ts="2026-10-07T00:03:00Z", monotonic_ns=4000,
+                     detail={"sequence": SEQ_D})
+    rec.record_event(window=0, slot=3, event="CANCEL_ACK",
+                     venue_ts="2026-10-07T00:03:01Z", monotonic_ns=4001,
+                     detail={"sequence": SEQ_D})
+    rec.record_event(window=0, slot=3, event="FILL_AFTER_CANCEL_ACK",
+                     venue_ts="2026-10-07T00:03:02Z", monotonic_ns=4002,
+                     detail={"sequence": SEQ_D, "fill_qty": "0.02",
+                             "cancel_ack_venue_ts":
+                                 "2026-10-07T00:03:01Z",
+                             "fill_raced_the_cancel": True,
+                             "signed_interval_s": 1.0})
+
+    # --- E: a first-leg fill arriving WHILE complement quantity is already
+    # --- outstanding. The outstanding complement is NOT touched; a new
+    # --- tranche covers the new inventory.
+    rec.record_event(window=0, slot=4, event="FIRST_LEG_PARTIAL_FILL",
+                     venue_ts="2026-10-07T00:03:59Z", monotonic_ns=4999,
+                     detail={"sequence": SEQ_E, "fill_qty": "0.05",
+                             "cumulative_filled_qty": "0.05",
+                             "complement_outstanding_qty": "0",
+                             "complement_outstanding_at_arrival": False})
+    rec.record_event(window=0, slot=4, event="COMPLEMENT_TRANCHE_SUBMIT",
+                     venue_ts="2026-10-07T00:04:00Z", monotonic_ns=5000,
+                     detail={"sequence": SEQ_E, "tranche_index": 0,
+                             "qty": "0.05", "price": "0.46",
+                             "cumulative_complemented_qty": "0.05"})
+    rec.record_event(window=0, slot=4, event="FIRST_LEG_PARTIAL_FILL",
+                     venue_ts="2026-10-07T00:04:01Z", monotonic_ns=5001,
+                     detail={"sequence": SEQ_E, "fill_qty": "0.04",
+                             "cumulative_filled_qty": "0.09",
+                             "complement_outstanding_qty": "0.05",
+                             "complement_outstanding_at_arrival": True})
+    rec.record_event(window=0, slot=4, event="COMPLEMENT_TRANCHE_SUBMIT",
+                     venue_ts="2026-10-07T00:04:02Z", monotonic_ns=5002,
+                     detail={"sequence": SEQ_E, "tranche_index": 1,
+                             "qty": "0.04", "price": "0.46",
+                             "cumulative_complemented_qty": "0.09",
+                             "earlier_complement_cancelled": False,
+                             "earlier_complement_price_moved": False,
+                             "is_a_requote": False})
+
+
+def test_the_tape_reconstructs_all_five_partial_fill_sequences(tmp_path):
+    """Reconstruct each sequence from a FRESH reader on the files alone."""
+    _record_five_sequences(R.Recorder(str(tmp_path / "tape")))
+    rows = R.Recorder(str(tmp_path / "tape")).read(R.EVENTS)
+    by_seq = {}
+    for row in rows:
+        by_seq.setdefault(row["detail"]["sequence"], []).append(row)
+    assert set(by_seq) == {SEQ_A, SEQ_B, SEQ_C, SEQ_D, SEQ_E}
+
+    # every row is orderable by the websocket authority, not by wall clock
+    for row in rows:
+        assert row["timing_authority"] == "websocket_strict"
+        assert row["ordering_monotonic_ns"] is not None
+
+    # --- A: 0.05 then 0.08 -> the whole 0.13, in two tranches at ONE price
+    a = by_seq[SEQ_A]
+    fills = [r for r in a if r["event"] == "FIRST_LEG_PARTIAL_FILL"]
+    tr = [r for r in a if r["event"] == "COMPLEMENT_TRANCHE_SUBMIT"]
+    assert [f["detail"]["fill_qty"] for f in fills] == ["0.05", "0.08"]
+    assert fills[-1]["detail"]["cumulative_filled_qty"] == "0.13"
+    assert sum(D(r["detail"]["qty"]) for r in tr) == D("0.13")
+    assert len({r["detail"]["price"] for r in tr}) == 1    # no price moved
+    assert [r["detail"]["tranche_index"] for r in tr] == [0, 1]
+    assert all(r["detail"]["is_a_requote"] is False for r in tr)
+
+    # --- B: repeated partials sum to the placed quantity
+    b = by_seq[SEQ_B]
+    bf = [r for r in b if r["event"] == "FIRST_LEG_PARTIAL_FILL"]
+    bt = [r for r in b if r["event"] == "COMPLEMENT_TRANCHE_SUBMIT"]
+    assert len(bf) == 13 and len(bt) == 13
+    assert sum(D(r["detail"]["fill_qty"]) for r in bf) == D("0.13")
+    assert sum(D(r["detail"]["qty"]) for r in bt) == D("0.13")
+    assert bt[-1]["detail"]["cumulative_complemented_qty"] == "0.13"
+    assert len(bt) <= SP.MAX_COMPLEMENT_TRANCHES
+
+    # --- C: complement partials, and the uncovered remainder is residual
+    c = by_seq[SEQ_C]
+    cp = [r for r in c if r["event"] == "COMPLEMENT_PARTIAL_FILL"]
+    assert sum(D(r["detail"]["fill_qty"]) for r in cp) == D("0.07")
+    end = [r for r in c if r["event"] == "COMPLEMENT_NO_FURTHER_FILL"][0]
+    assert end["detail"]["recorded_as"] == "RESIDUAL"
+    assert D(end["detail"]["uncovered_qty"]) == D("0.13") - D("0.07")
+    assert end["detail"]["requoted_more_aggressively"] is False
+
+    # --- D: the cancellation race is reconstructible AS a race
+    d = {r["event"]: r for r in by_seq[SEQ_D]}
+    assert set(d) == {"CANCEL_SUBMIT", "CANCEL_ACK", "FILL_AFTER_CANCEL_ACK"}
+    race = d["FILL_AFTER_CANCEL_ACK"]
+    assert race["detail"]["fill_raced_the_cancel"] is True
+    assert race["venue_timestamp"] > d["CANCEL_ACK"]["venue_timestamp"]
+    assert race["ordering_monotonic_ns"] > \
+        d["CANCEL_ACK"]["ordering_monotonic_ns"]
+    # and that is the preregistered estimand-6 FAIL
+    trk = ST.CohortTracker()
+    trk.record_post_cancel_ack_fill()
+    assert trk.verdict()["verdict"] == ST.VERDICT_FAIL
+
+    # --- E: a fill arriving while complement quantity was outstanding
+    e = by_seq[SEQ_E]
+    arrivals = [r for r in e if r["event"] == "FIRST_LEG_PARTIAL_FILL"]
+    assert [r["detail"]["fill_qty"] for r in arrivals] == ["0.05", "0.04"]
+    arrival = arrivals[1]
+    assert arrival["detail"]["complement_outstanding_at_arrival"] is True
+    assert arrival["detail"]["complement_outstanding_qty"] == "0.05"
+    assert arrival["detail"]["cumulative_filled_qty"] == "0.09"
+    et = [r for r in e if r["event"] == "COMPLEMENT_TRANCHE_SUBMIT"]
+    assert [r["detail"]["qty"] for r in et] == ["0.05", "0.04"]
+    assert sum(D(r["detail"]["qty"]) for r in et) == D("0.09")
+    # the outstanding complement was neither cancelled nor re-priced
+    assert et[1]["detail"]["earlier_complement_cancelled"] is False
+    assert et[1]["detail"]["earlier_complement_price_moved"] is False
+    assert et[1]["detail"]["is_a_requote"] is False
+    assert len({r["detail"]["price"] for r in et}) == 1
+
+
+def test_cumulative_accounting_is_recomputable_from_the_tape(tmp_path):
+    """For every sequence with first-leg fills, recompute cumulative filled
+    vs cumulative complemented from the tape and show nothing is
+    unaccounted."""
+    _record_five_sequences(R.Recorder(str(tmp_path / "tape")))
+    rows = R.Recorder(str(tmp_path / "tape")).read(R.EVENTS)
+    for seq, placed in ((SEQ_A, "0.13"), (SEQ_B, "0.13"), (SEQ_E, "0.09")):
+        ev = [r for r in rows if r["detail"].get("sequence") == seq]
+        filled = sum((D(r["detail"]["fill_qty"]) for r in ev
+                      if r["event"] == "FIRST_LEG_PARTIAL_FILL"), D("0"))
+        comped = sum((D(r["detail"]["qty"]) for r in ev
+                      if r["event"] == "COMPLEMENT_TRANCHE_SUBMIT"), D("0"))
+        assert filled == D(placed), (seq, filled)
+        acct = RUN.account_first_leg(cumulative_filled_qty=filled,
+                                     complemented_qty=comped)
+        assert acct["fully_accounted"] is True, (seq, acct)
+        assert D(acct["unaccounted_qty"]) == D("0"), (seq, acct)
+        assert D(acct["residual_qty"]) == D("0"), (seq, acct)
+
+
 def test_the_chain_survives_a_truncated_cohort(tmp_path):
     """A risk-truncated run must still yield the chain from its tape."""
     rec = R.Recorder(str(tmp_path / "tape"))
@@ -1210,6 +1582,179 @@ def test_every_recorded_row_carries_enough_provenance_to_be_reread(tmp_path):
             assert row["venue"] == "polymarket_us"
             assert row["timing_authority"] == "websocket_strict"
             assert row["written_utc"] and row["written_unix"]
+
+
+# =========== XR2W PARITY: the latch is the ONLY behavioural difference ====
+
+XR2W_SOURCE_SHA256_16 = {
+    "analysis/l5/live_exec5/spec.py": "dda1e2c50be81209",
+    "analysis/l5/live_exec2/orders.py": "800078a852f14d84",
+    "analysis/l5/live_exec2/latch.py": "add23515a5a8a201",
+    "src/l5_order_body.py": "50b9ff1376abea03",
+}
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+
+
+def test_xr2w_sources_are_byte_identical():
+    """The four files E1 reuses are UNMODIFIED, against hashes the owner
+    recorded independently."""
+    import hashlib
+    for rel, want in XR2W_SOURCE_SHA256_16.items():
+        raw = open(os.path.join(REPO, rel), "rb").read()
+        got = hashlib.sha256(raw).hexdigest()[:16]
+        assert got == want, "%s moved: %s != %s" % (rel, got, want)
+
+
+def test_xr2w_own_fingerprint_still_passes():
+    from analysis.l5.live_exec5 import spec as X
+    X.assert_frozen()
+    assert X.XR2W_FINGERPRINT == \
+        "ac6318d5fe986f629037edd129e08c70ff0031012070fd10cde1c67d0c9b2562"
+
+
+def test_parity_e1_and_xr2w_build_the_same_request_body():
+    """For an otherwise identical single submission, byte-identical body."""
+    for side, price, qty in (("UP", "0.50", "0.13"), ("DOWN", "0.46", "0.08"),
+                             ("UP", "0.01", "0.01")):
+        e1_body = O.order_body(slug="m", outcome_side=side, price=price,
+                               qty=qty)
+        xr2w_body = OB.build(slug="m", side=side, price=price, qty=qty,
+                             post_only=True)
+        assert e1_body == xr2w_body
+        assert json.dumps(e1_body, sort_keys=True) == \
+            json.dumps(xr2w_body, sort_keys=True)
+        # the hard-won conventions, on the wire
+        assert e1_body["price"]["currency"] == "USD"
+        assert isinstance(e1_body["quantity"], float)
+        assert e1_body["participateDontInitiate"] is True
+    # the NO-side 1-X mapping is the proven one, not re-derived
+    no_body = O.order_body(slug="m", outcome_side="DOWN", price="0.49",
+                           qty="0.13")
+    assert no_body["price"]["value"] == "0.51"
+
+
+def test_parity_e1_and_xr2w_use_the_same_preview_envelope():
+    body = O.order_body(slug="m", outcome_side="UP", price="0.50",
+                        qty="0.13")
+    assert O.preview_request(body) == OB.preview_envelope(body)
+    assert list(O.preview_request(body)) == ["request"]
+
+
+def test_parity_e1_and_xr2w_use_the_same_echo_validation():
+    """Same validator, same accept, same reject -- E1 imports it, it does
+    not reimplement it."""
+    import src.l5_preview_gate as GATE
+    body = O.order_body(slug="m", outcome_side="UP", price="0.50",
+                        qty="0.13")
+    assert GATE.require_echo(body, {"order": dict(body)})["ok"] is True
+    tampered = dict(body, quantity=0.99)
+    with pytest.raises(Exception):
+        GATE.require_echo(body, {"order": tampered})
+    # and E1's submission path raises the SAME exception type XR2W would
+    t = FakeTransport()
+    t_bad = FakeTransport()
+    t_bad.request = lambda m, pth, b=None, base=None: (
+        {"order": {"nope": 1}} if pth == O.PREVIEW_PATH else {})
+    with pytest.raises(O.PreviewRejected):
+        RUN._submit_once(t_bad, slug="m", outcome_side="UP", price="0.50",
+                         qty="0.13", consume_latch=lambda: {"fake": True})
+    assert t.calls == []
+
+
+def test_parity_e1_uses_xr2w_transport_routes_and_route_refusals():
+    t = O.BoundedOrderTransport()
+    assert t._allowed("POST", O.PREVIEW_PATH)
+    assert t._allowed("POST", O.SUBMIT_PATH)
+    assert t._allowed("POST", O.DEADMAN_PATH)
+    assert t._allowed("POST", "/v1/order/abc/cancel")
+    assert not t._allowed("POST", "/v1/anything/else")
+    assert not t._allowed("DELETE", O.SUBMIT_PATH)
+    # E1 reaches exactly two of them for one submission, in order
+    fake = FakeTransport()
+    RUN._submit_once(fake, slug="m", outcome_side="UP", price="0.50",
+                     qty="0.13", consume_latch=lambda: {"fake": True})
+    assert [c[1] for c in fake.calls] == [O.PREVIEW_PATH, O.SUBMIT_PATH]
+    assert [c[0] for c in fake.calls] == ["POST", "POST"]
+
+
+def test_parity_e1_raises_xr2w_exception_taxonomy():
+    for path, status, want in ((O.PREVIEW_PATH, 400, O.PreviewRejected),
+                               (O.SUBMIT_PATH, 503, O.SubmissionAmbiguous)):
+        err = O.VenueHTTPError(method="POST", path=path, status=status,
+                               reason="x", body="{}", headers={})
+        kw = {"preview_raises": err} if path == O.PREVIEW_PATH else \
+             {"submit_raises": err}
+        with pytest.raises(want) as ei:
+            RUN._submit_once(FakeTransport(**kw), slug="m",
+                             outcome_side="UP", price="0.50", qty="0.13",
+                             consume_latch=lambda: {"fake": True})
+        assert isinstance(ei.value, want)
+    # and the boundary flags are XR2W's own, not redefined
+    assert O.PreviewRejected("x").crossed_order_boundary is False
+    assert O.SubmissionAmbiguous("x").crossed_order_boundary is True
+
+
+def test_parity_the_latch_is_the_ONLY_behavioural_difference():
+    """Enumerate what E1's submission path calls, and assert every piece but
+    the latch comes from XR2W's modules."""
+    import inspect
+    src = inspect.getsource(RUN._submit_once)
+    for reused in ("O.order_body", "O.preview_request", "G.require_echo",
+                   "O.PREVIEW_PATH", "O.SUBMIT_PATH", "O.VenueHTTPError",
+                   "O.PreviewRejected", "O.SubmissionAmbiguous"):
+        assert reused in src, reused
+    # the ONLY substitution
+    assert "consume_latch()" in src
+    assert "L.consume" not in src          # the latch is injected, not wired
+    # CODE only, with the docstring stripped: the docstring legitimately
+    # names the modules it delegates to
+    code = src.split('"""')[2] if src.count('"""') >= 2 else src
+    # no field name is constructed here: the body is built by delegation
+    for forbidden in ("marketSlug", "ORDER_TYPE", "ORDER_ACTION",
+                      "TIME_IN_FORCE_", "OB.build", "OB.preview",
+                      "participateDontInitiate", '"request":'):
+        assert forbidden not in code, forbidden
+    # the only l5_order_body mention in the code is the PROVENANCE label it
+    # stamps on its result, never a call
+    assert "l5_order_body.build(" not in code
+    assert code.count("l5_order_body") == 1
+    assert SP.SPEC["xr2w_parity"]["the_only_behavioural_difference"].startswith(
+        "the latch")
+    assert SP.SPEC["xr2w_parity"]["xr2w_modified"] is False
+
+
+def test_the_superseded_fingerprint_must_not_be_rearmed():
+    assert SP.SPEC["supersedes_e1"]["must_not_be_rearmed"] == [
+        "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c"]
+    assert SP.E1_FINGERPRINT not in \
+        SP.SPEC["supersedes_e1"]["must_not_be_rearmed"]
+
+
+# ------------------------------------------------- venue errors: SAFETY only
+
+def test_venue_error_stop_is_a_safety_stop_and_records_exact_errors():
+    tr = ST.CohortTracker()
+    for i in range(5):
+        tr.record_venue_error(detail={"status": 503, "body": "upstream %d" % i,
+                                      "path": "/v1/orders"})
+    assert len(tr.venue_error_log) == 5
+    for e in tr.venue_error_log:
+        assert e["retried"] is False
+        assert e["is_a_safety_observation"] is True
+        assert e["is_an_economic_threshold"] is False
+        assert e["detail"]["status"] == 503
+    assert any("VENUE_ERROR_STORM" in x for x in tr.hard_stops())
+    v = tr.verdict()
+    assert v["verdict"] == ST.VERDICT_CONTINUE       # never a FAIL
+    assert v["truncation_cause"] == ST.TRUNCATION_VENUE_STORM
+    snap = tr.snapshot()
+    assert snap["venue_error_stop_is_a_safety_stop"] is True
+    assert snap["venue_error_stop_is_an_economic_threshold"] is False
+    assert snap["automatic_retry_anywhere"] is False
+    assert len(snap["venue_error_log"]) == 5
+    assert SP.SPEC["venue_error_stop"]["consecutive_errors"] == 5
+    assert SP.SPEC["venue_error_stop"]["automatic_retry"] is False
 
 
 # -------------------------------------------------------------------- boot

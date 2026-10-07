@@ -284,6 +284,9 @@ class CohortTracker:
         #: every attempt to reduce the bound by something that may not
         #: reduce it, recorded rather than silently ignored.
         self.refused_reducers: List[Dict[str, Any]] = []
+        #: the EXACT venue errors, kept because the stop is a SAFETY stop
+        #: and a safety stop that cannot say what it saw is not evidence.
+        self.venue_error_log: List[Dict[str, Any]] = []
 
     # ----------------------------------------------------------- observations
     def record_placement(self, *, window: int, notional_usd: Any) -> None:
@@ -448,9 +451,19 @@ class CohortTracker:
         """NEVER retried. The venue state is reconciled instead."""
         self.ambiguous_submissions += 1
 
-    def record_venue_error(self) -> None:
+    def record_venue_error(self, detail: Any = None) -> None:
+        """A SAFETY counter, never an economic threshold. The EXACT error is
+        recorded, and there is no automatic retry anywhere: a retry could
+        duplicate an ambiguous submission, so the venue state is reconciled
+        instead."""
         self.venue_errors += 1
         self.consecutive_venue_errors += 1
+        self.venue_error_log.append(
+            {"n": self.venue_errors,
+             "consecutive": self.consecutive_venue_errors,
+             "detail": detail, "retried": False,
+             "is_a_safety_observation": True,
+             "is_an_economic_threshold": False})
 
     def record_venue_ok(self) -> None:
         self.consecutive_venue_errors = 0
@@ -459,8 +472,12 @@ class CohortTracker:
         self.safety_violations.append(why)
 
     # ------------------------------------------------------------ hard stops
-    #: a venue error storm: five consecutive venue errors. Read as "the
-    #: venue is not answering us coherently", not as a result.
+    #: FROZEN at five consecutive venue errors for this cohort. STRICTLY a
+    #: SAFETY stop and NEVER an economic threshold: it says "the venue is
+    #: not answering us coherently", not "the strategy is bad". The exact
+    #: errors are recorded in `venue_error_log`, and nothing anywhere
+    #: retries automatically -- a retry could duplicate an ambiguous
+    #: submission.
     VENUE_ERROR_STORM = 5
 
     def hard_stops(self) -> List[str]:
@@ -691,6 +708,10 @@ class CohortTracker:
                 "ambiguous_submissions": self.ambiguous_submissions,
                 "venue_errors": self.venue_errors,
                 "safety_violations": list(self.safety_violations),
+                "venue_error_log": list(self.venue_error_log),
+                "venue_error_stop_is_a_safety_stop": True,
+                "venue_error_stop_is_an_economic_threshold": False,
+                "automatic_retry_anywhere": False,
                 "hard_stops": self.hard_stops(),
                 "forward_looking": self.forward_looking_report(
                     prospective_attempts=1),

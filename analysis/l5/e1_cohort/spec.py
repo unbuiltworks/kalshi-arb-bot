@@ -132,6 +132,12 @@ MAX_COHORT_REALIZED_LOSS_USD = D("5.00")
 #: term of the forward-looking invariant.
 PER_ATTEMPT_MAX_LOSS_USD = D("0.078")
 
+#: The most 0.01 increments a 0.13 first leg can arrive in, so the bound on
+#: complement tranches comes from the VENUE GRID and not from a judgement.
+#: A tranche exists only because new first-leg inventory arrived; it is not
+#: a re-quote. See `analysis.l5.e1_cohort.runner.complement_tranche`.
+MAX_COMPLEMENT_TRANCHES = 13
+
 MAX_OUTSTANDING_ORDERS = 1
 VENUE_TICK = D("0.01")
 VENUE_MIN_QTY = D("0.01")
@@ -183,6 +189,11 @@ def _check_arithmetic() -> None:
             "COHORT-E1-LIVE: PER_ATTEMPT_MAX_LOSS_USD is not 0.13 x 0.60: "
             "%s != %s" % (PER_ATTEMPT_MAX_LOSS_USD,
                           FIRST_LEG_QTY * MAX_FIRST_LEG_PRICE))
+    if MAX_COMPLEMENT_TRANCHES != int(FIRST_LEG_QTY / VENUE_TICK):
+        raise SystemExit(
+            "COHORT-E1-LIVE: MAX_COMPLEMENT_TRANCHES is not 0.13 / 0.01: "
+            "%s != %s" % (MAX_COMPLEMENT_TRANCHES,
+                          int(FIRST_LEG_QTY / VENUE_TICK)))
     if FIRST_LEG_QTY < VENUE_MIN_QTY or FIRST_LEG_QTY % VENUE_TICK != 0:
         raise SystemExit("COHORT-E1-LIVE: quantity is off the venue grid")
 
@@ -281,6 +292,52 @@ DIFF: Dict[str, Any] = {
         "module": "analysis.l5.e1_cohort.stopping",
     },
 
+    "venue_error_stop": {
+        "consecutive_errors": 5,
+        "is_a_safety_stop": True,
+        "is_an_economic_threshold": False,
+        "frozen_for_this_cohort": True,
+        "exact_errors_are_recorded": True,
+        "automatic_retry": False,
+        "why_no_retry": ("an automatic retry could duplicate an ambiguous "
+                         "submission, which is the one thing that must "
+                         "never happen. The venue state is reconciled "
+                         "instead."),
+    },
+
+    "supersedes_e1": {
+        "reason": ("the complement accounting was CORRECTED: quantity now "
+                   "tracks the CUMULATIVE first-leg fill rather than only "
+                   "the first partial, so a 0.13 first leg filling 0.05 "
+                   "then 0.08 accounts for the whole 0.13 instead of "
+                   "silently leaving an 0.08 residual."),
+        "must_not_be_rearmed": [
+            "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c",
+        ],
+    },
+
+    "xr2w_parity": {
+        "xr2w_is_byte_identical": True,
+        "xr2w_modified": False,
+        "reused_by_reference": [
+            "src.l5_order_body.build via orders.order_body",
+            "src.l5_order_body.preview_envelope via orders.preview_request",
+            "src.l5_preview_gate.require_echo",
+            "orders.BoundedOrderTransport.request (four permitted routes)",
+            "orders.VenueHTTPError / PreviewRejected / SubmissionAmbiguous",
+        ],
+        "the_only_behavioural_difference": (
+            "the latch: E1's bounded-count named slots in place of XR2W's "
+            "single slot. Asserted by parity test over a single "
+            "submission."),
+        "verified_source_sha256_prefixes": {
+            "analysis/l5/live_exec5/spec.py": "dda1e2c50be81209",
+            "analysis/l5/live_exec2/orders.py": "800078a852f14d84",
+            "analysis/l5/live_exec2/latch.py": "add23515a5a8a201",
+            "src/l5_order_body.py": "50b9ff1376abea03",
+        },
+    },
+
     "rebates": {
         "maker_rebate_at_this_size_usd": "0.00",
         "structurally_zero": True,
@@ -358,15 +415,36 @@ DIFF: Dict[str, Any] = {
             "C6 ONE complement submission per first-leg fill. NO CHASING "
             "and NO RE-QUOTE: a complement that does not fill is cancelled "
             "at handover and the residual is recorded, not re-priced.",
-            "C7 a partial first-leg fill yields a complement sized to that "
-            "partial. A later additional fill on the same first leg does "
-            "NOT trigger a second complement; the shortfall is residual.",
+            "C7 the complement quantity tracks the CUMULATIVE first-leg "
+            "filled quantity, not merely the first partial. A 0.13 first "
+            "leg that fills 0.05 and LATER 0.08 must have the ENTIRE 0.13 "
+            "accounted for. The shortfall is submitted as an ADDITIONAL "
+            "TRANCHE at the attempt's ORIGINAL complement price.",
+            "C9 a tranche is NOT chasing and NOT a re-quote. It replaces "
+            "nothing, cancels nothing and moves no price; it is triggered "
+            "by a FILL, never by a non-fill, and the two are therefore "
+            "distinguishable by their trigger. An unsuccessful complement "
+            "is still never replaced at a more aggressive price: it is "
+            "cancelled at handover and its quantity recorded as residual.",
+            "C10 any quantity that cannot LEGALLY or ECONOMICALLY receive "
+            "a complement -- a shortfall below the venue minimum 0.01, or "
+            "one whose complement price is infeasible under the frozen "
+            "fee-inclusive $0.96 ceiling -- is EXPLICITLY RECORDED AS "
+            "RESIDUAL with its reason. Never hidden and never implicit.",
             "C8 the complement is subject to the same latch, the same "
             "preview-and-echo requirement and the same deadman.",
         ],
         "taker_rescue": False,
         "chasing": False,
         "requote": False,
+        "quantity_tracks": "CUMULATIVE_FIRST_LEG_FILLED_QTY",
+        "quantity_tracks_only_the_first_partial": False,
+        "later_fills_fall_silently_into_residual": False,
+        "tranche_price_is_the_attempts_original": True,
+        "tranche_trigger": "A_FILL_NEVER_A_NON_FILL",
+        "max_tranches": MAX_COMPLEMENT_TRANCHES,
+        "max_tranches_source": "0.13 / 0.01, the venue grid",
+        "uncomplementable_quantity_is_explicitly_recorded_residual": True,
     },
 
     "pair_cost": {
@@ -638,6 +716,20 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("complement.taker_rescue", False),
     ("complement.chasing", False),
     ("complement.requote", False),
+    ("complement.quantity_tracks", "CUMULATIVE_FIRST_LEG_FILLED_QTY"),
+    ("complement.quantity_tracks_only_the_first_partial", False),
+    ("complement.later_fills_fall_silently_into_residual", False),
+    ("complement.tranche_price_is_the_attempts_original", True),
+    ("complement.tranche_trigger", "A_FILL_NEVER_A_NON_FILL"),
+    ("complement.max_tranches", 13),
+    ("complement."
+     "uncomplementable_quantity_is_explicitly_recorded_residual", True),
+    ("venue_error_stop.is_a_safety_stop", True),
+    ("venue_error_stop.is_an_economic_threshold", False),
+    ("venue_error_stop.consecutive_errors", 5),
+    ("venue_error_stop.automatic_retry", False),
+    ("supersedes_e1.must_not_be_rearmed",
+     ["110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c"]),
     ("pair_cost.ceiling_usd", "0.96"),
     ("pair_cost.fee_inclusive", True),
     ("pair_cost.fee_schedule_fingerprint", FEE_SCHEDULE_FINGERPRINT),
@@ -719,7 +811,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c"
+    "bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

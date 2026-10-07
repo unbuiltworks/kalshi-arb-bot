@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c
+bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -117,7 +117,13 @@ test in both directions.
 * forward-looking committed loss (realized + unresolved residuals) ≥ $5.00;
 * any window exposure ≥ $1.56;
 * any safety-invariant violation;
-* venue error storm (5 consecutive venue errors);
+* **venue error storm — 5 consecutive venue errors, FROZEN for this
+  cohort.** Strictly a **SAFETY** stop and **never** an economic threshold:
+  it says the venue is not answering us coherently, not that the strategy is
+  bad. The **exact** errors are recorded in `venue_error_log`. **No
+  automatic retry anywhere**, because a retry could duplicate an ambiguous
+  submission. Classified `CONTINUE_INSUFFICIENT_EVIDENCE` with
+  `truncation_cause: VENUE_ERROR_STORM`, never `FAIL`;
 * **ambiguous submission — NEVER retried.** The venue state is reconciled
   instead.
 
@@ -191,12 +197,49 @@ the latch refuses any window outside that range.
 > RE-QUOTE: a complement that does not fill is cancelled at handover and the
 > residual is recorded, not re-priced.
 >
-> **C7** a partial first-leg fill yields a complement sized to that partial.
-> A later additional fill on the same first leg does NOT trigger a second
-> complement; the shortfall is residual.
+> **C7** the complement quantity tracks the **CUMULATIVE** first-leg filled
+> quantity, not merely the first partial. A 0.13 first leg that fills 0.05
+> and LATER 0.08 must have the **ENTIRE 0.13** accounted for. The shortfall
+> is submitted as an ADDITIONAL TRANCHE at the attempt's ORIGINAL complement
+> price.
+>
+> **C9** a tranche is NOT chasing and NOT a re-quote. It replaces nothing,
+> cancels nothing and moves no price; it is triggered by a FILL, never by a
+> non-fill, and the two are therefore distinguishable by their trigger. An
+> unsuccessful complement is still never replaced at a more aggressive
+> price: it is cancelled at handover and its quantity recorded as residual.
+>
+> **C10** any quantity that cannot LEGALLY or ECONOMICALLY receive a
+> complement — a shortfall below the venue minimum 0.01, or one whose
+> complement price is infeasible under the frozen fee-inclusive $0.96
+> ceiling — is EXPLICITLY RECORDED AS RESIDUAL with its reason. Never hidden
+> and never implicit.
 >
 > **C8** the complement is subject to the same latch, the same
 > preview-and-echo requirement and the same deadman.
+
+### 6.3 The minimal cumulative mechanism, and why it is not chasing
+
+The complement price is computed **once per attempt**, from the attempt's
+ORIGINAL first-leg price against the frozen `<= $0.96` fee-inclusive ceiling.
+It therefore **cannot move**, because its inputs cannot. A tranche is a NEW
+order for NEW inventory at that SAME price:
+
+| | re-quote | tranche |
+|---|---|---|
+| trigger | a **non**-fill | a **fill** |
+| what it does to the earlier order | replaces it | nothing — it stays |
+| price | more aggressive | identical, by construction |
+
+This mechanism has **no path a non-fill can take**, so it cannot chase.
+Tranches are bounded at **13** = `0.13 / 0.01`, the number of 0.01
+increments a 0.13 first leg can arrive in — from the venue grid, not a
+judgement. Each tranche is its own **named latch slot**, so re-submitting the
+*same* tranche raises `LatchSpent`: the no-re-quote rule is enforced at the
+latch, not only in the policy.
+
+`account_first_leg()` closes the arithmetic: every filled share is
+**COMPLEMENTED or RESIDUAL**, never neither and never silently.
 
 **Pair cost** is fee-inclusive against `src/pmus_fee_schedule.py`
 (`ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bbeffd3ae61ca91629`, taker
@@ -363,7 +406,7 @@ without both tokens streaming.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_EXEC1_*` arming keys, naming the exact market slug;
 4. `PMUS_EXEC1_AUTHORIZED_FINGERPRINT` =
-   `110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c`;
+   `bfcff9ca9c4f27d73b2146876fcb62b8090ac0941fecaae8205032e76d07006a`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many
@@ -377,11 +420,44 @@ without both tokens streaming.
 **Until the owner supplies these, this is a frozen disarmed artifact and
 nothing may be armed.**
 
-## 12. Provenance
+## 12. XR2W parity and supersession
+
+`analysis/l5/live_exec5/` is **byte-identical and unmodified**, verified
+against the owner's independently recorded sha256 prefixes:
+
+| file | sha256[:16] |
+|---|---|
+| `analysis/l5/live_exec5/spec.py` | `dda1e2c50be81209` |
+| `analysis/l5/live_exec2/orders.py` | `800078a852f14d84` |
+| `analysis/l5/live_exec2/latch.py` | `add23515a5a8a201` |
+| `src/l5_order_body.py` | `50b9ff1376abea03` |
+
+Reused **by reference**, never copied: the body (`l5_order_body.build` via
+`orders.order_body`), the preview envelope, `l5_preview_gate.require_echo`,
+`BoundedOrderTransport.request` with its four permitted routes, and the
+`VenueHTTPError` / `PreviewRejected` / `SubmissionAmbiguous` taxonomy.
+
+**The latch is the ONLY behavioural difference** — E1's bounded-count named
+slots in place of XR2W's single slot — and parity tests prove it over a
+single submission: identical request body (including the NO-side 1−X
+mapping), identical preview envelope, identical echo accept/reject,
+identical route allow/refuse set, identical route sequence
+(`PREVIEW → SUBMIT`), identical exception types and boundary flags.
+
+### SUPERSEDED — MUST NOT BE ARMED
+
+```
+110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c
+```
+
+Superseded because the complement accounting was **corrected**: quantity now
+tracks the CUMULATIVE first-leg fill rather than only the first partial.
+
+## 13. Provenance
 
 | artifact | path |
 |---|---|
-| frozen spec `110a4fc4…a99c` | `analysis/l5/e1_cohort/spec.py` |
+| frozen spec `bfcff9ca…006a` | `analysis/l5/e1_cohort/spec.py` |
 | bounded-count named-slot latch | `analysis/l5/e1_cohort/latch.py` |
 | append-only recorder + chain reconstructor | `analysis/l5/e1_cohort/recorder.py` |
 | stopping rules + forward-looking bound | `analysis/l5/e1_cohort/stopping.py` |

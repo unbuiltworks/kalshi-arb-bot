@@ -42,7 +42,8 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
-from analysis.l5.e1_cohort.spec import (MAX_ATTEMPTS_PER_WINDOW, PROBE,
+from analysis.l5.e1_cohort.spec import (MAX_ATTEMPTS_PER_WINDOW,
+                                        MAX_COMPLEMENT_TRANCHES, PROBE,
                                         WINDOWS, assert_frozen)
 from analysis.l5.live_exec2.spec import LATCH_DIR
 
@@ -103,16 +104,28 @@ def _check_slot(slot: int) -> None:
 
 
 def slot_path(*, window: int, slot: int, role: str = ROLE_FIRST_LEG,
+              tranche: int = 0,
               session_id: Optional[str] = None) -> str:
-    """One NAMED file per (session, window, attempt slot, role)."""
+    """One NAMED file per (session, window, attempt slot, role, tranche).
+
+    `tranche` exists because a first leg can fill in several pieces and the
+    complement must track the CUMULATIVE fill. Each tranche is its own named
+    slot, so a tranche is won by exactly one O_EXCL create like everything
+    else, and the SAME tranche can never be submitted twice -- which is what
+    forbids a re-quote at the latch rather than only in the policy.
+    """
     _check_window(window)
     _check_slot(slot)
     if role not in ROLES:
         raise LatchUnavailable("unknown latch role %r" % (role,))
+    if not 0 <= tranche < MAX_COMPLEMENT_TRANCHES:
+        raise LatchUnavailable(
+            "tranche %r is outside the bounded 0..%d"
+            % (tranche, MAX_COMPLEMENT_TRANCHES - 1))
     sid = session_id or _session_id()
     return os.path.join(
-        LATCH_DIR, "%s.w%02d.s%02d.%s.submitted"
-        % (_stem(sid), window, slot, role))
+        LATCH_DIR, "%s.w%02d.s%02d.%s.t%02d.submitted"
+        % (_stem(sid), window, slot, role, tranche))
 
 
 def window_state(*, window: int,
@@ -168,8 +181,9 @@ def _write_slot(path: str, record: Dict[str, Any]) -> None:
 
 
 def _record(*, window: int, slot: int, role: str, slug: str, side: str,
-            price: Any, qty: Any) -> Dict[str, Any]:
+            price: Any, qty: Any, tranche: int = 0) -> Dict[str, Any]:
     return {"probe": PROBE, "window": window, "slot": slot, "role": role,
+            "tranche": tranche,
             "slug": slug, "side": side, "price": str(price), "qty": str(qty),
             "consumed_unix": time.time(),
             "consumed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ",
@@ -216,28 +230,49 @@ def consume_attempt(*, window: int, slug: str, side: str, price: Any,
         % (window, MAX_ATTEMPTS_PER_WINDOW, last))
 
 
+def complement_tranches_spent(*, window: int, slot: int,
+                              session_id: Optional[str] = None) -> int:
+    """How many complement tranches this attempt has already submitted.
+    Read-only; counted from the FILES, never from memory."""
+    n = 0
+    for i in range(MAX_COMPLEMENT_TRANCHES):
+        if os.path.exists(slot_path(window=window, slot=slot,
+                                    role=ROLE_COMPLEMENT, tranche=i,
+                                    session_id=session_id)):
+            n += 1
+    return n
+
+
 def consume_complement(*, window: int, slot: int, slug: str, side: str,
-                       price: Any, qty: Any,
+                       price: Any, qty: Any, tranche: int = 0,
                        session_id: Optional[str] = None) -> Dict[str, Any]:
-    """Claim the complement slot BELONGING TO one attempt slot.
+    """Claim ONE complement TRANCHE slot belonging to one attempt slot.
 
     Named off the attempt, so a complement can never consume an attempt
-    slot another first leg needed. Exactly one complement per attempt:
-    the second call raises `LatchSpent`, which is what forbids a re-quote
-    at the latch rather than only in the policy.
+    slot another first leg needed, and named off the TRANCHE, so the same
+    tranche can never be submitted twice: the second call raises
+    `LatchSpent`. That is what forbids a RE-QUOTE at the latch rather than
+    only in the policy.
+
+    A later tranche is a DIFFERENT slot, and it exists only because new
+    first-leg inventory arrived. It is not a re-quote: it replaces nothing,
+    cancels nothing, and carries the attempt's ORIGINAL complement price.
+    The tranche count is bounded by MAX_COMPLEMENT_TRANCHES = 13, the
+    number of 0.01 increments a 0.13 first leg can arrive in, so the bound
+    comes from the venue grid rather than from a judgement.
     """
     assert_frozen()
     path = slot_path(window=window, slot=slot, role=ROLE_COMPLEMENT,
-                     session_id=session_id)
+                     tranche=tranche, session_id=session_id)
     rec = _record(window=window, slot=slot, role=ROLE_COMPLEMENT, slug=slug,
-                  side=side, price=price, qty=qty)
+                  side=side, price=price, qty=qty, tranche=tranche)
     try:
         _write_slot(path, rec)
     except FileExistsError as exc:
         raise LatchSpent(
-            "the complement for window %d slot %d has already been "
+            "complement tranche %d for window %d slot %d has already been "
             "submitted once (%s). A re-quote is refused."
-            % (window, slot, path)) from exc
+            % (tranche, window, slot, path)) from exc
     except OSError as exc:
         raise LatchUnavailable("could not create the slot at %s: %s"
                                % (path, type(exc).__name__)) from exc
