@@ -71,3 +71,39 @@ This matters beyond this boot: under the owner's standing instruction the raw
 volume tape is the system of record and Railway logs are secondary and may be
 throttled. A live armed run prints more than this boot, so submission records
 must be read from the tape, never from Railway.
+
+## FINAL pinned artifact — owner decision 4
+
+The service was branch-tracked, so every push redeployed it; during a live armed
+window that would restart the executor mid-cohort. Now pinned:
+
+    config.source = {repo: unbuiltworks/kalshi-arb-bot,
+                     branch: claude/august-l5-forensic-replay-788cml,
+                     commitSha: cf932cda3}
+
+Pushes to the branch no longer deploy this service until the source is
+reconnected without `commitSha`.
+
+The risk was not hypothetical: pinning produced TWO deployments seconds apart on
+the same SHA -- `96e32013` from the branch push and `12b5dc08` from the pin.
+Same commit, so harmless here, and a live demonstration of what the pin removes.
+
+Commit `cf932cda344ecd143d0f99b94eac877ea1487b2b`
+Deployment `12b5dc08-6270-4e77-8001-4920c57182ef` -- **SUCCESS**, booted 2026-10-07T15:25:53Z
+Fingerprint `481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486` (unchanged)
+
+Re-verified at this exact SHA: `armed: false`,
+`NOT AUTHORIZED. NOT ARMED. NO OWNER VALUE SET.`,
+`DISARMED. NO ORDER MAY BE PLACED.`, `armed_main_reaches_run_cohort: true`,
+five superseded fingerprints carried as must-not-arm, and again
+
+    dns:         []
+    networkFlow: []
+
+for the whole deployment.
+
+One check here comes from the service CONFIG rather than the program's own
+output, which is the point: the service's variable list contains **no
+`PMUS_E1_*` key at all**. `PMUS_EXEC1_*` and `PMUS_Q1_*` are present but belong
+to XR2W and Q1 and cannot arm E1 -- that isolation was asserted by driving the
+legacy keys in tests. The artifact is deployed, order-capable, and refusing.
