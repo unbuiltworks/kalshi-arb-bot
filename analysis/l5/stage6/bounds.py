@@ -124,6 +124,27 @@ WINDOW_LEN_S = 900.0
 #: s -- no placement at or below this TTE; resting exposure comes off here.
 TTE_CUTOFF_S = 120.0
 
+#: s -- the TTE at which the first leg stops resting and the complement's
+#: turn begins.
+#:
+#: WHY THIS IS NOT AN ARBITRARY TIMER. CLAUDE.md forbids forcing
+#: rebalancing on an arbitrary timer, and the complement is accordingly
+#: never forced -- it is quoted once and waits. But the first leg and the
+#: complement compete for the SINGLE outstanding-order slot, so something
+#: has to end the first leg's turn, and "whenever it happens to fill" would
+#: leave the complement no time at all in the common case.
+#:
+#: So the split is derived from the window's own geometry rather than
+#: chosen: the placeable stretch is WINDOW_LEN_S - TTE_CUTOFF_S = 780 s, and
+#: it is divided EQUALLY, 390 s to each leg. The first leg rests over TTE
+#: 900 -> 510; the complement rests over TTE 510 -> 120. Neither leg gets
+#: more patience than the other, and the number falls out of 900 and 120,
+#: both of which are inherited. It was not fitted to anything.
+COMPLEMENT_HANDOVER_TTE_S = TTE_CUTOFF_S + (WINDOW_LEN_S - TTE_CUTOFF_S) / 2
+
+#: s -- the patience each leg is given, equal by construction
+PER_LEG_PATIENCE_S = (WINDOW_LEN_S - TTE_CUTOFF_S) / 2
+
 # ---------------------------------------------------------------- the rebate
 #: The PMUS maker rebate is round_half_even(0.0125*C*p*(1-p), $0.01) with a
 #: HARD CENT FLOOR: below 1.62 shares (at p=0.45) it rounds to $0.00. At
@@ -181,6 +202,17 @@ BOUND_PROVENANCE: Dict[str, Dict[str, Any]] = {
                 "the daily bound is the session bound."),
         "fitted": False,
     },
+    "COMPLEMENT_HANDOVER_TTE_S": {
+        "usd_or_unit": "510.0 s TTE",
+        "why": ("an EQUAL division of the placeable stretch "
+                "(900 - 120 = 780 s) between the two legs, 390 s each. "
+                "Derived from the inherited window length and TTE cutoff, "
+                "not chosen and not fitted. It ends the first leg's turn "
+                "because the two legs compete for the single outstanding-"
+                "order slot; it never forces the complement, which is "
+                "quoted once and waits."),
+        "fitted": False,
+    },
     "TTE_CUTOFF_S": {
         "usd_or_unit": "120.0 s",
         "why": ("inherited unchanged from analysis.l5.live_exec2.timing; "
@@ -225,6 +257,15 @@ def assert_bounds_coherent() -> None:
             MAX_COMPLEMENT_SUBMISSIONS:
         bad.append("submission count does not equal first legs + "
                    "complements")
+    if COMPLEMENT_HANDOVER_TTE_S <= TTE_CUTOFF_S:
+        bad.append("the handover TTE is at or below the withdrawal cutoff, "
+                   "so the complement would get no patience at all")
+    if COMPLEMENT_HANDOVER_TTE_S >= WINDOW_LEN_S:
+        bad.append("the handover TTE is at or above the window length, so "
+                   "the first leg would get no patience at all")
+    if PER_LEG_PATIENCE_S * 2 != WINDOW_LEN_S - TTE_CUTOFF_S:
+        bad.append("the per-leg patience split is not an equal division of "
+                   "the placeable stretch")
     if MAX_OUTSTANDING_ORDERS != 1:
         bad.append("more than one outstanding order")
     if MAX_CONCURRENT_MARKETS != 1:
@@ -262,6 +303,8 @@ def summary() -> Dict[str, Any]:
         "max_complement_submissions": MAX_COMPLEMENT_SUBMISSIONS,
         "window_len_s": WINDOW_LEN_S,
         "tte_cutoff_s": TTE_CUTOFF_S,
+        "complement_handover_tte_s": COMPLEMENT_HANDOVER_TTE_S,
+        "per_leg_patience_s": PER_LEG_PATIENCE_S,
         "venue_tick": str(VENUE_TICK),
         "venue_min_qty": str(VENUE_MIN_QTY),
         "rebate_is_assumed_zero": REBATE_IS_ASSUMED_ZERO,

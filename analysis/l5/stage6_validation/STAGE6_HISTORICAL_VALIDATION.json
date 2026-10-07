@@ -33,12 +33,29 @@
         "WOULD_FILL": 24439,
         "WOULD_NOT_FILL": 1240
       },
+      "leg1_time_to_level_consumed_s": {
+        "NOTE": "how long the horizon had to run before the touch fell through our price. A long tail here means WOULD_FILL is being earned by HORIZON LENGTH, i.e. by the market moving against us, which is the LEVEL_CONSUMED bias itself and not a benign maker fill.",
+        "max": 767.0,
+        "n": 24439,
+        "p50": 9.0,
+        "p75": 29.0,
+        "p90": 77.0,
+        "p99": 390.0
+      },
       "leg1_unknowable_ci95_market_clustered": [
         0.0724,
         0.0993
       ],
       "leg1_unknowable_fraction": 0.0849,
       "markets": 731,
+      "matched_pair_cost_maker_leg2": {
+        "all_at_or_below_ceiling": true,
+        "max": 0.96,
+        "n": 18102,
+        "p05": 0.96,
+        "p50": 0.96,
+        "p95": 0.96
+      },
       "pair_verdicts_all_states": {
         "MATCHED_PROVABLE": 18102,
         "NO_FIRST_LEG_PROVABLE": 1240,
@@ -52,6 +69,13 @@
         "REFUSED_FIRST_LEG_PRICE_CEILING": 11268,
         "REFUSED_NO_BID": 506,
         "REFUSED_STALE_BOOK": 658
+      },
+      "replay_expectancy_per_provable_first_leg_usd": {
+        "LABEL": "HISTORICAL_REPLAY_ONLY_NOT_REALIZED_NOT_SHADOW",
+        "NOTE": "computed over the adverse-selected provable subset only; the UNKNOWABLE states carry no expectancy estimate and are NOT imputed.",
+        "mean": -0.037409,
+        "n": 24439,
+        "total": -914.23
       },
       "residual_persistence_s_maker_complement": {
         "censored_fraction": 0.2593,
@@ -128,7 +152,7 @@
   "decision_grid_s": 15.0,
   "fee_schedule_fingerprint": "ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bbeffd3ae61ca91629",
   "fee_schedule_frozen": true,
-  "generated_utc": "2026-10-07T04:25:25.408911+00:00",
+  "generated_utc": "2026-10-07T04:27:14.958473+00:00",
   "inventory": {
     "by_contract": {
       "15m": 265,
@@ -205,12 +229,29 @@
       "WOULD_FILL": 6231,
       "WOULD_NOT_FILL": 316
     },
+    "leg1_time_to_level_consumed_s": {
+      "NOTE": "how long the horizon had to run before the touch fell through our price. A long tail here means WOULD_FILL is being earned by HORIZON LENGTH, i.e. by the market moving against us, which is the LEVEL_CONSUMED bias itself and not a benign maker fill.",
+      "max": 679.0,
+      "n": 6231,
+      "p50": 8.0,
+      "p75": 28.0,
+      "p90": 76.0,
+      "p99": 344.0
+    },
     "leg1_unknowable_ci95_market_clustered": [
       0.0366,
       0.0607
     ],
     "leg1_unknowable_fraction": 0.0473,
     "markets": 184,
+    "matched_pair_cost_maker_leg2": {
+      "all_at_or_below_ceiling": true,
+      "max": 0.96,
+      "n": 4053,
+      "p05": 0.96,
+      "p50": 0.96,
+      "p95": 0.96
+    },
     "pair_verdicts_all_states": {
       "MATCHED_PROVABLE": 4053,
       "NO_FIRST_LEG_PROVABLE": 316,
@@ -224,6 +265,13 @@
       "REFUSED_FIRST_LEG_PRICE_CEILING": 2975,
       "REFUSED_NO_BID": 98,
       "REFUSED_STALE_BOOK": 60
+    },
+    "replay_expectancy_per_provable_first_leg_usd": {
+      "LABEL": "HISTORICAL_REPLAY_ONLY_NOT_REALIZED_NOT_SHADOW",
+      "NOTE": "computed over the adverse-selected provable subset only; the UNKNOWABLE states carry no expectancy estimate and are NOT imputed.",
+      "mean": -0.080193,
+      "n": 6231,
+      "total": -499.68
     },
     "residual_persistence_s_maker_complement": {
       "censored_fraction": 0.3495,
@@ -349,12 +397,29 @@
       "WOULD_FILL": 24439,
       "WOULD_NOT_FILL": 1240
     },
+    "leg1_time_to_level_consumed_s": {
+      "NOTE": "how long the horizon had to run before the touch fell through our price. A long tail here means WOULD_FILL is being earned by HORIZON LENGTH, i.e. by the market moving against us, which is the LEVEL_CONSUMED bias itself and not a benign maker fill.",
+      "max": 767.0,
+      "n": 24439,
+      "p50": 9.0,
+      "p75": 29.0,
+      "p90": 77.0,
+      "p99": 390.0
+    },
     "leg1_unknowable_ci95_market_clustered": [
       0.0724,
       0.0993
     ],
     "leg1_unknowable_fraction": 0.0849,
     "markets": 731,
+    "matched_pair_cost_maker_leg2": {
+      "all_at_or_below_ceiling": true,
+      "max": 0.96,
+      "n": 18102,
+      "p05": 0.96,
+      "p50": 0.96,
+      "p95": 0.96
+    },
     "pair_verdicts_all_states": {
       "MATCHED_PROVABLE": 18102,
       "NO_FIRST_LEG_PROVABLE": 1240,
@@ -368,6 +433,13 @@
       "REFUSED_FIRST_LEG_PRICE_CEILING": 11268,
       "REFUSED_NO_BID": 506,
       "REFUSED_STALE_BOOK": 658
+    },
+    "replay_expectancy_per_provable_first_leg_usd": {
+      "LABEL": "HISTORICAL_REPLAY_ONLY_NOT_REALIZED_NOT_SHADOW",
+      "NOTE": "computed over the adverse-selected provable subset only; the UNKNOWABLE states carry no expectancy estimate and are NOT imputed.",
+      "mean": -0.037409,
+      "n": 24439,
+      "total": -914.23
     },
     "residual_persistence_s_maker_complement": {
       "censored_fraction": 0.2593,

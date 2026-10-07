@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-10-07T04:28:39.041941+00:00",
+  "generated_utc": "2026-10-07T04:29:46.889495+00:00",
   "subject": {
     "handle": "l5Zn1bWoM8eTsK",
     "proxy_wallet": "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
@@ -16,12 +16,13 @@
     "sources": {
       "sep2026:l5_activity_sep2026_raw.json.gz": 144394,
       "sep2026:l5_activity_sep2223_raw.json.gz": 16982,
-      "sep2325:l5_sep23_25_daily.json": 17074
+      "sep2325:l5_sep23_25_daily.json": 17074,
+      "ops:activity_20260901.jsonl": 5
     },
-    "records_seen": 184551,
+    "records_seen": 188922,
     "records_malformed": 0,
     "records_bad_numeric": 0,
-    "records_with_name_field": 184551,
+    "records_with_name_field": 188922,
     "records_without_name_field": 0,
     "records_contradicting_identity": 0,
     "records_nonhex_conditionid": 36,
@@ -29,15 +30,16 @@
     "trades_unresolved_slug": 0,
     "trades_unresolved_epoch": 0,
     "trades_bad_numeric": 0,
-    "duplicates_dropped": 6101,
+    "duplicates_dropped": 10467,
     "collisions_differing_fields": 0,
     "collision_examples": [],
     "dup_by_pair": {
-      "sep2026:l5_activity_sep2223_raw.json.gz|sep2325:l5_sep23_25_daily.json": 6101
+      "sep2026:l5_activity_sep2223_raw.json.gz|sep2325:l5_sep23_25_daily.json": 6101,
+      "sep2026:l5_activity_sep2026_raw.json.gz|ops:activity_20260901.jsonl": 4366
     },
     "type_counts": {
-      "TRADE": 173920,
-      "REDEEM": 4496,
+      "TRADE": 173921,
+      "REDEEM": 4500,
       "MAKER_REBATE": 14,
       "TAKER_REBATE": 14,
       "REWARD": 6
@@ -45,7 +47,8 @@
     "kept_by_src": {
       "sep2026:l5_activity_sep2026_raw.json.gz": 144394,
       "sep2026:l5_activity_sep2223_raw.json.gz": 16982,
-      "sep2325:l5_sep23_25_daily.json": 17074
+      "sep2325:l5_sep23_25_daily.json": 17074,
+      "ops:activity_20260901.jsonl": 5
     },
     "envelopes": {},
     "envelope_statuses": {},
@@ -106,7 +109,7 @@
       "2026-09-25": 256
     },
     "fills_per_day": {
-      "2026-09-01": 16620,
+      "2026-09-01": 16621,
       "2026-09-02": 16766,
       "2026-09-03": 12982,
       "2026-09-04": 15793,
@@ -123,9 +126,9 @@
     }
   },
   "totals": {
-    "rows_loaded_all": 178450,
-    "rows_post_august": 178450,
-    "fills_post_august": 173920,
+    "rows_loaded_all": 178455,
+    "rows_post_august": 178455,
+    "fills_post_august": 173921,
     "events_post_august": 5446
   },
   "periods": {
@@ -134,8 +137,8 @@
       "day_first": "2026-09-01",
       "day_last": "2026-09-25",
       "events": 5446,
-      "fills": 173920,
-      "notional_usd": 2061012.7668740046,
+      "fills": 173921,
+      "notional_usd": 2061013.8281640047,
       "matched_shares": 1870637.4442589995,
       "matched_notional_usd": 1805692.2414161994,
       "matched_locked_ex_fee_ex_incentive_usd": 64945.202842798055,
@@ -158,41 +161,41 @@
       "l5_maker_rebate_n": 14,
       "l5_taker_rebate_n": 14,
       "l5_reward_n": 6,
-      "taker_fee_upper_bound_usd": 43603.80609999799,
-      "maker_rebate_upper_bound_usd": 8754.836200000751,
-      "fills_priced": 173920,
+      "taker_fee_upper_bound_usd": 43603.86529999799,
+      "maker_rebate_upper_bound_usd": 8754.848500000751,
+      "fills_priced": 173921,
       "fills_date_ambiguous": 33096,
       "fills_unpriceable": 0,
-      "l5_redeem_usd": 2052491.2890600003,
-      "l5_redeem_n": 4496,
+      "l5_redeem_usd": 2052728.9777600002,
+      "l5_redeem_n": 4500,
       "act_mix": {
         "EXTEND": {
           "n": 122617,
-          "frac": 0.7050195492180312
+          "frac": 0.705015495541079
         },
         "COMPLEMENT": {
-          "n": 27465,
-          "frac": 0.1579174333026679
+          "n": 27466,
+          "frac": 0.1579222750559162
         },
         "SWITCH": {
           "n": 18392,
-          "frac": 0.10574977000919963
+          "frac": 0.10574916197583961
         },
         "OPEN": {
           "n": 5446,
-          "frac": 0.031313247470101196
+          "frac": 0.031313067427165206
         }
       },
       "extend_per_event": 22.515056922511935,
       "switch_per_event": 3.377157546823357,
-      "complement_per_event": 5.043150936467132,
+      "complement_per_event": 5.043334557473375,
       "completion_rate": 0.5538009548292324,
       "t_to_match_s_median": 54.0,
       "first_price_median": 0.58,
       "first_favored_frac": 0.654425266250459,
       "first_tte_s_median": 237.0,
       "mean_size_median": 30.2925,
-      "notional_per_event": 378.4452381333097,
+      "notional_per_event": 378.4454330084474,
       "category_mix": {
         "crypto_updown:BTC/5m": {
           "events": 2601,
@@ -233,8 +236,8 @@
       "day_first": "2026-09-01",
       "day_last": "2026-09-25",
       "events": 5446,
-      "fills": 173920,
-      "notional_usd": 2061012.7668740046,
+      "fills": 173921,
+      "notional_usd": 2061013.8281640047,
       "matched_shares": 1870637.4442589995,
       "matched_notional_usd": 1805692.2414161994,
       "matched_locked_ex_fee_ex_incentive_usd": 64945.202842798055,
@@ -257,41 +260,41 @@
       "l5_maker_rebate_n": 14,
       "l5_taker_rebate_n": 14,
       "l5_reward_n": 6,
-      "taker_fee_upper_bound_usd": 43603.80609999799,
-      "maker_rebate_upper_bound_usd": 8754.836200000751,
-      "fills_priced": 173920,
+      "taker_fee_upper_bound_usd": 43603.86529999799,
+      "maker_rebate_upper_bound_usd": 8754.848500000751,
+      "fills_priced": 173921,
       "fills_date_ambiguous": 33096,
       "fills_unpriceable": 0,
-      "l5_redeem_usd": 2052491.2890600003,
-      "l5_redeem_n": 4496,
+      "l5_redeem_usd": 2052728.9777600002,
+      "l5_redeem_n": 4500,
       "act_mix": {
         "EXTEND": {
           "n": 122617,
-          "frac": 0.7050195492180312
+          "frac": 0.705015495541079
         },
         "COMPLEMENT": {
-          "n": 27465,
-          "frac": 0.1579174333026679
+          "n": 27466,
+          "frac": 0.1579222750559162
         },
         "SWITCH": {
           "n": 18392,
-          "frac": 0.10574977000919963
+          "frac": 0.10574916197583961
         },
         "OPEN": {
           "n": 5446,
-          "frac": 0.031313247470101196
+          "frac": 0.031313067427165206
         }
       },
       "extend_per_event": 22.515056922511935,
       "switch_per_event": 3.377157546823357,
-      "complement_per_event": 5.043150936467132,
+      "complement_per_event": 5.043334557473375,
       "completion_rate": 0.5538009548292324,
       "t_to_match_s_median": 54.0,
       "first_price_median": 0.58,
       "first_favored_frac": 0.654425266250459,
       "first_tte_s_median": 237.0,
       "mean_size_median": 30.2925,
-      "notional_per_event": 378.4452381333097,
+      "notional_per_event": 378.4454330084474,
       "category_mix": {
         "crypto_updown:BTC/5m": {
           "events": 2601,
@@ -333,12 +336,12 @@
       "REWARD": 1174.3008,
       "MAKER_REBATE": 967.2582,
       "TAKER_REBATE": 148.2607,
-      "REDEEM": 172639.72,
+      "REDEEM": 172877.41,
       "n": {
         "REWARD": 1,
         "TAKER_REBATE": 1,
         "MAKER_REBATE": 1,
-        "REDEEM": 478
+        "REDEEM": 482
       },
       "observed": true
     },

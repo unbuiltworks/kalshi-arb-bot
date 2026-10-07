@@ -107,6 +107,12 @@ REGIME_POINTS_UTC = ("2026-04-25", "2026-06-23", "2026-08-19")
 
 L5_COINS = ("btc", "eth")
 
+#: the FORWARD-RELEVANT fee instant. The evaluable states are all 2026-08,
+#: where the effective-dated schedule charges taker theta 0.06. A probe
+#: authorized TODAY is charged 0.0695. Both ratings are run; the forward one
+#: is the one that may be cited for authorization.
+FORWARD_FEE_WHEN = dt.datetime(2026, 10, 7, tzinfo=dt.timezone.utc)
+
 
 # ------------------------------------------------------------------ params
 
@@ -125,6 +131,8 @@ class Params:
         self.rebate_assumed_zero: bool = kw["rebate_assumed_zero"]
         self.first_leg_offset_ticks: int = kw["first_leg_offset_ticks"]
         self.complement_requotes: int = kw["complement_requotes"]
+        self.pair_gate: str = kw["pair_gate"]
+        self.fee_basis: str = kw["fee_basis"]
         self.binding: str = kw["binding"]
         self.source: Dict[str, str] = kw["source"]
 
@@ -145,6 +153,7 @@ FALLBACK = dict(
     max_first_leg_price=0.99, pair_cost_ceiling=0.96,
     tte_cutoff_s=0.0, rebate_assumed_zero=True,
     first_leg_offset_ticks=0, complement_requotes=0,
+    pair_gate="LANE5_ROLE_AWARE", fee_basis="STATE_TIMESTAMP",
     binding="STANDING_SPRING_DISCIPLINE_FALLBACK_NOT_LANE4_FROZEN",
     source={
         "pair_cost_ceiling": "CLAUDE.md spring discipline <= 0.96",
@@ -157,7 +166,8 @@ FALLBACK = dict(
 )
 
 
-def bind_params() -> Params:
+def bind_params(pair_gate: str = "LANE5_ROLE_AWARE",
+                fee_basis: str = "STATE_TIMESTAMP") -> Params:
     """Bind to Lane 4's frozen Stage-6 spec if it is on disk, else fall back.
 
     Lane 4's files are READ ONLY here and never written or imported for
@@ -166,7 +176,9 @@ def bind_params() -> Params:
     proto = os.path.join(ROOT, "analysis", "l5", "stage6",
                          "STAGE6_PROTOCOL.md")
     if not os.path.exists(mod_path):
-        return Params(**FALLBACK)
+        f = dict(FALLBACK)
+        f["pair_gate"], f["fee_basis"] = pair_gate, fee_basis
+        return Params(**f)
     sys.path.insert(0, ROOT)
     b = importlib.import_module("analysis.l5.stage6.bounds")
     importlib.reload(b)
@@ -183,6 +195,7 @@ def bind_params() -> Params:
         rebate_assumed_zero=bool(b.REBATE_IS_ASSUMED_ZERO),
         first_leg_offset_ticks=0,
         complement_requotes=int(b.MAX_COMPLEMENT_SUBMISSIONS) - 1,
+        pair_gate=pair_gate, fee_basis=fee_basis,
         binding=("LANE4_FROZEN_bounds.py"
                  + ("+STAGE6_PROTOCOL.md" if os.path.exists(proto)
                     else " (PROTOCOL.md ABSENT)")),
@@ -287,6 +300,31 @@ def load_books(paths: Sequence[str] = BOOK_FILES,
 
 
 # ------------------------------------------------------------------- fees
+
+_LANE4_PE = None
+_LANE4_CACHE: Dict[Tuple[float, str], Optional[float]] = {}
+
+
+def _lane4_max_complement(p1: float,
+                          when: dt.datetime) -> Optional[float]:
+    """Lane 4's OWN fee-safe complement ceiling, imported read-only from
+    `analysis/l5/stage6/pair_economics.py`. It charges a TAKER fee on BOTH
+    legs -- the worst case -- so this gate is tighter than ours and is
+    reported as a separate binding rather than blended with it."""
+    global _LANE4_PE
+    if _LANE4_PE is None:
+        if ROOT not in sys.path:
+            sys.path.insert(0, ROOT)
+        _LANE4_PE = importlib.import_module(
+            "analysis.l5.stage6.pair_economics")
+    key = (round(p1, 4), when.date().isoformat())
+    if key not in _LANE4_CACHE:
+        v = _LANE4_PE.max_complement_price(
+            D(str(p1)), fill_ts=when.isoformat().replace("+00:00", "Z"))
+        px = v.get("max_complement_price") if isinstance(v, dict) else v
+        _LANE4_CACHE[key] = None if px in (None, "None") else float(px)
+    return _LANE4_CACHE[key]
+
 
 def fee_inclusive_pair_cost(p1: float, p2: float, qty: float,
                             leg2_is_taker: bool, when: dt.datetime,
@@ -495,8 +533,27 @@ def evaluate_market(slug: str, m: Dict[str, Any], params: Params,
                 row["pair_verdict"] = "RESIDUAL_PROVABLE_NO_FEASIBLE_PRICE"
                 rows.append(row)
                 continue
-            when = dt.datetime.fromtimestamp(t1, dt.timezone.utc)
-            # maker complement at the richest tick inside the budget
+            when = (dt.datetime.fromtimestamp(t1, dt.timezone.utc)
+                    if params.fee_basis == "STATE_TIMESTAMP"
+                    else FORWARD_FEE_WHEN)
+            # maker complement at the richest tick inside the budget.
+            # Under the LANE4_TAKER_BOTH_LEGS gate the budget is set by Lane
+            # 4's own `pair_economics.max_complement_price`, which charges a
+            # TAKER fee on BOTH legs -- the conservative worst case, and
+            # materially tighter than "prices sum to the ceiling".
+            if params.pair_gate == "LANE4_TAKER_BOTH_LEGS":
+                mc = _lane4_max_complement(p1, when)
+                if mc is None:
+                    row["leg2_maker_bucket"] = \
+                        "STRUCTURALLY_INFEASIBLE_AFTER_FEE"
+                    row["leg2_taker_bucket"] = \
+                        "STRUCTURALLY_INFEASIBLE_AFTER_FEE"
+                    row["pair_verdict"] = \
+                        "RESIDUAL_PROVABLE_NO_FEASIBLE_PRICE"
+                    rows.append(row)
+                    continue
+                budget = mc
+                row["complement_budget"] = round(budget, 4)
             p2m = floor_tick(budget, params.tick)
             p2m = min(p2m, params.max_price)
             row["p2_maker"] = round(p2m, 4)
@@ -508,15 +565,18 @@ def evaluate_market(slug: str, m: Dict[str, Any], params: Params,
             # taker complement: the limit is the richest price whose
             # FEE-INCLUSIVE pair cost still clears the ceiling.
             lim = None
-            k = int(round(budget / params.tick))
-            while k >= 1:
-                cand = round(k * params.tick, 4)
-                c, _f = fee_inclusive_pair_cost(p1, cand, params.qty, True,
-                                                when, params)
-                if c <= params.pair_cost_ceiling + 1e-9:
-                    lim = cand
-                    break
-                k -= 1
+            if params.pair_gate == "LANE4_TAKER_BOTH_LEGS":
+                lim = p2m
+            else:
+                k = int(round(budget / params.tick))
+                while k >= 1:
+                    cand = round(k * params.tick, 4)
+                    c, _f = fee_inclusive_pair_cost(p1, cand, params.qty,
+                                                    True, when, params)
+                    if c <= params.pair_cost_ceiling + 1e-9:
+                        lim = cand
+                        break
+                    k -= 1
             if lim is None:
                 row["leg2_taker_bucket"] = "STRUCTURALLY_INFEASIBLE_AFTER_FEE"
                 row["p2_taker_limit"] = None
@@ -761,9 +821,13 @@ def main() -> int:
     ap.add_argument("--out", default=os.path.join(
         HERE, "STAGE6_HISTORICAL_VALIDATION.json"))
     ap.add_argument("--rows-out", default=None)
+    ap.add_argument("--pair-gate", default="LANE5_ROLE_AWARE",
+                    choices=("LANE5_ROLE_AWARE", "LANE4_TAKER_BOTH_LEGS"))
+    ap.add_argument("--fee-basis", default="STATE_TIMESTAMP",
+                    choices=("STATE_TIMESTAMP", "FORWARD_2026-10-07"))
     a = ap.parse_args()
 
-    params = bind_params()
+    params = bind_params(a.pair_gate, a.fee_basis)
     books = load_books()
     two = {k: v for k, v in books.items() if len(v["tokens"]) == 2}
 

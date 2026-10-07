@@ -1,6 +1,6 @@
 # L5 POST-AUGUST BEHAVIOR & ECONOMICS REPORT
 
-Generated `2026-10-07T04:28:39.041941+00:00` by `scripts/l5_post_august_report.py`.
+Generated `2026-10-07T04:29:46.889495+00:00` by `scripts/l5_post_august_report.py`.
 Subject: Polymarket trader `l5Zn1bWoM8eTsK`, proxy wallet `0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68`.
 
 ## Profit attribution
@@ -27,8 +27,8 @@ harvests normalized through the canonical pipeline.
 
 | metric | value |
 |---|---|
-| post-August rows loaded | **178450** |
-| of which TRADE fills | **173920** |
+| post-August rows loaded | **178455** |
+| of which TRADE fills | **173921** |
 | independent window-events | **5446** |
 | days with observed activity | **14** |
 | observed span | **2026-09-01 -> 2026-09-25** |
@@ -54,11 +54,11 @@ and silently collapses records differing in price/size/side/outcome/type.
 
 | | count |
 |---|---|
-| duplicates dropped | **6101** |
+| duplicates dropped | **10467** |
 | **collisions with DIFFERING fields** | **0** |
 | records contradicting identity | 0 |
 | records with no `name`/`proxyWallet` (kept on provenance) | 0 |
-| records with `name`/`proxyWallet` | 184551 |
+| records with `name`/`proxyWallet` | 188922 |
 | TRADE rows with unresolved slug | 0 |
 
 A collision count of **0** means the key lost nothing: every dropped row was
@@ -71,6 +71,7 @@ Rows kept per source:
 
 | source | rows kept |
 |---|---|
+| `ops:activity_20260901.jsonl` | 5 |
 | `sep2026:l5_activity_sep2026_raw.json.gz` | 144394 |
 | `sep2026:l5_activity_sep2223_raw.json.gz` | 16982 |
 | `sep2325:l5_sep23_25_daily.json` | 17074 |
@@ -89,8 +90,8 @@ deliberately not restated as one anywhere in this document.
 
 | period | days | events | fills | notional USD | OPEN | EXTEND | COMPLEMENT | SWITCH |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `MONTH_2026-09` | 14 | 5446 | 173920 | 2,061,013 | 3.1% | 70.5% | 15.8% | 10.6% |
-| `REGIME_2026-08-19_ON` | 14 | 5446 | 173920 | 2,061,013 | 3.1% | 70.5% | 15.8% | 10.6% |
+| `MONTH_2026-09` | 14 | 5446 | 173921 | 2,061,014 | 3.1% | 70.5% | 15.8% | 10.6% |
+| `REGIME_2026-08-19_ON` | 14 | 5446 | 173921 | 2,061,014 | 3.1% | 70.5% | 15.8% | 10.6% |
 
 Per-event action rates (actions per window-event):
 
@@ -156,8 +157,8 @@ them and this tape cannot narrow it.
 
 | period | all-taker fee UPPER BOUND | all-maker credit UPPER BOUND | fills priced | fills in date-conflict window |
 |---|---:|---:|---:|---:|
-| `MONTH_2026-09` | $43,603.81 | $8,754.84 | 173920 | 33096 |
-| `REGIME_2026-08-19_ON` | $43,603.81 | $8,754.84 | 173920 | 33096 |
+| `MONTH_2026-09` | $43,603.87 | $8,754.85 | 173921 | 33096 |
+| `REGIME_2026-08-19_ON` | $43,603.87 | $8,754.85 | 173921 | 33096 |
 
 Fills in the **2026-09-17 -> 2026-10-01** window are flagged because our primary
 captured source and a secondary search summary disagree on the taker-theta
@@ -178,14 +179,14 @@ unobservable ones must not be filled in with a model.
 | 4. maker rebates (L5's, credited) | $15,056.24 over 14 credits | **observed**, L5's own; NOT ours |
 | 4b. taker rebates (L5's, credited) | $1,348.83 over 14 credits | **observed**, L5's own; NOT ours |
 | 5. liquidity rewards (L5's, credited) | $8,229.66 over 6 payouts | **observed**, L5's own; NOT ours |
-| 6. fees | bound $0 .. $43,603.81 | **BOUND only** -- no aggressor flag |
-| 7. settlement / redemption cashflow | $2,052,491.29 over 4496 REDEEM rows | **observed** gross credit, not profit |
+| 6. fees | bound $0 .. $43,603.87 | **BOUND only** -- no aggressor flag |
+| 7. settlement / redemption cashflow | $2,052,728.98 over 4500 REDEEM rows | **observed** gross credit, not profit |
 
 #### Ex-incentive economics
 
 Stripping **every** incentive stream, the matched-pair book in the current
 regime locks **$64,945.20** ex-fee across **1,870,637** matched shares.
-Against that sits an all-taker fee upper bound of **$43,603.81**.
+Against that sits an all-taker fee upper bound of **$43,603.87**.
 
 So the ex-incentive matched book survives its own worst-case fee bound
 with ratio **1.49x** (locked / all-taker bound). That ratio is *not* a
@@ -205,11 +206,11 @@ own right** -- a median pair at 0.9651 locks about **3.49 cents per pair-share**
 before any subsidy.
 
 **The fee bound is what makes this undecidable, and it is the whole**
-**uncertainty.** The all-taker upper bound is **$43,603.81** -- i.e. **67%** of
+**uncertainty.** The all-taker upper bound is **$43,603.87** -- i.e. **67%** of
 the ex-fee lock. So depending on L5's true (unobservable) maker/taker split,
 the ex-incentive matched book is anywhere between
 **comfortably profitable** (mostly maker: fee near zero, keeps ~$64,945.20) and
-**nearly fee-dead** (mostly taker: keeps ~$21,341.40), at which point the
+**nearly fee-dead** (mostly taker: keeps ~$21,341.34), at which point the
 credited incentives would indeed become the dominant term. **This tape
 cannot distinguish those two worlds**, and the difference is exactly what
 decides whether the behaviour is copyable.

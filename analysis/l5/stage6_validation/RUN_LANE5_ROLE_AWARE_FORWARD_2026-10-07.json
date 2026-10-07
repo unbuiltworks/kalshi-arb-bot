@@ -1,0 +1,518 @@
+{
+  "by_regime": {
+    "REGIME_2026-08-19_ON": {
+      "candidate_states": 42654,
+      "conditional_on_provable_first_leg": {
+        "NOTE": "this subset is the LEVEL_CONSUMED adverse-selected subset documented in analysis/l5/august_replay/S2_FINDINGS.md section 2, NOT a representative sample",
+        "counts": {
+          "MATCHED_PROVABLE": 18102,
+          "RESIDUAL_PROVABLE": 5547,
+          "UNKNOWABLE_COMPLEMENT": 790
+        },
+        "fractions": {
+          "MATCHED_PROVABLE": 0.7407,
+          "RESIDUAL_PROVABLE": 0.227,
+          "UNKNOWABLE_COMPLEMENT": 0.0323
+        },
+        "matched_provable_ci95_market_clustered": [
+          0.7213,
+          0.76
+        ],
+        "n": 24439,
+        "unknowable_fraction": 0.0323
+      },
+      "evaluated_states": 28062,
+      "label": "REGIME_2026-08-19_ON",
+      "leg1_fractions": {
+        "UNKNOWABLE": 0.0849,
+        "WOULD_FILL": 0.8709,
+        "WOULD_NOT_FILL": 0.0442
+      },
+      "leg1_three_buckets": {
+        "UNKNOWABLE": 2383,
+        "WOULD_FILL": 24439,
+        "WOULD_NOT_FILL": 1240
+      },
+      "leg1_time_to_level_consumed_s": {
+        "NOTE": "how long the horizon had to run before the touch fell through our price. A long tail here means WOULD_FILL is being earned by HORIZON LENGTH, i.e. by the market moving against us, which is the LEVEL_CONSUMED bias itself and not a benign maker fill.",
+        "max": 767.0,
+        "n": 24439,
+        "p50": 9.0,
+        "p75": 29.0,
+        "p90": 77.0,
+        "p99": 390.0
+      },
+      "leg1_unknowable_ci95_market_clustered": [
+        0.0724,
+        0.0993
+      ],
+      "leg1_unknowable_fraction": 0.0849,
+      "markets": 731,
+      "matched_pair_cost_maker_leg2": {
+        "all_at_or_below_ceiling": true,
+        "max": 0.96,
+        "n": 18102,
+        "p05": 0.96,
+        "p50": 0.96,
+        "p95": 0.96
+      },
+      "pair_verdicts_all_states": {
+        "MATCHED_PROVABLE": 18102,
+        "NO_FIRST_LEG_PROVABLE": 1240,
+        "RESIDUAL_PROVABLE": 5547,
+        "UNKNOWABLE_COMPLEMENT": 790,
+        "UNKNOWABLE_FIRST_LEG": 2383
+      },
+      "refused": {
+        "REFUSED_BELOW_MIN_PRICE": 252,
+        "REFUSED_CROSSED_BOOK": 1908,
+        "REFUSED_FIRST_LEG_PRICE_CEILING": 11268,
+        "REFUSED_NO_BID": 506,
+        "REFUSED_STALE_BOOK": 658
+      },
+      "replay_expectancy_per_provable_first_leg_usd": {
+        "LABEL": "HISTORICAL_REPLAY_ONLY_NOT_REALIZED_NOT_SHADOW",
+        "NOTE": "computed over the adverse-selected provable subset only; the UNKNOWABLE states carry no expectancy estimate and are NOT imputed.",
+        "mean": -0.037409,
+        "n": 24439,
+        "total": -914.23
+      },
+      "residual_persistence_s_maker_complement": {
+        "censored_fraction": 0.2593,
+        "max": 697.0,
+        "n": 18102,
+        "p50": 12.0,
+        "p75": 39.0,
+        "p90": 107.0,
+        "p95": 189.0,
+        "p99": 400.0,
+        "right_censored_at_horizon": 6337
+      },
+      "residual_persistence_s_taker_complement": {
+        "max": 758.0,
+        "n": 14602,
+        "p50": 37.0,
+        "p75": 89.0,
+        "p90": 197.0,
+        "p95": 298.0,
+        "p99": 510.0
+      },
+      "worst_exposure": {
+        "NOTE": "settlement is read only to VALUE a residual after every fill verdict is fixed; it never enters a fill decision",
+        "qty_shares": 1.0,
+        "worst_drawdown_path_one_market_at_a_time_usd": -3.0,
+        "worst_path_rows": [
+          {
+            "p1": 0.6,
+            "pair_verdict": "RESIDUAL_PROVABLE",
+            "residual_settle_pnl_usd": -0.6,
+            "side": "Down",
+            "slug": "bnb-updown-15m-1787351400",
+            "t_dec": 1787351627.0
+          },
+          {
+            "p1": 0.6,
+            "pair_verdict": "RESIDUAL_PROVABLE",
+            "residual_settle_pnl_usd": -0.6,
+            "side": "Up",
+            "slug": "bnb-updown-15m-1787438700",
+            "t_dec": 1787439150.0
+          },
+          {
+            "p1": 0.6,
+            "pair_verdict": "RESIDUAL_PROVABLE",
+            "residual_settle_pnl_usd": -0.6,
+            "side": "Down",
+            "slug": "bnb-updown-15m-1787447700",
+            "t_dec": 1787448000.0
+          },
+          {
+            "p1": 0.6,
+            "pair_verdict": "RESIDUAL_PROVABLE",
+            "residual_settle_pnl_usd": -0.6,
+            "side": "Down",
+            "slug": "bnb-updown-15m-1787551200",
+            "t_dec": 1787551890.0
+          },
+          {
+            "p1": 0.6,
+            "pair_verdict": "RESIDUAL_PROVABLE",
+            "residual_settle_pnl_usd": -0.6,
+            "side": "Up",
+            "slug": "bnb-updown-5m-1787304000",
+            "t_dec": 1787304121.0
+          }
+        ],
+        "worst_single_residual_loss_usd": -0.6,
+        "worst_single_residual_notional_usd": 0.6
+      }
+    }
+  },
+  "classification": "HISTORICAL_REPLAY_THREE_BUCKET_NOT_SHADOW_NOT_SUBMITTED_NOT_FILLED_NOT_SETTLED_NOT_REALIZED",
+  "decision_grid_s": 15.0,
+  "fee_schedule_fingerprint": "ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bbeffd3ae61ca91629",
+  "fee_schedule_frozen": true,
+  "generated_utc": "2026-10-07T04:30:09.408528+00:00",
+  "inventory": {
+    "by_contract": {
+      "15m": 265,
+      "5m": 471
+    },
+    "coins": [
+      "bnb",
+      "btc",
+      "doge",
+      "eth",
+      "hype",
+      "sol",
+      "xrp",
+      "zec"
+    ],
+    "inter_snapshot_gap_s": {
+      "gaps_over_max_carry_60s": 291,
+      "max": 361.0,
+      "n": 405779,
+      "p50": 1.0,
+      "p90": 4.0,
+      "p99": 13.0
+    },
+    "markets_one_token_excluded": 0,
+    "markets_total": 736,
+    "markets_two_token": 736,
+    "per_market_snapshot_cadence_s": null,
+    "snapshot_rows_two_token": 407251,
+    "snapshot_span_utc": [
+      "2026-08-21T00:14:09+00:00",
+      "2026-08-24T12:29:59+00:00"
+    ],
+    "sources": [
+      {
+        "path": "data/zenodo_22084977/updown_15m.parquet",
+        "sha256_present": true
+      },
+      {
+        "path": "data/zenodo_22084977/updown_5m.parquet",
+        "sha256_present": true
+      }
+    ]
+  },
+  "l5_coins_only": {
+    "candidate_states": 10916,
+    "conditional_on_provable_first_leg": {
+      "NOTE": "this subset is the LEVEL_CONSUMED adverse-selected subset documented in analysis/l5/august_replay/S2_FINDINGS.md section 2, NOT a representative sample",
+      "counts": {
+        "MATCHED_PROVABLE": 4053,
+        "RESIDUAL_PROVABLE": 1962,
+        "UNKNOWABLE_COMPLEMENT": 216
+      },
+      "fractions": {
+        "MATCHED_PROVABLE": 0.6505,
+        "RESIDUAL_PROVABLE": 0.3149,
+        "UNKNOWABLE_COMPLEMENT": 0.0347
+      },
+      "matched_provable_ci95_market_clustered": [
+        0.6128,
+        0.6872
+      ],
+      "n": 6231,
+      "unknowable_fraction": 0.0347
+    },
+    "evaluated_states": 6872,
+    "label": "L5_COINS_btc_eth",
+    "leg1_fractions": {
+      "UNKNOWABLE": 0.0473,
+      "WOULD_FILL": 0.9067,
+      "WOULD_NOT_FILL": 0.046
+    },
+    "leg1_three_buckets": {
+      "UNKNOWABLE": 325,
+      "WOULD_FILL": 6231,
+      "WOULD_NOT_FILL": 316
+    },
+    "leg1_time_to_level_consumed_s": {
+      "NOTE": "how long the horizon had to run before the touch fell through our price. A long tail here means WOULD_FILL is being earned by HORIZON LENGTH, i.e. by the market moving against us, which is the LEVEL_CONSUMED bias itself and not a benign maker fill.",
+      "max": 679.0,
+      "n": 6231,
+      "p50": 8.0,
+      "p75": 28.0,
+      "p90": 76.0,
+      "p99": 344.0
+    },
+    "leg1_unknowable_ci95_market_clustered": [
+      0.0366,
+      0.0607
+    ],
+    "leg1_unknowable_fraction": 0.0473,
+    "markets": 184,
+    "matched_pair_cost_maker_leg2": {
+      "all_at_or_below_ceiling": true,
+      "max": 0.96,
+      "n": 4053,
+      "p05": 0.96,
+      "p50": 0.96,
+      "p95": 0.96
+    },
+    "pair_verdicts_all_states": {
+      "MATCHED_PROVABLE": 4053,
+      "NO_FIRST_LEG_PROVABLE": 316,
+      "RESIDUAL_PROVABLE": 1962,
+      "UNKNOWABLE_COMPLEMENT": 216,
+      "UNKNOWABLE_FIRST_LEG": 325
+    },
+    "refused": {
+      "REFUSED_BELOW_MIN_PRICE": 81,
+      "REFUSED_CROSSED_BOOK": 830,
+      "REFUSED_FIRST_LEG_PRICE_CEILING": 2975,
+      "REFUSED_NO_BID": 98,
+      "REFUSED_STALE_BOOK": 60
+    },
+    "replay_expectancy_per_provable_first_leg_usd": {
+      "LABEL": "HISTORICAL_REPLAY_ONLY_NOT_REALIZED_NOT_SHADOW",
+      "NOTE": "computed over the adverse-selected provable subset only; the UNKNOWABLE states carry no expectancy estimate and are NOT imputed.",
+      "mean": -0.080193,
+      "n": 6231,
+      "total": -499.68
+    },
+    "residual_persistence_s_maker_complement": {
+      "censored_fraction": 0.3495,
+      "max": 671.0,
+      "n": 4053,
+      "p50": 30.0,
+      "p75": 77.0,
+      "p90": 169.0,
+      "p95": 256.0,
+      "p99": 459.0,
+      "right_censored_at_horizon": 2178
+    },
+    "residual_persistence_s_taker_complement": {
+      "max": 689.0,
+      "n": 3775,
+      "p50": 43.0,
+      "p75": 100.0,
+      "p90": 204.0,
+      "p95": 295.0,
+      "p99": 516.0
+    },
+    "worst_exposure": {
+      "NOTE": "settlement is read only to VALUE a residual after every fill verdict is fixed; it never enters a fill decision",
+      "qty_shares": 1.0,
+      "worst_drawdown_path_one_market_at_a_time_usd": -3.0,
+      "worst_path_rows": [
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Up",
+          "slug": "btc-updown-15m-1787365800",
+          "t_dec": 1787366476.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Down",
+          "slug": "btc-updown-15m-1787400900",
+          "t_dec": 1787401141.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Down",
+          "slug": "btc-updown-15m-1787462100",
+          "t_dec": 1787462130.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Down",
+          "slug": "btc-updown-15m-1787503500",
+          "t_dec": 1787503785.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Up",
+          "slug": "btc-updown-15m-1787543100",
+          "t_dec": 1787543685.0
+        }
+      ],
+      "worst_single_residual_loss_usd": -0.6,
+      "worst_single_residual_notional_usd": 0.6
+    }
+  },
+  "maker_rebate_counted": "EXACTLY_ZERO_CENT_FLOOR_1.62_SHARES",
+  "params_bound": {
+    "binding": "LANE4_FROZEN_bounds.py (PROTOCOL.md ABSENT)",
+    "complement_requotes": 0,
+    "fee_basis": "FORWARD_2026-10-07",
+    "first_leg_offset_ticks": 0,
+    "max_first_leg_price": 0.6,
+    "max_price": 0.99,
+    "min_price": 0.01,
+    "pair_cost_ceiling": 0.96,
+    "pair_gate": "LANE5_ROLE_AWARE",
+    "qty": 1.0,
+    "rebate_assumed_zero": true,
+    "source": {
+      "all": "analysis/l5/stage6/bounds.py",
+      "bounds_py_sha256": "40fd4e0d4b95edf701240f1a252565be630b3f9684dc3ca21e01674c24974c2c",
+      "first_leg_offset_ticks": "not in bounds.py; maker-first join-the-bid, S1 offset 0",
+      "protocol_md_present": "False"
+    },
+    "tick": 0.01,
+    "tte_cutoff_s": 120.0
+  },
+  "params_fingerprint": "027cfa640261d7c2bbd7ca30a854c80d9d31c5991c8a4717375cbaa08de96247",
+  "pooled_all_coins": {
+    "candidate_states": 42654,
+    "conditional_on_provable_first_leg": {
+      "NOTE": "this subset is the LEVEL_CONSUMED adverse-selected subset documented in analysis/l5/august_replay/S2_FINDINGS.md section 2, NOT a representative sample",
+      "counts": {
+        "MATCHED_PROVABLE": 18102,
+        "RESIDUAL_PROVABLE": 5547,
+        "UNKNOWABLE_COMPLEMENT": 790
+      },
+      "fractions": {
+        "MATCHED_PROVABLE": 0.7407,
+        "RESIDUAL_PROVABLE": 0.227,
+        "UNKNOWABLE_COMPLEMENT": 0.0323
+      },
+      "matched_provable_ci95_market_clustered": [
+        0.7213,
+        0.76
+      ],
+      "n": 24439,
+      "unknowable_fraction": 0.0323
+    },
+    "evaluated_states": 28062,
+    "label": "POOLED_ALL_COINS",
+    "leg1_fractions": {
+      "UNKNOWABLE": 0.0849,
+      "WOULD_FILL": 0.8709,
+      "WOULD_NOT_FILL": 0.0442
+    },
+    "leg1_three_buckets": {
+      "UNKNOWABLE": 2383,
+      "WOULD_FILL": 24439,
+      "WOULD_NOT_FILL": 1240
+    },
+    "leg1_time_to_level_consumed_s": {
+      "NOTE": "how long the horizon had to run before the touch fell through our price. A long tail here means WOULD_FILL is being earned by HORIZON LENGTH, i.e. by the market moving against us, which is the LEVEL_CONSUMED bias itself and not a benign maker fill.",
+      "max": 767.0,
+      "n": 24439,
+      "p50": 9.0,
+      "p75": 29.0,
+      "p90": 77.0,
+      "p99": 390.0
+    },
+    "leg1_unknowable_ci95_market_clustered": [
+      0.0724,
+      0.0993
+    ],
+    "leg1_unknowable_fraction": 0.0849,
+    "markets": 731,
+    "matched_pair_cost_maker_leg2": {
+      "all_at_or_below_ceiling": true,
+      "max": 0.96,
+      "n": 18102,
+      "p05": 0.96,
+      "p50": 0.96,
+      "p95": 0.96
+    },
+    "pair_verdicts_all_states": {
+      "MATCHED_PROVABLE": 18102,
+      "NO_FIRST_LEG_PROVABLE": 1240,
+      "RESIDUAL_PROVABLE": 5547,
+      "UNKNOWABLE_COMPLEMENT": 790,
+      "UNKNOWABLE_FIRST_LEG": 2383
+    },
+    "refused": {
+      "REFUSED_BELOW_MIN_PRICE": 252,
+      "REFUSED_CROSSED_BOOK": 1908,
+      "REFUSED_FIRST_LEG_PRICE_CEILING": 11268,
+      "REFUSED_NO_BID": 506,
+      "REFUSED_STALE_BOOK": 658
+    },
+    "replay_expectancy_per_provable_first_leg_usd": {
+      "LABEL": "HISTORICAL_REPLAY_ONLY_NOT_REALIZED_NOT_SHADOW",
+      "NOTE": "computed over the adverse-selected provable subset only; the UNKNOWABLE states carry no expectancy estimate and are NOT imputed.",
+      "mean": -0.037409,
+      "n": 24439,
+      "total": -914.23
+    },
+    "residual_persistence_s_maker_complement": {
+      "censored_fraction": 0.2593,
+      "max": 697.0,
+      "n": 18102,
+      "p50": 12.0,
+      "p75": 39.0,
+      "p90": 107.0,
+      "p95": 189.0,
+      "p99": 400.0,
+      "right_censored_at_horizon": 6337
+    },
+    "residual_persistence_s_taker_complement": {
+      "max": 758.0,
+      "n": 14602,
+      "p50": 37.0,
+      "p75": 89.0,
+      "p90": 197.0,
+      "p95": 298.0,
+      "p99": 510.0
+    },
+    "worst_exposure": {
+      "NOTE": "settlement is read only to VALUE a residual after every fill verdict is fixed; it never enters a fill decision",
+      "qty_shares": 1.0,
+      "worst_drawdown_path_one_market_at_a_time_usd": -3.0,
+      "worst_path_rows": [
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Down",
+          "slug": "bnb-updown-15m-1787351400",
+          "t_dec": 1787351627.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Up",
+          "slug": "bnb-updown-15m-1787438700",
+          "t_dec": 1787439150.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Down",
+          "slug": "bnb-updown-15m-1787447700",
+          "t_dec": 1787448000.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Down",
+          "slug": "bnb-updown-15m-1787551200",
+          "t_dec": 1787551890.0
+        },
+        {
+          "p1": 0.6,
+          "pair_verdict": "RESIDUAL_PROVABLE",
+          "residual_settle_pnl_usd": -0.6,
+          "side": "Up",
+          "slug": "bnb-updown-5m-1787304000",
+          "t_dec": 1787304121.0
+        }
+      ],
+      "worst_single_residual_loss_usd": -0.6,
+      "worst_single_residual_notional_usd": 0.6
+    }
+  },
+  "taker_theta_at_evaluable_states": "0.06",
+  "taker_theta_today": "0.0695"
+}

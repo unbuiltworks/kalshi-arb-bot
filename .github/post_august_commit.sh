@@ -16,7 +16,25 @@ if [ "${GITHUB_REF_NAME:-}" != "claude/august-l5-forensic-replay-788cml" ]; then
   echo "::error::refusing to commit on ${GITHUB_REF_NAME:-<none>}"; exit 1
 fi
 
-git add -- data/l5/raw/post_august analysis/l5/post_august 2>/dev/null || true
+# Add each path SEPARATELY and only when it exists. `git add` is atomic across
+# pathspecs: a single `git add -- A B` where B does not exist fails and stages
+# NEITHER. That silently discarded a completed 270k-row harvest once (run
+# 37571081753 printed "nothing to commit" after a successful fetch), because
+# `analysis/l5/post_august` did not yet exist in that checkout and `|| true`
+# swallowed the pathspec error. Never collapse these back into one add.
+staged=0
+for p in data/l5/raw/post_august analysis/l5/post_august; do
+  if [ -e "$p" ]; then
+    git add -- "$p" || { echo "::error::git add failed for $p"; exit 1; }
+    staged=1
+  else
+    echo "note: $p absent in this checkout, skipping"
+  fi
+done
+if [ "$staged" = "0" ]; then
+  echo "::error::neither artifact directory exists -- nothing was produced"
+  exit 1
+fi
 
 if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
 if git diff --cached --name-only | grep -qvE "$ALLOW"; then

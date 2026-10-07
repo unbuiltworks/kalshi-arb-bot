@@ -540,7 +540,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: HARD-CODED LITERAL so assert_frozen() cannot be vacuous. It is NOT
 #: recomputed from the object it checks.
 S6P_FINGERPRINT = \
-    "6c7d2112ec600738bbc7ddb1eaaab8b4f8c99010dfc444404ae5ffc673e9f157"
+    "32360e4c0441a8d7296794bd098e47ae962dabbc3fa406f98327dab40b2d96d8"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

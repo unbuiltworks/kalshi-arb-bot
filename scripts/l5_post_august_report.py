@@ -246,6 +246,34 @@ def load_post_august():
                         n += 1
         diag["sources"][src] = n
 
+    # (4) the 24/7 ops collector's own files: BARE records, one per line, and
+    # they carry `proxyWallet`. They add little coverage but they are an
+    # INDEPENDENT identity signal on days the nameless pages also cover, so
+    # they corroborate provenance rather than relying on it alone.
+    for p in sorted(glob.glob(os.path.join(ROOT, "data/l5/ops/activity_*.jsonl"))):
+        src = "ops:" + os.path.basename(p)
+        n_kept = 0
+        with open(p) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    diag["records_malformed"] += 1
+                    continue
+                # These rows carry proxyWallet, so identity is checked on the
+                # record itself here, not inherited from an envelope.
+                if str(rec.get("proxyWallet", "")).lower() != L5_ADDR:
+                    diag["records_contradicting_identity"] += 1
+                    continue
+                r = _norm(rec, src, seen, diag)
+                if r:
+                    rows.append(r)
+                    n_kept += 1
+        diag["sources"][src] = n_kept
+
     # Harvest-level truncation flags, carried through so a floor is never
     # read as a count.
     for p in sorted(glob.glob(os.path.join(
@@ -549,6 +577,28 @@ def write_md(o):
     W("`name`/`proxyWallet` disqualifies a record. A name-only filter would discard")
     W("the ~90% of pages on which the feed omits the profile block.")
     W()
+    ops_dup = sum(v for k, v in d["dup_by_pair"].items() if "ops:" in k)
+    ops_new = sum(v for k, v in d["kept_by_src"].items() if k.startswith("ops:"))
+    if ops_dup:
+        W("### Identity corroborated, not merely asserted")
+        W()
+        W("The canonical corpus could corroborate identity on only **~0.5%** of its")
+        W("nameless transactions (`CANON_CORPUS_VALIDATION.md`), leaving provenance as")
+        W("the sole evidence for the rest. The post-August window does better.")
+        W()
+        W("The 24/7 ops collector (`data/l5/ops/activity_*.jsonl`) writes **bare**")
+        W("records that carry `proxyWallet` on every row -- an identity signal")
+        W("*independent* of the fetch envelope. Overlapped against the provenance-")
+        W("admitted nameless harvest it produced **%s exact duplicates, %s"
+          % (n(ops_dup, 0), n(d["collisions_differing_fields"], 0)))
+        W("collisions, and only %s genuinely new row(s)**." % n(ops_new, 0))
+        W()
+        W("So on the overlap an independent `proxyWallet` signal agrees with")
+        W("provenance **byte-for-byte in every carried field**. That is a real")
+        W("corroboration of the identity rule on this window, not an assumption --")
+        W("though it still covers only the overlapping day, and the remaining days")
+        W("rest on provenance alone.")
+        W()
     W("Rows kept per source:")
     W()
     W("| source | rows kept |")
