@@ -1245,6 +1245,11 @@ def boot() -> Dict[str, Any]:
     """Boot assertions, every time. Fails closed. Reports arming; never
     acquires it."""
     rep = boot_assertions()
+    # BEFORE ANYTHING ELSE, including the arming gate: refuse to run
+    # beside a second armed execution stack. E1's image contains
+    # `src.pmus_q1_executor` as a dependency of the PMUS-native book.
+    rep["foreign_executor_guard"] = (
+        A.assert_no_foreign_executor_authorization())
     rep.update({
         "diff_report": diff_report(),
         "feasibility": project_feasibility(),

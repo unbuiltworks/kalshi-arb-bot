@@ -41,6 +41,56 @@ LEGACY_XR2W_KEYS_NEVER_READ = (
     "PMUS_EXEC1_LIVE", "PMUS_EXEC1_SESSION_ID", "PMUS_EXEC1_ARM",
     "PMUS_EXEC1_GATE_EVIDENCE", "PMUS_EXEC1_AUTHORIZED_FINGERPRINT")
 
+#: Q1's ARMING keys. E1's image now contains `src.pmus_q1_executor`,
+#: because the PMUS-native book (`src.l5_pmus_auth_book`) imports the
+#: evidence recorder, which imports it. That module carries
+#: `place_limit_buy`, `cancel_all_deadman` and `run_campaign`, and it arms
+#: from ITS OWN namespace -- so a Q1 authorization present in E1's
+#: container would mean two independently armed execution stacks sharing
+#: one process. Importing it is provably inert (no module-level network or
+#: order call; only Decimal constants and an `if __name__` guard), but
+#: "inert on import" is not "safe to leave armed".
+#:
+#: `PMUS_Q1_STATE_DIR` is deliberately NOT here: it names where Q1's
+#: historical state lives and authorizes nothing.
+Q1_AUTHORIZATION_KEYS = (
+    "PMUS_Q1_LIVE", "PMUS_Q1_ARM", "PMUS_Q1_SESSION_ID",
+    "PMUS_Q1_GATE_EVIDENCE", "PMUS_Q1_MARKET_SLUG")
+
+
+def q1_authorization_present() -> dict:
+    """Which Q1 arming values are set in this container, by NAME only."""
+    present = sorted(k for k in Q1_AUTHORIZATION_KEYS
+                     if (os.getenv(k) or "").strip())
+    return {"keys_checked": list(Q1_AUTHORIZATION_KEYS),
+            "present": present, "any_present": bool(present),
+            "values_never_read": True,
+            "state_dir_is_not_authorization": "PMUS_Q1_STATE_DIR"}
+
+
+def assert_no_foreign_executor_authorization() -> dict:
+    """FAIL CLOSED AT BOOT if another executor is armed in this container.
+
+    E1 cannot police what else is installed beside it, but it can refuse
+    to run next to a second armed order path. This is asserted at every
+    boot, before the arming gate and before any network call, and it
+    raises SystemExit rather than returning a flag so no caller can
+    continue past it by ignoring a return value.
+    """
+    q1 = q1_authorization_present()
+    if q1["any_present"]:
+        raise SystemExit(
+            "REFUSED: a Q1 executor authorization is present in E1's "
+            "container (%s). `src.pmus_q1_executor` ships in this image "
+            "as a dependency of the PMUS-native book and can place and "
+            "cancel orders from its own namespace. E1 will not run "
+            "beside a second armed execution stack. Blank these values "
+            "and redeploy." % ", ".join(q1["present"]))
+    return {"foreign_executor_authorization": "NONE",
+            "q1": q1,
+            "why": "two independently armed order paths must never share "
+                   "one process"}
+
 
 def session_id() -> str:
     return os.getenv(SESSION_ID_ENV, "").strip()
