@@ -112,14 +112,37 @@ HTTP 400.
 
 ---
 
-## 5. Historical / shadow evidence for or against — **PENDING** (Lane 5)
+## 5. Historical / shadow evidence — **DOES NOT SUPPORT AUTHORIZATION**
 
-Bound to report three buckets — WOULD_FILL, WOULD_NOT_FILL, **UNKNOWABLE**
-— never merged, with the UNKNOWABLE fraction prominent. If it dominates,
-the honest verdict is INCONCLUSIVE rather than an optimistic point
-estimate. No parameter fitting.
+Lane 5's verdict, from `analysis/l5/stage6_validation/
+STAGE6_HISTORICAL_VALIDATION.md`:
 
----
+**The primary answer is INCONCLUSIVE.** Under Stage-6 the first leg is a
+passive maker order, and in **95.58%** of evaluable historical states
+whether it would have filled is **UNKNOWABLE** from the data we hold. The
+archive is a *book* archive — aligned ladders written on change, **no trade
+prints, no sequence numbers**. A resting bid at `p` placed when size `Q`
+already sat at `p` joins *behind* `Q`, and a book-only feed cannot reveal
+whether our own quantity traded. On L5's own coins the unknowable fraction
+is 95.40%.
+
+The repo's own frozen fill standard (`EVIDENCED_LEVEL_CONSUMED`) collapses
+that to 8.49% — but `S2_FINDINGS.md` §2 already documents that proxy as a
+**selection bias, not a solution**. Both bucketings are carried separately
+and never merged.
+
+**And inside the proxy's own adverse-selected subset, the economics fail
+decisively:**
+
+| | needed to break even | achieved | per first leg |
+|---|---|---|---|
+| all coins (n = 24,439) | **78.73%** matched | **67.72%** (95% CI 65.62–69.81) | **−$0.0372** |
+| L5's own coins (btc, eth) | 78.73% | **57.90%** | **−$0.0879** |
+
+So the two standards disagree about *measurability* but **agree on the
+verdict**: on the generous, biased-favorable standard the protocol loses
+money; on the strict standard it cannot be evaluated at all. Neither is a
+case for risking capital.
 
 ## 6. Maximum dollars at risk — **$0.00 live tonight**
 
@@ -131,27 +154,55 @@ ambiguity does not affect its rebate economics.
 
 ---
 
-## 7. Exact live authorization proposed — **PENDING** on lanes 4 and 5
+## 7. Exact live authorization proposed — **NONE. I recommend against it.**
 
-I will not propose an authorization until Lane 5's historical evidence is
-in. The honest sequencing: a frozen protocol is necessary but not
-sufficient; what decides authorization is whether the policy's first leg
-becomes matched ≤ $0.96 often enough, and how bad the residual gets when it
-does not.
+I am not proposing a first matched-pair cohort, and I would decline to
+authorize one on tonight's evidence.
 
----
+The reasoning is not caution for its own sake. Stage-6 is a *matched-pair*
+protocol: its entire economic case rests on the first leg becoming matched
+cheaply and often. Lane 5 says we cannot measure how often that happens
+(95.58% unknowable), and that where we can construct a measurement at all,
+it comes out **below break-even** — 67.72% against the 78.73% required, and
+57.90% on the coins L5 actually trades. Authorizing live dollars would not
+be testing the thesis; it would be paying to find out what the data already
+declines to support.
+
+What would change my answer: a fill standard that is *queue-aware* rather
+than book-only. That is exactly what tonight's new evidence is for — see §8.
 
 ## 8. The single highest-value thing to do next
 
-**PENDING** the remaining lanes. The leading candidate, on evidence already
-in hand: S3's "complement side never observed" defect is the same class of
-problem that the new two-token collector was built to solve, and the new
-collector demonstrably does *not* have it (`single_token_markets: []`,
-`both_tokens_ok: true`). If that holds, re-running S3's question against
-the new collector's tape is worth more than any new strategy — it would
-convert a measurement failure into an actual answer.
+**Close the queue-position blind spot, because it is the binding constraint
+on every matched-pair question we have.**
 
----
+Two independent lanes failed tonight for the *same underlying reason*, and
+that convergence is the night's real finding:
+
+- **S3** could not evaluate because its tape never carried the complement
+  side (`complement_never_observed: true` in all five markets).
+- **Lane 5** could not evaluate because a book-only archive carries no trade
+  prints or sequence numbers, so passive fills are unknowable in 95.58% of
+  states.
+
+Both are instrument limits, not statements about opportunity. And both are
+addressed by the same thing: **the dual-token CLOB websocket built tonight**
+(`src/l5_clob_ws.py`). It is the strict-timing arm — both tokens on one
+socket sharing one receive clock — and it is the only path we have toward
+per-event ordering that a REST snapshot fundamentally cannot give.
+
+Concretely, in priority order:
+1. **Prove the websocket live** (both tokens streaming, `SubscriptionProof`
+   PROVEN). Until then its gaps are not quiet books.
+2. **Accumulate a tape that carries trade prints and arrival order**, then
+   re-ask Lane 5's four questions against it. That converts INCONCLUSIVE
+   into an answer.
+3. **Re-run S3's question against the new two-token collector**, which
+   demonstrably does *not* have S3's defect (`single_token_markets: []`,
+   `both_tokens_ok: true`).
+
+Nothing about Stage-6's code needs changing. What it needs is a measurement
+instrument good enough to judge it.
 
 ### Standing boundaries honored overnight
 
