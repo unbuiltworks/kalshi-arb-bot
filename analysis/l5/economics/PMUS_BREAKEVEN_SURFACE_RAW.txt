@@ -1,0 +1,2214 @@
+PMUS REBATE-ADJUSTED L5-CLONE BREAKEVEN SURFACE -- RAW NUMERIC OUTPUT
+protocol P0-ECONOMICS-PMUS-BREAKEVEN-SURFACE
+schedule fingerprint ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bbeffd3ae61ca91629
+maker_theta 0.0125  taker_theta 0.0695
+HISTORICAL / SHADOW ARITHMETIC ONLY. No network, no order path, no venue write. Nothing here is submitted, filled, settled or realized.
+
+==============================================================================
+1+2+3. REBATE PER MAKER FILL: cents, bp on MAKER NOTIONAL, cent floor
+==============================================================================
+price contracts  mak_notional   rebate$  unrounded     bp_on_notional  asym_bp  artifact zero
+ 0.10      0.01       0.0010      0.00   0.00001125            0.00   112.50        - ZERO
+ 0.10      0.10       0.0100      0.00   0.00011250            0.00   112.50        - ZERO
+ 0.10         1         0.10      0.00   0.00112500            0.00   112.50        - ZERO
+ 0.10      1.62       0.1620      0.00   0.00182250            0.00   112.50        - ZERO
+ 0.10         2         0.20      0.00   0.00225000            0.00   112.50        - ZERO
+ 0.10         5         0.50      0.01   0.00562500          200.00   112.50 ARTIFACT     
+ 0.10        10         1.00      0.01   0.01125000          100.00   112.50        -     
+ 0.10        25         2.50      0.03   0.02812500          120.00   112.50 ARTIFACT     
+ 0.10        50         5.00      0.06   0.05625000          120.00   112.50 ARTIFACT     
+ 0.10       100        10.00      0.11   0.11250000          110.00   112.50        -     
+ 0.20      0.01       0.0020      0.00   0.00002000            0.00   100.00        - ZERO
+ 0.20      0.10       0.0200      0.00   0.00020000            0.00   100.00        - ZERO
+ 0.20         1         0.20      0.00   0.00200000            0.00   100.00        - ZERO
+ 0.20      1.62       0.3240      0.00   0.00324000            0.00   100.00        - ZERO
+ 0.20         2         0.40      0.00   0.00400000            0.00   100.00        - ZERO
+ 0.20         5         1.00      0.01   0.01000000          100.00   100.00        -     
+ 0.20        10         2.00      0.02   0.02000000          100.00   100.00        -     
+ 0.20        25         5.00      0.05   0.05000000          100.00   100.00        -     
+ 0.20        50        10.00      0.10   0.10000000          100.00   100.00        -     
+ 0.20       100        20.00      0.20   0.20000000          100.00   100.00        -     
+ 0.30      0.01       0.0030      0.00   0.00002625            0.00    87.50        - ZERO
+ 0.30      0.10       0.0300      0.00   0.00026250            0.00    87.50        - ZERO
+ 0.30         1         0.30      0.00   0.00262500            0.00    87.50        - ZERO
+ 0.30      1.62       0.4860      0.00   0.00425250            0.00    87.50        - ZERO
+ 0.30         2         0.60      0.01   0.00525000          166.67    87.50 ARTIFACT     
+ 0.30         5         1.50      0.01   0.01312500           66.67    87.50        -     
+ 0.30        10         3.00      0.03   0.02625000          100.00    87.50 ARTIFACT     
+ 0.30        25         7.50      0.07   0.06562500           93.33    87.50 ARTIFACT     
+ 0.30        50        15.00      0.13   0.13125000           86.67    87.50        -     
+ 0.30       100        30.00      0.26   0.26250000           86.67    87.50        -     
+ 0.40      0.01       0.0040      0.00   0.00003000            0.00    75.00        - ZERO
+ 0.40      0.10       0.0400      0.00   0.00030000            0.00    75.00        - ZERO
+ 0.40         1         0.40      0.00   0.00300000            0.00    75.00        - ZERO
+ 0.40      1.62       0.6480      0.00   0.00486000            0.00    75.00        - ZERO
+ 0.40         2         0.80      0.01   0.00600000          125.00    75.00 ARTIFACT     
+ 0.40         5         2.00      0.02   0.01500000          100.00    75.00 ARTIFACT     
+ 0.40        10         4.00      0.03   0.03000000           75.00    75.00        -     
+ 0.40        25        10.00      0.08   0.07500000           80.00    75.00 ARTIFACT     
+ 0.40        50        20.00      0.15   0.15000000           75.00    75.00        -     
+ 0.40       100        40.00      0.30   0.30000000           75.00    75.00        -     
+ 0.50      0.01       0.0050      0.00   0.00003125            0.00    62.50        - ZERO
+ 0.50      0.10       0.0500      0.00   0.00031250            0.00    62.50        - ZERO
+ 0.50         1         0.50      0.00   0.00312500            0.00    62.50        - ZERO
+ 0.50      1.62       0.8100      0.01   0.00506250          123.46    62.50 ARTIFACT     
+ 0.50         2         1.00      0.01   0.00625000          100.00    62.50 ARTIFACT     
+ 0.50         5         2.50      0.02   0.01562500           80.00    62.50 ARTIFACT     
+ 0.50        10         5.00      0.03   0.03125000           60.00    62.50        -     
+ 0.50        25        12.50      0.08   0.07812500           64.00    62.50 ARTIFACT     
+ 0.50        50        25.00      0.16   0.15625000           64.00    62.50 ARTIFACT     
+ 0.50       100        50.00      0.31   0.31250000           62.00    62.50        -     
+ 0.60      0.01       0.0060      0.00   0.00003000            0.00    50.00        - ZERO
+ 0.60      0.10       0.0600      0.00   0.00030000            0.00    50.00        - ZERO
+ 0.60         1         0.60      0.00   0.00300000            0.00    50.00        - ZERO
+ 0.60      1.62       0.9720      0.00   0.00486000            0.00    50.00        - ZERO
+ 0.60         2         1.20      0.01   0.00600000           83.33    50.00 ARTIFACT     
+ 0.60         5         3.00      0.02   0.01500000           66.67    50.00 ARTIFACT     
+ 0.60        10         6.00      0.03   0.03000000           50.00    50.00        -     
+ 0.60        25        15.00      0.08   0.07500000           53.33    50.00 ARTIFACT     
+ 0.60        50        30.00      0.15   0.15000000           50.00    50.00        -     
+ 0.60       100        60.00      0.30   0.30000000           50.00    50.00        -     
+ 0.70      0.01       0.0070      0.00   0.00002625            0.00    37.50        - ZERO
+ 0.70      0.10       0.0700      0.00   0.00026250            0.00    37.50        - ZERO
+ 0.70         1         0.70      0.00   0.00262500            0.00    37.50        - ZERO
+ 0.70      1.62       1.1340      0.00   0.00425250            0.00    37.50        - ZERO
+ 0.70         2         1.40      0.01   0.00525000           71.43    37.50 ARTIFACT     
+ 0.70         5         3.50      0.01   0.01312500           28.57    37.50        -     
+ 0.70        10         7.00      0.03   0.02625000           42.86    37.50 ARTIFACT     
+ 0.70        25        17.50      0.07   0.06562500           40.00    37.50 ARTIFACT     
+ 0.70        50        35.00      0.13   0.13125000           37.14    37.50        -     
+ 0.70       100        70.00      0.26   0.26250000           37.14    37.50        -     
+ 0.80      0.01       0.0080      0.00   0.00002000            0.00    25.00        - ZERO
+ 0.80      0.10       0.0800      0.00   0.00020000            0.00    25.00        - ZERO
+ 0.80         1         0.80      0.00   0.00200000            0.00    25.00        - ZERO
+ 0.80      1.62       1.2960      0.00   0.00324000            0.00    25.00        - ZERO
+ 0.80         2         1.60      0.00   0.00400000            0.00    25.00        - ZERO
+ 0.80         5         4.00      0.01   0.01000000           25.00    25.00        -     
+ 0.80        10         8.00      0.02   0.02000000           25.00    25.00        -     
+ 0.80        25        20.00      0.05   0.05000000           25.00    25.00        -     
+ 0.80        50        40.00      0.10   0.10000000           25.00    25.00        -     
+ 0.80       100        80.00      0.20   0.20000000           25.00    25.00        -     
+ 0.90      0.01       0.0090      0.00   0.00001125            0.00    12.50        - ZERO
+ 0.90      0.10       0.0900      0.00   0.00011250            0.00    12.50        - ZERO
+ 0.90         1         0.90      0.00   0.00112500            0.00    12.50        - ZERO
+ 0.90      1.62       1.4580      0.00   0.00182250            0.00    12.50        - ZERO
+ 0.90         2         1.80      0.00   0.00225000            0.00    12.50        - ZERO
+ 0.90         5         4.50      0.01   0.00562500           22.22    12.50 ARTIFACT     
+ 0.90        10         9.00      0.01   0.01125000           11.11    12.50        -     
+ 0.90        25        22.50      0.03   0.02812500           13.33    12.50 ARTIFACT     
+ 0.90        50        45.00      0.06   0.05625000           13.33    12.50 ARTIFACT     
+ 0.90       100        90.00      0.11   0.11250000           12.22    12.50        -     
+
+CENT FLOOR -- minimum contracts for a NONZERO cent (0.01 contract grid)
+price per_contract$    continuous_thresh  min_on_grid  brief_ref  agrees  exact_half
+ 0.10       0.00112500             4.4444         4.45       4.45    True      False
+ 0.20       0.00200000             2.5000         2.51       2.51    True       True
+ 0.30       0.00262500             1.9048         1.91       1.91    True      False
+ 0.40       0.00300000             1.6667         1.67       1.67    True      False
+ 0.50       0.00312500             1.6000         1.61       1.61    True       True
+ 0.60       0.00300000             1.6667         1.67       1.67    True      False
+ 0.70       0.00262500             1.9048         1.91       1.91    True      False
+ 0.80       0.00200000             2.5000         2.51       2.51    True       True
+ 0.90       0.00112500             4.4444         4.45       4.45    True      False
+
+==============================================================================
+CAP AUDIT
+==============================================================================
+claim: published cap $0.31 per 100 contracts, binding near p=0.50
+verdict: REFUTED
+lot_in_capture: 100
+n_published_rows: 99
+all_rows_reproduce_from_formula: True
+why: $0.31 is the cent-rounded formula per 100 contracts over 0.43..0.57, not a truncation. Every published row reproduces from theta*C*p*(1-p) with half-even rounding, and the capture contains no cap language. The rebate is UNCAPPED.
+consequence: at p=0.50 the per-contract credit is $0.003125, NOT $0.0031; a cap would have cost 0.8 bp of pair turnover that the venue does not in fact withhold. No cap is applied anywhere in this module.
+brief_premise_confirmed_part: the brief is RIGHT that the formula gives 0.003125 at p=0.50 and 0.003000 at p=0.40/0.60; it is WRONG that a cap binds, because there is no cap
+rows showing 0.31: 0.43, 0.44, 0.45, 0.46, 0.47, 0.48, 0.49, 0.50, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57
+deviations from formula: []
+
+==============================================================================
+DENOMINATOR RECONCILIATION
+==============================================================================
+  l5_net_bp: TURNOVER, established FROM SOURCE: analysis/l5/regime_aug19/regime_shift.py line 360 accumulates `turnover += usdcSize` over EVERY fill of both legs -- NOT assumed
+  maker_rebate_natural: MAKER NOTIONAL = contracts * price (ONE leg)
+  pair_economics_natural: PAIR NOTIONAL ~ $1.00 of settlement per pair
+identity: turnover(pair) = C*p + C*(X-p) = C*X ~= $1.00*C, so PAIR TURNOVER ~= PAIR COST and a per-pair rebate over C*X is already in L5's bp-of-turnover units
+2x trap: a pair turns over 2x ONE LEG's notional, but each leg is ~$0.50, so the pair total is still ~$1.00. The 2x applies when converting FROM maker notional (one leg) TO pair turnover, and the rebate_bp_of_FIRST_LEG_MAKER_NOTIONAL column below is roughly 2x the pair-turnover column, exactly as that conversion requires. Comparing the maker-notional column against L5's bp would overstate our compensation ~2x.
+rate vs delta: {
+  "finding": "-71.7 bp IS A CHANGE, NOT A LEVEL",
+  "level_a_clone_must_cover_bp": "-30.4",
+  "overstatement_if_delta_used": "2.36x",
+  "r3_net_bp": "41.4",
+  "r4_net_bp": "-30.4",
+  "the_change": "-71.7"
+}
+minus-71.7 legitimate? {
+  "answer": "NO -- on two independent grounds",
+  "ground_1_rate_vs_delta": "-71.7 is a regime-to-regime MOVE. A rebate rate can only be compared against the LEVEL, -30.4 bp.",
+  "ground_2_role_mix": "even against -30.4 bp the comparison fails. L5's R4 shows fees of -62.1 bp of turnover, which means L5 PAID TAKER FEES on a material share of that turnover. A maker rebate and a taker fee cannot both be earned on the same fill, so the full both-legs-maker 62.5 bp CANNOT be added to a -30.4 bp figure that was produced partly by taker legs. Doing so double-counts the same notional. And an all-maker counterfactual does not hold L5's completion rate fixed: the taker completions are precisely what produced it.",
+  "what_can_be_said": "the two figures can be compared only on an all-maker sub-population with its OWN measured completion rate and its OWN turnover. We do not hold that measurement, so the comparison is NOT MADE here."
+}
+
+pairX legp compp  turnover rebate$/pair  bp_PAIR_TURNOVER  bp_FIRST_LEG_NOTIONAL  lock_bp
+ 0.94 0.30  0.64      0.94    0.00550500             58.56                 183.50    638.30
+ 0.94 0.50  0.44      0.94    0.00620500             66.01                 124.10    638.30
+ 0.95 0.30  0.65      0.95    0.00546875             57.57                 182.29    526.32
+ 0.95 0.50  0.45      0.95    0.00621875             65.46                 124.38    526.32
+ 0.96 0.30  0.66      0.96    0.00543000             56.56                 181.00    416.67
+ 0.96 0.50  0.46      0.96    0.00623000             64.90                 124.60    416.67
+ 0.97 0.30  0.67      0.97    0.00538875             55.55                 179.62    309.28
+ 0.97 0.50  0.47      0.97    0.00623875             64.32                 124.78    309.28
+ 0.98 0.30  0.68      0.98    0.00534500             54.54                 178.17    204.08
+ 0.98 0.50  0.48      0.98    0.00624500             63.72                 124.90    204.08
+ 0.99 0.30  0.69      0.99    0.00529875             53.52                 176.62    101.01
+ 0.99 0.50  0.49      0.99    0.00624875             63.12                 124.98    101.01
+ 1.00 0.30  0.70      1.00    0.00525000             52.50                 175.00      0.00
+ 1.00 0.50  0.50      1.00    0.00625000             62.50                 125.00      0.00
+
+==============================================================================
+PAIR-AT-PAR / REBATE-FINANCING TEST
+==============================================================================
+hypothesis: L5's median pair cost 0.9668 with only 46.2% completing <= 0.96 is explained by rebate financing: a pair at $1.00 has ZERO lock but still earns ~62.5 bp of turnover in maker rebate
+verdict: ARITHMETIC CONFIRMED, CAUSALLY UNPROVEN
+arithmetic: at X=1.00, p=0.50, both legs maker, the pair earns $0.00625 against a $0.00 lock -- 62.5 bp of pair turnover, financed entirely by the rebate. The rebate EXCEEDS the lock for every pair cost above ~0.9938, and is a majority of gross above ~0.9875.
+why_causally_unproven: three reasons. (1) L5's R4 confirmed incentive yield is +163.4 bp of turnover -- 2.6x the 62.5 bp the maker-rebate formula can produce -- so the maker rebate alone does NOT account for L5's compensation; a liquidity-reward program we have no source-confirmed entitlement to supplies the rest. (2) L5's R4 fees are -62.1 bp, so L5 is not all-maker and cannot be earning the full both-legs-maker rate. (3) The pair-cost distribution SPREAD rather than shifted (median fell 0.9764 -> 0.9609 while p90 rose 1.1705 -> 1.2175), which a pure rebate-financing story does not predict.
+pairX leg_p  lock$   rebate$/pair  lock_bp  rebate_bp  reb>lock  reb_share_gross
+ 0.94   0.47    0.06    0.00622750   638.30      66.25     False          0.0940
+ 0.95  0.475    0.05    0.00623438   526.32      65.62     False          0.1109
+ 0.96   0.48    0.04    0.00624000   416.67      65.00     False          0.1349
+ 0.97  0.485    0.03    0.00624438   309.28      64.38     False          0.1723
+ 0.98   0.49    0.02    0.00624750   204.08      63.75     False          0.2380
+ 0.99  0.495    0.01    0.00624938   101.01      63.12     False          0.3846
+ 1.00   0.50    0.00    0.00625000     0.00      62.50      True          1.0000
+
+==============================================================================
+4. BREAKEVEN MATCHED-COMPLETION SURFACE -- BOTH LEGS MAKER
+==============================================================================
+m* = matched fraction at which the five components sum to zero.
+price contr pairX compP  matched$   residual$   m*         vs_observed(67.72%)
+ 0.10  0.01  0.94  0.84     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.95  0.85     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.96  0.86     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.97  0.87     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.98  0.88     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.99  0.89     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.10  0.01  1.00  0.90     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.94  0.84     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.95  0.85     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.96  0.86     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.97  0.87     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.98  0.88     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.99  0.89     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.10  0.10  1.00  0.90     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.10     1  0.94  0.84       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.10     1  0.95  0.85       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.10     1  0.96  0.86       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.10     1  0.97  0.87       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.10     1  0.98  0.88       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.10     1  0.99  0.89       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.10     1  1.00  0.90       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.94  0.84     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.95  0.85     0.0810  -0.4494204   0.847291  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.96  0.86     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.97  0.87     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.98  0.88     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.99  0.89     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.10  1.62  1.00  0.90     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.10     2  0.94  0.84       0.12    -0.55484   0.822180  ABOVE_OBSERVED_CI
+ 0.10     2  0.95  0.85       0.10    -0.55484   0.847291  ABOVE_OBSERVED_CI
+ 0.10     2  0.96  0.86       0.08    -0.55484   0.873984  ABOVE_OBSERVED_CI
+ 0.10     2  0.97  0.87       0.06    -0.55484   0.902414  ABOVE_OBSERVED_CI
+ 0.10     2  0.98  0.88       0.04    -0.55484   0.932755  ABOVE_OBSERVED_CI
+ 0.10     2  0.99  0.89       0.02    -0.55484   0.965208  ABOVE_OBSERVED_CI
+ 0.10     2  1.00  0.90       0.00    -0.55484   1.000000  ABOVE_OBSERVED_CI
+ 0.10     5  0.94  0.84       0.32    -1.37710   0.811443  ABOVE_OBSERVED_CI
+ 0.10     5  0.95  0.85       0.27    -1.37710   0.836076  ABOVE_OBSERVED_CI
+ 0.10     5  0.96  0.86       0.22    -1.37710   0.862250  ABOVE_OBSERVED_CI
+ 0.10     5  0.97  0.87       0.17    -1.37710   0.890117  ABOVE_OBSERVED_CI
+ 0.10     5  0.98  0.88       0.12    -1.37710   0.919845  ABOVE_OBSERVED_CI
+ 0.10     5  0.99  0.89       0.07    -1.37710   0.951627  ABOVE_OBSERVED_CI
+ 0.10     5  1.00  0.90       0.02    -1.37710   0.985685  ABOVE_OBSERVED_CI
+ 0.10    10  0.94  0.84       0.63    -2.76420   0.814389  ABOVE_OBSERVED_CI
+ 0.10    10  0.95  0.85       0.53    -2.76420   0.839111  ABOVE_OBSERVED_CI
+ 0.10    10  0.96  0.86       0.43    -2.76420   0.865381  ABOVE_OBSERVED_CI
+ 0.10    10  0.97  0.87       0.32    -2.76420   0.896245  ABOVE_OBSERVED_CI
+ 0.10    10  0.98  0.88       0.22    -2.76420   0.926278  ABOVE_OBSERVED_CI
+ 0.10    10  0.99  0.89       0.12    -2.76420   0.958394  ABOVE_OBSERVED_CI
+ 0.10    10  1.00  0.90       0.02    -2.76420   0.992817  ABOVE_OBSERVED_CI
+ 0.10    25  0.94  0.84       1.57    -6.90550   0.814760  ABOVE_OBSERVED_CI
+ 0.10    25  0.95  0.85       1.32    -6.90550   0.839523  ABOVE_OBSERVED_CI
+ 0.10    25  0.96  0.86       1.07    -6.90550   0.865839  ABOVE_OBSERVED_CI
+ 0.10    25  0.97  0.87       0.82    -6.90550   0.893858  ABOVE_OBSERVED_CI
+ 0.10    25  0.98  0.88       0.56    -6.90550   0.924988  ABOVE_OBSERVED_CI
+ 0.10    25  0.99  0.89       0.31    -6.90550   0.957037  ABOVE_OBSERVED_CI
+ 0.10    25  1.00  0.90       0.06    -6.90550   0.991386  ABOVE_OBSERVED_CI
+ 0.10    50  0.94  0.84       3.14   -13.81100   0.814760  ABOVE_OBSERVED_CI
+ 0.10    50  0.95  0.85       2.64   -13.81100   0.839523  ABOVE_OBSERVED_CI
+ 0.10    50  0.96  0.86       2.14   -13.81100   0.865839  ABOVE_OBSERVED_CI
+ 0.10    50  0.97  0.87       1.63   -13.81100   0.894437  ABOVE_OBSERVED_CI
+ 0.10    50  0.98  0.88       1.13   -13.81100   0.924369  ABOVE_OBSERVED_CI
+ 0.10    50  0.99  0.89       0.62   -13.81100   0.957037  ABOVE_OBSERVED_CI
+ 0.10    50  1.00  0.90       0.12   -13.81100   0.991386  ABOVE_OBSERVED_CI
+ 0.10   100  0.94  0.84       6.28   -27.63200   0.814815  ABOVE_OBSERVED_CI
+ 0.10   100  0.95  0.85       5.27   -27.63200   0.839827  ABOVE_OBSERVED_CI
+ 0.10   100  0.96  0.86       4.26   -27.63200   0.866424  ABOVE_OBSERVED_CI
+ 0.10   100  0.97  0.87       3.25   -27.63200   0.894761  ABOVE_OBSERVED_CI
+ 0.10   100  0.98  0.88       2.24   -27.63200   0.925013  ABOVE_OBSERVED_CI
+ 0.10   100  0.99  0.89       1.23   -27.63200   0.957383  ABOVE_OBSERVED_CI
+ 0.10   100  1.00  0.90       0.22   -27.63200   0.992101  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.94  0.74     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.95  0.75     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.96  0.76     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.97  0.77     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.98  0.78     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.99  0.79     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.20  0.01  1.00  0.80     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.94  0.74     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.95  0.75     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.96  0.76     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.97  0.77     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.98  0.78     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.99  0.79     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.20  0.10  1.00  0.80     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.20     1  0.94  0.74       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.20     1  0.95  0.75       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.20     1  0.96  0.76       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.20     1  0.97  0.77       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.20     1  0.98  0.78       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.20     1  0.99  0.79       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.20     1  1.00  0.80       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.94  0.74     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.95  0.75     0.0810  -0.4494204   0.847291  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.96  0.76     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.97  0.77     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.98  0.78     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.99  0.79     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.20  1.62  1.00  0.80     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.20     2  0.94  0.74       0.12    -0.55484   0.822180  ABOVE_OBSERVED_CI
+ 0.20     2  0.95  0.75       0.10    -0.55484   0.847291  ABOVE_OBSERVED_CI
+ 0.20     2  0.96  0.76       0.08    -0.55484   0.873984  ABOVE_OBSERVED_CI
+ 0.20     2  0.97  0.77       0.06    -0.55484   0.902414  ABOVE_OBSERVED_CI
+ 0.20     2  0.98  0.78       0.04    -0.55484   0.932755  ABOVE_OBSERVED_CI
+ 0.20     2  0.99  0.79       0.02    -0.55484   0.965208  ABOVE_OBSERVED_CI
+ 0.20     2  1.00  0.80       0.00    -0.55484   1.000000  ABOVE_OBSERVED_CI
+ 0.20     5  0.94  0.74       0.32    -1.37710   0.811443  ABOVE_OBSERVED_CI
+ 0.20     5  0.95  0.75       0.27    -1.37710   0.836076  ABOVE_OBSERVED_CI
+ 0.20     5  0.96  0.76       0.22    -1.37710   0.862250  ABOVE_OBSERVED_CI
+ 0.20     5  0.97  0.77       0.17    -1.37710   0.890117  ABOVE_OBSERVED_CI
+ 0.20     5  0.98  0.78       0.12    -1.37710   0.919845  ABOVE_OBSERVED_CI
+ 0.20     5  0.99  0.79       0.07    -1.37710   0.951627  ABOVE_OBSERVED_CI
+ 0.20     5  1.00  0.80       0.02    -1.37710   0.985685  ABOVE_OBSERVED_CI
+ 0.20    10  0.94  0.74       0.64    -2.75420   0.811443  ABOVE_OBSERVED_CI
+ 0.20    10  0.95  0.75       0.54    -2.75420   0.836076  ABOVE_OBSERVED_CI
+ 0.20    10  0.96  0.76       0.44    -2.75420   0.862250  ABOVE_OBSERVED_CI
+ 0.20    10  0.97  0.77       0.34    -2.75420   0.890117  ABOVE_OBSERVED_CI
+ 0.20    10  0.98  0.78       0.24    -2.75420   0.919845  ABOVE_OBSERVED_CI
+ 0.20    10  0.99  0.79       0.14    -2.75420   0.951627  ABOVE_OBSERVED_CI
+ 0.20    10  1.00  0.80       0.04    -2.75420   0.985685  ABOVE_OBSERVED_CI
+ 0.20    25  0.94  0.74       1.61    -6.88550   0.810488  ABOVE_OBSERVED_CI
+ 0.20    25  0.95  0.75       1.36    -6.88550   0.835062  ABOVE_OBSERVED_CI
+ 0.20    25  0.96  0.76       1.11    -6.88550   0.861172  ABOVE_OBSERVED_CI
+ 0.20    25  0.97  0.77       0.86    -6.88550   0.888968  ABOVE_OBSERVED_CI
+ 0.20    25  0.98  0.78       0.60    -6.88550   0.919845  ABOVE_OBSERVED_CI
+ 0.20    25  0.99  0.79       0.35    -6.88550   0.951627  ABOVE_OBSERVED_CI
+ 0.20    25  1.00  0.80       0.10    -6.88550   0.985685  ABOVE_OBSERVED_CI
+ 0.20    50  0.94  0.74       3.22   -13.77100   0.810488  ABOVE_OBSERVED_CI
+ 0.20    50  0.95  0.75       2.72   -13.77100   0.835062  ABOVE_OBSERVED_CI
+ 0.20    50  0.96  0.76       2.21   -13.77100   0.861711  ABOVE_OBSERVED_CI
+ 0.20    50  0.97  0.77       1.71   -13.77100   0.889542  ABOVE_OBSERVED_CI
+ 0.20    50  0.98  0.78       1.21   -13.77100   0.919231  ABOVE_OBSERVED_CI
+ 0.20    50  0.99  0.79       0.70   -13.77100   0.951627  ABOVE_OBSERVED_CI
+ 0.20    50  1.00  0.80       0.20   -13.77100   0.985685  ABOVE_OBSERVED_CI
+ 0.20   100  0.94  0.74       6.44   -27.54200   0.810488  ABOVE_OBSERVED_CI
+ 0.20   100  0.95  0.75       5.43   -27.54200   0.835315  ABOVE_OBSERVED_CI
+ 0.20   100  0.96  0.76       4.43   -27.54200   0.861441  ABOVE_OBSERVED_CI
+ 0.20   100  0.97  0.77       3.42   -27.54200   0.889542  ABOVE_OBSERVED_CI
+ 0.20   100  0.98  0.78       2.41   -27.54200   0.919538  ABOVE_OBSERVED_CI
+ 0.20   100  0.99  0.79       1.41   -27.54200   0.951299  ABOVE_OBSERVED_CI
+ 0.20   100  1.00  0.80       0.40   -27.54200   0.985685  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.94  0.64     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.95  0.65     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.96  0.66     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.97  0.67     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.98  0.68     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.99  0.69     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.30  0.01  1.00  0.70     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.94  0.64     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.95  0.65     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.96  0.66     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.97  0.67     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.98  0.68     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.99  0.69     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.30  0.10  1.00  0.70     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.30     1  0.94  0.64       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.30     1  0.95  0.65       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.30     1  0.96  0.66       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.30     1  0.97  0.67       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.30     1  0.98  0.68       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.30     1  0.99  0.69       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.30     1  1.00  0.70       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.94  0.64     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.95  0.65     0.0810  -0.4494204   0.847291  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.96  0.66     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.97  0.67     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.98  0.68     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.99  0.69     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.30  1.62  1.00  0.70     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.30     2  0.94  0.64       0.14    -0.54484   0.795573  ABOVE_OBSERVED_CI
+ 0.30     2  0.95  0.65       0.12    -0.54484   0.819505  ABOVE_OBSERVED_CI
+ 0.30     2  0.96  0.66       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.30     2  0.97  0.67       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.30     2  0.98  0.68       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.30     2  0.99  0.69       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.30     2  1.00  0.70       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.30     5  0.94  0.64       0.32    -1.37710   0.811443  ABOVE_OBSERVED_CI
+ 0.30     5  0.95  0.65       0.27    -1.37710   0.836076  ABOVE_OBSERVED_CI
+ 0.30     5  0.96  0.66       0.22    -1.37710   0.862250  ABOVE_OBSERVED_CI
+ 0.30     5  0.97  0.67       0.17    -1.37710   0.890117  ABOVE_OBSERVED_CI
+ 0.30     5  0.98  0.68       0.12    -1.37710   0.919845  ABOVE_OBSERVED_CI
+ 0.30     5  0.99  0.69       0.07    -1.37710   0.951627  ABOVE_OBSERVED_CI
+ 0.30     5  1.00  0.70       0.02    -1.37710   0.985685  ABOVE_OBSERVED_CI
+ 0.30    10  0.94  0.64       0.66    -2.74420   0.806122  ABOVE_OBSERVED_CI
+ 0.30    10  0.95  0.65       0.56    -2.74420   0.830519  ABOVE_OBSERVED_CI
+ 0.30    10  0.96  0.66       0.46    -2.74420   0.856438  ABOVE_OBSERVED_CI
+ 0.30    10  0.97  0.67       0.36    -2.74420   0.884028  ABOVE_OBSERVED_CI
+ 0.30    10  0.98  0.68       0.26    -2.74420   0.913454  ABOVE_OBSERVED_CI
+ 0.30    10  0.99  0.69       0.16    -2.74420   0.944907  ABOVE_OBSERVED_CI
+ 0.30    10  1.00  0.70       0.06    -2.74420   0.978604  ABOVE_OBSERVED_CI
+ 0.30    25  0.94  0.64       1.64    -6.86550   0.807184  ABOVE_OBSERVED_CI
+ 0.30    25  0.95  0.65       1.39    -6.86550   0.831627  ABOVE_OBSERVED_CI
+ 0.30    25  0.96  0.66       1.14    -6.86550   0.857598  ABOVE_OBSERVED_CI
+ 0.30    25  0.97  0.67       0.89    -6.86550   0.885243  ABOVE_OBSERVED_CI
+ 0.30    25  0.98  0.68       0.64    -6.86550   0.914729  ABOVE_OBSERVED_CI
+ 0.30    25  0.99  0.69       0.39    -6.86550   0.946248  ABOVE_OBSERVED_CI
+ 0.30    25  1.00  0.70       0.14    -6.86550   0.980016  ABOVE_OBSERVED_CI
+ 0.30    50  0.94  0.64       3.27   -13.74100   0.807771  ABOVE_OBSERVED_CI
+ 0.30    50  0.95  0.65       2.77   -13.74100   0.832233  ABOVE_OBSERVED_CI
+ 0.30    50  0.96  0.66       2.27   -13.74100   0.858222  ABOVE_OBSERVED_CI
+ 0.30    50  0.97  0.67       1.77   -13.74100   0.885887  ABOVE_OBSERVED_CI
+ 0.30    50  0.98  0.68       1.27   -13.74100   0.915395  ABOVE_OBSERVED_CI
+ 0.30    50  0.99  0.69       0.76   -13.74100   0.947590  ABOVE_OBSERVED_CI
+ 0.30    50  1.00  0.70       0.26   -13.74100   0.981430  ABOVE_OBSERVED_CI
+ 0.30   100  0.94  0.64       6.55   -27.48200   0.807534  ABOVE_OBSERVED_CI
+ 0.30   100  0.95  0.65       5.54   -27.48200   0.832233  ABOVE_OBSERVED_CI
+ 0.30   100  0.96  0.66       4.54   -27.48200   0.858222  ABOVE_OBSERVED_CI
+ 0.30   100  0.97  0.67       3.54   -27.48200   0.885887  ABOVE_OBSERVED_CI
+ 0.30   100  0.98  0.68       2.53   -27.48200   0.915700  ABOVE_OBSERVED_CI
+ 0.30   100  0.99  0.69       1.53   -27.48200   0.947263  ABOVE_OBSERVED_CI
+ 0.30   100  1.00  0.70       0.52   -27.48200   0.981430  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.94  0.54     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.95  0.55     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.96  0.56     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.97  0.57     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.98  0.58     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.99  0.59     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.40  0.01  1.00  0.60     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.94  0.54     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.95  0.55     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.96  0.56     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.97  0.57     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.98  0.58     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.99  0.59     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.40  0.10  1.00  0.60     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.40     1  0.94  0.54       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.40     1  0.95  0.55       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.40     1  0.96  0.56       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.40     1  0.97  0.57       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.40     1  0.98  0.58       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.40     1  0.99  0.59       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.40     1  1.00  0.60       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.94  0.54     0.1072  -0.4494204   0.807409  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.95  0.55     0.0910  -0.4494204   0.831613  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.96  0.56     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.97  0.57     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.98  0.58     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.99  0.59     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.40  1.62  1.00  0.60     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.40     2  0.94  0.54       0.14    -0.54484   0.795573  ABOVE_OBSERVED_CI
+ 0.40     2  0.95  0.55       0.12    -0.54484   0.819505  ABOVE_OBSERVED_CI
+ 0.40     2  0.96  0.56       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.40     2  0.97  0.57       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.40     2  0.98  0.58       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.40     2  0.99  0.59       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.40     2  1.00  0.60       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.40     5  0.94  0.54       0.34    -1.36710   0.800832  ABOVE_OBSERVED_CI
+ 0.40     5  0.95  0.55       0.29    -1.36710   0.824995  ABOVE_OBSERVED_CI
+ 0.40     5  0.96  0.56       0.24    -1.36710   0.850663  ABOVE_OBSERVED_CI
+ 0.40     5  0.97  0.57       0.19    -1.36710   0.877978  ABOVE_OBSERVED_CI
+ 0.40     5  0.98  0.58       0.14    -1.36710   0.907106  ABOVE_OBSERVED_CI
+ 0.40     5  0.99  0.59       0.09    -1.36710   0.938233  ABOVE_OBSERVED_CI
+ 0.40     5  1.00  0.60       0.04    -1.36710   0.971573  ABOVE_OBSERVED_CI
+ 0.40    10  0.94  0.54       0.66    -2.74420   0.806122  ABOVE_OBSERVED_CI
+ 0.40    10  0.95  0.55       0.56    -2.74420   0.830519  ABOVE_OBSERVED_CI
+ 0.40    10  0.96  0.56       0.46    -2.74420   0.856438  ABOVE_OBSERVED_CI
+ 0.40    10  0.97  0.57       0.36    -2.74420   0.884028  ABOVE_OBSERVED_CI
+ 0.40    10  0.98  0.58       0.26    -2.74420   0.913454  ABOVE_OBSERVED_CI
+ 0.40    10  0.99  0.59       0.16    -2.74420   0.944907  ABOVE_OBSERVED_CI
+ 0.40    10  1.00  0.60       0.06    -2.74420   0.978604  ABOVE_OBSERVED_CI
+ 0.40    25  0.94  0.54       1.66    -6.85550   0.805061  ABOVE_OBSERVED_CI
+ 0.40    25  0.95  0.55       1.41    -6.85550   0.829411  ABOVE_OBSERVED_CI
+ 0.40    25  0.96  0.56       1.16    -6.85550   0.855280  ABOVE_OBSERVED_CI
+ 0.40    25  0.97  0.57       0.91    -6.85550   0.882815  ABOVE_OBSERVED_CI
+ 0.40    25  0.98  0.58       0.66    -6.85550   0.912181  ABOVE_OBSERVED_CI
+ 0.40    25  0.99  0.59       0.41    -6.85550   0.943569  ABOVE_OBSERVED_CI
+ 0.40    25  1.00  0.60       0.16    -6.85550   0.977193  ABOVE_OBSERVED_CI
+ 0.40    50  0.94  0.54       3.31   -13.72100   0.805649  ABOVE_OBSERVED_CI
+ 0.40    50  0.95  0.55       2.80   -13.72100   0.830519  ABOVE_OBSERVED_CI
+ 0.40    50  0.96  0.56       2.30   -13.72100   0.856438  ABOVE_OBSERVED_CI
+ 0.40    50  0.97  0.57       1.80   -13.72100   0.884028  ABOVE_OBSERVED_CI
+ 0.40    50  0.98  0.58       1.30   -13.72100   0.913454  ABOVE_OBSERVED_CI
+ 0.40    50  0.99  0.59       0.80   -13.72100   0.944907  ABOVE_OBSERVED_CI
+ 0.40    50  1.00  0.60       0.30   -13.72100   0.978604  ABOVE_OBSERVED_CI
+ 0.40   100  0.94  0.54       6.61   -27.44200   0.805885  ABOVE_OBSERVED_CI
+ 0.40   100  0.95  0.55       5.61   -27.44200   0.830267  ABOVE_OBSERVED_CI
+ 0.40   100  0.96  0.56       4.61   -27.44200   0.856171  ABOVE_OBSERVED_CI
+ 0.40   100  0.97  0.57       3.61   -27.44200   0.883743  ABOVE_OBSERVED_CI
+ 0.40   100  0.98  0.58       2.60   -27.44200   0.913454  ABOVE_OBSERVED_CI
+ 0.40   100  0.99  0.59       1.60   -27.44200   0.944907  ABOVE_OBSERVED_CI
+ 0.40   100  1.00  0.60       0.60   -27.44200   0.978604  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.94  0.44     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.95  0.45     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.96  0.46     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.97  0.47     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.98  0.48     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.99  0.49     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.50  0.01  1.00  0.50     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.94  0.44     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.95  0.45     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.96  0.46     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.97  0.47     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.98  0.48     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.99  0.49     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.50  0.10  1.00  0.50     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.50     1  0.94  0.44       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.50     1  0.95  0.45       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.50     1  0.96  0.46       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.50     1  0.97  0.47       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.50     1  0.98  0.48       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.50     1  0.99  0.49       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.50     1  1.00  0.50       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.94  0.44     0.1072  -0.4394204   0.803886  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.95  0.45     0.1010  -0.4394204   0.813108  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.96  0.46     0.0848  -0.4394204   0.838236  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.97  0.47     0.0686  -0.4394204   0.864966  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.98  0.48     0.0524  -0.4394204   0.893457  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.99  0.49     0.0362  -0.4394204   0.923889  ABOVE_OBSERVED_CI
+ 0.50  1.62  1.00  0.50     0.0200  -0.4394204   0.956467  ABOVE_OBSERVED_CI
+ 0.50     2  0.94  0.44       0.14    -0.54484   0.795573  ABOVE_OBSERVED_CI
+ 0.50     2  0.95  0.45       0.12    -0.54484   0.819505  ABOVE_OBSERVED_CI
+ 0.50     2  0.96  0.46       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.50     2  0.97  0.47       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.50     2  0.98  0.48       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.50     2  0.99  0.49       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.50     2  1.00  0.50       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.50     5  0.94  0.44       0.34    -1.36710   0.800832  ABOVE_OBSERVED_CI
+ 0.50     5  0.95  0.45       0.29    -1.36710   0.824995  ABOVE_OBSERVED_CI
+ 0.50     5  0.96  0.46       0.24    -1.36710   0.850663  ABOVE_OBSERVED_CI
+ 0.50     5  0.97  0.47       0.19    -1.36710   0.877978  ABOVE_OBSERVED_CI
+ 0.50     5  0.98  0.48       0.14    -1.36710   0.907106  ABOVE_OBSERVED_CI
+ 0.50     5  0.99  0.49       0.09    -1.36710   0.938233  ABOVE_OBSERVED_CI
+ 0.50     5  1.00  0.50       0.04    -1.36710   0.971573  ABOVE_OBSERVED_CI
+ 0.50    10  0.94  0.44       0.66    -2.74420   0.806122  ABOVE_OBSERVED_CI
+ 0.50    10  0.95  0.45       0.56    -2.74420   0.830519  ABOVE_OBSERVED_CI
+ 0.50    10  0.96  0.46       0.46    -2.74420   0.856438  ABOVE_OBSERVED_CI
+ 0.50    10  0.97  0.47       0.36    -2.74420   0.884028  ABOVE_OBSERVED_CI
+ 0.50    10  0.98  0.48       0.26    -2.74420   0.913454  ABOVE_OBSERVED_CI
+ 0.50    10  0.99  0.49       0.16    -2.74420   0.944907  ABOVE_OBSERVED_CI
+ 0.50    10  1.00  0.50       0.06    -2.74420   0.978604  ABOVE_OBSERVED_CI
+ 0.50    25  0.94  0.44       1.66    -6.85550   0.805061  ABOVE_OBSERVED_CI
+ 0.50    25  0.95  0.45       1.41    -6.85550   0.829411  ABOVE_OBSERVED_CI
+ 0.50    25  0.96  0.46       1.16    -6.85550   0.855280  ABOVE_OBSERVED_CI
+ 0.50    25  0.97  0.47       0.91    -6.85550   0.882815  ABOVE_OBSERVED_CI
+ 0.50    25  0.98  0.48       0.66    -6.85550   0.912181  ABOVE_OBSERVED_CI
+ 0.50    25  0.99  0.49       0.41    -6.85550   0.943569  ABOVE_OBSERVED_CI
+ 0.50    25  1.00  0.50       0.16    -6.85550   0.977193  ABOVE_OBSERVED_CI
+ 0.50    50  0.94  0.44       3.31   -13.71100   0.805534  ABOVE_OBSERVED_CI
+ 0.50    50  0.95  0.45       2.81   -13.71100   0.829913  ABOVE_OBSERVED_CI
+ 0.50    50  0.96  0.46       2.32   -13.71100   0.855280  ABOVE_OBSERVED_CI
+ 0.50    50  0.97  0.47       1.82   -13.71100   0.882815  ABOVE_OBSERVED_CI
+ 0.50    50  0.98  0.48       1.32   -13.71100   0.912181  ABOVE_OBSERVED_CI
+ 0.50    50  0.99  0.49       0.82   -13.71100   0.943569  ABOVE_OBSERVED_CI
+ 0.50    50  1.00  0.50       0.32   -13.71100   0.977193  ABOVE_OBSERVED_CI
+ 0.50   100  0.94  0.44       6.62   -27.43200   0.805591  ABOVE_OBSERVED_CI
+ 0.50   100  0.95  0.45       5.62   -27.43200   0.829965  ABOVE_OBSERVED_CI
+ 0.50   100  0.96  0.46       4.62   -27.43200   0.855859  ABOVE_OBSERVED_CI
+ 0.50   100  0.97  0.47       3.62   -27.43200   0.883421  ABOVE_OBSERVED_CI
+ 0.50   100  0.98  0.48       2.62   -27.43200   0.912818  ABOVE_OBSERVED_CI
+ 0.50   100  0.99  0.49       1.62   -27.43200   0.944238  ABOVE_OBSERVED_CI
+ 0.50   100  1.00  0.50       0.62   -27.43200   0.977898  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.94  0.34     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.95  0.35     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.96  0.36     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.97  0.37     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.98  0.38     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.99  0.39     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.60  0.01  1.00  0.40     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.94  0.34     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.95  0.35     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.96  0.36     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.97  0.37     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.98  0.38     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.99  0.39     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.60  0.10  1.00  0.40     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.60     1  0.94  0.34       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.60     1  0.95  0.35       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.60     1  0.96  0.36       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.60     1  0.97  0.37       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.60     1  0.98  0.38       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.60     1  0.99  0.39       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.60     1  1.00  0.40       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.94  0.34     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.95  0.35     0.0810  -0.4494204   0.847291  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.96  0.36     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.97  0.37     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.98  0.38     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.99  0.39     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.60  1.62  1.00  0.40     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.60     2  0.94  0.34       0.14    -0.54484   0.795573  ABOVE_OBSERVED_CI
+ 0.60     2  0.95  0.35       0.12    -0.54484   0.819505  ABOVE_OBSERVED_CI
+ 0.60     2  0.96  0.36       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.60     2  0.97  0.37       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.60     2  0.98  0.38       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.60     2  0.99  0.39       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.60     2  1.00  0.40       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.60     5  0.94  0.34       0.33    -1.36710   0.805551  ABOVE_OBSERVED_CI
+ 0.60     5  0.95  0.35       0.28    -1.36710   0.830004  ABOVE_OBSERVED_CI
+ 0.60     5  0.96  0.36       0.23    -1.36710   0.855989  ABOVE_OBSERVED_CI
+ 0.60     5  0.97  0.37       0.18    -1.36710   0.883653  ABOVE_OBSERVED_CI
+ 0.60     5  0.98  0.38       0.13    -1.36710   0.913165  ABOVE_OBSERVED_CI
+ 0.60     5  0.99  0.39       0.08    -1.36710   0.944717  ABOVE_OBSERVED_CI
+ 0.60     5  1.00  0.40       0.04    -1.36710   0.971573  ABOVE_OBSERVED_CI
+ 0.60    10  0.94  0.34       0.66    -2.74420   0.806122  ABOVE_OBSERVED_CI
+ 0.60    10  0.95  0.35       0.56    -2.74420   0.830519  ABOVE_OBSERVED_CI
+ 0.60    10  0.96  0.36       0.46    -2.74420   0.856438  ABOVE_OBSERVED_CI
+ 0.60    10  0.97  0.37       0.36    -2.74420   0.884028  ABOVE_OBSERVED_CI
+ 0.60    10  0.98  0.38       0.26    -2.74420   0.913454  ABOVE_OBSERVED_CI
+ 0.60    10  0.99  0.39       0.16    -2.74420   0.944907  ABOVE_OBSERVED_CI
+ 0.60    10  1.00  0.40       0.06    -2.74420   0.978604  ABOVE_OBSERVED_CI
+ 0.60    25  0.94  0.34       1.65    -6.85550   0.806008  ABOVE_OBSERVED_CI
+ 0.60    25  0.95  0.35       1.40    -6.85550   0.830416  ABOVE_OBSERVED_CI
+ 0.60    25  0.96  0.36       1.15    -6.85550   0.856349  ABOVE_OBSERVED_CI
+ 0.60    25  0.97  0.37       0.90    -6.85550   0.883953  ABOVE_OBSERVED_CI
+ 0.60    25  0.98  0.38       0.65    -6.85550   0.913397  ABOVE_OBSERVED_CI
+ 0.60    25  0.99  0.39       0.40    -6.85550   0.944869  ABOVE_OBSERVED_CI
+ 0.60    25  1.00  0.40       0.16    -6.85550   0.977193  ABOVE_OBSERVED_CI
+ 0.60    50  0.94  0.34       3.29   -13.72100   0.806596  ABOVE_OBSERVED_CI
+ 0.60    50  0.95  0.35       2.79   -13.72100   0.831022  ABOVE_OBSERVED_CI
+ 0.60    50  0.96  0.36       2.29   -13.72100   0.856973  ABOVE_OBSERVED_CI
+ 0.60    50  0.97  0.37       1.80   -13.72100   0.884028  ABOVE_OBSERVED_CI
+ 0.60    50  0.98  0.38       1.30   -13.72100   0.913454  ABOVE_OBSERVED_CI
+ 0.60    50  0.99  0.39       0.80   -13.72100   0.944907  ABOVE_OBSERVED_CI
+ 0.60    50  1.00  0.40       0.30   -13.72100   0.978604  ABOVE_OBSERVED_CI
+ 0.60   100  0.94  0.34       6.58   -27.44200   0.806596  ABOVE_OBSERVED_CI
+ 0.60   100  0.95  0.35       5.58   -27.44200   0.831022  ABOVE_OBSERVED_CI
+ 0.60   100  0.96  0.36       4.59   -27.44200   0.856706  ABOVE_OBSERVED_CI
+ 0.60   100  0.97  0.37       3.59   -27.44200   0.884313  ABOVE_OBSERVED_CI
+ 0.60   100  0.98  0.38       2.59   -27.44200   0.913759  ABOVE_OBSERVED_CI
+ 0.60   100  0.99  0.39       1.60   -27.44200   0.944907  ABOVE_OBSERVED_CI
+ 0.60   100  1.00  0.40       0.60   -27.44200   0.978604  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.94  0.24     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.95  0.25     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.96  0.26     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.97  0.27     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.98  0.28     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.99  0.29     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.70  0.01  1.00  0.30     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.94  0.24     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.95  0.25     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.96  0.26     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.97  0.27     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.98  0.28     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.99  0.29     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.70  0.10  1.00  0.30     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.70     1  0.94  0.24       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.70     1  0.95  0.25       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.70     1  0.96  0.26       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.70     1  0.97  0.27       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.70     1  0.98  0.28       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.70     1  0.99  0.29       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.70     1  1.00  0.30       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.94  0.24     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.95  0.25     0.0810  -0.4494204   0.847291  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.96  0.26     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.97  0.27     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.98  0.28     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.99  0.29     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.70  1.62  1.00  0.30     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.70     2  0.94  0.24       0.13    -0.54484   0.807362  ABOVE_OBSERVED_CI
+ 0.70     2  0.95  0.25       0.11    -0.54484   0.832020  ABOVE_OBSERVED_CI
+ 0.70     2  0.96  0.26       0.09    -0.54484   0.858232  ABOVE_OBSERVED_CI
+ 0.70     2  0.97  0.27       0.07    -0.54484   0.886149  ABOVE_OBSERVED_CI
+ 0.70     2  0.98  0.28       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.70     2  0.99  0.29       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.70     2  1.00  0.30       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.70     5  0.94  0.24       0.32    -1.37710   0.811443  ABOVE_OBSERVED_CI
+ 0.70     5  0.95  0.25       0.27    -1.37710   0.836076  ABOVE_OBSERVED_CI
+ 0.70     5  0.96  0.26       0.22    -1.37710   0.862250  ABOVE_OBSERVED_CI
+ 0.70     5  0.97  0.27       0.17    -1.37710   0.890117  ABOVE_OBSERVED_CI
+ 0.70     5  0.98  0.28       0.12    -1.37710   0.919845  ABOVE_OBSERVED_CI
+ 0.70     5  0.99  0.29       0.07    -1.37710   0.951627  ABOVE_OBSERVED_CI
+ 0.70     5  1.00  0.30       0.02    -1.37710   0.985685  ABOVE_OBSERVED_CI
+ 0.70    10  0.94  0.24       0.65    -2.74420   0.808497  ABOVE_OBSERVED_CI
+ 0.70    10  0.95  0.25       0.55    -2.74420   0.833040  ABOVE_OBSERVED_CI
+ 0.70    10  0.96  0.26       0.45    -2.74420   0.859120  ABOVE_OBSERVED_CI
+ 0.70    10  0.97  0.27       0.35    -2.74420   0.886885  ABOVE_OBSERVED_CI
+ 0.70    10  0.98  0.28       0.26    -2.74420   0.913454  ABOVE_OBSERVED_CI
+ 0.70    10  0.99  0.29       0.16    -2.74420   0.944907  ABOVE_OBSERVED_CI
+ 0.70    10  1.00  0.30       0.06    -2.74420   0.978604  ABOVE_OBSERVED_CI
+ 0.70    25  0.94  0.24       1.63    -6.86550   0.808134  ABOVE_OBSERVED_CI
+ 0.70    25  0.95  0.25       1.38    -6.86550   0.832636  ABOVE_OBSERVED_CI
+ 0.70    25  0.96  0.26       1.13    -6.86550   0.858671  ABOVE_OBSERVED_CI
+ 0.70    25  0.97  0.27       0.88    -6.86550   0.886386  ABOVE_OBSERVED_CI
+ 0.70    25  0.98  0.28       0.63    -6.86550   0.915950  ABOVE_OBSERVED_CI
+ 0.70    25  0.99  0.29       0.38    -6.86550   0.947554  ABOVE_OBSERVED_CI
+ 0.70    25  1.00  0.30       0.14    -6.86550   0.980016  ABOVE_OBSERVED_CI
+ 0.70    50  0.94  0.24       3.24   -13.74100   0.809199  ABOVE_OBSERVED_CI
+ 0.70    50  0.95  0.25       2.75   -13.74100   0.833242  ABOVE_OBSERVED_CI
+ 0.70    50  0.96  0.26       2.25   -13.74100   0.859296  ABOVE_OBSERVED_CI
+ 0.70    50  0.97  0.27       1.75   -13.74100   0.887031  ABOVE_OBSERVED_CI
+ 0.70    50  0.98  0.28       1.26   -13.74100   0.916006  ABOVE_OBSERVED_CI
+ 0.70    50  0.99  0.29       0.76   -13.74100   0.947590  ABOVE_OBSERVED_CI
+ 0.70    50  1.00  0.30       0.26   -13.74100   0.981430  ABOVE_OBSERVED_CI
+ 0.70   100  0.94  0.24       6.49   -27.48200   0.808960  ABOVE_OBSERVED_CI
+ 0.70   100  0.95  0.25       5.49   -27.48200   0.833495  ABOVE_OBSERVED_CI
+ 0.70   100  0.96  0.26       4.50   -27.48200   0.859296  ABOVE_OBSERVED_CI
+ 0.70   100  0.97  0.27       3.51   -27.48200   0.886745  ABOVE_OBSERVED_CI
+ 0.70   100  0.98  0.28       2.51   -27.48200   0.916311  ABOVE_OBSERVED_CI
+ 0.70   100  0.99  0.29       1.52   -27.48200   0.947590  ABOVE_OBSERVED_CI
+ 0.70   100  1.00  0.30       0.52   -27.48200   0.981430  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.94  0.14     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.95  0.15     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.96  0.16     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.97  0.17     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.98  0.18     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.99  0.19     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.80  0.01  1.00  0.20     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.94  0.14     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.95  0.15     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.96  0.16     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.97  0.17     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.98  0.18     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.99  0.19     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.80  0.10  1.00  0.20     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.80     1  0.94  0.14       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.80     1  0.95  0.15       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.80     1  0.96  0.16       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.80     1  0.97  0.17       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.80     1  0.98  0.18       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.80     1  0.99  0.19       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.80     1  1.00  0.20       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.94  0.14     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.95  0.15     0.0810  -0.4494204   0.847291  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.96  0.16     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.97  0.17     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.98  0.18     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.99  0.19     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.80  1.62  1.00  0.20     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.80     2  0.94  0.14       0.12    -0.55484   0.822180  ABOVE_OBSERVED_CI
+ 0.80     2  0.95  0.15       0.10    -0.55484   0.847291  ABOVE_OBSERVED_CI
+ 0.80     2  0.96  0.16       0.08    -0.55484   0.873984  ABOVE_OBSERVED_CI
+ 0.80     2  0.97  0.17       0.06    -0.55484   0.902414  ABOVE_OBSERVED_CI
+ 0.80     2  0.98  0.18       0.04    -0.55484   0.932755  ABOVE_OBSERVED_CI
+ 0.80     2  0.99  0.19       0.02    -0.55484   0.965208  ABOVE_OBSERVED_CI
+ 0.80     2  1.00  0.20       0.00    -0.55484   1.000000  ABOVE_OBSERVED_CI
+ 0.80     5  0.94  0.14       0.32    -1.37710   0.811443  ABOVE_OBSERVED_CI
+ 0.80     5  0.95  0.15       0.27    -1.37710   0.836076  ABOVE_OBSERVED_CI
+ 0.80     5  0.96  0.16       0.22    -1.37710   0.862250  ABOVE_OBSERVED_CI
+ 0.80     5  0.97  0.17       0.17    -1.37710   0.890117  ABOVE_OBSERVED_CI
+ 0.80     5  0.98  0.18       0.12    -1.37710   0.919845  ABOVE_OBSERVED_CI
+ 0.80     5  0.99  0.19       0.07    -1.37710   0.951627  ABOVE_OBSERVED_CI
+ 0.80     5  1.00  0.20       0.02    -1.37710   0.985685  ABOVE_OBSERVED_CI
+ 0.80    10  0.94  0.14       0.64    -2.75420   0.811443  ABOVE_OBSERVED_CI
+ 0.80    10  0.95  0.15       0.54    -2.75420   0.836076  ABOVE_OBSERVED_CI
+ 0.80    10  0.96  0.16       0.44    -2.75420   0.862250  ABOVE_OBSERVED_CI
+ 0.80    10  0.97  0.17       0.34    -2.75420   0.890117  ABOVE_OBSERVED_CI
+ 0.80    10  0.98  0.18       0.24    -2.75420   0.919845  ABOVE_OBSERVED_CI
+ 0.80    10  0.99  0.19       0.14    -2.75420   0.951627  ABOVE_OBSERVED_CI
+ 0.80    10  1.00  0.20       0.04    -2.75420   0.985685  ABOVE_OBSERVED_CI
+ 0.80    25  0.94  0.14       1.59    -6.88550   0.812400  ABOVE_OBSERVED_CI
+ 0.80    25  0.95  0.15       1.34    -6.88550   0.837092  ABOVE_OBSERVED_CI
+ 0.80    25  0.96  0.16       1.09    -6.88550   0.863331  ABOVE_OBSERVED_CI
+ 0.80    25  0.97  0.17       0.84    -6.88550   0.891269  ABOVE_OBSERVED_CI
+ 0.80    25  0.98  0.18       0.60    -6.88550   0.919845  ABOVE_OBSERVED_CI
+ 0.80    25  0.99  0.19       0.35    -6.88550   0.951627  ABOVE_OBSERVED_CI
+ 0.80    25  1.00  0.20       0.10    -6.88550   0.985685  ABOVE_OBSERVED_CI
+ 0.80    50  0.94  0.14       3.18   -13.77100   0.812400  ABOVE_OBSERVED_CI
+ 0.80    50  0.95  0.15       2.68   -13.77100   0.837092  ABOVE_OBSERVED_CI
+ 0.80    50  0.96  0.16       2.18   -13.77100   0.863331  ABOVE_OBSERVED_CI
+ 0.80    50  0.97  0.17       1.69   -13.77100   0.890693  ABOVE_OBSERVED_CI
+ 0.80    50  0.98  0.18       1.19   -13.77100   0.920460  ABOVE_OBSERVED_CI
+ 0.80    50  0.99  0.19       0.70   -13.77100   0.951627  ABOVE_OBSERVED_CI
+ 0.80    50  1.00  0.20       0.20   -13.77100   0.985685  ABOVE_OBSERVED_CI
+ 0.80   100  0.94  0.14       6.35   -27.54200   0.812640  ABOVE_OBSERVED_CI
+ 0.80   100  0.95  0.15       5.36   -27.54200   0.837092  ABOVE_OBSERVED_CI
+ 0.80   100  0.96  0.16       4.37   -27.54200   0.863061  ABOVE_OBSERVED_CI
+ 0.80   100  0.97  0.17       3.38   -27.54200   0.890693  ABOVE_OBSERVED_CI
+ 0.80   100  0.98  0.18       2.38   -27.54200   0.920460  ABOVE_OBSERVED_CI
+ 0.80   100  0.99  0.19       1.39   -27.54200   0.951956  ABOVE_OBSERVED_CI
+ 0.80   100  1.00  0.20       0.40   -27.54200   0.985685  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.94  0.04     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.95  0.05     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.96  0.06     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.97  0.07     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.98  0.08     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.99  0.09     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.90  0.01  1.00  0.10     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.94  0.04     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.95  0.05     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.96  0.06     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.97  0.07     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.98  0.08     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.99  0.09     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.90  0.10  1.00  0.10     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.90     1  0.94  0.04       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.90     1  0.95  0.05       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.90     1  0.96  0.06       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.90     1  0.97  0.07       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.90     1  0.98  0.08       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.90     1  0.99  0.09       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.90     1  1.00  0.10       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.94  0.04     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.95  0.05     0.0810  -0.4494204   0.847291  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.96  0.06     0.0648  -0.4494204   0.873984  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.97  0.07     0.0486  -0.4494204   0.902414  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.98  0.08     0.0324  -0.4494204   0.932755  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.99  0.09     0.0162  -0.4494204   0.965208  ABOVE_OBSERVED_CI
+ 0.90  1.62  1.00  0.10     0.0000  -0.4494204   1.000000  ABOVE_OBSERVED_CI
+ 0.90     2  0.94  0.04       0.12    -0.55484   0.822180  ABOVE_OBSERVED_CI
+ 0.90     2  0.95  0.05       0.10    -0.55484   0.847291  ABOVE_OBSERVED_CI
+ 0.90     2  0.96  0.06       0.08    -0.55484   0.873984  ABOVE_OBSERVED_CI
+ 0.90     2  0.97  0.07       0.06    -0.55484   0.902414  ABOVE_OBSERVED_CI
+ 0.90     2  0.98  0.08       0.04    -0.55484   0.932755  ABOVE_OBSERVED_CI
+ 0.90     2  0.99  0.09       0.02    -0.55484   0.965208  ABOVE_OBSERVED_CI
+ 0.90     2  1.00  0.10       0.00    -0.55484   1.000000  ABOVE_OBSERVED_CI
+ 0.90     5  0.94  0.04       0.31    -1.37710   0.816253  ABOVE_OBSERVED_CI
+ 0.90     5  0.95  0.05       0.26    -1.37710   0.841183  ABOVE_OBSERVED_CI
+ 0.90     5  0.96  0.06       0.21    -1.37710   0.867683  ABOVE_OBSERVED_CI
+ 0.90     5  0.97  0.07       0.16    -1.37710   0.895908  ABOVE_OBSERVED_CI
+ 0.90     5  0.98  0.08       0.11    -1.37710   0.926031  ABOVE_OBSERVED_CI
+ 0.90     5  0.99  0.09       0.07    -1.37710   0.951627  ABOVE_OBSERVED_CI
+ 0.90     5  1.00  0.10       0.02    -1.37710   0.985685  ABOVE_OBSERVED_CI
+ 0.90    10  0.94  0.04       0.61    -2.76420   0.819216  ABOVE_OBSERVED_CI
+ 0.90    10  0.95  0.05       0.52    -2.76420   0.841666  ABOVE_OBSERVED_CI
+ 0.90    10  0.96  0.06       0.42    -2.76420   0.868099  ABOVE_OBSERVED_CI
+ 0.90    10  0.97  0.07       0.32    -2.76420   0.896245  ABOVE_OBSERVED_CI
+ 0.90    10  0.98  0.08       0.22    -2.76420   0.926278  ABOVE_OBSERVED_CI
+ 0.90    10  0.99  0.09       0.12    -2.76420   0.958394  ABOVE_OBSERVED_CI
+ 0.90    10  1.00  0.10       0.02    -2.76420   0.992817  ABOVE_OBSERVED_CI
+ 0.90    25  0.94  0.04       1.54    -6.90550   0.817654  ABOVE_OBSERVED_CI
+ 0.90    25  0.95  0.05       1.29    -6.90550   0.842597  ABOVE_OBSERVED_CI
+ 0.90    25  0.96  0.06       1.05    -6.90550   0.868016  ABOVE_OBSERVED_CI
+ 0.90    25  0.97  0.07       0.80    -6.90550   0.896178  ABOVE_OBSERVED_CI
+ 0.90    25  0.98  0.08       0.55    -6.90550   0.926229  ABOVE_OBSERVED_CI
+ 0.90    25  0.99  0.09       0.31    -6.90550   0.957037  ABOVE_OBSERVED_CI
+ 0.90    25  1.00  0.10       0.06    -6.90550   0.991386  ABOVE_OBSERVED_CI
+ 0.90    50  0.94  0.04       3.08   -13.81100   0.817654  ABOVE_OBSERVED_CI
+ 0.90    50  0.95  0.05       2.59   -13.81100   0.842083  ABOVE_OBSERVED_CI
+ 0.90    50  0.96  0.06       2.10   -13.81100   0.868016  ABOVE_OBSERVED_CI
+ 0.90    50  0.97  0.07       1.60   -13.81100   0.896178  ABOVE_OBSERVED_CI
+ 0.90    50  0.98  0.08       1.11   -13.81100   0.925608  ABOVE_OBSERVED_CI
+ 0.90    50  0.99  0.09       0.61   -13.81100   0.957701  ABOVE_OBSERVED_CI
+ 0.90    50  1.00  0.10       0.12   -13.81100   0.991386  ABOVE_OBSERVED_CI
+ 0.90   100  0.94  0.04       6.16   -27.63200   0.817708  ABOVE_OBSERVED_CI
+ 0.90   100  0.95  0.05       5.17   -27.63200   0.842388  ABOVE_OBSERVED_CI
+ 0.90   100  0.96  0.06       4.18   -27.63200   0.868603  ABOVE_OBSERVED_CI
+ 0.90   100  0.97  0.07       3.19   -27.63200   0.896502  ABOVE_OBSERVED_CI
+ 0.90   100  0.98  0.08       2.20   -27.63200   0.926254  ABOVE_OBSERVED_CI
+ 0.90   100  0.99  0.09       1.21   -27.63200   0.958047  ABOVE_OBSERVED_CI
+ 0.90   100  1.00  0.10       0.22   -27.63200   0.992101  ABOVE_OBSERVED_CI
+
+==============================================================================
+4b. BREAKEVEN MATCHED-COMPLETION SURFACE -- ONE LEG TAKER
+==============================================================================
+m* = matched fraction at which the five components sum to zero.
+price contr pairX compP  matched$   residual$   m*         vs_observed(67.72%)
+ 0.10  0.01  0.94  0.84     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.95  0.85     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.96  0.86     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.97  0.87     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.98  0.88     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.10  0.01  0.99  0.89     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.10  0.01  1.00  0.90     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.94  0.84     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.95  0.85     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.96  0.86     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.97  0.87     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.98  0.88     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.10  0.10  0.99  0.89     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.10  0.10  1.00  0.90     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.10     1  0.94  0.84       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.10     1  0.95  0.85       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.10     1  0.96  0.86       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.10     1  0.97  0.87       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.10     1  0.98  0.88       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.10     1  0.99  0.89       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.10     1  1.00  0.90      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.10  1.62  0.94  0.84     0.0772  -0.4494204   0.853405  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.95  0.85     0.0710  -0.4494204   0.863572  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.96  0.86     0.0548  -0.4494204   0.891317  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.97  0.87     0.0386  -0.4494204   0.920905  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.98  0.88     0.0224  -0.4494204   0.952524  ABOVE_OBSERVED_CI
+ 0.10  1.62  0.99  0.89     0.0062  -0.4494204   0.986392  ABOVE_OBSERVED_CI
+ 0.10  1.62  1.00  0.90    -0.0100  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.10     2  0.94  0.84       0.10    -0.55484   0.847291  ABOVE_OBSERVED_CI
+ 0.10     2  0.95  0.85       0.08    -0.55484   0.873984  ABOVE_OBSERVED_CI
+ 0.10     2  0.96  0.86       0.06    -0.55484   0.902414  ABOVE_OBSERVED_CI
+ 0.10     2  0.97  0.87       0.04    -0.55484   0.932755  ABOVE_OBSERVED_CI
+ 0.10     2  0.98  0.88       0.03    -0.55484   0.948704  ABOVE_OBSERVED_CI
+ 0.10     2  0.99  0.89       0.01    -0.55484   0.982296  ABOVE_OBSERVED_CI
+ 0.10     2  1.00  0.90      -0.01    -0.55484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.10     5  0.94  0.84       0.26    -1.37710   0.841183  ABOVE_OBSERVED_CI
+ 0.10     5  0.95  0.85       0.22    -1.37710   0.862250  ABOVE_OBSERVED_CI
+ 0.10     5  0.96  0.86       0.17    -1.37710   0.890117  ABOVE_OBSERVED_CI
+ 0.10     5  0.97  0.87       0.12    -1.37710   0.919845  ABOVE_OBSERVED_CI
+ 0.10     5  0.98  0.88       0.07    -1.37710   0.951627  ABOVE_OBSERVED_CI
+ 0.10     5  0.99  0.89       0.03    -1.37710   0.978680  ABOVE_OBSERVED_CI
+ 0.10     5  1.00  0.90      -0.02    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.10    10  0.94  0.84       0.52    -2.76420   0.841666  ABOVE_OBSERVED_CI
+ 0.10    10  0.95  0.85       0.42    -2.76420   0.868099  ABOVE_OBSERVED_CI
+ 0.10    10  0.96  0.86       0.33    -2.76420   0.893349  ABOVE_OBSERVED_CI
+ 0.10    10  0.97  0.87       0.23    -2.76420   0.923185  ABOVE_OBSERVED_CI
+ 0.10    10  0.98  0.88       0.14    -2.76420   0.951794  ABOVE_OBSERVED_CI
+ 0.10    10  0.99  0.89       0.04    -2.76420   0.985736  ABOVE_OBSERVED_CI
+ 0.10    10  1.00  0.90      -0.05    -2.76420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.10    25  0.94  0.84       1.30    -6.90550   0.841570  ABOVE_OBSERVED_CI
+ 0.10    25  0.95  0.85       1.06    -6.90550   0.866926  ABOVE_OBSERVED_CI
+ 0.10    25  0.96  0.86       0.82    -6.90550   0.893858  ABOVE_OBSERVED_CI
+ 0.10    25  0.97  0.87       0.58    -6.90550   0.922517  ABOVE_OBSERVED_CI
+ 0.10    25  0.98  0.88       0.35    -6.90550   0.951761  ABOVE_OBSERVED_CI
+ 0.10    25  0.99  0.89       0.11    -6.90550   0.984320  ABOVE_OBSERVED_CI
+ 0.10    25  1.00  0.90      -0.13    -6.90550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.10    50  0.94  0.84       2.59   -13.81100   0.842083  ABOVE_OBSERVED_CI
+ 0.10    50  0.95  0.85       2.12   -13.81100   0.866926  ABOVE_OBSERVED_CI
+ 0.10    50  0.96  0.86       1.64   -13.81100   0.893858  ABOVE_OBSERVED_CI
+ 0.10    50  0.97  0.87       1.17   -13.81100   0.921901  ABOVE_OBSERVED_CI
+ 0.10    50  0.98  0.88       0.69   -13.81100   0.952417  ABOVE_OBSERVED_CI
+ 0.10    50  0.99  0.89       0.22   -13.81100   0.984320  ABOVE_OBSERVED_CI
+ 0.10    50  1.00  0.90      -0.25   -13.81100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.10   100  0.94  0.84       5.18   -27.63200   0.842131  ABOVE_OBSERVED_CI
+ 0.10   100  0.95  0.85       4.22   -27.63200   0.867512  ABOVE_OBSERVED_CI
+ 0.10   100  0.96  0.86       3.27   -27.63200   0.894182  ABOVE_OBSERVED_CI
+ 0.10   100  0.97  0.87       2.32   -27.63200   0.922543  ABOVE_OBSERVED_CI
+ 0.10   100  0.98  0.88       1.38   -27.63200   0.952433  ABOVE_OBSERVED_CI
+ 0.10   100  0.99  0.89       0.43   -27.63200   0.984677  ABOVE_OBSERVED_CI
+ 0.10   100  1.00  0.90      -0.52   -27.63200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20  0.01  0.94  0.74     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.95  0.75     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.96  0.76     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.97  0.77     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.98  0.78     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.20  0.01  0.99  0.79     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.20  0.01  1.00  0.80     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.94  0.74     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.95  0.75     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.96  0.76     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.97  0.77     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.98  0.78     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.20  0.10  0.99  0.79     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.20  0.10  1.00  0.80     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.20     1  0.94  0.74       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.20     1  0.95  0.75       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.20     1  0.96  0.76       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.20     1  0.97  0.77       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.20     1  0.98  0.78       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.20     1  0.99  0.79       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.20     1  1.00  0.80      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20  1.62  0.94  0.74     0.0772  -0.4494204   0.853405  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.95  0.75     0.0610  -0.4494204   0.880491  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.96  0.76     0.0448  -0.4494204   0.909352  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.97  0.77     0.0286  -0.4494204   0.940170  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.98  0.78     0.0124  -0.4494204   0.973150  ABOVE_OBSERVED_CI
+ 0.20  1.62  0.99  0.79    -0.0038  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20  1.62  1.00  0.80    -0.0200  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20     2  0.94  0.74       0.09    -0.55484   0.860430  ABOVE_OBSERVED_CI
+ 0.20     2  0.95  0.75       0.07    -0.55484   0.887971  ABOVE_OBSERVED_CI
+ 0.20     2  0.96  0.76       0.05    -0.55484   0.917334  ABOVE_OBSERVED_CI
+ 0.20     2  0.97  0.77       0.04    -0.55484   0.932755  ABOVE_OBSERVED_CI
+ 0.20     2  0.98  0.78       0.02    -0.55484   0.965208  ABOVE_OBSERVED_CI
+ 0.20     2  0.99  0.79       0.00    -0.55484   1.000000  ABOVE_OBSERVED_CI
+ 0.20     2  1.00  0.80      -0.02    -0.55484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20     5  0.94  0.74       0.24    -1.37710   0.851586  ABOVE_OBSERVED_CI
+ 0.20     5  0.95  0.75       0.19    -1.37710   0.878757  ABOVE_OBSERVED_CI
+ 0.20     5  0.96  0.76       0.15    -1.37710   0.901775  ABOVE_OBSERVED_CI
+ 0.20     5  0.97  0.77       0.10    -1.37710   0.932300  ABOVE_OBSERVED_CI
+ 0.20     5  0.98  0.78       0.05    -1.37710   0.964964  ABOVE_OBSERVED_CI
+ 0.20     5  0.99  0.79       0.00    -1.37710   1.000000  ABOVE_OBSERVED_CI
+ 0.20     5  1.00  0.80      -0.05    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20    10  0.94  0.74       0.49    -2.75420   0.848961  ABOVE_OBSERVED_CI
+ 0.20    10  0.95  0.75       0.39    -2.75420   0.875962  ABOVE_OBSERVED_CI
+ 0.20    10  0.96  0.76       0.29    -2.75420   0.904737  ABOVE_OBSERVED_CI
+ 0.20    10  0.97  0.77       0.20    -2.75420   0.932300  ABOVE_OBSERVED_CI
+ 0.20    10  0.98  0.78       0.10    -2.75420   0.964964  ABOVE_OBSERVED_CI
+ 0.20    10  0.99  0.79       0.00    -2.75420   1.000000  ABOVE_OBSERVED_CI
+ 0.20    10  1.00  0.80      -0.09    -2.75420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20    25  0.94  0.74       1.22    -6.88550   0.849485  ABOVE_OBSERVED_CI
+ 0.20    25  0.95  0.75       0.97    -6.88550   0.876520  ABOVE_OBSERVED_CI
+ 0.20    25  0.96  0.76       0.73    -6.88550   0.904143  ABOVE_OBSERVED_CI
+ 0.20    25  0.97  0.77       0.49    -6.88550   0.933564  ABOVE_OBSERVED_CI
+ 0.20    25  0.98  0.78       0.25    -6.88550   0.964964  ABOVE_OBSERVED_CI
+ 0.20    25  0.99  0.79       0.01    -6.88550   0.998550  ABOVE_OBSERVED_CI
+ 0.20    25  1.00  0.80      -0.23    -6.88550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20    50  0.94  0.74       2.43   -13.77100   0.850009  ABOVE_OBSERVED_CI
+ 0.20    50  0.95  0.75       1.95   -13.77100   0.875962  ABOVE_OBSERVED_CI
+ 0.20    50  0.96  0.76       1.47   -13.77100   0.903550  ABOVE_OBSERVED_CI
+ 0.20    50  0.97  0.77       0.98   -13.77100   0.933564  ABOVE_OBSERVED_CI
+ 0.20    50  0.98  0.78       0.50   -13.77100   0.964964  ABOVE_OBSERVED_CI
+ 0.20    50  0.99  0.79       0.02   -13.77100   0.998550  ABOVE_OBSERVED_CI
+ 0.20    50  1.00  0.80      -0.46   -13.77100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.20   100  0.94  0.74       4.86   -27.54200   0.850009  ABOVE_OBSERVED_CI
+ 0.20   100  0.95  0.75       3.90   -27.54200   0.875962  ABOVE_OBSERVED_CI
+ 0.20   100  0.96  0.76       2.93   -27.54200   0.903846  ABOVE_OBSERVED_CI
+ 0.20   100  0.97  0.77       1.97   -27.54200   0.933247  ABOVE_OBSERVED_CI
+ 0.20   100  0.98  0.78       1.01   -27.54200   0.964626  ABOVE_OBSERVED_CI
+ 0.20   100  0.99  0.79       0.05   -27.54200   0.998188  ABOVE_OBSERVED_CI
+ 0.20   100  1.00  0.80      -0.91   -27.54200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30  0.01  0.94  0.64     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.95  0.65     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.96  0.66     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.97  0.67     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.98  0.68     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.30  0.01  0.99  0.69     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.30  0.01  1.00  0.70     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.94  0.64     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.95  0.65     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.96  0.66     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.97  0.67     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.98  0.68     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.30  0.10  0.99  0.69     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.30  0.10  1.00  0.70     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.30     1  0.94  0.64       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.30     1  0.95  0.65       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.30     1  0.96  0.66       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.30     1  0.97  0.67       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.30     1  0.98  0.68       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.30     1  0.99  0.69       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.30     1  1.00  0.70      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30  1.62  0.94  0.64     0.0672  -0.4494204   0.869924  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.95  0.65     0.0510  -0.4494204   0.898086  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.96  0.66     0.0348  -0.4494204   0.928132  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.97  0.67     0.0286  -0.4494204   0.940170  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.98  0.68     0.0124  -0.4494204   0.973150  ABOVE_OBSERVED_CI
+ 0.30  1.62  0.99  0.69    -0.0038  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30  1.62  1.00  0.70    -0.0200  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30     2  0.94  0.64       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.30     2  0.95  0.65       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.30     2  0.96  0.66       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.30     2  0.97  0.67       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.30     2  0.98  0.68       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.30     2  0.99  0.69       0.00    -0.54484   1.000000  ABOVE_OBSERVED_CI
+ 0.30     2  1.00  0.70      -0.02    -0.54484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30     5  0.94  0.64       0.23    -1.37710   0.856885  ABOVE_OBSERVED_CI
+ 0.30     5  0.95  0.65       0.18    -1.37710   0.884400  ABOVE_OBSERVED_CI
+ 0.30     5  0.96  0.66       0.13    -1.37710   0.913742  ABOVE_OBSERVED_CI
+ 0.30     5  0.97  0.67       0.08    -1.37710   0.945096  ABOVE_OBSERVED_CI
+ 0.30     5  0.98  0.68       0.03    -1.37710   0.978680  ABOVE_OBSERVED_CI
+ 0.30     5  0.99  0.69      -0.01    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30     5  1.00  0.70      -0.06    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30    10  0.94  0.64       0.47    -2.74420   0.853774  ABOVE_OBSERVED_CI
+ 0.30    10  0.95  0.65       0.37    -2.74420   0.881189  ABOVE_OBSERVED_CI
+ 0.30    10  0.96  0.66       0.27    -2.74420   0.910424  ABOVE_OBSERVED_CI
+ 0.30    10  0.97  0.67       0.18    -2.74420   0.938445  ABOVE_OBSERVED_CI
+ 0.30    10  0.98  0.68       0.08    -2.74420   0.971673  ABOVE_OBSERVED_CI
+ 0.30    10  0.99  0.69      -0.02    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30    10  1.00  0.70      -0.12    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30    25  0.94  0.64       1.17    -6.86550   0.854396  ABOVE_OBSERVED_CI
+ 0.30    25  0.95  0.65       0.92    -6.86550   0.881832  ABOVE_OBSERVED_CI
+ 0.30    25  0.96  0.66       0.68    -6.86550   0.909880  ABOVE_OBSERVED_CI
+ 0.30    25  0.97  0.67       0.44    -6.86550   0.939771  ABOVE_OBSERVED_CI
+ 0.30    25  0.98  0.68       0.19    -6.86550   0.973071  ABOVE_OBSERVED_CI
+ 0.30    25  0.99  0.69      -0.05    -6.86550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30    25  1.00  0.70      -0.29    -6.86550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30    50  0.94  0.64       2.33   -13.74100   0.855018  ABOVE_OBSERVED_CI
+ 0.30    50  0.95  0.65       1.84   -13.74100   0.881907  ABOVE_OBSERVED_CI
+ 0.30    50  0.96  0.66       1.35   -13.74100   0.910543  ABOVE_OBSERVED_CI
+ 0.30    50  0.97  0.67       0.86   -13.74100   0.941100  ABOVE_OBSERVED_CI
+ 0.30    50  0.98  0.68       0.37   -13.74100   0.973779  ABOVE_OBSERVED_CI
+ 0.30    50  0.99  0.69      -0.11   -13.74100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30    50  1.00  0.70      -0.60   -13.74100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30   100  0.94  0.64       4.66   -27.48200   0.855018  ABOVE_OBSERVED_CI
+ 0.30   100  0.95  0.65       3.68   -27.48200   0.881907  ABOVE_OBSERVED_CI
+ 0.30   100  0.96  0.66       2.70   -27.48200   0.910543  ABOVE_OBSERVED_CI
+ 0.30   100  0.97  0.67       1.72   -27.48200   0.941100  ABOVE_OBSERVED_CI
+ 0.30   100  0.98  0.68       0.75   -27.48200   0.973434  ABOVE_OBSERVED_CI
+ 0.30   100  0.99  0.69      -0.23   -27.48200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.30   100  1.00  0.70      -1.20   -27.48200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40  0.01  0.94  0.54     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.95  0.55     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.96  0.56     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.97  0.57     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.98  0.58     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.40  0.01  0.99  0.59     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.40  0.01  1.00  0.60     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.94  0.54     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.95  0.55     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.96  0.56     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.97  0.57     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.98  0.58     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.40  0.10  0.99  0.59     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.40  0.10  1.00  0.60     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.40     1  0.94  0.54       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.40     1  0.95  0.55       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.40     1  0.96  0.56       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.40     1  0.97  0.57       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.40     1  0.98  0.58       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.40     1  0.99  0.59      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40     1  1.00  0.60      -0.02    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40  1.62  0.94  0.54     0.0672  -0.4494204   0.869924  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.95  0.55     0.0510  -0.4494204   0.898086  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.96  0.56     0.0348  -0.4494204   0.928132  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.97  0.57     0.0186  -0.4494204   0.960258  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.98  0.58     0.0024  -0.4494204   0.994688  ABOVE_OBSERVED_CI
+ 0.40  1.62  0.99  0.59    -0.0138  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40  1.62  1.00  0.60    -0.0300  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40     2  0.94  0.54       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.40     2  0.95  0.55       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.40     2  0.96  0.56       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.40     2  0.97  0.57       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.40     2  0.98  0.58       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.40     2  0.99  0.59       0.00    -0.54484   1.000000  ABOVE_OBSERVED_CI
+ 0.40     2  1.00  0.60      -0.02    -0.54484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40     5  0.94  0.54       0.23    -1.36710   0.855989  ABOVE_OBSERVED_CI
+ 0.40     5  0.95  0.55       0.18    -1.36710   0.883653  ABOVE_OBSERVED_CI
+ 0.40     5  0.96  0.56       0.13    -1.36710   0.913165  ABOVE_OBSERVED_CI
+ 0.40     5  0.97  0.57       0.08    -1.36710   0.944717  ABOVE_OBSERVED_CI
+ 0.40     5  0.98  0.58       0.04    -1.36710   0.971573  ABOVE_OBSERVED_CI
+ 0.40     5  0.99  0.59      -0.01    -1.36710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40     5  1.00  0.60      -0.06    -1.36710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40    10  0.94  0.54       0.46    -2.74420   0.856438  ABOVE_OBSERVED_CI
+ 0.40    10  0.95  0.55       0.36    -2.74420   0.884028  ABOVE_OBSERVED_CI
+ 0.40    10  0.96  0.56       0.26    -2.74420   0.913454  ABOVE_OBSERVED_CI
+ 0.40    10  0.97  0.57       0.16    -2.74420   0.944907  ABOVE_OBSERVED_CI
+ 0.40    10  0.98  0.58       0.06    -2.74420   0.978604  ABOVE_OBSERVED_CI
+ 0.40    10  0.99  0.59      -0.04    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40    10  1.00  0.60      -0.14    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40    25  0.94  0.54       1.15    -6.85550   0.856349  ABOVE_OBSERVED_CI
+ 0.40    25  0.95  0.55       0.90    -6.85550   0.883953  ABOVE_OBSERVED_CI
+ 0.40    25  0.96  0.56       0.65    -6.85550   0.913397  ABOVE_OBSERVED_CI
+ 0.40    25  0.97  0.57       0.40    -6.85550   0.944869  ABOVE_OBSERVED_CI
+ 0.40    25  0.98  0.58       0.16    -6.85550   0.977193  ABOVE_OBSERVED_CI
+ 0.40    25  0.99  0.59      -0.09    -6.85550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40    25  1.00  0.60      -0.34    -6.85550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40    50  0.94  0.54       2.29   -13.72100   0.856973  ABOVE_OBSERVED_CI
+ 0.40    50  0.95  0.55       1.79   -13.72100   0.884598  ABOVE_OBSERVED_CI
+ 0.40    50  0.96  0.56       1.29   -13.72100   0.914063  ABOVE_OBSERVED_CI
+ 0.40    50  0.97  0.57       0.80   -13.72100   0.944907  ABOVE_OBSERVED_CI
+ 0.40    50  0.98  0.58       0.30   -13.72100   0.978604  ABOVE_OBSERVED_CI
+ 0.40    50  0.99  0.59      -0.19   -13.72100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40    50  1.00  0.60      -0.68   -13.72100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40   100  0.94  0.54       4.57   -27.44200   0.857241  ABOVE_OBSERVED_CI
+ 0.40   100  0.95  0.55       3.58   -27.44200   0.884598  ABOVE_OBSERVED_CI
+ 0.40   100  0.96  0.56       2.59   -27.44200   0.913759  ABOVE_OBSERVED_CI
+ 0.40   100  0.97  0.57       1.60   -27.44200   0.944907  ABOVE_OBSERVED_CI
+ 0.40   100  0.98  0.58       0.61   -27.44200   0.978255  ABOVE_OBSERVED_CI
+ 0.40   100  0.99  0.59      -0.38   -27.44200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.40   100  1.00  0.60      -1.37   -27.44200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50  0.01  0.94  0.44     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.95  0.45     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.96  0.46     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.97  0.47     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.98  0.48     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.50  0.01  0.99  0.49     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.50  0.01  1.00  0.50     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.94  0.44     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.95  0.45     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.96  0.46     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.97  0.47     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.98  0.48     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.50  0.10  0.99  0.49     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.50  0.10  1.00  0.50     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.50     1  0.94  0.44       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.50     1  0.95  0.45       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.50     1  0.96  0.46       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.50     1  0.97  0.47       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.50     1  0.98  0.48       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.50     1  0.99  0.49      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50     1  1.00  0.50      -0.02    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50  1.62  0.94  0.44     0.0772  -0.4394204   0.850567  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.95  0.45     0.0610  -0.4394204   0.878102  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.96  0.46     0.0448  -0.4394204   0.907480  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.97  0.47     0.0286  -0.4394204   0.938892  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.98  0.48     0.0124  -0.4394204   0.972555  ABOVE_OBSERVED_CI
+ 0.50  1.62  0.99  0.49    -0.0038  -0.4394204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50  1.62  1.00  0.50    -0.0200  -0.4394204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50     2  0.94  0.44       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.50     2  0.95  0.45       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.50     2  0.96  0.46       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.50     2  0.97  0.47       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.50     2  0.98  0.48       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.50     2  0.99  0.49       0.00    -0.54484   1.000000  ABOVE_OBSERVED_CI
+ 0.50     2  1.00  0.50      -0.02    -0.54484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50     5  0.94  0.44       0.23    -1.36710   0.855989  ABOVE_OBSERVED_CI
+ 0.50     5  0.95  0.45       0.18    -1.36710   0.883653  ABOVE_OBSERVED_CI
+ 0.50     5  0.96  0.46       0.13    -1.36710   0.913165  ABOVE_OBSERVED_CI
+ 0.50     5  0.97  0.47       0.08    -1.36710   0.944717  ABOVE_OBSERVED_CI
+ 0.50     5  0.98  0.48       0.03    -1.36710   0.978527  ABOVE_OBSERVED_CI
+ 0.50     5  0.99  0.49      -0.02    -1.36710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50     5  1.00  0.50      -0.07    -1.36710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50    10  0.94  0.44       0.46    -2.74420   0.856438  ABOVE_OBSERVED_CI
+ 0.50    10  0.95  0.45       0.36    -2.74420   0.884028  ABOVE_OBSERVED_CI
+ 0.50    10  0.96  0.46       0.26    -2.74420   0.913454  ABOVE_OBSERVED_CI
+ 0.50    10  0.97  0.47       0.16    -2.74420   0.944907  ABOVE_OBSERVED_CI
+ 0.50    10  0.98  0.48       0.06    -2.74420   0.978604  ABOVE_OBSERVED_CI
+ 0.50    10  0.99  0.49      -0.04    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50    10  1.00  0.50      -0.14    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50    25  0.94  0.44       1.15    -6.85550   0.856349  ABOVE_OBSERVED_CI
+ 0.50    25  0.95  0.45       0.90    -6.85550   0.883953  ABOVE_OBSERVED_CI
+ 0.50    25  0.96  0.46       0.65    -6.85550   0.913397  ABOVE_OBSERVED_CI
+ 0.50    25  0.97  0.47       0.40    -6.85550   0.944869  ABOVE_OBSERVED_CI
+ 0.50    25  0.98  0.48       0.15    -6.85550   0.978588  ABOVE_OBSERVED_CI
+ 0.50    25  0.99  0.49      -0.10    -6.85550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50    25  1.00  0.50      -0.35    -6.85550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50    50  0.94  0.44       2.30   -13.71100   0.856349  ABOVE_OBSERVED_CI
+ 0.50    50  0.95  0.45       1.80   -13.71100   0.883953  ABOVE_OBSERVED_CI
+ 0.50    50  0.96  0.46       1.30   -13.71100   0.913397  ABOVE_OBSERVED_CI
+ 0.50    50  0.97  0.47       0.79   -13.71100   0.945521  ABOVE_OBSERVED_CI
+ 0.50    50  0.98  0.48       0.29   -13.71100   0.979287  ABOVE_OBSERVED_CI
+ 0.50    50  0.99  0.49      -0.21   -13.71100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50    50  1.00  0.50      -0.71   -13.71100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50   100  0.94  0.44       4.60   -27.43200   0.856394  ABOVE_OBSERVED_CI
+ 0.50   100  0.95  0.45       3.59   -27.43200   0.884276  ABOVE_OBSERVED_CI
+ 0.50   100  0.96  0.46       2.58   -27.43200   0.914034  ABOVE_OBSERVED_CI
+ 0.50   100  0.97  0.47       1.58   -27.43200   0.945540  ABOVE_OBSERVED_CI
+ 0.50   100  0.98  0.48       0.58   -27.43200   0.979295  ABOVE_OBSERVED_CI
+ 0.50   100  0.99  0.49      -0.43   -27.43200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.50   100  1.00  0.50      -1.43   -27.43200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60  0.01  0.94  0.34     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.95  0.35     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.96  0.36     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.97  0.37     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.98  0.38     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.60  0.01  0.99  0.39     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.60  0.01  1.00  0.40     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.94  0.34     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.95  0.35     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.96  0.36     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.97  0.37     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.98  0.38     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.60  0.10  0.99  0.39     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.60  0.10  1.00  0.40     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.60     1  0.94  0.34       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.60     1  0.95  0.35       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.60     1  0.96  0.36       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.60     1  0.97  0.37       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.60     1  0.98  0.38       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.60     1  0.99  0.39      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60     1  1.00  0.40      -0.02    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60  1.62  0.94  0.34     0.0672  -0.4494204   0.869924  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.95  0.35     0.0510  -0.4494204   0.898086  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.96  0.36     0.0348  -0.4494204   0.928132  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.97  0.37     0.0186  -0.4494204   0.960258  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.98  0.38     0.0024  -0.4494204   0.994688  ABOVE_OBSERVED_CI
+ 0.60  1.62  0.99  0.39    -0.0138  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60  1.62  1.00  0.40    -0.0300  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60     2  0.94  0.34       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.60     2  0.95  0.35       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.60     2  0.96  0.36       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.60     2  0.97  0.37       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.60     2  0.98  0.38       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.60     2  0.99  0.39       0.00    -0.54484   1.000000  ABOVE_OBSERVED_CI
+ 0.60     2  1.00  0.40      -0.02    -0.54484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60     5  0.94  0.34       0.24    -1.36710   0.850663  ABOVE_OBSERVED_CI
+ 0.60     5  0.95  0.35       0.19    -1.36710   0.877978  ABOVE_OBSERVED_CI
+ 0.60     5  0.96  0.36       0.14    -1.36710   0.907106  ABOVE_OBSERVED_CI
+ 0.60     5  0.97  0.37       0.09    -1.36710   0.938233  ABOVE_OBSERVED_CI
+ 0.60     5  0.98  0.38       0.04    -1.36710   0.971573  ABOVE_OBSERVED_CI
+ 0.60     5  0.99  0.39      -0.01    -1.36710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60     5  1.00  0.40      -0.06    -1.36710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60    10  0.94  0.34       0.47    -2.74420   0.853774  ABOVE_OBSERVED_CI
+ 0.60    10  0.95  0.35       0.37    -2.74420   0.881189  ABOVE_OBSERVED_CI
+ 0.60    10  0.96  0.36       0.27    -2.74420   0.910424  ABOVE_OBSERVED_CI
+ 0.60    10  0.97  0.37       0.17    -2.74420   0.941665  ABOVE_OBSERVED_CI
+ 0.60    10  0.98  0.38       0.07    -2.74420   0.975126  ABOVE_OBSERVED_CI
+ 0.60    10  0.99  0.39      -0.04    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60    10  1.00  0.40      -0.14    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60    25  0.94  0.34       1.19    -6.85550   0.852091  ABOVE_OBSERVED_CI
+ 0.60    25  0.95  0.35       0.93    -6.85550   0.880547  ABOVE_OBSERVED_CI
+ 0.60    25  0.96  0.36       0.68    -6.85550   0.909760  ABOVE_OBSERVED_CI
+ 0.60    25  0.97  0.37       0.42    -6.85550   0.942272  ABOVE_OBSERVED_CI
+ 0.60    25  0.98  0.38       0.17    -6.85550   0.975802  ABOVE_OBSERVED_CI
+ 0.60    25  0.99  0.39      -0.08    -6.85550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60    25  1.00  0.40      -0.34    -6.85550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60    50  0.94  0.34       2.37   -13.72100   0.852713  ABOVE_OBSERVED_CI
+ 0.60    50  0.95  0.35       1.86   -13.72100   0.880624  ABOVE_OBSERVED_CI
+ 0.60    50  0.96  0.36       1.35   -13.72100   0.910424  ABOVE_OBSERVED_CI
+ 0.60    50  0.97  0.37       0.84   -13.72100   0.942312  ABOVE_OBSERVED_CI
+ 0.60    50  0.98  0.38       0.33   -13.72100   0.976514  ABOVE_OBSERVED_CI
+ 0.60    50  0.99  0.39      -0.18   -13.72100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60    50  1.00  0.40      -0.68   -13.72100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60   100  0.94  0.34       4.74   -27.44200   0.852713  ABOVE_OBSERVED_CI
+ 0.60   100  0.95  0.35       3.72   -27.44200   0.880624  ABOVE_OBSERVED_CI
+ 0.60   100  0.96  0.36       2.70   -27.44200   0.910424  ABOVE_OBSERVED_CI
+ 0.60   100  0.97  0.37       1.68   -27.44200   0.942312  ABOVE_OBSERVED_CI
+ 0.60   100  0.98  0.38       0.66   -27.44200   0.976514  ABOVE_OBSERVED_CI
+ 0.60   100  0.99  0.39      -0.35   -27.44200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.60   100  1.00  0.40      -1.37   -27.44200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70  0.01  0.94  0.24     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.95  0.25     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.96  0.26     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.97  0.27     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.98  0.28     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.70  0.01  0.99  0.29     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.70  0.01  1.00  0.30     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.94  0.24     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.95  0.25     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.96  0.26     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.97  0.27     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.98  0.28     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.70  0.10  0.99  0.29     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.70  0.10  1.00  0.30     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.70     1  0.94  0.24       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.70     1  0.95  0.25       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.70     1  0.96  0.26       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.70     1  0.97  0.27       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.70     1  0.98  0.28       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.70     1  0.99  0.29       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.70     1  1.00  0.30      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70  1.62  0.94  0.24     0.0772  -0.4494204   0.853405  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.95  0.25     0.0610  -0.4494204   0.880491  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.96  0.26     0.0448  -0.4494204   0.909352  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.97  0.27     0.0286  -0.4494204   0.940170  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.98  0.28     0.0124  -0.4494204   0.973150  ABOVE_OBSERVED_CI
+ 0.70  1.62  0.99  0.29    -0.0038  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70  1.62  1.00  0.30    -0.0200  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70     2  0.94  0.24       0.10    -0.54484   0.844923  ABOVE_OBSERVED_CI
+ 0.70     2  0.95  0.25       0.08    -0.54484   0.871967  ABOVE_OBSERVED_CI
+ 0.70     2  0.96  0.26       0.06    -0.54484   0.900800  ABOVE_OBSERVED_CI
+ 0.70     2  0.97  0.27       0.04    -0.54484   0.931605  ABOVE_OBSERVED_CI
+ 0.70     2  0.98  0.28       0.02    -0.54484   0.964592  ABOVE_OBSERVED_CI
+ 0.70     2  0.99  0.29       0.00    -0.54484   1.000000  ABOVE_OBSERVED_CI
+ 0.70     2  1.00  0.30      -0.02    -0.54484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70     5  0.94  0.24       0.25    -1.37710   0.846352  ABOVE_OBSERVED_CI
+ 0.70     5  0.95  0.25       0.19    -1.37710   0.878757  ABOVE_OBSERVED_CI
+ 0.70     5  0.96  0.26       0.14    -1.37710   0.907719  ABOVE_OBSERVED_CI
+ 0.70     5  0.97  0.27       0.09    -1.37710   0.938654  ABOVE_OBSERVED_CI
+ 0.70     5  0.98  0.28       0.04    -1.37710   0.971773  ABOVE_OBSERVED_CI
+ 0.70     5  0.99  0.29      -0.01    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70     5  1.00  0.30      -0.06    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70    10  0.94  0.24       0.50    -2.74420   0.845879  ABOVE_OBSERVED_CI
+ 0.70    10  0.95  0.25       0.40    -2.74420   0.872782  ABOVE_OBSERVED_CI
+ 0.70    10  0.96  0.26       0.30    -2.74420   0.901452  ABOVE_OBSERVED_CI
+ 0.70    10  0.97  0.27       0.19    -2.74420   0.935246  ABOVE_OBSERVED_CI
+ 0.70    10  0.98  0.28       0.09    -2.74420   0.968245  ABOVE_OBSERVED_CI
+ 0.70    10  0.99  0.29      -0.01    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70    10  1.00  0.30      -0.12    -2.74420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70    25  0.94  0.24       1.25    -6.86550   0.845974  ABOVE_OBSERVED_CI
+ 0.70    25  0.95  0.25       0.99    -6.86550   0.873974  ABOVE_OBSERVED_CI
+ 0.70    25  0.96  0.26       0.74    -6.86550   0.902702  ABOVE_OBSERVED_CI
+ 0.70    25  0.97  0.27       0.48    -6.86550   0.934654  ABOVE_OBSERVED_CI
+ 0.70    25  0.98  0.28       0.22    -6.86550   0.968951  ABOVE_OBSERVED_CI
+ 0.70    25  0.99  0.29      -0.04    -6.86550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70    25  1.00  0.30      -0.29    -6.86550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70    50  0.94  0.24       2.50   -13.74100   0.846069  ABOVE_OBSERVED_CI
+ 0.70    50  0.95  0.25       1.98   -13.74100   0.874054  ABOVE_OBSERVED_CI
+ 0.70    50  0.96  0.26       1.46   -13.74100   0.903954  ABOVE_OBSERVED_CI
+ 0.70    50  0.97  0.27       0.95   -13.74100   0.935335  ABOVE_OBSERVED_CI
+ 0.70    50  0.98  0.28       0.43   -13.74100   0.969656  ABOVE_OBSERVED_CI
+ 0.70    50  0.99  0.29      -0.09   -13.74100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70    50  1.00  0.30      -0.60   -13.74100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70   100  0.94  0.24       4.99   -27.48200   0.846329  ABOVE_OBSERVED_CI
+ 0.70   100  0.95  0.25       3.96   -27.48200   0.874054  ABOVE_OBSERVED_CI
+ 0.70   100  0.96  0.26       2.92   -27.48200   0.903954  ABOVE_OBSERVED_CI
+ 0.70   100  0.97  0.27       1.89   -27.48200   0.935653  ABOVE_OBSERVED_CI
+ 0.70   100  0.98  0.28       0.86   -27.48200   0.969656  ABOVE_OBSERVED_CI
+ 0.70   100  0.99  0.29      -0.17   -27.48200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.70   100  1.00  0.30      -1.20   -27.48200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80  0.01  0.94  0.14     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.95  0.15     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.96  0.16     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.97  0.17     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.98  0.18     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.80  0.01  0.99  0.19     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.80  0.01  1.00  0.20     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.94  0.14     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.95  0.15     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.96  0.16     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.97  0.17     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.98  0.18     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.80  0.10  0.99  0.19     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.80  0.10  1.00  0.20     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.80     1  0.94  0.14       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.80     1  0.95  0.15       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.80     1  0.96  0.16       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.80     1  0.97  0.17       0.02    -0.27742   0.932755  ABOVE_OBSERVED_CI
+ 0.80     1  0.98  0.18       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.80     1  0.99  0.19       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.80     1  1.00  0.20      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80  1.62  0.94  0.14     0.0872  -0.4494204   0.837502  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.95  0.15     0.0710  -0.4494204   0.863572  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.96  0.16     0.0448  -0.4494204   0.909352  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.97  0.17     0.0286  -0.4494204   0.940170  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.98  0.18     0.0124  -0.4494204   0.973150  ABOVE_OBSERVED_CI
+ 0.80  1.62  0.99  0.19    -0.0038  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80  1.62  1.00  0.20    -0.0200  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80     2  0.94  0.14       0.10    -0.55484   0.847291  ABOVE_OBSERVED_CI
+ 0.80     2  0.95  0.15       0.08    -0.55484   0.873984  ABOVE_OBSERVED_CI
+ 0.80     2  0.96  0.16       0.06    -0.55484   0.902414  ABOVE_OBSERVED_CI
+ 0.80     2  0.97  0.17       0.04    -0.55484   0.932755  ABOVE_OBSERVED_CI
+ 0.80     2  0.98  0.18       0.02    -0.55484   0.965208  ABOVE_OBSERVED_CI
+ 0.80     2  0.99  0.19       0.00    -0.55484   1.000000  ABOVE_OBSERVED_CI
+ 0.80     2  1.00  0.20      -0.02    -0.55484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80     5  0.94  0.14       0.27    -1.37710   0.836076  ABOVE_OBSERVED_CI
+ 0.80     5  0.95  0.15       0.22    -1.37710   0.862250  ABOVE_OBSERVED_CI
+ 0.80     5  0.96  0.16       0.16    -1.37710   0.895908  ABOVE_OBSERVED_CI
+ 0.80     5  0.97  0.17       0.11    -1.37710   0.926031  ABOVE_OBSERVED_CI
+ 0.80     5  0.98  0.18       0.06    -1.37710   0.958249  ABOVE_OBSERVED_CI
+ 0.80     5  0.99  0.19       0.01    -1.37710   0.992791  ABOVE_OBSERVED_CI
+ 0.80     5  1.00  0.20      -0.05    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80    10  0.94  0.14       0.54    -2.75420   0.836076  ABOVE_OBSERVED_CI
+ 0.80    10  0.95  0.15       0.43    -2.75420   0.864958  ABOVE_OBSERVED_CI
+ 0.80    10  0.96  0.16       0.33    -2.75420   0.893003  ABOVE_OBSERVED_CI
+ 0.80    10  0.97  0.17       0.22    -2.75420   0.926031  ABOVE_OBSERVED_CI
+ 0.80    10  0.98  0.18       0.12    -2.75420   0.958249  ABOVE_OBSERVED_CI
+ 0.80    10  0.99  0.19       0.01    -2.75420   0.996382  ABOVE_OBSERVED_CI
+ 0.80    10  1.00  0.20      -0.09    -2.75420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80    25  0.94  0.14       1.34    -6.88550   0.837092  ABOVE_OBSERVED_CI
+ 0.80    25  0.95  0.15       1.08    -6.88550   0.864415  ABOVE_OBSERVED_CI
+ 0.80    25  0.96  0.16       0.82    -6.88550   0.893583  ABOVE_OBSERVED_CI
+ 0.80    25  0.97  0.17       0.55    -6.88550   0.926031  ABOVE_OBSERVED_CI
+ 0.80    25  0.98  0.18       0.29    -6.88550   0.959585  ABOVE_OBSERVED_CI
+ 0.80    25  0.99  0.19       0.03    -6.88550   0.995662  ABOVE_OBSERVED_CI
+ 0.80    25  1.00  0.20      -0.23    -6.88550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80    50  0.94  0.14       2.68   -13.77100   0.837092  ABOVE_OBSERVED_CI
+ 0.80    50  0.95  0.15       2.16   -13.77100   0.864415  ABOVE_OBSERVED_CI
+ 0.80    50  0.96  0.16       1.63   -13.77100   0.894163  ABOVE_OBSERVED_CI
+ 0.80    50  0.97  0.17       1.11   -13.77100   0.925408  ABOVE_OBSERVED_CI
+ 0.80    50  0.98  0.18       0.59   -13.77100   0.958917  ABOVE_OBSERVED_CI
+ 0.80    50  0.99  0.19       0.07   -13.77100   0.994943  ABOVE_OBSERVED_CI
+ 0.80    50  1.00  0.20      -0.46   -13.77100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.80   100  0.94  0.14       5.36   -27.54200   0.837092  ABOVE_OBSERVED_CI
+ 0.80   100  0.95  0.15       4.31   -27.54200   0.864687  ABOVE_OBSERVED_CI
+ 0.80   100  0.96  0.16       3.27   -27.54200   0.893873  ABOVE_OBSERVED_CI
+ 0.80   100  0.97  0.17       2.22   -27.54200   0.925408  ABOVE_OBSERVED_CI
+ 0.80   100  0.98  0.18       1.17   -27.54200   0.959250  ABOVE_OBSERVED_CI
+ 0.80   100  0.99  0.19       0.13   -27.54200   0.995302  ABOVE_OBSERVED_CI
+ 0.80   100  1.00  0.20      -0.91   -27.54200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90  0.01  0.94  0.04     0.0006  -0.0027742   0.822180  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.95  0.05     0.0005  -0.0027742   0.847291  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.96  0.06     0.0004  -0.0027742   0.873984  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.97  0.07     0.0003  -0.0027742   0.902414  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.98  0.08     0.0002  -0.0027742   0.932755  ABOVE_OBSERVED_CI
+ 0.90  0.01  0.99  0.09     0.0001  -0.0027742   0.965208  ABOVE_OBSERVED_CI
+ 0.90  0.01  1.00  0.10     0.0000  -0.0027742   1.000000  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.94  0.04     0.0060  -0.0277420   0.822180  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.95  0.05     0.0050  -0.0277420   0.847291  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.96  0.06     0.0040  -0.0277420   0.873984  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.97  0.07     0.0030  -0.0277420   0.902414  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.98  0.08     0.0020  -0.0277420   0.932755  ABOVE_OBSERVED_CI
+ 0.90  0.10  0.99  0.09     0.0010  -0.0277420   0.965208  ABOVE_OBSERVED_CI
+ 0.90  0.10  1.00  0.10     0.0000  -0.0277420   1.000000  ABOVE_OBSERVED_CI
+ 0.90     1  0.94  0.04       0.06    -0.27742   0.822180  ABOVE_OBSERVED_CI
+ 0.90     1  0.95  0.05       0.05    -0.27742   0.847291  ABOVE_OBSERVED_CI
+ 0.90     1  0.96  0.06       0.04    -0.27742   0.873984  ABOVE_OBSERVED_CI
+ 0.90     1  0.97  0.07       0.03    -0.27742   0.902414  ABOVE_OBSERVED_CI
+ 0.90     1  0.98  0.08       0.01    -0.27742   0.965208  ABOVE_OBSERVED_CI
+ 0.90     1  0.99  0.09       0.00    -0.27742   1.000000  ABOVE_OBSERVED_CI
+ 0.90     1  1.00  0.10      -0.01    -0.27742 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90  1.62  0.94  0.04     0.0972  -0.4494204   0.822180  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.95  0.05     0.0710  -0.4494204   0.863572  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.96  0.06     0.0548  -0.4494204   0.891317  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.97  0.07     0.0386  -0.4494204   0.920905  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.98  0.08     0.0224  -0.4494204   0.952524  ABOVE_OBSERVED_CI
+ 0.90  1.62  0.99  0.09     0.0062  -0.4494204   0.986392  ABOVE_OBSERVED_CI
+ 0.90  1.62  1.00  0.10    -0.0100  -0.4494204 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90     2  0.94  0.04       0.11    -0.55484   0.834547  ABOVE_OBSERVED_CI
+ 0.90     2  0.95  0.05       0.09    -0.55484   0.860430  ABOVE_OBSERVED_CI
+ 0.90     2  0.96  0.06       0.07    -0.55484   0.887971  ABOVE_OBSERVED_CI
+ 0.90     2  0.97  0.07       0.05    -0.55484   0.917334  ABOVE_OBSERVED_CI
+ 0.90     2  0.98  0.08       0.03    -0.55484   0.948704  ABOVE_OBSERVED_CI
+ 0.90     2  0.99  0.09       0.01    -0.55484   0.982296  ABOVE_OBSERVED_CI
+ 0.90     2  1.00  0.10      -0.01    -0.55484 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90     5  0.94  0.04       0.30    -1.37710   0.821120  ABOVE_OBSERVED_CI
+ 0.90     5  0.95  0.05       0.24    -1.37710   0.851586  ABOVE_OBSERVED_CI
+ 0.90     5  0.96  0.06       0.19    -1.37710   0.878757  ABOVE_OBSERVED_CI
+ 0.90     5  0.97  0.07       0.14    -1.37710   0.907719  ABOVE_OBSERVED_CI
+ 0.90     5  0.98  0.08       0.08    -1.37710   0.945096  ABOVE_OBSERVED_CI
+ 0.90     5  0.99  0.09       0.03    -1.37710   0.978680  ABOVE_OBSERVED_CI
+ 0.90     5  1.00  0.10      -0.02    -1.37710 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90    10  0.94  0.04       0.58    -2.76420   0.826565  ABOVE_OBSERVED_CI
+ 0.90    10  0.95  0.05       0.48    -2.76420   0.852044  ABOVE_OBSERVED_CI
+ 0.90    10  0.96  0.06       0.37    -2.76420   0.881948  ABOVE_OBSERVED_CI
+ 0.90    10  0.97  0.07       0.26    -2.76420   0.914027  ABOVE_OBSERVED_CI
+ 0.90    10  0.98  0.08       0.16    -2.76420   0.945284  ABOVE_OBSERVED_CI
+ 0.90    10  0.99  0.09       0.05    -2.76420   0.982233  ABOVE_OBSERVED_CI
+ 0.90    10  1.00  0.10      -0.05    -2.76420 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90    25  0.94  0.04       1.46    -6.90550   0.825474  ABOVE_OBSERVED_CI
+ 0.90    25  0.95  0.05       1.20    -6.90550   0.851952  ABOVE_OBSERVED_CI
+ 0.90    25  0.96  0.06       0.93    -6.90550   0.881309  ABOVE_OBSERVED_CI
+ 0.90    25  0.97  0.07       0.67    -6.90550   0.911557  ABOVE_OBSERVED_CI
+ 0.90    25  0.98  0.08       0.40    -6.90550   0.945247  ABOVE_OBSERVED_CI
+ 0.90    25  0.99  0.09       0.14    -6.90550   0.980129  ABOVE_OBSERVED_CI
+ 0.90    25  1.00  0.10      -0.13    -6.90550 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90    50  0.94  0.04       2.93   -13.81100   0.824981  ABOVE_OBSERVED_CI
+ 0.90    50  0.95  0.05       2.39   -13.81100   0.852478  ABOVE_OBSERVED_CI
+ 0.90    50  0.96  0.06       1.86   -13.81100   0.881309  ABOVE_OBSERVED_CI
+ 0.90    50  0.97  0.07       1.33   -13.81100   0.912159  ABOVE_OBSERVED_CI
+ 0.90    50  0.98  0.08       0.80   -13.81100   0.945247  ABOVE_OBSERVED_CI
+ 0.90    50  0.99  0.09       0.28   -13.81100   0.980129  ABOVE_OBSERVED_CI
+ 0.90    50  1.00  0.10      -0.25   -13.81100 UNREACHABLE  NO_BREAKEVEN_EXISTS
+ 0.90   100  0.94  0.04       5.84   -27.63200   0.825526  ABOVE_OBSERVED_CI
+ 0.90   100  0.95  0.05       4.78   -27.63200   0.852524  ABOVE_OBSERVED_CI
+ 0.90   100  0.96  0.06       3.72   -27.63200   0.881347  ABOVE_OBSERVED_CI
+ 0.90   100  0.97  0.07       2.66   -27.63200   0.912188  ABOVE_OBSERVED_CI
+ 0.90   100  0.98  0.08       1.60   -27.63200   0.945265  ABOVE_OBSERVED_CI
+ 0.90   100  0.99  0.09       0.54   -27.63200   0.980832  ABOVE_OBSERVED_CI
+ 0.90   100  1.00  0.10      -0.52   -27.63200 UNREACHABLE  NO_BREAKEVEN_EXISTS
+
+==============================================================================
+5. RESIDUAL TOLERANCE (at observed 67.72% completion)
+==============================================================================
+price contr pairX  matched$   max_tol_resid$/contr  obs_resid$  tolerable  max_tol_resid_FREQ  obs_freq
+ 0.10  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.10  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.10  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.10  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.10  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.10  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.10  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.10  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.10  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.10  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.10  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.10  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.10  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.10  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.10     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.10     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.10     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.10     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.10     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.10     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.10     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.10  1.62  0.94     0.0972             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.10  1.62  0.95     0.0810             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.10  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.10  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.10  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.10  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.10  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.10     2  0.94       0.12             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.10     2  0.95       0.10             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.10     2  0.96       0.08             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.10     2  0.97       0.06             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.10     2  0.98       0.04             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.10     2  0.99       0.02             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.10     2  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.10     5  0.94       0.32             -0.136265    -0.27742      False            0.188557    0.3228
+ 0.10     5  0.95       0.27             -0.115286    -0.27742      False            0.163924    0.3228
+ 0.10     5  0.96       0.22             -0.094307    -0.27742      False            0.137750    0.3228
+ 0.10     5  0.97       0.17             -0.073328    -0.27742      False            0.109883    0.3228
+ 0.10     5  0.98       0.12             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.10     5  0.99       0.07             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.10     5  1.00       0.02             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.10    10  0.94       0.63             -0.133167    -0.27742      False            0.185611    0.3228
+ 0.10    10  0.95       0.53             -0.112188    -0.27742      False            0.160889    0.3228
+ 0.10    10  0.96       0.43             -0.091209    -0.27742      False            0.134619    0.3228
+ 0.10    10  0.97       0.32             -0.068133    -0.27742      False            0.103755    0.3228
+ 0.10    10  0.98       0.22             -0.047154    -0.27742      False            0.073722    0.3228
+ 0.10    10  0.99       0.12             -0.026175    -0.27742      False            0.041606    0.3228
+ 0.10    10  1.00       0.02             -0.005196    -0.27742      False            0.007183    0.3228
+ 0.10    25  0.94       1.57             -0.132948    -0.27742      False            0.185240    0.3228
+ 0.10    25  0.95       1.32             -0.111969    -0.27742      False            0.160477    0.3228
+ 0.10    25  0.96       1.07             -0.090990    -0.27742      False            0.134161    0.3228
+ 0.10    25  0.97       0.82             -0.070011    -0.27742      False            0.106142    0.3228
+ 0.10    25  0.98       0.56             -0.048193    -0.27742      False            0.075012    0.3228
+ 0.10    25  0.99       0.31             -0.027214    -0.27742      False            0.042963    0.3228
+ 0.10    25  1.00       0.06             -0.006235    -0.27742      False            0.008614    0.3228
+ 0.10    50  0.94       3.14             -0.132948    -0.27742      False            0.185240    0.3228
+ 0.10    50  0.95       2.64             -0.111969    -0.27742      False            0.160477    0.3228
+ 0.10    50  0.96       2.14             -0.090990    -0.27742      False            0.134161    0.3228
+ 0.10    50  0.97       1.63             -0.069591    -0.27742      False            0.105563    0.3228
+ 0.10    50  0.98       1.13             -0.048612    -0.27742      False            0.075631    0.3228
+ 0.10    50  0.99       0.62             -0.027214    -0.27742      False            0.042963    0.3228
+ 0.10    50  1.00       0.12             -0.006235    -0.27742      False            0.008614    0.3228
+ 0.10   100  0.94       6.28             -0.132848    -0.27742      False            0.185185    0.3228
+ 0.10   100  0.95       5.27             -0.111659    -0.27742      False            0.160173    0.3228
+ 0.10   100  0.96       4.26             -0.090470    -0.27742      False            0.133576    0.3228
+ 0.10   100  0.97       3.25             -0.069282    -0.27742      False            0.105239    0.3228
+ 0.10   100  0.98       2.24             -0.048093    -0.27742      False            0.074987    0.3228
+ 0.10   100  0.99       1.23             -0.026904    -0.27742      False            0.042617    0.3228
+ 0.10   100  1.00       0.22             -0.005715    -0.27742      False            0.007899    0.3228
+ 0.20  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.20  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.20  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.20  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.20  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.20  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.20  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.20  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.20  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.20  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.20  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.20  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.20  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.20  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.20     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.20     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.20     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.20     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.20     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.20     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.20     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.20  1.62  0.94     0.0972             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.20  1.62  0.95     0.0810             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.20  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.20  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.20  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.20  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.20  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.20     2  0.94       0.12             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.20     2  0.95       0.10             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.20     2  0.96       0.08             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.20     2  0.97       0.06             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.20     2  0.98       0.04             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.20     2  0.99       0.02             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.20     2  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.20     5  0.94       0.32             -0.136265    -0.27742      False            0.188557    0.3228
+ 0.20     5  0.95       0.27             -0.115286    -0.27742      False            0.163924    0.3228
+ 0.20     5  0.96       0.22             -0.094307    -0.27742      False            0.137750    0.3228
+ 0.20     5  0.97       0.17             -0.073328    -0.27742      False            0.109883    0.3228
+ 0.20     5  0.98       0.12             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.20     5  0.99       0.07             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.20     5  1.00       0.02             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.20    10  0.94       0.64             -0.136265    -0.27742      False            0.188557    0.3228
+ 0.20    10  0.95       0.54             -0.115286    -0.27742      False            0.163924    0.3228
+ 0.20    10  0.96       0.44             -0.094307    -0.27742      False            0.137750    0.3228
+ 0.20    10  0.97       0.34             -0.073328    -0.27742      False            0.109883    0.3228
+ 0.20    10  0.98       0.24             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.20    10  0.99       0.14             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.20    10  1.00       0.04             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.20    25  0.94       1.61             -0.137104    -0.27742      False            0.189512    0.3228
+ 0.20    25  0.95       1.36             -0.116125    -0.27742      False            0.164938    0.3228
+ 0.20    25  0.96       1.11             -0.095146    -0.27742      False            0.138828    0.3228
+ 0.20    25  0.97       0.86             -0.074168    -0.27742      False            0.111032    0.3228
+ 0.20    25  0.98       0.60             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.20    25  0.99       0.35             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.20    25  1.00       0.10             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.20    50  0.94       3.22             -0.137104    -0.27742      False            0.189512    0.3228
+ 0.20    50  0.95       2.72             -0.116125    -0.27742      False            0.164938    0.3228
+ 0.20    50  0.96       2.21             -0.094727    -0.27742      False            0.138289    0.3228
+ 0.20    50  0.97       1.71             -0.073748    -0.27742      False            0.110458    0.3228
+ 0.20    50  0.98       1.21             -0.052769    -0.27742      False            0.080769    0.3228
+ 0.20    50  0.99       0.70             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.20    50  1.00       0.20             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.20   100  0.94       6.44             -0.137104    -0.27742      False            0.189512    0.3228
+ 0.20   100  0.95       5.43             -0.115916    -0.27742      False            0.164685    0.3228
+ 0.20   100  0.96       4.43             -0.094937    -0.27742      False            0.138559    0.3228
+ 0.20   100  0.97       3.42             -0.073748    -0.27742      False            0.110458    0.3228
+ 0.20   100  0.98       2.41             -0.052559    -0.27742      False            0.080462    0.3228
+ 0.20   100  0.99       1.41             -0.031580    -0.27742      False            0.048701    0.3228
+ 0.20   100  1.00       0.40             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.30  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.30  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.30  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.30  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.30  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.30  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.30  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.30  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.30  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.30  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.30  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.30  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.30  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.30  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.30     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.30     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.30     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.30     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.30     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.30     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.30     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.30  1.62  0.94     0.0972             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.30  1.62  0.95     0.0810             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.30  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.30  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.30  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.30  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.30  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.30     2  0.94       0.14             -0.151853    -0.27742      False            0.204427    0.3228
+ 0.30     2  0.95       0.12             -0.130874    -0.27742      False            0.180495    0.3228
+ 0.30     2  0.96       0.10             -0.109895    -0.27742      False            0.155077    0.3228
+ 0.30     2  0.97       0.08             -0.088916    -0.27742      False            0.128033    0.3228
+ 0.30     2  0.98       0.06             -0.067937    -0.27742      False            0.099200    0.3228
+ 0.30     2  0.99       0.04             -0.046958    -0.27742      False            0.068395    0.3228
+ 0.30     2  1.00       0.02             -0.025979    -0.27742      False            0.035408    0.3228
+ 0.30     5  0.94       0.32             -0.136265    -0.27742      False            0.188557    0.3228
+ 0.30     5  0.95       0.27             -0.115286    -0.27742      False            0.163924    0.3228
+ 0.30     5  0.96       0.22             -0.094307    -0.27742      False            0.137750    0.3228
+ 0.30     5  0.97       0.17             -0.073328    -0.27742      False            0.109883    0.3228
+ 0.30     5  0.98       0.12             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.30     5  0.99       0.07             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.30     5  1.00       0.02             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.30    10  0.94       0.66             -0.141461    -0.27742      False            0.193878    0.3228
+ 0.30    10  0.95       0.56             -0.120482    -0.27742      False            0.169481    0.3228
+ 0.30    10  0.96       0.46             -0.099503    -0.27742      False            0.143562    0.3228
+ 0.30    10  0.97       0.36             -0.078524    -0.27742      False            0.115972    0.3228
+ 0.30    10  0.98       0.26             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.30    10  0.99       0.16             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.30    10  1.00       0.06             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.30    25  0.94       1.64             -0.140422    -0.27742      False            0.192816    0.3228
+ 0.30    25  0.95       1.39             -0.119443    -0.27742      False            0.168373    0.3228
+ 0.30    25  0.96       1.14             -0.098464    -0.27742      False            0.142402    0.3228
+ 0.30    25  0.97       0.89             -0.077485    -0.27742      False            0.114757    0.3228
+ 0.30    25  0.98       0.64             -0.056506    -0.27742      False            0.085271    0.3228
+ 0.30    25  0.99       0.39             -0.035527    -0.27742      False            0.053752    0.3228
+ 0.30    25  1.00       0.14             -0.014548    -0.27742      False            0.019984    0.3228
+ 0.30    50  0.94       3.27             -0.139802    -0.27742      False            0.192229    0.3228
+ 0.30    50  0.95       2.77             -0.118823    -0.27742      False            0.167767    0.3228
+ 0.30    50  0.96       2.27             -0.097844    -0.27742      False            0.141778    0.3228
+ 0.30    50  0.97       1.77             -0.076865    -0.27742      False            0.114113    0.3228
+ 0.30    50  0.98       1.27             -0.055886    -0.27742      False            0.084605    0.3228
+ 0.30    50  0.99       0.76             -0.034488    -0.27742      False            0.052410    0.3228
+ 0.30    50  1.00       0.26             -0.013509    -0.27742      False            0.018570    0.3228
+ 0.30   100  0.94       6.55             -0.140012    -0.27742      False            0.192466    0.3228
+ 0.30   100  0.95       5.54             -0.118823    -0.27742      False            0.167767    0.3228
+ 0.30   100  0.96       4.54             -0.097844    -0.27742      False            0.141778    0.3228
+ 0.30   100  0.97       3.54             -0.076865    -0.27742      False            0.114113    0.3228
+ 0.30   100  0.98       2.53             -0.055677    -0.27742      False            0.084300    0.3228
+ 0.30   100  0.99       1.53             -0.034698    -0.27742      False            0.052737    0.3228
+ 0.30   100  1.00       0.52             -0.013509    -0.27742      False            0.018570    0.3228
+ 0.40  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.40  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.40  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.40  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.40  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.40  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.40  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.40  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.40  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.40  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.40  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.40  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.40  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.40  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.40     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.40     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.40     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.40     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.40     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.40     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.40     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.40  1.62  0.94     0.1072             -0.138824    -0.27742      False            0.192591    0.3228
+ 0.40  1.62  0.95     0.0910             -0.117845    -0.27742      False            0.168387    0.3228
+ 0.40  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.40  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.40  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.40  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.40  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.40     2  0.94       0.14             -0.151853    -0.27742      False            0.204427    0.3228
+ 0.40     2  0.95       0.12             -0.130874    -0.27742      False            0.180495    0.3228
+ 0.40     2  0.96       0.10             -0.109895    -0.27742      False            0.155077    0.3228
+ 0.40     2  0.97       0.08             -0.088916    -0.27742      False            0.128033    0.3228
+ 0.40     2  0.98       0.06             -0.067937    -0.27742      False            0.099200    0.3228
+ 0.40     2  0.99       0.04             -0.046958    -0.27742      False            0.068395    0.3228
+ 0.40     2  1.00       0.02             -0.025979    -0.27742      False            0.035408    0.3228
+ 0.40     5  0.94       0.34             -0.146657    -0.27742      False            0.199168    0.3228
+ 0.40     5  0.95       0.29             -0.125678    -0.27742      False            0.175005    0.3228
+ 0.40     5  0.96       0.24             -0.104699    -0.27742      False            0.149337    0.3228
+ 0.40     5  0.97       0.19             -0.083720    -0.27742      False            0.122022    0.3228
+ 0.40     5  0.98       0.14             -0.062741    -0.27742      False            0.092894    0.3228
+ 0.40     5  0.99       0.09             -0.041762    -0.27742      False            0.061767    0.3228
+ 0.40     5  1.00       0.04             -0.020783    -0.27742      False            0.028427    0.3228
+ 0.40    10  0.94       0.66             -0.141461    -0.27742      False            0.193878    0.3228
+ 0.40    10  0.95       0.56             -0.120482    -0.27742      False            0.169481    0.3228
+ 0.40    10  0.96       0.46             -0.099503    -0.27742      False            0.143562    0.3228
+ 0.40    10  0.97       0.36             -0.078524    -0.27742      False            0.115972    0.3228
+ 0.40    10  0.98       0.26             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.40    10  0.99       0.16             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.40    10  1.00       0.06             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.40    25  0.94       1.66             -0.142500    -0.27742      False            0.194939    0.3228
+ 0.40    25  0.95       1.41             -0.121521    -0.27742      False            0.170589    0.3228
+ 0.40    25  0.96       1.16             -0.100542    -0.27742      False            0.144720    0.3228
+ 0.40    25  0.97       0.91             -0.079563    -0.27742      False            0.117185    0.3228
+ 0.40    25  0.98       0.66             -0.058584    -0.27742      False            0.087819    0.3228
+ 0.40    25  0.99       0.41             -0.037605    -0.27742      False            0.056431    0.3228
+ 0.40    25  1.00       0.16             -0.016627    -0.27742      False            0.022807    0.3228
+ 0.40    50  0.94       3.31             -0.141881    -0.27742      False            0.194351    0.3228
+ 0.40    50  0.95       2.80             -0.120482    -0.27742      False            0.169481    0.3228
+ 0.40    50  0.96       2.30             -0.099503    -0.27742      False            0.143562    0.3228
+ 0.40    50  0.97       1.80             -0.078524    -0.27742      False            0.115972    0.3228
+ 0.40    50  0.98       1.30             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.40    50  0.99       0.80             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.40    50  1.00       0.30             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.40   100  0.94       6.61             -0.141671    -0.27742      False            0.194115    0.3228
+ 0.40   100  0.95       5.61             -0.120692    -0.27742      False            0.169733    0.3228
+ 0.40   100  0.96       4.61             -0.099713    -0.27742      False            0.143829    0.3228
+ 0.40   100  0.97       3.61             -0.078734    -0.27742      False            0.116257    0.3228
+ 0.40   100  0.98       2.60             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.40   100  0.99       1.60             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.40   100  1.00       0.60             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.50  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.50  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.50  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.50  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.50  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.50  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.50  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.50  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.50  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.50  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.50  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.50  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.50  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.50  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.50     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.50     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.50     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.50     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.50     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.50     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.50     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.50  1.62  0.94     0.1072             -0.144996    -0.27742      False            0.196114    0.3228
+ 0.50  1.62  0.95     0.1010             -0.136967    -0.27742      False            0.186892    0.3228
+ 0.50  1.62  0.96     0.0848             -0.115988    -0.27742      False            0.161764    0.3228
+ 0.50  1.62  0.97     0.0686             -0.095010    -0.27742      False            0.135034    0.3228
+ 0.50  1.62  0.98     0.0524             -0.074031    -0.27742      False            0.106543    0.3228
+ 0.50  1.62  0.99     0.0362             -0.053052    -0.27742      False            0.076111    0.3228
+ 0.50  1.62  1.00     0.0200             -0.032073    -0.27742      False            0.043533    0.3228
+ 0.50     2  0.94       0.14             -0.151853    -0.27742      False            0.204427    0.3228
+ 0.50     2  0.95       0.12             -0.130874    -0.27742      False            0.180495    0.3228
+ 0.50     2  0.96       0.10             -0.109895    -0.27742      False            0.155077    0.3228
+ 0.50     2  0.97       0.08             -0.088916    -0.27742      False            0.128033    0.3228
+ 0.50     2  0.98       0.06             -0.067937    -0.27742      False            0.099200    0.3228
+ 0.50     2  0.99       0.04             -0.046958    -0.27742      False            0.068395    0.3228
+ 0.50     2  1.00       0.02             -0.025979    -0.27742      False            0.035408    0.3228
+ 0.50     5  0.94       0.34             -0.146657    -0.27742      False            0.199168    0.3228
+ 0.50     5  0.95       0.29             -0.125678    -0.27742      False            0.175005    0.3228
+ 0.50     5  0.96       0.24             -0.104699    -0.27742      False            0.149337    0.3228
+ 0.50     5  0.97       0.19             -0.083720    -0.27742      False            0.122022    0.3228
+ 0.50     5  0.98       0.14             -0.062741    -0.27742      False            0.092894    0.3228
+ 0.50     5  0.99       0.09             -0.041762    -0.27742      False            0.061767    0.3228
+ 0.50     5  1.00       0.04             -0.020783    -0.27742      False            0.028427    0.3228
+ 0.50    10  0.94       0.66             -0.141461    -0.27742      False            0.193878    0.3228
+ 0.50    10  0.95       0.56             -0.120482    -0.27742      False            0.169481    0.3228
+ 0.50    10  0.96       0.46             -0.099503    -0.27742      False            0.143562    0.3228
+ 0.50    10  0.97       0.36             -0.078524    -0.27742      False            0.115972    0.3228
+ 0.50    10  0.98       0.26             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.50    10  0.99       0.16             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.50    10  1.00       0.06             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.50    25  0.94       1.66             -0.142500    -0.27742      False            0.194939    0.3228
+ 0.50    25  0.95       1.41             -0.121521    -0.27742      False            0.170589    0.3228
+ 0.50    25  0.96       1.16             -0.100542    -0.27742      False            0.144720    0.3228
+ 0.50    25  0.97       0.91             -0.079563    -0.27742      False            0.117185    0.3228
+ 0.50    25  0.98       0.66             -0.058584    -0.27742      False            0.087819    0.3228
+ 0.50    25  0.99       0.41             -0.037605    -0.27742      False            0.056431    0.3228
+ 0.50    25  1.00       0.16             -0.016627    -0.27742      False            0.022807    0.3228
+ 0.50    50  0.94       3.31             -0.142081    -0.27742      False            0.194466    0.3228
+ 0.50    50  0.95       2.81             -0.121102    -0.27742      False            0.170087    0.3228
+ 0.50    50  0.96       2.32             -0.100542    -0.27742      False            0.144720    0.3228
+ 0.50    50  0.97       1.82             -0.079563    -0.27742      False            0.117185    0.3228
+ 0.50    50  0.98       1.32             -0.058584    -0.27742      False            0.087819    0.3228
+ 0.50    50  0.99       0.82             -0.037605    -0.27742      False            0.056431    0.3228
+ 0.50    50  1.00       0.32             -0.016627    -0.27742      False            0.022807    0.3228
+ 0.50   100  0.94       6.62             -0.141981    -0.27742      False            0.194409    0.3228
+ 0.50   100  0.95       5.62             -0.121002    -0.27742      False            0.170035    0.3228
+ 0.50   100  0.96       4.62             -0.100023    -0.27742      False            0.144141    0.3228
+ 0.50   100  0.97       3.62             -0.079044    -0.27742      False            0.116579    0.3228
+ 0.50   100  0.98       2.62             -0.058065    -0.27742      False            0.087182    0.3228
+ 0.50   100  0.99       1.62             -0.037086    -0.27742      False            0.055762    0.3228
+ 0.50   100  1.00       0.62             -0.016107    -0.27742      False            0.022102    0.3228
+ 0.60  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.60  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.60  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.60  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.60  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.60  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.60  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.60  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.60  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.60  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.60  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.60  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.60  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.60  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.60     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.60     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.60     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.60     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.60     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.60     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.60     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.60  1.62  0.94     0.0972             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.60  1.62  0.95     0.0810             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.60  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.60  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.60  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.60  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.60  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.60     2  0.94       0.14             -0.151853    -0.27742      False            0.204427    0.3228
+ 0.60     2  0.95       0.12             -0.130874    -0.27742      False            0.180495    0.3228
+ 0.60     2  0.96       0.10             -0.109895    -0.27742      False            0.155077    0.3228
+ 0.60     2  0.97       0.08             -0.088916    -0.27742      False            0.128033    0.3228
+ 0.60     2  0.98       0.06             -0.067937    -0.27742      False            0.099200    0.3228
+ 0.60     2  0.99       0.04             -0.046958    -0.27742      False            0.068395    0.3228
+ 0.60     2  1.00       0.02             -0.025979    -0.27742      False            0.035408    0.3228
+ 0.60     5  0.94       0.33             -0.142461    -0.27742      False            0.194449    0.3228
+ 0.60     5  0.95       0.28             -0.121482    -0.27742      False            0.169996    0.3228
+ 0.60     5  0.96       0.23             -0.100503    -0.27742      False            0.144011    0.3228
+ 0.60     5  0.97       0.18             -0.079524    -0.27742      False            0.116347    0.3228
+ 0.60     5  0.98       0.13             -0.058545    -0.27742      False            0.086835    0.3228
+ 0.60     5  0.99       0.08             -0.037566    -0.27742      False            0.055283    0.3228
+ 0.60     5  1.00       0.04             -0.020783    -0.27742      False            0.028427    0.3228
+ 0.60    10  0.94       0.66             -0.141461    -0.27742      False            0.193878    0.3228
+ 0.60    10  0.95       0.56             -0.120482    -0.27742      False            0.169481    0.3228
+ 0.60    10  0.96       0.46             -0.099503    -0.27742      False            0.143562    0.3228
+ 0.60    10  0.97       0.36             -0.078524    -0.27742      False            0.115972    0.3228
+ 0.60    10  0.98       0.26             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.60    10  0.99       0.16             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.60    10  1.00       0.06             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.60    25  0.94       1.65             -0.141661    -0.27742      False            0.193992    0.3228
+ 0.60    25  0.95       1.40             -0.120682    -0.27742      False            0.169584    0.3228
+ 0.60    25  0.96       1.15             -0.099703    -0.27742      False            0.143651    0.3228
+ 0.60    25  0.97       0.90             -0.078724    -0.27742      False            0.116047    0.3228
+ 0.60    25  0.98       0.65             -0.057745    -0.27742      False            0.086603    0.3228
+ 0.60    25  0.99       0.40             -0.036766    -0.27742      False            0.055131    0.3228
+ 0.60    25  1.00       0.16             -0.016627    -0.27742      False            0.022807    0.3228
+ 0.60    50  0.94       3.29             -0.141041    -0.27742      False            0.193404    0.3228
+ 0.60    50  0.95       2.79             -0.120062    -0.27742      False            0.168978    0.3228
+ 0.60    50  0.96       2.29             -0.099084    -0.27742      False            0.143027    0.3228
+ 0.60    50  0.97       1.80             -0.078524    -0.27742      False            0.115972    0.3228
+ 0.60    50  0.98       1.30             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.60    50  0.99       0.80             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.60    50  1.00       0.30             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.60   100  0.94       6.58             -0.141041    -0.27742      False            0.193404    0.3228
+ 0.60   100  0.95       5.58             -0.120062    -0.27742      False            0.168978    0.3228
+ 0.60   100  0.96       4.59             -0.099293    -0.27742      False            0.143294    0.3228
+ 0.60   100  0.97       3.59             -0.078314    -0.27742      False            0.115687    0.3228
+ 0.60   100  0.98       2.59             -0.057335    -0.27742      False            0.086241    0.3228
+ 0.60   100  0.99       1.60             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.60   100  1.00       0.60             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.70  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.70  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.70  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.70  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.70  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.70  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.70  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.70  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.70  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.70  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.70  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.70  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.70  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.70  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.70     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.70     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.70     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.70     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.70     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.70     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.70     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.70  1.62  0.94     0.0972             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.70  1.62  0.95     0.0810             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.70  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.70  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.70  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.70  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.70  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.70     2  0.94       0.13             -0.141363    -0.27742      False            0.192638    0.3228
+ 0.70     2  0.95       0.11             -0.120384    -0.27742      False            0.167980    0.3228
+ 0.70     2  0.96       0.09             -0.099405    -0.27742      False            0.141768    0.3228
+ 0.70     2  0.97       0.07             -0.078426    -0.27742      False            0.113851    0.3228
+ 0.70     2  0.98       0.06             -0.067937    -0.27742      False            0.099200    0.3228
+ 0.70     2  0.99       0.04             -0.046958    -0.27742      False            0.068395    0.3228
+ 0.70     2  1.00       0.02             -0.025979    -0.27742      False            0.035408    0.3228
+ 0.70     5  0.94       0.32             -0.136265    -0.27742      False            0.188557    0.3228
+ 0.70     5  0.95       0.27             -0.115286    -0.27742      False            0.163924    0.3228
+ 0.70     5  0.96       0.22             -0.094307    -0.27742      False            0.137750    0.3228
+ 0.70     5  0.97       0.17             -0.073328    -0.27742      False            0.109883    0.3228
+ 0.70     5  0.98       0.12             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.70     5  0.99       0.07             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.70     5  1.00       0.02             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.70    10  0.94       0.65             -0.139363    -0.27742      False            0.191503    0.3228
+ 0.70    10  0.95       0.55             -0.118384    -0.27742      False            0.166960    0.3228
+ 0.70    10  0.96       0.45             -0.097405    -0.27742      False            0.140880    0.3228
+ 0.70    10  0.97       0.35             -0.076426    -0.27742      False            0.113115    0.3228
+ 0.70    10  0.98       0.26             -0.057545    -0.27742      False            0.086546    0.3228
+ 0.70    10  0.99       0.16             -0.036566    -0.27742      False            0.055093    0.3228
+ 0.70    10  1.00       0.06             -0.015587    -0.27742      False            0.021396    0.3228
+ 0.70    25  0.94       1.63             -0.139583    -0.27742      False            0.191866    0.3228
+ 0.70    25  0.95       1.38             -0.118604    -0.27742      False            0.167364    0.3228
+ 0.70    25  0.96       1.13             -0.097625    -0.27742      False            0.141329    0.3228
+ 0.70    25  0.97       0.88             -0.076646    -0.27742      False            0.113614    0.3228
+ 0.70    25  0.98       0.63             -0.055667    -0.27742      False            0.084050    0.3228
+ 0.70    25  0.99       0.38             -0.034688    -0.27742      False            0.052446    0.3228
+ 0.70    25  1.00       0.14             -0.014548    -0.27742      False            0.019984    0.3228
+ 0.70    50  0.94       3.24             -0.138543    -0.27742      False            0.190801    0.3228
+ 0.70    50  0.95       2.75             -0.117984    -0.27742      False            0.166758    0.3228
+ 0.70    50  0.96       2.25             -0.097005    -0.27742      False            0.140704    0.3228
+ 0.70    50  0.97       1.75             -0.076026    -0.27742      False            0.112969    0.3228
+ 0.70    50  0.98       1.26             -0.055467    -0.27742      False            0.083994    0.3228
+ 0.70    50  0.99       0.76             -0.034488    -0.27742      False            0.052410    0.3228
+ 0.70    50  1.00       0.26             -0.013509    -0.27742      False            0.018570    0.3228
+ 0.70   100  0.94       6.49             -0.138753    -0.27742      False            0.191040    0.3228
+ 0.70   100  0.95       5.49             -0.117774    -0.27742      False            0.166505    0.3228
+ 0.70   100  0.96       4.50             -0.097005    -0.27742      False            0.140704    0.3228
+ 0.70   100  0.97       3.51             -0.076236    -0.27742      False            0.113255    0.3228
+ 0.70   100  0.98       2.51             -0.055257    -0.27742      False            0.083689    0.3228
+ 0.70   100  0.99       1.52             -0.034488    -0.27742      False            0.052410    0.3228
+ 0.70   100  1.00       0.52             -0.013509    -0.27742      False            0.018570    0.3228
+ 0.80  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.80  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.80  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.80  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.80  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.80  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.80  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.80  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.80  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.80  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.80  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.80  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.80  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.80  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.80     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.80     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.80     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.80     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.80     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.80     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.80     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.80  1.62  0.94     0.0972             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.80  1.62  0.95     0.0810             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.80  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.80  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.80  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.80  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.80  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.80     2  0.94       0.12             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.80     2  0.95       0.10             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.80     2  0.96       0.08             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.80     2  0.97       0.06             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.80     2  0.98       0.04             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.80     2  0.99       0.02             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.80     2  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.80     5  0.94       0.32             -0.136265    -0.27742      False            0.188557    0.3228
+ 0.80     5  0.95       0.27             -0.115286    -0.27742      False            0.163924    0.3228
+ 0.80     5  0.96       0.22             -0.094307    -0.27742      False            0.137750    0.3228
+ 0.80     5  0.97       0.17             -0.073328    -0.27742      False            0.109883    0.3228
+ 0.80     5  0.98       0.12             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.80     5  0.99       0.07             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.80     5  1.00       0.02             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.80    10  0.94       0.64             -0.136265    -0.27742      False            0.188557    0.3228
+ 0.80    10  0.95       0.54             -0.115286    -0.27742      False            0.163924    0.3228
+ 0.80    10  0.96       0.44             -0.094307    -0.27742      False            0.137750    0.3228
+ 0.80    10  0.97       0.34             -0.073328    -0.27742      False            0.109883    0.3228
+ 0.80    10  0.98       0.24             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.80    10  0.99       0.14             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.80    10  1.00       0.04             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.80    25  0.94       1.59             -0.135426    -0.27742      False            0.187600    0.3228
+ 0.80    25  0.95       1.34             -0.114447    -0.27742      False            0.162908    0.3228
+ 0.80    25  0.96       1.09             -0.093468    -0.27742      False            0.136669    0.3228
+ 0.80    25  0.97       0.84             -0.072489    -0.27742      False            0.108731    0.3228
+ 0.80    25  0.98       0.60             -0.052349    -0.27742      False            0.080155    0.3228
+ 0.80    25  0.99       0.35             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.80    25  1.00       0.10             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.80    50  0.94       3.18             -0.135426    -0.27742      False            0.187600    0.3228
+ 0.80    50  0.95       2.68             -0.114447    -0.27742      False            0.162908    0.3228
+ 0.80    50  0.96       2.18             -0.093468    -0.27742      False            0.136669    0.3228
+ 0.80    50  0.97       1.69             -0.072909    -0.27742      False            0.109307    0.3228
+ 0.80    50  0.98       1.19             -0.051930    -0.27742      False            0.079540    0.3228
+ 0.80    50  0.99       0.70             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.80    50  1.00       0.20             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.80   100  0.94       6.35             -0.135216    -0.27742      False            0.187360    0.3228
+ 0.80   100  0.95       5.36             -0.114447    -0.27742      False            0.162908    0.3228
+ 0.80   100  0.96       4.37             -0.093678    -0.27742      False            0.136939    0.3228
+ 0.80   100  0.97       3.38             -0.072909    -0.27742      False            0.109307    0.3228
+ 0.80   100  0.98       2.38             -0.051930    -0.27742      False            0.079540    0.3228
+ 0.80   100  0.99       1.39             -0.031161    -0.27742      False            0.048044    0.3228
+ 0.80   100  1.00       0.40             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.90  0.01  0.94     0.0006             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.90  0.01  0.95     0.0005             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.90  0.01  0.96     0.0004             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.90  0.01  0.97     0.0003             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.90  0.01  0.98     0.0002             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.90  0.01  0.99     0.0001             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.90  0.01  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.90  0.10  0.94     0.0060             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.90  0.10  0.95     0.0050             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.90  0.10  0.96     0.0040             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.90  0.10  0.97     0.0030             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.90  0.10  0.98     0.0020             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.90  0.10  0.99     0.0010             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.90  0.10  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.90     1  0.94       0.06             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.90     1  0.95       0.05             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.90     1  0.96       0.04             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.90     1  0.97       0.03             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.90     1  0.98       0.02             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.90     1  0.99       0.01             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.90     1  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.90  1.62  0.94     0.0972             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.90  1.62  0.95     0.0810             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.90  1.62  0.96     0.0648             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.90  1.62  0.97     0.0486             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.90  1.62  0.98     0.0324             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.90  1.62  0.99     0.0162             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.90  1.62  1.00     0.0000             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.90     2  0.94       0.12             -0.125874    -0.27742      False            0.177820    0.3228
+ 0.90     2  0.95       0.10             -0.104895    -0.27742      False            0.152709    0.3228
+ 0.90     2  0.96       0.08             -0.083916    -0.27742      False            0.126016    0.3228
+ 0.90     2  0.97       0.06             -0.062937    -0.27742      False            0.097586    0.3228
+ 0.90     2  0.98       0.04             -0.041958    -0.27742      False            0.067245    0.3228
+ 0.90     2  0.99       0.02             -0.020979    -0.27742      False            0.034792    0.3228
+ 0.90     2  1.00       0.00             -0.000000    -0.27742      False            0.000000    0.3228
+ 0.90     5  0.94       0.31             -0.132069    -0.27742      False            0.183747    0.3228
+ 0.90     5  0.95       0.26             -0.111090    -0.27742      False            0.158817    0.3228
+ 0.90     5  0.96       0.21             -0.090112    -0.27742      False            0.132317    0.3228
+ 0.90     5  0.97       0.16             -0.069133    -0.27742      False            0.104092    0.3228
+ 0.90     5  0.98       0.11             -0.048154    -0.27742      False            0.073969    0.3228
+ 0.90     5  0.99       0.07             -0.031371    -0.27742      False            0.048373    0.3228
+ 0.90     5  1.00       0.02             -0.010392    -0.27742      False            0.014315    0.3228
+ 0.90    10  0.94       0.61             -0.128971    -0.27742      False            0.180784    0.3228
+ 0.90    10  0.95       0.52             -0.110090    -0.27742      False            0.158334    0.3228
+ 0.90    10  0.96       0.42             -0.089112    -0.27742      False            0.131901    0.3228
+ 0.90    10  0.97       0.32             -0.068133    -0.27742      False            0.103755    0.3228
+ 0.90    10  0.98       0.22             -0.047154    -0.27742      False            0.073722    0.3228
+ 0.90    10  0.99       0.12             -0.026175    -0.27742      False            0.041606    0.3228
+ 0.90    10  1.00       0.02             -0.005196    -0.27742      False            0.007183    0.3228
+ 0.90    25  0.94       1.54             -0.130430    -0.27742      False            0.182346    0.3228
+ 0.90    25  0.95       1.29             -0.109451    -0.27742      False            0.157403    0.3228
+ 0.90    25  0.96       1.05             -0.089312    -0.27742      False            0.131984    0.3228
+ 0.90    25  0.97       0.80             -0.068333    -0.27742      False            0.103822    0.3228
+ 0.90    25  0.98       0.55             -0.047354    -0.27742      False            0.073771    0.3228
+ 0.90    25  0.99       0.31             -0.027214    -0.27742      False            0.042963    0.3228
+ 0.90    25  1.00       0.06             -0.006235    -0.27742      False            0.008614    0.3228
+ 0.90    50  0.94       3.08             -0.130430    -0.27742      False            0.182346    0.3228
+ 0.90    50  0.95       2.59             -0.109871    -0.27742      False            0.157917    0.3228
+ 0.90    50  0.96       2.10             -0.089312    -0.27742      False            0.131984    0.3228
+ 0.90    50  0.97       1.60             -0.068333    -0.27742      False            0.103822    0.3228
+ 0.90    50  0.98       1.11             -0.047773    -0.27742      False            0.074392    0.3228
+ 0.90    50  0.99       0.61             -0.026794    -0.27742      False            0.042299    0.3228
+ 0.90    50  1.00       0.12             -0.006235    -0.27742      False            0.008614    0.3228
+ 0.90   100  0.94       6.16             -0.130330    -0.27742      False            0.182292    0.3228
+ 0.90   100  0.95       5.17             -0.109561    -0.27742      False            0.157612    0.3228
+ 0.90   100  0.96       4.18             -0.088792    -0.27742      False            0.131397    0.3228
+ 0.90   100  0.97       3.19             -0.068023    -0.27742      False            0.103498    0.3228
+ 0.90   100  0.98       2.20             -0.047254    -0.27742      False            0.073746    0.3228
+ 0.90   100  0.99       1.21             -0.026485    -0.27742      False            0.041953    0.3228
+ 0.90   100  1.00       0.22             -0.005715    -0.27742      False            0.007899    0.3228
+
+==============================================================================
+6. OBSERVED-VALUES REGION TEST
+==============================================================================
+question: does any positive region survive using OBSERVED fill, completion and residual values rather than hypothetical perfect fills?
+answer: NO
+gap_to_close_pct_points: 11.01
+gap_the_rebate_closes_pct_points: 1.56
+fraction_of_gap_closed: 0.1418
+why: breakeven needs 78.73% matched without the rebate and ~77.2% with it at size; observed is 67.72% with a 95% CI of [65.62%, 69.81%]. The rebate closes about 1.5 of an 11.0 point gap -- roughly one eighth -- and the CI still excludes breakeven by more than 7 points. On L5's own coins the observed fraction is 57.90%, which is worse.
+and_at_the_protocol_size: at Stage-6's own 1.00 share the rebate is $0.00 at EVERY price on the venue grid, because the cent floor is 1.61-4.45 shares. So at the size actually authorized, the rebate changes nothing at all and breakeven stays exactly 78.73%.
+contr reb_matched reb_resid  matched$   residual$    m*        delta_vs_0.7873  EV@67.72%   positive
+ 0.01        0.00      0.00   0.000750    -0.002774   0.787275        -0.000025   -0.000388     False
+ 0.10        0.00      0.00   0.007496    -0.027742   0.787275        -0.000025   -0.003879     False
+    1        0.00      0.00   0.074960    -0.277420   0.787275        -0.000025   -0.038788     False
+ 1.62        0.02      0.01   0.141435    -0.439420   0.756505        -0.030795   -0.046065     False
+    2        0.02      0.01   0.169920    -0.544840   0.762270        -0.025030   -0.060805     False
+    5        0.04      0.02   0.414800    -1.367100   0.767215        -0.020085   -0.160397     False
+   10        0.06      0.03   0.809600    -2.744200   0.772188        -0.015112   -0.337567     False
+   25        0.16      0.08   2.034000    -6.855500   0.771191        -0.016109   -0.835531     False
+   50        0.32      0.16   4.068000   -13.711000   0.771191        -0.016109   -1.671061     False
+  100        0.62      0.31   8.116000   -27.432000   0.771689        -0.015611   -3.358894     False
+
+==============================================================================
+STAGE-6 REPLAY UNDER ACTUAL PMUS COMPENSATION
+==============================================================================
+bounds: {
+  "FIRST_LEG_QTY": "1.00",
+  "MAX_FIRST_LEG_PRICE": "0.60",
+  "MAX_POSSIBLE_LOSS_USD": "0.6000",
+  "PAIR_COST_CEILING": "0.96",
+  "REBATE_CENT_FLOOR_SHARES": "1.62",
+  "qty_below_own_cent_floor": true
+}
+S6P pair gate as written: {
+  "ceiling": "0.96",
+  "clears_ceiling": false,
+  "complement_price": "0.36",
+  "effective_date_ambiguous": false,
+  "fee_basis": "TAKER coefficient on BOTH legs even though both are post-only -- strictly conservative",
+  "fee_safe_pair_cost": "0.9927",
+  "first_price": "0.60",
+  "locked_gross_per_contract": "0.0073",
+  "raw_pair_cost": "0.96",
+  "rebate_credited": "0",
+  "schedule_fingerprint": "ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bbeffd3ae61ca91629",
+  "taker_fee_complement": "0.0160",
+  "taker_fee_first": "0.0167"
+}
+S6P max complement price: {
+  "feasible": true,
+  "first_fill_vwap": "0.60",
+  "max_complement_price": "0.32",
+  "refusal": null,
+  "snapped": "DOWN_TO_TICK",
+  "tick": "0.01",
+  "why_searched_not_solved": "the fee is a rounded function of the complement price, so an algebraic inverse would be a second schedule"
+}
+S6P rebate estimate: {
+  "below_cent_floor": true,
+  "cent_floor_shares": "1.62",
+  "contracts": "1.00",
+  "counted_in_the_pair_cost_gate": false,
+  "label": "ESTIMATED from the published formula. NOT income. A rebate is income only once the venue credits it as a negative commissionNotionalCollected on our own execution.",
+  "schedule_fingerprint": "ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bbeffd3ae61ca91629",
+  "structurally_zero_at_this_size": true,
+  "usd": "0.00"
+}
+COMPONENTS SEPARATELY: {
+  "credited_liquidity_rewards_usd": "0.00 (PMUS program census returns zero for all our slugs; nothing credited)",
+  "fees_usd": "0.0000 across every audit (maker-only by owner rule); S6P's gate nonetheless CHARGES the taker coefficient on both legs as a bound",
+  "maker_rebates_usd_at_protocol_size": "0.00 (structurally zero: below cent floor)",
+  "matched_pair_economics_usd_per_contract": "0.07496",
+  "residual_pnl_usd_per_contract": "-0.27742",
+  "settlement": "A6 unresolved -> NOTHING here is realized"
+}
+WHAT CHANGES when the rebate is credited:
+  * THE PAIR GATE'S CONSERVATISM IS QUANTIFIED, AND IT IS LARGE. S6P prices BOTH post-only legs at the TAKER coefficient and counts the rebate as zero. At p1=0.60 with a complement of 0.36 the taker-on-both-legs charge is $0.0327 per contract, taking that pair to $0.9927 and FAILING the gate. The highest complement that clears is 0.32, so the $0.96 ceiling becomes a RAW-price ceiling of $0.92 -- four cents tighter. Priced as what the legs actually are -- two maker fills -- the same pair would instead RECEIVE a rebate. The swing between the two pricings is the schedule's full maker-to-taker spread.
+  * THE CONSERVATISM IS NOT WHAT KILLS IT. Removing the gate's taker pricing entirely and crediting the full both-legs-maker rebate at a size above the cent floor still leaves breakeven at ~77.2% against an observed 67.72%. So S6P's conservatism costs real headroom but is NOT the binding constraint -- the residual is.
+  * ONE TAKER LEG ENDS THE DISCUSSION. At p=0.50 a taker completion costs $0.02 per contract -- 200.0 bp of pair turnover -- against a both-legs-maker credit of 62.5 bp. A single taker leg is worth about 2.8x the entire maker rebate, with the opposite sign.
+WHAT DOES NOT CHANGE:
+  * THE VERDICT. Breakeven needs 78.73% matched; observed is 67.72% [65.62%, 69.81%]. Crediting the rebate where the formula and account history support it moves breakeven to ~77.2% AT SIZE and NOT AT ALL at the protocol's 1.00 share. UNECONOMIC either way.
+  * THE REBATE AT THE AUTHORIZED SIZE. $0.00, structurally, at every price. bounds.REBATE_CENT_FLOOR_SHARES = 1.62 and FIRST_LEG_QTY = 1.00, so the protocol sits BELOW its own documented cent floor. S6P's zero-rebate treatment is not merely conservative here -- it is EXACTLY RIGHT.
+  * THE RESIDUAL. Loss rate 1.000 over 7,148 provable residuals, mean -$0.27742 against a +$0.07496 matched lock -- 3.7x. No rebate at any size on the venue grid is of that order of magnitude.
+  * THE EVIDENCE BASE. 95.58% of first legs are UNKNOWABLE under the strict standard. Rebate arithmetic does not touch that.
+
+==============================================================================
+CLASSIFICATION
+==============================================================================
+
+[OBSERVED-POSITIVE]
+  boundary: EMPTY SET
+  why: we hold ONE credited PMUS fill (A6), at 0.01 shares, rebate structurally $0.00, settlement UNRESOLVED, NOT REALIZED. The $16.18 of credited PMUS compensation ($9.14 maker rebates + $7.04 liquidity rewards) is not attached to a matched-pair sequence we can replay, and the $0.51 / 97.59 bp credits are GEMINI, not PMUS. No price/size/completion region is evidenced positive.
+
+[PLAUSIBLE-BUT-UNPROVEN]
+  boundary: the surface m*(p, C, X) in the raw output. Positive requires m > m*, and m* >= ~0.772 everywhere the observed residual applies
+  why: mathematically real -- the rebate is uncapped, exact and formula-supported -- but every positive cell needs a completion or residual value we have NOT demonstrated, on top of a 95.58% UNKNOWABLE fill question.
+  - {"region": "both legs maker, size >= cent floor (1.61-4.45 shares by price), pair cost <= ~0.96, matched completion >= ~77.2%", "requires": "a matched completion rate at least 7.4 points above the observed 95% CI upper bound of 69.81%, demonstrated on all-maker fills"}
+  - {"region": "both legs maker at p ~ 0.50, pair cost ~ 1.00, rebate-financed with zero lock", "requires": "62.5 bp of pair turnover to exceed the residual drag, i.e. a residual loss rate far below the observed 1.000"}
+
+[UNECONOMIC]
+  boundary: everything the observed values reach. The positive region begins only ABOVE the observed completion CI and BELOW the observed residual loss rate.
+  why: the residual, not the rebate, sets the sign.
+  - {"region": "ANY state at Stage-6's authorized 1.00 share", "why": "below the cent floor at every price; rebate $0.00; breakeven stays 78.73% vs observed 67.72%"}
+  - {"region": "ANY state with ONE TAKER LEG", "why": "173.75 bp of pair turnover at p=0.50 against a 62.5 bp maker credit -- 2.8x, opposite sign"}
+  - {"region": "ANY state at the observed residual (-$0.27742/contract, loss rate 1.000) and the observed completion (67.72%, CI to 69.81%)", "why": "breakeven ~77.2% with the rebate credited at size; the CI excludes it by more than 7 points"}
+  - {"region": "p <= 0.20 or p >= 0.80 at small size", "why": "cent floor rises to 2.51-4.45 shares and the asymptotic rate collapses to 12.5 bp at p=0.90"}
+
+==============================================================================
+THE ANSWER
+==============================================================================
+{
+  "answer": "NO",
+  "one_line": "the maker rebate is real, uncapped and exactly computable, but it is worth at most ~62.5 bp of pair turnover and the binding constraint is a residual that loses 3.7x what a matched pair locks, at an observed loss rate of 1.000. The rebate closes about one eighth of the breakeven gap, and at the authorized 1.00 share it closes none of it.",
+  "question": "does PMUS's ACTUAL compensation create an executable positive-expectancy region for the L5-derived matched-pair engine?"
+}
+
+CREDITED PMUS COMPENSATION (cash, not formula): {
+  "a6_note": "A6 is our ONE credited PMUS fill. FILLED, settlement unresolved, NOT REALIZED. At 0.01 shares its rebate is structurally $0.00 at every price on the venue grid.",
+  "credited_pmus_fills_with_nonzero_rebate": "0",
+  "liquidity_rewards_usd": "7.04",
+  "maker_rebates_usd": "9.14",
+  "not_pmus": "the $0.51 / 97.59 bp maker-rebate credits are GEMINI, not PMUS, and are NOT attributed to PMUS anywhere here",
+  "our_credited_pmus_fills": "1",
+  "total_usd": "16.18"
+}
