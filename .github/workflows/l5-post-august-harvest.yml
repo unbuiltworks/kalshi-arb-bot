@@ -119,6 +119,21 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           bash .github/post_august_commit.sh "data(l5): post-August public activity harvest (Sep 11-21, Sep 26-present)"
 
+      # Normalize + report IN CI, so the deliverable does not depend on any
+      # agent session still being alive when a slow (rate-limited) fetch
+      # finally lands. Read-only, no network.
+      - name: Normalize, dedupe and write the post-August report
+        if: always()
+        run: python scripts/l5_post_august_report.py 2>&1 | tail -40
+
+      - name: Commit the report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/post_august_commit.sh "evidence(l5): post-August behavior/economics report, full coverage"
+
       # A fetch that succeeds and then fails to persist is worse than a fetch
       # that fails loudly: the job goes green while the evidence is discarded
       # with the runner. This step makes that impossible to miss.
