@@ -1,0 +1,5591 @@
+{
+ "generated_utc": "2026-10-07T00:30:58.151272+00:00",
+ "label": "HISTORICAL REPLAY SCORING \u2014 not shadow, not live, not submitted, not filled, not settled, not realized",
+ "source": "/home/user/kalshi-arb-bot/analysis/l5/l5_canonical_sequence.csv.gz",
+ "n_transitions": 69646,
+ "n_windows": 1936,
+ "span": [
+  "2026-03-27",
+  "2026-08-31"
+ ],
+ "corpus_coverage_caveat": "The canonical sequence holds 22 active days: 2026-03-19..04-21 and 2026-08-28..31. Regimes R2/R3 of canon_regimes.json and era E2_EARLY_REBATE have ZERO rows here \u2014 a gap in OUR collection, not in L5's activity. No regime is invented.",
+ "protocol": {
+  "split": "chronological by window start, no window overlap",
+  "train_fraction_target": 0.7,
+  "tuning": "none \u2014 every bucket, feature set and alpha is taken from the frozen production modules",
+  "discovery_cells": []
+ },
+ "unscorable_fields": {
+  "price_offset_ticks_vs_touch": "No contemporaneous order book exists for L5's windows, so the offset in ticks from the same-side best bid is not computable for any row (analysis/l5/L5_TOUCH_PROXIMITY.md \u00a70). The deployed model also emits no touch-relative price. MISSING ARTIFACT: a per-second L2 top-of-book time series covering L5's traded windows. The only book we hold is Zenodo 22084977 (2026-08-21..24 BTC15m, analysis/l5/historical_l2/), whose overlap with the canonical sequence is ZERO windows, and whose own measurement found 26.4% of L5 maker fills at or above the prevailing ask \u2014 i.e. not placeable as a touch offset at all.",
+  "withdraw": "No order-lifecycle data. The corpus is a FILL tape; resting, cancelled and repriced L5 orders are unobservable, so a WITHDRAW is indistinguishable from a WAIT. MISSING ARTIFACT: L5 order placement/cancel events, which the venue does not serve.",
+  "wait": "Not a row in the fill-transition space. Scored separately on an opportunity grid in analysis/l5/act_wait/ (Stage 1); cited, not re-scored, here."
+ },
+ "class_mix_all_rows": {
+  "exposure_action": {
+   "extend": 0.5066,
+   "complete": 0.4842,
+   "open": 0.0092
+  },
+  "switch": {
+   "stay": 0.6884,
+   "switch": 0.3116
+  },
+  "side": {
+   "Down": 0.5031,
+   "Up": 0.4969
+  },
+  "size_bucket": {
+   "q5-15": 0.3337,
+   "q>40": 0.2505,
+   "q15-40": 0.2155,
+   "q<5": 0.2003
+  },
+  "timing_bucket": {
+   "gap<2s": 0.4412,
+   "gap2-10": 0.3478,
+   "gap10-30": 0.1501,
+   "gap>30": 0.0609
+  }
+ },
+ "splits": {
+  "GLOBAL": {
+   "label": "GLOBAL",
+   "n_train_rows": 48940,
+   "n_test_rows": 20706,
+   "n_train_windows": 1381,
+   "n_test_windows": 555,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5089,
+      "complete": 0.4846,
+      "open": 0.0064
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5089,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6802
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4906,
+       "analytic_expected_accuracy": 0.49
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6802
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5363,
+       "lift_over_best_baseline": -0.1439,
+       "beats_best_baseline": false,
+       "confusion": {
+        "complete": {
+         "n": 10035,
+         "pred": {
+          "complete": 0.5951,
+          "extend": 0.4049
+         }
+        },
+        "extend": {
+         "n": 10538,
+         "pred": {
+          "complete": 0.5255,
+          "extend": 0.4745
+         }
+        },
+        "open": {
+         "n": 133,
+         "pred": {
+          "open": 1.0
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6845,
+       "lift_over_best_baseline": 0.0043,
+       "beats_best_baseline": true,
+       "confusion": {
+        "complete": {
+         "n": 10035,
+         "pred": {
+          "complete": 0.6476,
+          "extend": 0.3524
+         }
+        },
+        "extend": {
+         "n": 10538,
+         "pred": {
+          "extend": 0.7157,
+          "complete": 0.2843
+         }
+        },
+        "open": {
+         "n": 133,
+         "pred": {
+          "open": 1.0
+         }
+        }
+       }
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6962,
+      "switch": 0.3038
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6962,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.618
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5705,
+       "analytic_expected_accuracy": 0.5686
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6962
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6955,
+       "lift_over_best_baseline": -0.0007,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 14416,
+         "pred": {
+          "stay": 0.9963,
+          "switch": 0.0037
+         }
+        },
+        "switch": {
+         "n": 6290,
+         "pred": {
+          "stay": 0.9936,
+          "switch": 0.0064
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6923,
+       "lift_over_best_baseline": -0.0039,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 14416,
+         "pred": {
+          "stay": 0.9736,
+          "switch": 0.0264
+         }
+        },
+        "switch": {
+         "n": 6290,
+         "pred": {
+          "stay": 0.9523,
+          "switch": 0.0477
+         }
+        }
+       }
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5104,
+      "Down": 0.4896
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4896,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6908
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5022,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6908
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20573,
+       "n_silent": 133,
+       "accuracy": 0.5333,
+       "lift_over_best_baseline": -0.1575,
+       "beats_best_baseline": false,
+       "confusion": {
+        "Down": {
+         "n": 10138,
+         "pred": {
+          "Down": 0.5095,
+          "Up": 0.4837,
+          "(silent)": 0.0068
+         }
+        },
+        "Up": {
+         "n": 10568,
+         "pred": {
+          "Up": 0.5495,
+          "Down": 0.4445,
+          "(silent)": 0.0061
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20573,
+       "n_silent": 133,
+       "accuracy": 0.6825,
+       "lift_over_best_baseline": -0.0083,
+       "beats_best_baseline": false,
+       "confusion": {
+        "Down": {
+         "n": 10138,
+         "pred": {
+          "Down": 0.6708,
+          "Up": 0.3224,
+          "(silent)": 0.0068
+         }
+        },
+        "Up": {
+         "n": 10568,
+         "pred": {
+          "Up": 0.6851,
+          "Down": 0.3089,
+          "(silent)": 0.0061
+         }
+        }
+       }
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3283,
+      "q>40": 0.2673,
+      "q15-40": 0.2065,
+      "q<5": 0.1979
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3283,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3523
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.2651,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3523
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3394,
+       "lift_over_best_baseline": -0.0129,
+       "beats_best_baseline": false,
+       "confusion": {
+        "q15-40": {
+         "n": 4275,
+         "pred": {
+          "q5-15": 0.6973,
+          "q>40": 0.2,
+          "q<5": 0.0861,
+          "q15-40": 0.0166
+         }
+        },
+        "q5-15": {
+         "n": 6798,
+         "pred": {
+          "q5-15": 0.7052,
+          "q>40": 0.1692,
+          "q<5": 0.1139,
+          "q15-40": 0.0118
+         }
+        },
+        "q<5": {
+         "n": 4098,
+         "pred": {
+          "q5-15": 0.7155,
+          "q<5": 0.1545,
+          "q>40": 0.1201,
+          "q15-40": 0.01
+         }
+        },
+        "q>40": {
+         "n": 5535,
+         "pred": {
+          "q5-15": 0.6453,
+          "q>40": 0.2762,
+          "q<5": 0.0593,
+          "q15-40": 0.0192
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3686,
+       "lift_over_best_baseline": 0.0163,
+       "beats_best_baseline": true,
+       "confusion": {
+        "q15-40": {
+         "n": 4275,
+         "pred": {
+          "q5-15": 0.5097,
+          "q>40": 0.2889,
+          "q15-40": 0.1287,
+          "q<5": 0.0727
+         }
+        },
+        "q5-15": {
+         "n": 6798,
+         "pred": {
+          "q5-15": 0.5687,
+          "q>40": 0.2252,
+          "q15-40": 0.1103,
+          "q<5": 0.0958
+         }
+        },
+        "q<5": {
+         "n": 4098,
+         "pred": {
+          "q5-15": 0.561,
+          "q>40": 0.1994,
+          "q<5": 0.134,
+          "q15-40": 0.1057
+         }
+        },
+        "q>40": {
+         "n": 5535,
+         "pred": {
+          "q>40": 0.482,
+          "q5-15": 0.3695,
+          "q15-40": 0.1017,
+          "q<5": 0.0468
+         }
+        }
+       }
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.4793,
+      "gap2-10": 0.3568,
+      "gap10-30": 0.1139,
+      "gap>30": 0.05
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4793,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4183
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3527,
+       "analytic_expected_accuracy": 0.3306
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.4793
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4816,
+       "lift_over_best_baseline": 0.0023,
+       "beats_best_baseline": true,
+       "confusion": {
+        "gap10-30": {
+         "n": 2359,
+         "pred": {
+          "gap<2s": 0.6651,
+          "gap2-10": 0.1903,
+          "gap10-30": 0.0899,
+          "gap>30": 0.0547
+         }
+        },
+        "gap2-10": {
+         "n": 7388,
+         "pred": {
+          "gap<2s": 0.7857,
+          "gap2-10": 0.153,
+          "gap10-30": 0.0471,
+          "gap>30": 0.0142
+         }
+        },
+        "gap<2s": {
+         "n": 9924,
+         "pred": {
+          "gap<2s": 0.8414,
+          "gap2-10": 0.1159,
+          "gap10-30": 0.0306,
+          "gap>30": 0.0121
+         }
+        },
+        "gap>30": {
+         "n": 1035,
+         "pred": {
+          "gap<2s": 0.4551,
+          "gap>30": 0.2705,
+          "gap2-10": 0.142,
+          "gap10-30": 0.1324
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "GLOBALMODEL::duration=15m": {
+   "label": "global model, test rows duration=15m",
+   "n_train_rows": 48940,
+   "n_test_rows": 18637,
+   "n_train_windows": 1381,
+   "n_test_windows": 115,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.506,
+      "complete": 0.4903,
+      "open": 0.0038
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.506,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.6964
+      },
+      "marginal_random": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.4989,
+       "analytic_expected_accuracy": 0.49
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6964
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.538,
+       "lift_over_best_baseline": -0.1584,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.6987,
+       "lift_over_best_baseline": 0.0023,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.7099,
+      "switch": 0.2901
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.7099,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.6279
+      },
+      "marginal_random": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.572,
+       "analytic_expected_accuracy": 0.5686
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.7099
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.709,
+       "lift_over_best_baseline": -0.0009,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.7068,
+       "lift_over_best_baseline": -0.0031,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5117,
+      "Down": 0.4883
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.4883,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.7083
+      },
+      "marginal_random": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.5041,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.7083
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18637,
+       "n_scored": 18567,
+       "n_silent": 70,
+       "accuracy": 0.5363,
+       "lift_over_best_baseline": -0.172,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 18637,
+       "n_scored": 18567,
+       "n_silent": 70,
+       "accuracy": 0.6975,
+       "lift_over_best_baseline": -0.0108,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3436,
+      "q>40": 0.2398,
+      "q<5": 0.2152,
+      "q15-40": 0.2013
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.3436,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.3465
+      },
+      "marginal_random": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.2624,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3465
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.3312,
+       "lift_over_best_baseline": -0.0153,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.3563,
+       "lift_over_best_baseline": 0.0098,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.5161,
+      "gap2-10": 0.3703,
+      "gap10-30": 0.0938,
+      "gap>30": 0.0197
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.5161,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.4389
+      },
+      "marginal_random": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.3656,
+       "analytic_expected_accuracy": 0.3306
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5161
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 18637,
+       "n_scored": 18637,
+       "n_silent": 0,
+       "accuracy": 0.504,
+       "lift_over_best_baseline": -0.0121,
+       "beats_best_baseline": false
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::duration=15m": {
+   "label": "within-stratum split, duration=15m",
+   "n_train_rows": 44155,
+   "n_test_rows": 18855,
+   "n_train_windows": 415,
+   "n_test_windows": 116,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5066,
+      "complete": 0.4896,
+      "open": 0.0038
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.5066,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.6973
+      },
+      "marginal_random": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.4947,
+       "analytic_expected_accuracy": 0.4914
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6973
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.5417,
+       "lift_over_best_baseline": -0.1556,
+       "beats_best_baseline": false,
+       "confusion": {
+        "complete": {
+         "n": 9232,
+         "pred": {
+          "complete": 0.6447,
+          "extend": 0.3553
+         }
+        },
+        "extend": {
+         "n": 9552,
+         "pred": {
+          "complete": 0.5612,
+          "extend": 0.4388
+         }
+        },
+        "open": {
+         "n": 71,
+         "pred": {
+          "open": 1.0
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.6994,
+       "lift_over_best_baseline": 0.0021,
+       "beats_best_baseline": true,
+       "confusion": {
+        "complete": {
+         "n": 9232,
+         "pred": {
+          "complete": 0.678,
+          "extend": 0.322
+         }
+        },
+        "extend": {
+         "n": 9552,
+         "pred": {
+          "extend": 0.7179,
+          "complete": 0.2821
+         }
+        },
+        "open": {
+         "n": 71,
+         "pred": {
+          "open": 1.0
+         }
+        }
+       }
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.7107,
+      "switch": 0.2893
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.7107,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.6281
+      },
+      "marginal_random": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.5779,
+       "analytic_expected_accuracy": 0.576
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.7107
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.7103,
+       "lift_over_best_baseline": -0.0004,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 13400,
+         "pred": {
+          "stay": 0.9984,
+          "switch": 0.0016
+         }
+        },
+        "switch": {
+         "n": 5455,
+         "pred": {
+          "stay": 0.9974,
+          "switch": 0.0026
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.7078,
+       "lift_over_best_baseline": -0.0029,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 13400,
+         "pred": {
+          "stay": 0.9767,
+          "switch": 0.0233
+         }
+        },
+        "switch": {
+         "n": 5455,
+         "pred": {
+          "stay": 0.9527,
+          "switch": 0.0473
+         }
+        }
+       }
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5105,
+      "Down": 0.4895
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.4895,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.7091
+      },
+      "marginal_random": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.5037,
+       "analytic_expected_accuracy": 0.5001
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.7091
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18855,
+       "n_scored": 18784,
+       "n_silent": 71,
+       "accuracy": 0.54,
+       "lift_over_best_baseline": -0.1691,
+       "beats_best_baseline": false,
+       "confusion": {
+        "Down": {
+         "n": 9230,
+         "pred": {
+          "Down": 0.5095,
+          "Up": 0.4866,
+          "(silent)": 0.0039
+         }
+        },
+        "Up": {
+         "n": 9625,
+         "pred": {
+          "Up": 0.5652,
+          "Down": 0.4312,
+          "(silent)": 0.0036
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 18855,
+       "n_scored": 18784,
+       "n_silent": 71,
+       "accuracy": 0.6983,
+       "lift_over_best_baseline": -0.0108,
+       "beats_best_baseline": false,
+       "confusion": {
+        "Down": {
+         "n": 9230,
+         "pred": {
+          "Down": 0.6854,
+          "Up": 0.3107,
+          "(silent)": 0.0039
+         }
+        },
+        "Up": {
+         "n": 9625,
+         "pred": {
+          "Up": 0.7055,
+          "Down": 0.2909,
+          "(silent)": 0.0036
+         }
+        }
+       }
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3437,
+      "q>40": 0.2398,
+      "q<5": 0.2154,
+      "q15-40": 0.2011
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.3437,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.3464
+      },
+      "marginal_random": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.2604,
+       "analytic_expected_accuracy": 0.2642
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3464
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.3411,
+       "lift_over_best_baseline": -0.0053,
+       "beats_best_baseline": false,
+       "confusion": {
+        "q15-40": {
+         "n": 3791,
+         "pred": {
+          "q5-15": 0.8552,
+          "q<5": 0.0992,
+          "q>40": 0.0303,
+          "q15-40": 0.0153
+         }
+        },
+        "q5-15": {
+         "n": 6481,
+         "pred": {
+          "q5-15": 0.844,
+          "q<5": 0.123,
+          "q>40": 0.0236,
+          "q15-40": 0.0094
+         }
+        },
+        "q<5": {
+         "n": 4062,
+         "pred": {
+          "q5-15": 0.8154,
+          "q<5": 0.1605,
+          "q>40": 0.0165,
+          "q15-40": 0.0076
+         }
+        },
+        "q>40": {
+         "n": 4521,
+         "pred": {
+          "q5-15": 0.8525,
+          "q<5": 0.0737,
+          "q>40": 0.0555,
+          "q15-40": 0.0184
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.356,
+       "lift_over_best_baseline": 0.0096,
+       "beats_best_baseline": true,
+       "confusion": {
+        "q15-40": {
+         "n": 3791,
+         "pred": {
+          "q5-15": 0.5648,
+          "q>40": 0.2065,
+          "q15-40": 0.1356,
+          "q<5": 0.0931
+         }
+        },
+        "q5-15": {
+         "n": 6481,
+         "pred": {
+          "q5-15": 0.5987,
+          "q>40": 0.1774,
+          "q15-40": 0.115,
+          "q<5": 0.1089
+         }
+        },
+        "q<5": {
+         "n": 4062,
+         "pred": {
+          "q5-15": 0.5716,
+          "q>40": 0.1664,
+          "q<5": 0.1509,
+          "q15-40": 0.111
+         }
+        },
+        "q>40": {
+         "n": 4521,
+         "pred": {
+          "q5-15": 0.4395,
+          "q>40": 0.3771,
+          "q15-40": 0.1175,
+          "q<5": 0.0659
+         }
+        }
+       }
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.516,
+      "gap2-10": 0.3706,
+      "gap10-30": 0.0938,
+      "gap>30": 0.0196
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.516,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.4382
+      },
+      "marginal_random": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.3833,
+       "analytic_expected_accuracy": 0.3545
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.516
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 18855,
+       "n_scored": 18855,
+       "n_silent": 0,
+       "accuracy": 0.5043,
+       "lift_over_best_baseline": -0.0117,
+       "beats_best_baseline": false,
+       "confusion": {
+        "gap10-30": {
+         "n": 1769,
+         "pred": {
+          "gap<2s": 0.74,
+          "gap2-10": 0.1973,
+          "gap10-30": 0.0627
+         }
+        },
+        "gap2-10": {
+         "n": 6988,
+         "pred": {
+          "gap<2s": 0.8243,
+          "gap2-10": 0.1424,
+          "gap10-30": 0.0322,
+          "gap>30": 0.0011
+         }
+        },
+        "gap<2s": {
+         "n": 9729,
+         "pred": {
+          "gap<2s": 0.8635,
+          "gap2-10": 0.1131,
+          "gap10-30": 0.0226,
+          "gap>30": 0.0008
+         }
+        },
+        "gap>30": {
+         "n": 369,
+         "pred": {
+          "gap<2s": 0.626,
+          "gap2-10": 0.206,
+          "gap10-30": 0.1653,
+          "gap>30": 0.0027
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "GLOBALMODEL::duration=5m": {
+   "label": "global model, test rows duration=5m",
+   "n_train_rows": 48940,
+   "n_test_rows": 2069,
+   "n_train_windows": 1381,
+   "n_test_windows": 440,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5355,
+      "complete": 0.434,
+      "open": 0.0304
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5355,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5346
+      },
+      "marginal_random": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.4727,
+       "analytic_expected_accuracy": 0.49
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5355
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.521,
+       "lift_over_best_baseline": -0.0145,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5573,
+       "lift_over_best_baseline": 0.0218,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.5732,
+      "switch": 0.4268
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5732,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5292
+      },
+      "marginal_random": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5114,
+       "analytic_expected_accuracy": 0.5686
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5732
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5742,
+       "lift_over_best_baseline": 0.001,
+       "beats_best_baseline": true
+      },
+      "M_V1_1": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5616,
+       "lift_over_best_baseline": -0.0116,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Down": 0.5017,
+      "Up": 0.4983
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5017,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.5331
+      },
+      "marginal_random": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.4973,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.5331
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 2069,
+       "n_scored": 2006,
+       "n_silent": 63,
+       "accuracy": 0.506,
+       "lift_over_best_baseline": -0.0271,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 2069,
+       "n_scored": 2006,
+       "n_silent": 63,
+       "accuracy": 0.5434,
+       "lift_over_best_baseline": 0.0103,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q>40": 0.5147,
+      "q15-40": 0.2528,
+      "q5-15": 0.1904,
+      "q<5": 0.042
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.1904,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.4045
+      },
+      "marginal_random": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.2475,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.4045
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.4128,
+       "lift_over_best_baseline": 0.0083,
+       "beats_best_baseline": true
+      },
+      "M_V1_1": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.4799,
+       "lift_over_best_baseline": 0.0754,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap>30": 0.3224,
+      "gap10-30": 0.2948,
+      "gap2-10": 0.2354,
+      "gap<2s": 0.1474
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.1474,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.2325
+      },
+      "marginal_random": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.2054,
+       "analytic_expected_accuracy": 0.3306
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.2325
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 2069,
+       "n_scored": 2069,
+       "n_silent": 0,
+       "accuracy": 0.2798,
+       "lift_over_best_baseline": 0.0473,
+       "beats_best_baseline": true
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::duration=5m": {
+   "label": "within-stratum split, duration=5m",
+   "n_train_rows": 4647,
+   "n_test_rows": 1989,
+   "n_train_windows": 983,
+   "n_test_windows": 422,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-08-28",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5365,
+      "complete": 0.4334,
+      "open": 0.0302
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5365,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5354
+      },
+      "marginal_random": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.4746,
+       "analytic_expected_accuracy": 0.4795
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5365
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.548,
+       "lift_over_best_baseline": 0.0115,
+       "beats_best_baseline": true,
+       "confusion": {
+        "complete": {
+         "n": 862,
+         "pred": {
+          "extend": 0.7761,
+          "complete": 0.2239
+         }
+        },
+        "extend": {
+         "n": 1067,
+         "pred": {
+          "extend": 0.7854,
+          "complete": 0.2146
+         }
+        },
+        "open": {
+         "n": 60,
+         "pred": {
+          "open": 0.9833,
+          "extend": 0.0167
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5737,
+       "lift_over_best_baseline": 0.0372,
+       "beats_best_baseline": true,
+       "confusion": {
+        "complete": {
+         "n": 862,
+         "pred": {
+          "extend": 0.6752,
+          "complete": 0.3248
+         }
+        },
+        "extend": {
+         "n": 1067,
+         "pred": {
+          "extend": 0.7516,
+          "complete": 0.2484
+         }
+        },
+        "open": {
+         "n": 60,
+         "pred": {
+          "open": 0.9833,
+          "extend": 0.0167
+         }
+        }
+       }
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.5747,
+      "switch": 0.4253
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5747,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5299
+      },
+      "marginal_random": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5138,
+       "analytic_expected_accuracy": 0.5143
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5747
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5732,
+       "lift_over_best_baseline": -0.0015,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 1143,
+         "pred": {
+          "stay": 0.9545,
+          "switch": 0.0455
+         }
+        },
+        "switch": {
+         "n": 846,
+         "pred": {
+          "stay": 0.9421,
+          "switch": 0.0579
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5782,
+       "lift_over_best_baseline": 0.0035,
+       "beats_best_baseline": true,
+       "confusion": {
+        "stay": {
+         "n": 1143,
+         "pred": {
+          "stay": 0.8373,
+          "switch": 0.1627
+         }
+        },
+        "switch": {
+         "n": 846,
+         "pred": {
+          "stay": 0.7719,
+          "switch": 0.2281
+         }
+        }
+       }
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Down": 0.5023,
+      "Up": 0.4977
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5023,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5354
+      },
+      "marginal_random": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.4902,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.5354
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1989,
+       "n_scored": 1929,
+       "n_silent": 60,
+       "accuracy": 0.5345,
+       "lift_over_best_baseline": -0.0009,
+       "beats_best_baseline": false,
+       "confusion": {
+        "Down": {
+         "n": 999,
+         "pred": {
+          "Down": 0.5135,
+          "Up": 0.4545,
+          "(silent)": 0.032
+         }
+        },
+        "Up": {
+         "n": 990,
+         "pred": {
+          "Up": 0.5232,
+          "Down": 0.4485,
+          "(silent)": 0.0283
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1989,
+       "n_scored": 1929,
+       "n_silent": 60,
+       "accuracy": 0.5609,
+       "lift_over_best_baseline": 0.0255,
+       "beats_best_baseline": true,
+       "confusion": {
+        "Down": {
+         "n": 999,
+         "pred": {
+          "Down": 0.5536,
+          "Up": 0.4144,
+          "(silent)": 0.032
+         }
+        },
+        "Up": {
+         "n": 990,
+         "pred": {
+          "Up": 0.5343,
+          "Down": 0.4374,
+          "(silent)": 0.0283
+         }
+        }
+       }
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q>40": 0.5133,
+      "q15-40": 0.2514,
+      "q5-15": 0.1931,
+      "q<5": 0.0422
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5133,
+       "predicts": "q>40"
+      },
+      "persistence": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.451
+      },
+      "marginal_random": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.3891,
+       "analytic_expected_accuracy": 0.422
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5133
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5204,
+       "lift_over_best_baseline": 0.0071,
+       "beats_best_baseline": true,
+       "confusion": {
+        "q15-40": {
+         "n": 500,
+         "pred": {
+          "q>40": 0.932,
+          "q5-15": 0.066,
+          "q15-40": 0.002
+         }
+        },
+        "q5-15": {
+         "n": 384,
+         "pred": {
+          "q>40": 0.8802,
+          "q5-15": 0.1198
+         }
+        },
+        "q<5": {
+         "n": 84,
+         "pred": {
+          "q>40": 0.8333,
+          "q5-15": 0.1667
+         }
+        },
+        "q>40": {
+         "n": 1021,
+         "pred": {
+          "q>40": 0.9677,
+          "q5-15": 0.0304,
+          "q15-40": 0.002
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.5259,
+       "lift_over_best_baseline": 0.0126,
+       "beats_best_baseline": true,
+       "confusion": {
+        "q15-40": {
+         "n": 500,
+         "pred": {
+          "q>40": 0.906,
+          "q5-15": 0.086,
+          "q15-40": 0.008
+         }
+        },
+        "q5-15": {
+         "n": 384,
+         "pred": {
+          "q>40": 0.8359,
+          "q5-15": 0.1562,
+          "q15-40": 0.0078
+         }
+        },
+        "q<5": {
+         "n": 84,
+         "pred": {
+          "q>40": 0.8214,
+          "q5-15": 0.1786
+         }
+        },
+        "q>40": {
+         "n": 1021,
+         "pred": {
+          "q>40": 0.9618,
+          "q5-15": 0.0304,
+          "q15-40": 0.0078
+         }
+        }
+       }
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap>30": 0.3243,
+      "gap10-30": 0.2951,
+      "gap2-10": 0.2348,
+      "gap<2s": 0.1458
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.3243,
+       "predicts": "gap>30"
+      },
+      "persistence": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.3007
+      },
+      "marginal_random": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.266,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.3243
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 1989,
+       "n_scored": 1989,
+       "n_silent": 0,
+       "accuracy": 0.3901,
+       "lift_over_best_baseline": 0.0658,
+       "beats_best_baseline": true,
+       "confusion": {
+        "gap10-30": {
+         "n": 587,
+         "pred": {
+          "gap10-30": 0.3867,
+          "gap>30": 0.3322,
+          "gap2-10": 0.2095,
+          "gap<2s": 0.0716
+         }
+        },
+        "gap2-10": {
+         "n": 467,
+         "pred": {
+          "gap10-30": 0.334,
+          "gap2-10": 0.2891,
+          "gap>30": 0.2634,
+          "gap<2s": 0.1135
+         }
+        },
+        "gap<2s": {
+         "n": 290,
+         "pred": {
+          "gap>30": 0.4172,
+          "gap<2s": 0.2517,
+          "gap2-10": 0.1897,
+          "gap10-30": 0.1414
+         }
+        },
+        "gap>30": {
+         "n": 645,
+         "pred": {
+          "gap>30": 0.5287,
+          "gap10-30": 0.2388,
+          "gap2-10": 0.1271,
+          "gap<2s": 0.1054
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::era=E1_PRE_REBATE": {
+   "label": "within-stratum split, era=E1_PRE_REBATE",
+   "n_train_rows": 3287,
+   "n_test_rows": 1408,
+   "n_train_windows": 163,
+   "n_test_windows": 26,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-04-17"
+   ],
+   "test_span": [
+    "2026-04-17",
+    "2026-04-20"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "complete": 0.5526,
+      "extend": 0.429,
+      "open": 0.0185
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5526,
+       "predicts": "complete"
+      },
+      "persistence": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5348
+      },
+      "marginal_random": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.4801,
+       "analytic_expected_accuracy": 0.4494
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5526
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5682,
+       "lift_over_best_baseline": 0.0156,
+       "beats_best_baseline": true,
+       "confusion": {
+        "complete": {
+         "n": 778,
+         "pred": {
+          "complete": 0.7326,
+          "extend": 0.2674
+         }
+        },
+        "extend": {
+         "n": 604,
+         "pred": {
+          "complete": 0.6589,
+          "extend": 0.3411
+         }
+        },
+        "open": {
+         "n": 26,
+         "pred": {
+          "open": 0.9231,
+          "complete": 0.0769
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5874,
+       "lift_over_best_baseline": 0.0348,
+       "beats_best_baseline": true,
+       "confusion": {
+        "complete": {
+         "n": 778,
+         "pred": {
+          "complete": 0.7275,
+          "extend": 0.2725
+         }
+        },
+        "extend": {
+         "n": 604,
+         "pred": {
+          "complete": 0.6076,
+          "extend": 0.3924
+         }
+        },
+        "open": {
+         "n": 26,
+         "pred": {
+          "open": 0.9231,
+          "complete": 0.0769
+         }
+        }
+       }
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.5533,
+      "switch": 0.4467
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5533,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5156
+      },
+      "marginal_random": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5156,
+       "analytic_expected_accuracy": 0.5049
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.5533
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5511,
+       "lift_over_best_baseline": -0.0022,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 779,
+         "pred": {
+          "stay": 0.6765,
+          "switch": 0.3235
+         }
+        },
+        "switch": {
+         "n": 629,
+         "pred": {
+          "stay": 0.6041,
+          "switch": 0.3959
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5611,
+       "lift_over_best_baseline": 0.0078,
+       "beats_best_baseline": true,
+       "confusion": {
+        "stay": {
+         "n": 779,
+         "pred": {
+          "stay": 0.6521,
+          "switch": 0.3479
+         }
+        },
+        "switch": {
+         "n": 629,
+         "pred": {
+          "stay": 0.5517,
+          "switch": 0.4483
+         }
+        }
+       }
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5057,
+      "Down": 0.4943
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.4943,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.544
+      },
+      "marginal_random": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5036,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.544
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1408,
+       "n_scored": 1382,
+       "n_silent": 26,
+       "accuracy": 0.5615,
+       "lift_over_best_baseline": 0.0175,
+       "beats_best_baseline": true,
+       "confusion": {
+        "Down": {
+         "n": 696,
+         "pred": {
+          "Down": 0.5761,
+          "Up": 0.4095,
+          "(silent)": 0.0144
+         }
+        },
+        "Up": {
+         "n": 712,
+         "pred": {
+          "Up": 0.5267,
+          "Down": 0.4508,
+          "(silent)": 0.0225
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1408,
+       "n_scored": 1382,
+       "n_silent": 26,
+       "accuracy": 0.581,
+       "lift_over_best_baseline": 0.037,
+       "beats_best_baseline": true,
+       "confusion": {
+        "Down": {
+         "n": 696,
+         "pred": {
+          "Down": 0.579,
+          "Up": 0.4066,
+          "(silent)": 0.0144
+         }
+        },
+        "Up": {
+         "n": 712,
+         "pred": {
+          "Up": 0.5618,
+          "Down": 0.4157,
+          "(silent)": 0.0225
+         }
+        }
+       }
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q15-40": 0.6037,
+      "q5-15": 0.2457,
+      "q<5": 0.1491,
+      "q>40": 0.0014
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.2457,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.5241
+      },
+      "marginal_random": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.3047,
+       "analytic_expected_accuracy": 0.6278
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.5241
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.3047,
+       "lift_over_best_baseline": -0.2194,
+       "beats_best_baseline": false,
+       "confusion": {
+        "q15-40": {
+         "n": 850,
+         "pred": {
+          "q5-15": 0.8282,
+          "q15-40": 0.1647,
+          "q<5": 0.0071
+         }
+        },
+        "q5-15": {
+         "n": 346,
+         "pred": {
+          "q5-15": 0.8353,
+          "q15-40": 0.159,
+          "q<5": 0.0058
+         }
+        },
+        "q<5": {
+         "n": 210,
+         "pred": {
+          "q5-15": 0.8714,
+          "q15-40": 0.1286
+         }
+        },
+        "q>40": {
+         "n": 2,
+         "pred": {
+          "q15-40": 0.5,
+          "q5-15": 0.5
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.3892,
+       "lift_over_best_baseline": -0.1349,
+       "beats_best_baseline": false,
+       "confusion": {
+        "q15-40": {
+         "n": 850,
+         "pred": {
+          "q5-15": 0.6376,
+          "q15-40": 0.3553,
+          "q<5": 0.0071
+         }
+        },
+        "q5-15": {
+         "n": 346,
+         "pred": {
+          "q5-15": 0.711,
+          "q15-40": 0.2832,
+          "q<5": 0.0058
+         }
+        },
+        "q<5": {
+         "n": 210,
+         "pred": {
+          "q5-15": 0.7143,
+          "q15-40": 0.2857
+         }
+        },
+        "q>40": {
+         "n": 2,
+         "pred": {
+          "q15-40": 0.5,
+          "q5-15": 0.5
+         }
+        }
+       }
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap2-10": 0.3835,
+      "gap10-30": 0.2969,
+      "gap<2s": 0.2081,
+      "gap>30": 0.1115
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.2969,
+       "predicts": "gap10-30"
+      },
+      "persistence": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.3942
+      },
+      "marginal_random": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.2649,
+       "analytic_expected_accuracy": 0.5961
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3942
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 1408,
+       "n_scored": 1408,
+       "n_silent": 0,
+       "accuracy": 0.3516,
+       "lift_over_best_baseline": -0.0426,
+       "beats_best_baseline": false,
+       "confusion": {
+        "gap10-30": {
+         "n": 418,
+         "pred": {
+          "gap10-30": 0.8732,
+          "gap2-10": 0.122,
+          "gap>30": 0.0048
+         }
+        },
+        "gap2-10": {
+         "n": 540,
+         "pred": {
+          "gap10-30": 0.7593,
+          "gap2-10": 0.2352,
+          "gap>30": 0.0056
+         }
+        },
+        "gap<2s": {
+         "n": 293,
+         "pred": {
+          "gap10-30": 0.6758,
+          "gap2-10": 0.3242
+         }
+        },
+        "gap>30": {
+         "n": 157,
+         "pred": {
+          "gap10-30": 0.8981,
+          "gap2-10": 0.0828,
+          "gap>30": 0.0191
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "GLOBALMODEL::era=E3_INCENTIVE_ERA": {
+   "label": "global model, test rows era=E3_INCENTIVE_ERA",
+   "n_train_rows": 48940,
+   "n_test_rows": 20706,
+   "n_train_windows": 1381,
+   "n_test_windows": 555,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5089,
+      "complete": 0.4846,
+      "open": 0.0064
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5089,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6802
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4906,
+       "analytic_expected_accuracy": 0.49
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6802
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5363,
+       "lift_over_best_baseline": -0.1439,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6845,
+       "lift_over_best_baseline": 0.0043,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6962,
+      "switch": 0.3038
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6962,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.618
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5705,
+       "analytic_expected_accuracy": 0.5686
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6962
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6955,
+       "lift_over_best_baseline": -0.0007,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6923,
+       "lift_over_best_baseline": -0.0039,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5104,
+      "Down": 0.4896
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4896,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6908
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5022,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6908
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20573,
+       "n_silent": 133,
+       "accuracy": 0.5333,
+       "lift_over_best_baseline": -0.1575,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20573,
+       "n_silent": 133,
+       "accuracy": 0.6825,
+       "lift_over_best_baseline": -0.0083,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3283,
+      "q>40": 0.2673,
+      "q15-40": 0.2065,
+      "q<5": 0.1979
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3283,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3523
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.2651,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3523
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3394,
+       "lift_over_best_baseline": -0.0129,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3686,
+       "lift_over_best_baseline": 0.0163,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.4793,
+      "gap2-10": 0.3568,
+      "gap10-30": 0.1139,
+      "gap>30": 0.05
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4793,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4183
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3527,
+       "analytic_expected_accuracy": 0.3306
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.4793
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4816,
+       "lift_over_best_baseline": 0.0023,
+       "beats_best_baseline": true
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::era=E3_INCENTIVE_ERA": {
+   "label": "within-stratum split, era=E3_INCENTIVE_ERA",
+   "n_train_rows": 45470,
+   "n_test_rows": 19481,
+   "n_train_windows": 1229,
+   "n_test_windows": 518,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-04-21",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5082,
+      "complete": 0.4852,
+      "open": 0.0066
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.5082,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.6805
+      },
+      "marginal_random": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.4955,
+       "analytic_expected_accuracy": 0.4938
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6805
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.54,
+       "lift_over_best_baseline": -0.1405,
+       "beats_best_baseline": false,
+       "confusion": {
+        "complete": {
+         "n": 9452,
+         "pred": {
+          "complete": 0.6005,
+          "extend": 0.3995
+         }
+        },
+        "extend": {
+         "n": 9901,
+         "pred": {
+          "complete": 0.5236,
+          "extend": 0.4764
+         }
+        },
+        "open": {
+         "n": 128,
+         "pred": {
+          "open": 0.9922,
+          "extend": 0.0078
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.6853,
+       "lift_over_best_baseline": 0.0048,
+       "beats_best_baseline": true,
+       "confusion": {
+        "complete": {
+         "n": 9452,
+         "pred": {
+          "complete": 0.649,
+          "extend": 0.351
+         }
+        },
+        "extend": {
+         "n": 9901,
+         "pred": {
+          "extend": 0.7161,
+          "complete": 0.2839
+         }
+        },
+        "open": {
+         "n": 128,
+         "pred": {
+          "open": 0.9922,
+          "extend": 0.0078
+         }
+        }
+       }
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.697,
+      "switch": 0.303
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.697,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.6197
+      },
+      "marginal_random": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.5746,
+       "analytic_expected_accuracy": 0.5792
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.697
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.6963,
+       "lift_over_best_baseline": -0.0007,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 13579,
+         "pred": {
+          "stay": 0.9976,
+          "switch": 0.0024
+         }
+        },
+        "switch": {
+         "n": 5902,
+         "pred": {
+          "stay": 0.997,
+          "switch": 0.003
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.6943,
+       "lift_over_best_baseline": -0.0027,
+       "beats_best_baseline": false,
+       "confusion": {
+        "stay": {
+         "n": 13579,
+         "pred": {
+          "stay": 0.9793,
+          "switch": 0.0207
+         }
+        },
+        "switch": {
+         "n": 5902,
+         "pred": {
+          "stay": 0.9615,
+          "switch": 0.0385
+         }
+        }
+       }
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5093,
+      "Down": 0.4907
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.4907,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.6918
+      },
+      "marginal_random": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.5013,
+       "analytic_expected_accuracy": 0.5001
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6918
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19481,
+       "n_scored": 19353,
+       "n_silent": 128,
+       "accuracy": 0.537,
+       "lift_over_best_baseline": -0.1548,
+       "beats_best_baseline": false,
+       "confusion": {
+        "Down": {
+         "n": 9560,
+         "pred": {
+          "Down": 0.5141,
+          "Up": 0.479,
+          "(silent)": 0.0069
+         }
+        },
+        "Up": {
+         "n": 9921,
+         "pred": {
+          "Up": 0.5522,
+          "Down": 0.4416,
+          "(silent)": 0.0062
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 19481,
+       "n_scored": 19353,
+       "n_silent": 128,
+       "accuracy": 0.6833,
+       "lift_over_best_baseline": -0.0085,
+       "beats_best_baseline": false,
+       "confusion": {
+        "Down": {
+         "n": 9560,
+         "pred": {
+          "Down": 0.6684,
+          "Up": 0.3247,
+          "(silent)": 0.0069
+         }
+        },
+        "Up": {
+         "n": 9921,
+         "pred": {
+          "Up": 0.6888,
+          "Down": 0.3049,
+          "(silent)": 0.0062
+         }
+        }
+       }
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3288,
+      "q>40": 0.2661,
+      "q15-40": 0.207,
+      "q<5": 0.1981
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.3288,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.3541
+      },
+      "marginal_random": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.2546,
+       "analytic_expected_accuracy": 0.2567
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3541
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.3348,
+       "lift_over_best_baseline": -0.0193,
+       "beats_best_baseline": false,
+       "confusion": {
+        "q15-40": {
+         "n": 4032,
+         "pred": {
+          "q5-15": 0.5861,
+          "q>40": 0.3093,
+          "q<5": 0.095,
+          "q15-40": 0.0097
+         }
+        },
+        "q5-15": {
+         "n": 6405,
+         "pred": {
+          "q5-15": 0.5906,
+          "q>40": 0.2718,
+          "q<5": 0.1279,
+          "q15-40": 0.0097
+         }
+        },
+        "q<5": {
+         "n": 3860,
+         "pred": {
+          "q5-15": 0.6228,
+          "q>40": 0.1995,
+          "q<5": 0.1728,
+          "q15-40": 0.0049
+         }
+        },
+        "q>40": {
+         "n": 5184,
+         "pred": {
+          "q5-15": 0.5237,
+          "q>40": 0.3922,
+          "q<5": 0.0706,
+          "q15-40": 0.0135
+         }
+        }
+       }
+      },
+      "M_V1_1": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.3686,
+       "lift_over_best_baseline": 0.0145,
+       "beats_best_baseline": true,
+       "confusion": {
+        "q15-40": {
+         "n": 4032,
+         "pred": {
+          "q5-15": 0.5064,
+          "q>40": 0.3388,
+          "q<5": 0.1012,
+          "q15-40": 0.0536
+         }
+        },
+        "q5-15": {
+         "n": 6405,
+         "pred": {
+          "q5-15": 0.5578,
+          "q>40": 0.2609,
+          "q<5": 0.1296,
+          "q15-40": 0.0517
+         }
+        },
+        "q<5": {
+         "n": 3860,
+         "pred": {
+          "q5-15": 0.5557,
+          "q>40": 0.2306,
+          "q<5": 0.1775,
+          "q15-40": 0.0363
+         }
+        },
+        "q>40": {
+         "n": 5184,
+         "pred": {
+          "q>40": 0.522,
+          "q5-15": 0.359,
+          "q<5": 0.0693,
+          "q15-40": 0.0498
+         }
+        }
+       }
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.482,
+      "gap2-10": 0.3563,
+      "gap10-30": 0.1119,
+      "gap>30": 0.0497
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.482,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.4206
+      },
+      "marginal_random": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.3618,
+       "analytic_expected_accuracy": 0.3658
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.482
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 19481,
+       "n_scored": 19481,
+       "n_silent": 0,
+       "accuracy": 0.4905,
+       "lift_over_best_baseline": 0.0085,
+       "beats_best_baseline": true,
+       "confusion": {
+        "gap10-30": {
+         "n": 2180,
+         "pred": {
+          "gap<2s": 0.7179,
+          "gap2-10": 0.2225,
+          "gap>30": 0.056,
+          "gap10-30": 0.0037
+         }
+        },
+        "gap2-10": {
+         "n": 6942,
+         "pred": {
+          "gap<2s": 0.8234,
+          "gap2-10": 0.1616,
+          "gap>30": 0.0135,
+          "gap10-30": 0.0014
+         }
+        },
+        "gap<2s": {
+         "n": 9390,
+         "pred": {
+          "gap<2s": 0.869,
+          "gap2-10": 0.1199,
+          "gap>30": 0.0108,
+          "gap10-30": 0.0003
+         }
+        },
+        "gap>30": {
+         "n": 969,
+         "pred": {
+          "gap<2s": 0.5181,
+          "gap>30": 0.2745,
+          "gap2-10": 0.1971,
+          "gap10-30": 0.0103
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::regime=R1": {
+   "label": "within-stratum split, regime=R1",
+   "n_train_rows": 3555,
+   "n_test_rows": 1376,
+   "n_train_windows": 168,
+   "n_test_windows": 26,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-04-20"
+   ],
+   "test_span": [
+    "2026-04-20",
+    "2026-04-21"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "complete": 0.561,
+      "extend": 0.423,
+      "open": 0.016
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.561,
+       "predicts": "complete"
+      },
+      "persistence": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.5385
+      },
+      "marginal_random": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.4767,
+       "analytic_expected_accuracy": 0.4508
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.561
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.5523,
+       "lift_over_best_baseline": -0.0087,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.5632,
+       "lift_over_best_baseline": 0.0022,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.548,
+      "switch": 0.452
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.548,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.5189
+      },
+      "marginal_random": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.4775,
+       "analytic_expected_accuracy": 0.5054
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.548
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.561,
+       "lift_over_best_baseline": 0.013,
+       "beats_best_baseline": true
+      },
+      "M_V1_1": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.556,
+       "lift_over_best_baseline": 0.008,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5022,
+      "Down": 0.4978
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.4978,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.5407
+      },
+      "marginal_random": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.4978,
+       "analytic_expected_accuracy": 0.5001
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.5407
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1376,
+       "n_scored": 1354,
+       "n_silent": 22,
+       "accuracy": 0.5465,
+       "lift_over_best_baseline": 0.0058,
+       "beats_best_baseline": true
+      },
+      "M_V1_1": {
+       "n_rows": 1376,
+       "n_scored": 1354,
+       "n_silent": 22,
+       "accuracy": 0.5576,
+       "lift_over_best_baseline": 0.0169,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q15-40": 0.5858,
+      "q5-15": 0.2594,
+      "q<5": 0.1526,
+      "q>40": 0.0022
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.2594,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.5036
+      },
+      "marginal_random": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.3205,
+       "analytic_expected_accuracy": 0.5785
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.5036
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.3328,
+       "lift_over_best_baseline": -0.1708,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.4193,
+       "lift_over_best_baseline": -0.0843,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap2-10": 0.3765,
+      "gap10-30": 0.2849,
+      "gap<2s": 0.218,
+      "gap>30": 0.1206
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.2849,
+       "predicts": "gap10-30"
+      },
+      "persistence": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.3815
+      },
+      "marginal_random": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.2485,
+       "analytic_expected_accuracy": 0.5445
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3815
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 1376,
+       "n_scored": 1376,
+       "n_silent": 0,
+       "accuracy": 0.407,
+       "lift_over_best_baseline": 0.0255,
+       "beats_best_baseline": true
+      }
+     }
+    }
+   }
+  },
+  "GLOBALMODEL::regime=R4": {
+   "label": "global model, test rows regime=R4",
+   "n_train_rows": 48940,
+   "n_test_rows": 20706,
+   "n_train_windows": 1381,
+   "n_test_windows": 555,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5089,
+      "complete": 0.4846,
+      "open": 0.0064
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5089,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6802
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4906,
+       "analytic_expected_accuracy": 0.49
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6802
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5363,
+       "lift_over_best_baseline": -0.1439,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6845,
+       "lift_over_best_baseline": 0.0043,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6962,
+      "switch": 0.3038
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6962,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.618
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5705,
+       "analytic_expected_accuracy": 0.5686
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6962
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6955,
+       "lift_over_best_baseline": -0.0007,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6923,
+       "lift_over_best_baseline": -0.0039,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5104,
+      "Down": 0.4896
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4896,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.6908
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.5022,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6908
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20573,
+       "n_silent": 133,
+       "accuracy": 0.5333,
+       "lift_over_best_baseline": -0.1575,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20573,
+       "n_silent": 133,
+       "accuracy": 0.6825,
+       "lift_over_best_baseline": -0.0083,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3283,
+      "q>40": 0.2673,
+      "q15-40": 0.2065,
+      "q<5": 0.1979
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3283,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3523
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.2651,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3523
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3394,
+       "lift_over_best_baseline": -0.0129,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3686,
+       "lift_over_best_baseline": 0.0163,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.4793,
+      "gap2-10": 0.3568,
+      "gap10-30": 0.1139,
+      "gap>30": 0.05
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4793,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4183
+      },
+      "marginal_random": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.3527,
+       "analytic_expected_accuracy": 0.3306
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.4793
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 20706,
+       "n_scored": 20706,
+       "n_silent": 0,
+       "accuracy": 0.4816,
+       "lift_over_best_baseline": 0.0023,
+       "beats_best_baseline": true
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::regime=R4": {
+   "label": "within-stratum split, regime=R4",
+   "n_train_rows": 45470,
+   "n_test_rows": 19245,
+   "n_train_windows": 1226,
+   "n_test_windows": 516,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-08-28",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5093,
+      "complete": 0.4841,
+      "open": 0.0066
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.5093,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.68
+      },
+      "marginal_random": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.4904,
+       "analytic_expected_accuracy": 0.4938
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.68
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.5367,
+       "lift_over_best_baseline": -0.1433,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.6845,
+       "lift_over_best_baseline": 0.0045,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6967,
+      "switch": 0.3033
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.6967,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.6192
+      },
+      "marginal_random": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.5799,
+       "analytic_expected_accuracy": 0.5799
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6967
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.696,
+       "lift_over_best_baseline": -0.0007,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.6939,
+       "lift_over_best_baseline": -0.0028,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5077,
+      "Down": 0.4923
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.4923,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.6913
+      },
+      "marginal_random": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.4986,
+       "analytic_expected_accuracy": 0.5001
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6913
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19245,
+       "n_scored": 19118,
+       "n_silent": 127,
+       "accuracy": 0.5336,
+       "lift_over_best_baseline": -0.1577,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 19245,
+       "n_scored": 19118,
+       "n_silent": 127,
+       "accuracy": 0.6825,
+       "lift_over_best_baseline": -0.0088,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3281,
+      "q>40": 0.2668,
+      "q15-40": 0.2076,
+      "q<5": 0.1974
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.3281,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.3546
+      },
+      "marginal_random": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.2595,
+       "analytic_expected_accuracy": 0.2569
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3546
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.3356,
+       "lift_over_best_baseline": -0.019,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.368,
+       "lift_over_best_baseline": 0.0134,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.4826,
+      "gap2-10": 0.3554,
+      "gap10-30": 0.1119,
+      "gap>30": 0.0501
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.4826,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.421
+      },
+      "marginal_random": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.3712,
+       "analytic_expected_accuracy": 0.3667
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.4826
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 19245,
+       "n_scored": 19245,
+       "n_silent": 0,
+       "accuracy": 0.492,
+       "lift_over_best_baseline": 0.0094,
+       "beats_best_baseline": true
+      }
+     }
+    }
+   }
+  },
+  "GLOBALMODEL::asset=BTC": {
+   "label": "global model, test rows asset=BTC",
+   "n_train_rows": 48940,
+   "n_test_rows": 20187,
+   "n_train_windows": 1381,
+   "n_test_windows": 379,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5061,
+      "complete": 0.488,
+      "open": 0.0059
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.5061,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.6816
+      },
+      "marginal_random": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.4926,
+       "analytic_expected_accuracy": 0.49
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6816
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.5366,
+       "lift_over_best_baseline": -0.145,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.6863,
+       "lift_over_best_baseline": 0.0047,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6968,
+      "switch": 0.3032
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.6968,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.6184
+      },
+      "marginal_random": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.5714,
+       "analytic_expected_accuracy": 0.5686
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6968
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.6962,
+       "lift_over_best_baseline": -0.0006,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.6937,
+       "lift_over_best_baseline": -0.0031,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5108,
+      "Down": 0.4892
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.4892,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.6938
+      },
+      "marginal_random": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.4986,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6938
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20187,
+       "n_scored": 20067,
+       "n_silent": 120,
+       "accuracy": 0.5339,
+       "lift_over_best_baseline": -0.1599,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20187,
+       "n_scored": 20067,
+       "n_silent": 120,
+       "accuracy": 0.6845,
+       "lift_over_best_baseline": -0.0093,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3266,
+      "q>40": 0.2715,
+      "q15-40": 0.202,
+      "q<5": 0.2
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.3266,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.3511
+      },
+      "marginal_random": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.2681,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3511
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.3408,
+       "lift_over_best_baseline": -0.0103,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.3694,
+       "lift_over_best_baseline": 0.0183,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.4866,
+      "gap2-10": 0.3611,
+      "gap10-30": 0.1105,
+      "gap>30": 0.0419
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.4866,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.4234
+      },
+      "marginal_random": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.3548,
+       "analytic_expected_accuracy": 0.3306
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.4866
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 20187,
+       "n_scored": 20187,
+       "n_silent": 0,
+       "accuracy": 0.4865,
+       "lift_over_best_baseline": -0.0001,
+       "beats_best_baseline": false
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::asset=BTC": {
+   "label": "within-stratum split, asset=BTC",
+   "n_train_rows": 47768,
+   "n_test_rows": 20424,
+   "n_train_windows": 1032,
+   "n_test_windows": 383,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.5066,
+      "complete": 0.4875,
+      "open": 0.0059
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.5066,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.6824
+      },
+      "marginal_random": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.4967,
+       "analytic_expected_accuracy": 0.4901
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6824
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.5376,
+       "lift_over_best_baseline": -0.1448,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.6875,
+       "lift_over_best_baseline": 0.0051,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6975,
+      "switch": 0.3025
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.6975,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.6185
+      },
+      "marginal_random": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.5712,
+       "analytic_expected_accuracy": 0.569
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6975
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.6974,
+       "lift_over_best_baseline": -0.0001,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.6948,
+       "lift_over_best_baseline": -0.0027,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Up": 0.5097,
+      "Down": 0.4903
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.4903,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.6946
+      },
+      "marginal_random": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.4998,
+       "analytic_expected_accuracy": 0.5001
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6946
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20424,
+       "n_scored": 20303,
+       "n_silent": 121,
+       "accuracy": 0.5348,
+       "lift_over_best_baseline": -0.1598,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20424,
+       "n_scored": 20303,
+       "n_silent": 121,
+       "accuracy": 0.6856,
+       "lift_over_best_baseline": -0.009,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.3267,
+      "q>40": 0.2714,
+      "q15-40": 0.2017,
+      "q<5": 0.2003
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.3267,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.3511
+      },
+      "marginal_random": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.2569,
+       "analytic_expected_accuracy": 0.2603
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3511
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.3418,
+       "lift_over_best_baseline": -0.0093,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.3705,
+       "lift_over_best_baseline": 0.0194,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap<2s": 0.4863,
+      "gap2-10": 0.3614,
+      "gap10-30": 0.1104,
+      "gap>30": 0.0419
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.4863,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.4228
+      },
+      "marginal_random": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.3492,
+       "analytic_expected_accuracy": 0.3346
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.4863
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 20424,
+       "n_scored": 20424,
+       "n_silent": 0,
+       "accuracy": 0.4841,
+       "lift_over_best_baseline": -0.0022,
+       "beats_best_baseline": false
+      }
+     }
+    }
+   }
+  },
+  "GLOBALMODEL::asset=ETH": {
+   "label": "global model, test rows asset=ETH",
+   "n_train_rows": 48940,
+   "n_test_rows": 519,
+   "n_train_windows": 1381,
+   "n_test_windows": 176,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-03-27",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.6204,
+      "complete": 0.3545,
+      "open": 0.025
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.6204,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.6262
+      },
+      "marginal_random": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.4855,
+       "analytic_expected_accuracy": 0.49
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.6262
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.5241,
+       "lift_over_best_baseline": -0.1021,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.6146,
+       "lift_over_best_baseline": -0.0116,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6744,
+      "switch": 0.3256
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.6744,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.6031
+      },
+      "marginal_random": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.5665,
+       "analytic_expected_accuracy": 0.5686
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6744
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.6705,
+       "lift_over_best_baseline": -0.0039,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.6397,
+       "lift_over_best_baseline": -0.0347,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Down": 0.5067,
+      "Up": 0.4933
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.5067,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.5761
+      },
+      "marginal_random": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.4701,
+       "analytic_expected_accuracy": 0.5002
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.5761
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 519,
+       "n_scored": 506,
+       "n_silent": 13,
+       "accuracy": 0.5119,
+       "lift_over_best_baseline": -0.0642,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 519,
+       "n_scored": 506,
+       "n_silent": 13,
+       "accuracy": 0.6047,
+       "lift_over_best_baseline": 0.0286,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q5-15": 0.395,
+      "q15-40": 0.3815,
+      "q<5": 0.1175,
+      "q>40": 0.106
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.395,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.3969
+      },
+      "marginal_random": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.2678,
+       "analytic_expected_accuracy": 0.2608
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.3969
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.2832,
+       "lift_over_best_baseline": -0.1137,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.3372,
+       "lift_over_best_baseline": -0.0597,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap>30": 0.3642,
+      "gap10-30": 0.2486,
+      "gap<2s": 0.1965,
+      "gap2-10": 0.1908
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.1965,
+       "predicts": "gap<2s"
+      },
+      "persistence": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.2177
+      },
+      "marginal_random": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.2447,
+       "analytic_expected_accuracy": 0.3306
+      }
+     },
+     "best_baseline": {
+      "name": "marginal_random",
+      "accuracy": 0.2447
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 519,
+       "n_scored": 519,
+       "n_silent": 0,
+       "accuracy": 0.2909,
+       "lift_over_best_baseline": 0.0462,
+       "beats_best_baseline": true
+      }
+     }
+    }
+   }
+  },
+  "WITHIN::asset=ETH": {
+   "label": "within-stratum split, asset=ETH",
+   "n_train_rows": 1020,
+   "n_test_rows": 434,
+   "n_train_windows": 377,
+   "n_test_windows": 144,
+   "window_overlap": 0,
+   "train_span": [
+    "2026-08-28",
+    "2026-08-30"
+   ],
+   "test_span": [
+    "2026-08-30",
+    "2026-08-31"
+   ],
+   "fields": {
+    "exposure_action": {
+     "class_mix_test": {
+      "extend": 0.6152,
+      "complete": 0.3571,
+      "open": 0.0276
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.6152,
+       "predicts": "extend"
+      },
+      "persistence": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.6129
+      },
+      "marginal_random": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5092,
+       "analytic_expected_accuracy": 0.4992
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6152
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5737,
+       "lift_over_best_baseline": -0.0415,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5945,
+       "lift_over_best_baseline": -0.0207,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "switch": {
+     "class_mix_test": {
+      "stay": 0.6705,
+      "switch": 0.3295
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.6705,
+       "predicts": "stay"
+      },
+      "persistence": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5922
+      },
+      "marginal_random": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5369,
+       "analytic_expected_accuracy": 0.5393
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.6705
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.6728,
+       "lift_over_best_baseline": 0.0023,
+       "beats_best_baseline": true
+      },
+      "M_V1_1": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.6336,
+       "lift_over_best_baseline": -0.0369,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "side": {
+     "class_mix_test": {
+      "Down": 0.5046,
+      "Up": 0.4954
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5046,
+       "predicts": "Down"
+      },
+      "persistence": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5691
+      },
+      "marginal_random": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.5323,
+       "analytic_expected_accuracy": 0.5014
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.5691
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 434,
+       "n_scored": 422,
+       "n_silent": 12,
+       "accuracy": 0.5735,
+       "lift_over_best_baseline": 0.0044,
+       "beats_best_baseline": true
+      },
+      "M_V1_1": {
+       "n_rows": 434,
+       "n_scored": 422,
+       "n_silent": 12,
+       "accuracy": 0.5948,
+       "lift_over_best_baseline": 0.0257,
+       "beats_best_baseline": true
+      }
+     }
+    },
+    "size_bucket": {
+     "class_mix_test": {
+      "q15-40": 0.3963,
+      "q5-15": 0.394,
+      "q<5": 0.1175,
+      "q>40": 0.0922
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.394,
+       "predicts": "q5-15"
+      },
+      "persistence": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.4032
+      },
+      "marginal_random": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.2903,
+       "analytic_expected_accuracy": 0.3058
+      }
+     },
+     "best_baseline": {
+      "name": "persistence",
+      "accuracy": 0.4032
+     },
+     "models": {
+      "M_V1": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.3618,
+       "lift_over_best_baseline": -0.0414,
+       "beats_best_baseline": false
+      },
+      "M_V1_1": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.3848,
+       "lift_over_best_baseline": -0.0184,
+       "beats_best_baseline": false
+      }
+     }
+    },
+    "timing_bucket": {
+     "class_mix_test": {
+      "gap>30": 0.3917,
+      "gap10-30": 0.2419,
+      "gap<2s": 0.1866,
+      "gap2-10": 0.1797
+     },
+     "baselines": {
+      "majority": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.3917,
+       "predicts": "gap>30"
+      },
+      "persistence": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.3226
+      },
+      "marginal_random": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.2834,
+       "analytic_expected_accuracy": 0.2583
+      }
+     },
+     "best_baseline": {
+      "name": "majority",
+      "accuracy": 0.3917
+     },
+     "models": {
+      "M_T": {
+       "n_rows": 434,
+       "n_scored": 434,
+       "n_silent": 0,
+       "accuracy": 0.4101,
+       "lift_over_best_baseline": 0.0184,
+       "beats_best_baseline": true
+      }
+     }
+    }
+   }
+  }
+ },
+ "economics": {
+  "GLOBAL": {
+   "side_errors": {
+    "model": "M_V1_1",
+    "wrong_side": {
+     "n": 6532,
+     "shares": 160331.1,
+     "l5_settlement_pnl_usd": 869.2,
+     "notional_usd": 80542.21,
+     "pnl_per_share": 0.00542
+    },
+    "right_side": {
+     "n": 14041,
+     "shares": 277758.0,
+     "l5_settlement_pnl_usd": 1530.77,
+     "notional_usd": 122701.99,
+     "pnl_per_share": 0.00551
+    },
+    "note": "Per-share settlement P&L of the legs the model mislabels, versus the legs it labels correctly. A clone that takes the model's side instead of L5's on the wrong rows buys the complement at (1 - the pair's other price), so the sign of this difference is the directional cost of the side error."
+   },
+   "size_errors": {
+    "model": "M_V1_1",
+    "n": 20706,
+    "l5_notional_usd": 205193.92,
+    "model_notional_usd": 284747.64,
+    "notional_ratio_model_over_l5": 1.3877,
+    "bucket_mix_l5": {
+     "q5-15": 0.3283,
+     "q>40": 0.2673,
+     "q15-40": 0.2065,
+     "q<5": 0.1979
+    },
+    "bucket_mix_model": {
+     "q5-15": 0.5017,
+     "q>40": 0.3019,
+     "q15-40": 0.1109,
+     "q<5": 0.0855
+    },
+    "note": "Bucket midpoints (2.5 / 10 / 27.5 / 70 shares) are a stated convention, not a measurement; the ratio is indicative of scale error, not an exact dollar figure."
+   },
+   "timing_errors": {
+    "model": "M_T",
+    "n": 20706,
+    "never_predicted_classes": [],
+    "gap<2s_rows": 9924,
+    "gap<2s_missed": 1574,
+    "notional_in_missed_bursts_usd": 17275.17,
+    "share_of_test_notional": 0.0842
+   },
+   "relation_confusion_economics": {
+    "model": "M_V1_1",
+    "extend_called_complete": {
+     "n": 2996,
+     "shares": 73475.6,
+     "l5_settlement_pnl_usd": -449.98,
+     "notional_usd": 35754.74
+    },
+    "complete_called_extend": {
+     "n": 3536,
+     "shares": 86855.5,
+     "l5_settlement_pnl_usd": 1319.18,
+     "notional_usd": 44787.46
+    },
+    "confusion_counts": {
+     "extend->extend": 7542,
+     "complete->complete": 6499,
+     "complete->extend": 3536,
+     "extend->complete": 2996,
+     "open->open": 133
+    },
+    "note": "Each extend-called-complete row is a clone that flattens inventory L5 kept building, and each complete-called-extend row is a clone that doubles down where L5 reduced. The settlement P&L shown is L5's own on those legs."
+   }
+  },
+  "WITHIN::duration=15m": {
+   "side_errors": {
+    "model": "M_V1_1",
+    "wrong_side": {
+     "n": 5668,
+     "shares": 129526.5,
+     "l5_settlement_pnl_usd": 47.47,
+     "notional_usd": 69404.03,
+     "pnl_per_share": 0.00037
+    },
+    "right_side": {
+     "n": 13116,
+     "shares": 243516.3,
+     "l5_settlement_pnl_usd": 1643.49,
+     "notional_usd": 103276.97,
+     "pnl_per_share": 0.00675
+    },
+    "note": "Per-share settlement P&L of the legs the model mislabels, versus the legs it labels correctly. A clone that takes the model's side instead of L5's on the wrong rows buys the complement at (1 - the pair's other price), so the sign of this difference is the directional cost of the side error."
+   },
+   "size_errors": {
+    "model": "M_V1_1",
+    "n": 18855,
+    "l5_notional_usd": 173412.18,
+    "model_notional_usd": 217585.27,
+    "notional_ratio_model_over_l5": 1.2547,
+    "bucket_mix_l5": {
+     "q5-15": 0.3437,
+     "q>40": 0.2398,
+     "q<5": 0.2154,
+     "q15-40": 0.2011
+    },
+    "bucket_mix_model": {
+     "q5-15": 0.5479,
+     "q>40": 0.2288,
+     "q15-40": 0.1189,
+     "q<5": 0.1045
+    },
+    "note": "Bucket midpoints (2.5 / 10 / 27.5 / 70 shares) are a stated convention, not a measurement; the ratio is indicative of scale error, not an exact dollar figure."
+   },
+   "timing_errors": {
+    "model": "M_T",
+    "n": 18855,
+    "never_predicted_classes": [],
+    "gap<2s_rows": 9729,
+    "gap<2s_missed": 1328,
+    "notional_in_missed_bursts_usd": 13247.51,
+    "share_of_test_notional": 0.0764
+   },
+   "relation_confusion_economics": {
+    "model": "M_V1_1",
+    "extend_called_complete": {
+     "n": 2695,
+     "shares": 62404.5,
+     "l5_settlement_pnl_usd": -741.29,
+     "notional_usd": 31623.61
+    },
+    "complete_called_extend": {
+     "n": 2973,
+     "shares": 67122.0,
+     "l5_settlement_pnl_usd": 788.76,
+     "notional_usd": 37780.43
+    },
+    "confusion_counts": {
+     "extend->extend": 6857,
+     "complete->complete": 6259,
+     "complete->extend": 2973,
+     "extend->complete": 2695,
+     "open->open": 71
+    },
+    "note": "Each extend-called-complete row is a clone that flattens inventory L5 kept building, and each complete-called-extend row is a clone that doubles down where L5 reduced. The settlement P&L shown is L5's own on those legs."
+   }
+  },
+  "WITHIN::duration=5m": {
+   "side_errors": {
+    "model": "M_V1_1",
+    "wrong_side": {
+     "n": 847,
+     "shares": 29921.7,
+     "l5_settlement_pnl_usd": 496.04,
+     "notional_usd": 12654.03,
+     "pnl_per_share": 0.01658
+    },
+    "right_side": {
+     "n": 1082,
+     "shares": 36507.5,
+     "l5_settlement_pnl_usd": 143.62,
+     "notional_usd": 18829.84,
+     "pnl_per_share": 0.00393
+    },
+    "note": "Per-share settlement P&L of the legs the model mislabels, versus the legs it labels correctly. A clone that takes the model's side instead of L5's on the wrong rows buys the complement at (1 - the pair's other price), so the sign of this difference is the directional cost of the side error."
+   },
+   "size_errors": {
+    "model": "M_V1_1",
+    "n": 1989,
+    "l5_notional_usd": 32633.09,
+    "model_notional_usd": 66110.89,
+    "notional_ratio_model_over_l5": 2.0259,
+    "bucket_mix_l5": {
+     "q>40": 0.5133,
+     "q15-40": 0.2514,
+     "q5-15": 0.1931,
+     "q<5": 0.0422
+    },
+    "bucket_mix_model": {
+     "q>40": 0.9175,
+     "q5-15": 0.0749,
+     "q15-40": 0.0075
+    },
+    "note": "Bucket midpoints (2.5 / 10 / 27.5 / 70 shares) are a stated convention, not a measurement; the ratio is indicative of scale error, not an exact dollar figure."
+   },
+   "timing_errors": {
+    "model": "M_T",
+    "n": 1989,
+    "never_predicted_classes": [],
+    "gap<2s_rows": 290,
+    "gap<2s_missed": 217,
+    "notional_in_missed_bursts_usd": 3476.55,
+    "share_of_test_notional": 0.1065
+   },
+   "relation_confusion_economics": {
+    "model": "M_V1_1",
+    "extend_called_complete": {
+     "n": 265,
+     "shares": 9375.9,
+     "l5_settlement_pnl_usd": 22.69,
+     "notional_usd": 4041.18
+    },
+    "complete_called_extend": {
+     "n": 582,
+     "shares": 20545.8,
+     "l5_settlement_pnl_usd": 473.36,
+     "notional_usd": 8612.85
+    },
+    "confusion_counts": {
+     "extend->extend": 802,
+     "complete->extend": 582,
+     "complete->complete": 280,
+     "extend->complete": 265,
+     "open->open": 59,
+     "open->extend": 1
+    },
+    "note": "Each extend-called-complete row is a clone that flattens inventory L5 kept building, and each complete-called-extend row is a clone that doubles down where L5 reduced. The settlement P&L shown is L5's own on those legs."
+   }
+  },
+  "WITHIN::era=E1_PRE_REBATE": {
+   "side_errors": {
+    "model": "M_V1_1",
+    "wrong_side": {
+     "n": 579,
+     "shares": 8606.8,
+     "l5_settlement_pnl_usd": 104.03,
+     "notional_usd": 4317.06,
+     "pnl_per_share": 0.01209
+    },
+    "right_side": {
+     "n": 803,
+     "shares": 11671.7,
+     "l5_settlement_pnl_usd": 135.09,
+     "notional_usd": 5298.53,
+     "pnl_per_share": 0.01157
+    },
+    "note": "Per-share settlement P&L of the legs the model mislabels, versus the legs it labels correctly. A clone that takes the model's side instead of L5's on the wrong rows buys the complement at (1 - the pair's other price), so the sign of this difference is the directional cost of the side error."
+   },
+   "size_errors": {
+    "model": "M_V1_1",
+    "n": 1408,
+    "l5_notional_usd": 9796.54,
+    "model_notional_usd": 10233.11,
+    "notional_ratio_model_over_l5": 1.0446,
+    "bucket_mix_l5": {
+     "q15-40": 0.6037,
+     "q5-15": 0.2457,
+     "q<5": 0.1491,
+     "q>40": 0.0014
+    },
+    "bucket_mix_model": {
+     "q5-15": 0.6669,
+     "q15-40": 0.3274,
+     "q<5": 0.0057
+    },
+    "note": "Bucket midpoints (2.5 / 10 / 27.5 / 70 shares) are a stated convention, not a measurement; the ratio is indicative of scale error, not an exact dollar figure."
+   },
+   "timing_errors": {
+    "model": "M_T",
+    "n": 1408,
+    "never_predicted_classes": [
+     "gap<2s"
+    ],
+    "gap<2s_rows": 293,
+    "gap<2s_missed": 293,
+    "notional_in_missed_bursts_usd": 1570.99,
+    "share_of_test_notional": 0.1604
+   },
+   "relation_confusion_economics": {
+    "model": "M_V1_1",
+    "extend_called_complete": {
+     "n": 367,
+     "shares": 5740.3,
+     "l5_settlement_pnl_usd": -82.38,
+     "notional_usd": 2870.14
+    },
+    "complete_called_extend": {
+     "n": 212,
+     "shares": 2866.5,
+     "l5_settlement_pnl_usd": 186.41,
+     "notional_usd": 1446.92
+    },
+    "confusion_counts": {
+     "complete->complete": 566,
+     "extend->complete": 367,
+     "extend->extend": 237,
+     "complete->extend": 212,
+     "open->open": 24,
+     "open->complete": 2
+    },
+    "note": "Each extend-called-complete row is a clone that flattens inventory L5 kept building, and each complete-called-extend row is a clone that doubles down where L5 reduced. The settlement P&L shown is L5's own on those legs."
+   }
+  },
+  "WITHIN::era=E3_INCENTIVE_ERA": {
+   "side_errors": {
+    "model": "M_V1_1",
+    "wrong_side": {
+     "n": 6129,
+     "shares": 150621.9,
+     "l5_settlement_pnl_usd": 501.41,
+     "notional_usd": 76523.12,
+     "pnl_per_share": 0.00333
+    },
+    "right_side": {
+     "n": 13224,
+     "shares": 260467.2,
+     "l5_settlement_pnl_usd": 1987.48,
+     "notional_usd": 115157.82,
+     "pnl_per_share": 0.00763
+    },
+    "note": "Per-share settlement P&L of the legs the model mislabels, versus the legs it labels correctly. A clone that takes the model's side instead of L5's on the wrong rows buys the complement at (1 - the pair's other price), so the sign of this difference is the directional cost of the side error."
+   },
+   "size_errors": {
+    "model": "M_V1_1",
+    "n": 19481,
+    "l5_notional_usd": 193531.07,
+    "model_notional_usd": 281018.19,
+    "notional_ratio_model_over_l5": 1.4521,
+    "bucket_mix_l5": {
+     "q5-15": 0.3288,
+     "q>40": 0.2661,
+     "q15-40": 0.207,
+     "q<5": 0.1981
+    },
+    "bucket_mix_model": {
+     "q5-15": 0.4939,
+     "q>40": 0.3405,
+     "q<5": 0.1171,
+     "q15-40": 0.0485
+    },
+    "note": "Bucket midpoints (2.5 / 10 / 27.5 / 70 shares) are a stated convention, not a measurement; the ratio is indicative of scale error, not an exact dollar figure."
+   },
+   "timing_errors": {
+    "model": "M_T",
+    "n": 19481,
+    "never_predicted_classes": [],
+    "gap<2s_rows": 9390,
+    "gap<2s_missed": 1230,
+    "notional_in_missed_bursts_usd": 13233.82,
+    "share_of_test_notional": 0.0684
+   },
+   "relation_confusion_economics": {
+    "model": "M_V1_1",
+    "extend_called_complete": {
+     "n": 2811,
+     "shares": 68143.6,
+     "l5_settlement_pnl_usd": -717.68,
+     "notional_usd": 33303.25
+    },
+    "complete_called_extend": {
+     "n": 3318,
+     "shares": 82478.3,
+     "l5_settlement_pnl_usd": 1219.08,
+     "notional_usd": 43219.87
+    },
+    "confusion_counts": {
+     "extend->extend": 7090,
+     "complete->complete": 6134,
+     "complete->extend": 3318,
+     "extend->complete": 2811,
+     "open->open": 127,
+     "open->extend": 1
+    },
+    "note": "Each extend-called-complete row is a clone that flattens inventory L5 kept building, and each complete-called-extend row is a clone that doubles down where L5 reduced. The settlement P&L shown is L5's own on those legs."
+   }
+  }
+ },
+ "bootstrap_lift_GLOBAL": {
+  "exposure_action::M_V1": {
+   "best_baseline": "persistence",
+   "point_lift": -0.1439,
+   "ci95": [
+    -0.1621,
+    -0.1266
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "exposure_action::M_V1_1": {
+   "best_baseline": "persistence",
+   "point_lift": 0.0043,
+   "ci95": [
+    -0.0003,
+    0.0092
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "switch::M_V1": {
+   "best_baseline": "majority",
+   "point_lift": -0.0007,
+   "ci95": [
+    -0.0017,
+    0.0003
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "switch::M_V1_1": {
+   "best_baseline": "majority",
+   "point_lift": -0.0039,
+   "ci95": [
+    -0.0069,
+    -0.0011
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "side::M_V1": {
+   "best_baseline": "persistence",
+   "point_lift": -0.1609,
+   "ci95": [
+    -0.1792,
+    -0.143
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "side::M_V1_1": {
+   "best_baseline": "persistence",
+   "point_lift": -0.0127,
+   "ci95": [
+    -0.0173,
+    -0.0082
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "size_bucket::M_V1": {
+   "best_baseline": "persistence",
+   "point_lift": -0.0129,
+   "ci95": [
+    -0.0239,
+    -0.0018
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "size_bucket::M_V1_1": {
+   "best_baseline": "persistence",
+   "point_lift": 0.0164,
+   "ci95": [
+    0.0103,
+    0.0228
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  },
+  "timing_bucket::M_T": {
+   "best_baseline": "majority",
+   "point_lift": 0.0023,
+   "ci95": [
+    -0.0044,
+    0.01
+   ],
+   "n_boot": 1000,
+   "blocks": 555
+  }
+ }
+}

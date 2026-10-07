@@ -1,0 +1,816 @@
+{
+ "label": "LANE_E_PMUS_CATEGORY_RANKING_V1",
+ "generated_utc": "2026-10-07",
+ "venue": "polymarket_us (PMUS)",
+ "scope": "ranks PMUS categories/market types for THE MECHANICS ACTUALLY OBSERVED FROM L5, using existing repo artefacts only",
+ "labels": {
+  "accounting": "historical replay -> shadow -> live probe -> submitted -> filled -> settled -> realized. EVIDENCED means venue-confirmed fill and/or venue-confirmed settlement on our account. SHADOW/THEORETICAL is never added to a realized figure.",
+  "read_only": "no S3 touched, no habitat selector refitted, no live_exec/deploy/scripts/l5_exec* artefact modified, no git command run, no order, no signing, no credential printed"
+ },
+ "live_slate_reenumeration": {
+  "attempted": true,
+  "endpoint": "GET https://gateway.polymarket.us/v1/series",
+  "result": "FAILED - HTTP 000, 'CONNECT tunnel failed, response 403' via the container agent proxy",
+  "consequence": "every figure is from recorded data; newest slate census in repo is 2026-09-27; the slate TODAY is unverified"
+ },
+ "missing_artefact": {
+  "named_in_brief": "analysis/pmus/habitat_selector_frozen.json, sha256 f9dcd886549a2865",
+  "status": "NOT PRESENT in this working tree; grep for both filename and hash returns nothing",
+  "action_taken": "none - nothing refitted, nothing re-frozen"
+ },
+ "l5_observed_mechanics": {
+  "source": [
+   "analysis/l5/COHORT_EXECUTION_MODES.md",
+   "analysis/l5/FILL_TOXICITY.json"
+  ],
+  "maker_share_of_fills_pct": 95.5,
+  "maker_fills": 55639,
+  "total_fills": 63569,
+  "windows": 527,
+  "sequence_maker_to_maker_pct": 82.7,
+  "sequences_attributed": 313,
+  "fills_per_window": 121,
+  "spread_at_fill_median_usd": 0.01,
+  "spread_n": 2878,
+  "settlement_adverse_selection_per_fill_usd": -0.0041,
+  "settlement_adverse_selection_ci95": [
+   -0.0251,
+   0.0194
+  ],
+  "adverse_selection_fills": 3069,
+  "adverse_selection_markets": 27,
+  "markout_60s_mean_usd": 0.004,
+  "markout_60s_n": 2720,
+  "matched_pair_cost": 0.9624,
+  "pair_rate_balanced_band_pct": 84.25,
+  "pair_rate_n": 1143,
+  "EXCLUSION": "every L5 cohort outside BTC15m is taker->taker (BTC5m 322/322, ETH15m 13/13, ETH5m ~0.24% maker, 3-7 fills/window). The mechanism being ranked for exists in exactly ONE L5 cohort.",
+  "discriminator": "queue turnover = touch depth / touch replacement rate. Spread does not separate the failure modes."
+ },
+ "frozen_mechanics_assumed": [
+  "one market at a time",
+  "0.01-share minimum",
+  "post-only at the touch",
+  "maker-first, no taker fallback",
+  "patient completion",
+  "$5 per market envelope",
+  "residual <= 10 shares",
+  "no unsupported rebate assumption"
+ ],
+ "ranking": [
+  {
+   "rank": 1,
+   "category": "tennis",
+   "market_types": [
+    "atpcq|tennis_match_winner",
+    "atp",
+    "setkame*"
+   ],
+   "passive_fill_frequency": {
+    "basis": "EVIDENCED (our venue-confirmed maker fills) + OBSERVED (public book)",
+    "our_maker_fills": 24,
+    "our_taker_fills": 0,
+    "book_markets": 12,
+    "book_states": 1382,
+    "obs_minutes": 212.7,
+    "buy_reach_120s_pct": 31.3,
+    "sell_reach_120s_pct": 31.7,
+    "recycle_per_hr": 18.06,
+    "median_reach_s": 39.3
+   },
+   "spread": {
+    "basis": "OBSERVED",
+    "median_usd": 0.01,
+    "pct_le_1c": 69.2,
+    "n_states": 1382
+   },
+   "depth": {
+    "basis": "OBSERVED",
+    "touch_bid_contracts_median": 3773.0,
+    "touch_move_per_min": 0.78,
+    "turnover": "poor"
+   },
+   "adverse_selection": {
+    "basis": "NOT MEASURED - no markout exists on our fills in any category",
+    "proxy_realized_net_usd": 0.102,
+    "proxy_turnover_usd": 20.798,
+    "proxy_markets": 9,
+    "proxy_pair_usd": 1.0478,
+    "proxy_residual_usd": -1.0858
+   },
+   "two_sided_inventory": {
+    "basis": "EVIDENCED",
+    "best_market": "aec-setkamecz-mulpat-holtom-2026-09-10",
+    "maker_fills": 11,
+    "matched_pairs": 19.87,
+    "matched_pair_cost": 0.9477,
+    "terminal_residual": 0.0,
+    "inside_spring_discipline_0_96": true,
+    "book_two_sided_reach_120s_pct": 6.3
+   },
+   "tte_structure": {
+    "basis": "OBSERVED DEFECT",
+    "fixed_expiry": false,
+    "note": "SPORTS_TTE_DEFAULT_S=1e9; 635/635 decisions keyed tte>10m, so the frozen patience schedule is inert"
+   },
+   "fees": {
+    "basis": "PUBLISHED + CONFIRMED",
+    "maker_theta": -0.0125,
+    "taker_theta": 0.0695,
+    "maker_fee_charged": 0.0
+   },
+   "confirmed_rewards": {
+    "maker_rebate_credited_usd": 0.27,
+    "detail": "$0.14 R4 (3 markets) + $0.13 on 2026-09-10",
+    "liquidity_rewards_credited_usd": 0.0,
+    "liquidity_note": "0 of 239 traded sports slugs carried an active program"
+   }
+  },
+  {
+   "rank": 2,
+   "category": "soccer",
+   "market_types": [
+    "sea|soccer_team_full_time_winner",
+    "sea|soccer_team_full_game_total",
+    "flc|soccer_team_full_time_winner",
+    "epl",
+    "lal|total",
+    "mls|drawable_outcome"
+   ],
+   "passive_fill_frequency": {
+    "basis": "EVIDENCED + OBSERVED",
+    "our_maker_fills": 13,
+    "our_taker_fills": 0,
+    "evidenced_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha",
+     "asc-lal-lev-fcb-2026-09-13-pos-2pt5"
+    ],
+    "rest_durations_s": [
+     1.94,
+     2.08,
+     5.29,
+     6.72,
+     6.97,
+     11.25,
+     13.02,
+     14.36,
+     19.84,
+     24.89,
+     27.56,
+     31.92
+    ],
+    "best_book_group": "PMUS|sea|soccer_team_full_game_total",
+    "book_markets": 3,
+    "book_states": 224,
+    "n120": 180,
+    "buy_reach_120s_pct": 67.8,
+    "sell_reach_120s_pct": 10.6,
+    "recycle_per_hr": 25.74
+   },
+   "spread": {
+    "basis": "OBSERVED",
+    "median_usd": 0.01,
+    "sea_winner_pct_le_1c": 98.2,
+    "degenerate_subtypes": {
+     "mls|totals": 0.12,
+     "mls|spreads": 0.16
+    }
+   },
+   "depth": {
+    "basis": "OBSERVED",
+    "sea_winner_touch_bid": 45538.1,
+    "sea_totals_touch_bid": 12535.0,
+    "mls_drawable_touch_bid": 224.99,
+    "touch_move_per_min": [
+     0.28,
+     0.79
+    ],
+    "turnover": "frozen wall"
+   },
+   "adverse_selection": {
+    "basis": "NOT MEASURED",
+    "natural_experiment": "cov-bha drifted FOR us (YES 0.47->0.99), completed 4/32; jayfri drifted AGAINST, completed 0/10"
+   },
+   "two_sided_inventory": {
+    "basis": "EVIDENCED - BEST IN PROGRAMME",
+    "cov_bha": {
+     "matched_pairs": 5.67,
+     "matched_pair_cost": 0.763597,
+     "terminal_residual": 0.0
+    },
+    "lal_lev_fcb": {
+     "matched_pairs": 7.07,
+     "matched_pair_cost": 0.947722,
+     "terminal_residual": 0.28
+    },
+    "inside_spring_discipline_0_96": true,
+    "book_two_sided_reach_120s_pct": [
+     2.2,
+     5.0
+    ]
+   },
+   "tte_structure": {
+    "basis": "OBSERVED DEFECT",
+    "fixed_expiry": false,
+    "note": "clock defect applies"
+   },
+   "fees": {
+    "basis": "PUBLISHED",
+    "maker_theta": -0.0125,
+    "taker_theta": 0.0695
+   },
+   "confirmed_rewards": {
+    "maker_rebate_credited_usd": 0.0,
+    "why": "turnover below the one-cent rebate rounding floor",
+    "liquidity_rewards_credited_usd": 0.0
+   }
+  },
+  {
+   "rank": 3,
+   "category": "crypto",
+   "market_types": [
+    "cpc-btc-updown-15m",
+    "cpc-btc-updown-1h"
+   ],
+   "passive_fill_frequency": {
+    "basis": "EVIDENCED",
+    "probe07": {
+     "submitted": 9,
+     "rested": 9,
+     "maker_fills": 9,
+     "taker_fills": 0,
+     "rest_s": [
+      1.5,
+      3.2,
+      6.3,
+      7.4,
+      21.8,
+      22.0,
+      35.2,
+      50.4,
+      204.8
+     ]
+    },
+    "probe08_fills": 5,
+    "taker_actions_refused": 35,
+    "fills_per_15min_window_evidenced": 9,
+    "book_zero_volume_window_rate_pct": 60.7,
+    "closed_windows_sampled": 89,
+    "traded_window_contracts_median": 14956
+   },
+   "spread": {
+    "basis": "OBSERVED",
+    "median_usd": 0.03,
+    "p90_usd": 0.04,
+    "n_samples": 167,
+    "windows": 1,
+    "tick": 0.01,
+    "note": "3x the sports leaders"
+   },
+   "depth": {
+    "basis": "OBSERVED",
+    "touch_bid_contracts_median": 2600,
+    "touch_ask_contracts_median": 10000
+   },
+   "adverse_selection": {
+    "basis": "NOT MEASURED FOR US ON PMUS",
+    "reference_only": "L5's -0.0041/fill (n=3069) is PM International, a different venue - a reference, not a PMUS measurement"
+   },
+   "two_sided_inventory": {
+    "basis": "EVIDENCED - WORST WE HOLD",
+    "probe07": {
+     "matched_pairs": 2.47,
+     "matched_pair_cost": 1.0299
+    },
+    "probe08": {
+     "matched_pairs": 3.93,
+     "matched_pair_cost": 1.1986
+    },
+    "both_above_par": true,
+    "inside_spring_discipline_0_96": false,
+    "shadow_theoretical": "SHADOW/THEORETICAL: >=2c gross complements reachable in 62.5% of 315 decision states, median 29.9s - never submitted, never filled"
+   },
+   "tte_structure": {
+    "basis": "OBSERVED - BEST AXIS OUTRIGHT",
+    "fixed_expiry": true,
+    "window_s": 900,
+    "windows_per_day": 96,
+    "clock": "native literal from startTime/endDate",
+    "identical_to_l5_source": [
+     "instrument",
+     "BRTI resolution rule",
+     "settlement index",
+     "window length",
+     "$1 payout",
+     "binary structure"
+    ]
+   },
+   "fees": {
+    "basis": "PUBLISHED + CONFIRMED",
+    "maker_theta": -0.0125,
+    "taker_theta": 0.0695,
+    "live_defect": "pmus_q1_executor.taker_fee still uses 0.06, understating taker cost 15.8% and loosening the fee-safe bound on EVERY PMUS market"
+   },
+   "confirmed_rewards": {
+    "maker_rebate_credited_usd": 0.05,
+    "detail": "$0.01 Probe 07 + $0.04 Probe 08; every other probe credited $0.00",
+    "liquidity_rewards_credited_usd": 0.0,
+    "liquidity_note": "crypto_up_down pool $30/day shared across ~120 markets"
+   }
+  },
+  {
+   "rank": 4,
+   "category": "esports",
+   "market_types": [
+    "cs2|esports_match_winner",
+    "lol|esports_match_winner",
+    "valorant|esports_match_winner"
+   ],
+   "passive_fill_frequency": {
+    "basis": "EVIDENCED + OBSERVED",
+    "our_maker_fills": 6,
+    "our_taker_fills": 0,
+    "evidenced_market": "aec-cs2-ica-ff-2026-09-10",
+    "cs2": {
+     "markets": 7,
+     "states": 648,
+     "reach120_pct": 19.0,
+     "recycle_per_hr": 10.8
+    },
+    "lol": {
+     "markets": 4,
+     "states": 294,
+     "reach120_pct": 20.5,
+     "recycle_per_hr": 10.67
+    },
+    "valorant": {
+     "markets": 2,
+     "states": 428,
+     "reach120_pct": 12.9,
+     "recycle_per_hr": 6.37
+    }
+   },
+   "spread": {
+    "basis": "OBSERVED",
+    "cs2_median_usd": 0.01,
+    "cs2_pct_le_1c": 74.7,
+    "lol_pct_le_1c": 78.6,
+    "valorant_median_usd": 0.02
+   },
+   "depth": {
+    "basis": "OBSERVED",
+    "cs2_touch_bid": 141.5,
+    "lol_touch_bid": 111.5,
+    "note": "thinnest tight books on PMUS - the closest profile to L5's source touch depth of 65"
+   },
+   "adverse_selection": {
+    "basis": "NOT MEASURED",
+    "one_evidenced_adverse_case": {
+     "market": "aec-cs2-ica-ff-2026-09-10",
+     "realized_usd": -3.9028,
+     "residual": -9.08,
+     "pair_usd": 0.0924
+    }
+   },
+   "two_sided_inventory": {
+    "basis": "EVIDENCED, borderline",
+    "matched_pairs": 4.62,
+    "matched_pair_cost": 0.98,
+    "inside_spring_discipline_0_96": false,
+    "book_two_sided_reach_120s_pct": [
+     0.0,
+     4.6
+    ],
+    "degenerate_subtypes": [
+     "cs2|esports_series_total_maps spread 0.21 depth 5",
+     "valorant|esports_series_total_maps spread 0.50 depth 5",
+     "lol|esports_series_total_games spread 0.25 depth 0.1"
+    ]
+   },
+   "tte_structure": {
+    "basis": "OBSERVED DEFECT",
+    "fixed_expiry": false
+   },
+   "fees": {
+    "basis": "PUBLISHED",
+    "maker_theta": -0.0125,
+    "taker_theta": 0.0695
+   },
+   "confirmed_rewards": {
+    "maker_rebate_credited_usd": 0.04,
+    "liquidity_rewards_credited_usd": 0.0
+   }
+  },
+  {
+   "rank": 5,
+   "category": "baseball",
+   "market_types": [
+    "mlb|moneyline|LIVE",
+    "mlb|totals|LIVE",
+    "mlb|spreads|LIVE",
+    "mlb|baseball_team_full_game_spread"
+   ],
+   "passive_fill_frequency": {
+    "basis": "OBSERVED ONLY - no maker fill ever taken at size in this category",
+    "mlb_moneyline_live": {
+     "markets": 8,
+     "states": 1339,
+     "reach120_pct": 29.9,
+     "two_sided_120_pct": 9.1,
+     "median_reach_s": 39.8
+    },
+    "single_market_outlier": {
+     "markets": 1,
+     "states": 50,
+     "n120": 36,
+     "reach120_pct": 77.8,
+     "sell_reach120_pct": 69.4,
+     "two_sided_120_pct": 47.2,
+     "recycle_per_hr": 47.36,
+     "WARNING": "n=36 answerable states on ONE market - not a category reading"
+    },
+    "our_turnover_usd": 0.2381,
+    "our_markets": 6
+   },
+   "spread": {
+    "basis": "OBSERVED",
+    "median_usd": 0.005,
+    "pct_le_1c": 94.2,
+    "note": "tighter than L5's own source spread"
+   },
+   "depth": {
+    "basis": "OBSERVED",
+    "touch_bid_contracts": 3950.89,
+    "touch_ask_contracts": 68094.54,
+    "touch_move_per_min": 0.64,
+    "diagnosis": "canonical 'tight but frozen' wall"
+   },
+   "adverse_selection": {
+    "basis": "NOT MEASURED"
+   },
+   "two_sided_inventory": {
+    "basis": "OBSERVED book only",
+    "book_two_sided_reach_120s_pct": 9.1,
+    "our_realized_net_usd": -0.029,
+    "our_turnover_usd": 0.2381,
+    "note": "size far below rebate floor; shape evidence only"
+   },
+   "tte_structure": {
+    "basis": "OBSERVED DEFECT",
+    "fixed_expiry": false
+   },
+   "fees": {
+    "basis": "PUBLISHED",
+    "maker_theta": -0.0125,
+    "taker_theta": 0.0695
+   },
+   "confirmed_rewards": {
+    "maker_rebate_credited_usd": 0.0,
+    "liquidity_rewards_credited_usd": 0.0
+   }
+  },
+  {
+   "rank": 6,
+   "category": "basketball",
+   "market_types": [
+    "wnba|moneyline|LIVE",
+    "wnba|totals|LIVE",
+    "wnba|spreads|LIVE"
+   ],
+   "passive_fill_frequency": {
+    "basis": "OBSERVED, essentially zero",
+    "wnba_moneyline": {
+     "markets": 1,
+     "states": 204,
+     "reach120_pct": 0.0
+    },
+    "wnba_totals": {
+     "markets": 1,
+     "states": 204,
+     "reach120_pct": 11.1,
+     "two_sided_120_pct": 0.0
+    },
+    "our_maker_fills": 0,
+    "nba_data_in_repo": false
+   },
+   "spread": {
+    "basis": "OBSERVED",
+    "median_usd": 0.01
+   },
+   "depth": {
+    "basis": "OBSERVED",
+    "wnba_moneyline_touch_bid": 20329.26,
+    "touch_move_per_min": 0.0
+   },
+   "adverse_selection": {
+    "basis": "NOT MEASURABLE"
+   },
+   "two_sided_inventory": {
+    "basis": "NONE OBSERVED"
+   },
+   "tte_structure": {
+    "basis": "OBSERVED DEFECT",
+    "fixed_expiry": false
+   },
+   "fees": {
+    "basis": "PUBLISHED",
+    "maker_theta": -0.0125,
+    "taker_theta": 0.0695
+   },
+   "confirmed_rewards": {
+    "maker_rebate_credited_usd": 0.0,
+    "liquidity_rewards_credited_usd": 0.0
+   }
+  },
+  {
+   "rank": 7,
+   "category": "football",
+   "market_types": [
+    "nfl|moneyline|PRE",
+    "nfl|totals|PRE",
+    "nfl|spreads|PRE",
+    "cfb spreads",
+    "cfb totals"
+   ],
+   "passive_fill_frequency": {
+    "basis": "OBSERVED, and ZERO - and every football reach observation is PREGAME",
+    "nfl_moneyline_pre": {
+     "markets": 2,
+     "states": 408,
+     "reach120_pct": 0.0
+    },
+    "nfl_totals_pre": {
+     "markets": 11,
+     "states": 2243,
+     "reach120_pct": 0.0
+    },
+    "nfl_spreads_pre": {
+     "markets": 13,
+     "states": 2652,
+     "reach120_pct": 0.0
+    },
+    "touch_move_per_min": 0.0,
+    "live_reach_ever_measured": false
+   },
+   "spread": {
+    "basis": "OBSERVED",
+    "nfl_moneyline_pre_median_usd": 0.005,
+    "nfl_moneyline_pre_pct_le_2c": 100.0,
+    "nfl_spreads_pre_median_usd": 0.05,
+    "nfl_spreads_pre_pct_le_2c": 15.4
+   },
+   "depth": {
+    "basis": "OBSERVED",
+    "nfl_moneyline_pre_touch_bid": 2252045.485,
+    "nfl_moneyline_pre_touch_ask": 2347077.065,
+    "diagnosis": "most extreme wall recorded anywhere in this repo"
+   },
+   "adverse_selection": {
+    "basis": "NOT MEASURED"
+   },
+   "two_sided_inventory": {
+    "basis": "EVIDENCED - WORST REALIZED",
+    "markets": 5,
+    "turnover_usd": 34.6776,
+    "realized_net_usd": -1.5476,
+    "pair_usd": 4.4773,
+    "residual_usd": -6.3049,
+    "worst_single_market": {
+     "slug": "asc-cfb-wisc-nd-2026-09-06-pos-10pt5",
+     "net_usd": -6.2255
+    }
+   },
+   "tte_structure": {
+    "basis": "OBSERVED DEFECT",
+    "fixed_expiry": false
+   },
+   "fees": {
+    "basis": "PUBLISHED",
+    "maker_theta": -0.0125,
+    "taker_theta": 0.0695
+   },
+   "confirmed_rewards": {
+    "maker_rebate_credited_usd": 0.0,
+    "liquidity_rewards_credited_usd": 0.0,
+    "largest_pools_on_venue_usd": [
+     750,
+     1200,
+     3000,
+     4500
+    ],
+    "why_zero": "target sizes 25,000-500,000 contracts; our 12-contract resting share models to ~$0 and nothing was ever credited"
+   }
+  }
+ ],
+ "not_rankable": [
+  {
+   "category": "combat / ice / other single-market groups",
+   "market_types": [
+    "ufc|moneyline|LIVE",
+    "boxing|moneyline|PRE",
+    "nhl|moneyline|PRE",
+    "darts",
+    "table-tennis"
+   ],
+   "why": "n too small to be a category",
+   "ufc": {
+    "markets": 1,
+    "states": 39,
+    "reach120_pct": 45.8,
+    "two_sided_120_pct": 33.3,
+    "median_reach_s": 16.0,
+    "touch_bid": 359.97,
+    "touch_ask": 256.87,
+    "note": "the most L5-like profile on PMUS, on 1 market and 39 states - a hypothesis, not a reading"
+   },
+   "boxing_pre_reach120_pct": 0.0,
+   "nhl_pre_reach120_pct": 0.0,
+   "our_maker_fills": 0
+  },
+  {
+   "category": "economics / politics / commodities / weather / culture / non-sports props",
+   "why": "NOT OBSERVED AT ALL - zero observations in this repo",
+   "evidence": {
+    "pmus_live_funnel_2026_09_13": {
+     "markets": 11631,
+     "live_events": 61,
+     "live_events_unfiltered": 61,
+     "live_events_categories_sports": 61,
+     "verdict_quoted": "the hardcoded &categories=sports narrows NOTHING right now: the whole PMUS live universe is category 'sports'"
+    },
+    "pmus_leagues_served": 50,
+    "all_sports": true,
+    "only_non_sports_pmus_product_enumerated": [
+     "btc-updown-15m",
+     "btc-updown-1h",
+     "btc-updown-5m (declared, 0 events)",
+     "btc-updown-4h (declared, 0 events)",
+     "btc-strike-*",
+     "btc-range-*",
+     "btc-hit-monthly"
+    ]
+   },
+   "action": "NO RANK GIVEN. Ranking these would be ranking on vapour."
+  }
+ ],
+ "headline": {
+  "does_btc15m_win": false,
+  "statement": "BTC15m wins exactly ONE axis - TTE structure, where it wins outright and is the only native-clock cohort - and ties on fees. It LOSES passive fill frequency, spread, two-sided inventory opportunity and confirmed rewards to tennis and soccer, and loses spread to MLB. Its evidenced pair costs (1.0299, 1.1986) are the worst we hold, against soccer 0.7636 and tennis 0.9477, the only evidenced pair costs inside the <=0.96 spring discipline.",
+  "honest_limit": "Tennis's and soccer's lead rests on ONE fully-matched market each (19.87 and 5.67 pairs) inside a 212-minute and a ~100-minute observation window. That is a reason to measure them properly, not a verdict. Both also lose the clock axis, and no sports category has a fix for that.",
+  "no_pmus_sports_category_met_preregistered_habitat_thresholds": true,
+  "qualifying_categories_in_both_sweeps": 0
+ },
+ "data_thinness": {
+  "no_markout_ever_computed_on_our_own_fills": "in ANY category, on EITHER venue. The only toxicity measurement in the repo (FILL_TOXICITY.json) is of L5's fills on PM International.",
+  "football_reach_dataset_is_entirely_pregame": "176 of 229 sampled markets were NFL pregame for games days away, move/min 0.00; the artefact states 'THIS SAMPLE CANNOT ANSWER THE REACH QUESTION'",
+  "sports_habitat_sweeps_ran_off_peak": "sweep 1 at 01:45-02:15 UTC (tail of the US evening); sweep 2 at 02:40-03:10 UTC with essentially no US sport live. Both pre-register a peak-hours repeat that has not happened.",
+  "per_category": {
+   "tennis": {
+    "book_states": 1382,
+    "markets": 12,
+    "obs_minutes": 212.7,
+    "our_maker_fills": 24,
+    "our_settled_markets": 9,
+    "markouts": 0
+   },
+   "soccer": {
+    "book_states": 3727,
+    "markets": 27,
+    "our_maker_fills": 13,
+    "our_settled_markets": 4,
+    "markouts": 0
+   },
+   "crypto_btc15m": {
+    "public_tape_samples": 167,
+    "tape_windows": 1,
+    "authenticated_decision_states": 315,
+    "closed_windows_of_volume": 89,
+    "our_maker_fills": 14,
+    "our_probes": 4,
+    "markouts": 0
+   },
+   "esports": {
+    "book_states": 1370,
+    "markets": 13,
+    "our_maker_fills": 6,
+    "our_settled_markets": 3,
+    "markouts": 0
+   },
+   "baseball": {
+    "book_states": 4615,
+    "markets": 8,
+    "our_maker_fills": 0,
+    "our_settled_markets": 6,
+    "markouts": 0
+   },
+   "basketball": {
+    "book_states": 434,
+    "markets": 2,
+    "our_maker_fills": 0,
+    "our_settled_markets": 0,
+    "markouts": 0
+   },
+   "football": {
+    "book_states": 5303,
+    "markets": 26,
+    "all_pregame": true,
+    "our_maker_fills": 8,
+    "our_settled_markets": 5,
+    "markouts": 0
+   },
+   "ufc_boxing_nhl_darts_tt": {
+    "book_states": 658,
+    "markets": 6,
+    "our_maker_fills": 0,
+    "our_settled_markets": 0,
+    "markouts": 0
+   },
+   "economics_politics_commodities_weather_culture": {
+    "book_states": 0,
+    "markets": 0,
+    "our_maker_fills": 0,
+    "our_settled_markets": 0
+   }
+  }
+ },
+ "executability_conditions_for_frozen_mechanics": {
+  "tennis": [
+   "pass a real settlement horizon so the TTE bucket stops being degenerate (today 635/635 decisions key tte>10m, patience schedule inert)",
+   "two-sided reach above the measured 6.3%, or explicit acceptance of slow one-sided completion",
+   "the 0.9477 pair cost reproduced beyond n=1 market"
+  ],
+  "soccer": [
+   "same clock fix",
+   "resolve the buy/sell reach asymmetry - 67.8% buy against 10.6% sell means our patient COMPLETION side is the hard side, which is the Probe 08 failure mode",
+   "show 0.7636 was not a function of favourable first-leg drift, which R5F section E says it was"
+  ],
+  "crypto_btc15m": [
+   "a separately reviewed crypto entry band - only 54% of observed mids fall inside the sports 0.20-0.80",
+   "correct taker theta from 0.06 to the published 0.0695 on the execution path",
+   "a completion rule demanding >=2c, realistically >=3c gross, since a 1c gross pair edge is worth less than nothing after the 1.67c median complement taker fee",
+   "accept the 60.7% zero-volume duty cycle"
+  ],
+  "esports": [
+   "clock fix",
+   "treat depth 112-142 as the feature it is, and measure whether a 112-deep book strands more often - the 28.2% incidence figure was measured in books 80x deeper",
+   "hard-exclude the degenerate series_total_maps sub-types"
+  ],
+  "baseball": [
+   "clock fix",
+   "a peak-hours habitat repeat showing reach rises materially above 29.9% (the artefact's own gating step)",
+   "a route past a 3,951-contract touch replaced 0.64 times a minute - queue position is unproven everywhere in this programme"
+  ],
+  "basketball": [
+   "any sample at all; 1-2 markets at 0% reach is not a basis; no NBA data exists in this repo"
+  ],
+  "football": [
+   "a LIVE reach measurement, which has never been taken",
+   "a reason to believe a 2.25-million-contract touch is joinable",
+   "an explanation of the -$6.23 single-market CFB spread loss before further spread-shape exposure",
+   "its large liquidity pools are NOT a reason - target sizes make our share ~$0 and nothing was ever credited"
+  ],
+  "combat_ice_other": [
+   "n. ufc is the most interesting single reading on the venue and it is 39 states on one market"
+  ],
+  "economics_politics_commodities_weather_culture": [
+   "the products must be shown to exist on PMUS at all. The engine IS market-agnostic (PMUSAdapter and pmus_q1_executor are slug-based with zero sports-specific order-path references) but agnostic machinery is not the same as available markets."
+  ]
+ },
+ "sources": [
+  "analysis/pmus/sports_habitat_discovery.json",
+  "analysis/pmus/habitat_search_v2.json",
+  "analysis/pmus/live_rankings_and_shadow.json",
+  "analysis/pmus/live_slate_habitat.json",
+  "analysis/pmus/live_discovery_coverage.json",
+  "analysis/pmus/universe/live_funnel.json",
+  "analysis/pmus/P24_PMUS_BTC15M.md",
+  "analysis/pmus/p24_pmus_btc15m_window_volumes.json",
+  "analysis/pmus/EXPLORATORY_OPPORTUNITY_FREQUENCY.md",
+  "analysis/pmus/pmus_published_fee_schedule.json",
+  "analysis/pmus/evidence/PROBE_06_FINAL_ACCOUNTING.md",
+  "analysis/pmus/evidence/PROBE_07_FINAL_ACCOUNTING.md",
+  "analysis/pmus/evidence/probe08/PROBE_08_FINAL.md",
+  "analysis/pmus/evidence/BPRIME_FOUR_MARKET_RESULT.md",
+  "analysis/l5/COHORT_EXECUTION_MODES.md",
+  "analysis/l5/FILL_TOXICITY.json",
+  "analysis/l5/BAND_SPREAD_FINDINGS.md",
+  "analysis/l5/BAND_SPREAD_GRID.md",
+  "analysis/l5/CAPACITY_CURVE.md",
+  "analysis/l5/CAPACITY_AND_CLONE.md",
+  "analysis/l5/EXEC_SHADOW_ECONOMICS.md",
+  "analysis/l5/L5_PROFITABILITY.md",
+  "analysis/l5/l5_economic_scoreboard.json",
+  "analysis/l5/REALIZED_BRIDGE.md",
+  "analysis/l5/LIVE_R5FT_FORENSIC_2026-09-13.md",
+  "data/pmus/sports_incentives_2026-09-10/credited_reconcile.json",
+  "data/pmus/sports_incentives_2026-09-10/depth.json",
+  "data/pmus/sports_opportunity_2026-09-10/ranked_universe.json.gz",
+  "data/pmus/sports_opportunity_2026-09-10/eligible.json"
+ ],
+ "not_used_by_instruction": [
+  "analysis/l5/s3/** (live CI collection in flight)",
+  "deploy/**",
+  "scripts/l5_exec*",
+  "any live_exec* spec or frozen fingerprint"
+ ]
+}
