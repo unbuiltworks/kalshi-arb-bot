@@ -1,0 +1,62 @@
+{
+ "LABEL": "REAL PMUS RESPONSES, CAPTURED READ-ONLY. Sanitized only by omission -- no value was altered.",
+ "provenance": {
+  "venue": "polymarket_us",
+  "slug": "cpc-btc-updown-15m-2026-10-07-2215z",
+  "captured_utc": "2026-10-07T22:29:48Z",
+  "seconds_into_window": 842.5,
+  "deployment": "dd7583fb-6f5e-41fd-a51b-0b566c9c05fa",
+  "probe": "scripts/l5_e1_bbo_semantics_probe.py",
+  "read_only": true,
+  "venue_post": "none",
+  "what_was_removed": "nothing from these payloads; no credential, header or signature was ever in them",
+  "why_this_window_is_still_useful": "it is a NEAR-EXPIRY, ONE-SIDED book -- the state that must fail closed. bestAsk is null, askDepth 0, askShares 0 and the offers ladder is empty, while bestBid is 0.9900 with 29 bid levels."
+ },
+ "rest_bbo": {
+  "marketData": {
+   "marketSlug": "cpc-btc-updown-15m-2026-10-07-2215z",
+   "currentPx": {"value": "0.9900", "currency": "USD"},
+   "lastTradePx": {"value": "0.9900", "currency": "USD"},
+   "settlementPx": null,
+   "sharesTraded": "354010.4600",
+   "openInterest": "86676.3500",
+   "bestAsk": null,
+   "bestBid": {"value": "0.9900", "currency": "USD"},
+   "askDepth": 0,
+   "bidDepth": 29,
+   "lastPriceSample": {
+    "longPx": {"value": "0.9900", "currency": "USD"},
+    "shortPx": {"value": "0.01", "currency": "USD"},
+    "ts": "2026-10-07T22:28:50.067272083Z"
+   },
+   "shortQuote": {"value": "0.01", "currency": "USD"},
+   "state": "MARKET_STATE_OPEN",
+   "bidShares": "39000",
+   "askShares": "0"
+  }
+ },
+ "ws_book_frame_shape": {
+  "LABEL": "AuthBook's own pre_book record of the FIRST frames for this slug. NOTE bestBid and bestAsk are BOTH null in every one: the PMUS authenticated websocket carries LADDERS ONLY.",
+  "keys": ["bids", "marketSlug", "offers", "state", "stats", "transactTime"],
+  "n_bids": 29,
+  "n_offers": 0,
+  "bid0": {"px": {"value": "0.9900", "currency": "USD"}, "price": null, "qty": "24597.4900"},
+  "offer0": [],
+  "bestBid": null,
+  "bestAsk": null,
+  "state": "MARKET_STATE_OPEN"
+ },
+ "ws_feed_state": {
+  "connected": true,
+  "book_updates": 103,
+  "health_why": "NO_CONNECTED_TWO_SIDED_BOOK_FOR_THIS_SLUG",
+  "snapshot": null,
+  "why_no_snapshot": "AuthBook returns a snapshot only when connected AND two-sided. The offers ladder was empty, so it correctly returned nothing -- the fail-closed path, observed working on real data."
+ },
+ "observed_unit_interval_values": ["0.01", "0.9900"],
+ "the_values_that_motivated_this_capture": {
+  "price_sent_in_window_3": "0.1300",
+  "other_value_in_the_same_payload": "0.4900",
+  "status": "neither appears in THIS payload; the capture establishes the SHAPE and the field semantics, and the parser tests below use both numbers against that shape"
+ }
+}

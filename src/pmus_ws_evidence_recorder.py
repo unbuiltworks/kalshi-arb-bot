@@ -183,29 +183,63 @@ DEFAULT_STATUS_EVERY_S = 60.0
 
 # ---------------- authenticated-stream state + status line ----------------
 
-def _walk_market_events(msg: Any, out: list, slug_hint: str = "") -> None:
+def _walk_market_events(msg: Any, out: list, slug_hint: str = "",
+                        booked: Any = None) -> None:
     """Tolerant extractor over the LIVE documented WS schema (camelCase
     like `marketData`/`marketSlug`/`lastTradePx`/`offers`, with snake_case
     equivalents accepted): collects book and trade events wherever they
-    appear in the message tree."""
+    appear in the message tree.
+
+    A NESTED OBJECT IS NOT A SECOND BOOK FOR THE SAME MARKET. `booked`
+    carries the slugs for which an ANCESTOR in this subtree already
+    yielded a book event, and no descendant may yield another one for
+    that slug.
+
+    WHY, with the defect it closes. The slug propagates downward through
+    `slug_hint`, so ANY nested dict carrying a `bids`/`offers`/`bestBid`
+    key used to become a competing book event for the enclosing market --
+    and `apply_events` folds events in order, so the LAST one won. A
+    nested object holding a single stale or unrelated level therefore
+    REPLACED the authoritative top of book.
+
+    Reproduced against the venue's real frame shape, whose keys are
+    exactly ["bids","marketSlug","offers","state","stats","transactTime"]:
+    with a `bids` list placed inside `stats`, the authoritative best bid
+    0.9900 became 0.4900. That is the mechanism by which E1's window-3
+    attempt could record a price no level of the real ladder carried.
+
+    Trades are UNAFFECTED: they are still collected at any depth, because
+    a trade legitimately appears inside a market object.
+    """
+    if booked is None:
+        booked = set()
     if isinstance(msg, list):
         for item in msg:
-            _walk_market_events(item, out, slug_hint)
+            _walk_market_events(item, out, slug_hint, booked)
         return
     if not isinstance(msg, Mapping):
         return
     slug = str(msg.get("marketSlug") or msg.get("market_slug")
                or msg.get("slug") or slug_hint or "")
     asks = msg.get("offers") if "offers" in msg else msg.get("asks")
+    emitted_book = False
     if slug and ("bids" in msg or "offers" in msg or "asks" in msg
                  or "bestBid" in msg or "best_bid" in msg
                  or "bestAsk" in msg or "best_ask" in msg):
-        out.append({"kind": "book", "slug": slug,
-                    "bids": msg.get("bids"), "asks": asks,
-                    "best_bid": msg.get("bestBid") or msg.get("best_bid"),
-                    "best_ask": msg.get("bestAsk") or msg.get("best_ask"),
-                    "last_trade_px": msg.get("lastTradePx")
-                    or msg.get("last_trade_px")})
+        if slug in booked:
+            # an ancestor already described this market's book; this is
+            # part of that payload, not another book
+            pass
+        else:
+            emitted_book = True
+            out.append({"kind": "book", "slug": slug,
+                        "bids": msg.get("bids"), "asks": asks,
+                        "best_bid": msg.get("bestBid")
+                        or msg.get("best_bid"),
+                        "best_ask": msg.get("bestAsk")
+                        or msg.get("best_ask"),
+                        "last_trade_px": msg.get("lastTradePx")
+                        or msg.get("last_trade_px")})
     if slug and "price" in msg and ("qty" in msg or "quantity" in msg
                                     or "size" in msg):
         out.append({"kind": "trade", "slug": slug,
@@ -217,8 +251,9 @@ def _walk_market_events(msg: Any, out: list, slug_hint: str = "") -> None:
                     "maker": msg.get("maker"), "taker": msg.get("taker"),
                     "side": msg.get("side") or msg.get("takerSide")
                     or msg.get("taker_side")})
+    child_booked = (booked | {slug}) if emitted_book else booked
     for v in msg.values():
-        _walk_market_events(v, out, slug)
+        _walk_market_events(v, out, slug, child_booked)
 
 
 def _trade_direction(ev: Mapping[str, Any],
