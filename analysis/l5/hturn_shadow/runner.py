@@ -186,9 +186,11 @@ def summarise(windows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "side": {
             "agrees": sum(1 for t in ev if t["side_agrees"]),
             "disagrees": sum(1 for t in ev if t["side_agrees"] is False),
-            "note": ("side agreement is BY CONSTRUCTION -- the mechanism rests "
-                     "the complement of its own surplus -- and is reported as "
-                     "a construction check, never as a result")},
+            "note": ("the mechanism rests the complement of ITS OWN surplus, "
+                     "so the side is not free -- but it is not identical to "
+                     "L5's either, because the shadow does not take his "
+                     "completes and its surplus therefore drifts from his. A "
+                     "disagreement is a real behavioural divergence")},
         "fill_timing": {
             "shadow_hit_inside_the_run": len(hit),
             "shadow_hit_only_after_the_run_started_again": len(late),
@@ -290,17 +292,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         slugs = slugs[:a.max_windows]
 
     arms: Dict[str, Any] = {}
-    for arm_name, allowance in (("fee_allowance_measured_max",
-                                 D(str(a.fee_allowance))),
-                                ("fee_allowance_zero_sensitivity", D("0"))):
+    # THREE ARMS. The third is a DIAGNOSTIC and is not authorized for
+    # anything: it answers "is the mechanism's miss caused by the missing
+    # book or by the frozen 0.96 discipline?" by relaxing the ceiling to par.
+    # Near-par tolerance remains LOCKED for every deployable path; this arm
+    # exists so the attribution is measured instead of argued.
+    for arm_name, allowance, ceil_ in (
+            ("fee_allowance_measured_max", D(str(a.fee_allowance)), None),
+            ("fee_allowance_zero_sensitivity", D("0"), None),
+            ("diagnostic_ceiling_1_00_NOT_AUTHORIZED", D("0"), D("1.00"))):
         windows = []
         for slug in slugs:
             w = S.replay_window(slug, fills[slug], books[slug],
-                                fee_allowance=allowance)
+                                fee_allowance=allowance, ceiling=ceil_)
             w["family"] = "%s%s" % (meta[slug]["coin"],
                                     meta[slug]["contract_length"])
             if not a.rows:
-                for k in ("l5_actions", "shadow_trajectory", "l5_trajectory"):
+                for k in ("l5_actions", "shadow_trajectory", "quote_log",
+                          "shadow_fills"):
                     w.pop(k, None)
             windows.append(w)
         by_family: Dict[str, Any] = {}
@@ -308,6 +317,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             by_family[fam] = summarise([w for w in windows
                                         if w["family"] == fam])
         arms[arm_name] = {"fee_allowance_per_share": str(allowance),
+                          "pair_ceiling": str(ceil_ or M.pair_ceiling()),
+                          "authorized": ceil_ is None,
                           "pooled_is_R4_only": summarise(windows),
                           "by_family": by_family,
                           "windows": windows}
@@ -356,11 +367,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         json.dump(out, fh, indent=1, default=str)
     s = arms["fee_allowance_measured_max"]["pooled_is_R4_only"]
     print(json.dumps({k: s[k] for k in
-                      ("n_windows", "n_l5_fills", "n_episodes",
-                       "episode_status", "unevaluable_fraction",
-                       "evaluable_episodes", "shadow_turned",
-                       "comparable_turns_both_ledgers",
-                       "turn_timing_delta_s", "pair_cost")},
+                      ("n_windows", "n_l5_fills", "n_l5_turns", "turn_status",
+                       "unevaluable_fraction", "evaluable_turns", "side",
+                       "fill_timing", "price", "pair_cost",
+                       "inventory_trajectory", "partial_fills",
+                       "mirror_dependency")},
                      indent=1, default=str), flush=True)
     print("wrote %s" % a.out, flush=True)
     return 0
