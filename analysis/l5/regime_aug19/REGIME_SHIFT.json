@@ -1,0 +1,2662 @@
+{
+ "protocol": "REGIME-AUG19-ATTRIBUTION",
+ "generated_utc": "2026-10-07T01:22:33.486933+00:00",
+ "profit_label": "historical replay / descriptive measurement",
+ "NOT_OUR_REALIZED_PROFIT": "Public activity of another trader. Not shadow, not a probe, not submitted, not filled, not settled, never realized.",
+ "change_points": [
+  "2026-04-25",
+  "2026-06-23",
+  "2026-08-19"
+ ],
+ "change_points_source": "analysis/l5/CANON_REGIMES.md via analysis.l5.residual_frontier.replay.CANON_CHANGE_POINTS. NOT re-fit, NOT moved, NOT added to by this module.",
+ "regime_labels": [
+  "REGIME_PRE_2026-04-25",
+  "REGIME_2026-04-25_TO_2026-06-22",
+  "REGIME_2026-06-23_TO_2026-08-18",
+  "REGIME_2026-08-19_ON"
+ ],
+ "contemporaneous_fields": [
+  "slug",
+  "asset",
+  "duration_s",
+  "day",
+  "regime",
+  "n_fills",
+  "turnover_usd",
+  "first_price",
+  "first_size",
+  "first_is_up",
+  "first_tte_s",
+  "shares_up",
+  "shares_down",
+  "vwap_up",
+  "vwap_down",
+  "n_open",
+  "n_extend",
+  "n_switch",
+  "n_complete",
+  "run_lengths",
+  "fill_sizes",
+  "peak_abs_residual",
+  "terminal_abs_residual",
+  "t_to_match_s",
+  "span_s",
+  "price_travel",
+  "price_range"
+ ],
+ "settlement_derived_fields": [
+  "winner_index",
+  "has_redeem",
+  "redeem_usd",
+  "residual_pnl_usd",
+  "settled_net_usd",
+  "one_sided_lost"
+ ],
+ "no_hindsight_clause": "Contemporaneous metrics are computed by contemporaneous_metrics(), whose only input is EventObservables, a frozen __slots__ dataclass with no settlement field. Settlement lives in a separate EventOutcome record read only by outcome_metrics().",
+ "PRIMARY": {
+  "source": "data/l5/raw/activity_gap.jsonl.gz",
+  "diagnostics": {
+   "dropped_in_sample_leak": 3501,
+   "incentive_records": 194,
+   "dropped_out_of_family": 3245
+  },
+  "n_events": 14785,
+  "n_fills": 685430,
+  "contemporaneous_by_regime": {
+   "REGIME_PRE_2026-04-25": {
+    "n_events": 170,
+    "n_fills": 10399,
+    "observed_days": 4,
+    "first_day": "2026-04-21",
+    "last_day": "2026-04-24",
+    "turnover_usd": 92040.76,
+    "events_per_observed_day": 42.5,
+    "turnover_per_observed_day_usd": 23010.19,
+    "fills_per_event": 61.1706,
+    "notional_per_event_usd": 541.4162,
+    "clip_size_shares": {
+     "n": 10399,
+     "mean": 18.926243,
+     "p10": 2.727271,
+     "p25": 6.242681,
+     "median": 20.0,
+     "p75": 27.625,
+     "p90": 40.0,
+     "p95": 40.0,
+     "p99": 40.0
+    },
+    "clip_size_mix_frac_of_fills": {
+     "lt10": 0.328205,
+     "10_25": 0.317242,
+     "25_50": 0.353207,
+     "50_100": 0.001058,
+     "100_250": 0.000288,
+     "ge250": 0.0
+    },
+    "clip_size_mix_frac_of_shares": {
+     "lt10": 0.077368,
+     "10_25": 0.286808,
+     "25_50": 0.63075,
+     "50_100": 0.003549,
+     "100_250": 0.001524,
+     "ge250": 0.0
+    },
+    "first_size_shares": {
+     "n": 170,
+     "mean": 21.526198,
+     "p10": 5.816111,
+     "p25": 13.9425,
+     "median": 25.0,
+     "p75": 25.0,
+     "p90": 40.0,
+     "p95": 40.0,
+     "p99": 40.0
+    },
+    "first_price": {
+     "n": 170,
+     "mean": 0.498183,
+     "p10": 0.36,
+     "p25": 0.44,
+     "median": 0.5,
+     "p75": 0.56,
+     "p90": 0.62,
+     "p95": 0.672,
+     "p99": 0.8362
+    },
+    "first_favored_frac": 0.452941,
+    "first_tte_s": {
+     "n": 170,
+     "mean": 837.541176,
+     "p10": 787.8,
+     "p25": 850.5,
+     "median": 867.0,
+     "p75": 878.0,
+     "p90": 886.0,
+     "p95": 888.0,
+     "p99": 890.0
+    },
+    "action_mix_frac": {
+     "open": 0.016348,
+     "extend": 0.619483,
+     "switch": 0.140302,
+     "complete": 0.223868
+    },
+    "action_counts": {
+     "open": 170,
+     "extend": 6442,
+     "switch": 1459,
+     "complete": 2328
+    },
+    "extend_per_event": 37.8941,
+    "switch_per_event": 8.5824,
+    "complete_per_event": 13.6941,
+    "same_side_run_length": {
+     "n": 3957,
+     "mean": 2.628001,
+     "p10": 1.0,
+     "p25": 1.0,
+     "median": 2.0,
+     "p75": 3.0,
+     "p90": 5.0,
+     "p95": 7.0,
+     "p99": 11.0
+    },
+    "pair_cost": {
+     "n": 167,
+     "mean": 0.963184,
+     "p10": 0.875226,
+     "p25": 0.926102,
+     "median": 0.959151,
+     "p75": 0.990425,
+     "p90": 1.047759,
+     "p95": 1.087659,
+     "p99": 1.165135
+    },
+    "pair_cost_frac_le_0_96": 0.502994,
+    "pair_cost_frac_lt_1_00": 0.778443,
+    "pair_cost_frac_gt_1_00": 0.221557,
+    "pair_cost_frac_gt_1_05": 0.095808,
+    "pair_cost_frac_gt_1_15": 0.023952,
+    "completion_rate": 0.982353,
+    "completion_ratio": {
+     "n": 170,
+     "mean": 0.859436,
+     "p10": 0.670758,
+     "p25": 0.826432,
+     "median": 0.919639,
+     "p75": 0.966318,
+     "p90": 0.986438,
+     "p95": 0.99491,
+     "p99": 0.998979
+    },
+    "t_to_match_s": {
+     "n": 167,
+     "mean": 61.976048,
+     "p10": 6.0,
+     "p25": 14.0,
+     "median": 38.0,
+     "p75": 86.0,
+     "p90": 133.6,
+     "p95": 190.4,
+     "p99": 342.12
+    },
+    "event_span_s": {
+     "n": 170,
+     "mean": 693.929412,
+     "p10": 443.8,
+     "p25": 622.5,
+     "median": 762.0,
+     "p75": 841.5,
+     "p90": 864.2,
+     "p95": 871.1,
+     "p99": 888.0
+    },
+    "peak_abs_residual_shares": {
+     "n": 170,
+     "mean": 171.083971,
+     "p10": 84.293,
+     "p25": 112.738541,
+     "median": 154.759436,
+     "p75": 212.03391,
+     "p90": 277.149582,
+     "p95": 360.33776,
+     "p99": 435.064187
+    },
+    "terminal_abs_residual_shares": {
+     "n": 170,
+     "mean": 103.120499,
+     "p10": 13.105959,
+     "p25": 36.046286,
+     "median": 83.889654,
+     "p75": 149.346712,
+     "p90": 233.615635,
+     "p95": 276.360341,
+     "p99": 380.531291
+    },
+    "terminal_residual_frac": {
+     "n": 170,
+     "mean": 0.140564,
+     "p10": 0.013563,
+     "p25": 0.033682,
+     "median": 0.080361,
+     "p75": 0.173568,
+     "p90": 0.329242,
+     "p95": 0.482216,
+     "p99": 1.0
+    },
+    "one_sided_event_frac": 0.017647,
+    "composition_asset_frac_of_events": {
+     "btc": 1.0
+    },
+    "composition_asset_frac_of_turnover": {
+     "btc": 1.0
+    },
+    "composition_duration_frac_of_events": {
+     "15m": 1.0
+    },
+    "composition_duration_frac_of_turnover": {
+     "15m": 1.0
+    },
+    "VOL_PROXY_price_travel_per_fill": {
+     "n": 170,
+     "mean": 0.198709,
+     "p10": 0.096064,
+     "p25": 0.136843,
+     "median": 0.195277,
+     "p75": 0.250968,
+     "p90": 0.312339,
+     "p95": 0.346635,
+     "p99": 0.416139
+    },
+    "VOL_PROXY_price_range_within_event": {
+     "n": 170,
+     "mean": 0.868353,
+     "p10": 0.67,
+     "p25": 0.85,
+     "median": 0.93,
+     "p75": 0.95,
+     "p90": 0.97,
+     "p95": 0.97,
+     "p99": 0.98
+    },
+    "VOL_PROXY_NOTE": "L5's OWN fill prices, not a venue mid and not the underlying. An EVENT-LEVEL DESCRIPTIVE, not a decision-time feature. True implied/realized volatility of the underlying is UNAVAILABLE across regimes: data/btc_spot_proxy/btc_1m.json covers only 2026-08-15..2026-08-20.",
+    "MAKER_TAKER_MIX": {
+     "status": "UNAVAILABLE",
+     "reason": "Liquidity role requires `execution.isAggressor` from the data-api /trades shape. Neither holdout source carries it: data/l5/raw/activity_gap.jsonl.gz records have exactly {conditionId,eventSlug,outcome,outcomeIndex,price,side,size,slug,timestamp,transactionHash,type,usdcSize} and data/l5/raw/sep/l5_sep23_25.json adds only profile fields. NOT INFERRED, and the bare boolean `aggressor` is not used anywhere in this module."
+    },
+    "SPREAD": {
+     "status": "UNAVAILABLE",
+     "reason": "Spread needs a resting book. analysis/l5/BOOK_ACQUISITION.md establishes that the only historical Polymarket L2 on disk is 2026-08-21..2026-08-24 (3.5 of 166 days, 2.1%), entirely inside REGIME_2026-08-19_ON, so no cross-regime spread series can be formed. Pair cost is reported instead and is a different quantity."
+    }
+   },
+   "REGIME_2026-04-25_TO_2026-06-22": {
+    "n_events": 1641,
+    "n_fills": 158978,
+    "observed_days": 48,
+    "first_day": "2026-04-25",
+    "last_day": "2026-06-22",
+    "turnover_usd": 1316565.65,
+    "events_per_observed_day": 34.188,
+    "turnover_per_observed_day_usd": 27428.45,
+    "fills_per_event": 96.8787,
+    "notional_per_event_usd": 802.2947,
+    "clip_size_shares": {
+     "n": 158978,
+     "mean": 17.587787,
+     "p10": 3.03,
+     "p25": 6.951988,
+     "median": 18.81,
+     "p75": 20.505427,
+     "p90": 30.0,
+     "p95": 45.0,
+     "p99": 60.0
+    },
+    "clip_size_mix_frac_of_fills": {
+     "lt10": 0.311861,
+     "10_25": 0.463341,
+     "25_50": 0.179239,
+     "50_100": 0.043434,
+     "100_250": 0.002126,
+     "ge250": 0.0
+    },
+    "clip_size_mix_frac_of_shares": {
+     "lt10": 0.08087,
+     "10_25": 0.458457,
+     "25_50": 0.311749,
+     "50_100": 0.136745,
+     "100_250": 0.012179,
+     "ge250": 0.0
+    },
+    "first_size_shares": {
+     "n": 1641,
+     "mean": 19.696052,
+     "p10": 4.68,
+     "p25": 9.73,
+     "median": 20.0,
+     "p75": 25.0,
+     "p90": 30.0,
+     "p95": 50.0,
+     "p99": 60.0
+    },
+    "first_price": {
+     "n": 1641,
+     "mean": 0.496184,
+     "p10": 0.350004,
+     "p25": 0.43,
+     "median": 0.5,
+     "p75": 0.56,
+     "p90": 0.64,
+     "p95": 0.7,
+     "p99": 0.86
+    },
+    "first_favored_frac": 0.446069,
+    "first_tte_s": {
+     "n": 1641,
+     "mean": 814.352834,
+     "p10": 707.0,
+     "p25": 813.0,
+     "median": 858.0,
+     "p75": 878.0,
+     "p90": 886.0,
+     "p95": 889.0,
+     "p99": 893.0
+    },
+    "action_mix_frac": {
+     "open": 0.010322,
+     "extend": 0.718389,
+     "switch": 0.110443,
+     "complete": 0.160846
+    },
+    "action_counts": {
+     "open": 1641,
+     "extend": 114208,
+     "switch": 17558,
+     "complete": 25571
+    },
+    "extend_per_event": 69.5966,
+    "switch_per_event": 10.6996,
+    "complete_per_event": 15.5826,
+    "same_side_run_length": {
+     "n": 44770,
+     "mean": 3.550994,
+     "p10": 1.0,
+     "p25": 1.0,
+     "median": 2.0,
+     "p75": 4.75,
+     "p90": 8.0,
+     "p95": 10.0,
+     "p99": 17.0
+    },
+    "pair_cost": {
+     "n": 1631,
+     "mean": 0.956012,
+     "p10": 0.879727,
+     "p25": 0.921652,
+     "median": 0.957736,
+     "p75": 0.991816,
+     "p90": 1.029798,
+     "p95": 1.058467,
+     "p99": 1.123359
+    },
+    "pair_cost_frac_le_0_96": 0.516248,
+    "pair_cost_frac_lt_1_00": 0.793378,
+    "pair_cost_frac_gt_1_00": 0.206622,
+    "pair_cost_frac_gt_1_05": 0.057633,
+    "pair_cost_frac_gt_1_15": 0.004292,
+    "completion_rate": 0.993906,
+    "completion_ratio": {
+     "n": 1641,
+     "mean": 0.868214,
+     "p10": 0.714093,
+     "p25": 0.822661,
+     "median": 0.905741,
+     "p75": 0.960445,
+     "p90": 0.983752,
+     "p95": 0.991689,
+     "p99": 0.998295
+    },
+    "t_to_match_s": {
+     "n": 1631,
+     "mean": 45.630901,
+     "p10": 5.0,
+     "p25": 13.0,
+     "median": 30.0,
+     "p75": 60.0,
+     "p90": 105.0,
+     "p95": 145.0,
+     "p99": 259.7
+    },
+    "event_span_s": {
+     "n": 1641,
+     "mean": 698.466789,
+     "p10": 460.0,
+     "p25": 617.0,
+     "median": 754.0,
+     "p75": 831.0,
+     "p90": 862.0,
+     "p95": 872.0,
+     "p99": 890.0
+    },
+    "peak_abs_residual_shares": {
+     "n": 1641,
+     "mean": 276.659082,
+     "p10": 129.9048,
+     "p25": 178.491031,
+     "median": 242.45892,
+     "p75": 347.170228,
+     "p90": 475.744729,
+     "p95": 557.706499,
+     "p99": 722.753552
+    },
+    "terminal_abs_residual_shares": {
+     "n": 1641,
+     "mean": 183.590567,
+     "p10": 23.426891,
+     "p25": 60.880204,
+     "median": 139.311687,
+     "p75": 258.282742,
+     "p90": 412.626222,
+     "p95": 511.930867,
+     "p99": 683.786916
+    },
+    "terminal_residual_frac": {
+     "n": 1641,
+     "mean": 0.131786,
+     "p10": 0.016248,
+     "p25": 0.039555,
+     "median": 0.094259,
+     "p75": 0.177339,
+     "p90": 0.285907,
+     "p95": 0.381591,
+     "p99": 0.646532
+    },
+    "one_sided_event_frac": 0.006094,
+    "composition_asset_frac_of_events": {
+     "btc": 1.0
+    },
+    "composition_asset_frac_of_turnover": {
+     "btc": 1.0
+    },
+    "composition_duration_frac_of_events": {
+     "15m": 1.0
+    },
+    "composition_duration_frac_of_turnover": {
+     "15m": 1.0
+    },
+    "VOL_PROXY_price_travel_per_fill": {
+     "n": 1641,
+     "mean": 0.160689,
+     "p10": 0.087841,
+     "p25": 0.116977,
+     "median": 0.152961,
+     "p75": 0.195588,
+     "p90": 0.245517,
+     "p95": 0.274495,
+     "p99": 0.352726
+    },
+    "VOL_PROXY_price_range_within_event": {
+     "n": 1641,
+     "mean": 0.895429,
+     "p10": 0.79,
+     "p25": 0.89,
+     "median": 0.94,
+     "p75": 0.96,
+     "p90": 0.97,
+     "p95": 0.98,
+     "p99": 0.9806
+    },
+    "VOL_PROXY_NOTE": "L5's OWN fill prices, not a venue mid and not the underlying. An EVENT-LEVEL DESCRIPTIVE, not a decision-time feature. True implied/realized volatility of the underlying is UNAVAILABLE across regimes: data/btc_spot_proxy/btc_1m.json covers only 2026-08-15..2026-08-20.",
+    "MAKER_TAKER_MIX": {
+     "status": "UNAVAILABLE",
+     "reason": "Liquidity role requires `execution.isAggressor` from the data-api /trades shape. Neither holdout source carries it: data/l5/raw/activity_gap.jsonl.gz records have exactly {conditionId,eventSlug,outcome,outcomeIndex,price,side,size,slug,timestamp,transactionHash,type,usdcSize} and data/l5/raw/sep/l5_sep23_25.json adds only profile fields. NOT INFERRED, and the bare boolean `aggressor` is not used anywhere in this module."
+    },
+    "SPREAD": {
+     "status": "UNAVAILABLE",
+     "reason": "Spread needs a resting book. analysis/l5/BOOK_ACQUISITION.md establishes that the only historical Polymarket L2 on disk is 2026-08-21..2026-08-24 (3.5 of 166 days, 2.1%), entirely inside REGIME_2026-08-19_ON, so no cross-regime spread series can be formed. Pair cost is reported instead and is a different quantity."
+    }
+   },
+   "REGIME_2026-06-23_TO_2026-08-18": {
+    "n_events": 8235,
+    "n_fills": 349160,
+    "observed_days": 46,
+    "first_day": "2026-06-23",
+    "last_day": "2026-08-18",
+    "turnover_usd": 3517048.42,
+    "events_per_observed_day": 179.022,
+    "turnover_per_observed_day_usd": 76457.57,
+    "fills_per_event": 42.3995,
+    "notional_per_event_usd": 427.0854,
+    "clip_size_shares": {
+     "n": 349160,
+     "mean": 20.326349,
+     "p10": 2.0,
+     "p25": 5.1,
+     "median": 15.0,
+     "p75": 30.0,
+     "p90": 49.92,
+     "p95": 53.805066,
+     "p99": 80.0
+    },
+    "clip_size_mix_frac_of_fills": {
+     "lt10": 0.384254,
+     "10_25": 0.238166,
+     "25_50": 0.277761,
+     "50_100": 0.099161,
+     "100_250": 0.000659,
+     "ge250": 0.0
+    },
+    "clip_size_mix_frac_of_shares": {
+     "lt10": 0.08176,
+     "10_25": 0.185528,
+     "25_50": 0.436748,
+     "50_100": 0.292631,
+     "100_250": 0.003333,
+     "ge250": 0.0
+    },
+    "first_size_shares": {
+     "n": 8235,
+     "mean": 30.96023,
+     "p10": 5.011082,
+     "p25": 14.98,
+     "median": 30.0,
+     "p75": 50.0,
+     "p90": 50.0,
+     "p95": 50.789971,
+     "p99": 80.0
+    },
+    "first_price": {
+     "n": 8235,
+     "mean": 0.545373,
+     "p10": 0.3,
+     "p25": 0.46,
+     "median": 0.54,
+     "p75": 0.66,
+     "p90": 0.8,
+     "p95": 0.88,
+     "p99": 0.95
+    },
+    "first_favored_frac": 0.617729,
+    "first_tte_s": {
+     "n": 8235,
+     "mean": 403.130176,
+     "p10": 91.0,
+     "p25": 174.0,
+     "median": 275.0,
+     "p75": 866.0,
+     "p90": 893.0,
+     "p95": 894.0,
+     "p99": 895.0
+    },
+    "action_mix_frac": {
+     "open": 0.023585,
+     "extend": 0.714581,
+     "switch": 0.10106,
+     "complete": 0.160774
+    },
+    "action_counts": {
+     "open": 8235,
+     "extend": 249503,
+     "switch": 35286,
+     "complete": 56136
+    },
+    "extend_per_event": 30.2979,
+    "switch_per_event": 4.2849,
+    "complete_per_event": 6.8168,
+    "same_side_run_length": {
+     "n": 99657,
+     "mean": 3.503617,
+     "p10": 1.0,
+     "p25": 1.0,
+     "median": 2.0,
+     "p75": 4.0,
+     "p90": 8.0,
+     "p95": 11.0,
+     "p99": 19.0
+    },
+    "pair_cost": {
+     "n": 6005,
+     "mean": 0.981989,
+     "p10": 0.809873,
+     "p25": 0.914401,
+     "median": 0.976445,
+     "p75": 1.03479,
+     "p90": 1.170455,
+     "p95": 1.272175,
+     "p99": 1.47028
+    },
+    "pair_cost_frac_le_0_96": 0.417485,
+    "pair_cost_frac_lt_1_00": 0.625812,
+    "pair_cost_frac_gt_1_00": 0.372856,
+    "pair_cost_frac_gt_1_05": 0.215487,
+    "pair_cost_frac_gt_1_15": 0.112906,
+    "completion_rate": 0.729205,
+    "completion_ratio": {
+     "n": 8235,
+     "mean": 0.555236,
+     "p10": 0.0,
+     "p25": 0.0,
+     "median": 0.702307,
+     "p75": 0.915827,
+     "p90": 0.972181,
+     "p95": 0.987762,
+     "p99": 1.0
+    },
+    "t_to_match_s": {
+     "n": 6005,
+     "mean": 68.378684,
+     "p10": 6.0,
+     "p25": 18.0,
+     "median": 48.0,
+     "p75": 100.0,
+     "p90": 165.0,
+     "p95": 201.0,
+     "p99": 257.96
+    },
+    "event_span_s": {
+     "n": 8235,
+     "mean": 309.387492,
+     "p10": 0.0,
+     "p25": 59.0,
+     "median": 187.0,
+     "p75": 658.0,
+     "p90": 838.0,
+     "p95": 865.0,
+     "p99": 880.0
+    },
+    "peak_abs_residual_shares": {
+     "n": 8235,
+     "mean": 166.278654,
+     "p10": 41.0,
+     "p25": 60.0,
+     "median": 128.44,
+     "p75": 226.151597,
+     "p90": 335.028731,
+     "p95": 432.304757,
+     "p99": 680.885489
+    },
+    "terminal_abs_residual_shares": {
+     "n": 8235,
+     "mean": 114.69766,
+     "p10": 15.0,
+     "p25": 40.0,
+     "median": 78.016054,
+     "p75": 150.0,
+     "p90": 253.863039,
+     "p95": 339.145559,
+     "p99": 587.924523
+    },
+    "terminal_residual_frac": {
+     "n": 8235,
+     "mean": 0.444764,
+     "p10": 0.027819,
+     "p25": 0.084173,
+     "median": 0.297693,
+     "p75": 1.0,
+     "p90": 1.0,
+     "p95": 1.0,
+     "p99": 1.0
+    },
+    "one_sided_event_frac": 0.270795,
+    "composition_asset_frac_of_events": {
+     "btc": 0.939162,
+     "eth": 0.060838
+    },
+    "composition_asset_frac_of_turnover": {
+     "btc": 0.991899,
+     "eth": 0.008101
+    },
+    "composition_duration_frac_of_events": {
+     "5m": 0.696418,
+     "15m": 0.303582
+    },
+    "composition_duration_frac_of_turnover": {
+     "15m": 0.820812,
+     "5m": 0.179188
+    },
+    "VOL_PROXY_price_travel_per_fill": {
+     "n": 7318,
+     "mean": 0.195448,
+     "p10": 0.046118,
+     "p25": 0.103786,
+     "median": 0.161818,
+     "p75": 0.245804,
+     "p90": 0.386375,
+     "p95": 0.496667,
+     "p99": 0.73915
+    },
+    "VOL_PROXY_price_range_within_event": {
+     "n": 8235,
+     "mean": 0.587071,
+     "p10": 0.0,
+     "p25": 0.240145,
+     "median": 0.72,
+     "p75": 0.93,
+     "p90": 0.96,
+     "p95": 0.97,
+     "p99": 0.98
+    },
+    "VOL_PROXY_NOTE": "L5's OWN fill prices, not a venue mid and not the underlying. An EVENT-LEVEL DESCRIPTIVE, not a decision-time feature. True implied/realized volatility of the underlying is UNAVAILABLE across regimes: data/btc_spot_proxy/btc_1m.json covers only 2026-08-15..2026-08-20.",
+    "MAKER_TAKER_MIX": {
+     "status": "UNAVAILABLE",
+     "reason": "Liquidity role requires `execution.isAggressor` from the data-api /trades shape. Neither holdout source carries it: data/l5/raw/activity_gap.jsonl.gz records have exactly {conditionId,eventSlug,outcome,outcomeIndex,price,side,size,slug,timestamp,transactionHash,type,usdcSize} and data/l5/raw/sep/l5_sep23_25.json adds only profile fields. NOT INFERRED, and the bare boolean `aggressor` is not used anywhere in this module."
+    },
+    "SPREAD": {
+     "status": "UNAVAILABLE",
+     "reason": "Spread needs a resting book. analysis/l5/BOOK_ACQUISITION.md establishes that the only historical Polymarket L2 on disk is 2026-08-21..2026-08-24 (3.5 of 166 days, 2.1%), entirely inside REGIME_2026-08-19_ON, so no cross-regime spread series can be formed. Pair cost is reported instead and is a different quantity."
+    }
+   },
+   "REGIME_2026-08-19_ON": {
+    "n_events": 4739,
+    "n_fills": 166893,
+    "observed_days": 9,
+    "first_day": "2026-08-19",
+    "last_day": "2026-08-28",
+    "turnover_usd": 1927289.34,
+    "events_per_observed_day": 526.556,
+    "turnover_per_observed_day_usd": 214143.26,
+    "fills_per_event": 35.2169,
+    "notional_per_event_usd": 406.6869,
+    "clip_size_shares": {
+     "n": 166893,
+     "mean": 24.276352,
+     "p10": 1.724135,
+     "p25": 5.0,
+     "median": 13.157893,
+     "p75": 40.0,
+     "p90": 70.0,
+     "p95": 80.0,
+     "p99": 80.0
+    },
+    "clip_size_mix_frac_of_fills": {
+     "lt10": 0.406818,
+     "10_25": 0.241011,
+     "25_50": 0.14843,
+     "50_100": 0.200703,
+     "100_250": 0.003032,
+     "ge250": 6e-06
+    },
+    "clip_size_mix_frac_of_shares": {
+     "lt10": 0.068432,
+     "10_25": 0.153879,
+     "25_50": 0.217821,
+     "50_100": 0.546976,
+     "100_250": 0.012646,
+     "ge250": 0.000247
+    },
+    "first_size_shares": {
+     "n": 4739,
+     "mean": 35.039853,
+     "p10": 5.0,
+     "p25": 10.0,
+     "median": 25.55,
+     "p75": 50.0,
+     "p90": 80.0,
+     "p95": 80.0,
+     "p99": 82.5682
+    },
+    "first_price": {
+     "n": 4739,
+     "mean": 0.524254,
+     "p10": 0.16,
+     "p25": 0.43,
+     "median": 0.55,
+     "p75": 0.66,
+     "p90": 0.790324,
+     "p95": 0.86,
+     "p99": 0.94
+    },
+    "first_favored_frac": 0.622283,
+    "first_tte_s": {
+     "n": 4739,
+     "mean": 369.022157,
+     "p10": 124.6,
+     "p25": 194.0,
+     "median": 276.0,
+     "p75": 296.0,
+     "p90": 890.0,
+     "p95": 893.0,
+     "p99": 894.0
+    },
+    "action_mix_frac": {
+     "open": 0.028395,
+     "extend": 0.705961,
+     "switch": 0.103018,
+     "complete": 0.162625
+    },
+    "action_counts": {
+     "open": 4739,
+     "extend": 117820,
+     "switch": 17193,
+     "complete": 27141
+    },
+    "extend_per_event": 24.8618,
+    "switch_per_event": 3.628,
+    "complete_per_event": 5.7272,
+    "same_side_run_length": {
+     "n": 49073,
+     "mean": 3.400913,
+     "p10": 1.0,
+     "p25": 1.0,
+     "median": 2.0,
+     "p75": 4.0,
+     "p90": 8.0,
+     "p95": 11.0,
+     "p99": 20.0
+    },
+    "pair_cost": {
+     "n": 3519,
+     "mean": 0.970918,
+     "p10": 0.745578,
+     "p25": 0.868359,
+     "median": 0.960883,
+     "p75": 1.059348,
+     "p90": 1.217538,
+     "p95": 1.32215,
+     "p99": 1.48481
+    },
+    "pair_cost_frac_le_0_96": 0.496732,
+    "pair_cost_frac_lt_1_00": 0.641375,
+    "pair_cost_frac_gt_1_00": 0.357488,
+    "pair_cost_frac_gt_1_05": 0.263995,
+    "pair_cost_frac_gt_1_15": 0.149758,
+    "completion_rate": 0.742562,
+    "completion_ratio": {
+     "n": 4739,
+     "mean": 0.515377,
+     "p10": 0.0,
+     "p25": 0.0,
+     "median": 0.602758,
+     "p75": 0.87369,
+     "p90": 0.953975,
+     "p95": 0.979081,
+     "p99": 0.997381
+    },
+    "t_to_match_s": {
+     "n": 3519,
+     "mean": 93.756749,
+     "p10": 10.0,
+     "p25": 26.0,
+     "median": 63.0,
+     "p75": 126.0,
+     "p90": 199.0,
+     "p95": 257.1,
+     "p99": 588.82
+    },
+    "event_span_s": {
+     "n": 4739,
+     "mean": 248.313779,
+     "p10": 0.0,
+     "p25": 63.0,
+     "median": 168.0,
+     "p75": 262.0,
+     "p90": 761.2,
+     "p95": 831.0,
+     "p99": 869.0
+    },
+    "peak_abs_residual_shares": {
+     "n": 4739,
+     "mean": 164.659944,
+     "p10": 25.0,
+     "p25": 50.064944,
+     "median": 100.93,
+     "p75": 193.269306,
+     "p90": 379.03733,
+     "p95": 554.527695,
+     "p99": 944.126431
+    },
+    "terminal_abs_residual_shares": {
+     "n": 4739,
+     "mean": 123.674747,
+     "p10": 10.0,
+     "p25": 28.01,
+     "median": 69.0,
+     "p75": 146.085,
+     "p90": 284.857934,
+     "p95": 447.558831,
+     "p99": 864.129243
+    },
+    "terminal_residual_frac": {
+     "n": 4739,
+     "mean": 0.484623,
+     "p10": 0.046025,
+     "p25": 0.126311,
+     "median": 0.397242,
+     "p75": 1.0,
+     "p90": 1.0,
+     "p95": 1.0,
+     "p99": 1.0
+    },
+    "one_sided_event_frac": 0.257438,
+    "composition_asset_frac_of_events": {
+     "btc": 0.540409,
+     "eth": 0.459591
+    },
+    "composition_asset_frac_of_turnover": {
+     "btc": 0.933093,
+     "eth": 0.066907
+    },
+    "composition_duration_frac_of_events": {
+     "5m": 0.743617,
+     "15m": 0.256383
+    },
+    "composition_duration_frac_of_turnover": {
+     "15m": 0.795265,
+     "5m": 0.204735
+    },
+    "VOL_PROXY_price_travel_per_fill": {
+     "n": 4241,
+     "mean": 0.247386,
+     "p10": 0.073,
+     "p25": 0.128658,
+     "median": 0.211429,
+     "p75": 0.33,
+     "p90": 0.46375,
+     "p95": 0.581268,
+     "p99": 0.8206
+    },
+    "VOL_PROXY_price_range_within_event": {
+     "n": 4739,
+     "mean": 0.58565,
+     "p10": 0.0,
+     "p25": 0.31,
+     "median": 0.7,
+     "p75": 0.88,
+     "p90": 0.95,
+     "p95": 0.96,
+     "p99": 0.98
+    },
+    "VOL_PROXY_NOTE": "L5's OWN fill prices, not a venue mid and not the underlying. An EVENT-LEVEL DESCRIPTIVE, not a decision-time feature. True implied/realized volatility of the underlying is UNAVAILABLE across regimes: data/btc_spot_proxy/btc_1m.json covers only 2026-08-15..2026-08-20.",
+    "MAKER_TAKER_MIX": {
+     "status": "UNAVAILABLE",
+     "reason": "Liquidity role requires `execution.isAggressor` from the data-api /trades shape. Neither holdout source carries it: data/l5/raw/activity_gap.jsonl.gz records have exactly {conditionId,eventSlug,outcome,outcomeIndex,price,side,size,slug,timestamp,transactionHash,type,usdcSize} and data/l5/raw/sep/l5_sep23_25.json adds only profile fields. NOT INFERRED, and the bare boolean `aggressor` is not used anywhere in this module."
+    },
+    "SPREAD": {
+     "status": "UNAVAILABLE",
+     "reason": "Spread needs a resting book. analysis/l5/BOOK_ACQUISITION.md establishes that the only historical Polymarket L2 on disk is 2026-08-21..2026-08-24 (3.5 of 166 days, 2.1%), entirely inside REGIME_2026-08-19_ON, so no cross-regime spread series can be formed. Pair cost is reported instead and is a different quantity."
+    }
+   }
+  },
+  "outcome_by_regime": {
+   "REGIME_PRE_2026-04-25": {
+    "LABEL": "SETTLEMENT-DERIVED OUTCOME. Not observable at decision time.",
+    "n_events": 170,
+    "events_with_redeem": 167,
+    "redeem_coverage_frac": 0.982353,
+    "events_without_redeem": 3,
+    "redeem_cashflow_usd": 93104.66,
+    "SELF_SELECTION_WARNING": "A REDEEM record exists only if something was redeemable. OOS_RESULT.md \u00a74 measured 99.61% of one-sided no-REDEEM events as actual LOSSES. The no-REDEEM stratum is therefore a loss-enriched stratum, never to be pooled with the REDEEM-backed one."
+   },
+   "REGIME_2026-04-25_TO_2026-06-22": {
+    "LABEL": "SETTLEMENT-DERIVED OUTCOME. Not observable at decision time.",
+    "n_events": 1641,
+    "events_with_redeem": 1637,
+    "redeem_coverage_frac": 0.997562,
+    "events_without_redeem": 4,
+    "redeem_cashflow_usd": 1325804.0,
+    "SELF_SELECTION_WARNING": "A REDEEM record exists only if something was redeemable. OOS_RESULT.md \u00a74 measured 99.61% of one-sided no-REDEEM events as actual LOSSES. The no-REDEEM stratum is therefore a loss-enriched stratum, never to be pooled with the REDEEM-backed one."
+   },
+   "REGIME_2026-06-23_TO_2026-08-18": {
+    "LABEL": "SETTLEMENT-DERIVED OUTCOME. Not observable at decision time.",
+    "n_events": 8235,
+    "events_with_redeem": 7467,
+    "redeem_coverage_frac": 0.90674,
+    "events_without_redeem": 768,
+    "redeem_cashflow_usd": 3532952.59,
+    "SELF_SELECTION_WARNING": "A REDEEM record exists only if something was redeemable. OOS_RESULT.md \u00a74 measured 99.61% of one-sided no-REDEEM events as actual LOSSES. The no-REDEEM stratum is therefore a loss-enriched stratum, never to be pooled with the REDEEM-backed one."
+   },
+   "REGIME_2026-08-19_ON": {
+    "LABEL": "SETTLEMENT-DERIVED OUTCOME. Not observable at decision time.",
+    "n_events": 4739,
+    "events_with_redeem": 4201,
+    "redeem_coverage_frac": 0.886474,
+    "events_without_redeem": 538,
+    "redeem_cashflow_usd": 1921433.43,
+    "SELF_SELECTION_WARNING": "A REDEEM record exists only if something was redeemable. OOS_RESULT.md \u00a74 measured 99.61% of one-sided no-REDEEM events as actual LOSSES. The no-REDEEM stratum is therefore a loss-enriched stratum, never to be pooled with the REDEEM-backed one."
+   }
+  },
+  "incentives": {
+   "by_regime": {
+    "REGIME_PRE_2026-04-25": {
+     "MAKER_REBATE": {
+      "n": 4,
+      "usd": 327.81
+     },
+     "TAKER_REBATE": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "REWARD": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "days_with_any_credit": 4,
+     "credit_days": [
+      "2026-04-21",
+      "2026-04-22",
+      "2026-04-23",
+      "2026-04-24"
+     ],
+     "total_usd": 327.81
+    },
+    "REGIME_2026-04-25_TO_2026-06-22": {
+     "MAKER_REBATE": {
+      "n": 49,
+      "usd": 3615.23
+     },
+     "TAKER_REBATE": {
+      "n": 1,
+      "usd": 9.86
+     },
+     "REWARD": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "days_with_any_credit": 49,
+     "credit_days": [
+      "2026-04-25",
+      "2026-04-26",
+      "2026-04-27",
+      "2026-04-28",
+      "2026-04-29",
+      "2026-04-30",
+      "2026-05-01",
+      "2026-05-02",
+      "2026-05-03",
+      "2026-05-04",
+      "2026-05-05",
+      "2026-05-06",
+      "2026-05-07",
+      "2026-05-08",
+      "2026-05-09",
+      "2026-05-10",
+      "2026-05-11",
+      "2026-05-12",
+      "2026-05-13",
+      "2026-05-14",
+      "2026-05-15",
+      "2026-05-16",
+      "2026-05-19",
+      "2026-05-20",
+      "2026-05-21",
+      "2026-05-22",
+      "2026-05-23",
+      "2026-05-24",
+      "2026-05-25",
+      "2026-05-26",
+      "2026-05-27",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-30",
+      "2026-06-02",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-05",
+      "2026-06-06",
+      "2026-06-09",
+      "2026-06-10",
+      "2026-06-11",
+      "2026-06-12",
+      "2026-06-13",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-18",
+      "2026-06-19",
+      "2026-06-20"
+     ],
+     "total_usd": 3625.09
+    },
+    "REGIME_2026-06-23_TO_2026-08-18": {
+     "MAKER_REBATE": {
+      "n": 45,
+      "usd": 14383.13
+     },
+     "TAKER_REBATE": {
+      "n": 60,
+      "usd": 4441.63
+     },
+     "REWARD": {
+      "n": 8,
+      "usd": 6976.35
+     },
+     "days_with_any_credit": 46,
+     "credit_days": [
+      "2026-06-23",
+      "2026-06-24",
+      "2026-06-25",
+      "2026-06-26",
+      "2026-06-27",
+      "2026-06-30",
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03",
+      "2026-07-04",
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+      "2026-07-18",
+      "2026-07-20",
+      "2026-07-21",
+      "2026-07-22",
+      "2026-07-23",
+      "2026-07-24",
+      "2026-07-25",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06",
+      "2026-08-07",
+      "2026-08-08",
+      "2026-08-09",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-14",
+      "2026-08-15",
+      "2026-08-16",
+      "2026-08-17",
+      "2026-08-18"
+     ],
+     "total_usd": 25801.11
+    },
+    "REGIME_2026-08-19_ON": {
+     "MAKER_REBATE": {
+      "n": 9,
+      "usd": 13022.79
+     },
+     "TAKER_REBATE": {
+      "n": 9,
+      "usd": 2486.92
+     },
+     "REWARD": {
+      "n": 9,
+      "usd": 15979.54
+     },
+     "days_with_any_credit": 9,
+     "credit_days": [
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21",
+      "2026-08-22",
+      "2026-08-23",
+      "2026-08-25",
+      "2026-08-26",
+      "2026-08-27",
+      "2026-08-28"
+     ],
+     "total_usd": 31489.25
+    }
+   },
+   "first_record_day": {
+    "MAKER_REBATE": "2026-04-21",
+    "TAKER_REBATE": "2026-06-20",
+    "REWARD": "2026-08-08"
+   },
+   "last_record_day": {
+    "MAKER_REBATE": "2026-08-28",
+    "TAKER_REBATE": "2026-08-28",
+    "REWARD": "2026-08-28"
+   },
+   "credit_hour_utc_histogram": {
+    "0": 173,
+    "1": 9,
+    "2": 4,
+    "4": 1,
+    "6": 1,
+    "10": 1,
+    "11": 1,
+    "14": 1,
+    "15": 1,
+    "16": 1,
+    "21": 1
+   },
+   "CONFIRMED_ONLY": "Counted solely where a record exists. Never modelled or imputed. These are L5's credits, not ours, and they are EXCLUDED from every ex-incentive figure quoted from OOS_RESULT.json."
+  },
+  "outcome_pnl": {
+   "LABEL": "SETTLEMENT-DERIVED OUTCOME, ex incentives (rebates and rewards are exactly $0). HISTORICAL REPLAY -- not our realized profit.",
+   "STRATA_NEVER_POOLED": "SETTLEMENT_CONDITIONAL is conditional on a source-backed REDEEM record and is UPWARD-BIASED by self-selection. NO_REDEEM_loss_enriched is the complementary, loss-enriched stratum. POOLED_all_events scores an absent REDEEM as $0 payout, which is the unbiased reading of what the feed shows. The three are reported separately and are never averaged.",
+   "by_stratum": {
+    "SETTLEMENT_CONDITIONAL_redeem_backed": {
+     "REGIME_PRE_2026-04-25": {
+      "events": 167,
+      "matched_usd": 3944.3,
+      "residual_usd": -2251.82,
+      "fees_usd": 0.0,
+      "net_ex_incentives_usd": 1692.48,
+      "turnover_usd": 91997.83,
+      "matched_bp": 428.74,
+      "residual_bp": -244.77,
+      "fees_bp": -0.0,
+      "net_bp": 183.97,
+      "per_cell": {
+       "btc_15m": {
+        "events": 167,
+        "turnover_usd": 91997.83,
+        "net_usd": 1692.48,
+        "net_bp": 183.97,
+        "residual_bp": -244.77,
+        "matched_bp": 428.74
+       }
+      }
+     },
+     "REGIME_2026-04-25_TO_2026-06-22": {
+      "events": 1637,
+      "matched_usd": 52310.72,
+      "residual_usd": -30187.0,
+      "fees_usd": 13561.65,
+      "net_ex_incentives_usd": 8562.06,
+      "turnover_usd": 1316337.33,
+      "matched_bp": 397.4,
+      "residual_bp": -229.33,
+      "fees_bp": -103.03,
+      "net_bp": 65.04,
+      "per_cell": {
+       "btc_15m": {
+        "events": 1637,
+        "turnover_usd": 1316337.33,
+        "net_usd": 8562.06,
+        "net_bp": 65.04,
+        "residual_bp": -229.33,
+        "matched_bp": 397.4
+       }
+      }
+     },
+     "REGIME_2026-06-23_TO_2026-08-18": {
+      "events": 7467,
+      "matched_usd": 62230.08,
+      "residual_usd": -1222.87,
+      "fees_usd": 23225.33,
+      "net_ex_incentives_usd": 37781.88,
+      "turnover_usd": 3493810.71,
+      "matched_bp": 178.12,
+      "residual_bp": -3.5,
+      "fees_bp": -66.48,
+      "net_bp": 108.14,
+      "per_cell": {
+       "btc_15m": {
+        "events": 2499,
+        "turnover_usd": 2886751.89,
+        "net_usd": 13054.73,
+        "net_bp": 45.22,
+        "residual_bp": -116.7,
+        "matched_bp": 198.34
+       },
+       "btc_5m": {
+        "events": 4524,
+        "turnover_usd": 579460.55,
+        "net_usd": 23502.65,
+        "net_bp": 405.6,
+        "residual_bp": 530.67,
+        "matched_bp": 84.28
+       },
+       "eth_5m": {
+        "events": 444,
+        "turnover_usd": 27598.27,
+        "net_usd": 1224.5,
+        "net_bp": 443.69,
+        "residual_bp": 621.52,
+        "matched_bp": 32.68
+       }
+      }
+     },
+     "REGIME_2026-08-19_ON": {
+      "events": 4201,
+      "matched_usd": 60952.55,
+      "residual_usd": -46365.78,
+      "fees_usd": 11641.77,
+      "net_ex_incentives_usd": 2945.0,
+      "turnover_usd": 1918488.43,
+      "matched_bp": 317.71,
+      "residual_bp": -241.68,
+      "fees_bp": -60.68,
+      "net_bp": 15.35,
+      "per_cell": {
+       "btc_15m": {
+        "events": 664,
+        "turnover_usd": 1484077.26,
+        "net_usd": -3479.24,
+        "net_bp": -23.44,
+        "residual_bp": -368.14,
+        "matched_bp": 361.45
+       },
+       "btc_5m": {
+        "events": 1742,
+        "turnover_usd": 310139.92,
+        "net_usd": 1113.12,
+        "net_bp": 35.89,
+        "residual_bp": -16.1,
+        "matched_bp": 267.09
+       },
+       "eth_15m": {
+        "events": 498,
+        "turnover_usd": 47990.97,
+        "net_usd": 374.62,
+        "net_bp": 78.06,
+        "residual_bp": 482.05,
+        "matched_bp": -213.24
+       },
+       "eth_5m": {
+        "events": 1297,
+        "turnover_usd": 76280.28,
+        "net_usd": 4936.51,
+        "net_bp": 647.15,
+        "residual_bp": 846.21,
+        "matched_bp": 6.52
+       }
+      }
+     }
+    },
+    "POOLED_all_events": {
+     "REGIME_PRE_2026-04-25": {
+      "events": 170,
+      "matched_usd": 3944.3,
+      "residual_usd": -2294.75,
+      "fees_usd": 0.0,
+      "net_ex_incentives_usd": 1649.55,
+      "turnover_usd": 92040.76,
+      "matched_bp": 428.54,
+      "residual_bp": -249.32,
+      "fees_bp": -0.0,
+      "net_bp": 179.22,
+      "per_cell": {
+       "btc_15m": {
+        "events": 170,
+        "turnover_usd": 92040.76,
+        "net_usd": 1649.55,
+        "net_bp": 179.22,
+        "residual_bp": -249.32,
+        "matched_bp": 428.54
+       }
+      }
+     },
+     "REGIME_2026-04-25_TO_2026-06-22": {
+      "events": 1641,
+      "matched_usd": 52310.72,
+      "residual_usd": -30412.95,
+      "fees_usd": 13564.03,
+      "net_ex_incentives_usd": 8333.74,
+      "turnover_usd": 1316565.65,
+      "matched_bp": 397.33,
+      "residual_bp": -231.0,
+      "fees_bp": -103.03,
+      "net_bp": 63.3,
+      "per_cell": {
+       "btc_15m": {
+        "events": 1641,
+        "turnover_usd": 1316565.65,
+        "net_usd": 8333.74,
+        "net_bp": 63.3,
+        "residual_bp": -231.0,
+        "matched_bp": 397.33
+       }
+      }
+     },
+     "REGIME_2026-06-23_TO_2026-08-18": {
+      "events": 8235,
+      "matched_usd": 62229.82,
+      "residual_usd": -23724.25,
+      "fees_usd": 23960.02,
+      "net_ex_incentives_usd": 14545.54,
+      "turnover_usd": 3517048.42,
+      "matched_bp": 176.94,
+      "residual_bp": -67.46,
+      "fees_bp": -68.13,
+      "net_bp": 41.36,
+      "per_cell": {
+       "btc_15m": {
+        "events": 2500,
+        "turnover_usd": 2886835.94,
+        "net_usd": 12970.68,
+        "net_bp": 44.93,
+        "residual_bp": -116.99,
+        "matched_bp": 198.34
+       },
+       "btc_5m": {
+        "events": 5234,
+        "turnover_usd": 601720.77,
+        "net_usd": 1242.97,
+        "net_bp": 20.66,
+        "residual_bp": 152.84,
+        "matched_bp": 81.16
+       },
+       "eth_5m": {
+        "events": 501,
+        "turnover_usd": 28491.71,
+        "net_usd": 331.9,
+        "net_bp": 116.49,
+        "residual_bp": 298.85,
+        "matched_bp": 31.54
+       }
+      }
+     },
+     "REGIME_2026-08-19_ON": {
+      "events": 4739,
+      "matched_usd": 60952.69,
+      "residual_usd": -54843.18,
+      "fees_usd": 11960.57,
+      "net_ex_incentives_usd": -5851.05,
+      "turnover_usd": 1927289.34,
+      "matched_bp": 316.26,
+      "residual_bp": -284.56,
+      "fees_bp": -62.06,
+      "net_bp": -30.36,
+      "per_cell": {
+       "btc_15m": {
+        "events": 664,
+        "turnover_usd": 1484077.26,
+        "net_usd": -3479.24,
+        "net_bp": -23.44,
+        "residual_bp": -368.14,
+        "matched_bp": 361.45
+       },
+       "btc_5m": {
+        "events": 1897,
+        "turnover_usd": 314263.85,
+        "net_usd": -3009.9,
+        "net_bp": -95.78,
+        "residual_bp": -142.04,
+        "matched_bp": 263.59
+       },
+       "eth_15m": {
+        "events": 551,
+        "turnover_usd": 48628.47,
+        "net_usd": -260.16,
+        "net_bp": -53.5,
+        "residual_bp": 350.12,
+        "matched_bp": -210.53
+       },
+       "eth_5m": {
+        "events": 1627,
+        "turnover_usd": 80319.75,
+        "net_usd": 898.25,
+        "net_bp": 111.83,
+        "residual_bp": 317.86,
+        "matched_bp": 6.25
+       }
+      }
+     }
+    },
+    "NO_REDEEM_loss_enriched": {
+     "REGIME_PRE_2026-04-25": {
+      "events": 3,
+      "matched_usd": 0.0,
+      "residual_usd": -42.93,
+      "fees_usd": 0.0,
+      "net_ex_incentives_usd": -42.93,
+      "turnover_usd": 42.93,
+      "matched_bp": 0.0,
+      "residual_bp": -10000.0,
+      "fees_bp": -0.0,
+      "net_bp": -10000.0,
+      "per_cell": {
+       "btc_15m": {
+        "events": 3,
+        "turnover_usd": 42.93,
+        "net_usd": -42.93,
+        "net_bp": -10000.0,
+        "residual_bp": -10000.0,
+        "matched_bp": 0.0
+       }
+      }
+     },
+     "REGIME_2026-04-25_TO_2026-06-22": {
+      "events": 4,
+      "matched_usd": 0.0,
+      "residual_usd": -225.94,
+      "fees_usd": 2.38,
+      "net_ex_incentives_usd": -228.32,
+      "turnover_usd": 228.32,
+      "matched_bp": 0.0,
+      "residual_bp": -9895.89,
+      "fees_bp": -104.11,
+      "net_bp": -10000.0,
+      "per_cell": {
+       "btc_15m": {
+        "events": 4,
+        "turnover_usd": 228.32,
+        "net_usd": -228.32,
+        "net_bp": -10000.0,
+        "residual_bp": -9895.89,
+        "matched_bp": 0.0
+       }
+      }
+     },
+     "REGIME_2026-06-23_TO_2026-08-18": {
+      "events": 768,
+      "matched_usd": -0.26,
+      "residual_usd": -22501.38,
+      "fees_usd": 734.7,
+      "net_ex_incentives_usd": -23236.34,
+      "turnover_usd": 23237.71,
+      "matched_bp": -0.11,
+      "residual_bp": -9683.13,
+      "fees_bp": -316.17,
+      "net_bp": -9999.41,
+      "per_cell": {
+       "btc_15m": {
+        "events": 1,
+        "turnover_usd": 84.05,
+        "net_usd": -84.05,
+        "net_bp": -10000.0,
+        "residual_bp": -10000.0,
+        "matched_bp": 0.0
+       },
+       "btc_5m": {
+        "events": 710,
+        "turnover_usd": 22260.22,
+        "net_usd": -22259.68,
+        "net_bp": -9999.76,
+        "residual_bp": -9682.53,
+        "matched_bp": 0.03
+       },
+       "eth_5m": {
+        "events": 57,
+        "turnover_usd": 893.44,
+        "net_usd": -892.61,
+        "net_bp": -9990.71,
+        "residual_bp": -9668.42,
+        "matched_bp": -3.53
+       }
+      }
+     },
+     "REGIME_2026-08-19_ON": {
+      "events": 538,
+      "matched_usd": 0.14,
+      "residual_usd": -8477.4,
+      "fees_usd": 318.8,
+      "net_ex_incentives_usd": -8796.06,
+      "turnover_usd": 8800.91,
+      "matched_bp": 0.16,
+      "residual_bp": -9632.41,
+      "fees_bp": -362.23,
+      "net_bp": -9994.49,
+      "per_cell": {
+       "btc_5m": {
+        "events": 155,
+        "turnover_usd": 4123.93,
+        "net_usd": -4123.02,
+        "net_bp": -9997.79,
+        "residual_bp": -9613.91,
+        "matched_bp": 0.15
+       },
+       "eth_15m": {
+        "events": 53,
+        "turnover_usd": 637.5,
+        "net_usd": -634.78,
+        "net_bp": -9957.33,
+        "residual_bp": -9581.4,
+        "matched_bp": -6.18
+       },
+       "eth_5m": {
+        "events": 330,
+        "turnover_usd": 4039.48,
+        "net_usd": -4038.26,
+        "net_bp": -9996.98,
+        "residual_bp": -9659.36,
+        "matched_bp": 1.16
+       }
+      }
+     }
+    }
+   },
+   "shift_share": {
+    "SETTLEMENT_CONDITIONAL_redeem_backed": {
+     "REGIME_PRE_2026-04-25__to__REGIME_2026-04-25_TO_2026-06-22": {
+      "unit": "bp of turnover",
+      "net_bp_from": 183.97,
+      "net_bp_to": 65.04,
+      "d_total_bp": -118.93,
+      "d_composition_bp": 0.0,
+      "d_behaviour_bp": -118.93,
+      "d_interaction_bp": 0.0,
+      "composition_share_of_move": -0.0,
+      "behaviour_share_of_move": 1.0,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 1.0,
+        "w_to": 1.0,
+        "bp_from": 183.97,
+        "bp_to": 65.04
+       }
+      }
+     },
+     "REGIME_2026-04-25_TO_2026-06-22__to__REGIME_2026-06-23_TO_2026-08-18": {
+      "unit": "bp of turnover",
+      "net_bp_from": 65.04,
+      "net_bp_to": 108.14,
+      "d_total_bp": 43.09,
+      "d_composition_bp": -11.3,
+      "d_behaviour_bp": -19.82,
+      "d_interaction_bp": 74.22,
+      "composition_share_of_move": -0.2623,
+      "behaviour_share_of_move": -0.46,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 1.0,
+        "w_to": 0.826247,
+        "bp_from": 65.04,
+        "bp_to": 45.22
+       },
+       "btc_5m": {
+        "w_from": 0.0,
+        "w_to": 0.165853,
+        "bp_from": 0.0,
+        "bp_to": 405.6
+       },
+       "eth_5m": {
+        "w_from": 0.0,
+        "w_to": 0.007899,
+        "bp_from": 0.0,
+        "bp_to": 443.69
+       }
+      }
+     },
+     "REGIME_2026-06-23_TO_2026-08-18__to__REGIME_2026-08-19_ON": {
+      "unit": "bp of turnover",
+      "net_bp_from": 108.14,
+      "net_bp_to": 15.35,
+      "d_total_bp": -92.79,
+      "d_composition_bp": 10.05,
+      "d_behaviour_bp": -116.45,
+      "d_interaction_bp": 13.6,
+      "composition_share_of_move": -0.1083,
+      "behaviour_share_of_move": 1.2549,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 0.826247,
+        "w_to": 0.773566,
+        "bp_from": 45.22,
+        "bp_to": -23.44
+       },
+       "btc_5m": {
+        "w_from": 0.165853,
+        "w_to": 0.161658,
+        "bp_from": 405.6,
+        "bp_to": 35.89
+       },
+       "eth_15m": {
+        "w_from": 0.0,
+        "w_to": 0.025015,
+        "bp_from": 0.0,
+        "bp_to": 78.06
+       },
+       "eth_5m": {
+        "w_from": 0.007899,
+        "w_to": 0.039761,
+        "bp_from": 443.69,
+        "bp_to": 647.15
+       }
+      }
+     }
+    },
+    "POOLED_all_events": {
+     "REGIME_PRE_2026-04-25__to__REGIME_2026-04-25_TO_2026-06-22": {
+      "unit": "bp of turnover",
+      "net_bp_from": 179.22,
+      "net_bp_to": 63.3,
+      "d_total_bp": -115.92,
+      "d_composition_bp": 0.0,
+      "d_behaviour_bp": -115.92,
+      "d_interaction_bp": 0.0,
+      "composition_share_of_move": -0.0,
+      "behaviour_share_of_move": 1.0,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 1.0,
+        "w_to": 1.0,
+        "bp_from": 179.22,
+        "bp_to": 63.3
+       }
+      }
+     },
+     "REGIME_2026-04-25_TO_2026-06-22__to__REGIME_2026-06-23_TO_2026-08-18": {
+      "unit": "bp of turnover",
+      "net_bp_from": 63.3,
+      "net_bp_to": 41.36,
+      "d_total_bp": -21.94,
+      "d_composition_bp": -11.34,
+      "d_behaviour_bp": -18.37,
+      "d_interaction_bp": 7.77,
+      "composition_share_of_move": 0.5169,
+      "behaviour_share_of_move": 0.8372,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 1.0,
+        "w_to": 0.820812,
+        "bp_from": 63.3,
+        "bp_to": 44.93
+       },
+       "btc_5m": {
+        "w_from": 0.0,
+        "w_to": 0.171087,
+        "bp_from": 0.0,
+        "bp_to": 20.66
+       },
+       "eth_5m": {
+        "w_from": 0.0,
+        "w_to": 0.008101,
+        "bp_from": 0.0,
+        "bp_to": 116.49
+       }
+      }
+     },
+     "REGIME_2026-06-23_TO_2026-08-18__to__REGIME_2026-08-19_ON": {
+      "unit": "bp of turnover",
+      "net_bp_from": 41.36,
+      "net_bp_to": -30.36,
+      "d_total_bp": -71.72,
+      "d_composition_bp": 1.46,
+      "d_behaviour_bp": -76.08,
+      "d_interaction_bp": 2.9,
+      "composition_share_of_move": -0.0204,
+      "behaviour_share_of_move": 1.0609,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 0.820812,
+        "w_to": 0.770033,
+        "bp_from": 44.93,
+        "bp_to": -23.44
+       },
+       "btc_5m": {
+        "w_from": 0.171087,
+        "w_to": 0.16306,
+        "bp_from": 20.66,
+        "bp_to": -95.78
+       },
+       "eth_15m": {
+        "w_from": 0.0,
+        "w_to": 0.025232,
+        "bp_from": 0.0,
+        "bp_to": -53.5
+       },
+       "eth_5m": {
+        "w_from": 0.008101,
+        "w_to": 0.041675,
+        "bp_from": 116.49,
+        "bp_to": 111.83
+       }
+      }
+     }
+    },
+    "NO_REDEEM_loss_enriched": {
+     "REGIME_PRE_2026-04-25__to__REGIME_2026-04-25_TO_2026-06-22": {
+      "unit": "bp of turnover",
+      "net_bp_from": -10000.0,
+      "net_bp_to": -10000.0,
+      "d_total_bp": 0.0,
+      "d_composition_bp": 0.0,
+      "d_behaviour_bp": 0.0,
+      "d_interaction_bp": 0.0,
+      "composition_share_of_move": 0.0,
+      "behaviour_share_of_move": 1.0,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 1.0,
+        "w_to": 1.0,
+        "bp_from": -10000.0,
+        "bp_to": -10000.0
+       }
+      }
+     },
+     "REGIME_2026-04-25_TO_2026-06-22__to__REGIME_2026-06-23_TO_2026-08-18": {
+      "unit": "bp of turnover",
+      "net_bp_from": -10000.0,
+      "net_bp_to": -9999.41,
+      "d_total_bp": 0.59,
+      "d_composition_bp": 9963.83,
+      "d_behaviour_bp": 0.0,
+      "d_interaction_bp": -9963.24,
+      "composition_share_of_move": 16900.4819,
+      "behaviour_share_of_move": 0.0,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 1.0,
+        "w_to": 0.003617,
+        "bp_from": -10000.0,
+        "bp_to": -10000.0
+       },
+       "btc_5m": {
+        "w_from": 0.0,
+        "w_to": 0.957935,
+        "bp_from": 0.0,
+        "bp_to": -9999.76
+       },
+       "eth_5m": {
+        "w_from": 0.0,
+        "w_to": 0.038448,
+        "bp_from": 0.0,
+        "bp_to": -9990.71
+       }
+      }
+     },
+     "REGIME_2026-06-23_TO_2026-08-18__to__REGIME_2026-08-19_ON": {
+      "unit": "bp of turnover",
+      "net_bp_from": -9999.41,
+      "net_bp_to": -9994.49,
+      "d_total_bp": 4.92,
+      "d_composition_bp": 728.15,
+      "d_behaviour_bp": 37.81,
+      "d_interaction_bp": -761.03,
+      "composition_share_of_move": 147.9599,
+      "behaviour_share_of_move": 7.683,
+      "per_cell": {
+       "btc_15m": {
+        "w_from": 0.003617,
+        "w_to": 0.0,
+        "bp_from": -10000.0,
+        "bp_to": 0.0
+       },
+       "btc_5m": {
+        "w_from": 0.957935,
+        "w_to": 0.46858,
+        "bp_from": -9999.76,
+        "bp_to": -9997.79
+       },
+       "eth_15m": {
+        "w_from": 0.0,
+        "w_to": 0.072436,
+        "bp_from": 0.0,
+        "bp_to": -9957.33
+       },
+       "eth_5m": {
+        "w_from": 0.038448,
+        "w_to": 0.458984,
+        "bp_from": -9990.71,
+        "bp_to": -9996.98
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "SECONDARY": {
+  "source": "data/l5/raw/sep/l5_sep23_25.json",
+  "diagnostics": {
+   "incentive_records": 6,
+   "dropped_event_no_fills": 455
+  },
+  "n_events": 255,
+  "n_fills": 5498,
+  "contemporaneous_by_regime": {
+   "REGIME_PRE_2026-04-25": {
+    "n_events": 0,
+    "UNAVAILABLE": "no events in this regime"
+   },
+   "REGIME_2026-04-25_TO_2026-06-22": {
+    "n_events": 0,
+    "UNAVAILABLE": "no events in this regime"
+   },
+   "REGIME_2026-06-23_TO_2026-08-18": {
+    "n_events": 0,
+    "UNAVAILABLE": "no events in this regime"
+   },
+   "REGIME_2026-08-19_ON": {
+    "n_events": 255,
+    "n_fills": 5498,
+    "observed_days": 2,
+    "first_day": "2026-09-24",
+    "last_day": "2026-09-25",
+    "turnover_usd": 67027.62,
+    "events_per_observed_day": 127.5,
+    "turnover_per_observed_day_usd": 33513.81,
+    "fills_per_event": 21.5608,
+    "notional_per_event_usd": 262.8534,
+    "clip_size_shares": {
+     "n": 5498,
+     "mean": 26.535438,
+     "p10": 3.503933,
+     "p25": 6.0,
+     "median": 20.0,
+     "p75": 46.06,
+     "p90": 50.0,
+     "p95": 61.084,
+     "p99": 100.0
+    },
+    "clip_size_mix_frac_of_fills": {
+     "lt10": 0.333394,
+     "10_25": 0.221353,
+     "25_50": 0.21044,
+     "50_100": 0.202983,
+     "100_250": 0.03183,
+     "ge250": 0.0
+    },
+    "clip_size_mix_frac_of_shares": {
+     "lt10": 0.058953,
+     "10_25": 0.130278,
+     "25_50": 0.285731,
+     "50_100": 0.404732,
+     "100_250": 0.120306,
+     "ge250": 0.0
+    },
+    "first_size_shares": {
+     "n": 255,
+     "mean": 29.240835,
+     "p10": 5.0,
+     "p25": 11.495,
+     "median": 34.583334,
+     "p75": 40.0,
+     "p90": 50.0,
+     "p95": 50.0,
+     "p99": 80.0
+    },
+    "first_price": {
+     "n": 255,
+     "mean": 0.581169,
+     "p10": 0.234,
+     "p25": 0.48,
+     "median": 0.6,
+     "p75": 0.74,
+     "p90": 0.87,
+     "p95": 0.9,
+     "p99": 0.9546
+    },
+    "first_favored_frac": 0.705882,
+    "first_tte_s": {
+     "n": 255,
+     "mean": 377.623529,
+     "p10": 61.0,
+     "p25": 120.0,
+     "median": 237.0,
+     "p75": 830.0,
+     "p90": 889.0,
+     "p95": 894.0,
+     "p99": 895.0
+    },
+    "action_mix_frac": {
+     "open": 0.046381,
+     "extend": 0.684431,
+     "switch": 0.108039,
+     "complete": 0.16115
+    },
+    "action_counts": {
+     "open": 255,
+     "extend": 3763,
+     "switch": 594,
+     "complete": 886
+    },
+    "extend_per_event": 14.7569,
+    "switch_per_event": 2.3294,
+    "complete_per_event": 3.4745,
+    "same_side_run_length": {
+     "n": 1735,
+     "mean": 3.168876,
+     "p10": 1.0,
+     "p25": 1.0,
+     "median": 2.0,
+     "p75": 4.0,
+     "p90": 7.0,
+     "p95": 10.0,
+     "p99": 19.0
+    },
+    "pair_cost": {
+     "n": 111,
+     "mean": 0.958832,
+     "p10": 0.824184,
+     "p25": 0.900609,
+     "median": 0.946444,
+     "p75": 1.017186,
+     "p90": 1.132049,
+     "p95": 1.318427,
+     "p99": 1.430592
+    },
+    "pair_cost_frac_le_0_96": 0.558559,
+    "pair_cost_frac_lt_1_00": 0.666667,
+    "pair_cost_frac_gt_1_00": 0.324324,
+    "pair_cost_frac_gt_1_05": 0.18018,
+    "pair_cost_frac_gt_1_15": 0.099099,
+    "completion_rate": 0.435294,
+    "completion_ratio": {
+     "n": 255,
+     "mean": 0.314524,
+     "p10": 0.0,
+     "p25": 0.0,
+     "median": 0.0,
+     "p75": 0.74381,
+     "p90": 0.897288,
+     "p95": 0.95306,
+     "p99": 0.992776
+    },
+    "t_to_match_s": {
+     "n": 111,
+     "mean": 92.585586,
+     "p10": 6.0,
+     "p25": 27.0,
+     "median": 63.0,
+     "p75": 141.0,
+     "p90": 219.0,
+     "p95": 252.5,
+     "p99": 380.2
+    },
+    "event_span_s": {
+     "n": 255,
+     "mean": 218.988235,
+     "p10": 0.0,
+     "p25": 0.0,
+     "median": 30.0,
+     "p75": 474.0,
+     "p90": 792.0,
+     "p95": 829.6,
+     "p99": 854.38
+    },
+    "peak_abs_residual_shares": {
+     "n": 255,
+     "mean": 136.428359,
+     "p10": 11.4,
+     "p25": 36.11,
+     "median": 50.1963,
+     "p75": 162.508226,
+     "p90": 383.045095,
+     "p95": 561.02766,
+     "p99": 838.010606
+    },
+    "terminal_abs_residual_shares": {
+     "n": 255,
+     "mean": 111.175846,
+     "p10": 10.0,
+     "p25": 27.700119,
+     "median": 43.62,
+     "p75": 118.155,
+     "p90": 339.421898,
+     "p95": 413.602083,
+     "p99": 788.467901
+    },
+    "terminal_residual_frac": {
+     "n": 255,
+     "mean": 0.685476,
+     "p10": 0.102712,
+     "p25": 0.25619,
+     "median": 1.0,
+     "p75": 1.0,
+     "p90": 1.0,
+     "p95": 1.0,
+     "p99": 1.0
+    },
+    "one_sided_event_frac": 0.564706,
+    "composition_asset_frac_of_events": {
+     "btc": 0.745098,
+     "eth": 0.254902
+    },
+    "composition_asset_frac_of_turnover": {
+     "btc": 0.981944,
+     "eth": 0.018056
+    },
+    "composition_duration_frac_of_events": {
+     "5m": 0.627451,
+     "15m": 0.372549
+    },
+    "composition_duration_frac_of_turnover": {
+     "15m": 0.907122,
+     "5m": 0.092878
+    },
+    "VOL_PROXY_price_travel_per_fill": {
+     "n": 156,
+     "mean": 0.204115,
+     "p10": 0.03,
+     "p25": 0.099088,
+     "median": 0.170588,
+     "p75": 0.255833,
+     "p90": 0.3825,
+     "p95": 0.518815,
+     "p99": 0.8945
+    },
+    "VOL_PROXY_price_range_within_event": {
+     "n": 255,
+     "mean": 0.362411,
+     "p10": 0.0,
+     "p25": 0.0,
+     "median": 0.1,
+     "p75": 0.89,
+     "p90": 0.95,
+     "p95": 0.96,
+     "p99": 0.98
+    },
+    "VOL_PROXY_NOTE": "L5's OWN fill prices, not a venue mid and not the underlying. An EVENT-LEVEL DESCRIPTIVE, not a decision-time feature. True implied/realized volatility of the underlying is UNAVAILABLE across regimes: data/btc_spot_proxy/btc_1m.json covers only 2026-08-15..2026-08-20.",
+    "MAKER_TAKER_MIX": {
+     "status": "UNAVAILABLE",
+     "reason": "Liquidity role requires `execution.isAggressor` from the data-api /trades shape. Neither holdout source carries it: data/l5/raw/activity_gap.jsonl.gz records have exactly {conditionId,eventSlug,outcome,outcomeIndex,price,side,size,slug,timestamp,transactionHash,type,usdcSize} and data/l5/raw/sep/l5_sep23_25.json adds only profile fields. NOT INFERRED, and the bare boolean `aggressor` is not used anywhere in this module."
+    },
+    "SPREAD": {
+     "status": "UNAVAILABLE",
+     "reason": "Spread needs a resting book. analysis/l5/BOOK_ACQUISITION.md establishes that the only historical Polymarket L2 on disk is 2026-08-21..2026-08-24 (3.5 of 166 days, 2.1%), entirely inside REGIME_2026-08-19_ON, so no cross-regime spread series can be formed. Pair cost is reported instead and is a different quantity."
+    }
+   }
+  },
+  "outcome_by_regime": {
+   "REGIME_PRE_2026-04-25": {
+    "n_events": 0,
+    "UNAVAILABLE": "no events in this regime"
+   },
+   "REGIME_2026-04-25_TO_2026-06-22": {
+    "n_events": 0,
+    "UNAVAILABLE": "no events in this regime"
+   },
+   "REGIME_2026-06-23_TO_2026-08-18": {
+    "n_events": 0,
+    "UNAVAILABLE": "no events in this regime"
+   },
+   "REGIME_2026-08-19_ON": {
+    "LABEL": "SETTLEMENT-DERIVED OUTCOME. Not observable at decision time.",
+    "n_events": 255,
+    "events_with_redeem": 201,
+    "redeem_coverage_frac": 0.788235,
+    "events_without_redeem": 54,
+    "redeem_cashflow_usd": 68263.22,
+    "SELF_SELECTION_WARNING": "A REDEEM record exists only if something was redeemable. OOS_RESULT.md \u00a74 measured 99.61% of one-sided no-REDEEM events as actual LOSSES. The no-REDEEM stratum is therefore a loss-enriched stratum, never to be pooled with the REDEEM-backed one."
+   }
+  },
+  "incentives": {
+   "by_regime": {
+    "REGIME_PRE_2026-04-25": {
+     "MAKER_REBATE": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "TAKER_REBATE": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "REWARD": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "days_with_any_credit": 0,
+     "credit_days": [],
+     "total_usd": 0.0
+    },
+    "REGIME_2026-04-25_TO_2026-06-22": {
+     "MAKER_REBATE": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "TAKER_REBATE": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "REWARD": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "days_with_any_credit": 0,
+     "credit_days": [],
+     "total_usd": 0.0
+    },
+    "REGIME_2026-06-23_TO_2026-08-18": {
+     "MAKER_REBATE": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "TAKER_REBATE": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "REWARD": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "days_with_any_credit": 0,
+     "credit_days": [],
+     "total_usd": 0.0
+    },
+    "REGIME_2026-08-19_ON": {
+     "MAKER_REBATE": {
+      "n": 3,
+      "usd": 2838.32
+     },
+     "TAKER_REBATE": {
+      "n": 3,
+      "usd": 151.16
+     },
+     "REWARD": {
+      "n": 0,
+      "usd": 0.0
+     },
+     "days_with_any_credit": 3,
+     "credit_days": [
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25"
+     ],
+     "total_usd": 2989.48
+    }
+   },
+   "first_record_day": {
+    "MAKER_REBATE": "2026-09-23",
+    "TAKER_REBATE": "2026-09-23",
+    "REWARD": null
+   },
+   "last_record_day": {
+    "MAKER_REBATE": "2026-09-25",
+    "TAKER_REBATE": "2026-09-25",
+    "REWARD": null
+   },
+   "credit_hour_utc_histogram": {
+    "0": 6
+   },
+   "CONFIRMED_ONLY": "Counted solely where a record exists. Never modelled or imputed. These are L5's credits, not ours, and they are EXCLUDED from every ex-incentive figure quoted from OOS_RESULT.json."
+  },
+  "outcome_pnl": {
+   "LABEL": "SETTLEMENT-DERIVED OUTCOME, ex incentives (rebates and rewards are exactly $0). HISTORICAL REPLAY -- not our realized profit.",
+   "STRATA_NEVER_POOLED": "SETTLEMENT_CONDITIONAL is conditional on a source-backed REDEEM record and is UPWARD-BIASED by self-selection. NO_REDEEM_loss_enriched is the complementary, loss-enriched stratum. POOLED_all_events scores an absent REDEEM as $0 payout, which is the unbiased reading of what the feed shows. The three are reported separately and are never averaged.",
+   "by_stratum": {
+    "SETTLEMENT_CONDITIONAL_redeem_backed": {
+     "REGIME_PRE_2026-04-25": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-04-25_TO_2026-06-22": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-06-23_TO_2026-08-18": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-08-19_ON": {
+      "events": 201,
+      "matched_usd": 2534.63,
+      "residual_usd": -2999.86,
+      "fees_usd": 175.44,
+      "net_ex_incentives_usd": -640.66,
+      "turnover_usd": 65346.71,
+      "matched_bp": 387.87,
+      "residual_bp": -459.07,
+      "fees_bp": -26.85,
+      "net_bp": -98.04,
+      "per_cell": {
+       "btc_15m": {
+        "events": 64,
+        "turnover_usd": 59638.18,
+        "net_usd": -1797.8,
+        "net_bp": -301.45,
+        "residual_bp": -703.83,
+        "matched_bp": 413.16
+       },
+       "btc_5m": {
+        "events": 90,
+        "turnover_usd": 4729.33,
+        "net_usd": 868.43,
+        "net_bp": 1836.27,
+        "residual_bp": 1935.46,
+        "matched_bp": 99.4
+       },
+       "eth_15m": {
+        "events": 24,
+        "turnover_usd": 485.62,
+        "net_usd": 142.09,
+        "net_bp": 2925.98,
+        "residual_bp": 2559.62,
+        "matched_bp": 535.08
+       },
+       "eth_5m": {
+        "events": 23,
+        "turnover_usd": 493.58,
+        "net_usd": 146.61,
+        "net_bp": 2970.42,
+        "residual_bp": 3201.84,
+        "matched_bp": -47.85
+       }
+      }
+     }
+    },
+    "POOLED_all_events": {
+     "REGIME_PRE_2026-04-25": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-04-25_TO_2026-06-22": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-06-23_TO_2026-08-18": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-08-19_ON": {
+      "events": 255,
+      "matched_usd": 2473.37,
+      "residual_usd": -4087.73,
+      "fees_usd": 209.34,
+      "net_ex_incentives_usd": -1823.7,
+      "turnover_usd": 67027.62,
+      "matched_bp": 369.01,
+      "residual_bp": -609.86,
+      "fees_bp": -31.23,
+      "net_bp": -272.08,
+      "per_cell": {
+       "btc_15m": {
+        "events": 65,
+        "turnover_usd": 60197.83,
+        "net_usd": -1899.58,
+        "net_bp": -315.56,
+        "residual_bp": -703.79,
+        "matched_bp": 399.27
+       },
+       "btc_5m": {
+        "events": 125,
+        "turnover_usd": 5619.55,
+        "net_usd": 18.2,
+        "net_bp": 32.39,
+        "residual_bp": 165.0,
+        "matched_bp": 82.23
+       },
+       "eth_15m": {
+        "events": 30,
+        "turnover_usd": 604.39,
+        "net_usd": 23.33,
+        "net_bp": 385.98,
+        "residual_bp": 128.24,
+        "matched_bp": 429.94
+       },
+       "eth_5m": {
+        "events": 35,
+        "turnover_usd": 605.85,
+        "net_usd": 34.35,
+        "net_bp": 566.93,
+        "residual_bp": 800.0,
+        "matched_bp": -38.98
+       }
+      }
+     }
+    },
+    "NO_REDEEM_loss_enriched": {
+     "REGIME_PRE_2026-04-25": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-04-25_TO_2026-06-22": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-06-23_TO_2026-08-18": {
+      "UNAVAILABLE": "no events"
+     },
+     "REGIME_2026-08-19_ON": {
+      "events": 54,
+      "matched_usd": -61.26,
+      "residual_usd": -1087.88,
+      "fees_usd": 33.9,
+      "net_ex_incentives_usd": -1183.04,
+      "turnover_usd": 1680.91,
+      "matched_bp": -364.46,
+      "residual_bp": -6471.95,
+      "fees_bp": -201.67,
+      "net_bp": -7038.07,
+      "per_cell": {
+       "btc_15m": {
+        "events": 1,
+        "turnover_usd": 559.65,
+        "net_usd": -101.78,
+        "net_bp": -1818.64,
+        "residual_bp": -699.33,
+        "matched_bp": -1080.34
+       },
+       "btc_5m": {
+        "events": 35,
+        "turnover_usd": 890.23,
+        "net_usd": -850.23,
+        "net_bp": -9550.68,
+        "residual_bp": -9240.58,
+        "matched_bp": -8.99
+       },
+       "eth_15m": {
+        "events": 6,
+        "turnover_usd": 118.76,
+        "net_usd": -118.76,
+        "net_bp": -10000.0,
+        "residual_bp": -9813.58,
+        "matched_bp": 0.0
+       },
+       "eth_5m": {
+        "events": 12,
+        "turnover_usd": 112.27,
+        "net_usd": -112.27,
+        "net_bp": -10000.0,
+        "residual_bp": -9759.68,
+        "matched_bp": 0.0
+       }
+      }
+     }
+    }
+   },
+   "shift_share": {
+    "SETTLEMENT_CONDITIONAL_redeem_backed": {},
+    "POOLED_all_events": {},
+    "NO_REDEEM_loss_enriched": {}
+   }
+  }
+ },
+ "EX_INCENTIVE_BASELINE_COPIED_FROM_OOS": {
+  "PRIMARY": {
+   "E2_EARLY_REBATE": {
+    "matched_retained_usd": 12794.87,
+    "residual_pnl_usd": -7721.26,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 825.68,
+    "net_cash_ex_incentives_usd": 4247.92,
+    "turnover_retained_usd": 290743.83,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 420,
+    "events_per_observed_day": 19.09,
+    "worst_drawdown_usd": -1211.94,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": 146.1
+   },
+   "E3_INCENTIVE_ERA": {
+    "matched_retained_usd": 166642.66,
+    "residual_pnl_usd": -103553.87,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 48658.94,
+    "net_cash_ex_incentives_usd": 14429.86,
+    "turnover_retained_usd": 6562200.33,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 14365,
+    "events_per_observed_day": 652.95,
+    "worst_drawdown_usd": -9165.71,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": 22.0
+   },
+   "FULL_CORPUS": {
+    "matched_retained_usd": 179437.54,
+    "residual_pnl_usd": -111275.13,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 49484.62,
+    "net_cash_ex_incentives_usd": 18677.78,
+    "turnover_retained_usd": 6852944.16,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 14785,
+    "events_per_observed_day": 672.05,
+    "worst_drawdown_usd": -9165.71,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": 27.3
+   },
+   "REGIME_2026-04-25_TO_2026-06-22": {
+    "matched_retained_usd": 52310.72,
+    "residual_pnl_usd": -30412.95,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 13564.03,
+    "net_cash_ex_incentives_usd": 8333.74,
+    "turnover_retained_usd": 1316565.65,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 1641,
+    "events_per_observed_day": 74.59,
+    "worst_drawdown_usd": -3480.8,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": 63.3
+   },
+   "REGIME_2026-06-23_TO_2026-08-18": {
+    "matched_retained_usd": 62229.82,
+    "residual_pnl_usd": -23724.25,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 23960.02,
+    "net_cash_ex_incentives_usd": 14545.54,
+    "turnover_retained_usd": 3517048.42,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 8235,
+    "events_per_observed_day": 374.32,
+    "worst_drawdown_usd": -3287.42,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": 41.4
+   },
+   "REGIME_2026-08-19_ON": {
+    "matched_retained_usd": 60952.69,
+    "residual_pnl_usd": -54843.18,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 11960.57,
+    "net_cash_ex_incentives_usd": -5851.05,
+    "turnover_retained_usd": 1927289.34,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 4739,
+    "events_per_observed_day": 215.41,
+    "worst_drawdown_usd": -9165.71,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": -30.4
+   },
+   "REGIME_PRE_2026-04-25": {
+    "matched_retained_usd": 3944.3,
+    "residual_pnl_usd": -2294.75,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 0.0,
+    "net_cash_ex_incentives_usd": 1649.55,
+    "turnover_retained_usd": 92040.76,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 170,
+    "events_per_observed_day": 7.73,
+    "worst_drawdown_usd": -245.43,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": 179.2
+   },
+   "SETTLEMENT_RESOLVED": {
+    "matched_retained_usd": 179437.65,
+    "residual_pnl_usd": -80027.47,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 48428.75,
+    "net_cash_ex_incentives_usd": 50981.43,
+    "turnover_retained_usd": 6820634.29,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 13472,
+    "events_per_observed_day": 612.36,
+    "worst_drawdown_usd": -3568.55,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": 74.7
+   },
+   "SETTLEMENT_UNRESOLVED": {
+    "matched_retained_usd": -0.12,
+    "residual_pnl_usd": -31247.66,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 1055.87,
+    "net_cash_ex_incentives_usd": -32303.65,
+    "turnover_retained_usd": 32309.87,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 1313,
+    "events_per_observed_day": 59.68,
+    "worst_drawdown_usd": -32303.65,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": -9998.1
+   }
+  },
+  "SECONDARY": {
+   "E3_INCENTIVE_ERA": {
+    "matched_retained_usd": 2473.37,
+    "residual_pnl_usd": -4087.73,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 209.34,
+    "net_cash_ex_incentives_usd": -1823.7,
+    "turnover_retained_usd": 67027.62,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 255,
+    "events_per_observed_day": 11.59,
+    "worst_drawdown_usd": -1879.41,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": -272.1
+   },
+   "FULL_CORPUS": {
+    "matched_retained_usd": 2473.37,
+    "residual_pnl_usd": -4087.73,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 209.34,
+    "net_cash_ex_incentives_usd": -1823.7,
+    "turnover_retained_usd": 67027.62,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 255,
+    "events_per_observed_day": 11.59,
+    "worst_drawdown_usd": -1879.41,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": -272.1
+   },
+   "REGIME_2026-08-19_ON": {
+    "matched_retained_usd": 2473.37,
+    "residual_pnl_usd": -4087.73,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 209.34,
+    "net_cash_ex_incentives_usd": -1823.7,
+    "turnover_retained_usd": 67027.62,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 255,
+    "events_per_observed_day": 11.59,
+    "worst_drawdown_usd": -1879.41,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": -272.1
+   },
+   "SETTLEMENT_RESOLVED": {
+    "matched_retained_usd": 2534.63,
+    "residual_pnl_usd": -2999.86,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 175.44,
+    "net_cash_ex_incentives_usd": -640.66,
+    "turnover_retained_usd": 65346.71,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 201,
+    "events_per_observed_day": 9.14,
+    "worst_drawdown_usd": -1045.05,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": -98.0
+   },
+   "SETTLEMENT_UNRESOLVED": {
+    "matched_retained_usd": -61.26,
+    "residual_pnl_usd": -1087.88,
+    "residual_loss_avoided_usd": 0.0,
+    "fees_usd": 33.9,
+    "net_cash_ex_incentives_usd": -1183.04,
+    "turnover_retained_usd": 1680.91,
+    "turnover_retained_frac": 1.0,
+    "events_touched": 54,
+    "events_per_observed_day": 2.45,
+    "worst_drawdown_usd": -1183.04,
+    "suppressed_action_frac": 0.0,
+    "suppressed_extend_frac": 0.0,
+    "suppressed_complete_frac": 0.0,
+    "net_bp_of_turnover": -7038.1
+   }
+  }
+ },
+ "EX_INCENTIVE_BASELINE_PROVENANCE": "Copied verbatim from analysis/l5/residual_frontier/OOS_RESULT.json BASELINE strata. Not recomputed here."
+}

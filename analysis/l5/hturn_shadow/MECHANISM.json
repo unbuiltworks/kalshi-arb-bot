@@ -1,0 +1,1078 @@
+{
+ "generated_utc": "2026-10-07T01:22:40.545363+00:00",
+ "label": "SHADOW",
+ "hypothesis": "H-TURN as a MECHANISM: rest the fee-safe complement while extending and let FILLS determine the turn. Not a classifier, not a prediction.",
+ "gates": {
+  "mutation_incapable": {
+   "gate": "mutation_incapable",
+   "blocking": true,
+   "pass": true,
+   "importable_order_capable_modules": [],
+   "detail": "no order-capable module is importable from this process",
+   "label": "SHADOW"
+  }
+ },
+ "economics": {
+  "pair_ceiling": "0.96",
+  "pair_ceiling_source": "src.l5_shadow.two_sided.ADAPTED_EXECUTABLE_PAIR_CEILING",
+  "near_par_tolerance": "LOCKED",
+  "maker_first_post_only": true,
+  "rebates_credited_usd": 0,
+  "rewards_credited_usd": 0,
+  "fee_allowance_source": "analysis/l5/POLYMARKET_FEE_SOURCES.json fee_per_contract_fee_bearing.max"
+ },
+ "book_provenance": {
+  "dataset": "Zenodo 22084977 updown_15m/5m.parquet, 1s full ladders, 2026-08-21..24, CC-BY-4.0",
+  "overlap_with_canonical_scorecard_windows": 0,
+  "decisive_artifact_exists": false,
+  "why": "FORENSIC.md \u00a74 asks for both tokens' top-of-book over the canonical sequence's own windows (2026-03-27..04-21, 2026-08-28..31). No such series is on disk.",
+  "anonymous_depth": "every level is SIZE AT A PRICE and is never attributed to L5 or any trader"
+ },
+ "regime": {
+  "all_evaluable_rows_fall_in": "REGIME_2026-08-19_ON",
+  "rows_in_R1_R2_R3": 0,
+  "note": "the pooled figure IS the R4 figure. L5's ex-incentive baseline is NEGATIVE in R4 (-$5,851, -30.4bp), so no pooled number here is advertised as current expectancy."
+ },
+ "arms": {
+  "fee_allowance_measured_max": {
+   "fee_allowance_per_share": "0.018",
+   "pooled_is_R4_only": {
+    "label": "SHADOW",
+    "n_windows": 3,
+    "n_l5_fills": 724,
+    "n_episodes": 10,
+    "episode_status": {
+     "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE": 6,
+     "EVALUABLE": 4
+    },
+    "unevaluable_fraction": 0.6,
+    "evaluable_episodes": 4,
+    "shadow_turned": 3,
+    "shadow_turn_rate_given_evaluable": 0.75,
+    "comparable_turns_both_ledgers": 3,
+    "turn_timing_delta_s": {
+     "n": 3,
+     "p10": 1.0,
+     "p25": 1.0,
+     "median": 4.0,
+     "p75": 7.0,
+     "p90": 7.0,
+     "shadow_earlier_or_same": 0,
+     "shadow_later": 3,
+     "within_5s": 2,
+     "within_30s": 3,
+     "reading": "negative = the mechanism's resting complement was hit BEFORE L5's own turn fill"
+    },
+    "turn_price_delta": {
+     "n": 3,
+     "median": -0.06,
+     "p10": -0.25,
+     "p90": -0.04,
+     "shadow_cheaper": 3,
+     "reading": "shadow complement price minus L5's own complete price, complement terms"
+    },
+    "pair_cost": {
+     "shadow_n": 3,
+     "shadow_median": 0.928,
+     "shadow_max": 0.931868,
+     "shadow_frac_le_ceiling": 1.0,
+     "l5_n": 10,
+     "l5_median": 0.984,
+     "note": "shadow pair cost is the mechanism's own matched basis; L5's is his. Neither is realized P&L for our account"
+    },
+    "mirror_dependency": {
+     "episodes_opening_on_a_non_post_only_arrival": 6,
+     "episodes_with_any_non_post_only_arrival": 9,
+     "why": "26.4% of L5's BTC15m maker fills price at or above the prevailing ask -- a complete-set mint a resting bid cannot do (ZENODO_OVERLAP_FINDINGS.md \u00a72)"
+    },
+    "residual_by_window": [
+     {
+      "market_slug": "btc-updown-15m-1787274000",
+      "l5_residual_end": "-986.557126",
+      "shadow_residual_end": "-2242.413707",
+      "l5_matched": "1255.856581",
+      "shadow_matched": "0",
+      "l5_avg_pair_cost": "1.083731",
+      "shadow_avg_pair_cost": null
+     },
+     {
+      "market_slug": "btc-updown-15m-1787290200",
+      "l5_residual_end": "24.567828",
+      "shadow_residual_end": "-573.558498",
+      "l5_matched": "4206.283980",
+      "shadow_matched": "3675.353318",
+      "l5_avg_pair_cost": "0.986459",
+      "shadow_avg_pair_cost": "0.927474"
+     },
+     {
+      "market_slug": "btc-updown-15m-1787296500",
+      "l5_residual_end": "-382.410611",
+      "shadow_residual_end": "-3295.475857",
+      "l5_matched": "2913.065246",
+      "shadow_matched": "0",
+      "l5_avg_pair_cost": "1.012522",
+      "shadow_avg_pair_cost": null
+     }
+    ],
+    "NEVER": [
+     "never submitted",
+     "never filled",
+     "never settled",
+     "never realized"
+    ]
+   },
+   "by_family": {
+    "btc15m": {
+     "label": "SHADOW",
+     "n_windows": 3,
+     "n_l5_fills": 724,
+     "n_episodes": 10,
+     "episode_status": {
+      "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE": 6,
+      "EVALUABLE": 4
+     },
+     "unevaluable_fraction": 0.6,
+     "evaluable_episodes": 4,
+     "shadow_turned": 3,
+     "shadow_turn_rate_given_evaluable": 0.75,
+     "comparable_turns_both_ledgers": 3,
+     "turn_timing_delta_s": {
+      "n": 3,
+      "p10": 1.0,
+      "p25": 1.0,
+      "median": 4.0,
+      "p75": 7.0,
+      "p90": 7.0,
+      "shadow_earlier_or_same": 0,
+      "shadow_later": 3,
+      "within_5s": 2,
+      "within_30s": 3,
+      "reading": "negative = the mechanism's resting complement was hit BEFORE L5's own turn fill"
+     },
+     "turn_price_delta": {
+      "n": 3,
+      "median": -0.06,
+      "p10": -0.25,
+      "p90": -0.04,
+      "shadow_cheaper": 3,
+      "reading": "shadow complement price minus L5's own complete price, complement terms"
+     },
+     "pair_cost": {
+      "shadow_n": 3,
+      "shadow_median": 0.928,
+      "shadow_max": 0.931868,
+      "shadow_frac_le_ceiling": 1.0,
+      "l5_n": 10,
+      "l5_median": 0.984,
+      "note": "shadow pair cost is the mechanism's own matched basis; L5's is his. Neither is realized P&L for our account"
+     },
+     "mirror_dependency": {
+      "episodes_opening_on_a_non_post_only_arrival": 6,
+      "episodes_with_any_non_post_only_arrival": 9,
+      "why": "26.4% of L5's BTC15m maker fills price at or above the prevailing ask -- a complete-set mint a resting bid cannot do (ZENODO_OVERLAP_FINDINGS.md \u00a72)"
+     },
+     "residual_by_window": [
+      {
+       "market_slug": "btc-updown-15m-1787274000",
+       "l5_residual_end": "-986.557126",
+       "shadow_residual_end": "-2242.413707",
+       "l5_matched": "1255.856581",
+       "shadow_matched": "0",
+       "l5_avg_pair_cost": "1.083731",
+       "shadow_avg_pair_cost": null
+      },
+      {
+       "market_slug": "btc-updown-15m-1787290200",
+       "l5_residual_end": "24.567828",
+       "shadow_residual_end": "-573.558498",
+       "l5_matched": "4206.283980",
+       "shadow_matched": "3675.353318",
+       "l5_avg_pair_cost": "0.986459",
+       "shadow_avg_pair_cost": "0.927474"
+      },
+      {
+       "market_slug": "btc-updown-15m-1787296500",
+       "l5_residual_end": "-382.410611",
+       "shadow_residual_end": "-3295.475857",
+       "l5_matched": "2913.065246",
+       "shadow_matched": "0",
+       "l5_avg_pair_cost": "1.012522",
+       "shadow_avg_pair_cost": null
+      }
+     ],
+     "NEVER": [
+      "never submitted",
+      "never filled",
+      "never settled",
+      "never realized"
+     ]
+    }
+   },
+   "windows": [
+    {
+     "market_slug": "btc-updown-15m-1787274000",
+     "label": "SHADOW",
+     "n_l5_fills": 143,
+     "n_l5_sells": 0,
+     "l5_relations": {
+      "open": 1,
+      "extend": 91,
+      "complete": 51
+     },
+     "l5_final": {
+      "up_qty": "0",
+      "down_qty": "986.557126",
+      "residual_signed": "-986.557126",
+      "matched_qty": "1255.856581",
+      "avg_pair_cost": "1.083731",
+      "fills_booked": 143
+     },
+     "shadow_final": {
+      "up_qty": "0",
+      "down_qty": "2242.413707",
+      "residual_signed": "-2242.413707",
+      "matched_qty": "0",
+      "avg_pair_cost": null,
+      "fills_booked": 92
+     },
+     "episodes": [
+      {
+       "episode": 0,
+       "market_slug": "btc-updown-15m-1787274000",
+       "start_t": 1787274010.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.56 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 92,
+       "mirrored_fills_not_post_only_achievable": 24,
+       "surplus_cash_basis_at_first_quote": "0.560000",
+       "complement_price": "0.38",
+       "complement_reprices": 90,
+       "shadow_turn_t": null,
+       "shadow_turn_price": null,
+       "shadow_turn_qty": null,
+       "shadow_turn_partial_fills": 0,
+       "shadow_pair_cost": null,
+       "l5_turn_t": 1787274072.0,
+       "l5_turn_price": "0.45",
+       "l5_turn_qty": "72.72",
+       "l5_pair_cost": "0.987189",
+       "label": "SHADOW",
+       "turn_timing_delta_s": null,
+       "turn_price_delta": null
+      }
+     ],
+     "family": "btc15m"
+    },
+    {
+     "market_slug": "btc-updown-15m-1787290200",
+     "label": "SHADOW",
+     "n_l5_fills": 360,
+     "n_l5_sells": 0,
+     "l5_relations": {
+      "open": 2,
+      "extend": 206,
+      "complete": 152
+     },
+     "l5_final": {
+      "up_qty": "24.567828",
+      "down_qty": "0",
+      "residual_signed": "24.567828",
+      "matched_qty": "4206.283980",
+      "avg_pair_cost": "0.986459",
+      "fills_booked": 360
+     },
+     "shadow_final": {
+      "up_qty": "0",
+      "down_qty": "573.558498",
+      "residual_signed": "-573.558498",
+      "matched_qty": "3675.353318",
+      "avg_pair_cost": "0.927474",
+      "fills_booked": 208
+     },
+     "episodes": [
+      {
+       "episode": 0,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290206.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.65 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 139,
+       "mirrored_fills_not_post_only_achievable": 65,
+       "surplus_cash_basis_at_first_quote": "0.665925",
+       "complement_price": "0.27",
+       "complement_reprices": 138,
+       "shadow_turn_t": 1787290380.0,
+       "shadow_turn_price": "0.25",
+       "shadow_turn_qty": "426.0",
+       "shadow_turn_partial_fills": 2,
+       "shadow_pair_cost": "0.909867",
+       "l5_turn_t": 1787290233.0,
+       "l5_turn_price": "0.32",
+       "l5_turn_qty": "21",
+       "l5_pair_cost": "0.985925",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 147.0,
+       "turn_price_delta": "-0.07"
+      },
+      {
+       "episode": 1,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290890.0,
+       "surplus_outcome": "Down",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 1,
+       "mirrored_fills_not_post_only_achievable": 0,
+       "surplus_cash_basis_at_first_quote": "0.470000",
+       "complement_price": "0.44",
+       "complement_reprices": 0,
+       "shadow_turn_t": 1787290891.0,
+       "shadow_turn_price": "0.44",
+       "shadow_turn_qty": "5.660376",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.931868",
+       "l5_turn_t": 1787290890.0,
+       "l5_turn_price": "0.48",
+       "l5_turn_qty": "46",
+       "l5_pair_cost": "0.982181",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 1.0,
+       "turn_price_delta": "-0.04"
+      },
+      {
+       "episode": 2,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290893.0,
+       "surplus_outcome": "Up",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 7,
+       "mirrored_fills_not_post_only_achievable": 5,
+       "surplus_cash_basis_at_first_quote": "0.400000",
+       "complement_price": "0.44",
+       "complement_reprices": 6,
+       "shadow_turn_t": 1787290922.0,
+       "shadow_turn_price": "0.44",
+       "shadow_turn_qty": "143.8",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.924479",
+       "l5_turn_t": 1787290918.0,
+       "l5_turn_price": "0.6900000357",
+       "l5_turn_qty": "12.870966",
+       "l5_pair_cost": "0.984257",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 4.0,
+       "turn_price_delta": "-0.2500000357"
+      },
+      {
+       "episode": 3,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290923.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.56 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 17,
+       "mirrored_fills_not_post_only_achievable": 1,
+       "surplus_cash_basis_at_first_quote": "0.560000",
+       "complement_price": "0.38",
+       "complement_reprices": 16,
+       "shadow_turn_t": 1787290975.0,
+       "shadow_turn_price": "0.75",
+       "shadow_turn_qty": "453.0",
+       "shadow_turn_partial_fills": 2,
+       "shadow_pair_cost": "0.928009",
+       "l5_turn_t": 1787290930.0,
+       "l5_turn_price": "0.83",
+       "l5_turn_qty": "0.5",
+       "l5_pair_cost": "0.992439",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 45.0,
+       "turn_price_delta": "-0.08"
+      },
+      {
+       "episode": 4,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290980.0,
+       "surplus_outcome": "Up",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.74 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 6,
+       "mirrored_fills_not_post_only_achievable": 4,
+       "surplus_cash_basis_at_first_quote": "0.753468",
+       "complement_price": "0.18",
+       "complement_reprices": 5,
+       "shadow_turn_t": 1787291011.0,
+       "shadow_turn_price": "0.26",
+       "shadow_turn_qty": "211.145164",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.927146",
+       "l5_turn_t": 1787290987.0,
+       "l5_turn_price": "0.54",
+       "l5_turn_qty": "25.01",
+       "l5_pair_cost": "0.956293",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 24.0,
+       "turn_price_delta": "-0.28"
+      },
+      {
+       "episode": 5,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787291011.0,
+       "surplus_outcome": "Down",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 7,
+       "mirrored_fills_not_post_only_achievable": 5,
+       "surplus_cash_basis_at_first_quote": "0.320000",
+       "complement_price": "0.62",
+       "complement_reprices": 6,
+       "shadow_turn_t": 1787291023.0,
+       "shadow_turn_price": "0.76",
+       "shadow_turn_qty": "179.730254",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.927660",
+       "l5_turn_t": 1787291016.0,
+       "l5_turn_price": "0.82",
+       "l5_turn_qty": "11.48",
+       "l5_pair_cost": "0.985919",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 7.0,
+       "turn_price_delta": "-0.06"
+      },
+      {
+       "episode": 6,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787291023.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.3700000105 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 1,
+       "mirrored_fills_not_post_only_achievable": 1,
+       "surplus_cash_basis_at_first_quote": "0.370000",
+       "complement_price": "0.53",
+       "complement_reprices": 0,
+       "shadow_turn_t": 1787291027.0,
+       "shadow_turn_price": "0.53",
+       "shadow_turn_qty": "24.761902",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.927474",
+       "l5_turn_t": 1787291023.0,
+       "l5_turn_price": "0.6200000532",
+       "l5_turn_qty": "5.263156",
+       "l5_pair_cost": "0.979448",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 4.0,
+       "turn_price_delta": "-0.0900000532"
+      },
+      {
+       "episode": 7,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787291028.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.55 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 21,
+       "mirrored_fills_not_post_only_achievable": 11,
+       "surplus_cash_basis_at_first_quote": "0.550000",
+       "complement_price": "0.39",
+       "complement_reprices": 20,
+       "shadow_turn_t": null,
+       "shadow_turn_price": null,
+       "shadow_turn_qty": null,
+       "shadow_turn_partial_fills": 0,
+       "shadow_pair_cost": null,
+       "l5_turn_t": 1787291029.0,
+       "l5_turn_price": "0.44",
+       "l5_turn_qty": "80",
+       "l5_pair_cost": "0.979402",
+       "label": "SHADOW",
+       "turn_timing_delta_s": null,
+       "turn_price_delta": null
+      }
+     ],
+     "family": "btc15m"
+    },
+    {
+     "market_slug": "btc-updown-15m-1787296500",
+     "label": "SHADOW",
+     "n_l5_fills": 221,
+     "n_l5_sells": 0,
+     "l5_relations": {
+      "open": 2,
+      "extend": 107,
+      "complete": 112
+     },
+     "l5_final": {
+      "up_qty": "0",
+      "down_qty": "382.410611",
+      "residual_signed": "-382.410611",
+      "matched_qty": "2913.065246",
+      "avg_pair_cost": "1.012522",
+      "fills_booked": 221
+     },
+     "shadow_final": {
+      "up_qty": "0",
+      "down_qty": "3295.475857",
+      "residual_signed": "-3295.475857",
+      "matched_qty": "0",
+      "avg_pair_cost": null,
+      "fills_booked": 112
+     },
+     "episodes": [
+      {
+       "episode": 0,
+       "market_slug": "btc-updown-15m-1787296500",
+       "start_t": 1787296506.0,
+       "surplus_outcome": "Down",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 112,
+       "mirrored_fills_not_post_only_achievable": 44,
+       "surplus_cash_basis_at_first_quote": "0.420000",
+       "complement_price": "0.52",
+       "complement_reprices": 108,
+       "shadow_turn_t": null,
+       "shadow_turn_price": null,
+       "shadow_turn_qty": null,
+       "shadow_turn_partial_fills": 0,
+       "shadow_pair_cost": null,
+       "l5_turn_t": 1787296527.0,
+       "l5_turn_price": "0.88",
+       "l5_turn_qty": "13",
+       "l5_pair_cost": "1.300000",
+       "label": "SHADOW",
+       "turn_timing_delta_s": null,
+       "turn_price_delta": null
+      }
+     ],
+     "family": "btc15m"
+    }
+   ]
+  },
+  "fee_allowance_zero_sensitivity": {
+   "fee_allowance_per_share": "0",
+   "pooled_is_R4_only": {
+    "label": "SHADOW",
+    "n_windows": 3,
+    "n_l5_fills": 724,
+    "n_episodes": 10,
+    "episode_status": {
+     "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE": 5,
+     "EVALUABLE": 5
+    },
+    "unevaluable_fraction": 0.5,
+    "evaluable_episodes": 5,
+    "shadow_turned": 3,
+    "shadow_turn_rate_given_evaluable": 0.6,
+    "comparable_turns_both_ledgers": 3,
+    "turn_timing_delta_s": {
+     "n": 3,
+     "p10": 1.0,
+     "p25": 1.0,
+     "median": 4.0,
+     "p75": 22.0,
+     "p90": 22.0,
+     "shadow_earlier_or_same": 0,
+     "shadow_later": 3,
+     "within_5s": 2,
+     "within_30s": 3,
+     "reading": "negative = the mechanism's resting complement was hit BEFORE L5's own turn fill"
+    },
+    "turn_price_delta": {
+     "n": 3,
+     "median": -0.04,
+     "p10": -0.25,
+     "p90": 0.25,
+     "shadow_cheaper": 2,
+     "reading": "shadow complement price minus L5's own complete price, complement terms"
+    },
+    "pair_cost": {
+     "shadow_n": 3,
+     "shadow_median": 0.947,
+     "shadow_max": 0.952087,
+     "shadow_frac_le_ceiling": 1.0,
+     "l5_n": 10,
+     "l5_median": 0.984,
+     "note": "shadow pair cost is the mechanism's own matched basis; L5's is his. Neither is realized P&L for our account"
+    },
+    "mirror_dependency": {
+     "episodes_opening_on_a_non_post_only_arrival": 5,
+     "episodes_with_any_non_post_only_arrival": 9,
+     "why": "26.4% of L5's BTC15m maker fills price at or above the prevailing ask -- a complete-set mint a resting bid cannot do (ZENODO_OVERLAP_FINDINGS.md \u00a72)"
+    },
+    "residual_by_window": [
+     {
+      "market_slug": "btc-updown-15m-1787274000",
+      "l5_residual_end": "-986.557126",
+      "shadow_residual_end": "-2242.413707",
+      "l5_matched": "1255.856581",
+      "shadow_matched": "0",
+      "l5_avg_pair_cost": "1.083731",
+      "shadow_avg_pair_cost": null
+     },
+     {
+      "market_slug": "btc-updown-15m-1787290200",
+      "l5_residual_end": "24.567828",
+      "shadow_residual_end": "-197.308489",
+      "l5_matched": "4206.283980",
+      "shadow_matched": "3907.841159",
+      "l5_avg_pair_cost": "0.986459",
+      "shadow_avg_pair_cost": "0.946960"
+     },
+     {
+      "market_slug": "btc-updown-15m-1787296500",
+      "l5_residual_end": "-382.410611",
+      "shadow_residual_end": "-3295.475857",
+      "l5_matched": "2913.065246",
+      "shadow_matched": "0",
+      "l5_avg_pair_cost": "1.012522",
+      "shadow_avg_pair_cost": null
+     }
+    ],
+    "NEVER": [
+     "never submitted",
+     "never filled",
+     "never settled",
+     "never realized"
+    ]
+   },
+   "by_family": {
+    "btc15m": {
+     "label": "SHADOW",
+     "n_windows": 3,
+     "n_l5_fills": 724,
+     "n_episodes": 10,
+     "episode_status": {
+      "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE": 5,
+      "EVALUABLE": 5
+     },
+     "unevaluable_fraction": 0.5,
+     "evaluable_episodes": 5,
+     "shadow_turned": 3,
+     "shadow_turn_rate_given_evaluable": 0.6,
+     "comparable_turns_both_ledgers": 3,
+     "turn_timing_delta_s": {
+      "n": 3,
+      "p10": 1.0,
+      "p25": 1.0,
+      "median": 4.0,
+      "p75": 22.0,
+      "p90": 22.0,
+      "shadow_earlier_or_same": 0,
+      "shadow_later": 3,
+      "within_5s": 2,
+      "within_30s": 3,
+      "reading": "negative = the mechanism's resting complement was hit BEFORE L5's own turn fill"
+     },
+     "turn_price_delta": {
+      "n": 3,
+      "median": -0.04,
+      "p10": -0.25,
+      "p90": 0.25,
+      "shadow_cheaper": 2,
+      "reading": "shadow complement price minus L5's own complete price, complement terms"
+     },
+     "pair_cost": {
+      "shadow_n": 3,
+      "shadow_median": 0.947,
+      "shadow_max": 0.952087,
+      "shadow_frac_le_ceiling": 1.0,
+      "l5_n": 10,
+      "l5_median": 0.984,
+      "note": "shadow pair cost is the mechanism's own matched basis; L5's is his. Neither is realized P&L for our account"
+     },
+     "mirror_dependency": {
+      "episodes_opening_on_a_non_post_only_arrival": 5,
+      "episodes_with_any_non_post_only_arrival": 9,
+      "why": "26.4% of L5's BTC15m maker fills price at or above the prevailing ask -- a complete-set mint a resting bid cannot do (ZENODO_OVERLAP_FINDINGS.md \u00a72)"
+     },
+     "residual_by_window": [
+      {
+       "market_slug": "btc-updown-15m-1787274000",
+       "l5_residual_end": "-986.557126",
+       "shadow_residual_end": "-2242.413707",
+       "l5_matched": "1255.856581",
+       "shadow_matched": "0",
+       "l5_avg_pair_cost": "1.083731",
+       "shadow_avg_pair_cost": null
+      },
+      {
+       "market_slug": "btc-updown-15m-1787290200",
+       "l5_residual_end": "24.567828",
+       "shadow_residual_end": "-197.308489",
+       "l5_matched": "4206.283980",
+       "shadow_matched": "3907.841159",
+       "l5_avg_pair_cost": "0.986459",
+       "shadow_avg_pair_cost": "0.946960"
+      },
+      {
+       "market_slug": "btc-updown-15m-1787296500",
+       "l5_residual_end": "-382.410611",
+       "shadow_residual_end": "-3295.475857",
+       "l5_matched": "2913.065246",
+       "shadow_matched": "0",
+       "l5_avg_pair_cost": "1.012522",
+       "shadow_avg_pair_cost": null
+      }
+     ],
+     "NEVER": [
+      "never submitted",
+      "never filled",
+      "never settled",
+      "never realized"
+     ]
+    }
+   },
+   "windows": [
+    {
+     "market_slug": "btc-updown-15m-1787274000",
+     "label": "SHADOW",
+     "n_l5_fills": 143,
+     "n_l5_sells": 0,
+     "l5_relations": {
+      "open": 1,
+      "extend": 91,
+      "complete": 51
+     },
+     "l5_final": {
+      "up_qty": "0",
+      "down_qty": "986.557126",
+      "residual_signed": "-986.557126",
+      "matched_qty": "1255.856581",
+      "avg_pair_cost": "1.083731",
+      "fills_booked": 143
+     },
+     "shadow_final": {
+      "up_qty": "0",
+      "down_qty": "2242.413707",
+      "residual_signed": "-2242.413707",
+      "matched_qty": "0",
+      "avg_pair_cost": null,
+      "fills_booked": 92
+     },
+     "episodes": [
+      {
+       "episode": 0,
+       "market_slug": "btc-updown-15m-1787274000",
+       "start_t": 1787274010.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.56 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 92,
+       "mirrored_fills_not_post_only_achievable": 24,
+       "surplus_cash_basis_at_first_quote": "0.560000",
+       "complement_price": "0.40",
+       "complement_reprices": 90,
+       "shadow_turn_t": null,
+       "shadow_turn_price": null,
+       "shadow_turn_qty": null,
+       "shadow_turn_partial_fills": 0,
+       "shadow_pair_cost": null,
+       "l5_turn_t": 1787274072.0,
+       "l5_turn_price": "0.45",
+       "l5_turn_qty": "72.72",
+       "l5_pair_cost": "0.987189",
+       "label": "SHADOW",
+       "turn_timing_delta_s": null,
+       "turn_price_delta": null
+      }
+     ],
+     "family": "btc15m"
+    },
+    {
+     "market_slug": "btc-updown-15m-1787290200",
+     "label": "SHADOW",
+     "n_l5_fills": 360,
+     "n_l5_sells": 0,
+     "l5_relations": {
+      "open": 2,
+      "extend": 206,
+      "complete": 152
+     },
+     "l5_final": {
+      "up_qty": "24.567828",
+      "down_qty": "0",
+      "residual_signed": "24.567828",
+      "matched_qty": "4206.283980",
+      "avg_pair_cost": "0.986459",
+      "fills_booked": 360
+     },
+     "shadow_final": {
+      "up_qty": "0",
+      "down_qty": "197.308489",
+      "residual_signed": "-197.308489",
+      "matched_qty": "3907.841159",
+      "avg_pair_cost": "0.946960",
+      "fills_booked": 206
+     },
+     "episodes": [
+      {
+       "episode": 0,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290206.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.65 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 31,
+       "mirrored_fills_not_post_only_achievable": 22,
+       "surplus_cash_basis_at_first_quote": "0.665925",
+       "complement_price": "0.29",
+       "complement_reprices": 30,
+       "shadow_turn_t": 1787290333.0,
+       "shadow_turn_price": "0.30",
+       "shadow_turn_qty": "481.011233",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.956243",
+       "l5_turn_t": 1787290233.0,
+       "l5_turn_price": "0.32",
+       "l5_turn_qty": "21",
+       "l5_pair_cost": "0.985925",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 100.0,
+       "turn_price_delta": "-0.02"
+      },
+      {
+       "episode": 1,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290339.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.73 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 108,
+       "mirrored_fills_not_post_only_achievable": 43,
+       "surplus_cash_basis_at_first_quote": "0.730000",
+       "complement_price": "0.23",
+       "complement_reprices": 107,
+       "shadow_turn_t": 1787290887.0,
+       "shadow_turn_price": "0.52",
+       "shadow_turn_qty": "2092.812605",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.952179",
+       "l5_turn_t": 1787290339.0,
+       "l5_turn_price": "0.27",
+       "l5_turn_qty": "80",
+       "l5_pair_cost": "0.980111",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 548.0,
+       "turn_price_delta": "0.25"
+      },
+      {
+       "episode": 2,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290890.0,
+       "surplus_outcome": "Down",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 1,
+       "mirrored_fills_not_post_only_achievable": 0,
+       "surplus_cash_basis_at_first_quote": "0.470000",
+       "complement_price": "0.44",
+       "complement_reprices": 0,
+       "shadow_turn_t": 1787290891.0,
+       "shadow_turn_price": "0.44",
+       "shadow_turn_qty": "5.660376",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.952087",
+       "l5_turn_t": 1787290890.0,
+       "l5_turn_price": "0.48",
+       "l5_turn_qty": "46",
+       "l5_pair_cost": "0.982181",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 1.0,
+       "turn_price_delta": "-0.04"
+      },
+      {
+       "episode": 3,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290893.0,
+       "surplus_outcome": "Up",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 7,
+       "mirrored_fills_not_post_only_achievable": 5,
+       "surplus_cash_basis_at_first_quote": "0.400000",
+       "complement_price": "0.44",
+       "complement_reprices": 6,
+       "shadow_turn_t": 1787290922.0,
+       "shadow_turn_price": "0.44",
+       "shadow_turn_qty": "143.8",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.943631",
+       "l5_turn_t": 1787290918.0,
+       "l5_turn_price": "0.6900000357",
+       "l5_turn_qty": "12.870966",
+       "l5_pair_cost": "0.984257",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 4.0,
+       "turn_price_delta": "-0.2500000357"
+      },
+      {
+       "episode": 4,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290923.0,
+       "surplus_outcome": "Down",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.56 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 17,
+       "mirrored_fills_not_post_only_achievable": 1,
+       "surplus_cash_basis_at_first_quote": "0.560000",
+       "complement_price": "0.40",
+       "complement_reprices": 16,
+       "shadow_turn_t": 1787290975.0,
+       "shadow_turn_price": "0.77",
+       "shadow_turn_qty": "536.431784",
+       "shadow_turn_partial_fills": 1,
+       "shadow_pair_cost": "0.945675",
+       "l5_turn_t": 1787290930.0,
+       "l5_turn_price": "0.83",
+       "l5_turn_qty": "0.5",
+       "l5_pair_cost": "0.992439",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 45.0,
+       "turn_price_delta": "-0.06"
+      },
+      {
+       "episode": 5,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787290977.0,
+       "surplus_outcome": "Up",
+       "status": "UNEVALUABLE_MIRRORED_SURPLUS_FILL_NOT_POST_ONLY_ACHIEVABLE",
+       "why": "the arrival this episode opens on priced 0.81 vs the prevailing book (AT_OR_ABOVE_ASK_NOT_MEASURABLE): a post-only resting bid could not have been that fill",
+       "mirrored_surplus_fills": 7,
+       "mirrored_fills_not_post_only_achievable": 5,
+       "surplus_cash_basis_at_first_quote": "0.810000",
+       "complement_price": "0.15",
+       "complement_reprices": 6,
+       "shadow_turn_t": 1787291011.0,
+       "shadow_turn_price": "0.25",
+       "shadow_turn_qty": "126.0",
+       "shadow_turn_partial_fills": 2,
+       "shadow_pair_cost": "0.947358",
+       "l5_turn_t": 1787290987.0,
+       "l5_turn_price": "0.54",
+       "l5_turn_qty": "25.01",
+       "l5_pair_cost": "0.956293",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 24.0,
+       "turn_price_delta": "-0.29"
+      },
+      {
+       "episode": 6,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787291016.0,
+       "surplus_outcome": "Up",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 15,
+       "mirrored_fills_not_post_only_achievable": 10,
+       "surplus_cash_basis_at_first_quote": "0.820000",
+       "complement_price": "0.14",
+       "complement_reprices": 14,
+       "shadow_turn_t": 1787291039.0,
+       "shadow_turn_price": "0.42",
+       "shadow_turn_qty": "315.0",
+       "shadow_turn_partial_fills": 2,
+       "shadow_pair_cost": "0.946569",
+       "l5_turn_t": 1787291017.0,
+       "l5_turn_price": "0.17",
+       "l5_turn_qty": "5",
+       "l5_pair_cost": "0.985562",
+       "label": "SHADOW",
+       "turn_timing_delta_s": 22.0,
+       "turn_price_delta": "0.25"
+      },
+      {
+       "episode": 7,
+       "market_slug": "btc-updown-15m-1787290200",
+       "start_t": 1787291046.0,
+       "surplus_outcome": "Down",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 11,
+       "mirrored_fills_not_post_only_achievable": 9,
+       "surplus_cash_basis_at_first_quote": "0.140000",
+       "complement_price": "0.82",
+       "complement_reprices": 10,
+       "shadow_turn_t": null,
+       "shadow_turn_price": null,
+       "shadow_turn_qty": null,
+       "shadow_turn_partial_fills": 0,
+       "shadow_pair_cost": null,
+       "l5_turn_t": 1787291053.0,
+       "l5_turn_price": "0.92",
+       "l5_turn_qty": "80",
+       "l5_pair_cost": "0.983872",
+       "label": "SHADOW",
+       "turn_timing_delta_s": null,
+       "turn_price_delta": null
+      }
+     ],
+     "family": "btc15m"
+    },
+    {
+     "market_slug": "btc-updown-15m-1787296500",
+     "label": "SHADOW",
+     "n_l5_fills": 221,
+     "n_l5_sells": 0,
+     "l5_relations": {
+      "open": 2,
+      "extend": 107,
+      "complete": 112
+     },
+     "l5_final": {
+      "up_qty": "0",
+      "down_qty": "382.410611",
+      "residual_signed": "-382.410611",
+      "matched_qty": "2913.065246",
+      "avg_pair_cost": "1.012522",
+      "fills_booked": 221
+     },
+     "shadow_final": {
+      "up_qty": "0",
+      "down_qty": "3295.475857",
+      "residual_signed": "-3295.475857",
+      "matched_qty": "0",
+      "avg_pair_cost": null,
+      "fills_booked": 112
+     },
+     "episodes": [
+      {
+       "episode": 0,
+       "market_slug": "btc-updown-15m-1787296500",
+       "start_t": 1787296506.0,
+       "surplus_outcome": "Down",
+       "status": "EVALUABLE",
+       "why": null,
+       "mirrored_surplus_fills": 112,
+       "mirrored_fills_not_post_only_achievable": 44,
+       "surplus_cash_basis_at_first_quote": "0.420000",
+       "complement_price": "0.53",
+       "complement_reprices": 108,
+       "shadow_turn_t": null,
+       "shadow_turn_price": null,
+       "shadow_turn_qty": null,
+       "shadow_turn_partial_fills": 0,
+       "shadow_pair_cost": null,
+       "l5_turn_t": 1787296527.0,
+       "l5_turn_price": "0.88",
+       "l5_turn_qty": "13",
+       "l5_pair_cost": "1.300000",
+       "label": "SHADOW",
+       "turn_timing_delta_s": null,
+       "turn_price_delta": null
+      }
+     ],
+     "family": "btc15m"
+    }
+   ]
+  }
+ },
+ "NEVER": [
+  "never submitted",
+  "never filled",
+  "never settled",
+  "never realized"
+ ]
+}
