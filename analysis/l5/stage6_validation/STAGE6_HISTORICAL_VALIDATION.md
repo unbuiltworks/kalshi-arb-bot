@@ -40,9 +40,9 @@ proxy numbers are never presented as a representative sample.
 
 **Within the proxy's own adverse-selected subset the economics fail
 decisively**: the protocol needs a 78.73% matched fraction to break even and
-achieves 68.83% (95% CI, market-clustered, 66.76%–70.94%), for
-−$0.0372 per first leg over 24,439 states. On L5's own coins it is worse:
-59.06% matched, −$0.0873 per first leg.
+achieves **67.72%** (95% CI, market-clustered, 65.62%–69.81%), for
+**−$0.0372** per first leg over 24,439 states. On L5's own coins it is worse:
+**57.90%** matched, **−$0.0879** per first leg.
 
 **Verdict: this evidence does NOT support authorizing a first matched-pair
 cohort.** §9.
@@ -242,25 +242,29 @@ data permits arithmetic at all.
 | standard | answer | UNKNOWABLE fraction |
 |---|---|---:|
 | **STRICT (primary)** | **INCONCLUSIVE — not estimable** | **95.58%** of first legs |
-| FROZEN PROXY, Lane 4 gate | **68.83%** of provable first legs, 95% CI **[66.76%, 70.94%]** (16,822 / 24,439) | 3.16% of that subset; 11.14% of all evaluated states are in some UNKNOWABLE bucket |
+| **FROZEN PROXY, Lane 4 gate, forward fees — authoritative** | **67.72%** of provable first legs, 95% CI **[65.62%, 69.81%]** (16,549 / 24,439) | 3.04% of that subset; 11.14% of all evaluated states are in some UNKNOWABLE bucket |
+| FROZEN PROXY, Lane 4 gate, state-dated fees | 68.83%, CI [66.76%, 70.94%] (16,822 / 24,439) | 3.16% |
 | FROZEN PROXY, role-aware gate | 74.07%, CI [72.13%, 76.00%] (18,102 / 24,439) | 3.23% |
-| FROZEN PROXY, Lane 4 gate, **L5 coins only** | **59.06%** | 2.86% |
+| **FROZEN PROXY, Lane 4 gate, forward fees, L5 coins only** | **57.90%** | 2.39% |
 
 Every matched pair cleared the ceiling by construction: under Lane 4's gate the
-realized pair cost is p05 **0.93**, p50 **0.93**, p95 0.95, max **0.95** — i.e.
-the fee-safe gate costs ~3 ticks of headroom against the nominal 0.96, exactly
-as `pair_economics.py` says it would. Fee basis makes no difference to the
-matched fraction, because the matched legs are maker fills and carry no venue
-charge; the forward θ = 0.0695 rating is what tightens the gate.
+realized pair cost at the forward fee basis is p05 **0.92**, p50 **0.92**,
+p95 0.95, max **0.95** — i.e. the fee-safe gate costs ~4 ticks of headroom
+against the nominal 0.96, exactly as `pair_economics.py` says it would. The
+forward θ = 0.0695 rating costs one further tick against the state-dated
+θ = 0.06 rating (p50 0.92 vs 0.93), and that is the whole effect of the fee
+basis here: the matched legs are maker fills and carry no venue charge, so the
+fee only ever moves the *gate*, never the fill.
 
 ### Q2 — How often would it instead REMAIN RESIDUAL?
 
 | standard | answer |
 |---|---|
 | **STRICT (primary)** | **INCONCLUSIVE** |
-| FROZEN PROXY, Lane 4 gate | **28.01%** `RESIDUAL_PROVABLE` (6,845) + **3.16%** `UNKNOWABLE_COMPLEMENT` (772) |
+| **FROZEN PROXY, Lane 4 gate, forward fees — authoritative** | **29.25%** `RESIDUAL_PROVABLE` (7,148) + **3.04%** `UNKNOWABLE_COMPLEMENT` (742) |
+| FROZEN PROXY, Lane 4 gate, state-dated fees | 28.01% (6,845) + 3.16% (772) |
 | FROZEN PROXY, role-aware gate | 22.70% + 3.23% |
-| FROZEN PROXY, **L5 coins only** | **38.08%** + 2.86% |
+| **FROZEN PROXY, Lane 4 gate, forward fees, L5 coins only** | **39.70%** + 2.39% |
 
 Plus, over all 28,062 evaluated states: 4.42% `NO_FIRST_LEG_PROVABLE` (no
 position taken, no exposure) and 8.49% `UNKNOWABLE_FIRST_LEG`.
@@ -268,18 +272,18 @@ position taken, no exposure) and 8.49% `UNKNOWABLE_FIRST_LEG`.
 ### Q3 — How long would residuals PERSIST? (full distribution)
 
 Time from the first leg's fill instant to a provable complement fill, Lane 4
-gate, maker complement (n = 16,822):
+gate, forward fees, maker complement (n = 16,549):
 
 | p50 | p75 | p90 | p95 | p99 | max |
 |---:|---:|---:|---:|---:|---:|
-| **19 s** | 54 s | **150 s** | 249 s | **451 s** | **699 s** |
+| **22 s** | 64 s | **160 s** | 255 s | **467 s** | **699 s** |
 
-Taker complement (n = 14,106): p50 **42 s**, p75 99 s, p90 214 s, p95 312 s,
-p99 530 s, max **758 s**.
+Taker complement (n = 13,849): p50 **46 s**, p75 105 s, p90 222 s, p95 330 s,
+p99 551 s, max **760 s**.
 
-**Right-censoring is 31.17%** (6,845 of 21,951 provable-first-leg pairs never
+**Right-censoring is 32.28%** (7,890 of the 24,439 provable first legs never
 provably matched inside the horizon). Censored observations are **reported,
-never imputed**: the true persistence distribution has ~31% of its mass at
+never imputed**: the true persistence distribution has ~32% of its mass at
 "never, within one market's life," and the percentiles above describe only the
 pairs that did complete. For a 15m contract the practical ceiling is the
 window itself minus the 120 s TTE cutoff — a residual that has not matched by
@@ -294,7 +298,8 @@ residual loss at settlement is **−$0.600000**. Lane 4's `MAX_POSSIBLE_LOSS_USD
 is therefore **confirmed empirically, not merely asserted** — no evaluable
 state produced a residual outside it.
 
-**Residual loss distribution** (provable residuals, n = 7,148, valued at the
+**Residual loss distribution** (provable residuals, n = 7,148, Lane 4 gate,
+forward fees, valued at the
 archive's settled `winner`): p01 −$0.59, p50 **−$0.28**, p99 −$0.01, mean
 **−$0.2774**, and **the loss rate is 1.000 — every single provable residual
 lost money.** That is the LEVEL_CONSUMED bias in its purest form: the first leg
@@ -327,7 +332,8 @@ measurement sizes it.
 
 ## 5. The economic decomposition — why the verdict is what it is
 
-Lane 4 gate, forward fee basis, provable-first-leg subset (n = 24,439):
+Lane 4 gate, forward fee basis — the authoritative binding — over the
+provable-first-leg subset (n = 24,439):
 
 | | n | total USD | mean USD |
 |---|---:|---:|---:|
@@ -339,18 +345,18 @@ A matched pair locks about **+$0.075**. An unmatched residual costs about
 **−$0.277** — **3.7×** the locked gain. So:
 
 > **Break-even matched fraction required: 78.73%.
-> Observed: 68.83%, 95% CI [66.76%, 70.94%].
-> The confidence interval excludes break-even.**
+> Observed: 67.72%, 95% CI [65.62%, 69.81%].
+> The confidence interval excludes break-even by more than 8 points.**
 
-On L5's own coins (btc, eth) the observed matched fraction is **59.06%** and
-the replay expectancy **−$0.0873 per first leg** — materially worse than the
+On L5's own coins (btc, eth) the observed matched fraction is **57.90%** and
+the replay expectancy **−$0.0879 per first leg** — materially worse than the
 all-coin pool, which matters because btc/eth is the forward-relevant category.
 
 Replay expectancy per provable first leg, every binding, for the record:
 
 | gate | fee basis | matched frac | mean USD/leg | total USD |
 |---|---|---:|---:|---:|
-| LANE4_TAKER_BOTH_LEGS | FORWARD θ=0.0695 | 0.6883 | **−0.0372** | −908.14 |
+| **LANE4_TAKER_BOTH_LEGS** | **FORWARD θ=0.0695** | **0.6772** | **−0.0372** | **−909.60** |
 | LANE4_TAKER_BOTH_LEGS | state θ=0.06 | 0.6883 | −0.0372 | −908.14 |
 | LANE5_ROLE_AWARE | FORWARD θ=0.0695 | 0.7407 | −0.0374 | −914.23 |
 | LANE5_ROLE_AWARE | state θ=0.06 | 0.7407 | −0.0374 | −914.23 |
@@ -445,7 +451,7 @@ Consequences, both load-bearing:
    what would our clone have done?") is **not** met by this lane and is not
    claimed to be.
 6. **Partial fills are not modelled.** Legs are all-or-nothing at 1.00 share.
-7. **Censoring, not imputation.** 31.17% of residual durations are right-
+7. **Censoring, not imputation.** 32.28% of residual durations are right-
    censored; no distribution was fitted through them.
 8. **The 15 s cadence is a cadence, not a claim.** Overlapping states are
    correlated; clustering handles inference, not the fact that 28,062 states
@@ -469,9 +475,9 @@ Three independent reasons, each sufficient on its own:
    authorization actually turns on, the validation is **INCONCLUSIVE**, and the
    repo's own frozen proxy is a documented selection bias rather than a fix.
 2. **Economic.** Where arithmetic is possible at all, it fails: break-even
-   needs **78.73%** matched, the observed fraction is **68.83%** with a 95% CI
-   of **[66.76%, 70.94%]** that excludes break-even, and on L5's own coins it
-   falls to **59.06%** (−$0.0873/leg). The cause is structural, not marginal:
+   needs **78.73%** matched, the observed fraction is **67.72%** with a 95% CI
+   of **[65.62%, 69.81%]** that excludes break-even by over 8 points, and on
+   L5's own coins it falls to **57.90%** (−$0.0879/leg). The cause is structural, not marginal:
    a matched pair locks ~**$0.075** while an unmatched residual costs
    ~**$0.277** — **3.7×**. The $0.96 ceiling, once made fee-safe, simply does
    not buy enough upside to pay for the residuals it leaves behind. No gate
