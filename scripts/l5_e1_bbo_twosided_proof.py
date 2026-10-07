@@ -81,12 +81,27 @@ PER_WINDOW_BUDGET_S = float(
     os.getenv("PMUS_E1_TWOSIDED_WINDOW_BUDGET_S") or 600.0)
 POLL_S = 1.0
 
-#: a REST reading taken more than this after the WS snapshot is not
-#: "contemporaneous" and cannot adjudicate a disagreement.
-MAX_SKEW_S = 10.0
+#: THE CRITICAL BOUND. A REST reading further than this from the websocket
+#: capture cannot adjudicate anything: at +119s a BTC15m book moves
+#: constantly (103 book updates in 45s, measured), so a one-tick
+#: difference across several seconds is ordinary market motion, not a
+#: parse defect. The first version of this probe measured skew from the
+#: WRONG READ and reported 0.0 while the real gap was 6-9 seconds.
+MAX_SKEW_S = float(os.getenv("PMUS_E1_BBO_MAX_SKEW_S") or 1.0)
+
+#: how many samples to take while hunting for a DETERMINATE one. An
+#: INCONCLUSIVE sample is a MEASUREMENT FAILURE, not a result, so it is
+#: retried. A determinate sample -- agreement OR genuine disagreement --
+#: ENDS THE RUN. That asymmetry is deliberate: retrying past a genuine
+#: disagreement would be shopping for a verdict.
+MAX_SAMPLES = int(os.getenv("PMUS_E1_BBO_MAX_SAMPLES") or 60)
 
 OUT_DIR = (os.getenv("PMUS_E1_BBO_DIR")
            or "/state/pmus-ws/e1_bbo_semantics")
+
+#: the PMUS gateway, taken from the proven identity module rather than
+#: restated here.
+GATEWAY = None          # bound in main() from pmus_identity.GATEWAY
 
 
 # ----------------------------------------------------------------- safety
@@ -203,36 +218,56 @@ def _prune(msg: Any, depth: int = 0) -> Any:
 
 # -------------------------------------------------------------- REST reads
 
-def rest_reads(slug: str) -> Dict[str, Any]:
-    from analysis.l5.e1_cohort import pmus_identity as PI
-    t = PI.read_only_transport()
+def rest_book_once(slug: str, http: Any) -> Dict[str, Any]:
+    """ONE /book request, with its own start and end timestamps.
+
+    NO RETRY. The previous version retried /bbo three times with 3s
+    pauses INSIDE the measurement path and then read /book afterwards, so
+    the comparison was against a book read 6-9 seconds after the
+    websocket capture while the probe reported a skew of 0.0. The retry
+    is gone from the hot path entirely; a failed read makes the sample
+    INCONCLUSIVE, which is what it always was.
+    """
     t0 = time.time()
-    bbo = _tolerant(PI.bbo, slug, t)
+    try:
+        raw = http.request("GET", "/v1/markets/%s/book" % slug, None,
+                           GATEWAY)
+        err = None
+    except Exception as exc:                                # noqa: BLE001
+        raw, err = None, "%s: %s" % (type(exc).__name__, exc)
     t1 = time.time()
-    book = _tolerant(PI.book, slug, t)
-    t2 = time.time()
-    return {"bbo": {"t": t0, "raw": bbo},
-            "book": {"t": t1, "raw": book, "top": book_top(book)},
-            "elapsed_s": round(t2 - t0, 3)}
+    return {"request_start_unix": t0, "request_end_unix": t1,
+            "duration_s": round(t1 - t0, 4),
+            "request_start_utc": _utc(t0), "request_end_utc": _utc(t1),
+            "raw": raw, "error": err,
+            "top": book_top(raw) if raw else None}
 
 
-def _tolerant(fn: Any, slug: str, t: Any, tries: int = 3,
-              pause: float = 3.0) -> Dict[str, Any]:
-    """Read-only REST, retrying a transient refusal, NEVER inventing a
-    body. `/v1/markets/{slug}/bbo` 404s at window open while
-    `/v1/events/slug/{event}` already resolves the market -- measured."""
-    last = None
-    for i in range(tries):
-        try:
-            got = fn(slug, t)
-            if isinstance(got, dict) and got:
-                return got
-            last = "EMPTY_BODY"
-        except Exception as exc:                            # noqa: BLE001
-            last = "%s: %s" % (type(exc).__name__, exc)
-        if i < tries - 1:
-            time.sleep(pause)
-    return {"REST_READ_REFUSED": last, "attempts": tries}
+def rest_bbo_once(slug: str, http: Any) -> Dict[str, Any]:
+    """SUPPLEMENTARY ONLY, and taken AFTER the critical comparison.
+
+    /v1/markets/{slug}/bbo 404s at window open (measured). It is useful
+    context but it may not gate or influence the verdict, so it is read
+    last, once, and its absence is recorded rather than retried.
+    """
+    t0 = time.time()
+    try:
+        raw = http.request("GET", "/v1/markets/%s/bbo" % slug, None,
+                           GATEWAY)
+        err = None
+    except Exception as exc:                                # noqa: BLE001
+        raw, err = None, "%s: %s" % (type(exc).__name__, exc)
+    md = (raw or {}).get("marketData") or {}
+    return {"t_unix": t0, "t_utc": _utc(t0), "raw": raw, "error": err,
+            "bid": _s(dec(md.get("bestBid"))),
+            "ask": _s(dec(md.get("bestAsk"))),
+            "ROLE": "supplementary; never gates the verdict"}
+
+
+def _utc(t: float) -> str:
+    ms = int((t % 1) * 1000)
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(int(t))) \
+        + ".%03dZ" % ms
 
 
 def book_top(payload: Any) -> Dict[str, Any]:
@@ -265,78 +300,167 @@ def book_top(payload: Any) -> Dict[str, Any]:
 
 # --------------------------------------------------------------- the proof
 
-def adjudicate(slug: str, snap: Dict[str, Any], ws_frame: Dict[str, Any],
-               rest: Dict[str, Any], ws_t: float) -> Dict[str, Any]:
-    """All four readings against each other. No shopping, no retry."""
-    bbo = rest["bbo"]["raw"] or {}
-    md = bbo.get("marketData") or {}
+def take_sample(feed: Any, book: Any, tap: Any, slug: str,
+                http: Any) -> Dict[str, Any]:
+    """ONE sample: the websocket state and the venue's book, together.
 
-    r1_bid, r1_ask = dec(md.get("bestBid")), dec(md.get("bestAsk"))
-    top = rest["book"]["top"] or {}
-    r2_bid = dec((top.get("bid") or {}).get("level_0"))
-    r2_ask = dec((top.get("offer") or {}).get("level_0"))
-    sh = (ws_frame or {}).get("shape") or {}
-    r3_bid = dec((sh.get("bid0") or {}).get("px"))
-    r3_ask = dec((sh.get("offer0") or {}).get("px")
+    ORDER MATTERS AND IS THE WHOLE POINT:
+      1. read the AuthBook snapshot and the RAW frame that produced it,
+         back to back, and record the venue's own `transactTime` plus the
+         book-update counter;
+      2. IMMEDIATELY issue one /book request, timestamped either side;
+      3. re-read the snapshot and the counter.
+
+    If anything about the websocket state moved between (1) and (3), the
+    two readings describe DIFFERENT instants and the sample is
+    INCONCLUSIVE. That is the check the first version lacked.
+    """
+    t_ws = time.time()
+    snap_before = feed._snapshot_for(slug)
+    frame = tap.latest_two_sided()
+    updates_before = _updates(book, slug)
+
+    if not snap_before or snap_before.get("bid") is None \
+            or snap_before.get("ask") is None or frame is None:
+        return {"classification": "INCONCLUSIVE",
+                "why": "NO_TWO_SIDED_WS_STATE_AT_CAPTURE"}
+
+    rest = rest_book_once(slug, http)
+
+    snap_after = feed._snapshot_for(slug)
+    updates_after = _updates(book, slug)
+    t_done = time.time()
+
+    sh = frame.get("shape") or {}
+    ws_bid = dec((sh.get("bid0") or {}).get("px"))
+    ws_ask = dec((sh.get("offer0") or {}).get("px")
                  if isinstance(sh.get("offer0"), dict) else None)
-    r4_bid, r4_ask = dec(snap.get("bid")), dec(snap.get("ask"))
+    ab_bid, ab_ask = dec(snap_before.get("bid")), dec(snap_before.get("ask"))
 
-    skew = abs(rest["bbo"]["t"] - ws_t)
-    readings = {
-        "1_rest_bbo": {"bid": _s(r1_bid), "ask": _s(r1_ask),
-                       "path": "marketData.bestBid/.bestAsk"},
-        "2_rest_book_top": {"bid": _s(r2_bid), "ask": _s(r2_ask),
-                            "path": "marketData.bids[0]/.offers[0]"},
-        "3_raw_ws_frame": {"bid": _s(r3_bid), "ask": _s(r3_ask),
-                           "path": "the ingested frame's own bids[0]/"
-                                   "offers[0]"},
-        "4_authbook_snapshot": {"bid": _s(r4_bid), "ask": _s(r4_ask),
-                                "path": "AuthBook.snapshot()"},
-    }
-
-    bids = [r1_bid, r2_bid, r3_bid, r4_bid]
-    asks = [r1_ask, r2_ask, r3_ask, r4_ask]
-    bid_all = [b for b in bids if b is not None]
-    ask_all = [a for a in asks if a is not None]
-    all_four_bid = len(bid_all) == 4 and len(set(bid_all)) == 1
-    all_four_ask = len(ask_all) == 4 and len(set(ask_all)) == 1
-
-    out: Dict[str, Any] = {
+    # SKEW, MEASURED AGAINST THE READ THAT IS ACTUALLY BEING COMPARED.
+    skew_to_start = rest["request_start_unix"] - t_ws
+    skew_to_end = rest["request_end_unix"] - t_ws
+    sample: Dict[str, Any] = {
         "slug": slug,
-        "T_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ",
-                               time.gmtime(int(ws_t))),
-        "T_unix": ws_t,
-        "readings": readings,
-        "skew_s": round(skew, 3), "max_skew_s": MAX_SKEW_S,
-        "contemporaneous": skew <= MAX_SKEW_S,
-        "all_four_agree_on_the_bid": all_four_bid,
-        "all_four_agree_on_the_ask": all_four_ask,
-        "A_bid": _s(bid_all[0]) if all_four_bid else None,
-        "B_ask": _s(ask_all[0]) if all_four_ask else None,
-        "two_sided": bool(ask_all) and bool(bid_all),
-        "book_is_uncrossed": (bool(bid_all) and bool(ask_all)
-                              and bid_all[0] < ask_all[0]),
-        "ladder_is_best_first": {
-            "bid": (top.get("bid") or {}).get("level_0_is_the_best"),
-            "offer": (top.get("offer") or {}).get("level_0_is_the_best"),
+        "T_ws_capture_unix": t_ws, "T_ws_capture_utc": _utc(t_ws),
+        "ws_venue_transact_time": _transact_time(frame),
+        "ws_last_update_t": snap_before.get("last_update_t"),
+        "ws_stream_age_s": snap_before.get("stream_age_s"),
+        "rest_request_start_utc": rest["request_start_utc"],
+        "rest_request_end_utc": rest["request_end_utc"],
+        "rest_duration_s": rest["duration_s"],
+        "skew_ws_to_rest_start_s": round(skew_to_start, 4),
+        "skew_ws_to_rest_end_s": round(skew_to_end, 4),
+        "max_skew_s": MAX_SKEW_S,
+        "book_updates_before": updates_before,
+        "book_updates_after": updates_after,
+        "book_updates_during_rest": (
+            None if (updates_before is None or updates_after is None)
+            else updates_after - updates_before),
+        "ws_state_after": {"bid": (snap_after or {}).get("bid"),
+                           "ask": (snap_after or {}).get("ask")},
+        "total_sample_s": round(t_done - t_ws, 4),
+        "readings": {
+            "raw_ws_frame": {"bid": _s(ws_bid), "ask": _s(ws_ask),
+                             "path": "the ingested frame's own "
+                                     "bids[0]/offers[0]",
+                             "n_bids": sh.get("n_bids"),
+                             "n_offers": sh.get("n_offers")},
+            "authbook_snapshot": {"bid": _s(ab_bid), "ask": _s(ab_ask),
+                                  "path": "AuthBook.snapshot()"},
+            "rest_book_top": {
+                "bid": _s(dec(((rest["top"] or {}).get("bid") or {})
+                              .get("level_0"))),
+                "ask": _s(dec(((rest["top"] or {}).get("offer") or {})
+                              .get("level_0"))),
+                "path": "marketData.bids[0]/offers[0]",
+                "n_bids": ((rest["top"] or {}).get("bid") or {})
+                .get("n_levels"),
+                "n_offers": ((rest["top"] or {}).get("offer") or {})
+                .get("n_levels")},
         },
-        "ws_carries_a_best_bid_field": bool(sh.get("bestBid") is not None),
+        "rest_ladders": rest["top"],
+        "rest_error": rest["error"],
+        "raw_ws_frame_shape": sh,
     }
 
-    if all_four_bid and all_four_ask:
-        A, B = bid_all[0], ask_all[0]
-        out["e1_decision"] = e1_prices(slug, A, B)
-        out["VERDICT"] = "BBO PROVEN"
-    elif not out["contemporaneous"]:
-        out["VERDICT"] = ("INCONCLUSIVE: the REST cross-check was not "
-                          "contemporaneous with the WS snapshot")
-    else:
-        out["VERDICT"] = "DISAGREEMENT: STOP"
-        out["disagreement"] = {
-            "bids": [_s(b) for b in bids],
-            "asks": [_s(a) for a in asks],
-        }
-    return out
+    # ---------------------------------------------------- classification
+    r_bid = dec(sample["readings"]["rest_book_top"]["bid"])
+    r_ask = dec(sample["readings"]["rest_book_top"]["ask"])
+
+    if rest["raw"] is None:
+        sample["classification"] = "INCONCLUSIVE"
+        sample["why"] = "REST_BOOK_UNAVAILABLE:%s" % rest["error"]
+        return sample
+
+    moved = (_s(ab_bid) != str((snap_after or {}).get("bid"))
+             or _s(ab_ask) != str((snap_after or {}).get("ask")))
+    if moved:
+        sample["classification"] = "INCONCLUSIVE"
+        sample["why"] = "WS_TOP_OF_BOOK_MOVED_DURING_THE_REST_REQUEST"
+        return sample
+
+    n_during = sample["book_updates_during_rest"]
+    if n_during is None or n_during != 0:
+        sample["classification"] = "INCONCLUSIVE"
+        sample["why"] = ("BOOK_UPDATED_DURING_THE_REST_REQUEST:%s"
+                         % n_during)
+        return sample
+
+    if skew_to_end > MAX_SKEW_S:
+        sample["classification"] = "INCONCLUSIVE"
+        sample["why"] = ("SKEW_%.4fs_EXCEEDS_%.4fs"
+                         % (skew_to_end, MAX_SKEW_S))
+        return sample
+
+    if ws_bid is None or ws_ask is None or ab_bid is None \
+            or ab_ask is None or r_bid is None or r_ask is None:
+        sample["classification"] = "INCONCLUSIVE"
+        sample["why"] = "A_SIDE_WAS_ABSENT_IN_ONE_READING"
+        return sample
+
+    # the fold must match the frame it folded, or AuthBook is the problem
+    if (ws_bid, ws_ask) != (ab_bid, ab_ask):
+        sample["classification"] = "GENUINE_DISAGREEMENT"
+        sample["why"] = "AUTHBOOK_DOES_NOT_MATCH_THE_FRAME_IT_FOLDED"
+        return sample
+
+    if (ws_bid, ws_ask) == (r_bid, r_ask):
+        sample["classification"] = "AGREE"
+        sample["A_bid"], sample["B_ask"] = str(ws_bid), str(ws_ask)
+        sample["book_is_uncrossed"] = ws_bid < ws_ask
+        sample["ladder_best_first"] = {
+            "bid": ((rest["top"] or {}).get("bid") or {})
+            .get("level_0_is_the_best"),
+            "offer": ((rest["top"] or {}).get("offer") or {})
+            .get("level_0_is_the_best")}
+        return sample
+
+    sample["classification"] = "GENUINE_DISAGREEMENT"
+    sample["why"] = "WS_AND_REST_DIFFER_WITHIN_A_BOUNDED_STABLE_WINDOW"
+    return sample
+
+
+def _updates(book: Any, slug: str) -> Optional[int]:
+    try:
+        return int(((book.state or {}).get(slug) or {})
+                   .get("book_updates"))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _transact_time(frame: Dict[str, Any]) -> Any:
+    raw = (frame or {}).get("raw")
+    for key in ("transactTime", "transact_time"):
+        if isinstance(raw, dict) and raw.get(key):
+            return raw[key]
+    if isinstance(raw, dict):
+        for v in raw.values():
+            if isinstance(v, dict):
+                got = _transact_time({"raw": v})
+                if got:
+                    return got
+    return None
 
 
 def _s(x: Any) -> Optional[str]:
@@ -395,94 +519,116 @@ def e1_prices(slug: str, A: D, B: D) -> Dict[str, Any]:
 # ------------------------------------------------------------------- main
 
 def main() -> int:
+    global GATEWAY
     out: Dict[str, Any] = {
-        "proof": "E1_BBO_TWO_SIDED", "venue": "polymarket_us",
+        "proof": "E1_BBO_TWO_SIDED_V2", "venue": "polymarket_us",
         "read_only": True, "credentials_used": True,
         "signing_is_not_ordering": True,
-        "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "started_utc": _utc(time.time()),
+        "critical_comparison": ("the raw authenticated WS frame and "
+                                "AuthBook's fold of it, against REST "
+                                "/book read IMMEDIATELY after, with the "
+                                "skew measured against THAT request"),
+        "bbo_role": "supplementary only; never gates the verdict",
+        "max_skew_s": MAX_SKEW_S,
+        "a_sample_that_cannot_be_trusted_is_INCONCLUSIVE": True,
+        "an_inconclusive_sample_is_retried_a_determinate_one_ends_the_run":
+            True,
         **disable_the_latch(),
     }
     from analysis.l5.e1_cohort import pmus_book as PBK
     from analysis.l5.e1_cohort import pmus_identity as PI
     from analysis.l5.e1_cohort import pmus_selector as SEL
+    GATEWAY = PI.GATEWAY
 
+    http = PI.read_only_transport()
     deadline = time.time() + TOTAL_BUDGET_S
-    attempts: List[Dict[str, Any]] = []
+    samples: List[Dict[str, Any]] = []
     feed = PBK.PmusDecisionFeed(clock=time.time)
     feed.start()
     book = getattr(feed, "_book", None)
     out["feed_started"] = book is not None
-
-    try:
-        while time.time() < deadline:
-            now = time.time()
-            ws = SEL.window_start_for(now)
-            slug = PI.slug_for(ws)
-            att: Dict[str, Any] = {
-                "slug": slug, "window_start": ws,
-                "seconds_into_window": round(now - ws, 1)}
-            try:
-                PI.resolve(slug)
-                att["resolved"] = True
-            except Exception as exc:                        # noqa: BLE001
-                att["resolved"] = False
-                att["refused"] = "%s: %s" % (type(exc).__name__, exc)
-                attempts.append(att)
-                time.sleep(10.0)
-                continue
-
-            tap = RawFrameTap(book, slug) if book is not None else None
-            wdl = min(deadline, time.time() + PER_WINDOW_BUDGET_S,
-                      float(ws + SEL.WINDOW_S) - 20.0)
-            found = None
-            while time.time() < wdl:
-                snap = feed._snapshot_for(slug)
-                if snap and snap.get("bid") is not None \
-                        and snap.get("ask") is not None:
-                    frame = tap.latest_two_sided() if tap else None
-                    if frame is not None:
-                        found = (snap, frame, time.time())
-                        break
-                time.sleep(POLL_S)
-
-            if found is None:
-                h = feed.health({"slug": slug})
-                att["result"] = "NO_TWO_SIDED_STATE_IN_THIS_WINDOW"
-                att["health_why"] = h.get("why")
-                att["book_updates"] = h.get("book_updates")
-                att["last_raw_frame_shape"] = (
-                    (tap.latest() or {}).get("shape") if tap else None)
-                attempts.append(att)
-                if tap:
-                    tap.restore()
-                continue
-
-            snap, frame, ws_t = found
-            rest = rest_reads(slug)
-            verdict = adjudicate(slug, snap, frame, rest, ws_t)
-            att["result"] = "ADJUDICATED"
-            attempts.append(att)
-            out["attempts"] = attempts
-            out["proof_record"] = {
-                "authbook_snapshot": snap,
-                "raw_ws_frame": frame,
-                "rest": rest,
-                "feed_health": feed.health({"slug": slug}),
-            }
-            out["verdict"] = verdict
-            if tap:
-                tap.restore()
-            out.update(assert_no_order_path())
-            rc = 0 if verdict["VERDICT"] == "BBO PROVEN" else 4
-            out["result"] = verdict["VERDICT"]
-            finish(out)
-            return rc
-
-        out["attempts"] = attempts
-        out["result"] = "NO_TWO_SIDED_STATE_IN_BUDGET"
+    if book is None:
+        out["result"] = "NO_FEED"
         out.update(assert_no_order_path())
         finish(out)
         return 3
+
+    tap = None
+    current = None
+    try:
+        while time.time() < deadline and len(samples) < MAX_SAMPLES:
+            ws = SEL.window_start_for(time.time())
+            slug = PI.slug_for(ws)
+            if slug != current:
+                if tap is not None:
+                    tap.restore()
+                try:
+                    PI.resolve(slug)
+                except Exception as exc:                    # noqa: BLE001
+                    samples.append({
+                        "slug": slug, "classification": "INCONCLUSIVE",
+                        "why": "WINDOW_NOT_RESOLVABLE:%s: %s"
+                               % (type(exc).__name__, exc)})
+                    time.sleep(10.0)
+                    continue
+                tap = RawFrameTap(book, slug)
+                current = slug
+                out.setdefault("slugs_observed", []).append(slug)
+
+            snap = feed._snapshot_for(slug)
+            if not snap or snap.get("bid") is None \
+                    or snap.get("ask") is None:
+                time.sleep(POLL_S)
+                continue
+
+            sample = take_sample(feed, book, tap, slug, http)
+            sample["sample_n"] = len(samples) + 1
+            samples.append(sample)
+
+            if sample["classification"] in ("AGREE",
+                                            "GENUINE_DISAGREEMENT"):
+                break
+            time.sleep(POLL_S)
+
+        out["samples"] = samples
+        determinate = [s for s in samples
+                       if s.get("classification") in
+                       ("AGREE", "GENUINE_DISAGREEMENT")]
+        out["sample_count"] = len(samples)
+        out["inconclusive_count"] = len(samples) - len(determinate)
+        out["inconclusive_reasons"] = sorted(
+            {str(s.get("why")) for s in samples
+             if s.get("classification") == "INCONCLUSIVE"})
+
+        if not determinate:
+            out["result"] = "INCONCLUSIVE"
+            out["VERDICT"] = "INCONCLUSIVE"
+            out["why"] = ("no sample met the bounded, stable comparison "
+                          "conditions within budget")
+            rc = 5
+        else:
+            d = determinate[0]
+            out["determinate_sample"] = d
+            if d["classification"] == "AGREE":
+                d["e1_decision"] = e1_prices(
+                    d["slug"], D(d["A_bid"]), D(d["B_ask"]))
+                out["VERDICT"] = "BBO PROVEN"
+                out["result"] = "BBO PROVEN"
+                out["A_bid"], out["B_ask"] = d["A_bid"], d["B_ask"]
+                rc = 0
+            else:
+                out["VERDICT"] = "GENUINE DISAGREEMENT"
+                out["result"] = "GENUINE DISAGREEMENT"
+                rc = 4
+            # SUPPLEMENTARY, taken only AFTER the verdict is fixed.
+            out["supplementary_bbo"] = rest_bbo_once(d["slug"], http)
+
+        if tap is not None:
+            tap.restore()
+        out.update(assert_no_order_path())
+        finish(out)
+        return rc
     finally:
         try:
             feed.stop()
@@ -514,34 +660,42 @@ def persist(out: Dict[str, Any]) -> Optional[str]:
 
 def summarize(out: Dict[str, Any]) -> None:
     """Compact, because Railway drops logs above 500/sec."""
-    v = out.get("verdict") or {}
+    d = out.get("determinate_sample") or {}
     rows: List[Any] = [
-        ("result", out.get("result")),
+        ("VERDICT", out.get("VERDICT") or out.get("result")),
         ("saved_to", out.get("saved_to")),
-        ("VERDICT", v.get("VERDICT")),
-        ("slug", v.get("slug")),
-        ("T_utc", v.get("T_utc")),
-        ("A_bid", v.get("A_bid")),
-        ("B_ask", v.get("B_ask")),
-        ("readings", v.get("readings")),
-        ("all_four_bid", v.get("all_four_agree_on_the_bid")),
-        ("all_four_ask", v.get("all_four_agree_on_the_ask")),
-        ("skew_s", v.get("skew_s")),
-        ("contemporaneous", v.get("contemporaneous")),
-        ("uncrossed", v.get("book_is_uncrossed")),
-        ("ladder_best_first", v.get("ladder_is_best_first")),
-        ("ws_has_best_field", v.get("ws_carries_a_best_bid_field")),
-        ("disagreement", v.get("disagreement")),
-        ("e1_yes", (v.get("e1_decision") or {}).get(
+        ("slug", d.get("slug")),
+        ("A_bid", out.get("A_bid")),
+        ("B_ask", out.get("B_ask")),
+        ("classification", d.get("classification")),
+        ("why", d.get("why") or out.get("why")),
+        ("readings", d.get("readings")),
+        ("T_ws_capture_utc", d.get("T_ws_capture_utc")),
+        ("ws_venue_transact_time", d.get("ws_venue_transact_time")),
+        ("ws_last_update_t", d.get("ws_last_update_t")),
+        ("ws_stream_age_s", d.get("ws_stream_age_s")),
+        ("rest_request_start_utc", d.get("rest_request_start_utc")),
+        ("rest_request_end_utc", d.get("rest_request_end_utc")),
+        ("rest_duration_s", d.get("rest_duration_s")),
+        ("skew_ws_to_rest_start_s", d.get("skew_ws_to_rest_start_s")),
+        ("skew_ws_to_rest_end_s", d.get("skew_ws_to_rest_end_s")),
+        ("max_skew_s", d.get("max_skew_s") or out.get("max_skew_s")),
+        ("book_updates_during_rest", d.get("book_updates_during_rest")),
+        ("ws_state_after", d.get("ws_state_after")),
+        ("uncrossed", d.get("book_is_uncrossed")),
+        ("ladder_best_first", d.get("ladder_best_first")),
+        ("rest_ladders", d.get("rest_ladders")),
+        ("raw_ws_frame_shape", d.get("raw_ws_frame_shape")),
+        ("e1_yes", (d.get("e1_decision") or {}).get(
             "yes_maker_first_leg")),
-        ("e1_no", (v.get("e1_decision") or {}).get("no_maker_first_leg")),
-        ("e1_complement", (v.get("e1_decision") or {}).get(
+        ("e1_no", (d.get("e1_decision") or {}).get("no_maker_first_leg")),
+        ("e1_complement", (d.get("e1_decision") or {}).get(
             "complement_arithmetic")),
-        ("rest_book_top", ((out.get("proof_record") or {}).get("rest")
-                           or {}).get("book", {}).get("top")),
-        ("raw_ws_shape", ((out.get("proof_record") or {}).get(
-            "raw_ws_frame") or {}).get("shape")),
-        ("attempts", out.get("attempts")),
+        ("supplementary_bbo", out.get("supplementary_bbo")),
+        ("sample_count", out.get("sample_count")),
+        ("inconclusive_count", out.get("inconclusive_count")),
+        ("inconclusive_reasons", out.get("inconclusive_reasons")),
+        ("slugs_observed", out.get("slugs_observed")),
         ("safety", {"venue_post": out.get("venue_post"),
                     "order_submitted": out.get("order_submitted"),
                     "latch_touched": out.get("latch_touched"),
