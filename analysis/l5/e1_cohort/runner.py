@@ -671,6 +671,114 @@ def account_first_leg(*, cumulative_filled_qty: Any,
                     "neither and never silently"}
 
 
+# ------------------------------------------------- preview-rejection record
+
+def preview_rejection_record(snapshot: Mapping[str, Any],
+                             detail: Mapping[str, Any], *,
+                             iteration: int, now: float) -> Dict[str, Any]:
+    """Assemble the DURABLE record of one venue preview rejection.
+
+    WHY THIS EXISTS. On 2026-10-07T19:15:47Z an eligible attempt was
+    rejected by the venue five times and the cohort stopped on
+    VENUE_ERROR_STORM. Every one of those rejections carried the venue's
+    own status, reason and body -- and NONE of it reached the tape, because
+    the `PreviewRejected` handler recorded to the in-memory tracker and the
+    refusal list only. The detail existed solely in the final stdout JSON,
+    and Railway's 500 logs/sec limit dropped 5704 lines of that run. The
+    venue told us exactly what was wrong with the order and the answer was
+    thrown away.
+
+    So the rejection is now written through the EXISTING recorder, on every
+    occurrence, before the loop continues and before the storm can end the
+    cohort.
+
+    PURE. It builds a dict and nothing else: no transport, no latch, no
+    tracker mutation, no I/O. That is what makes it safe to call from the
+    middle of the submission handler, and it is why the regression tests
+    can assert the shape without a venue.
+
+    SECRETS. Auth headers and signatures are never in `detail` to begin
+    with -- `BoundedOrderTransport` records response headers through an
+    allowlist and request headers by NAME only -- and the result is passed
+    through `local_faults.redact_detail`, which subtracts credential values
+    at every depth. Nothing here reads a credential.
+    """
+    fl = dict(snapshot.get("first_leg") or {})
+    cp = dict(snapshot.get("complement") or {})
+    pin = dict(snapshot.get("pin") or {})
+    sent = dict(detail.get("sent") or {})
+    return {
+        "phase": "PREVIEW",
+        "iteration": iteration,
+        "unix": now,
+        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+        "session_id": A.session_id(),
+        "window": snapshot.get("window"),
+        "spec_fingerprint": E1_FINGERPRINT,
+        # ---- what the venue said
+        "http_status": detail.get("status"),
+        "http_reason": detail.get("reason"),
+        "venue_response_body": detail.get("response_body"),
+        "venue_response_headers_safe": detail.get("response_headers_safe"),
+        "request_method": detail.get("method"),
+        "request_path": detail.get("path"),
+        "sent_envelope_key": detail.get("sent_envelope_key"),
+        # ---- market and token identity
+        "slug": snapshot.get("market"),
+        "market_id": pin.get("market_id") or pin.get("condition_id"),
+        "window_start": pin.get("window_start"),
+        "window_end": pin.get("window_end"),
+        "token_up": str(pin.get("token_up")) if pin.get("token_up")
+                    is not None else None,
+        "token_down": str(pin.get("token_down")) if pin.get("token_down")
+                      is not None else None,
+        # ---- what E1 decided, BEFORE serialization
+        "e1_outcome_side": fl.get("side"),
+        "e1_first_leg_token_id": (str(fl.get("token_id"))
+                                  if fl.get("token_id") is not None
+                                  else None),
+        "e1_complement_side": cp.get("side"),
+        "e1_price_local": str(snapshot.get("first_leg_price")),
+        "e1_qty_local": str(snapshot.get("qty", FIRST_LEG_QTY)),
+        "e1_observed_best_bid": fl.get("best_bid"),
+        "e1_observed_best_ask": fl.get("best_ask"),
+        # ---- WHAT WENT ON THE WIRE, AFTER SERIALIZATION, VERBATIM.
+        #
+        # The whole serialized body is recorded as one object rather than
+        # re-listed field by field, and that is deliberate:
+        # `test_no_file_in_this_package_contains_a_duplicate_serializer`
+        # forbids any non-test file here from naming a wire key, because
+        # naming them is the first step of the duplicate-serializer bug
+        # that caused the Attempt-5 HTTP 400 twice. Copying them out to
+        # make the record look tidier would reintroduce exactly the
+        # coupling that guard exists to prevent.
+        #
+        # Nothing is lost. The serialized price, quantity, post-only flag
+        # and side are all here, under the proven serializer's own key
+        # names, and
+        # `test_the_serialized_wire_values_are_retrievable_from_the_record`
+        # asserts each one is readable from the persisted event.
+        "wire_body_non_secret": sent,
+        "wire_body_keys": sorted(sent),
+        "wire_value_types": {k: type(v).__name__
+                             for k, v in sorted(sent.items())},
+        "serializer": "src.l5_order_body",
+        "WIRE_FIELDS_NOT_RE_LISTED": "the body above is verbatim; this "
+                                     "package may not name wire keys",
+        # ---- the two facts that must never be inferred from state
+        "latch_touched": False,
+        "order_submitted": False,
+        "reached_the_venue": True,
+        "is_a_venue_error": True,
+        "is_a_local_fault": False,
+        "retried": False,
+        "WHY_LATCH_UNTOUCHED": "the preview runs strictly before latch "
+                               "consumption, so this is control flow and "
+                               "not a deduction from state",
+        "SECRETS": "auth headers and signatures are never recorded",
+    }
+
+
 # ------------------------------------------------------------- the cohort
 
 def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
@@ -809,6 +917,18 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             # the latch is UNTOUCHED: a preview creates nothing.
             tracker.record_venue_error(detail={"phase": "PREVIEW",
                                                "detail": exc.detail})
+            # DURABLE, ON EVERY REJECTION, INCLUDING THE FIFTH. The storm
+            # stop is evaluated at the TOP of the next iteration, so
+            # recording here means the rejection that ends the cohort is
+            # on the tape before the cohort ends. Nothing below this line
+            # submits, consumes a latch or touches risk accounting.
+            if recorder is not None:
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="PREVIEW_REJECTED",
+                    detail=LF.redact_detail(preview_rejection_record(
+                        snap, dict(exc.detail or {}), iteration=it,
+                        now=now_fn())))
             refusals.append({"iteration": it,
                              "refusals": ["PREVIEW_REJECTED"]})
             continue
