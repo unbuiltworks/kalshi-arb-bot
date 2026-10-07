@@ -57,7 +57,11 @@ def snapshot(*, first_leg_price="0.50", complement_bid="0.46",
         "fingerprint_pinned": {"matches_this_build": True},
         "ws_state": {"timing_authority": "websocket_strict",
                      "both_tokens_streaming": True,
-                     "book_unix": 1000.0},
+                     "book_unix": 1000.0,
+                     "first_leg": {"best_bid": first_leg_price,
+                                   "best_ask": "0.52"},
+                     "complement": {"best_bid": complement_bid,
+                                    "best_ask": "0.54"}},
     }
     s.update(over)
     return s
@@ -82,7 +86,9 @@ class FakeTransport:
         if path == O.PREVIEW_PATH:
             if self.preview_raises:
                 raise self.preview_raises
-            return dict(body["request"])
+            # the venue answers the preview with the order under `order`,
+            # which is what `src.l5_preview_gate.require_echo` compares
+            return {"order": dict(body["request"])}
         if path == O.SUBMIT_PATH:
             self._submits += 1
             if self._submits > 1:
@@ -247,8 +253,12 @@ def test_a_pair_at_the_ceiling_is_cent_observable_at_013():
 
 def test_rebate_at_this_size_is_structurally_zero():
     from src import pmus_fee_schedule as FEE
-    for p in ("0.10", "0.30", "0.50", "0.60"):
-        assert FEE.maker_rebate(D(p), D("0.13")) == D("0")
+    # the CREDITED rebate is cent-rounded, and at 0.13 shares the raw
+    # rebate 0.0125 x 0.13 x p(1-p) <= $0.000406 rounds to $0.00 at EVERY
+    # price. That is structural, not a weak signal.
+    for p in ("0.01", "0.10", "0.30", "0.50", "0.60", "0.99"):
+        assert FEE.maker_rebate(D(p), D("0.13"), cents=True) == D("0.00")
+        assert FEE.maker_rebate(D(p), D("0.13")) <= D("0.0005")
 
 
 # -------------------------------------------------- complement sizing rules
@@ -368,10 +378,10 @@ def test_ambiguous_submission_is_one_attempt_and_is_never_retried(armed):
     assert len([c for c in t.calls if c[1] == O.SUBMIT_PATH]) == 1
     # and the cohort is stopped, not retrying
     v = tr.verdict()
-    assert v["verdict"] == ST.VERDICT_FAILURE_TO_MEASURE
+    assert v["verdict"] == ST.VERDICT_CONTINUE
+    assert v["truncation_cause"] == ST.TRUNCATION_AMBIGUOUS
     assert any("AMBIGUOUS_SUBMISSION_NEVER_RETRIED" in s
                for s in v["stop_reasons"])
-    assert v["is_a_FAIL"] is False
     # the slot is NOT released
     assert os.path.exists(L.slot_path(window=0, slot=0,
                                       role=L.ROLE_COMPLEMENT))
@@ -431,17 +441,20 @@ def test_latch_refuses_a_window_outside_the_authorized_twelve():
 
 def test_cohort_loss_stop_at_five_dollars():
     tr = ST.CohortTracker()
-    tr.record_confirmed_cash(amount_usd="-4.99")
+    tr.record_confirmed_cash(amount_usd="-4.90")
     assert tr.hard_stops() == []
+    # 4.90 + 0.078 = 4.978 <= 5.00, so one more attempt is still permitted
     assert tr.may_place(window=0, notional_usd="0.078")["ok"] is True
-    tr.record_confirmed_cash(amount_usd="-0.01")
+    tr.record_confirmed_cash(amount_usd="-0.10")
     assert tr.realized_loss_usd == D("5.00")
     stops = tr.hard_stops()
     assert any("COHORT_REALIZED_LOSS_AT_OR_ABOVE_5.00" in s for s in stops)
     assert tr.may_place(window=0, notional_usd="0.078")["ok"] is False
     v = tr.verdict()
-    assert v["verdict"] == ST.VERDICT_FAILURE_TO_MEASURE
-    assert v["is_a_FAIL"] is False and v["is_a_result"] is False
+    assert v["verdict"] == ST.VERDICT_CONTINUE
+    assert v["truncation_cause"] == ST.TRUNCATION_RISK_LIMIT
+    assert v["truncated_by_the_risk_limit"] is True
+    assert v["truncated_by_a_low_fill_rate"] is False
 
 
 def test_only_confirmed_cash_moves_the_loss_counter():
@@ -465,7 +478,9 @@ def test_safety_violation_is_a_hard_stop():
     tr = ST.CohortTracker()
     tr.violate("the book went backwards")
     assert any("SAFETY_INVARIANT_VIOLATION" in s for s in tr.hard_stops())
-    assert tr.verdict()["verdict"] == ST.VERDICT_FAILURE_TO_MEASURE
+    v = tr.verdict()
+    assert v["verdict"] == ST.VERDICT_CONTINUE
+    assert v["truncation_cause"] == ST.TRUNCATION_SAFETY
 
 
 def test_venue_error_storm_is_a_hard_stop():
@@ -518,13 +533,13 @@ def test_fail_on_sprt_crossing_h0_with_economics_foreclosed():
     assert ST.sprt_walk(0, 8) <= ST.sprt_boundaries()["accept_h0_at_or_below"]
 
 
-def test_a_fill_racing_a_cancel_is_counted_and_is_a_hard_fail():
+def test_a_fill_racing_a_cancel_is_counted_and_is_a_FAIL():
     tr = ST.CohortTracker()
     tr.record_post_cancel_ack_fill()
     assert tr.post_cancel_ack_fills == 1
     v = tr.verdict()
     assert v["verdict"] == ST.VERDICT_FAIL
-    assert any("after a cancel acknowledgement" in r for r in v["reasons"])
+    assert any("AFTER a cancel acknowledgement" in r for r in v["reasons"])
     assert any("invalidates the design" in r for r in v["reasons"])
 
 
@@ -536,46 +551,311 @@ def test_a_cashflow_without_source_identity_is_a_fail():
     assert any("source identity" in r for r in v["reasons"])
 
 
-def test_pass_is_unreachable_in_this_authorization_and_says_so():
-    f = ST.project_feasibility()
-    assert f["PASS_reachable_in_this_authorization"] is False
-    assert f["placement_gate_reachable"] is False
-    assert f["binding_fill_gate_reachable"] is False
-    assert f["EXTENDING_THE_COHORT_REQUIRES_A_FRESH_OWNER_AUTHORIZATION"]
-    assert f["anything_widened_here"] is False
-    rows = {r["p_fill"]: r for r in f["rows"]}
-    assert rows[0.35]["expected_fills_in_240_placements"] == 84
-    assert rows[0.20]["expected_fills_in_240_placements"] == 48
-    assert rows[0.20]["reaches_sprt_expected_81_fills"] is False
+def test_there_is_no_PASS_outcome_at_all():
+    assert not hasattr(ST, "VERDICT_PASS")
+    assert ST.AUTHORIZED_VERDICTS == (
+        "FAIL", "COMPLETION_SPRT_POSITIVE_CROSSING",
+        "CONTINUE_INSUFFICIENT_EVIDENCE")
+    assert SP.SPEC["outcome_taxonomy"]["formal_PASS_exists_as_an_outcome"] \
+        is False
+    assert SP.SPEC["outcome_taxonomy"][
+        "no_code_path_can_label_a_result_PASS"] is True
+
+
+def test_PASS_never_appears_as_a_terminal_classification():
+    """Not in the taxonomy, not in the spec's authorized outcomes, and not
+    producible by any reachable tracker state."""
+    assert "PASS" not in ST.AUTHORIZED_VERDICTS
+    for v in ST.AUTHORIZED_VERDICTS:
+        assert v != "PASS"
+    assert "PASS" not in SP.SPEC["outcome_taxonomy"]["authorized_outcomes"]
+    # no source line in stopping.py assigns a verdict of "PASS"
+    src = open(os.path.join(HERE, "stopping.py"), encoding="utf8").read()
+    assert 'VERDICT_PASS' not in src
+    assert '"verdict": "PASS"' not in src
+    # and over a wide sweep of tracker states, no verdict is ever PASS
+    seen = set()
+    for nf in (0, 10, 35):
+        for comp in (0, 20, 200):
+            for noncomp in (0, 8, 50):
+                for exp in (None, D("-0.02"), D("0.05")):
+                    tr = ST.CohortTracker()
+                    tr.consecutive_no_fill = nf
+                    tr.completions, tr.non_completions = comp, noncomp
+                    tr.per_share_expectancy_upper_usd = exp
+                    tr.placements, tr.fills = 500, 500
+                    v = tr.verdict()["verdict"]
+                    assert v in ST.AUTHORIZED_VERDICTS, v
+                    seen.add(v)
+    assert "PASS" not in seen
+
+
+def test_sprt_positive_crossing_carries_all_four_disclaimers_as_fields():
+    tr = ST.CohortTracker()
+    for _ in range(40):
+        tr.record_completion(complete=True)
+    v = tr.verdict()
+    assert v["verdict"] == ST.VERDICT_SPRT_POSITIVE
+    # FIELDS, not prose, so a summary cannot drop them
+    assert v["evidence_specifically_for"] == \
+        "the maker->maker completion question, and nothing else"
+    assert v["is_formal_E1_PASS"] is False
+    assert v["is_proof_of_positive_expectancy"] is False
+    assert v["is_authorization_for_E2"] is False
+    assert v["disclaimers"] == ST.SPRT_POSITIVE_DISCLAIMERS
+    assert v["is_an_authorization"] is False
+    assert v["sprt_walk"] >= ST.sprt_boundaries()["accept_h1_at_or_above"]
+
+
+def test_a_risk_truncation_is_distinguishable_from_a_low_fill_truncation():
+    risk = ST.CohortTracker()
+    risk.record_confirmed_cash(amount_usd="-5.00")
+    rv = risk.verdict()
+    assert rv["verdict"] == ST.VERDICT_CONTINUE
+    assert rv["truncation_cause"] == ST.TRUNCATION_RISK_LIMIT
+    assert rv["truncated_by_the_risk_limit"] is True
+    assert rv["truncated_by_a_low_fill_rate"] is False
+
+    low = ST.CohortTracker()
+    # a fill every 30 placements: 8 fills in 240, and the longest no-fill
+    # run is 29, which stays BELOW the 35-consecutive FAIL boundary. So this
+    # is a genuine low-fill truncation and not a disguised FAIL.
+    for i in range(240):
+        low.record_placement(window=i // 20, notional_usd=D("0.0001"))
+        low.record_first_leg_result(
+            filled_qty="0.13" if i % 30 == 0 else "0")
+    assert low.fails_so_far() == [] if hasattr(low, "fails_so_far") else True
+    assert low.consecutive_no_fill < ST.FAIL_CONSECUTIVE_NO_FILL
+    lv = low.verdict()
+    assert lv["verdict"] == ST.VERDICT_CONTINUE
+    assert lv["truncation_cause"] == ST.TRUNCATION_LOW_FILL_RATE
+    assert lv["truncated_by_a_low_fill_rate"] is True
+    assert lv["truncated_by_the_risk_limit"] is False
+    assert rv["truncation_cause"] != lv["truncation_cause"]
 
 
 def test_continue_terminates_explicitly_when_the_fill_rate_is_too_low():
-    """240 placements with a low fill rate must say INCONCLUSIVE_FILL_RATE_
-    TOO_LOW out loud, not run out silently."""
     tr = ST.CohortTracker()
-    # 160 placements, 10 fills: at most 10 + 80 = 90 >= 81, still CONTINUE
     for i in range(160):
-        tr.record_placement(window=i // 20, notional_usd=D("0.001"))
+        tr.record_placement(window=i // 20, notional_usd=D("0.0001"))
         tr.record_first_leg_result(filled_qty="0.13" if i % 16 == 0 else "0")
-    assert tr.verdict()["verdict"] == ST.VERDICT_CONTINUE
-    # push to 200 placements with no further fills: 10 + 40 = 50 < 81
+    v0 = tr.verdict()
+    assert v0["verdict"] == ST.VERDICT_CONTINUE
+    assert v0["truncation_cause"] is None and v0["stopped"] is False
     for i in range(160, 200):
-        tr.record_placement(window=i // 20, notional_usd=D("0.001"))
-        tr.record_first_leg_result(filled_qty="0")
+        tr.record_placement(window=i // 20, notional_usd=D("0.0001"))
+        # one fill at 180 keeps the no-fill run under 35, so this is a
+        # low-fill truncation and not the consecutive-no-fill FAIL
+        tr.record_first_leg_result(filled_qty="0.13" if i == 180 else "0")
+    assert tr.consecutive_no_fill < ST.FAIL_CONSECUTIVE_NO_FILL
     v = tr.verdict()
-    assert v["verdict"] == ST.VERDICT_UNDECIDABLE
-    assert v["is_a_FAIL"] is False and v["is_a_PASS"] is False
+    assert v["verdict"] == ST.VERDICT_CONTINUE
+    assert v["truncation_cause"] == ST.TRUNCATION_LOW_FILL_RATE
+    assert v["stopped"] is True
     assert v["EXTENDING_THE_COHORT_REQUIRES_A_FRESH_OWNER_AUTHORIZATION"]
     assert v["anything_widened_automatically"] is False
+    assert v["raw_tape_must_still_yield_the_estimation_chain"] is True
 
 
-def test_a_hard_stop_is_never_reported_as_a_fail():
+def test_parameters_do_not_move_on_interim_results():
+    tr = ST.CohortTracker()
+    for i in range(240):
+        tr.record_placement(window=i // 20, notional_usd=D("0.0001"))
+        tr.record_first_leg_result(filled_qty="0")
+        assert SP.MAX_PLACEMENTS == 240
+        assert SP.WINDOWS == 12
+        assert SP.FIRST_LEG_QTY == D("0.13")
+        assert SP.MAX_COHORT_REALIZED_LOSS_USD == D("5.00")
+        assert SP.MAX_EXPOSURE_PER_WINDOW_USD == D("1.56")
+    assert tr.verdict()["parameters_moved_on_interim_results"] is False
+
+
+def test_a_hard_stop_is_not_a_FAIL():
+    """Only a PREREGISTERED boundary yields FAIL. A risk stop is
+    CONTINUE_INSUFFICIENT_EVIDENCE with the cause named."""
     tr = ST.CohortTracker()
     tr.record_confirmed_cash(amount_usd="-5.00")
     v = tr.verdict()
     assert v["verdict"] != ST.VERDICT_FAIL
-    assert v["verdict"] == ST.VERDICT_FAILURE_TO_MEASURE
-    assert v["report_partial_posteriors"] is True
+    assert v["verdict"] == ST.VERDICT_CONTINUE
+
+
+# ------------------------------- the FORWARD-LOOKING $5.00 risk invariant
+
+def test_the_invariant_counts_the_attempt_about_to_be_submitted():
+    tr = ST.CohortTracker()
+    r = tr.forward_looking_report(prospective_attempts=1)
+    assert r["realized_cohort_loss_usd"] == "0"
+    assert r["unresolved_residual_max_loss_usd"] == "0"
+    assert r["prospective_attempt_max_loss_usd"] == "0.0780"
+    assert r["forward_looking_total_usd"] == "0.0780"
+    assert r["within_ceiling"] is True
+    assert ST.PER_ATTEMPT_MAX_LOSS_USD == D("0.13") * D("0.60") == D("0.0780")
+
+
+def test_the_bound_blocks_a_new_first_leg_when_residuals_total_near_five():
+    tr = ST.CohortTracker()
+    # 63 residuals of 0.13 x 0.60 = 0.078 each -> $4.914
+    for i in range(63):
+        tr.open_residual(window=0, slot=i, filled_qty="0.13",
+                         fill_price_usd="0.60")
+    assert tr.unresolved_residual_max_loss_usd() == D("4.9140")
+    # + one more attempt at 0.078 = 4.992 <= 5.00, so still permitted
+    assert tr.forward_looking_report(
+        prospective_attempts=1)["within_ceiling"] is True
+    tr.open_residual(window=0, slot=99, filled_qty="0.13",
+                     fill_price_usd="0.60")
+    assert tr.unresolved_residual_max_loss_usd() == D("4.9920")
+    # 4.992 + 0.078 = 5.070 > 5.00 -> the NEW FIRST LEG IS REFUSED
+    r = tr.forward_looking_report(prospective_attempts=1)
+    assert r["forward_looking_total_usd"] == "5.0700"
+    assert r["within_ceiling"] is False
+    g = tr.may_place(window=1, notional_usd=D("0.078"))
+    assert g["ok"] is False
+    assert any("FORWARD_LOOKING_LOSS_BOUND" in x for x in g["refusals"])
+
+
+def test_five_dollars_is_a_true_ceiling_not_a_ceiling_plus_one_attempt():
+    """Walk a tracker right up to the boundary and assert the committed
+    total NEVER exceeds $5.00, attempt by attempt."""
+    tr = ST.CohortTracker()
+    n = 0
+    while tr.may_place(window=0, notional_usd=D("0.078"))["ok"]:
+        tr.open_residual(window=0, slot=n, filled_qty="0.13",
+                         fill_price_usd="0.60")
+        n += 1
+        committed = tr.forward_looking_loss_usd(prospective_attempts=0)
+        assert committed <= D("5.00"), committed
+        if n > 100:
+            break
+    assert tr.forward_looking_loss_usd(prospective_attempts=0) <= D("5.00")
+    assert tr.forward_looking_loss_usd(prospective_attempts=1) > D("5.00")
+
+
+def test_a_confirmed_settled_win_reduces_the_realized_component():
+    tr = ST.CohortTracker()
+    tr.record_confirmed_cash(amount_usd="-1.00")
+    assert tr.realized_loss_usd == D("1.00")
+    tr.record_confirmed_cash(amount_usd="0.40")
+    assert tr.realized_loss_usd == D("0.60")
+    # and resolving a residual by confirmed cash frees its headroom
+    tr.open_residual(window=0, slot=0, filled_qty="0.13",
+                     fill_price_usd="0.60")
+    assert tr.unresolved_residual_max_loss_usd() == D("0.0780")
+    tr.record_confirmed_cash(amount_usd="0.13", key=(0, 0))
+    assert tr.unresolved_residual_max_loss_usd() == D("0")
+
+
+FORBIDDEN_REDUCERS = (
+    ("MARK_TO_MARKET", lambda t: t.offer_mark_to_market("2.00")),
+    ("EXPECTED_OR_PROJECTED_SETTLEMENT",
+     lambda t: t.offer_expected_settlement("2.00")),
+    ("UNFILLED_OR_RESTING_COMPLEMENT",
+     lambda t: t.offer_resting_complement(window=0, slot=0,
+                                          price_usd="0.46")),
+    ("PENDING_ACCRUED_OR_ESTIMATED_REBATE",
+     lambda t: t.offer_pending_rebate("2.00")),
+)
+
+
+@pytest.mark.parametrize("kind,offer", FORBIDDEN_REDUCERS,
+                         ids=[k for k, _ in FORBIDDEN_REDUCERS])
+def test_a_forbidden_reducer_does_not_move_the_bound(kind, offer):
+    """Each of the four, its own test. The bound is identical before and
+    after, and the attempt is RECORDED rather than silently ignored."""
+    tr = ST.CohortTracker()
+    tr.record_confirmed_cash(amount_usd="-2.00")
+    for i in range(10):
+        tr.open_residual(window=0, slot=i, filled_qty="0.13",
+                         fill_price_usd="0.60")
+    before = tr.forward_looking_loss_usd(prospective_attempts=1)
+    before_realized = tr.realized_loss_usd
+    before_resid = tr.unresolved_residual_max_loss_usd()
+    rec = offer(tr)
+    assert rec["kind"] == kind
+    assert rec["moved_the_bound"] is False
+    assert rec["bound_before_usd"] == rec["bound_after_usd"]
+    assert tr.forward_looking_loss_usd(prospective_attempts=1) == before
+    assert tr.realized_loss_usd == before_realized
+    assert tr.unresolved_residual_max_loss_usd() == before_resid
+    assert any(r["kind"] == kind for r in tr.refused_reducers)
+
+
+def test_the_window_bound_binds_independently_of_the_cohort_bound():
+    """A tracker with ample forward-looking headroom is still stopped by the
+    window bound, and vice versa. Neither substitutes for the other."""
+    tr = ST.CohortTracker()
+    for _ in range(19):
+        tr.record_placement(window=0, notional_usd=D("0.078"))
+    fwd = tr.forward_looking_report(prospective_attempts=1)
+    assert fwd["within_ceiling"] is True            # cohort bound is fine
+    g = tr.may_place(window=0, notional_usd=D("0.078"))
+    assert g["ok"] is False                          # window bound is not
+    assert any("PROJECTED_WINDOW_EXPOSURE" in r for r in g["refusals"])
+    # the other direction: window 1 is empty, but the cohort bound bites
+    tr2 = ST.CohortTracker()
+    tr2.record_confirmed_cash(amount_usd="-4.95")
+    g2 = tr2.may_place(window=1, notional_usd=D("0.078"))
+    assert g2["ok"] is False
+    assert any("FORWARD_LOOKING" in r for r in g2["refusals"])
+    assert g2["window_bound_binds_independently"] is True
+
+
+def test_the_bound_blocks_submission_21_in_a_window():
+    tr = ST.CohortTracker()
+    for i in range(20):
+        g = tr.may_place(window=0, notional_usd=D("0.078"))
+        if i < 19:
+            assert g["ok"] is True, (i, g["refusals"])
+        tr.record_placement(window=0, notional_usd=D("0.078"))
+    g = tr.may_place(window=0, notional_usd=D("0.078"))
+    assert g["ok"] is False
+    assert any("ATTEMPT_21_REFUSED_MAX_20" in r for r in g["refusals"])
+
+
+def test_eighteen_seventy_two_is_unreachable_by_construction():
+    w = ST.effective_worst_case()
+    assert w["unrestricted_cohort_worst_case_usd"] == "18.72"
+    assert w["unrestricted_is_REACHABLE"] is False
+    assert w["effective_cohort_worst_case_usd"] == "5.00"
+    assert w["independent_per_window_bound_usd"] == "1.56"
+    assert w["both_bind_simultaneously"] is True
+    assert w["neither_substitutes_for_the_other"] is True
+    assert w["reduced_only_by"] == "a CONFIRMED settled win"
+    # drive the cohort as hard as the gates allow and assert the committed
+    # worst case never passes $5.00
+    tr = ST.CohortTracker()
+    slot = 0
+    for win in range(SP.WINDOWS):
+        for _ in range(SP.MAX_ATTEMPTS_PER_WINDOW):
+            if not tr.may_place(window=win, notional_usd=D("0.078"))["ok"]:
+                continue
+            tr.record_placement(window=win, notional_usd=D("0.078"))
+            tr.open_residual(window=win, slot=slot, filled_qty="0.13",
+                             fill_price_usd="0.60")
+            slot += 1
+            assert tr.forward_looking_loss_usd(
+                prospective_attempts=0) <= D("5.00")
+    total = tr.forward_looking_loss_usd(prospective_attempts=0)
+    assert total <= D("5.00") < D("18.72")
+    assert SP.SPEC["forward_looking_loss_bound"][
+        "unrestricted_worst_case_is_reachable"] is False
+
+
+def test_the_spec_records_the_forward_looking_bound():
+    b = SP.SPEC["forward_looking_loss_bound"]
+    assert b["realized_only"] is False
+    assert b["prospective_attempt_is_counted_before_submitting"] is True
+    assert b["is_a_true_ceiling_not_a_ceiling_plus_one_attempt"] is True
+    assert b["ceiling_usd"] == "5.00"
+    assert b["per_attempt_max_loss_usd"] == "0.078"
+    assert b["per_window_bound_binds_independently"] is True
+    assert b["residual_is_unresolved_until"] == \
+        "CONFIRMED_SETTLEMENT_CASHFLOW"
+    assert b["may_never_reduce_the_bound"] == [
+        "mark-to-market value", "expected or projected settlement",
+        "an unfilled or resting complement",
+        "pending, accrued or estimated rebates"]
 
 
 # ------------------------------------------------------------- eligibility
@@ -603,13 +883,12 @@ def test_eligibility_refusals_one_at_a_time(armed):
         "E1_FINGERPRINT_NOT_PINNED_TO_THIS_BUILD": {
             "fingerprint_pinned": {"matches_this_build": False}},
         "E7_BOTH_TOKENS_NOT_STREAMING": {
-            "ws_state": {"timing_authority": "websocket_strict",
-                         "both_tokens_streaming": False,
-                         "book_unix": 1000.0}},
+            "ws_state": dict(snapshot()["ws_state"],
+                             both_tokens_streaming=False)},
         "E7_TIMING_AUTHORITY_NOT_WEBSOCKET_STRICT": {
-            "ws_state": {"timing_authority": "rest_same_second_reachability",
-                         "both_tokens_streaming": True,
-                         "book_unix": 1000.0}},
+            "ws_state": dict(snapshot()["ws_state"],
+                             timing_authority="rest_same_second_"
+                                              "reachability")},
     }
     for want, over in cases.items():
         el = RUN.eligible(snapshot(**over), tr, now=NOW)
@@ -769,6 +1048,170 @@ def test_a_fill_racing_a_cancel_is_recorded_as_such(tmp_path):
     assert row["event"] == "FILL_AFTER_CANCEL_ACK"
 
 
+# ===========================================================================
+# THE MOST IMPORTANT TEST: the raw tape must yield the whole estimation
+# chain, afterwards and from the files alone. Asserted BEFORE money is
+# spent rather than discovered after.
+# ===========================================================================
+
+def _ws(ok=True):
+    return {"timing_authority": "websocket_strict",
+            "both_tokens_streaming": True, "book_unix": 1000.0,
+            "first_leg": {"best_bid": "0.50", "best_ask": "0.52",
+                          "size_at_bid": "4.0"},
+            "complement": {"best_bid": "0.46", "best_ask": "0.48"},
+            "recv_monotonic_ns": 12345}
+
+
+def _record_fixture(rec):
+    """Six attempts covering every branch the chain has to survive:
+    full fill + complete, partial fill + complete, full fill + residual,
+    partial fill + residual, and two no-fills."""
+    plan = [
+        # (filled, placed, state, comp_px, pair_cost, ttf, ttc, resid, dur)
+        ("0.13", "0.13", "COMPLETE", "0.46", "0.96", 3.0, 11.0, None, None),
+        ("0.07", "0.13", "COMPLETE", "0.44", "0.94", 5.0, 40.0, None, None),
+        ("0.13", "0.13", "RESIDUAL", "0.46", None, 2.0, None, "0.13", 420.0),
+        ("0.05", "0.13", "RESIDUAL", "0.46", None, 9.0, None, "0.05", 300.0),
+        ("0", "0.13", "NO_FILL", None, None, None, None, None, None),
+        ("0", "0.13", "NO_FILL", None, None, None, None, None, None),
+    ]
+    for i, (fq, pq, state, cpx, pc, ttf, ttc, resid, dur) in enumerate(plan):
+        rec.record_attempt(
+            window=0, slot=i, market="btc-updown-15m-TEST",
+            ws_state=_ws(),
+            first_leg={"side": "UP", "price": "0.50", "qty": pq},
+            queue={"size_at_our_price": "4.00", "size_ahead_of_us": "3.87"},
+            timestamps={"submitted_unix": 1000.0 + i,
+                        "acknowledged_unix": 1000.1 + i,
+                        "resting_unix": 1000.1 + i,
+                        "time_to_first_fill_s": ttf,
+                        "time_to_completion_s": ttc},
+            fill={"filled_qty": fq,
+                  "partial": D(fq) > 0 and D(fq) < D(pq)},
+            complement=None if cpx is None else {
+                "side": "DOWN", "price": cpx, "qty": fq,
+                "submitted_unix": 1000.5 + i,
+                "filled_qty": fq if state == "COMPLETE" else "0",
+                "no_fill": state != "COMPLETE"},
+            outcome={"state": state,
+                     "realized_pair_cost_usd_per_share": pc,
+                     "residual_shares": resid,
+                     "residual_duration_s": dur,
+                     "residual_censored": False if dur else None},
+            cancellations=([] if state == "COMPLETE" else
+                           [{"event": "DEADMAN_CANCEL_ALL",
+                             "fill_raced_it": False}]),
+            markouts={"book_moved": "DOWN", "h_s": 30,
+                      "signed_move_usd": "-0.01",
+                      "source": "websocket_tape"})
+        rec.record_event(window=0, slot=i, event="SUBMITTED",
+                         venue_ts="2026-10-07T00:00:0%dZ" % i,
+                         monotonic_ns=1000 + i)
+    # venue-reported money: at 0.13 shares the rebate is structurally $0.00
+    for i in (0, 1):
+        rec.record_venue_money(window=0, slot=i, kind="maker_rebate",
+                               amount_usd="0.00",
+                               source="venue_rebate_credit",
+                               source_identity={"sufficient": True,
+                                                "statement_id": "st-%d" % i})
+    # settlement: one confirmed, one settled-but-unconfirmed
+    rec.record_settlement(window=0, slot=0, market="btc-updown-15m-TEST",
+                          settled=True, cash_confirmed=True, cash_usd="0.01",
+                          source_identity={"sufficient": True,
+                                           "statement_id": "s0"})
+    rec.record_settlement(window=0, slot=2, market="btc-updown-15m-TEST",
+                          settled=True, cash_confirmed=False, cash_usd=None,
+                          source_identity={"sufficient": False})
+
+
+def test_the_raw_tape_yields_the_whole_estimation_chain(tmp_path):
+    rec = R.Recorder(str(tmp_path / "tape"))
+    _record_fixture(rec)
+
+    # reconstruct from a FRESH Recorder on the same directory: nothing
+    # in-memory is carried over, so this is the files alone
+    chain = R.reconstruct_chain(R.Recorder(str(tmp_path / "tape")))
+    assert chain["chain_is_computable"] is True, chain["missing_for_the_chain"]
+
+    s1 = chain["step_1_first_leg_maker_fill_rate"]
+    assert s1["placements"] == 6 and s1["fills"] == 4
+    assert D(s1["rate"]) == D(4) / D(6)
+    assert s1["partial_fills"] == 2
+
+    s2 = chain["step_2_conditional_maker_to_maker_completion_rate"]
+    assert s2["denominator_is_first_leg_fills"] == 4
+    assert s2["completions"] == 2 and s2["non_completions"] == 2
+    assert D(s2["rate"]) == D("0.5")
+    assert s2["conditioning_on_the_fill_is_part_of_the_definition"] is True
+
+    s3 = chain["step_3_residual"]
+    assert D(s3["rate"]) == D("0.5") and s3["count"] == 2
+    assert D(s3["total_shares"]) == D("0.18")
+    assert sorted(s3["durations_s"]) == [300.0, 420.0]
+    # worst-case residual loss = (0.13 + 0.05) x 0.50
+    assert D(s3["worst_case_loss_usd"]) == D("0.0900")
+
+    s4 = chain["step_4_pair_cost"]
+    assert s4["n"] == 2
+    assert sorted(s4["values_usd_per_share"]) == ["0.94", "0.96"]
+    assert s4["all_within_ceiling_096"] is True
+
+    s5 = chain["step_5_actual_cashflows"]
+    assert s5["all_venue_money_rows_are_unmodelled"] is True
+    assert s5["confirmed_realized_rows"] == 1
+    assert D(s5["confirmed_cash_usd"]) == D("0.01")
+    assert s5["unconfirmed_rows"] == 1
+
+    assert sorted(chain["timings"]["time_to_first_fill_s"]) == \
+        [2.0, 3.0, 5.0, 9.0]
+    assert sorted(chain["timings"]["time_to_completion_s"]) == [11.0, 40.0]
+
+
+def test_the_chain_survives_a_truncated_cohort(tmp_path):
+    """A risk-truncated run must still yield the chain from its tape."""
+    rec = R.Recorder(str(tmp_path / "tape"))
+    _record_fixture(rec)
+    tr = ST.CohortTracker()
+    tr.record_confirmed_cash(amount_usd="-5.00")
+    v = tr.verdict()
+    assert v["verdict"] == ST.VERDICT_CONTINUE
+    assert v["truncation_cause"] == ST.TRUNCATION_RISK_LIMIT
+    assert v["raw_tape_must_still_yield_the_estimation_chain"] is True
+    chain = R.reconstruct_chain(R.Recorder(str(tmp_path / "tape")))
+    assert chain["chain_is_computable"] is True
+    assert chain["step_1_first_leg_maker_fill_rate"]["placements"] == 6
+
+
+def test_the_chain_reports_what_is_missing_rather_than_guessing(tmp_path):
+    rec = R.Recorder(str(tmp_path / "tape"))
+    rec.record_attempt(
+        window=0, slot=0, market="m", ws_state=_ws(),
+        first_leg={"side": "UP", "price": "0.50", "qty": "0.13"},
+        queue={}, timestamps={},
+        fill={"filled_qty": "0.13"}, complement=None,
+        outcome={"state": "RESIDUAL"}, cancellations=[], markouts={})
+    chain = R.reconstruct_chain(rec)
+    assert chain["chain_is_computable"] is False
+    assert chain["missing_for_the_chain"]
+
+
+def test_every_recorded_row_carries_enough_provenance_to_be_reread(tmp_path):
+    rec = R.Recorder(str(tmp_path / "tape"))
+    _record_fixture(rec)
+    for name in (R.ATTEMPTS, R.EVENTS, R.VENUE_MONEY, R.SETTLEMENT):
+        rows = R.Recorder(str(tmp_path / "tape")).read(name)
+        assert rows
+        for row in rows:
+            assert row["schema_version"] == R.SCHEMA_VERSION
+            assert row["spec_fingerprint"] == SP.E1_FINGERPRINT
+            assert row["fee_schedule_fingerprint"] == \
+                SP.FEE_SCHEDULE_FINGERPRINT
+            assert row["venue"] == "polymarket_us"
+            assert row["timing_authority"] == "websocket_strict"
+            assert row["written_utc"] and row["written_unix"]
+
+
 # -------------------------------------------------------------------- boot
 
 def test_boot_asserts_and_reports_disarmed():
@@ -786,8 +1229,16 @@ def test_no_network_is_reachable_from_these_tests():
     Asserted structurally: every submission in this file goes through a
     FakeTransport."""
     src = open(os.path.abspath(__file__), encoding="utf8").read()
-    assert "O.BoundedOrderTransport()" not in src
-    assert "urllib" not in src
+    # no network client is imported, and every transport_factory in this
+    # file is the FakeTransport
+    assert "url" + "lib" not in src
+    assert "import " + "socket" not in src
+    assert "import " + "requests" not in src
+    lines = [ln for ln in src.splitlines() if "transport_factory" + "=" in ln
+             and "splitlines" not in ln and "def " not in ln]
+    assert lines, "no submissions are exercised at all"
+    for ln in lines:
+        assert "Fake" in ln or "lambda: t" in ln, ln
 
 
 def test_the_manifest_exists_has_the_header_and_the_eight_items():

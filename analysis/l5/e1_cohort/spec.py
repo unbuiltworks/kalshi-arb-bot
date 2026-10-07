@@ -45,11 +45,39 @@ WHAT IS HONEST AND UNCOMFORTABLE
 --------------------------------
 12 x 20 = 240 placements. The design's binding fill-denominated gate is
 431 FILLS and its placement gate is 385 PLACEMENTS. Both exceed 240 at
-ANY fill rate. **PASS IS THEREFORE UNREACHABLE INSIDE THIS AUTHORIZATION**
-and this spec says so in `pass_reachability`. The authorized cohort is a
-FAIL-or-INCONCLUSIVE instrument. That is not a reason to widen it; it is a
-reason for the owner to know it before authorizing. Extending the cohort
-requires a FRESH owner authorization and a new manifest.
+ANY fill rate, so FORMAL E1 PASS IS UNREACHABLE. The owner accepted that
+rather than widening the cohort, so there is no PASS outcome at all:
+`outcome_taxonomy` admits exactly three, and no code path can label a
+result PASS. Extending the cohort requires a FRESH owner authorization.
+
+THE THREE AUTHORIZED OUTCOMES
+-----------------------------
+  1. FAIL                               a preregistered boundary is reached
+  2. COMPLETION_SPRT_POSITIVE_CROSSING  the completion SPRT crosses H1 --
+                                        evidence for the maker->maker
+                                        completion question ONLY, NOT formal
+                                        PASS, NOT proof of positive
+                                        expectancy, NOT authorization for E2
+  3. CONTINUE_INSUFFICIENT_EVIDENCE     anything else, with the truncation
+                                        cause always named, so a risk
+                                        truncation is distinguishable in the
+                                        record from a low-fill-rate one
+
+THE FORWARD-LOOKING RISK BOUND
+------------------------------
+`realized_cohort_loss + worst-case loss on ALL unresolved residual
+inventory + worst-case loss of THE ATTEMPT ABOUT TO BE SUBMITTED <= $5.00`,
+checked before every submission with the prospective attempt counted
+first, so $5.00 is a true ceiling. `MAX_EXPOSURE_PER_WINDOW = $1.56`
+remains an INDEPENDENT limit. The unrestricted $18.72 is unreachable.
+
+WHAT MATTERS MOST
+-----------------
+The RAW TAPE. Whatever the classification, the append-only record must be
+sufficient to recompute first-leg fill rate -> conditional maker->maker
+completion rate -> residual rate/loss/duration -> pair cost -> actual
+cashflows, afterwards and independently. A test reconstructs that whole
+chain from a fixture, so sufficiency is known BEFORE money is spent.
 """
 from __future__ import annotations
 
@@ -404,23 +432,71 @@ DIFF: Dict[str, Any] = {
         "abort_is_not_a_verdict": True,
     },
 
-    "pass_reachability": {
-        "pass_is_reachable_in_this_authorization": False,
+    "outcome_taxonomy": {
+        "authorized_outcomes": [
+            "FAIL",
+            "COMPLETION_SPRT_POSITIVE_CROSSING",
+            "CONTINUE_INSUFFICIENT_EVIDENCE",
+        ],
+        "there_are_exactly_three": True,
+        "formal_PASS_exists_as_an_outcome": False,
+        "no_code_path_can_label_a_result_PASS": True,
+        "why_no_pass": (
+            "240 authorized placements is below the design's 385 placement "
+            "gate and far below its 431 binding fill gate, which 240 "
+            "placements cannot reach at ANY fill rate. The owner accepted "
+            "that formal PASS is unreachable rather than widening the "
+            "cohort to reach it."),
+        "1_FAIL": "a preregistered failure boundary is reached",
+        "2_COMPLETION_SPRT_POSITIVE_CROSSING": {
+            "trigger": "the completion SPRT walk crosses H1",
+            "evidence_specifically_for":
+                "the maker->maker completion question, and nothing else",
+            "is_formal_E1_PASS": False,
+            "is_proof_of_positive_expectancy": False,
+            "is_authorization_for_E2": False,
+            "disclaimers_are_FIELDS_on_the_result_not_prose": True,
+        },
+        "3_CONTINUE_INSUFFICIENT_EVIDENCE": {
+            "trigger": "anything else, including every truncation",
+            "truncation_cause_is_always_named": True,
+            "risk_truncation_is_distinguished_from_low_fill_truncation":
+                True,
+            "if_the_5_dollar_risk_limit_truncates_the_outcome_is": (
+                "CONTINUE_INSUFFICIENT_EVIDENCE with truncation_cause "
+                "RISK_LIMIT_FORWARD_LOOKING_5_USD"),
+        },
         "authorized_placements": MAX_PLACEMENTS,
         "design_placement_gate": DESIGN_PLACEMENT_GATE,
         "design_binding_fill_gate": DESIGN_BINDING_FILL_GATE,
-        "why": ("240 authorized placements is below the design's 385 "
-                "placement gate and far below its 431 binding fill gate, "
-                "which 240 placements cannot reach at ANY fill rate. The "
-                "authorized cohort can therefore reach FAIL or "
-                "INCONCLUSIVE but NOT PASS."),
         "at_p_fill_0_35_expected_fills": 84,
         "at_p_fill_0_20_expected_fills": 48,
         "sprt_expected_fills_under_h0": 81,
-        "terminates_CONTINUE_explicitly_when_undecidable": True,
-        "undecidable_verdict": "INCONCLUSIVE_FILL_RATE_TOO_LOW",
+        "placements_windows_quantity_or_ceiling_increased_to_reach_a_"
+        "boundary": False,
+        "parameters_move_on_interim_results": False,
         "extending_the_cohort_requires_a_FRESH_owner_authorization": True,
         "anything_widened_quietly": False,
+    },
+
+    "raw_observation_preservation": {
+        "is_the_most_important_requirement": True,
+        "why": ("an inconclusive run with a complete tape is worth far more "
+                "than a crossing with a lossy one. The classification can "
+                "be recomputed later; the tape cannot be recollected."),
+        "append_only": True,
+        "full_provenance_on_every_row": True,
+        "must_support_computing_independently_afterwards": [
+            "first-leg maker fill rate",
+            "conditional maker->maker completion rate",
+            "residual rate, residual loss and residual duration",
+            "pair cost",
+            "actual cashflows",
+        ],
+        "a_truncated_or_inconclusive_cohort_must_still_yield_the_chain":
+            True,
+        "sufficiency_is_asserted_by_test_BEFORE_money_is_spent": True,
+        "reconstructor": "analysis.l5.e1_cohort.recorder:reconstruct_chain",
     },
 
     "recording": {
@@ -576,12 +652,33 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("latch.is_a_bare_counter", False),
     ("stopping.boundaries_invented_here", False),
     ("stopping.hard_truncation_placements", 4310),
-    ("pass_reachability.pass_is_reachable_in_this_authorization", False),
-    ("pass_reachability.terminates_CONTINUE_explicitly_when_undecidable",
-     True),
-    ("pass_reachability.extending_the_cohort_requires_a_FRESH_owner_"
+    ("outcome_taxonomy.there_are_exactly_three", True),
+    ("outcome_taxonomy.formal_PASS_exists_as_an_outcome", False),
+    ("outcome_taxonomy.no_code_path_can_label_a_result_PASS", True),
+    ("outcome_taxonomy.authorized_outcomes",
+     ["FAIL", "COMPLETION_SPRT_POSITIVE_CROSSING",
+      "CONTINUE_INSUFFICIENT_EVIDENCE"]),
+    ("outcome_taxonomy.2_COMPLETION_SPRT_POSITIVE_CROSSING.is_formal_E1_PASS",
+     False),
+    ("outcome_taxonomy.2_COMPLETION_SPRT_POSITIVE_CROSSING."
+     "is_proof_of_positive_expectancy", False),
+    ("outcome_taxonomy.2_COMPLETION_SPRT_POSITIVE_CROSSING."
+     "is_authorization_for_E2", False),
+    ("outcome_taxonomy.3_CONTINUE_INSUFFICIENT_EVIDENCE."
+     "risk_truncation_is_distinguished_from_low_fill_truncation", True),
+    ("outcome_taxonomy.placements_windows_quantity_or_ceiling_increased_to_"
+     "reach_a_boundary", False),
+    ("outcome_taxonomy.parameters_move_on_interim_results", False),
+    ("outcome_taxonomy.extending_the_cohort_requires_a_FRESH_owner_"
      "authorization", True),
-    ("pass_reachability.anything_widened_quietly", False),
+    ("outcome_taxonomy.anything_widened_quietly", False),
+    ("raw_observation_preservation.is_the_most_important_requirement", True),
+    ("raw_observation_preservation.append_only", True),
+    ("raw_observation_preservation.full_provenance_on_every_row", True),
+    ("raw_observation_preservation."
+     "a_truncated_or_inconclusive_cohort_must_still_yield_the_chain", True),
+    ("raw_observation_preservation."
+     "sufficiency_is_asserted_by_test_BEFORE_money_is_spent", True),
     ("serializer.module", "src.l5_order_body"),
     ("serializer.duplicated_here", False),
     ("mutation_path.module", "analysis.l5.live_exec2.orders"),
@@ -622,7 +719,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "790f1a6f0b34b4dcb23760d30258a068efb4999206f055ef53ac69db9fa880cb"
+    "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

@@ -263,3 +263,138 @@ class Recorder:
             "detail": dict(detail or {}),
         })
         return self._append(SETTLEMENT, row)
+
+
+# --------------------------------------------------------------------------
+# THE ESTIMATION CHAIN, RECONSTRUCTED FROM THE RAW TAPE ALONE.
+#
+# This is the point of the recorder and it matters more than the cohort's
+# classification. An inconclusive run with a complete tape is worth far
+# more than a crossing with a lossy one: the verdict can be recomputed
+# later, the tape cannot be recollected. So the sufficiency of the tape is
+# a TESTED property, asserted against a fixture before money is spent
+# rather than discovered afterwards.
+#
+# `reconstruct_chain` reads ONLY the ledgers. It takes no tracker, no
+# in-memory state and no argument but a path, so if it can compute the
+# chain then so can anyone, months later, from the files alone.
+# --------------------------------------------------------------------------
+
+def reconstruct_chain(rec: "Recorder") -> Dict[str, Any]:
+    """first-leg maker fill rate -> conditional maker->maker completion rate
+    -> residual rate / loss / duration -> pair cost -> actual cashflows,
+    computed from the append-only ledgers and nothing else."""
+    attempts = rec.read(ATTEMPTS)
+    money = rec.read(VENUE_MONEY)
+    settlements = rec.read(SETTLEMENT)
+
+    placements = len(attempts)
+    filled = [a for a in attempts
+              if D(str((a.get("first_leg_fill") or {}).get("filled_qty", 0)))
+              > 0]
+    partials = [a for a in filled
+                if D(str(a["first_leg_fill"]["filled_qty"]))
+                < D(str((a.get("first_leg") or {}).get("qty", 0)))]
+    complete = [a for a in filled
+                if (a.get("outcome") or {}).get("state") == "COMPLETE"]
+    residual = [a for a in filled
+                if (a.get("outcome") or {}).get("state") == "RESIDUAL"]
+
+    def _frac(num: int, den: int) -> Optional[str]:
+        return None if den == 0 else str(D(num) / D(den))
+
+    pair_costs = [D(str(a["outcome"]["realized_pair_cost_usd_per_share"]))
+                  for a in complete
+                  if (a.get("outcome") or {}).get(
+                      "realized_pair_cost_usd_per_share") is not None]
+    res_durations = [float(a["outcome"]["residual_duration_s"])
+                     for a in residual
+                     if (a.get("outcome") or {}).get("residual_duration_s")
+                     is not None]
+    res_shares = [D(str(a["outcome"]["residual_shares"])) for a in residual
+                  if (a.get("outcome") or {}).get("residual_shares")
+                  is not None]
+    ttf = [float(a["timestamps"]["time_to_first_fill_s"]) for a in filled
+           if (a.get("timestamps") or {}).get("time_to_first_fill_s")
+           is not None]
+    ttc = [float(a["timestamps"]["time_to_completion_s"]) for a in complete
+           if (a.get("timestamps") or {}).get("time_to_completion_s")
+           is not None]
+
+    confirmed = [s for s in settlements if s.get("REALIZED_CLAIM")]
+    confirmed_cash = sum((D(str(s["cash_usd"])) for s in confirmed
+                          if s.get("cash_usd") is not None), D("0"))
+    unconfirmed = [s for s in settlements if not s.get("REALIZED_CLAIM")]
+
+    missing = []
+    if placements and not all(a.get("ws_state_at_decision") for a in attempts):
+        missing.append("an attempt row has no decision-time websocket state")
+    if filled and not all((a.get("queue_state") or {}) for a in filled):
+        missing.append("a filled attempt has no queue/touch state")
+    if residual and len(res_shares) != len(residual):
+        missing.append("a residual has no recorded size")
+
+    return {
+        "source": "the append-only ledgers ONLY -- no in-memory state",
+        "ledgers_read": [ATTEMPTS, VENUE_MONEY, SETTLEMENT],
+
+        # 1. first-leg maker fill rate
+        "step_1_first_leg_maker_fill_rate": {
+            "placements": placements,
+            "fills": len(filled),
+            "partial_fills": len(partials),
+            "rate": _frac(len(filled), placements),
+            "LABEL": "P(any fill), NOT P(full fill)",
+        },
+        # 2. conditional maker->maker completion rate
+        "step_2_conditional_maker_to_maker_completion_rate": {
+            "denominator_is_first_leg_fills": len(filled),
+            "completions": len(complete),
+            "non_completions": len(residual),
+            "rate": _frac(len(complete), len(filled)),
+            "conditioning_on_the_fill_is_part_of_the_definition": True,
+        },
+        # 3. residual rate / loss / duration
+        "step_3_residual": {
+            "rate": _frac(len(residual), len(filled)),
+            "count": len(residual),
+            "total_shares": str(sum(res_shares, D("0"))),
+            "durations_s": res_durations,
+            "right_censored": [a["outcome"].get("residual_censored")
+                               for a in residual],
+            "worst_case_loss_usd": str(sum(
+                (D(str(a["outcome"]["residual_shares"]))
+                 * D(str(a["first_leg"]["price"])) for a in residual
+                 if (a.get("outcome") or {}).get("residual_shares")
+                 is not None), D("0"))),
+        },
+        # 4. pair cost
+        "step_4_pair_cost": {
+            "n": len(pair_costs),
+            "values_usd_per_share": [str(x) for x in pair_costs],
+            "mean_usd_per_share": (None if not pair_costs else
+                                   str(sum(pair_costs, D("0"))
+                                       / D(len(pair_costs)))),
+            "all_within_ceiling_096": all(x <= D("0.96")
+                                          for x in pair_costs),
+        },
+        # 5. actual cashflows
+        "step_5_actual_cashflows": {
+            "venue_money_rows": len(money),
+            "venue_money_usd": str(sum((D(str(m["amount_usd"]))
+                                        for m in money), D("0"))),
+            "all_venue_money_rows_are_unmodelled": all(
+                m.get("modelled") is False for m in money),
+            "settlement_rows": len(settlements),
+            "confirmed_realized_rows": len(confirmed),
+            "confirmed_cash_usd": str(confirmed_cash),
+            "unconfirmed_rows": len(unconfirmed),
+            "NOTHING_HERE_IS_REALIZED_UNLESS_REALIZED_CLAIM_IS_TRUE": True,
+        },
+        "timings": {"time_to_first_fill_s": ttf,
+                    "time_to_completion_s": ttc},
+        "chain_is_computable": not missing,
+        "missing_for_the_chain": missing,
+        "NOTE": ("recomputed from the tape. A truncated or inconclusive "
+                 "cohort still yields this chain."),
+    }

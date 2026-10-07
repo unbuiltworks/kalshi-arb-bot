@@ -53,6 +53,7 @@ from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
 from analysis.l5.e1_cohort.stopping import CohortTracker, project_feasibility
 from analysis.l5.live_exec2 import orders as O
 from src import l5_clob_ws as WS
+from src import l5_preview_gate as G
 from src import pmus_fee_schedule as FEE
 
 #: Decision-time book staleness bound, inherited from the XR2W AuthBook
@@ -278,6 +279,92 @@ def e1_preflight(snapshot: Mapping[str, Any], tracker: CohortTracker,
 
 # -------------------------------------------------------------- submission
 
+def _submit_once(t: Any, *, slug: str, outcome_side: str, price: Any,
+                 qty: Any, consume_latch: Any) -> Dict[str, Any]:
+    """`orders.submit_one`'s sequence with EXACTLY ONE substitution: E1's
+    bounded-count named-slot latch in place of XR2W's single-slot one.
+
+    WHY THIS EXISTS, STATED PLAINLY. `orders.submit_one` calls
+    `analysis.l5.live_exec2.latch.consume`, which is a SINGLE slot per
+    session: the first submission takes it and every later one raises
+    `LatchSpent`. E1 needs twenty per window, so calling `submit_one`
+    unchanged would let the cohort place exactly ONE order and then refuse
+    all 239 others. The alternatives were to edit `live_exec2` -- which the
+    mandate forbids and which would weaken XR2W's own guarantee -- or to
+    clear a latch, which nothing here may do.
+
+    SO THE LATCH IS THE ONLY THING SUBSTITUTED, and E1's latch is STRICTER
+    per attempt, not looser: one named slot per attempt, O_EXCL, never
+    released. Everything else is the proven path, by reference and not by
+    copy:
+
+      * the body        `orders.order_body` -> `src.l5_order_body.build`
+      * the envelope    `orders.preview_request`
+      * the echo gate   `src.l5_preview_gate.require_echo`
+      * the routes      `orders.BoundedOrderTransport.request`, which still
+                        refuses anything but the four permitted ones
+      * the taxonomy    `orders.PreviewRejected` / `SubmissionAmbiguous`,
+                        raised by EXCEPTION TYPE and not by reading a latch
+
+    The ordering is the one that matters and it is unchanged: preview, echo,
+    THEN latch, THEN the single POST. A `PreviewRejected` therefore leaves
+    the latch untouched because the preview runs strictly before it, and
+    anything at or after the POST is genuinely ambiguous and never retried.
+    """
+    body = O.order_body(slug=slug, outcome_side=outcome_side, price=price,
+                        qty=qty)
+    try:
+        preview_response = t.request("POST", O.PREVIEW_PATH,
+                                     O.preview_request(body))
+    except O.VenueHTTPError as exc:
+        raise O.PreviewRejected(
+            "the venue rejected the PREVIEW; no order was created",
+            detail={"phase": "PREVIEW", "sent": dict(body),
+                    "sent_envelope_key": "request",
+                    **exc.detail()}) from None
+    except O.MutationRefused:
+        raise
+    except Exception as exc:                                   # noqa: BLE001
+        raise O.PreviewRejected(
+            "the preview call failed before any order could exist: %s: %s"
+            % (type(exc).__name__, exc),
+            detail={"phase": "PREVIEW", "error": type(exc).__name__,
+                    "sent": dict(body)}) from None
+    try:
+        echo = G.require_echo(body, preview_response)
+    except Exception as exc:                                   # noqa: BLE001
+        raise O.PreviewRejected(
+            "the preview echo did not match what we asked for: %s" % exc,
+            detail={"phase": "PREVIEW_ECHO", "sent": dict(body),
+                    "echo_failure": str(exc)[:600]}) from None
+    # THE LATCH. Consumed here, between the echo and the POST, and never
+    # released -- so a crash from this point on leaves the slot spent,
+    # which is the only safe direction.
+    record = consume_latch()
+    try:
+        resp = t.request("POST", O.SUBMIT_PATH, body)
+    except O.VenueHTTPError as exc:
+        raise O.SubmissionAmbiguous(
+            "POST /v1/orders answered %s; an order may exist" % exc.status,
+            detail={"phase": "SUBMIT", "sent": dict(body),
+                    "latch_record": record, **exc.detail()}) from None
+    except Exception as exc:                                   # noqa: BLE001
+        raise O.SubmissionAmbiguous(
+            "POST /v1/orders failed after the request left this process: "
+            "%s: %s" % (type(exc).__name__, exc),
+            detail={"phase": "SUBMIT", "error": type(exc).__name__,
+                    "sent": dict(body), "latch_record": record}) from None
+    order_id = str(resp.get("id") or resp.get("orderId")
+                   or (resp.get("order") or {}).get("id") or "")
+    return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
+            "order_id": order_id or None, "venue_response": resp,
+            "preview_echo": echo, "latch_record": record,
+            "submitted_post_only": True,
+            "submitted_post_only_implies_maker": False,
+            "serializer": "src.l5_order_body",
+            "LANGUAGE": "SUBMITTED is not a fill"}
+
+
 def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
                      *, now: float,
                      transport_factory: Any = O.BoundedOrderTransport
@@ -304,18 +391,28 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     price = snapshot["first_leg_price"]
     qty = snapshot.get("qty", FIRST_LEG_QTY)
 
-    slot = L.consume_attempt(window=window, slug=slug, side=side,
-                             price=price, qty=qty)
+    holder: Dict[str, Any] = {}
+
+    def _take_slot() -> Dict[str, Any]:
+        holder["slot"] = L.consume_attempt(window=window, slug=slug,
+                                           side=side, price=price, qty=qty)
+        return holder["slot"]
+
     t = transport_factory()
     try:
-        out = O.submit_one(t, slug=slug, outcome_side=side, price=price,
-                           qty=qty, checks=checks)
+        out = _submit_once(t, slug=slug, outcome_side=side, price=price,
+                           qty=qty, consume_latch=_take_slot)
     except O.SubmissionAmbiguous:
         tracker.record_ambiguous_submission()
         raise
-    tracker.record_placement(window=window,
-                             notional_usd=D(str(qty)) * D(str(price)))
-    out["e1_latch_slot"] = slot
+    finally:
+        # the attempt is counted the moment a slot was taken, whatever the
+        # POST then did. A spent slot that we did not count would let the
+        # window bound drift away from the latch.
+        if "slot" in holder:
+            tracker.record_placement(
+                window=window, notional_usd=D(str(qty)) * D(str(price)))
+    out["e1_latch_slot"] = holder["slot"]
     out["e1_window"] = window
     return out
 
@@ -334,20 +431,25 @@ def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
         complement_best_bid=(snapshot.get("complement")
                              or {}).get("best_bid", "0"))
     side = snapshot["complement"]["side"]
-    rec = L.consume_complement(window=window, slot=slot,
-                               slug=snapshot["market"], side=side,
-                               price=plan["price_usd"], qty=q)
+    holder: Dict[str, Any] = {}
+
+    def _take_slot() -> Dict[str, Any]:
+        holder["slot"] = L.consume_complement(
+            window=window, slot=slot, slug=snapshot["market"], side=side,
+            price=plan["price_usd"], qty=q)
+        return holder["slot"]
+
     t = transport_factory()
     try:
-        out = O.submit_one(t, slug=snapshot["market"], outcome_side=side,
+        out = _submit_once(t, slug=snapshot["market"], outcome_side=side,
                            price=plan["price_usd"], qty=q,
-                           checks={"ok": True})
+                           consume_latch=_take_slot)
     except O.SubmissionAmbiguous:
         tracker.record_ambiguous_submission()
         raise
     out["e1_complement_plan"] = plan
     out["e1_complement_qty"] = str(q)
-    out["e1_latch_slot"] = rec
+    out["e1_latch_slot"] = holder["slot"]
     out["sized_to_actual_filled_qty"] = True
     return out
 

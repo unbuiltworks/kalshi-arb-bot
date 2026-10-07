@@ -99,6 +99,9 @@ SPRT_BETA = 0.05
 ECONOMICS_FORECLOSURE_USD_PER_SHARE = \
     CD.e1_economics_foreclosure_usd_per_share()               # -0.006231
 
+#: E1_COHORT_DESIGN.md estimand 2: expected fills under H0. Read, not chosen.
+SPRT_EXPECTED_FILLS_UNDER_H0 = 81
+
 PLACEMENT_GATE = 385
 BINDING_FILL_GATE = CD.e1_binding_gates()["fill_gate"]
 HARD_TRUNCATION = CD.e1_hard_truncation_placements()                  # 4310
@@ -108,12 +111,49 @@ HARD_TRUNCATION = CD.e1_hard_truncation_placements()                  # 4310
 #: residual settling worthless.
 PER_ATTEMPT_MAX_LOSS_USD = (FIRST_LEG_QTY * MAX_FIRST_LEG_PRICE)       # 0.078
 
-VERDICT_PASS = "PASS"
+# --------------------------------------------------------------------------
+# THE THREE AND ONLY THREE AUTHORIZED OUTCOMES.
+#
+# The owner has accepted that formal E1 PASS is unreachable at 240
+# placements rather than widening the cohort to reach it. So there is NO
+# PASS outcome, and no code path that can produce one: the string "PASS"
+# does not appear as a terminal classification anywhere in this module, and
+# a test asserts that.
+# --------------------------------------------------------------------------
+
+#: 1. a preregistered failure boundary is reached.
 VERDICT_FAIL = "FAIL"
-VERDICT_CONTINUE = "CONTINUE"
-VERDICT_INCONCLUSIVE = "INCONCLUSIVE"
-VERDICT_UNDECIDABLE = "INCONCLUSIVE_FILL_RATE_TOO_LOW"
-VERDICT_FAILURE_TO_MEASURE = "FAILURE_TO_MEASURE"
+
+#: 2. the completion SPRT crosses H1. NOT a PASS -- see the four disclaimers
+#:    carried as FIELDS on the result object, not as prose.
+VERDICT_SPRT_POSITIVE = "COMPLETION_SPRT_POSITIVE_CROSSING"
+
+#: 3. anything else at all, including every truncation.
+VERDICT_CONTINUE = "CONTINUE_INSUFFICIENT_EVIDENCE"
+
+AUTHORIZED_VERDICTS = (VERDICT_FAIL, VERDICT_SPRT_POSITIVE, VERDICT_CONTINUE)
+
+#: WHICH limit stopped it. The owner wants a risk truncation distinguishable
+#: in the record from a low-fill-rate truncation.
+TRUNCATION_RISK_LIMIT = "RISK_LIMIT_FORWARD_LOOKING_5_USD"
+TRUNCATION_WINDOW_EXPOSURE = "RISK_LIMIT_WINDOW_EXPOSURE_1_56_USD"
+TRUNCATION_LOW_FILL_RATE = "LOW_FILL_RATE_UNDECIDABLE"
+TRUNCATION_PLACEMENT_CAP = "AUTHORIZED_PLACEMENT_CAP_240"
+TRUNCATION_DESIGN_HARD = "DESIGN_HARD_TRUNCATION_4310"
+TRUNCATION_SAFETY = "SAFETY_INVARIANT_VIOLATION"
+TRUNCATION_VENUE_STORM = "VENUE_ERROR_STORM"
+TRUNCATION_AMBIGUOUS = "AMBIGUOUS_SUBMISSION_RECONCILE_VENUE_STATE"
+TRUNCATION_NONE = None
+
+#: The four disclaimers outcome 2 carries as FIELDS, so they cannot be
+#: dropped when the result is summarised.
+SPRT_POSITIVE_DISCLAIMERS: Dict[str, Any] = {
+    "evidence_specifically_for":
+        "the maker->maker completion question, and nothing else",
+    "is_formal_E1_PASS": False,
+    "is_proof_of_positive_expectancy": False,
+    "is_authorization_for_E2": False,
+}
 
 
 def sprt_walk(completions: int, non_completions: int) -> float:
@@ -140,7 +180,8 @@ def project_feasibility() -> Dict[str, Any]:
         rows.append({
             "p_fill": p,
             "expected_fills_in_240_placements": fills,
-            "reaches_sprt_expected_81_fills": fills >= 81,
+            "reaches_sprt_expected_fills_under_h0":
+                fills >= SPRT_EXPECTED_FILLS_UNDER_H0,
             "reaches_binding_fill_gate_431": fills >= BINDING_FILL_GATE,
         })
     return {
@@ -151,15 +192,15 @@ def project_feasibility() -> Dict[str, Any]:
         "placement_gate_reachable": MAX_PLACEMENTS >= PLACEMENT_GATE,
         "binding_fill_gate_reachable": MAX_PLACEMENTS >= BINDING_FILL_GATE,
         "PASS_reachable_in_this_authorization": False,
-        "what_the_authorized_cohort_can_reach": [VERDICT_FAIL,
-                                                 VERDICT_INCONCLUSIVE,
-                                                 VERDICT_UNDECIDABLE],
+        "what_the_authorized_cohort_can_reach": list(AUTHORIZED_VERDICTS),
+        "formal_PASS_is_not_an_authorized_outcome_at_all": True,
         "rows": rows,
         "HONESTY": (
             "240 placements yield about 85 fills only if p_fill >= ~0.35. "
             "At p_fill = 0.20 they yield about 48, SHORT of the SPRT's "
             "need. The cohort therefore terminates CONTINUE explicitly as "
-            "%s rather than running out silently." % VERDICT_UNDECIDABLE),
+            "%s with truncation_cause %s rather than running out "
+            "silently." % (VERDICT_CONTINUE, TRUNCATION_LOW_FILL_RATE)),
         "EXTENDING_THE_COHORT_REQUIRES_A_FRESH_OWNER_AUTHORIZATION": True,
         "anything_widened_here": False,
     }
@@ -481,8 +522,11 @@ class CohortTracker:
                    fwd["prospective_attempt_max_loss_usd"],
                    fwd["forward_looking_total_usd"], fwd["ceiling_usd"]))
         v = self.verdict()
-        if v["verdict"] != VERDICT_CONTINUE:
-            reasons.append("VERDICT_IS_%s" % v["verdict"])
+        if v["verdict"] != VERDICT_CONTINUE or v["stopped"]:
+            reasons.append("VERDICT_IS_%s%s" % (
+                v["verdict"],
+                "" if not v.get("truncation_cause")
+                else ":" + str(v["truncation_cause"])))
         return {"ok": not reasons, "refusals": reasons,
                 "projected_window_exposure_usd": str(projected),
                 "forward_looking": fwd,
@@ -490,22 +534,35 @@ class CohortTracker:
                 "verdict": v["verdict"]}
 
     # -------------------------------------------------------------- verdict
-    def verdict(self) -> Dict[str, Any]:
-        """PASS / FAIL / CONTINUE, plus the two terminations that are
-        neither. A hard stop is a FAILURE TO MEASURE and is NEVER a FAIL."""
-        stops = self.hard_stops()
-        if stops:
-            return {
-                "verdict": VERDICT_FAILURE_TO_MEASURE,
-                "stopped": True, "stop_reasons": stops,
-                "is_a_FAIL": False, "is_a_result": False,
-                "meaning": ("a hard automatic stop. Per E1_COHORT_DESIGN.md "
-                            "§3 this is a FAILURE TO MEASURE, reported with "
-                            "the partial posteriors, and never reported as "
-                            "FAIL or as a result."),
-                "report_partial_posteriors": True,
-            }
+    def _truncation_cause(self, stops: List[str]) -> Any:
+        """WHICH limit stopped it. The owner wants a risk truncation
+        distinguishable in the record from a low-fill-rate truncation, so
+        the cause is named and never merged into one bucket."""
+        for s in stops:
+            if s.startswith("FORWARD_LOOKING_COMMITTED_LOSS") or \
+                    s.startswith("COHORT_REALIZED_LOSS_AT_OR_ABOVE"):
+                return TRUNCATION_RISK_LIMIT
+        for s in stops:
+            if "EXPOSURE_AT_OR_ABOVE" in s:
+                return TRUNCATION_WINDOW_EXPOSURE
+            if s.startswith("SAFETY_INVARIANT_VIOLATION"):
+                return TRUNCATION_SAFETY
+            if s.startswith("VENUE_ERROR_STORM"):
+                return TRUNCATION_VENUE_STORM
+            if s.startswith("AMBIGUOUS_SUBMISSION"):
+                return TRUNCATION_AMBIGUOUS
+        if self.placements >= HARD_TRUNCATION:
+            return TRUNCATION_DESIGN_HARD
+        remaining = MAX_PLACEMENTS - self.placements
+        if self.fills + remaining < SPRT_EXPECTED_FILLS_UNDER_H0:
+            return TRUNCATION_LOW_FILL_RATE
+        if remaining <= 0:
+            return TRUNCATION_PLACEMENT_CAP
+        return TRUNCATION_NONE
 
+    def fail_reasons(self) -> List[str]:
+        """The four PREREGISTERED failure boundaries, read from
+        E1_COHORT_DESIGN.md §3 and not invented here."""
         fails: List[str] = []
         if self.consecutive_no_fill >= FAIL_CONSECUTIVE_NO_FILL:
             fails.append(
@@ -531,73 +588,91 @@ class CohortTracker:
                 "estimand 6: %d fill(s) timestamped AFTER a cancel "
                 "acknowledgement. Cancellation does not bound exposure, so "
                 "the worst-case arithmetic every frozen bound rests on is "
-                "invalid. HARD stop; invalidates the design, not just the "
-                "run." % self.post_cancel_ack_fills)
+                "invalid. It invalidates the design, not just the run."
+                % self.post_cancel_ack_fills)
         if self.unattributed_cashflows:
             fails.append(
                 "estimand 8: %d cashflow(s) without sufficient source "
                 "identity. The settlement ledger cannot be trusted and "
                 "nothing may be labelled REALIZED. Instrument fault."
                 % self.unattributed_cashflows)
+        return fails
+
+    def verdict(self) -> Dict[str, Any]:
+        """One of exactly three outcomes. There is NO PASS.
+
+        1. FAIL                              a preregistered boundary is hit
+        2. COMPLETION_SPRT_POSITIVE_CROSSING the SPRT crosses H1
+        3. CONTINUE_INSUFFICIENT_EVIDENCE    anything else, including every
+                                             truncation, with the cause named
+        """
+        stops = self.hard_stops()
+        walk = sprt_walk(self.completions, self.non_completions)
+        b = sprt_boundaries()
+        base = {"placements": self.placements, "fills": self.fills,
+                "completions": self.completions,
+                "non_completions": self.non_completions,
+                "sprt_walk": walk, "sprt_boundaries": b,
+                "authorized_verdicts": list(AUTHORIZED_VERDICTS),
+                "formal_PASS_exists_as_an_outcome": False,
+                "is_an_authorization": False,
+                "parameters_moved_on_interim_results": False}
+
+        fails = self.fail_reasons()
         if fails:
-            return {"verdict": VERDICT_FAIL, "stopped": True,
-                    "reasons": fails, "sprt_walk": walk,
-                    "meaning": "STOP. The finding is itself the result.",
-                    "is_an_authorization": False}
+            out = dict(base)
+            out.update({"verdict": VERDICT_FAIL, "stopped": True,
+                        "reasons": fails,
+                        "meaning": "a preregistered failure boundary was "
+                                   "reached. The finding is itself the "
+                                   "result.",
+                        "stop_reasons": stops,
+                        "truncation_cause": self._truncation_cause(stops)})
+            return out
 
-        passed = (
-            self.placements >= PLACEMENT_GATE
-            and self.fills >= BINDING_FILL_GATE
-            and self.post_cancel_ack_fills == 0
-            and self.unattributed_cashflows == 0
-            and self.estimand8_reconciled_without_unattributed
-            and self.per_share_expectancy_upper_usd is not None
-            and self.per_share_expectancy_upper_usd
-            > ECONOMICS_FORECLOSURE_USD_PER_SHARE)
-        if passed:
-            return {"verdict": VERDICT_PASS, "stopped": True,
-                    "meaning": RULES["PASS"]["meaning"],
-                    "is_an_authorization": False,
-                    "is_a_profit_claim": False}
+        if walk >= b["accept_h1_at_or_above"]:
+            out = dict(base)
+            out.update({
+                "verdict": VERDICT_SPRT_POSITIVE, "stopped": True,
+                "meaning": ("the completion SPRT crossed H1. This is "
+                            "evidence about ONE question and is not a "
+                            "verdict on the cohort."),
+                # the four disclaimers, as FIELDS so a summary cannot drop
+                # them
+                **SPRT_POSITIVE_DISCLAIMERS,
+                "disclaimers": dict(SPRT_POSITIVE_DISCLAIMERS),
+                "DISCLAIMER_TEXT": (
+                    "evidence SPECIFICALLY for the maker->maker completion "
+                    "question; NOT formal E1 PASS; NOT proof of positive "
+                    "expectancy; NOT authorization for E2."),
+                "stop_reasons": stops,
+                "truncation_cause": self._truncation_cause(stops)})
+            return out
 
-        if self.placements >= HARD_TRUNCATION:
-            return {"verdict": VERDICT_INCONCLUSIVE, "stopped": True,
-                    "meaning": RULES["CONTINUE"]["on_truncation"],
-                    "is_a_FAIL": False, "is_a_PASS": False}
-
-        # THE EXPLICIT UNDECIDABLE TERMINATION. Stated out loud at the point
-        # it becomes arithmetically certain, not discovered at the end.
-        remaining = MAX_PLACEMENTS - self.placements
-        max_reachable_fills = self.fills + remaining
-        if remaining <= 0 or max_reachable_fills < 81:
-            return {
-                "verdict": VERDICT_UNDECIDABLE,
-                "stopped": True,
-                "placements": self.placements,
-                "fills": self.fills,
-                "max_reachable_fills_in_this_authorization":
-                    max_reachable_fills,
-                "sprt_expected_fills_under_h0": 81,
-                "design_binding_fill_gate": BINDING_FILL_GATE,
-                "meaning": (
-                    "the fill rate is too low for the AUTHORIZED cohort to "
-                    "decide. This is an explicit termination of CONTINUE, "
-                    "not a silent exhaustion, and it is NEITHER PASS NOR "
-                    "FAIL."),
-                "EXTENDING_THE_COHORT_REQUIRES_A_FRESH_OWNER_AUTHORIZATION":
-                    True,
-                "anything_widened_automatically": False,
-                "is_a_FAIL": False, "is_a_PASS": False,
-            }
-
-        return {"verdict": VERDICT_CONTINUE, "stopped": False,
-                "placements": self.placements, "fills": self.fills,
-                "sprt_walk": walk,
-                "placements_to_design_gate":
-                    max(0, PLACEMENT_GATE - self.placements),
-                "fills_to_binding_gate":
-                    max(0, BINDING_FILL_GATE - self.fills),
-                "PASS_reachable_in_this_authorization": False}
+        cause = self._truncation_cause(stops)
+        out = dict(base)
+        out.update({
+            "verdict": VERDICT_CONTINUE,
+            "stopped": bool(stops) or cause is not None,
+            "stop_reasons": stops,
+            "truncation_cause": cause,
+            "truncated_by_the_risk_limit":
+                cause in (TRUNCATION_RISK_LIMIT, TRUNCATION_WINDOW_EXPOSURE),
+            "truncated_by_a_low_fill_rate": cause == TRUNCATION_LOW_FILL_RATE,
+            "meaning": ("insufficient evidence. This is NEITHER a failure "
+                        "boundary NOR a positive crossing, and formal PASS "
+                        "is not an available outcome at all."),
+            "raw_tape_must_still_yield_the_estimation_chain": True,
+            "EXTENDING_THE_COHORT_REQUIRES_A_FRESH_OWNER_AUTHORIZATION": True,
+            "anything_widened_automatically": False,
+            "placements_to_design_gate":
+                max(0, PLACEMENT_GATE - self.placements),
+            "fills_to_binding_gate":
+                max(0, BINDING_FILL_GATE - self.fills),
+        })
+        if cause == TRUNCATION_DESIGN_HARD:
+            out["design_note"] = RULES["CONTINUE"]["on_truncation"]
+        return out
 
     def snapshot(self) -> Dict[str, Any]:
         return {"probe": PROBE, "placements": self.placements,
