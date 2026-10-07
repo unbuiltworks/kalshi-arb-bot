@@ -431,7 +431,12 @@ class ReadOnlyFetcher:
         elapsed = time.monotonic() - self._first_request_mono
         if elapsed <= 0:
             return None
-        return 60.0 * self.requests / elapsed
+        #: N requests span N-1 INTERVALS, and the clock starts at the first
+        #: request, not before it. Dividing by N overstates a perfectly
+        #: paced stream by 1/(N-1) -- which is why an early heartbeat read
+        #: 241.9 against a 240 cap that was never exceeded. The pacer
+        #: enforces the interval; this must measure the same quantity.
+        return 60.0 * (self.requests - 1) / elapsed
 
     @staticmethod
     def _ctx() -> ssl.SSLContext:
@@ -789,6 +794,53 @@ def token_coverage(rows: Iterable[Mapping[str, Any]]) -> Dict[str, dict]:
     return acc
 
 
+def activity_windows(rows: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Every BOOK_ONLY interval, with its exact edges. READ-ONLY.
+
+    The edges live on the tape, which is where they belong, but an
+    interval nobody can read is an interval nobody will honor -- so this
+    derives the list into its own file for downstream analysis to exclude.
+    """
+    edges = [r for r in rows if r.get("kind") == "activity_availability"]
+    intervals: List[dict] = []
+    open_row: Optional[Mapping[str, Any]] = None
+    for r in edges:
+        if r.get("edge") == "OPEN":
+            if open_row is None:
+                open_row = r
+        elif r.get("edge") == "CLOSE" and open_row is not None:
+            intervals.append({
+                "label": ACTIVITY_UNAVAILABLE_LABEL,
+                "start_utc": open_row.get("since_utc"),
+                "start_unix": open_row.get("since_unix"),
+                "open_recorded_utc": open_row.get("recv_utc"),
+                "end_utc": r.get("recv_utc"),
+                "end_unix": r.get("recv_unix"),
+                "consecutive_failures_at_close": r.get(
+                    "consecutive_failures"),
+                "closed": True,
+            })
+            open_row = None
+    if open_row is not None:
+        intervals.append({
+            "label": ACTIVITY_UNAVAILABLE_LABEL,
+            "start_utc": open_row.get("since_utc"),
+            "start_unix": open_row.get("since_unix"),
+            "open_recorded_utc": open_row.get("recv_utc"),
+            "end_utc": None,
+            "closed": False,
+        })
+    return {
+        "intervals": intervals,
+        "open_now": bool(intervals and not intervals[-1]["closed"]),
+        "MEANING": "L5 activity inside any interval listed here is "
+                   "UNMEASURED, NOT a zero-fill observation. Exclude "
+                   "these intervals from any fill-rate, fill-count or "
+                   "EXTEND->COMPLETE measurement, or report them "
+                   "separately.",
+    }
+
+
 def activity_join_proof(rows: Iterable[Mapping[str, Any]],
                         limit: int = 5) -> Dict[str, Any]:
     """Can a real L5 activity item be joined to a book we actually recorded?
@@ -1128,6 +1180,8 @@ class BookShadowCollector:
             "observed_rpm": (None if self.http.observed_rpm() is None
                              else round(self.http.observed_rpm(), 1)),
             "requests_issued": self.http.requests,
+            "activity_windows": activity_windows(
+                self.tape.read_all())["intervals"],
             "credentials_present": credential_presence(),
             "orders_submitted": 0,
             "venue_mutations": 0,
@@ -1137,6 +1191,7 @@ class BookShadowCollector:
             {k: row[k] for k in ("uptime_s", "cycles", "markets",
                                  "tokens_tracked", "rows_per_stream",
                                  "single_token_markets", "http_429",
+                                 "activity_windows",
                                  "scheduled_rpm", "observed_rpm",
                                  "requests_issued",
                                  "pacer_worst_case_rpm")},
@@ -1151,6 +1206,8 @@ class BookShadowCollector:
         #: their own file. Nothing in raw/ is read for anything but reading.
         self.tape.write_derived("activity_join_proof.json",
                                 activity_join_proof(rows))
+        self.tape.write_derived("activity_windows.json",
+                                activity_windows(rows))
         return self.tape.write_derived(
             "token_coverage.json", verify_both_tokens(rows))
 

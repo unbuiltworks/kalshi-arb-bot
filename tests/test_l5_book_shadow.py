@@ -707,3 +707,58 @@ def test_a_chain_of_restarts_yields_one_interval_not_several(tmp_path):
     second._emit_activity_window("OPEN")        # a restart re-announces
     # The EARLIEST open is still the true start of the interval.
     assert _collector(tmp_path).resume_activity_window() == 1_700_000_000.0
+
+
+def test_observed_rpm_never_overstates_a_perfectly_paced_stream():
+    """A stream paced exactly at the cap must measure AT the cap, not above.
+
+    Regression for an off-by-one that made an early heartbeat read 241.9
+    against a 240 cap the pacer had not exceeded: N requests span N-1
+    intervals, and the clock starts at the first request.
+    """
+    clock = {"t": 0.0}
+    pacer = bs.Pacer(max_rpm=240.0, sleep=lambda s: clock.__setitem__(
+        "t", clock["t"] + s), clock=lambda: clock["t"])
+    f = bs.ReadOnlyFetcher(pacer, opener=lambda *a, **k: (_ for _ in ()
+                                                          ).throw(
+        RuntimeError("no network in tests")))
+    import time as _t
+    real = _t.monotonic
+    _t.monotonic = lambda: clock["t"]
+    try:
+        for _ in range(75):
+            try:
+                f.get("https://example.invalid/x")
+            except RuntimeError:
+                pass
+        rpm = f.observed_rpm()
+    finally:
+        _t.monotonic = real
+    assert rpm is not None
+    assert rpm <= 240.0 + 1e-6, "metric overstates a capped stream: %r" % rpm
+    assert rpm > 239.0
+
+
+def test_activity_windows_pairs_the_edges_into_exact_intervals(tmp_path):
+    col = _collector(tmp_path)
+    col._activity_down_since = 1_700_000_000.0
+    col._activity_failures = 4
+    col._emit_activity_window("OPEN")
+    col._emit_activity_window("CLOSE")
+    rep = bs.activity_windows(col.tape.read_all())
+    assert len(rep["intervals"]) == 1
+    iv = rep["intervals"][0]
+    assert iv["closed"] is True
+    assert iv["start_unix"] == 1_700_000_000.0
+    assert iv["end_utc"] and iv["end_unix"]
+    assert rep["open_now"] is False
+    assert "NOT a zero-fill observation" in rep["MEANING"]
+
+
+def test_an_unclosed_window_is_reported_as_still_open(tmp_path):
+    col = _collector(tmp_path)
+    col._activity_down_since = 1_700_000_000.0
+    col._emit_activity_window("OPEN")
+    rep = bs.activity_windows(col.tape.read_all())
+    assert rep["open_now"] is True
+    assert rep["intervals"][0]["end_utc"] is None
