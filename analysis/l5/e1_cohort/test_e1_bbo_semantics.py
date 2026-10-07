@@ -323,3 +323,73 @@ def test_a_crossed_or_absent_quote_yields_no_complement():
     for bad in ("NaN", "Infinity", "abc", ""):
         c = PBK.complement_of(bad, "0.42")
         assert c["ask"] is None
+
+
+# ========= 5. THE LADDER ORDER, FROM THE REAL /book RESPONSE ===========
+
+def test_the_real_bid_ladder_is_strictly_descending(real):
+    """THE ORDERING QUESTION, ANSWERED BY THE VENUE.
+
+    `_level()` takes `levels[0]` and calls it the best. Since the PMUS
+    websocket carries no best-field, E1's entire first-leg price rests on
+    that. The captured `GET /book` body has 29 bid levels and they are
+    strictly descending, so levels[0] IS the best -- and it equals both
+    other readings.
+    """
+    bids = real["rest_book"]["marketData"]["bids"]
+    vals = [D(b["px"]["value"]) for b in bids]
+    assert len(vals) == 29
+    assert all(a > b for a, b in zip(vals, vals[1:])), vals
+    assert vals[0] == max(vals) == D("0.9900")
+    # three independent readings, one number
+    assert str(vals[0]) == "0.9900"
+    assert real["rest_bbo"]["marketData"]["bestBid"]["value"] == "0.9900"
+    assert real["ws_book_frame_shape"]["bid0"]["px"]["value"] == "0.9900"
+    f = real["ladder_facts"]
+    assert f["bids_are_strictly_descending"] is True
+    assert f["bids_level_0_equals_rest_bestBid"] is True
+    assert f["bids_level_0_equals_ws_bid0"] is True
+
+
+def test_the_offers_ladder_is_empty_in_the_capture(real):
+    """One-sided, which is why no complement price exists and why E1
+    correctly got no snapshot."""
+    assert real["rest_book"]["marketData"]["offers"] == []
+    assert real["rest_bbo"]["marketData"]["askDepth"] == 0
+    assert real["rest_bbo"]["marketData"]["askShares"] == "0"
+
+
+def test_the_parser_on_the_verbatim_real_book_body(real):
+    """Feed the ACTUAL captured /book body through the ACTUAL parser."""
+    slug = real["provenance"]["slug"]
+    st = {}
+    R.apply_events(st, real["rest_book"], 1.0)
+    assert st[slug]["bid"] == "0.9900"
+    assert st[slug]["ask"] is None
+    assert st[slug]["both_sides_served"] is False
+    # and `stats` -- a real nested object carrying a NO-denominated
+    # shortPx -- contributed nothing to the price
+    assert st[slug]["bid"] != "0.01"
+
+
+def test_a_mid_ladder_level_cannot_become_the_top(real):
+    """The captured ladder contains 0.5000, 0.4000 and 0.2500. A parse
+    that reached any of them would report a price the top of book never
+    showed."""
+    slug = real["provenance"]["slug"]
+    st = {}
+    R.apply_events(st, real["rest_book"], 1.0)
+    for deeper in real["ladder_facts"][
+            "levels_that_could_be_mistaken_for_the_top"]:
+        assert st[slug]["bid"] != deeper, deeper
+    assert st[slug]["bid"] == real["ladder_facts"]["bids_level_0_value"]
+
+
+def test_stats_carries_a_no_denominated_price_in_the_real_body(real):
+    """Recorded because it is the wrong-side value sitting closest to the
+    right one."""
+    stats = real["rest_book"]["marketData"]["stats"]
+    assert stats["lastPriceSample"]["shortPx"]["value"] == "0.01"
+    assert stats["lastPriceSample"]["longPx"]["value"] == "0.9900"
+    assert (D(stats["lastPriceSample"]["longPx"]["value"])
+            + D(stats["lastPriceSample"]["shortPx"]["value"])) == ONE
