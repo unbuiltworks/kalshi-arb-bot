@@ -1,0 +1,16 @@
+{
+ "captured_utc": "2026-10-07T02:47:00Z",
+ "purpose": "EXACT restore target for pmus-readonly-recovery, captured BEFORE any change, so restoration is verifiable rather than remembered.",
+ "service": {"id": "247304c7-972d-45b4-a308-46ba708dd4d6", "name": "pmus-readonly-recovery"},
+ "environment": {"id": "f3642d27-26dc-4e21-9170-bc76290c076f", "name": "production"},
+ "config": {
+  "source": {"repo": "unbuiltworks/kalshi-arb-bot", "branch": "feature/l5-transfer-backtest", "checkSuites": false, "commitSha": null},
+  "build": {"builder": "DOCKERFILE", "watchPatterns": ["deploy/pmus_readonly_recovery/**", "scripts/pmus_readonly_recovery.py", "src/pmus_auth.py"], "buildEnvironment": "V3", "dockerfilePath": "deploy/pmus_readonly_recovery/Dockerfile"},
+  "deploy": {"startCommand": "python3 -m scripts.pmus_readonly_recovery", "restartPolicyType": "NEVER", "useLegacyStacker": false, "ipv6EgressEnabled": false, "runtime": "V2", "multiRegionConfig": {"us-east4-eqdc4a": {"numReplicas": 1}}}
+ },
+ "variableNames": ["PMUS_API_KEY_ID", "PMUS_API_SECRET_KEY", "RAILWAY_DOCKERFILE_PATH", "RECOVERY_MARKET", "RECOVERY_ORDER_ID", "RECOVERY_ORDER_IDS"],
+ "volumeMounts": [],
+ "latest_deployment_before": {"id": "9ebc9087-b5ca-43bb-b395-e63a4af794ee", "status": "SUCCESS", "createdAt": "2026-09-27T14:25:45.479Z"},
+ "NOTE_ON_VARIABLE_VALUES": "Variable VALUES are redacted to this session (names only). No value is read, printed or rewritten. RAILWAY_DOCKERFILE_PATH is the only variable this operation touches; it is restored to the value that config.build.dockerfilePath attests, which is the authoritative field.",
+ "NOTE_ON_SOURCE": "source carries no commitSha, so the service follows the branch head rather than a pinned commit. Restoration therefore restores the BRANCH, which is the same binding it had."
+}

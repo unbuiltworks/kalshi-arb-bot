@@ -21,13 +21,18 @@ RUN pip install --no-cache-dir "cryptography>=42"
 
 COPY src/__init__.py src/__init__.py
 COPY src/pmus_auth.py src/pmus_auth.py
-COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
+# NO ORDER PATH IN THIS IMAGE. The real Q1 executors carry POST
+# /v1/order/preview, POST /v1/orders and POST /v1/order/{id}/cancel, so
+# they are NOT copied. A GET-only shim is copied over both module names
+# instead; its transport raises on any method except GET before a socket
+# opens. There is no POST here to disable.
+COPY deploy/pmus_incentive_reaudit/q1_getonly_shim.py src/pmus_q1_executor.py
+COPY deploy/pmus_incentive_reaudit/q1_getonly_shim.py src/pmus_q1_executor_v4.py
 # pmus_settlement_auditor imports q1_executor_v4 at module level for its
 # paced GET helper (_get_with_retry, which hardcodes GET and never retries
 # a mutation). l5_realized_bridge is imported lazily inside the audit for
 # the ESTIMATED block only. Both are present only to satisfy imports; the
 # runner's arming refusal is what keeps the image inert.
-COPY src/pmus_q1_executor_v4.py src/pmus_q1_executor_v4.py
 COPY src/l5_realized_bridge.py src/l5_realized_bridge.py
 COPY src/pmus_fees.py src/pmus_fees.py
 COPY src/pmus_fee_schedule.py src/pmus_fee_schedule.py
