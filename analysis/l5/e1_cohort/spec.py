@@ -283,6 +283,17 @@ DIFF: Dict[str, Any] = {
         "manifest": "analysis/l5/e1_cohort/E1_AUTHORIZATION_MANIFEST.md",
         "self_granted": False,
         "arming_is_the_owner_s_and_no_code_here_sets_it": True,
+        "namespace": "PMUS_E1_*",
+        "keys": ["PMUS_E1_LIVE", "PMUS_E1_SESSION_ID", "PMUS_E1_ARM",
+                 "PMUS_E1_GATE_EVIDENCE"],
+        "fingerprint_pin_env": "PMUS_E1_AUTHORIZED_FINGERPRINT",
+        "reads_pmus_exec1_namespace": False,
+        "why_a_dedicated_namespace": (
+            "the service l5-live-probe-oneshot already carries "
+            "PMUS_EXEC1_* for XR2W, so sharing the namespace would let a "
+            "legacy value participate in arming E1. Two experiments, two "
+            "namespaces."),
+        "module": "analysis.l5.e1_cohort.arming",
         "deployed": False,
         "railway_service": None,
     },
@@ -350,6 +361,28 @@ DIFF: Dict[str, Any] = {
         "unrestricted_worst_case_is_reachable": False,
         "effective_worst_case_usd": str(MAX_COHORT_REALIZED_LOSS_USD),
         "module": "analysis.l5.e1_cohort.stopping",
+    },
+
+    "network": {
+        "network_capable": True,
+        "claims_to_be_network_incapable": False,
+        "why_capable": (
+            "E1's job is to place real orders, and XR2W's proven "
+            "analysis/l5/live_exec2/orders.py uses urllib. Importing the "
+            "production entrypoint therefore pulls http, http.client, "
+            "socket, ssl, urllib, urllib.error, urllib.parse, "
+            "urllib.request and urllib.response. That is NECESSARY and "
+            "CORRECT."),
+        "tests_make_zero_network_calls": True,
+        "transport_reachable_only_through": [
+            "the preview-echo gate",
+            "the E1 named-slot latch",
+        ],
+        "HONESTY": (
+            "a false safety claim is worse than an acknowledged "
+            "capability. Nothing in this package claims E1 cannot reach "
+            "the network; the provable claims are that the TESTS make zero "
+            "network CALLS and that the transport is gated."),
     },
 
     "venue_error_stop": {
@@ -546,6 +579,13 @@ DIFF: Dict[str, Any] = {
         "slots_per_window": MAX_ATTEMPTS_PER_WINDOW,
         "mechanism": "O_CREAT|O_EXCL per NAMED slot file",
         "session_scoped": True,
+        "namespace_dir": "/state/pmus-ws/e1_cohort",
+        "shares_the_mounted_volume_with_xr2w": True,
+        "xr2w_latch_dir_is_distinct": True,
+        "file_prefix": "e1.",
+        "xr2w_a6_latch_is_evidence_and_is_never_touched": True,
+        "e1_deletes_resets_or_renames_anything": False,
+        "boot_assertion": "latch:assert_no_collision_with_xr2w",
         "consumed_before_the_post": True,
         "released_on_failure": False,
         "is_a_bare_counter": False,
@@ -795,6 +835,17 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("complement.max_tranches", 13),
     ("complement."
      "uncomplementable_quantity_is_explicitly_recorded_residual", True),
+    ("network.network_capable", True),
+    ("network.claims_to_be_network_incapable", False),
+    ("network.tests_make_zero_network_calls", True),
+    ("network.transport_reachable_only_through",
+     ["the preview-echo gate", "the E1 named-slot latch"]),
+    ("authorization.namespace", "PMUS_E1_*"),
+    ("authorization.reads_pmus_exec1_namespace", False),
+    ("latch.namespace_dir", "/state/pmus-ws/e1_cohort"),
+    ("latch.xr2w_latch_dir_is_distinct", True),
+    ("latch.xr2w_a6_latch_is_evidence_and_is_never_touched", True),
+    ("latch.boot_assertion", "latch:assert_no_collision_with_xr2w"),
     ("venue_error_stop.is_a_safety_stop", True),
     ("venue_error_stop.is_an_economic_threshold", False),
     ("venue_error_stop.consecutive_errors", 5),

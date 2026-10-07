@@ -2009,21 +2009,39 @@ def test_boot_asserts_and_reports_disarmed():
     assert rep["diff_report"]["to_fingerprint"] == SP.E1_FINGERPRINT
 
 
-def test_no_network_is_reachable_from_these_tests():
-    """The tests never construct a real transport, so nothing can dial out.
-    Asserted structurally: every submission in this file goes through a
-    FakeTransport."""
+def test_these_tests_make_ZERO_network_CALLS():
+    """ZERO CALLS, not zero capability. Read the distinction.
+
+    E1 IS NETWORK-CAPABLE AND MUST BE. Its job is to place real orders, and
+    XR2W's proven `orders.py` uses `urllib`, so importing the production
+    entrypoint pulls http, http.client, socket, ssl and the urllib family.
+    That is correct and it is asserted positively in
+    `test_the_entrypoint_IS_network_capable_and_says_so`. Nothing in this
+    package may ever claim E1 cannot reach the network.
+
+    What IS provable, and all this test claims:
+      (a) these tests make zero network CALLS -- every transport is a fake;
+      (b) the real transport is reachable only through the preview-echo
+          gate and the E1 named-slot latch.
+
+    BRITTLENESS WARNING FOR THE NEXT PERSON. The literal scan below reads
+    THIS TEST FILE'S OWN TEXT, not the package's capabilities. Any new test
+    that so much as MENTIONS the string "urllib" -- including a correct one
+    whose purpose is to assert urllib is trapped -- will trip it. It went
+    red once for exactly that reason, mid-edit, and that was never a safety
+    breach. The string concatenations below exist so this test does not
+    trip over itself.
+    """
     src = open(os.path.abspath(__file__), encoding="utf8").read()
-    # no network client is imported, and every transport_factory in this
-    # file is the FakeTransport
-    assert "url" + "lib" not in src
+    # (a) no network client is imported BY THIS TEST FILE
+    assert "import " + "url" + "lib" not in src
     assert "import " + "socket" not in src
     assert "import " + "requests" not in src
+    # every factory this file passes is the FakeTransport or a subclass,
+    # checked at RUNTIME against the resolved object, not by name
     lines = [ln for ln in src.splitlines() if "transport_factory" + "=" in ln
              and "splitlines" not in ln and "def " not in ln]
     assert lines, "no submissions are exercised at all"
-    # every factory this file passes is the FakeTransport or a subclass of
-    # it -- checked at RUNTIME against the resolved object, not by name
     for ln in lines:
         name = ln.split("transport_factory" + "=")[1].split(",")[0]
         name = name.strip().rstrip(")")
@@ -2033,11 +2051,57 @@ def test_no_network_is_reachable_from_these_tests():
         if obj is not None:
             assert isinstance(obj, type) and issubclass(obj, FakeTransport), ln
             continue
-        # a class defined locally inside a test: it must subclass
-        # FakeTransport, which the source states explicitly
         assert "class %s(FakeTransport)" % name in src, ln
-    # and the only lambdas close over FakeTransport instances
     assert "lambda: t" in src
+
+
+def test_the_entrypoint_IS_network_capable_and_says_so():
+    """The POSITIVE assertion of the capability, so no reader can mistake
+    the test above for a claim that E1 cannot reach the network.
+
+    A false safety claim is worse than an acknowledged capability, and this
+    artifact is about to be given credentials.
+    """
+    import importlib
+    import sys
+    before = set(sys.modules)
+    importlib.import_module(SP.SPEC["entrypoint"]["module"])
+    pulled = {m.split(".")[0] for m in set(sys.modules) - before}
+    # whether or not THIS process is the one that first imported them, the
+    # modules are present once the entrypoint is importable
+    for mod in ("urllib", "socket", "ssl", "http"):
+        assert mod in sys.modules, mod
+    # and the spec states the capability rather than denying it
+    net = SP.SPEC["network"]
+    assert net["network_capable"] is True
+    assert net["claims_to_be_network_incapable"] is False
+    assert net["tests_make_zero_network_calls"] is True
+    assert net["transport_reachable_only_through"] == [
+        "the preview-echo gate", "the E1 named-slot latch"]
+    assert "urllib" in net["why_capable"]
+
+
+def test_the_transport_is_reachable_only_through_the_gate_and_the_latch():
+    """Claim (b), structurally: `_submit_once` cannot reach POST /v1/orders
+    without first passing the echo gate and consuming a latch slot."""
+    import inspect
+    src = inspect.getsource(RUN._submit_once)
+    code = src.split('"""')[2] if src.count('"""') >= 2 else src
+    i_echo = code.index("require_echo")
+    i_latch = code.index("consume_latch()")
+    i_post = code.index("O.SUBMIT_PATH")
+    assert i_echo < i_latch < i_post, \
+        "the echo gate and the latch must both precede the POST"
+    # and a refused echo means no POST at all
+    t = FakeTransport()
+    t.request = lambda m, p, b=None, base=None: (
+        {"order": {"wrong": 1}} if p == O.PREVIEW_PATH else
+        pytest.fail("POST reached without passing the echo gate"))
+    with pytest.raises(O.PreviewRejected):
+        RUN._submit_once(t, slug="m", outcome_side="UP", price="0.50",
+                         qty="0.13",
+                         consume_latch=lambda: pytest.fail(
+                             "the latch was consumed before the echo gate"))
 
 
 def test_the_manifest_exists_has_the_header_and_the_eight_items():
