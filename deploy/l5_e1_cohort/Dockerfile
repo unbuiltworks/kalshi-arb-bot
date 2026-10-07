@@ -15,16 +15,24 @@
 # /state/pmus-ws/exec1x is NOT touched; it is evidence.
 #
 # The COPY list below is the TRANSITIVE AST IMPORT CLOSURE of
-# scripts/l5_e1_cohort_run.py, computed rather than guessed -- 30 first-party
+# scripts/l5_e1_cohort_run.py, computed rather than guessed -- 37 first-party
 # files. A missing COPY is invisible until the container starts, and in this
-# repository that has already cost a failed deploy twice, so the final RUN
+# repository that has already cost a failed deploy three times (most recently
+# src/l5_market_binding.py, which entered the closure when authorization.py
+# began importing selector.py AFTER the list was computed), so the final RUN
 # asserts the entrypoint actually imports.
+#
+# A hand-maintained list drifts the moment an import is added. The closure is
+# therefore recomputed and compared against this file by
+# analysis/l5/e1_cohort/tests/test_dockerfile_closure.py, so an import added
+# without a COPY fails the SUITE, not the deploy.
 FROM python:3.11-slim
 WORKDIR /app
 
 COPY src/__init__.py              src/__init__.py
 COPY src/l5_book_shadow.py        src/l5_book_shadow.py
 COPY src/l5_clob_ws.py            src/l5_clob_ws.py
+COPY src/l5_market_binding.py     src/l5_market_binding.py
 COPY src/l5_order_body.py         src/l5_order_body.py
 COPY src/l5_preview_gate.py       src/l5_preview_gate.py
 COPY src/pmus_auth.py             src/pmus_auth.py
