@@ -102,15 +102,70 @@ about opportunity.
 
 ---
 
-## 4. Stage-6 candidate protocol and fingerprint — **PENDING** (Lane 4)
+## 4. Stage-6 candidate protocol — FROZEN, TESTED, **DISARMED**
 
-Built, not armed. Spot-checked for safety state only: `armed: False`, its
-own `PMUS_S6P_*` arm keys (no collision with A6's `PMUS_Q1_*`), a separate
-fingerprint-pin env, and derived from XR2W by deep-copying its `SPEC`
-rather than duplicating it — a duplicate serializer is what caused the A5
-HTTP 400.
+```
+STAGE-6-S6P
+32360e4c0441a8d7296794bd098e47ae962dabbc3fa406f98327dab40b2d96d8
+```
 
----
+Hard-coded literal, so `assert_frozen()` cannot be vacuous. Derived from
+XR2W (`ac6318d5…2562`) by deep-copying its `SPEC` plus a literal `DIFF`;
+verification chains XR2W's own check, then the fee schedule's
+(`ecc240bd…1629`), then bound coherence, then ~80 named invariants, then
+the fingerprint. **XR2W, its spec and its fingerprint are untouched**, and a
+test asserts it.
+
+State machine, ten declared terminals:
+`ARMING_GATE → PREFLIGHT → PLACE_FIRST_LEG → OBSERVE_FIRST →
+CANCEL_FIRST_LEG → PAIR_GATE → PLACE_COMPLEMENT → OBSERVE_COMPLEMENT →
+WITHDRAW → DEADMAN (finally) → RECONCILE`
+
+The parts that matter: `complement_qty()` reads `filled_qty` and nothing
+else, snapped **down** to the grid — so the complement follows the actual
+fill, never the intended one; fills counted once per execution id with
+bounds re-checked after **every** fill; two *named* latch slots rather than
+a capacity counter, which would have permitted two first legs;
+`AMBIGUOUS_SUBMISSION` never retried; deadman in `finally`, ungated; one
+post-cancel sweep so a fill racing a cancel is still counted.
+
+**Tests: 50 passed** on the state machine, plus **209** confirming the
+proven executor and fee schedule are unchanged. All offline — no network,
+no credentials, no arming.
+
+Three findings worth your attention:
+
+- **A real bug in the inherited derivation pattern.** `_apply` assigned
+  `DIFF`'s own nested objects into the built spec, so every derived spec
+  shared mutable state with `DIFF`: a caller inspecting a copy could edit
+  the frozen `SPEC` in place and the fingerprint assertion would *still
+  pass*. S6P deep-copies. **This pattern is inherited, so the older specs
+  should be checked** — I did not touch them tonight, since XR2W is frozen,
+  deployed and independently fingerprint-verified.
+- **The pair gate is tighter than $0.96**: it prices *both* post-only legs
+  at the **taker** coefficient and counts the rebate as zero, costing ~4¢
+  of complement headroom at every price. Reported by `headroom_report()`,
+  not hidden. Near-$1 tolerance has no branch at all — it cannot be flagged
+  on, only written.
+- **The TTE 510 s handover is structural, not measured.** Something must end
+  the first leg's turn because both legs share the single outstanding-order
+  slot. An equal split of the 780 s placeable stretch is defensible, but it
+  is not evidence that 390 s is right for either leg.
+
+`python3 -m analysis.l5.stage6.runner` prints the fingerprint, the lineage
+diff, every bound, arming and latch state, the headroom table, the scope
+limits, and the exact sentence of what arming would authorize — then exits
+on `DISARMED: the owner has not set the four PMUS_S6P_* keys`.
+
+### What this protocol cannot establish, by its own declaration
+
+Profitability (one pair is one sample); that L5 would have acted the same
+way (no action-by-action fidelity comparison); that $480/day is reachable
+(no capacity, frequency or concurrency measurement); rebate economics
+(structurally $0.00 at 1.00 share); residual *skill* (it bounds the
+residual, it cannot evaluate it); whether a complement would have filled
+better later (one patience path, not the distribution); or that post-only
+guaranteed a maker role (absent `isAggressor` stays UNRESOLVED).
 
 ## 5. Historical / shadow evidence — **DOES NOT SUPPORT AUTHORIZATION**
 
