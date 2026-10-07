@@ -67,8 +67,19 @@ FORBIDDEN_MODULES = (
 )
 
 #: how long to let the authenticated book fill before giving up.
-WS_BUDGET_S = 45.0
-WS_POLL_S = 0.5
+WS_BUDGET_S = float(os.getenv("PMUS_E1_BBO_WS_BUDGET_S") or 420.0)
+WS_POLL_S = 1.0
+
+#: MEASURED, NOT ASSUMED. The first run read
+#: cpc-btc-updown-15m-2026-10-07-2215z at +842s -- 14 minutes into a
+#: 15-minute window -- and found the book COLLAPSED: bestAsk null,
+#: askDepth 0, askShares "0", n_offers 0. Near expiry a BTC15m window has
+#: resolved in all but name (bestBid 0.9900, shortQuote 0.01), so there is
+#: no two-sided book to compare and AuthBook correctly returns nothing.
+#: A semantic comparison needs a LIVE two-sided book, which means early in
+#: a window -- which is also exactly where E1 trades.
+MAX_SECONDS_INTO_WINDOW = float(
+    os.getenv("PMUS_E1_BBO_MAX_TTE_OFFSET_S") or 420.0)
 
 #: how close the REST and WS readings must be in TIME for a disagreement
 #: to mean anything. A push feed and a cached REST route are not the same
@@ -153,7 +164,51 @@ def read_rest(slug: str) -> Dict[str, Any]:
                     "candidates": candidates(bbo_raw)},
             "book": {"t": t1, "elapsed_s": round(t2 - t1, 3),
                      "raw": book_raw,
-                     "candidates": candidates(book_raw)}}
+                     "candidates": candidates(book_raw),
+                     "ladders": ladders(book_raw)}}
+
+
+def ladders(payload: Any) -> Dict[str, Any]:
+    """The ORDER of the ladder, stated rather than assumed.
+
+    `_level()` in the shared recorder takes `levels[0]` and calls it the
+    best. That is an ASSUMPTION ABOUT ORDERING, and since the PMUS
+    websocket carries no bestBid/bestAsk at all (measured: its book frames
+    have keys bids/offers/state/stats/transactTime and nothing else), it
+    is the assumption E1's entire first-leg price rests on. So the first
+    five levels of each side are recorded, with whether the side is
+    monotonic in the direction that would make levels[0] the best.
+    """
+    md = (payload or {}).get("marketData") or payload or {}
+    out: Dict[str, Any] = {}
+    for name, key, want_desc in (("bids", "bids", True),
+                                 ("offers", "offers", False)):
+        rows = md.get(key) or []
+        px = []
+        for r in rows[:12]:
+            if isinstance(r, dict):
+                v = r.get("px")
+                px.append({"px": (v or {}).get("value")
+                           if isinstance(v, dict) else v,
+                           "qty": r.get("qty")})
+        vals = [_dec(r["px"]) for r in px]
+        vals = [v for v in vals if v is not None]
+        desc = all(a >= b for a, b in zip(vals, vals[1:]))
+        asc = all(a <= b for a, b in zip(vals, vals[1:]))
+        out[name] = {
+            "n_levels": len(rows),
+            "first_12": px,
+            "monotonic_descending": desc,
+            "monotonic_ascending": asc,
+            "levels_0_is_the_best": (desc if want_desc else asc),
+            "best_by_value": (str(max(vals)) if (vals and want_desc)
+                              else (str(min(vals)) if vals else None)),
+            "level_0_value": str(vals[0]) if vals else None,
+            "level_0_equals_best_by_value": (
+                bool(vals) and (vals[0] == (max(vals) if want_desc
+                                            else min(vals)))),
+        }
+    return out
 
 
 def proven_lineage_read(bbo_raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -308,6 +363,21 @@ def main() -> int:
     now = time.time()
     slug = None
     tried = []
+    # WAIT FOR A WINDOW THAT IS STILL EARLY. The current window is used
+    # only if it is young enough to plausibly have two sides; otherwise
+    # the probe sleeps to the next window open. A collapsed near-expiry
+    # book cannot answer a semantic question about executable quotes.
+    cur = SEL.window_start_for(now)
+    if (now - cur) > MAX_SECONDS_INTO_WINDOW:
+        nxt = SEL.next_window_starts(now, 1)[0]
+        wait = max(0.0, (nxt + 5.0) - time.time())
+        out["waited_for_next_window_s"] = round(wait, 1)
+        out["why_waited"] = (
+            "the current window was %.0fs old, past the %.0fs bound; a "
+            "near-expiry BTC15m book has no ask side to compare"
+            % (now - cur, MAX_SECONDS_INTO_WINDOW))
+        time.sleep(wait)
+        now = time.time()
     for start in [SEL.window_start_for(now)] + SEL.next_window_starts(now, 2):
         s = PI.slug_for(start)
         try:
@@ -329,7 +399,15 @@ def main() -> int:
 
     out["rest"] = read_rest(slug)
     out["ws"] = read_ws(slug)
-    out["comparison"] = compare(out["rest"], out["ws"])
+    # A SECOND REST READ, IMMEDIATELY AFTER THE WS SNAPSHOT. The first
+    # read happens before the feed has filled, so its skew is the whole
+    # readiness wait -- which made the first run INCONCLUSIVE for a
+    # reason that had nothing to do with the parse. This one is taken
+    # within a second of the snapshot being read.
+    out["rest_after_ws"] = read_rest(slug)
+    out["comparison"] = compare(out["rest_after_ws"], out["ws"])
+    out["comparison_against_the_first_rest_read"] = compare(
+        out["rest"], out["ws"])
     out.update(_assert_no_order_path())
 
     snap = out["ws"].get("snapshot") or {}
@@ -405,7 +483,13 @@ def _print_summary(out: Dict[str, Any]) -> None:
         ("ws_pre_book_shapes",
          ((out.get("ws") or {}).get("frame_evidence") or {})
          .get("pre_book_shapes_for_this_slug")),
-        ("rest_bbo_raw", (out.get("rest") or {}).get("bbo", {}).get("raw")),
+        ("rest_bbo_raw",
+         (out.get("rest_after_ws") or out.get("rest") or {})
+         .get("bbo", {}).get("raw")),
+        ("rest_book_ladders",
+         (out.get("rest_after_ws") or out.get("rest") or {})
+         .get("book", {}).get("ladders")),
+        ("waited_for_next_window_s", out.get("waited_for_next_window_s")),
         ("venue_post", out.get("venue_post")),
         ("latch_touched", out.get("latch_touched")),
     ]
