@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-10-07T04:24:37.752922+00:00",
+  "generated_utc": "2026-10-07T04:28:39.041941+00:00",
   "subject": {
     "handle": "l5Zn1bWoM8eTsK",
     "proxy_wallet": "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
@@ -327,6 +327,237 @@
         "2026-09-25"
       ]
     }
+  },
+  "incentive_days": {
+    "2026-09-01": {
+      "REWARD": 1174.3008,
+      "MAKER_REBATE": 967.2582,
+      "TAKER_REBATE": 148.2607,
+      "REDEEM": 172639.72,
+      "n": {
+        "REWARD": 1,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1,
+        "REDEEM": 478
+      },
+      "observed": true
+    },
+    "2026-09-02": {
+      "REWARD": 1502.6331,
+      "MAKER_REBATE": 1091.5817,
+      "TAKER_REBATE": 150.5352,
+      "REDEEM": 180009.33,
+      "n": {
+        "REWARD": 1,
+        "REDEEM": 426,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-03": {
+      "REWARD": 1605.5704,
+      "MAKER_REBATE": 1053.5437,
+      "TAKER_REBATE": 182.4458,
+      "REDEEM": 149809.76,
+      "n": {
+        "REDEEM": 377,
+        "REWARD": 1,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-04": {
+      "REWARD": 1158.9136,
+      "MAKER_REBATE": 803.6066,
+      "TAKER_REBATE": 197.3523,
+      "REDEEM": 174794.03,
+      "n": {
+        "REWARD": 1,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1,
+        "REDEEM": 451
+      },
+      "observed": true
+    },
+    "2026-09-05": {
+      "REWARD": 1272.5349,
+      "MAKER_REBATE": 1163.8283,
+      "TAKER_REBATE": 110.8184,
+      "REDEEM": 152749.37,
+      "n": {
+        "REWARD": 1,
+        "REDEEM": 388,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-06": {
+      "REWARD": 1515.7071,
+      "MAKER_REBATE": 1181.9176,
+      "TAKER_REBATE": 89.5764,
+      "REDEEM": 148992.36,
+      "n": {
+        "REWARD": 1,
+        "TAKER_REBATE": 1,
+        "REDEEM": 372,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-07": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1077.8461,
+      "TAKER_REBATE": 85.4691,
+      "REDEEM": 144513.08,
+      "n": {
+        "REDEEM": 330,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-08": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1228.9821,
+      "TAKER_REBATE": 67.6706,
+      "REDEEM": 161876.78,
+      "n": {
+        "REDEEM": 292,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-09": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1164.278,
+      "TAKER_REBATE": 60.8888,
+      "REDEEM": 155947.92,
+      "n": {
+        "REDEEM": 248,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-10": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1380.6088,
+      "TAKER_REBATE": 54.0004,
+      "REDEEM": 118173.38,
+      "n": {
+        "REDEEM": 182,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-22": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1104.4749,
+      "TAKER_REBATE": 50.6565,
+      "REDEEM": 180452.02,
+      "n": {
+        "REDEEM": 292,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-23": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 1347.795,
+      "TAKER_REBATE": 54.3493,
+      "REDEEM": 136440.63,
+      "n": {
+        "REDEEM": 249,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-24": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 969.5675,
+      "TAKER_REBATE": 53.9614,
+      "REDEEM": 107789.7,
+      "n": {
+        "REDEEM": 209,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    },
+    "2026-09-25": {
+      "REWARD": 0.0,
+      "MAKER_REBATE": 520.9549,
+      "TAKER_REBATE": 42.8482,
+      "REDEEM": 68303.22,
+      "n": {
+        "REDEEM": 202,
+        "TAKER_REBATE": 1,
+        "MAKER_REBATE": 1
+      },
+      "observed": true
+    }
+  },
+  "incentive_streams": {
+    "REWARD": {
+      "paying_days": [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-06"
+      ],
+      "last_paying_day": "2026-09-06",
+      "total_usd": 8229.6599
+    },
+    "MAKER_REBATE": {
+      "paying_days": [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-06",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09",
+        "2026-09-10",
+        "2026-09-22",
+        "2026-09-23",
+        "2026-09-24",
+        "2026-09-25"
+      ],
+      "last_paying_day": "2026-09-25",
+      "total_usd": 15056.2434
+    },
+    "TAKER_REBATE": {
+      "paying_days": [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-06",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09",
+        "2026-09-10",
+        "2026-09-22",
+        "2026-09-23",
+        "2026-09-24",
+        "2026-09-25"
+      ],
+      "last_paying_day": "2026-09-25",
+      "total_usd": 1348.8330999999998
+    },
+    "note": "L5's OWN credited incentive cashflows, observed in the public feed. Never netted into trading P&L, never annualized for us, and NOT evidence that any equivalent program applies to our account. A stream shows zero on a day only if that day was OBSERVED -- check `observed`."
   },
   "unavailable": {
     "maker_taker_role": "The tape carries NO execution.isAggressor field. The liquidity-role field present is CHAIN_TOPIC_POSITION (on-chain CTF topic position). No maker/taker role is claimed. Fee figures are BOUNDS.",

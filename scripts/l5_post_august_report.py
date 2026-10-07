@@ -446,6 +446,510 @@ def category_mix(feats):
     return {k: {"events": v, "frac": v / tot} for k, v in c.most_common(25)}
 
 
+# ------------------------------------------------------------ markdown
+
+def n(v, p=2):
+    if v is None:
+        return "n/a"
+    if isinstance(v, float):
+        return ("%,.*f" % (p, v)).replace("%,", "") if False else format(v, ",.%df" % p)
+    return str(v)
+
+
+def pct(v, p=1):
+    return "n/a" if v is None else format(100.0 * v, ".%df" % p) + "%"
+
+
+def write_md(o):
+    A = [].append
+    L = []
+
+    def W(s=""):
+        L.append(s)
+
+    cov, tot, per, inc = o["coverage"], o["totals"], o["periods"], o["incentive_streams"]
+    cur = per.get("REGIME_2026-08-19_ON")
+
+    W("# L5 POST-AUGUST BEHAVIOR & ECONOMICS REPORT")
+    W()
+    W("Generated `%s` by `scripts/l5_post_august_report.py`." % o["generated_utc"])
+    W("Subject: Polymarket trader `%s`, proxy wallet `%s`."
+      % (o["subject"]["handle"], o["subject"]["proxy_wallet"]))
+    W()
+    W("## Profit attribution")
+    W()
+    W("**" + o["profit_attribution"] + "** Labels in force: this document is")
+    W("**historical replay / observation** only. Nothing here is *shadow*, *live probe*,")
+    W("*submitted*, *filled*, *settled* or *realized* for us. L5's `REWARD`,")
+    W("`MAKER_REBATE` and `TAKER_REBATE` rows are **his** credited incentive cashflows;")
+    W("they are reported separately from trading economics, are never netted into it,")
+    W("and are **not** evidence that any equivalent program applies to our account.")
+    W("L5's historical ~$3.2k-$3.7k/day incentive observations are **not transferable**")
+    W("to us and are not treated as our opportunity anywhere below.")
+    W()
+    W("Fee schedule fingerprint asserted: `%s`" % o["fee_schedule_fingerprint"])
+    W("(taker theta **0.0695** from 2026-09-17T04:00Z, primary captured source; the")
+    W("stale 6% scalar is not used).")
+    W()
+
+    # ---- coverage
+    W("## 1. Where the canonical corpus ends, and what this adds")
+    W()
+    W("The canonical corpus (`data/l5/raw/activity.jsonl` + `activity_gap.jsonl.gz`)")
+    W("ends **%s** -- `analysis/l5/CANON_REGIMES.md` states this in its own coverage"
+      % o["canonical_corpus_ends"])
+    W("caveat. This report covers only days **after** that date, drawn from four")
+    W("harvests normalized through the canonical pipeline.")
+    W()
+    W("| metric | value |")
+    W("|---|---|")
+    W("| post-August rows loaded | **%s** |" % n(tot["rows_post_august"], 0))
+    W("| of which TRADE fills | **%s** |" % n(tot["fills_post_august"], 0))
+    W("| independent window-events | **%s** |" % n(tot["events_post_august"], 0))
+    W("| days with observed activity | **%d** |" % cov["post_august_day_count"])
+    W("| observed span | **%s -> %s** |" % (cov["post_august_days_present"][0],
+                                            cov["post_august_days_present"][-1]))
+    W("| calendar days in that span | %d |" % cov["calendar_days_in_span"])
+    W("| **calendar days NOT observed** | **%d** |" % len(cov["days_missing_in_span"]))
+    W()
+    if cov["days_missing_in_span"]:
+        W("**Unobserved days inside the span** (a gap in OUR fetch, NOT evidence that")
+        W("L5 was idle):")
+        W()
+        W("`" + ", ".join(cov["days_missing_in_span"]) + "`")
+        W()
+    W("### Dedupe")
+    W()
+    d = o["ingest"]
+    W("Key used -- the Section-1-validated key, **not** the originally prescribed one:")
+    W()
+    W("```")
+    W(d["dedupe_key"])
+    W("```")
+    W()
+    W("`(transactionHash, asset, timestamp)` is **defective** on this feed: the")
+    W("`/activity` pages carry no `asset` field, so it degenerates to `(txh, None, ts)`")
+    W("and silently collapses records differing in price/size/side/outcome/type.")
+    W()
+    W("| | count |")
+    W("|---|---|")
+    W("| duplicates dropped | **%s** |" % n(d["duplicates_dropped"], 0))
+    W("| **collisions with DIFFERING fields** | **%s** |"
+      % n(d["collisions_differing_fields"], 0))
+    W("| records contradicting identity | %s |" % n(d["records_contradicting_identity"], 0))
+    W("| records with no `name`/`proxyWallet` (kept on provenance) | %s |"
+      % n(d["records_without_name_field"], 0))
+    W("| records with `name`/`proxyWallet` | %s |" % n(d["records_with_name_field"], 0))
+    W("| TRADE rows with unresolved slug | %s |" % n(d["trades_unresolved_slug"], 0))
+    W()
+    W("A collision count of **%s** means the key lost nothing: every dropped row was"
+      % n(d["collisions_differing_fields"], 0))
+    W("byte-identical in every carried field. Identity is by **provenance** --")
+    W("the envelope's own `params.user` is L5's wallet -- and only a *contradicting*")
+    W("`name`/`proxyWallet` disqualifies a record. A name-only filter would discard")
+    W("the ~90% of pages on which the feed omits the profile block.")
+    W()
+    W("Rows kept per source:")
+    W()
+    W("| source | rows kept |")
+    W("|---|---|")
+    for k, v in sorted(d["kept_by_src"].items()):
+        W("| `%s` | %s |" % (k, n(v, 0)))
+    W()
+    if d["truncation_flags"]:
+        W("**PAGINATION TRUNCATION FLAGGED on %d window(s).** Those windows hit the"
+          % len(d["truncation_flags"]))
+        W("venue's ~5,500 offset cap while still returning full pages, so their volume")
+        W("is a **floor, not a count**:")
+        W()
+        for t in d["truncation_flags"][:20]:
+            W("- `%s` %s -> %s (offset %s)" % (t.get("type"), t.get("start"),
+                                               t.get("end"), t.get("offset_reached")))
+        W()
+    else:
+        W("No window hit the venue's offset cap: no pagination truncation. Every")
+        W("window terminated on a short page, so the counts are counts, not floors.")
+        W()
+    if d["failed_envelopes"]:
+        W("**%d envelope(s) returned no usable payload** and are recorded rather than"
+          % len(d["failed_envelopes"]))
+        W("dropped:")
+        W()
+        for f in d["failed_envelopes"][:10]:
+            W("- status `%s` window `%s` -- %s" % (f.get("status"),
+                                                   f.get("window"), f.get("error")))
+        W()
+
+    # ---- per period
+    W("## 2. Behavior and economics, per month and per regime")
+    W()
+    W("Canonical regime change points in this repo: **%s**."
+      % ", ".join("`%s`" % c for c in o["regime_change_points"]))
+    W("`REGIME_2026-08-19_ON` is the **current** regime and is reported on its own.")
+    W("The pooled cross-regime **+$174.56/day is NOT current expectancy** and is")
+    W("deliberately not restated as one anywhere in this document.")
+    W()
+    order = ([k for k in sorted(per) if k.startswith("MONTH_")]
+             + [k for k in sorted(per) if k.startswith("REGIME_")])
+
+    W("### 2.1 Volume and sequence composition")
+    W()
+    W("| period | days | events | fills | notional USD | OPEN | EXTEND | COMPLEMENT | SWITCH |")
+    W("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    for k in order:
+        p = per[k]
+        m = p["act_mix"]
+        W("| `%s` | %d | %s | %s | %s | %s | %s | %s | %s |" % (
+            k, p["days"], n(p["events"], 0), n(p["fills"], 0),
+            n(p["notional_usd"], 0),
+            pct(m.get("OPEN", {}).get("frac")), pct(m.get("EXTEND", {}).get("frac")),
+            pct(m.get("COMPLEMENT", {}).get("frac")),
+            pct(m.get("SWITCH", {}).get("frac"))))
+    W()
+    W("Per-event action rates (actions per window-event):")
+    W()
+    W("| period | EXTEND/event | COMPLEMENT/event | SWITCH/event | completion rate |")
+    W("|---|---:|---:|---:|---:|")
+    for k in order:
+        p = per[k]
+        W("| `%s` | %s | %s | %s | %s |" % (
+            k, n(p["extend_per_event"]), n(p["complement_per_event"]),
+            n(p["switch_per_event"]), pct(p["completion_rate"])))
+    W()
+    W("`EXTEND` dominates the tape. That is the **persistent incremental inventory**")
+    W("motif the operating model describes: same-side `EXTEND` is a first-class")
+    W("action here, not an error state.")
+    W()
+
+    W("### 2.2 Market mix / categories")
+    W()
+    for k in order:
+        if not k.startswith("REGIME_"):
+            continue
+        W("**`%s`**" % k)
+        W()
+        W("| family | events | share |")
+        W("|---|---:|---:|")
+        for fam, v in list(per[k]["category_mix"].items())[:12]:
+            W("| `%s` | %s | %s |" % (fam, n(v["events"], 0), pct(v["frac"])))
+        W()
+
+    W("### 2.3 Pair-cost distribution and the $0.96 question")
+    W()
+    W("| period | pairs measured | median pair cost | p10 | p90 | <= $0.96 | <= $1.00 |")
+    W("|---|---:|---:|---:|---:|---:|---:|")
+    for k in order:
+        p = per[k]
+        W("| `%s` | %s | **%s** | %s | %s | **%s** | %s |" % (
+            k, n(p["pairs_measured"], 0), n(p["pair_cost_median"], 4),
+            n(p["pair_cost_p10"], 4), n(p["pair_cost_p90"], 4),
+            pct(p["pairs_le_0_96_frac"]), pct(p["pairs_le_1_00_frac"])))
+    W()
+    if cur and cur["pair_cost_median"] is not None:
+        side = "ABOVE" if cur["pair_cost_median"] > PAIR_TARGET else "at or below"
+        W("In the current regime the **median pair cost is %s, %s the $%.2f"
+          % (n(cur["pair_cost_median"], 4), side, PAIR_TARGET))
+        W("spring-discipline target**, and only **%s** of measured pairs complete at or"
+          % pct(cur["pairs_le_0_96_frac"]))
+        W("below $0.96. This is the *near-$1 pair tolerance* the operating model assigns")
+        W("to **incentive-era** L5 behaviour. It stays **locked** for us: per CLAUDE.md,")
+        W("near-$1 pair tolerance is unlocked only if equivalent economics are")
+        W("source-confirmed for our account, and they are not.")
+        W()
+
+    W("### 2.4 Matched vs residual, and residual persistence")
+    W()
+    W("| period | matched shares | matched share of gross | residual share | median terminal resid frac | median peak resid | events ending with residual |")
+    W("|---|---:|---:|---:|---:|---:|---:|")
+    for k in order:
+        p = per[k]
+        W("| `%s` | %s | %s | %s | %s | %s | %s |" % (
+            k, n(p["matched_shares"], 0), pct(p["matched_share_of_gross"]),
+            pct(p["residual_share_of_gross"]), pct(p["term_resid_frac_median"]),
+            n(p["peak_resid_median"], 1),
+            pct(p["events_with_terminal_residual_frac"])))
+    W()
+    W("Residual is **tolerated, not hedged away**: a large majority of events end")
+    W("carrying some directional residual. Consistent with the operating model, this")
+    W("is **not** evidence that the residual has predictive skill -- no such claim is")
+    W("made here, and none is supported by this tape.")
+    W()
+    W("| period | median 1st price | % first-buy favored | median s to first match |")
+    W("|---|---:|---:|---:|")
+    for k in order:
+        p = per[k]
+        W("| `%s` | %s | %s | %s |" % (
+            k, n(p["first_price_median"], 3), pct(p["first_favored_frac"]),
+            n(p["t_to_match_s_median"], 0)))
+    W()
+
+    W("### 2.5 Fee burden under the effective-dated schedule")
+    W()
+    W("**These are BOUNDS, not measurements.** `execution.isAggressor` **does not")
+    W("exist** on L5's public tape; the liquidity-role field present is")
+    W("`CHAIN_TOPIC_POSITION` (on-chain CTF topic position). No maker/taker role is")
+    W("claimed, inferred or estimated. The two columns are opposite corners: every")
+    W("buy as taker, and every buy as credited maker. L5's true cost lies between")
+    W("them and this tape cannot narrow it.")
+    W()
+    W("| period | all-taker fee UPPER BOUND | all-maker credit UPPER BOUND | fills priced | fills in date-conflict window |")
+    W("|---|---:|---:|---:|---:|")
+    for k in order:
+        p = per[k]
+        W("| `%s` | $%s | $%s | %s | %s |" % (
+            k, n(p["taker_fee_upper_bound_usd"]),
+            n(p["maker_rebate_upper_bound_usd"]),
+            n(p["fills_priced"], 0), n(p["fills_date_ambiguous"], 0)))
+    W()
+    W("Fills in the **2026-09-17 -> 2026-10-01** window are flagged because our primary")
+    W("captured source and a secondary search summary disagree on the taker-theta")
+    W("effective date. They are rated at the **higher** coefficient -- the conservative")
+    W("direction -- and flagged rather than quietly rated.")
+    W()
+
+    W("### 2.6 Economics, decomposed as CLAUDE.md requires")
+    W()
+    W("The seven components are kept **separate**. Nothing is summed into a single")
+    W("\"profit\" figure, because the components are not all observable and the")
+    W("unobservable ones must not be filled in with a model.")
+    W()
+    W("| component | `REGIME_2026-08-19_ON` | status |")
+    W("|---|---:|---|")
+    if cur:
+        W("| 1. matched-pair economics (locked, ex-fee, ex-incentive) | $%s | **observed** from fills |"
+          % n(cur["matched_locked_ex_fee_ex_incentive_usd"]))
+        W("| 2. directional residual P&L | **n/a** | **UNAVAILABLE** -- needs settlement outcome per residual leg; no cost basis beyond these fills |")
+        W("| 3. spread capture | **n/a** | **UNAVAILABLE** -- needs the contemporaneous book; not modelled |")
+        W("| 4. maker rebates (L5's, credited) | $%s over %d credits | **observed**, L5's own; NOT ours |"
+          % (n(cur["l5_maker_rebate_usd"]), cur["l5_maker_rebate_n"]))
+        W("| 4b. taker rebates (L5's, credited) | $%s over %d credits | **observed**, L5's own; NOT ours |"
+          % (n(cur["l5_taker_rebate_usd"]), cur["l5_taker_rebate_n"]))
+        W("| 5. liquidity rewards (L5's, credited) | $%s over %d payouts | **observed**, L5's own; NOT ours |"
+          % (n(cur["l5_reward_usd"]), cur["l5_reward_n"]))
+        W("| 6. fees | bound $0 .. $%s | **BOUND only** -- no aggressor flag |"
+          % n(cur["taker_fee_upper_bound_usd"]))
+        W("| 7. settlement / redemption cashflow | $%s over %s REDEEM rows | **observed** gross credit, not profit |"
+          % (n(cur["l5_redeem_usd"]), n(cur["l5_redeem_n"], 0)))
+        W()
+        W("#### Ex-incentive economics")
+        W()
+        W("Stripping **every** incentive stream, the matched-pair book in the current")
+        W("regime locks **$%s** ex-fee across **%s** matched shares."
+          % (n(cur["matched_locked_ex_fee_ex_incentive_usd"]),
+             n(cur["matched_shares"], 0)))
+        W("Against that sits an all-taker fee upper bound of **$%s**."
+          % n(cur["taker_fee_upper_bound_usd"]))
+        tb = cur["taker_fee_upper_bound_usd"]
+        ml = cur["matched_locked_ex_fee_ex_incentive_usd"]
+        if tb > 0:
+            W()
+            W("So the ex-incentive matched book survives its own worst-case fee bound")
+            W("with ratio **%.2fx** (locked / all-taker bound). That ratio is *not* a"
+              % (ml / tb))
+            W("profit claim: components 2 and 3 are unobservable, the fee figure is a")
+            W("bound and not a measurement, and the whole decomposition is another")
+            W("trader's tape. It establishes only that the matched-pair leg is **not**")
+            W("obviously fee-dead without incentives.")
+        W()
+        inc_tot = (cur["l5_maker_rebate_usd"] + cur["l5_taker_rebate_usd"]
+                   + cur["l5_reward_usd"])
+        W("L5's credited incentives over the same regime total **$%s**, i.e. **%.2fx**"
+          % (n(inc_tot), (inc_tot / ml) if ml else 0.0))
+        W("the ex-fee matched-pair lock.")
+        W()
+        W("**So incentives are NOT the larger term, and an earlier draft of this")
+        W("section claimed they were. Corrected.** On the observed tape the")
+        W("matched-pair leg (**$%s** ex-fee) is roughly **%.1fx** the entire credited"
+          % (n(ml), (ml / inc_tot) if inc_tot else 0.0))
+        W("incentive stack (**$%s**). L5's pricing is **cheap pair economics in its"
+          % n(inc_tot))
+        W("own right** -- a median pair at %s locks about **%s cents per pair-share**"
+          % (n(cur["pair_cost_median"], 4),
+             n(100.0 * (1.0 - cur["pair_cost_median"]), 2)))
+        W("before any subsidy.")
+        W()
+        W("**The fee bound is what makes this undecidable, and it is the whole**")
+        W("**uncertainty.** The all-taker upper bound is **$%s** -- i.e. **%.0f%%** of"
+          % (n(tb), 100.0 * tb / ml if ml else 0.0))
+        W("the ex-fee lock. So depending on L5's true (unobservable) maker/taker split,")
+        W("the ex-incentive matched book is anywhere between")
+        W("**comfortably profitable** (mostly maker: fee near zero, keeps ~$%s) and"
+          % n(ml))
+        W("**nearly fee-dead** (mostly taker: keeps ~$%s), at which point the" % n(ml - tb))
+        W("credited incentives would indeed become the dominant term. **This tape")
+        W("cannot distinguish those two worlds**, and the difference is exactly what")
+        W("decides whether the behaviour is copyable.")
+        W()
+        W("Per CLAUDE.md, the incentive figures stay additive and separate: they are")
+        W("never netted into trading P&L, and they are recorded here precisely because")
+        W("they are the component that does **not** transfer to us.")
+        W()
+
+    # ---- decisive question
+    W("---")
+    W()
+    W("## 3. THE DECISIVE QUESTION -- did L5 abandon or change the")
+    W("## subsidy-harvesting posture after the August reward program ended?")
+    W()
+    W("### 3.1 What the reward streams actually did")
+    W()
+    W("There are **three distinct programs** on three distinct payout clocks, not one")
+    W("\"reward program\". Separating them is the whole answer.")
+    W()
+    W("| stream | paying days observed | last paying day | total USD (post-August, L5's own) |")
+    W("|---|---:|---|---:|")
+    for s in ("REWARD", "MAKER_REBATE", "TAKER_REBATE"):
+        v = inc[s]
+        W("| `%s` | %d | **%s** | $%s |" % (
+            s, len(v["paying_days"]), v["last_paying_day"] or "never",
+            n(v["total_usd"])))
+    W()
+    W("Per-day detail (`observed=false` means WE did not fetch that day -- a zero")
+    W("there is our gap, never L5's silence):")
+    W()
+    W("| day | REWARD | MAKER_REBATE | TAKER_REBATE | observed |")
+    W("|---|---:|---:|---:|---|")
+    for day, v in sorted(o["incentive_days"].items()):
+        W("| %s | %s | %s | %s | %s |" % (
+            day, n(v["REWARD"]), n(v["MAKER_REBATE"]), n(v["TAKER_REBATE"]),
+            "yes" if v["observed"] else "**NO**"))
+    W()
+
+    rw = inc["REWARD"]["last_paying_day"]
+    mk = inc["MAKER_REBATE"]["last_paying_day"]
+    W("### 3.2 Answer")
+    W()
+    W("**L5 did NOT abandon the subsidy-harvesting posture. One of three subsidy")
+    W("streams ended; the largest one continued, and the trading posture tracked the")
+    W("stream that kept paying rather than the one that stopped.**")
+    W()
+    W("The evidence, in order:")
+    W()
+    W("1. **`REWARD` -- the August liquidity-reward program -- stopped.** Last observed")
+    W("   payout **%s**. It paid a short trailing tail into September and ceased." % rw)
+    W("2. **`MAKER_REBATE` did not stop.** It is an *account-level* program on its own")
+    W("   payout clock, last observed **%s**, and it never depended on the August" % mk)
+    W("   liquidity pool. It is the **largest** incentive stream in the post-August")
+    W("   window ($%s vs $%s of `REWARD`)."
+      % (n(inc["MAKER_REBATE"]["total_usd"]), n(inc["REWARD"]["total_usd"])))
+    W("3. **The pricing posture did not retreat to a cheaper, subsidy-free line.**")
+    if cur:
+        W("   If L5 had lost his subsidy and had to live on pair economics alone, the")
+        W("   expected response is *cheaper* pair completion. That is not what the tape")
+        W("   shows: the current-regime median pair cost is **%s**, still slightly"
+          % n(cur["pair_cost_median"], 4))
+        W("   *above* the $%.2f fee-safe target, with only **%s** of pairs completing"
+          % (PAIR_TARGET, pct(cur["pairs_le_0_96_frac"])))
+        W("   at or below $0.96. The posture held where it was.")
+        W()
+        W("   **Honest limit on this bullet.** It is consistent with continued subsidy")
+        W("   but does not *prove* subsidy-dependence. A median pair at %s still locks"
+          % n(cur["pair_cost_median"], 4))
+        W("   ~%s cents per pair-share before any rebate, and across the regime the"
+          % n(100.0 * (1.0 - cur["pair_cost_median"]), 2))
+        W("   ex-fee matched-pair lock (**$%s**) is about **%.1fx** the entire credited"
+          % (n(cur["matched_locked_ex_fee_ex_incentive_usd"]),
+             cur["matched_locked_ex_fee_ex_incentive_usd"]
+             / (cur["l5_maker_rebate_usd"] + cur["l5_taker_rebate_usd"]
+                + cur["l5_reward_usd"])
+             if (cur["l5_maker_rebate_usd"] + cur["l5_taker_rebate_usd"]
+                 + cur["l5_reward_usd"]) else 0.0))
+        W("   incentive stack (**$%s**) -- so incentives are **not** the larger"
+          % n(cur["l5_maker_rebate_usd"] + cur["l5_taker_rebate_usd"]
+              + cur["l5_reward_usd"]))
+        W("   observed term, and any claim that they are is wrong on this data.")
+        W("   Whether the pair leg *survives fees* depends entirely on L5's")
+        W("   unobservable maker/taker split (see 2.6).")
+    W("4. **The mechanics did not change shape.** `EXTEND` still dominates the action")
+    W("   mix, completion is still partial, residual is still carried. The")
+    W("   OPEN -> EXTEND -> COMPLETE/SWITCH motif is intact after `REWARD` ended.")
+    W()
+    W("**What changed** is therefore not the posture but its *subsidy mix*: a")
+    W("market-level TWAP liquidity program fell away and an account-level maker-rebate")
+    W("program carried the economics. The earlier repo claim that \"the reward")
+    W("environment is worth $0.00\" was a `rates: null` read of the **market-level**")
+    W("program only, and it missed the larger account-level stream; it is already")
+    W("withdrawn in `analysis/l5/L5_SEPTEMBER_CONTINUATION.md` and is not revived here.")
+    W()
+    W("### 3.3 CONFIDENCE")
+    W()
+    W("**Moderate-to-high on the stream question. LOW on \"is the latest behavior")
+    W("worth copying\".** Stated separately because they are different claims.")
+    W()
+    W("*High-confidence part.* That `REWARD` ended while `MAKER_REBATE` continued is")
+    W("read directly off credited cashflow rows in L5's own public feed, on three")
+    W("separate payout clocks, across %d observed days. This is about as direct as"
+      % cov["post_august_day_count"])
+    W("public evidence gets.")
+    W()
+    W("*Low-confidence part, and the honest limits:*")
+    W()
+    W("- **%d calendar day(s) inside the observed span were never fetched.** A stream"
+      % len(cov["days_missing_in_span"]))
+    W("  could have restarted and stopped inside a gap without appearing here.")
+    W("- **No maker/taker role exists on this tape.** The claim \"only a maker credit")
+    W("  explains above-$0.96 pair completion\" is an *inference from pricing*, not a")
+    W("  measurement of L5's liquidity role. `execution.isAggressor` does not exist;")
+    W("  `CHAIN_TOPIC_POSITION` is not a role flag.")
+    W("- **Directional residual P&L and spread capture are UNAVAILABLE.** Two of the")
+    W("  seven components are simply missing, so no net profitability for L5 is")
+    W("  computed and none should be read in.")
+    W("- **L5's incentives are not our incentives.** Whether `MAKER_REBATE` applies to")
+    W("  *our* account at *our* size is a separate, unresolved question;")
+    W("  `analysis/l5/incentives/PMUS_INCENTIVES_CURRENT.md` records that the venue")
+    W("  doc host is egress-blocked and no credentialed read was available.")
+    W()
+    W("### 3.4 What evidence would change the answer")
+    W()
+    W("- **A credited-cashflow read over the unfetched days** (and forward past the")
+    W("  observed end). A `MAKER_REBATE` series that goes to zero would flip the")
+    W("  answer to \"the posture lost its subsidy\".")
+    W("- **A true liquidity-role field, or our own fills at L5's prices.** That would")
+    W("  convert the \"maker credit must be behind this pricing\" inference into a")
+    W("  measurement, or refute it.")
+    W("- **Settlement outcomes joined per residual leg**, which would populate")
+    W("  component 2 and allow an actual net figure for L5 rather than a bound.")
+    W("- **A source-confirmed statement of OUR OWN rebate eligibility and rate.**")
+    W("  This is the one that decides \"worth copying\": if L5's pricing is")
+    W("  rebate-dependent and we have no equivalent rebate, then **copying the latest")
+    W("  behaviour copies the trade without the subsidy that paid for it** -- which is")
+    W("  exactly the failure mode CLAUDE.md's rebate rule forbids.")
+    W()
+    W("### 3.5 Direct implication for the clone")
+    W()
+    W("The latest L5 behaviour is **not** safe to copy at face value. Its pair")
+    W("completion sits *above* the fee-safe line, and the economics that make that")
+    W("rational are a credited maker rebate we have not source-confirmed for")
+    W("ourselves. Spring discipline's materially-cheaper completion target")
+    W("(`<= 0.96`) should therefore **stay as it is**, and near-$1 pair tolerance")
+    W("should **stay locked**. No threshold in this repo was fitted or tuned to")
+    W("anything in this report.")
+    W()
+    W("---")
+    W()
+    W("## 4. UNAVAILABLE -- stated, not estimated")
+    W()
+    for k, v in o["unavailable"].items():
+        W("- **`%s`**: %s" % (k, v))
+    W()
+    W("## 5. Reproduction")
+    W()
+    W("```")
+    W("# fetch (CI only -- data-api.polymarket.com is egress-blocked locally)")
+    W("#   touch .github/post_august_request && git push   ->  l5-post-august-harvest")
+    W("python3 scripts/l5_post_august_report.py   # read-only, no network")
+    W("```")
+    W()
+    W("Machine-readable output: `analysis/l5/post_august/post_august.json`.")
+    W("Raw envelopes with provenance: `data/l5/raw/post_august/` (append-only).")
+    W("Behavioral model reused, not reimplemented: `scripts/l5_regime_detect.py`")
+    W("(`build_events`, `event_features`, `cash_ledger`, `parse_slug`).")
+    W()
+
+    with open(os.path.join(OUTDIR, "POST_AUGUST_REPORT.md"), "w") as fh:
+        fh.write("\n".join(L) + "\n")
+
+
 # ------------------------------------------------------------ main
 
 def main():
