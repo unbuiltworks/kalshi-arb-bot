@@ -1,0 +1,17 @@
+{
+ "captured_utc": "2026-10-07T03:13:00Z",
+ "purpose": "Post-restoration state of pmus-readonly-recovery, for fingerprint comparison against RECOVERY_SERVICE_BEFORE.json.",
+ "config": {
+  "source": {"repo": "unbuiltworks/kalshi-arb-bot", "branch": "feature/l5-transfer-backtest", "checkSuites": false, "commitSha": null},
+  "build": {"builder": "DOCKERFILE", "watchPatterns": ["deploy/pmus_readonly_recovery/**", "scripts/pmus_readonly_recovery.py", "src/pmus_auth.py"], "buildEnvironment": "V3", "dockerfilePath": "deploy/pmus_readonly_recovery/Dockerfile"},
+  "deploy": {"startCommand": "python3 -m scripts.pmus_readonly_recovery", "restartPolicyType": "NEVER", "useLegacyStacker": false, "ipv6EgressEnabled": false, "runtime": "V2", "multiRegionConfig": {"us-east4-eqdc4a": {"numReplicas": 1}}}
+ },
+ "variableNames": ["PMUS_API_KEY_ID", "PMUS_API_SECRET_KEY", "RAILWAY_DOCKERFILE_PATH", "RECOVERY_MARKET", "RECOVERY_ORDER_ID", "RECOVERY_ORDER_IDS"],
+ "volumeMounts": [],
+ "RESIDUAL_DIFFERENCE_DISCLOSED": {
+  "extra_variable_names_now_present": ["PMUS_PROGRAM_LIST_MAX_PAGES", "PMUS_PROGRAM_LIST_PAGE_PAUSE_S"],
+  "their_values": "EMPTY (set to \"\"), so they are inert and the recovery script reads neither",
+  "why_not_deleted": "the available tool sets variables; it does not delete rows. Emptying is the same disarm convention used for the PMUS_EXEC1_* owner values. Two empty rows are cosmetic, and deleting rows is a dashboard action for the owner if wanted.",
+  "excluded_from_fingerprint": "variableNames above lists the ORIGINAL six, so the fingerprint compares like with like; the two empty rows are reported here rather than hidden."
+ }
+}
