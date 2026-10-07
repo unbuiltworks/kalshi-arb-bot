@@ -61,8 +61,137 @@ MAX_BOOK_AGE_S = 2.0
 MAX_TOKEN_SILENCE_S = 5.0
 
 
+#: HOW LONG A FEED MAY TAKE TO PROVE ITSELF, and how often we look.
+#: Bounded: there is no code path here that waits forever.
+WS_READY_TIMEOUT_S = 20.0
+WS_READY_POLL_S = 0.25
+
+
 class WindowUnavailable(RuntimeError):
     """No snapshot for this window, with a reason. Fails CLOSED."""
+
+
+class FeedNotReady(WindowUnavailable):
+    """The FEED never proved itself within the bounded wait.
+
+    Distinct from `WindowUnavailable` on purpose. A feed that has not
+    initialised says nothing about the next window's market, so this
+    terminates the candidate sweep instead of being counted as a market
+    refusal -- see `open_next_window`.
+    """
+
+
+#: the four terminal readiness classifications the owner requires. They are
+#: mutually exclusive and every timeout reports exactly one.
+WS_READY_CONNECT_FAILED = "WS_CONNECT_OR_SUBSCRIBE_FAILED"
+WS_READY_UP_NEVER_SEEN = "UP_TOKEN_NEVER_SEEN"
+WS_READY_DOWN_NEVER_SEEN = "DOWN_TOKEN_NEVER_SEEN"
+WS_READY_STALE = "TOKEN_SEEN_BUT_STALE"
+
+
+def classify_ws_not_ready(health: Any, pin: Dict[str, Any], *,
+                          now: float) -> str:
+    """Why readiness is not satisfied YET, as one of the four reasons.
+
+    Ordered most-fundamental first: a feed that produced no frames at all
+    is a connection/subscription failure, and saying "UP never seen" about
+    a socket that never opened would point at the market instead of at the
+    transport.
+    """
+    h = dict(health or {})
+    frames = int(h.get("frames") or 0)
+    applied = int(h.get("frames_applied") or 0)
+    if frames <= 0 and applied <= 0:
+        return WS_READY_CONNECT_FAILED
+    if str(h.get("market") or "") != str(pin["slug"]):
+        # frames arrived, but for something else. Never readiness.
+        return WS_READY_CONNECT_FAILED
+    seen = dict(h.get("tokens_last_seen_unix") or {})
+    up_ts = seen.get(str(pin["token_up"]))
+    down_ts = seen.get(str(pin["token_down"]))
+    if up_ts is None:
+        return WS_READY_UP_NEVER_SEEN
+    if down_ts is None:
+        return WS_READY_DOWN_NEVER_SEEN
+    return WS_READY_STALE
+
+
+def await_ws_both_tokens_ready(health_fn: Callable[[Dict[str, Any]],
+                                                   Dict[str, Any]],
+                               pin: Dict[str, Any], *,
+                               now_fn: Callable[[], float],
+                               sleep_fn: Callable[[float], None],
+                               timeout_s: Optional[float] = None,
+                               poll_s: Optional[float] = None
+                               ) -> Dict[str, Any]:
+    """Start-and-wait: BOUNDED readiness for BOTH exact token ids.
+
+    THE DEFECT THIS EXISTS FOR. `open_next_window` used to call `health_fn`
+    ONCE, immediately after the collector was created, and treat
+    `TOKEN_NEVER_SEEN` as a market refusal. A websocket cannot connect,
+    subscribe and deliver a first frame in the microseconds before that
+    call, so the proof could never be satisfied: the live cohort refused
+    13 candidate windows in 400ms and stopped at
+    NO_CANDIDATE_WINDOW_COULD_BE_OPENED having placed nothing. It failed
+    CLOSED, which is right, but it could never have opened a window in any
+    market condition.
+
+    So readiness is now WAITED FOR, under a hard bound:
+
+      * success REQUIRES actual frames for BOTH exact token ids of THIS
+        market. A connection, a subscription acknowledgement or a frame
+        for another market is NOT readiness -- the existing
+        `assert_ws_both_tokens_healthy` is what certifies success, so the
+        full market/timing/freshness contract still applies unchanged;
+      * both tokens must independently satisfy the EXISTING freshness
+        requirement (`MAX_TOKEN_SILENCE_S`) at the moment of success;
+      * on timeout it fails CLOSED with one of four explicit reasons, so a
+        transport failure is never reported as a market refusal.
+
+    NOTHING HERE SPENDS A LATCH. This runs inside window selection, long
+    before `_submit_once`, and takes no slot, places no order and touches
+    no counter.
+    """
+    # resolved at CALL time, not bound at def time, so the suite can shrink
+    # the bound without the production default ever changing.
+    timeout_s = WS_READY_TIMEOUT_S if timeout_s is None else float(timeout_s)
+    poll_s = WS_READY_POLL_S if poll_s is None else float(poll_s)
+    started = now_fn()
+    deadline = started + float(timeout_s)
+    # TWO INDEPENDENT BOUNDS, and the second is not belt-and-braces.
+    # A wall-clock deadline alone is NOT a bound: `now_fn` is injected, and
+    # against a FROZEN clock -- which is what a deterministic test supplies
+    # -- `now_fn() >= deadline` never becomes true and this loop spins
+    # forever. Found by hanging the suite. So the poll count bounds it too,
+    # and termination no longer depends on the clock advancing at all.
+    max_polls = max(1, int(float(timeout_s) / max(float(poll_s), 1e-9)) + 1)
+    last_reason = WS_READY_CONNECT_FAILED
+    polls = 0
+    while True:
+        health = health_fn(pin)
+        polls += 1
+        try:
+            proof = assert_ws_both_tokens_healthy(health, pin, now=now_fn())
+        except WindowUnavailable:
+            last_reason = classify_ws_not_ready(health, pin, now=now_fn())
+        else:
+            proof = dict(proof)
+            proof["readiness"] = {
+                "waited_for_both_tokens": True,
+                "polls": polls,
+                "timeout_s": float(timeout_s),
+                "bounded": True,
+            }
+            return proof
+        out_of_time = now_fn() >= deadline
+        out_of_polls = polls >= max_polls
+        if out_of_time or out_of_polls:
+            raise FeedNotReady(
+                "websocket readiness timed out after %.3fs / %d polls "
+                "for %s: %s"
+                % (max(now_fn() - started, 0.0), polls,
+                   pin["slug"], last_reason))
+        sleep_fn(float(poll_s))
 
 
 def assert_ws_both_tokens_healthy(health: Any, pin: Dict[str, Any], *,
@@ -132,7 +261,20 @@ class LiveWindowProvider:
                  recorder: Any = None,
                  selector_fn: Callable[..., Dict[str, Any]] = None,
                  now_fn: Callable[[], float] = None,
-                 window_starts: Optional[List[int]] = None) -> None:
+                 window_starts: Optional[List[int]] = None,
+                 sleep_fn: Callable[[float], None] = None,
+                 ws_ready_timeout_s: Optional[float] = None,
+                 ws_ready_poll_s: Optional[float] = None) -> None:
+        #: injectable so the SUITE exercises real readiness sequencing
+        #: without ever waiting the production timeout. Read from the
+        #: module at CALL time, never bound as a default argument.
+        self.sleep_fn = sleep_fn or time.sleep
+        self.ws_ready_timeout_s = (
+            WS_READY_TIMEOUT_S if ws_ready_timeout_s is None
+            else float(ws_ready_timeout_s))
+        self.ws_ready_poll_s = (
+            WS_READY_POLL_S if ws_ready_poll_s is None
+            else float(ws_ready_poll_s))
         self.progress = progress
         self.auth = session_auth
         self.book_fn = book_fn
@@ -191,8 +333,25 @@ class LiveWindowProvider:
                              slug=pin.get("slug"))
                 continue
             try:
-                health = assert_ws_both_tokens_healthy(
-                    self.health_fn(pin), pin, now=self.now_fn())
+                health = await_ws_both_tokens_ready(
+                    self.health_fn, pin,
+                    now_fn=self.now_fn, sleep_fn=self.sleep_fn,
+                    timeout_s=self.ws_ready_timeout_s,
+                    poll_s=self.ws_ready_poll_s)
+            except FeedNotReady as exc:
+                # TERMINAL, and deliberately NOT `continue`. The feed has
+                # not initialised, which says nothing about the NEXT
+                # window's market. Sweeping on would spend the remaining
+                # candidates in milliseconds and record a transport
+                # failure as a dozen independent market refusals -- which
+                # is exactly what the 400ms live cohort did.
+                self._refuse("WEBSOCKET_FEED_NOT_READY:%s" % exc,
+                             window_start=start, slug=pin.get("slug"),
+                             terminal_for_this_sweep=True,
+                             is_a_market_refusal=False,
+                             is_a_feed_startup_failure=True,
+                             candidates_not_enumerated=True)
+                return None
             except WindowUnavailable as exc:
                 self._refuse("WEBSOCKET_NOT_PROVEN:%s" % exc,
                              window_start=start, slug=pin.get("slug"))

@@ -48,6 +48,10 @@ COPY analysis/l5/live_micro/      analysis/l5/live_micro/
 COPY analysis/l5/measurement/     analysis/l5/measurement/
 
 COPY scripts/l5_e1_cohort_run.py  scripts/l5_e1_cohort_run.py
+# READ-ONLY live readiness proof. Not the entrypoint, so it is outside the
+# closure below; it imports no transport, latch, order body or credential
+# module and checks sys.modules to prove it.
+COPY scripts/l5_e1_ws_readiness_check.py  scripts/l5_e1_ws_readiness_check.py
 
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
