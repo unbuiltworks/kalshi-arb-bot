@@ -83,10 +83,18 @@ TIMING_REST = "rest_same_second_reachability"
 #: Until SubscriptionProof.status reads PROVEN on a deployed probe this is
 #: a CANDIDATE, not a contract, and no websocket row may be treated as a
 #: strict-timing observation.
+#: 2026-10-07: the venue's OWN documentation names the market channel
+#: endpoint, and it is none of the three hosts I guessed. Two deploys of
+#: evidence before looking it up:
+#:   ws-subscribe.polymarket.com           NXDOMAIN
+#:   ws-live-data.polymarket.com           resolves, handshake 403 FROM
+#:                                         RAILWAY -- so not a proxy issue
+#:   ws-subscriptions-clob.polymarket.com  resolves, DOCUMENTED  <- this one
+#: Source: docs.polymarket.com/developers/CLOB/websocket/wss-overview
 WS_URL_CANDIDATES = (
+    "wss://ws-subscriptions-clob.polymarket.com/ws/market",
     "wss://ws-live-data.polymarket.com/ws/market",
     "wss://clob.polymarket.com/ws/market",
-    "wss://ws-live-data.polymarket.com",
 )
 DEFAULT_WS_URL = WS_URL_CANDIDATES[0]
 ENV_WS_URL = "CLOB_WS_URL"
@@ -341,7 +349,8 @@ def subscribe_payload(token_ids: Iterable[str]) -> Dict[str, Any]:
     strict-timing arm -- two sockets would reintroduce the cross-stream
     skew this module exists to remove.
     """
-    return {"assets_ids": list(token_ids), "type": "market"}
+    return {"assets_ids": list(token_ids), "type": "market",
+            "custom_feature_enabled": True}
 
 
 class SubscriptionProof:

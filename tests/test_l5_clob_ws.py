@@ -220,9 +220,12 @@ def test_the_default_url_is_only_a_candidate_until_proven():
         parsed = ws.parse_ws_url(url)
         assert parsed["secure"] is True
         assert parsed["host"].endswith("polymarket.com")
-    # The dead hostname must not come back.
-    assert not any("ws-subscribe.polymarket.com" in u
-                   for u in ws.WS_URL_CANDIDATES)
+    # The dead hostname must not come back. Checked on the exact host, not
+    # a substring: "ws-subscribe." is dead but "ws-subscriptions-clob." is
+    # the venue's documented live one, and a naive `in` test excludes both.
+    hosts = {ws.parse_ws_url(u)["host"] for u in ws.WS_URL_CANDIDATES}
+    assert "ws-subscribe.polymarket.com" not in hosts
+    assert "ws-subscriptions-clob.polymarket.com" in hosts
 
 
 def test_discovery_unpacks_the_selection_tuple(monkeypatch):
