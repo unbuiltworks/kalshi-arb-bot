@@ -294,6 +294,33 @@ DIFF: Dict[str, Any] = {
         "staleness_depends_on_silence_alone": False,
         "source_must_be_the_authenticated_ws": True,
         "a_rest_sourced_snapshot_is_refused": True,
+        # ======== BBO SEMANTICS, SETTLED FROM VENUE DATA ==============
+        # Capture: cpc-btc-updown-15m-2026-10-07-2215z at 2026-10-07
+        # T22:29:48Z, deployment dd7583fb, read-only. Fixture:
+        # analysis/l5/e1_cohort/fixtures/pmus_bbo_2026-10-07T2229Z.json
+        #
+        # THE AUTHENTICATED WEBSOCKET CARRIES NO BEST-BID FIELD. Every
+        # book frame's keys are exactly ["bids","marketSlug","offers",
+        # "state","stats","transactTime"], with bestBid and bestAsk both
+        # null. `bestBid` exists ONLY on REST /bbo. So E1's first-leg
+        # price always comes from the LADDER TOP, and the ladder's order
+        # is the only thing it rests on.
+        "ws_carries_a_best_bid_field": False,
+        "price_comes_from_the_ladder_top": True,
+        "ladder_is_ordered_best_first": True,
+        "ladder_ordering_is_assumed_rather_than_measured": False,
+        "ladder_ordering_confirmed_by": (
+            "three independent readings of one slug agreeing on 0.9900: "
+            "REST /bbo marketData.bestBid.value, REST /book "
+            "marketData.bids[0].px.value across 29 strictly descending "
+            "levels, and the authenticated websocket's own first frame"),
+        "a_nested_object_can_replace_the_top_of_book": False,
+        "yes_buy_maker_price": "the YES best bid, wire value unchanged",
+        "no_buy_maker_price": (
+            "1 - YES best ask (the NO best bid); the wire value is "
+            "1 - that = the YES best ask, because price.value is ALWAYS "
+            "the long side's price"),
+        "no_side_priced_in_no_terms_on_the_wire": False,
         "complement_is_the_arithmetic_complement_of_the_same_book": True,
         "complement_convention": "NO bid = 1 - YES ask; NO ask = 1 - YES bid",
         "complement_is_a_second_feed": False,
@@ -574,6 +601,7 @@ DIFF: Dict[str, Any] = {
             "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
             "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
             "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
+            "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
         ],
         "reasons": {
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
@@ -603,6 +631,15 @@ DIFF: Dict[str, Any] = {
                  "failed OPEN."),
             "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486":
                 ("it discovered and identified its market on POLYMARKET.COM -- gamma-api.polymarket.com plus two CTF token ids, streamed over Polymarket.com's public CLOB websocket -- and then serialized that identity into an order to api.polymarket.us, which answered \"Market not found\". It also treated an ABSENT first-leg bid as 0.00 and therefore as a cheap maker opportunity"),
+            "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920":
+                ("its websocket book parse let a NESTED OBJECT carrying a "
+                 "bids/offers key inherit the market slug and become a "
+                 "second book event, which the fold then applied LAST -- "
+                 "so a stray level could replace the authoritative top of "
+                 "book. Reproduced against the venue's real frame shape: "
+                 "bids[0] 0.9900 became stats.bids[0] 0.4900. It also "
+                 "shipped WITHOUT the `websockets` dependency, so the "
+                 "decision feed could never connect at all"),
         },
     },
 
@@ -1070,6 +1107,13 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("decision_feed."
      "complement_is_the_arithmetic_complement_of_the_same_book", True),
     ("decision_feed.complement_is_a_second_feed", False),
+    ("decision_feed.ws_carries_a_best_bid_field", False),
+    ("decision_feed.price_comes_from_the_ladder_top", True),
+    ("decision_feed.ladder_is_ordered_best_first", True),
+    ("decision_feed."
+     "ladder_ordering_is_assumed_rather_than_measured", False),
+    ("decision_feed.a_nested_object_can_replace_the_top_of_book", False),
+    ("decision_feed.no_side_priced_in_no_terms_on_the_wire", False),
     ("decision_feed.size_is_invented_when_absent", False),
     ("decision_feed.a_book_for_another_slug_is_refused", True),
     ("decision_feed.stall_and_resubscribe_semantics_are_authbooks_own",
@@ -1105,7 +1149,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "f6b4a89ffbd801deefb8bdadacc7d127b507c928cc188e6b506a1bbbbb65f8b4",
       "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
       "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
-      "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486"]),
+      "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
+      "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920"]),
     ("entrypoint.module", "scripts.l5_e1_cohort_run"),
     ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
     ("entrypoint.cohort_driver",
@@ -1204,7 +1249,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920"
+    "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

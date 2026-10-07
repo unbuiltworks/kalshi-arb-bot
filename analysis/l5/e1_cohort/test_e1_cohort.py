@@ -1954,7 +1954,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # the Polymarket.com-identity build: it ordered gamma/CTF-token
         # identity to api.polymarket.us and got "Market not found", and it
         # treated an absent first-leg bid as 0.00
-        "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486"]
+        "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
+        # the build whose WS parse let a nested object replace the top of
+        # book, and which shipped without the `websockets` dependency so
+        # the decision feed could never connect
+        "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this
