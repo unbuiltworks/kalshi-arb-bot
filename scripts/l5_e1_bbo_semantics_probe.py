@@ -337,8 +337,80 @@ def main() -> int:
                and snap.get("ask") is not None) else 3
     out["result"] = "COMPARED" if rc == 0 else "NO_TWO_SIDED_WS_BOOK"
     out["finished_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    print(json.dumps(out, indent=1, sort_keys=True, default=str))
+
+    # PERSIST FIRST, PRINT SECOND, AND PRINT COMPACTLY.
+    #
+    # The full record enumerates every numeric value in two payloads plus
+    # AuthBook's frame evidence -- hundreds of lines. Railway drops logs
+    # above 500/sec, and that is exactly how the window-3 rejection detail
+    # was lost: 5,704 lines dropped from the only copy. So the full record
+    # goes to the VOLUME, and stdout gets a summary small enough to
+    # survive.
+    out["saved_to"] = _persist(out)
+    _print_summary(out)
     return rc
+
+
+def _persist(out: Dict[str, Any]) -> Optional[str]:
+    base = os.getenv("PMUS_E1_BBO_DIR") or "/state/pmus-ws/e1_bbo_semantics"
+    try:
+        os.makedirs(base, exist_ok=True)
+        path = os.path.join(base, "bbo_semantics.%s.%s.json"
+                            % (out.get("slug", "unknown"),
+                               time.strftime("%Y%m%dT%H%M%SZ",
+                                             time.gmtime())))
+        with open(path, "w", encoding="utf8") as fh:
+            json.dump(out, fh, sort_keys=True, default=str, indent=1)
+            fh.flush()
+            os.fsync(fh.fileno())
+        return path
+    except OSError as exc:
+        return "UNSAVED:%s" % type(exc).__name__
+
+
+def _print_summary(out: Dict[str, Any]) -> None:
+    """One compact line per fact, few enough to survive the rate limit."""
+    c = out.get("comparison") or {}
+    rows = [
+        ("result", out.get("result")),
+        ("slug", out.get("slug")),
+        ("seconds_into_window", out.get("seconds_into_window")),
+        ("saved_to", out.get("saved_to")),
+        ("VERDICT", c.get("VERDICT")),
+        ("rest_bestBid", (c.get("proven_lineage") or {}).get("bid")),
+        ("rest_bestAsk", (c.get("proven_lineage") or {}).get("ask")),
+        ("ws_bid", (c.get("authbook") or {}).get("bid")),
+        ("ws_ask", (c.get("authbook") or {}).get("ask")),
+        ("ws_bid_shares", (c.get("authbook") or {}).get("bid_shares")),
+        ("ws_source", (c.get("authbook") or {}).get("source")),
+        ("bid_agrees", c.get("bid_agrees")),
+        ("ask_agrees", c.get("ask_agrees")),
+        ("skew_s", c.get("skew_s")),
+        ("distinct_unit_interval_values",
+         c.get("distinct_unit_interval_values")),
+        ("yes_buy_maker_price",
+         (c.get("yes_buy_maker_price") or {}).get("outcome_terms")),
+        ("no_buy_maker_price",
+         (c.get("no_buy_maker_price") or {}).get("outcome_terms")),
+        ("no_buy_wire_value",
+         (c.get("no_buy_maker_price") or {}).get("wire_price_value")),
+        ("complement", c.get("complement_arithmetic_against_venue_data")),
+        ("ws_health_why", (out.get("ws") or {}).get("health", {}).get("why")),
+        ("ws_book_updates",
+         ((out.get("ws") or {}).get("frame_evidence") or {})
+         .get("book_updates")),
+        ("ws_connected",
+         ((out.get("ws") or {}).get("frame_evidence") or {})
+         .get("connected")),
+        ("ws_pre_book_shapes",
+         ((out.get("ws") or {}).get("frame_evidence") or {})
+         .get("pre_book_shapes_for_this_slug")),
+        ("rest_bbo_raw", (out.get("rest") or {}).get("bbo", {}).get("raw")),
+        ("venue_post", out.get("venue_post")),
+        ("latch_touched", out.get("latch_touched")),
+    ]
+    for k, v in rows:
+        print("E1BBO %s=%s" % (k, json.dumps(v, default=str)))
 
 
 if __name__ == "__main__":
