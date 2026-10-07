@@ -631,3 +631,40 @@ def test_boot_gate_refuses_a_non_address_activity_identity():
     assert "activity_identity_is_wallet_address" in bad["blocking_failures"]
     good = bs.boot_gate(forbidden=(), l5_address=bs.L5_ADDRESS_DEFAULT)
     assert good["ok"] is True
+
+
+def test_observed_rpm_measures_issued_requests_not_the_cap():
+    """The >=240 RPM claim must be a measurement, not a configuration."""
+    clock = {"t": 1000.0}
+    pacer = bs.Pacer(max_rpm=240.0, sleep=lambda s: None,
+                     clock=lambda: clock["t"])
+    f = bs.ReadOnlyFetcher(pacer, opener=lambda *a, **k: (_ for _ in ()
+                                                          ).throw(
+        RuntimeError("no network in tests")))
+    assert f.observed_rpm() is None          # nothing issued yet
+    for _ in range(4):
+        try:
+            f.get("https://example.invalid/x")
+        except RuntimeError:
+            pass
+    assert f.requests == 4
+    assert f.observed_rpm() is not None
+
+
+def test_activity_join_proof_joins_on_the_token_id(tmp_path):
+    rows = [
+        {"kind": "book", "feed": "clob_rest_book", "token": "tokA",
+         "market": "btc-15m-x"},
+        {"kind": "l5_activity", "token": "tokA", "market": "btc-15m-x",
+         "outcome": "Up", "venue_event_time": 1_700_000_000,
+         "recv_utc": "2026-10-07T04:10:00+00:00"},
+        {"kind": "l5_activity", "token": "tokZ", "market": "never-polled"},
+    ]
+    rep = bs.activity_join_proof(rows)
+    assert rep["activity_rows"] == 2
+    assert rep["joined_any"] is True
+    assert rep["joined_examples"][0]["activity_token"] == "tokA"
+    assert rep["joined_examples"][0]["market_slugs_agree"] is True
+    # An unjoined row is reported, never silently dropped.
+    assert rep["activity_rows_without_a_recorded_book"] == 1
+    assert "NOT that the book was unchanged" in rep["MEANING"]

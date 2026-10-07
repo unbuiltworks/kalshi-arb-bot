@@ -419,6 +419,19 @@ class ReadOnlyFetcher:
         self.requests = 0
         self.errors = 0
         self.rate_limited = 0
+        #: First-request monotonic stamp, so the heartbeat can report the
+        #: rate ACTUALLY ISSUED rather than the ceiling the pacer was
+        #: configured with. A cap is an intention; this is a measurement.
+        self._first_request_mono: Optional[float] = None
+
+    def observed_rpm(self) -> Optional[float]:
+        """Requests actually issued per minute since the first request."""
+        if self._first_request_mono is None or self.requests < 2:
+            return None
+        elapsed = time.monotonic() - self._first_request_mono
+        if elapsed <= 0:
+            return None
+        return 60.0 * self.requests / elapsed
 
     @staticmethod
     def _ctx() -> ssl.SSLContext:
@@ -436,6 +449,8 @@ class ReadOnlyFetcher:
             url = "%s?%s" % (url, urllib.parse.urlencode(params))
         self.pacer.wait()
         req = urllib.request.Request(url, headers=dict(UA), method="GET")
+        if self._first_request_mono is None:
+            self._first_request_mono = time.monotonic()
         self.requests += 1
         try:
             with self._opener(req, timeout=timeout,
@@ -774,6 +789,58 @@ def token_coverage(rows: Iterable[Mapping[str, Any]]) -> Dict[str, dict]:
     return acc
 
 
+def activity_join_proof(rows: Iterable[Mapping[str, Any]],
+                        limit: int = 5) -> Dict[str, Any]:
+    """Can a real L5 activity item be joined to a book we actually recorded?
+
+    READ-ONLY over the tape. The join key is the venue's own token id, and
+    the market slug is reported alongside as corroboration -- it is never
+    the key, because a slug is a label and a token id is an identity.
+
+    This answers the live-proof requirement directly: an activity row whose
+    token appears in a book row we recorded is a joined observation; one
+    whose token we never polled is honestly reported as unjoined rather
+    than silently dropped.
+    """
+    book_tokens: Dict[str, str] = {}
+    for r in rows:
+        if r.get("kind") == "book" or r.get("feed") == "clob_rest_book":
+            tok = r.get("token")
+            if isinstance(tok, str) and tok:
+                book_tokens[tok] = str(r.get("market") or "")
+    joined: List[dict] = []
+    unjoined = 0
+    total = 0
+    for r in rows:
+        if r.get("kind") != "l5_activity":
+            continue
+        total += 1
+        tok = r.get("token")
+        if isinstance(tok, str) and tok in book_tokens:
+            if len(joined) < limit:
+                joined.append({
+                    "activity_token": tok,
+                    "activity_market": r.get("market"),
+                    "book_market": book_tokens[tok],
+                    "activity_outcome": r.get("outcome"),
+                    "venue_event_time": r.get("venue_event_time"),
+                    "activity_recv_utc": r.get("recv_utc"),
+                    "market_slugs_agree": (str(r.get("market") or "")
+                                           == book_tokens[tok]),
+                })
+        else:
+            unjoined += 1
+    return {
+        "activity_rows": total,
+        "joined_examples": joined,
+        "joined_any": bool(joined),
+        "activity_rows_without_a_recorded_book": unjoined,
+        "join_key": "venue token id (asset); slug is corroboration only",
+        "MEANING": "An unjoined activity row means we did not poll that "
+                   "token's book, NOT that the book was unchanged.",
+    }
+
+
 def defective_markets(rows: Iterable[Mapping[str, Any]]) -> List[str]:
     """Markets whose tape cannot answer the question: fewer than two token
     identities recorded."""
@@ -1033,6 +1100,9 @@ class BookShadowCollector:
             "pacer_interval_s": round(self.pacer.interval_s, 4),
             "pacer_worst_case_rpm": round(self.pacer.worst_case_rpm(), 1),
             "scheduled_rpm": round(self.scheduled_rpm(), 1),
+            "observed_rpm": (None if self.http.observed_rpm() is None
+                             else round(self.http.observed_rpm(), 1)),
+            "requests_issued": self.http.requests,
             "credentials_present": credential_presence(),
             "orders_submitted": 0,
             "venue_mutations": 0,
@@ -1042,15 +1112,22 @@ class BookShadowCollector:
             {k: row[k] for k in ("uptime_s", "cycles", "markets",
                                  "tokens_tracked", "rows_per_stream",
                                  "single_token_markets", "http_429",
-                                 "scheduled_rpm", "pacer_worst_case_rpm")},
+                                 "scheduled_rpm", "observed_rpm",
+                                 "requests_issued",
+                                 "pacer_worst_case_rpm")},
             sort_keys=True))
         return row
 
     def write_coverage_view(self) -> Path:
         """A DERIVED view, in its own file, computed from the raw tape. The
         raw parts are never touched."""
+        rows = self.tape.read_all()
+        #: Two derived views, both computed FROM the raw tape, both in
+        #: their own file. Nothing in raw/ is read for anything but reading.
+        self.tape.write_derived("activity_join_proof.json",
+                                activity_join_proof(rows))
         return self.tape.write_derived(
-            "token_coverage.json", verify_both_tokens(self.tape.read_all()))
+            "token_coverage.json", verify_both_tokens(rows))
 
     # -- run ------------------------------------------------------------
     def run(self, minutes: float = 0.0,
