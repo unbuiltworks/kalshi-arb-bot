@@ -46,9 +46,24 @@ WORKDIR /app
 # `PreviewRejected` in 20.8 ms, recorded as VENUE_ERROR_STORM against a
 # venue that had never been contacted.
 #
-# PINNED to the version the test suite actually runs against, so "green
-# locally" and "works in the image" are claims about the same library.
-RUN pip install --no-cache-dir cryptography==49.0.0
+# THE SAME DEFECT, A SECOND TIME, FOUND BY THE BBO PROBE.
+# `src/l5_pmus_auth_book.py` does `import websockets` INSIDE `_run()` --
+# again lazy, again invisible to the build-time import assertion below --
+# and `websockets` was not in this image. The AuthBook thread therefore
+# died on its first line the moment E1's decision feed was started:
+#
+#   Exception in thread auth-book: ModuleNotFoundError: No module named
+#   'websockets'   (deployment cc131f76, 2026-10-07T22:19:53Z)
+#
+# E1 would have failed CLOSED -- no connected book, so health() refuses
+# and no window ever opens -- but it could never have traded either, and
+# the disarmed validation could not see it because a disarmed boot never
+# starts the feed. Sibling images (pmus_ws_recorder, l5_window_collector,
+# pmus_ws_book_diag) have always installed it; this one did not.
+#
+# PINNED to the versions the test suite actually runs against, so "green
+# locally" and "works in the image" are claims about the same libraries.
+RUN pip install --no-cache-dir cryptography==49.0.0 websockets==17.2
 
 COPY src/__init__.py              src/__init__.py
 COPY src/l5_order_body.py         src/l5_order_body.py
@@ -132,6 +147,16 @@ ENV PYTHONUNBUFFERED=1
 RUN python3 -c "import scripts.l5_e1_cohort_run as m; \
 from analysis.l5.e1_cohort.spec import E1_FINGERPRINT, assert_frozen; \
 assert_frozen(); print('BUILD OK fingerprint', E1_FINGERPRINT)"
+
+# BUILD-TIME PROOF THAT THE LAZY IMPORTS RESOLVE.
+#
+# Neither `cryptography` nor `websockets` is imported at module scope by
+# anything E1's entrypoint loads, so the import assertion below passes
+# with both absent. Both have now shipped missing, once each. So the
+# build imports them BY NAME, exactly as the lazy call sites do.
+RUN python3 -c "import websockets, cryptography; \
+print('BUILD OK lazy imports', websockets.__version__, \
+cryptography.__version__)"
 
 # BUILD-TIME PROOF THAT THE SECOND ORDER-CAPABLE STACK IS INERT.
 #

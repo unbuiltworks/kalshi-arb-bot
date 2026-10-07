@@ -164,3 +164,97 @@ def test_namespace_packages_are_created():
         body = fh.read()
     for pkg in ("scripts/__init__.py", "analysis/__init__.py", "analysis/l5/__init__.py"):
         assert pkg in body, pkg
+
+
+# ============ THE LAZY-IMPORT CLASS OF DEFECT, CLOSED =================
+#
+# TWICE NOW a third-party module has shipped missing from this image
+# because its import is LAZY -- inside a function, not at module scope --
+# so `test_dockerfile_copies_every_imported_module` and the Dockerfile's
+# own import assertion both pass with it absent:
+#
+#   * `cryptography`, imported inside `pmus_auth.signed_headers`. The
+#     first authenticated request is the PREVIEW, so the failure surfaced
+#     as five PreviewRejected in 20.8 ms and was recorded as a
+#     VENUE_ERROR_STORM against a venue that had never been contacted.
+#   * `websockets`, imported inside `l5_pmus_auth_book.AuthBook._run`.
+#     The auth-book thread died on its first line, so E1's decision feed
+#     could never connect. It fails CLOSED, but it also could never have
+#     traded, and a DISARMED validation cannot see it because a disarmed
+#     boot never starts the feed.
+#
+# So the closure test now looks for LAZY imports too, and requires each
+# third-party module they name to be installed by the Dockerfile.
+
+#: third-party distributions the image installs, by import name.
+THIRD_PARTY_INSTALLED = ("cryptography", "websockets")
+
+
+def lazy_third_party_imports():
+    """{module_name: [where it is imported]} for every import inside a
+    function body anywhere in the entrypoint's transitive closure."""
+    import ast
+    import os
+    import sys
+    found = {}
+    for rel in sorted(import_closure()):
+        path = os.path.join(REPO_ROOT, rel)
+        if not os.path.exists(path):
+            continue
+        tree = ast.parse(open(path, encoding="utf8").read())
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for node in ast.walk(fn):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [a.name.split(".")[0] for a in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module \
+                        and node.level == 0:
+                    names = [node.module.split(".")[0]]
+                for n in names:
+                    if n in sys.stdlib_module_names or n in ("src",
+                                                             "analysis",
+                                                             "scripts"):
+                        continue
+                    found.setdefault(n, []).append(
+                        "%s:%s" % (rel, getattr(fn, "name", "?")))
+    return found
+
+
+def test_every_lazily_imported_third_party_module_is_installed():
+    """A lazy import is still a dependency. The image must install it."""
+    lazy = lazy_third_party_imports()
+    with open(DOCKERFILE, encoding="utf8") as fh:
+        dockerfile = fh.read()
+    missing = {}
+    for mod, sites in sorted(lazy.items()):
+        if mod not in dockerfile:
+            missing[mod] = sites
+    assert not missing, (
+        "these third-party modules are imported lazily inside E1's "
+        "closure but the Dockerfile never installs them, so the image "
+        "will fail at the call site and not at build: %r" % (missing,))
+
+
+def test_the_two_modules_that_have_already_shipped_missing_are_pinned():
+    """Named explicitly, so a refactor that drops either one fails HERE
+    rather than at 02:00 with a window at stake."""
+    with open(DOCKERFILE, encoding="utf8") as fh:
+        dockerfile = fh.read()
+    for mod in THIRD_PARTY_INSTALLED:
+        assert mod in dockerfile, mod
+    # pinned to an exact version, not a floor
+    assert "cryptography==49.0.0" in dockerfile
+    assert "websockets==17.2" in dockerfile
+    # and the build PROVES both resolve, because the import assertion
+    # cannot: a lazy import is invisible to it
+    assert "BUILD OK lazy imports" in dockerfile
+
+
+def test_both_lazily_imported_modules_actually_import_here():
+    """The suite must run against the same libraries the image has, or
+    'green locally' says nothing about the container."""
+    import importlib
+    for mod in THIRD_PARTY_INSTALLED:
+        importlib.import_module(mod)
