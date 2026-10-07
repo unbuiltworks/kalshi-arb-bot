@@ -1,18 +1,42 @@
 # BOOK_ONLY_ACTIVITY_UNAVAILABLE — exact window
 
-**Status:** CLOSED pending the live-proof row (`end_utc` below is filled
-from the collector's own `activity_availability` CLOSE row, not from this
-file).
+**Status:** CLOSED. Both edges are source-backed: the start from the live
+log, the end from the collector's own `activity_availability` CLOSE row on
+the tape. Neither is asserted by this file.
 
-## The window
+## The window — TWO bounds, and the difference matters
 
 | field | value |
 |---|---|
 | label | `BOOK_ONLY_ACTIVITY_UNAVAILABLE` |
-| start (UTC) | **2026-10-07T03:33:10Z** — first `activity poll failed` after the collector's first boot (deployment `2aa5cb96`) |
-| end (UTC) | **first successful activity poll on deployment pinned to `fd76be5a2`** — recorded on the tape as `kind="activity_availability", edge="CLOSE"` |
-| books during the window | **HEALTHY AND UNAFFECTED.** Two-token book rows continued throughout; `single_token_markets: []`, `http_429: 0` |
-| activity during the window | **ZERO rows, and ZERO is UNMEASURED** |
+| **true start (UTC)** | **2026-10-07T03:33:10Z** — first observed `activity poll failed`, deployment `2aa5cb96` |
+| machine-readable start on the tape | `2026-10-07T04:03:01.867925Z` — deployment `b08498b1` |
+| **end (UTC)** | **2026-10-07T04:17:51.286224Z** — `activity_availability` CLOSE edge, deployment `fb8a9444`, `closed: true` |
+| true duration | **44 min 41 s** |
+| duration the tape's own interval covers | 14 min 49 s |
+| **UNRECORDED LEADING GAP** | **03:33:10Z → 04:03:01.868Z, 29 min 52 s** |
+
+### Read this before using the derived file
+
+`derived/activity_windows.json` **understates this outage by 29 min 52 s.**
+The OPEN edge could not be written before the code that writes it existed:
+the observability change shipped at 04:03, so the first ~30 minutes of
+failure were recorded only as individual log lines, with no
+`activity_error` rows and no OPEN edge on the tape.
+
+This is the exact failure mode the label exists to prevent, occurring in
+the instrument rather than the data. Stating it here is the correction;
+the tape is append-only and will not be rewritten to manufacture rows
+that were never observed.
+
+**Therefore: exclude `2026-10-07T03:33:10Z → 2026-10-07T04:17:51.286Z`,
+the TRUE bound above — not the narrower interval the derived file
+reports.**
+
+| | |
+|---|---|
+| books during the whole window | **HEALTHY AND UNAFFECTED** — two-token rows continued throughout; `single_token_markets: []`, `http_429: 0` |
+| activity during the whole window | **ZERO rows, and ZERO is UNMEASURED** |
 
 ## The rule this file exists to enforce
 

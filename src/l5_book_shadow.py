@@ -1182,6 +1182,14 @@ class BookShadowCollector:
             "requests_issued": self.http.requests,
             "activity_windows": activity_windows(
                 self.tape.read_all())["intervals"],
+            #: Proof item: a real L5 activity row joined to a book we
+            #: actually recorded. Surfaced in the log because a proof that
+            #: only exists on an unreadable volume proves nothing.
+            "activity_join": {
+                k: v for k, v in
+                activity_join_proof(self.tape.read_all()).items()
+                if k in ("activity_rows", "joined_any",
+                         "activity_rows_without_a_recorded_book")},
             "credentials_present": credential_presence(),
             "orders_submitted": 0,
             "venue_mutations": 0,
@@ -1191,7 +1199,7 @@ class BookShadowCollector:
             {k: row[k] for k in ("uptime_s", "cycles", "markets",
                                  "tokens_tracked", "rows_per_stream",
                                  "single_token_markets", "http_429",
-                                 "activity_windows",
+                                 "activity_windows", "activity_join",
                                  "scheduled_rpm", "observed_rpm",
                                  "requests_issued",
                                  "pacer_worst_case_rpm")},

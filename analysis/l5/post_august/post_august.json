@@ -1,0 +1,337 @@
+{
+  "generated_utc": "2026-10-07T04:24:37.752922+00:00",
+  "subject": {
+    "handle": "l5Zn1bWoM8eTsK",
+    "proxy_wallet": "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
+  },
+  "profit_attribution": "NONE. Another trader's public activity. No figure here is submitted, filled, settled or realized profit for our account.",
+  "fee_schedule_fingerprint": "ecc240bd8a63b668e0bdbde872c6a3ebd9897b18781443bbeffd3ae61ca91629",
+  "canonical_corpus_ends": "2026-08-31",
+  "regime_change_points": [
+    "2026-04-25",
+    "2026-06-23",
+    "2026-08-19"
+  ],
+  "ingest": {
+    "sources": {
+      "sep2026:l5_activity_sep2026_raw.json.gz": 144394,
+      "sep2026:l5_activity_sep2223_raw.json.gz": 16982,
+      "sep2325:l5_sep23_25_daily.json": 17074
+    },
+    "records_seen": 184551,
+    "records_malformed": 0,
+    "records_bad_numeric": 0,
+    "records_with_name_field": 184551,
+    "records_without_name_field": 0,
+    "records_contradicting_identity": 0,
+    "records_nonhex_conditionid": 36,
+    "records_empty_slug": 34,
+    "trades_unresolved_slug": 0,
+    "trades_unresolved_epoch": 0,
+    "trades_bad_numeric": 0,
+    "duplicates_dropped": 6101,
+    "collisions_differing_fields": 0,
+    "collision_examples": [],
+    "dup_by_pair": {
+      "sep2026:l5_activity_sep2223_raw.json.gz|sep2325:l5_sep23_25_daily.json": 6101
+    },
+    "type_counts": {
+      "TRADE": 173920,
+      "REDEEM": 4496,
+      "MAKER_REBATE": 14,
+      "TAKER_REBATE": 14,
+      "REWARD": 6
+    },
+    "kept_by_src": {
+      "sep2026:l5_activity_sep2026_raw.json.gz": 144394,
+      "sep2026:l5_activity_sep2223_raw.json.gz": 16982,
+      "sep2325:l5_sep23_25_daily.json": 17074
+    },
+    "envelopes": {},
+    "envelope_statuses": {},
+    "failed_envelopes": [],
+    "truncation_flags": [],
+    "dedupe_key": "(transactionHash, conditionId, outcomeIndex, timestamp, str(price), str(size), type)"
+  },
+  "coverage": {
+    "post_august_days_present": [
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+      "2026-09-06",
+      "2026-09-07",
+      "2026-09-08",
+      "2026-09-09",
+      "2026-09-10",
+      "2026-09-22",
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25"
+    ],
+    "post_august_day_count": 14,
+    "calendar_span": [
+      "2026-09-01",
+      "2026-09-25"
+    ],
+    "calendar_days_in_span": 25,
+    "days_missing_in_span": [
+      "2026-09-11",
+      "2026-09-12",
+      "2026-09-13",
+      "2026-09-14",
+      "2026-09-15",
+      "2026-09-16",
+      "2026-09-17",
+      "2026-09-18",
+      "2026-09-19",
+      "2026-09-20",
+      "2026-09-21"
+    ],
+    "events_per_day": {
+      "2026-09-01": 541,
+      "2026-09-02": 470,
+      "2026-09-03": 436,
+      "2026-09-04": 490,
+      "2026-09-05": 470,
+      "2026-09-06": 459,
+      "2026-09-07": 423,
+      "2026-09-08": 376,
+      "2026-09-09": 328,
+      "2026-09-10": 227,
+      "2026-09-22": 375,
+      "2026-09-23": 326,
+      "2026-09-24": 269,
+      "2026-09-25": 256
+    },
+    "fills_per_day": {
+      "2026-09-01": 16620,
+      "2026-09-02": 16766,
+      "2026-09-03": 12982,
+      "2026-09-04": 15793,
+      "2026-09-05": 15506,
+      "2026-09-06": 13814,
+      "2026-09-07": 13448,
+      "2026-09-08": 12607,
+      "2026-09-09": 12917,
+      "2026-09-10": 10371,
+      "2026-09-22": 10584,
+      "2026-09-23": 9599,
+      "2026-09-24": 7516,
+      "2026-09-25": 5397
+    }
+  },
+  "totals": {
+    "rows_loaded_all": 178450,
+    "rows_post_august": 178450,
+    "fills_post_august": 173920,
+    "events_post_august": 5446
+  },
+  "periods": {
+    "MONTH_2026-09": {
+      "days": 14,
+      "day_first": "2026-09-01",
+      "day_last": "2026-09-25",
+      "events": 5446,
+      "fills": 173920,
+      "notional_usd": 2061012.7668740046,
+      "matched_shares": 1870637.4442589995,
+      "matched_notional_usd": 1805692.2414161994,
+      "matched_locked_ex_fee_ex_incentive_usd": 64945.202842798055,
+      "pair_cost_median": 0.9650993076291614,
+      "pair_cost_p10": 0.7765365136206126,
+      "pair_cost_p90": 1.2315102311240185,
+      "pairs_measured": 3016,
+      "pairs_le_0_96": 1430,
+      "pairs_le_0_96_frac": 0.47413793103448276,
+      "pairs_le_1_00_frac": 0.6555039787798409,
+      "matched_share_of_gross": 0.8522851314121185,
+      "residual_share_of_gross": 0.14771486858788152,
+      "term_resid_frac_median": 0.620327121869146,
+      "peak_resid_median": 80.0,
+      "events_with_terminal_residual_frac": 0.9876973925817113,
+      "spread_capture_usd": null,
+      "l5_maker_rebate_usd": 15056.2434,
+      "l5_taker_rebate_usd": 1348.8330999999998,
+      "l5_reward_usd": 8229.6599,
+      "l5_maker_rebate_n": 14,
+      "l5_taker_rebate_n": 14,
+      "l5_reward_n": 6,
+      "taker_fee_upper_bound_usd": 43603.80609999799,
+      "maker_rebate_upper_bound_usd": 8754.836200000751,
+      "fills_priced": 173920,
+      "fills_date_ambiguous": 33096,
+      "fills_unpriceable": 0,
+      "l5_redeem_usd": 2052491.2890600003,
+      "l5_redeem_n": 4496,
+      "act_mix": {
+        "EXTEND": {
+          "n": 122617,
+          "frac": 0.7050195492180312
+        },
+        "COMPLEMENT": {
+          "n": 27465,
+          "frac": 0.1579174333026679
+        },
+        "SWITCH": {
+          "n": 18392,
+          "frac": 0.10574977000919963
+        },
+        "OPEN": {
+          "n": 5446,
+          "frac": 0.031313247470101196
+        }
+      },
+      "extend_per_event": 22.515056922511935,
+      "switch_per_event": 3.377157546823357,
+      "complement_per_event": 5.043150936467132,
+      "completion_rate": 0.5538009548292324,
+      "t_to_match_s_median": 54.0,
+      "first_price_median": 0.58,
+      "first_favored_frac": 0.654425266250459,
+      "first_tte_s_median": 237.0,
+      "mean_size_median": 30.2925,
+      "notional_per_event": 378.4452381333097,
+      "category_mix": {
+        "crypto_updown:BTC/5m": {
+          "events": 2601,
+          "frac": 0.47759823723834005
+        },
+        "crypto_updown:BTC/15m": {
+          "events": 1189,
+          "frac": 0.2183253764230628
+        },
+        "crypto_updown:ETH/5m": {
+          "events": 1119,
+          "frac": 0.2054719059860448
+        },
+        "crypto_updown:ETH/15m": {
+          "events": 537,
+          "frac": 0.09860448035255233
+        }
+      },
+      "days_represented": [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-06",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09",
+        "2026-09-10",
+        "2026-09-22",
+        "2026-09-23",
+        "2026-09-24",
+        "2026-09-25"
+      ]
+    },
+    "REGIME_2026-08-19_ON": {
+      "days": 14,
+      "day_first": "2026-09-01",
+      "day_last": "2026-09-25",
+      "events": 5446,
+      "fills": 173920,
+      "notional_usd": 2061012.7668740046,
+      "matched_shares": 1870637.4442589995,
+      "matched_notional_usd": 1805692.2414161994,
+      "matched_locked_ex_fee_ex_incentive_usd": 64945.202842798055,
+      "pair_cost_median": 0.9650993076291614,
+      "pair_cost_p10": 0.7765365136206126,
+      "pair_cost_p90": 1.2315102311240185,
+      "pairs_measured": 3016,
+      "pairs_le_0_96": 1430,
+      "pairs_le_0_96_frac": 0.47413793103448276,
+      "pairs_le_1_00_frac": 0.6555039787798409,
+      "matched_share_of_gross": 0.8522851314121185,
+      "residual_share_of_gross": 0.14771486858788152,
+      "term_resid_frac_median": 0.620327121869146,
+      "peak_resid_median": 80.0,
+      "events_with_terminal_residual_frac": 0.9876973925817113,
+      "spread_capture_usd": null,
+      "l5_maker_rebate_usd": 15056.2434,
+      "l5_taker_rebate_usd": 1348.8330999999998,
+      "l5_reward_usd": 8229.6599,
+      "l5_maker_rebate_n": 14,
+      "l5_taker_rebate_n": 14,
+      "l5_reward_n": 6,
+      "taker_fee_upper_bound_usd": 43603.80609999799,
+      "maker_rebate_upper_bound_usd": 8754.836200000751,
+      "fills_priced": 173920,
+      "fills_date_ambiguous": 33096,
+      "fills_unpriceable": 0,
+      "l5_redeem_usd": 2052491.2890600003,
+      "l5_redeem_n": 4496,
+      "act_mix": {
+        "EXTEND": {
+          "n": 122617,
+          "frac": 0.7050195492180312
+        },
+        "COMPLEMENT": {
+          "n": 27465,
+          "frac": 0.1579174333026679
+        },
+        "SWITCH": {
+          "n": 18392,
+          "frac": 0.10574977000919963
+        },
+        "OPEN": {
+          "n": 5446,
+          "frac": 0.031313247470101196
+        }
+      },
+      "extend_per_event": 22.515056922511935,
+      "switch_per_event": 3.377157546823357,
+      "complement_per_event": 5.043150936467132,
+      "completion_rate": 0.5538009548292324,
+      "t_to_match_s_median": 54.0,
+      "first_price_median": 0.58,
+      "first_favored_frac": 0.654425266250459,
+      "first_tte_s_median": 237.0,
+      "mean_size_median": 30.2925,
+      "notional_per_event": 378.4452381333097,
+      "category_mix": {
+        "crypto_updown:BTC/5m": {
+          "events": 2601,
+          "frac": 0.47759823723834005
+        },
+        "crypto_updown:BTC/15m": {
+          "events": 1189,
+          "frac": 0.2183253764230628
+        },
+        "crypto_updown:ETH/5m": {
+          "events": 1119,
+          "frac": 0.2054719059860448
+        },
+        "crypto_updown:ETH/15m": {
+          "events": 537,
+          "frac": 0.09860448035255233
+        }
+      },
+      "days_represented": [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-06",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09",
+        "2026-09-10",
+        "2026-09-22",
+        "2026-09-23",
+        "2026-09-24",
+        "2026-09-25"
+      ]
+    }
+  },
+  "unavailable": {
+    "maker_taker_role": "The tape carries NO execution.isAggressor field. The liquidity-role field present is CHAIN_TOPIC_POSITION (on-chain CTF topic position). No maker/taker role is claimed. Fee figures are BOUNDS.",
+    "spread_capture": "Requires the contemporaneous book, which this feed does not carry. UNAVAILABLE -- not modelled.",
+    "order_placements_and_cancels": "Not public. Patience-in-book UNAVAILABLE.",
+    "l5_pnl": "No cost basis beyond these fills; settlement credit for events outside the fetch span UNAVAILABLE."
+  }
+}
