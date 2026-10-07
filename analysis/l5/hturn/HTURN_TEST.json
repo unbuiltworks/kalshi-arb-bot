@@ -483,24 +483,27 @@
   },
   "HEADLINE": {
    "persistence_auc": 0.5,
-   "best_EX_ANTE_BOOK_feature": [
-    0.048699999999999966,
-    "pre_mint_sum",
-    0.5487,
-    [
+   "best_EX_ANTE_BOOK_feature": {
+    "feature": "pre_mint_sum",
+    "stratified_auc": 0.5487,
+    "raw_auc": 0.5265,
+    "abs_lift_over_persistence": 0.0487,
+    "raw_auc_cluster_ci95": [
      0.4962,
      0.5619
     ]
-   ],
-   "best_FILL_HISTORY_feature": [
-    0.05910000000000004,
-    "prev_size",
-    0.5591,
-    [
+   },
+   "best_FILL_HISTORY_feature": {
+    "feature": "prev_size",
+    "stratified_auc": 0.5591,
+    "raw_auc": 0.6114,
+    "abs_lift_over_persistence": 0.0591,
+    "raw_auc_cluster_ci95": [
      0.5829,
      0.6422
     ]
-   ]
+   },
+   "ci_note": "`raw_auc_cluster_ci95` is the window-clustered bootstrap of the RAW (unstratified) AUC; the point estimate beside it is the STRATIFIED AUC. They are different estimators and are not to be read as a point estimate with its own interval."
   },
   "contingency_unmatched": {
    "pre_obtainable_sub1": {
@@ -1164,24 +1167,27 @@
   },
   "HEADLINE": {
    "persistence_auc": 0.5,
-   "best_EX_ANTE_BOOK_feature": [
-    0.048699999999999966,
-    "pre_mint_sum",
-    0.5487,
-    [
+   "best_EX_ANTE_BOOK_feature": {
+    "feature": "pre_mint_sum",
+    "stratified_auc": 0.5487,
+    "raw_auc": 0.5265,
+    "abs_lift_over_persistence": 0.0487,
+    "raw_auc_cluster_ci95": [
      0.4962,
      0.5619
     ]
-   ],
-   "best_FILL_HISTORY_feature": [
-    0.05910000000000004,
-    "prev_size",
-    0.5591,
-    [
+   },
+   "best_FILL_HISTORY_feature": {
+    "feature": "prev_size",
+    "stratified_auc": 0.5591,
+    "raw_auc": 0.6114,
+    "abs_lift_over_persistence": 0.0591,
+    "raw_auc_cluster_ci95": [
      0.5829,
      0.6422
     ]
-   ]
+   },
+   "ci_note": "`raw_auc_cluster_ci95` is the window-clustered bootstrap of the RAW (unstratified) AUC; the point estimate beside it is the STRATIFIED AUC. They are different estimators and are not to be read as a point estimate with its own interval."
   },
   "contingency_unmatched": {
    "pre_obtainable_sub1": {

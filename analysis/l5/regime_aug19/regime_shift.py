@@ -862,6 +862,226 @@ def fee_by_slug(records: Iterable[Dict[str, Any]],
     return dict(out)
 
 
+#: The DOCUMENTED venue change nearest the final regime boundary: Polymarket
+#: moved crypto up/down markets to TWAP settlement and attached a $1,000,000
+#: August liquidity-reward pool on this date (see
+#: analysis/l5/AUGUST8_PROGRAM_EVENT_STUDY.md; L5's first-ever REWARD credit
+#: is the following day). It is used ONLY to cut a disclosed diagnostic
+#: sub-window inside the canonical third regime, so that "did the metric move
+#: at the program change or at the detected boundary?" can be answered. It is
+#: NOT a change point, is never fitted, and never replaces or moves one.
+DOCUMENTED_PROGRAM_CHANGE = dt.date(2026, 8, 7)
+
+
+def residual_quality(obs: Sequence[EventObservables],
+                     outs: Sequence[EventOutcome],
+                     change_points: Sequence[str] = CANON_CHANGE_POINTS,
+                     ) -> Dict[str, Any]:
+    """Why the residual term moved: exposure vs realized quality.
+
+    Per regime and per settlement stratum, all normalised by turnover so the
+    5x change in scale does not confound:
+      resid_cost_bp    the directional leg's cost basis, bp of turnover
+      resid_payout_bp  what settlement actually paid on it, bp of turnover
+      resid_net_bp     the difference -- the drag itself
+      resid_entry_vwap his own average entry price on the residual leg
+                       (CONTEMPORANEOUS)
+      share_weighted_hit_rate   payout per residual share (SETTLEMENT)
+      hit_minus_entry_price     the per-share edge; 0 means the residual was
+                                priced fairly in hindsight
+    """
+    o_by = {o.slug: o for o in outs}
+    acc: Dict[str, Dict[str, Dict[str, float]]] = {
+        s: collections.defaultdict(lambda: collections.defaultdict(float))
+        for s in ("SETTLEMENT_CONDITIONAL_redeem_backed", "POOLED_all_events")}
+    for e in obs:
+        o = o_by.get(e.slug)
+        if o is None:
+            continue
+        resid = e.shares_up - e.shares_down
+        side = 0 if resid > 0 else 1
+        v = (e.vwap_up if side == 0 else e.vwap_down) or 0.0
+        pay = (abs(resid) if (o.winner_index is not None
+                              and side == o.winner_index) else 0.0)
+        strata = ["POOLED_all_events"]
+        if o.has_redeem:
+            strata.append("SETTLEMENT_CONDITIONAL_redeem_backed")
+        for st in strata:
+            a = acc[st][e.regime]
+            a["turn"] += e.turnover_usd
+            a["sh"] += abs(resid)
+            a["cost"] += v * abs(resid)
+            a["pay"] += pay
+            a["n"] += 1
+    out: Dict[str, Any] = {"LABEL": (
+        "resid_cost_bp and resid_entry_vwap are CONTEMPORANEOUS; "
+        "resid_payout_bp, share_weighted_hit_rate and hit_minus_entry_price "
+        "are SETTLEMENT-DERIVED OUTCOMES and are not features.")}
+    for st, per in acc.items():
+        blk = {}
+        for lab in regime_labels(change_points):
+            a = per.get(lab)
+            if not a or not a["turn"] or not a["sh"]:
+                blk[lab] = {"UNAVAILABLE": "no residual exposure"}
+                continue
+            hit = a["pay"] / a["sh"]
+            vwap = a["cost"] / a["sh"]
+            blk[lab] = {
+                "events": int(a["n"]),
+                "resid_shares_per_usd_turnover": round(a["sh"] / a["turn"], 6),
+                "resid_cost_bp": round(1e4 * a["cost"] / a["turn"], 2),
+                "resid_payout_bp": round(1e4 * a["pay"] / a["turn"], 2),
+                "resid_net_bp": round(1e4 * (a["pay"] - a["cost"]) / a["turn"], 2),
+                "resid_entry_vwap": round(vwap, 6),
+                "share_weighted_hit_rate": round(hit, 6),
+                "hit_minus_entry_price": round(hit - vwap, 6),
+            }
+        out[st] = blk
+    return out
+
+
+def program_window_ramp(obs: Sequence[EventObservables],
+                        outs: Sequence[EventOutcome],
+                        fills_cost: Dict[str, float],
+                        incentives: Sequence[Dict[str, Any]],
+                        change_points: Sequence[str] = CANON_CHANGE_POINTS,
+                        ) -> Dict[str, Any]:
+    """Did the metric move at the DOCUMENTED program change, or at the
+    DETECTED boundary? Three windows, in order:
+
+      A  third canonical regime, BEFORE  DOCUMENTED_PROGRAM_CHANGE
+      B  third canonical regime, ON/AFTER DOCUMENTED_PROGRAM_CHANGE
+      C  the final canonical regime, unchanged
+
+    A/B is a DISCLOSED DIAGNOSTIC SPLIT at a published venue date. The
+    canonical partition is untouched: C is exactly the repo's final regime and
+    A+B is exactly the repo's third one.
+    """
+    labs = regime_labels(change_points)
+    cut = DOCUMENTED_PROGRAM_CHANGE.isoformat()
+    o_by = {o.slug: o for o in outs}
+
+    def win(e: EventObservables) -> Optional[str]:
+        if e.regime == labs[-2]:
+            return "A_regime3_pre_program" if e.day < cut                 else "B_regime3_post_program"
+        if e.regime == labs[-1]:
+            return "C_regime4_detected_boundary"
+        return None
+
+    acc: Dict[str, Dict[str, float]] = collections.defaultdict(
+        lambda: collections.defaultdict(float))
+    days: Dict[str, set] = collections.defaultdict(set)
+    for e in obs:
+        w = win(e)
+        if w is None:
+            continue
+        o = o_by.get(e.slug)
+        if o is None:
+            continue
+        p = event_pnl(e, o, fills_cost)
+        for k, v in p.items():
+            acc[w][k] += v
+        acc[w]["events"] += 1
+        days[w].add(e.day)
+    inc: Dict[str, float] = collections.defaultdict(float)
+    for r in incentives:
+        d = day_of(r["timestamp"])
+        lab = regime_of(d, change_points)
+        if lab == labs[-2]:
+            w = "A_regime3_pre_program" if d < cut else "B_regime3_post_program"
+        elif lab == labs[-1]:
+            w = "C_regime4_detected_boundary"
+        else:
+            continue
+        inc[w] += float(r.get("usdcSize") or 0.0)
+
+    out: Dict[str, Any] = {
+        "DISCLOSED_DIAGNOSTIC_SPLIT": (
+            "A/B split at the published venue date %s. No change point was "
+            "fitted, moved or added; the canonical partition is unchanged."
+            % cut),
+        "windows": {},
+    }
+    for w in ("A_regime3_pre_program", "B_regime3_post_program",
+              "C_regime4_detected_boundary"):
+        a = acc.get(w)
+        if not a:
+            continue
+        t = a["turnover_usd"] or 1.0
+        nd = max(1, len(days[w]))
+        out["windows"][w] = {
+            "observed_days": len(days[w]),
+            "events": int(a["events"]),
+            "turnover_usd": round(t, 2),
+            "net_ex_incentives_usd": round(a["net_usd"], 2),
+            "net_bp": round(1e4 * a["net_usd"] / t, 2),
+            "matched_bp": round(1e4 * a["matched_usd"] / t, 2),
+            "residual_bp": round(1e4 * a["residual_usd"] / t, 2),
+            "fees_bp": round(-1e4 * a["fees_usd"] / t, 2),
+            "net_ex_incentives_per_day_usd": round(a["net_usd"] / nd, 2),
+            "CONFIRMED_incentive_usd": round(inc[w], 2),
+            "CONFIRMED_incentive_bp_of_turnover": round(1e4 * inc[w] / t, 2),
+            "CONFIRMED_incentive_per_day_usd": round(inc[w] / nd, 2),
+            "LABEL_POOLED": (
+                "POOLED/unbiased: a no-REDEEM residual is scored $0, which is "
+                "what the feed shows. Not conditional on settlement cover."),
+        }
+    return out
+
+
+def daily_series(obs: Sequence[EventObservables],
+                 outs: Sequence[EventOutcome],
+                 fills_cost: Dict[str, float],
+                 incentives: Sequence[Dict[str, Any]],
+                 change_points: Sequence[str] = CANON_CHANGE_POINTS,
+                 ) -> List[Dict[str, Any]]:
+    """One row per observed UTC day. This is the SHAPE evidence: a monotone
+    ramp and a single discontinuity look different here, and the brief asks
+    which it is. No change point is fitted from it."""
+    o_by = {o.slug: o for o in outs}
+    per: Dict[str, Dict[str, Any]] = collections.defaultdict(
+        lambda: {"acc": collections.defaultdict(float), "pc": [],
+                 "t2m": [], "compl": []})
+    for e in obs:
+        o = o_by.get(e.slug)
+        if o is None:
+            continue
+        d = per[e.day]
+        p = event_pnl(e, o, fills_cost)
+        for k, v in p.items():
+            d["acc"][k] += v
+        d["acc"]["events"] += 1
+        if e.pair_cost is not None:
+            d["pc"].append(e.pair_cost)
+        if e.t_to_match_s is not None:
+            d["t2m"].append(e.t_to_match_s)
+        d["compl"].append(1.0 if e.is_complete else 0.0)
+    inc: Dict[str, float] = collections.defaultdict(float)
+    for r in incentives:
+        inc[day_of(r["timestamp"])] += float(r.get("usdcSize") or 0.0)
+    rows = []
+    for day in sorted(per):
+        d = per[day]
+        a = d["acc"]
+        t = a["turnover_usd"] or 1.0
+        rows.append({
+            "day": day,
+            "regime": regime_of(day, change_points),
+            "events": int(a["events"]),
+            "turnover_usd": round(t, 2),
+            "net_bp_POOLED": round(1e4 * a["net_usd"] / t, 2),
+            "matched_bp": round(1e4 * a["matched_usd"] / t, 2),
+            "residual_bp_POOLED": round(1e4 * a["residual_usd"] / t, 2),
+            "pair_cost_p90": (round(_q(d["pc"], 0.90), 6) if d["pc"] else None),
+            "pair_cost_frac_gt_1_05": _frac(d["pc"], lambda c: c > 1.05),
+            "completion_rate": round(stats.fmean(d["compl"]), 6),
+            "t_to_match_median_s": (round(_q(d["t2m"], 0.50), 2)
+                                    if d["t2m"] else None),
+            "CONFIRMED_incentive_usd": round(inc.get(day, 0.0), 2),
+        })
+    return rows
+
+
 # ------------------------------------------------------------------- driver
 
 def _baseline_strata(path: str) -> Dict[str, Dict[str, Any]]:
@@ -886,6 +1106,8 @@ def run(change_points: Sequence[str] = CANON_CHANGE_POINTS,
     # the OOS adapter does, so the populations stay disjoint.
     sec_excl = excl | {e.slug for e in p_obs}
     s_obs, s_out, s_inc, s_diag = build_corpus(sec, sec_excl, change_points)
+    p_fees = fee_by_slug(prim, {e.slug for e in p_obs})
+    s_fees = fee_by_slug(sec, {e.slug for e in s_obs})
 
     labels = regime_labels(change_points)
 
@@ -932,8 +1154,12 @@ def run(change_points: Sequence[str] = CANON_CHANGE_POINTS,
             "outcome_by_regime": p_outm,
             "incentives": incentive_metrics(p_inc, change_points),
             "outcome_pnl": pnl_block(
-                p_obs, p_out,
-                fee_by_slug(prim, {e.slug for e in p_obs}), change_points),
+                p_obs, p_out, p_fees, change_points),
+            "residual_quality": residual_quality(p_obs, p_out, change_points),
+            "daily_series": daily_series(
+                p_obs, p_out, p_fees, p_inc, change_points),
+            "PROGRAM_WINDOW_RAMP": program_window_ramp(
+                p_obs, p_out, p_fees, p_inc, change_points),
         },
         "SECONDARY": {
             "source": oos_adapter.SECONDARY,
@@ -944,8 +1170,10 @@ def run(change_points: Sequence[str] = CANON_CHANGE_POINTS,
             "outcome_by_regime": s_outm,
             "incentives": incentive_metrics(s_inc, change_points),
             "outcome_pnl": pnl_block(
-                s_obs, s_out,
-                fee_by_slug(sec, {e.slug for e in s_obs}), change_points),
+                s_obs, s_out, s_fees, change_points),
+            "residual_quality": residual_quality(s_obs, s_out, change_points),
+            "daily_series": daily_series(
+                s_obs, s_out, s_fees, s_inc, change_points),
         },
         "EX_INCENTIVE_BASELINE_COPIED_FROM_OOS": _baseline_strata(oos_result),
         "EX_INCENTIVE_BASELINE_PROVENANCE": (

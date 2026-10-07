@@ -768,18 +768,26 @@ def run() -> Dict[str, Any]:
                    if k != "feature"},
                 "cluster_bootstrap": cluster_bootstrap(sub, f),
             }
+        def _best(d):
+            cand = max(d.items(),
+                       key=lambda kv: abs((kv[1]["stratified_auc"] or 0.5) - 0.5))
+            f, v = cand
+            return {"feature": f, "stratified_auc": v["stratified_auc"],
+                    "raw_auc": v["raw_auc"],
+                    "abs_lift_over_persistence": round(
+                        abs((v["stratified_auc"] or 0.5) - 0.5), 4),
+                    "raw_auc_cluster_ci95": (
+                        v["cluster_bootstrap"] or {}).get("ci95")}
+
         out["HEADLINE"] = {
             "persistence_auc": PERSISTENCE_AUC,
-            "best_EX_ANTE_BOOK_feature": max(
-                ((abs((v["stratified_auc"] or 0.5) - 0.5), f,
-                  v["stratified_auc"], (v["cluster_bootstrap"] or {}).get("ci95"))
-                 for f, v in out["EX_ANTE_F_PRE"].items()),
-                default=None),
-            "best_FILL_HISTORY_feature": max(
-                ((abs((v["stratified_auc"] or 0.5) - 0.5), f,
-                  v["stratified_auc"], (v["cluster_bootstrap"] or {}).get("ci95"))
-                 for f, v in out["BASELINE_FILL_HISTORY"].items()),
-                default=None),
+            "best_EX_ANTE_BOOK_feature": _best(out["EX_ANTE_F_PRE"]),
+            "best_FILL_HISTORY_feature": _best(out["BASELINE_FILL_HISTORY"]),
+            "ci_note": ("`raw_auc_cluster_ci95` is the window-clustered "
+                        "bootstrap of the RAW (unstratified) AUC; the point "
+                        "estimate beside it is the STRATIFIED AUC. They are "
+                        "different estimators and are not to be read as a "
+                        "point estimate with its own interval."),
         }
         out["contingency_unmatched"] = {
             f: contingency(rs, f) for f in
