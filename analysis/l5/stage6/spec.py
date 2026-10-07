@@ -377,7 +377,12 @@ def _apply(spec: Dict[str, Any], dotted: str, value: Any) -> None:
     node = spec
     for p in parts[:-1]:
         node = node[p]
-    node[parts[-1]] = value
+    # DEEP-COPY the value too. Assigning the DIFF's own object would make
+    # every built spec share mutable state with DIFF and with each other,
+    # so a caller that inspected one copy could silently alter the frozen
+    # SPEC -- and the fingerprint assertion would then pass on a spec that
+    # had been edited in place.
+    node[parts[-1]] = copy.deepcopy(value)
 
 
 def build() -> Dict[str, Any]:

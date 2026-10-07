@@ -169,6 +169,19 @@ def reconcile(inv, *, settlement: Optional[Dict[str, Any]] = None,
                 (pair["fee_safe_pair_cost"] if pair else None),
             "locked_gross_per_contract":
                 (pair["locked_gross_per_contract"] if pair else None),
+            "clears_ceiling_on_ACTUAL_fills":
+                (pair["clears_ceiling"] if pair else None),
+            "ceiling_breached_by_the_fills": (
+                bool(pair) and not pair["clears_ceiling"]),
+            "ceiling_breach_note": (
+                None if (pair is None or pair["clears_ceiling"]) else
+                "ANOMALY: the realized pair cost is above the $%s ceiling "
+                "even though the gate cleared it at the quoted prices. A "
+                "post-only BUY cannot fill above its limit, so this means "
+                "a fill price, a quantity or a fee was not what the gate "
+                "assumed. Investigate before any further probe; do NOT "
+                "treat the pair as locked."
+                % B.PAIR_COST_CEILING),
             "label": ("LOCKED economics of a completed pair. NOT realized "
                       "until settlement cash is confirmed."),
             "na_not_zero": None if matched > 0 else

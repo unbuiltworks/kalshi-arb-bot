@@ -193,7 +193,33 @@ class PairMachine:
     def arming_gate(self) -> Dict[str, Any]:
         return S.may_submit(self.slug)
 
-    def preflight(self, *, for_leg: str, price: Any,
+    @staticmethod
+    def side_book(side: str, bid: Any, ask: Any) -> Dict[str, Any]:
+        """The touch in THIS SIDE's own terms.
+
+        The venue lists ONE instrument: a DOWN/NO order at price X is the
+        long-side price 1 - X on the wire (`src.l5_order_body.venue_price`).
+        So the DOWN book is the YES book reflected through 1:
+
+            no_bid = 1 - yes_ask      no_ask = 1 - yes_bid
+
+        Getting this wrong is not a cosmetic error. A complement priced
+        against the YES book would read as crossing when it does not, and
+        the probe would refuse every complement it ever computed -- the
+        first-leg-only outcome, arrived at by arithmetic rather than by the
+        market.
+        """
+        if bid is None or ask is None:
+            return {"bid": None, "ask": None, "terms": str(side).upper()}
+        b, a = D(str(bid)), D(str(ask))
+        if str(side).upper().endswith(("NO", "DOWN")):
+            return {"bid": D("1") - a, "ask": D("1") - b,
+                    "terms": str(side).upper(),
+                    "reflected_through_one": True}
+        return {"bid": b, "ask": a, "terms": str(side).upper(),
+                "reflected_through_one": False}
+
+    def preflight(self, *, for_leg: str, side: str, price: Any,
                   qty: Any) -> Dict[str, Any]:
         """Every local refusal, together, before any network call."""
         S.assert_frozen()
@@ -212,7 +238,8 @@ class PairMachine:
                 "window has begun; a first leg placed now would leave the "
                 "complement no patience")
         bk = self.a.book() or {}
-        bid, ask = bk.get("bid"), bk.get("ask")
+        sb = self.side_book(side, bk.get("bid"), bk.get("ask"))
+        bid, ask = sb["bid"], sb["ask"]
         if bid is None or ask is None:
             refusals.append("BOOK_NOT_TWO_SIDED")
         p = D(str(price))
@@ -236,7 +263,7 @@ class PairMachine:
         if not chk["ok"]:
             refusals.extend(chk["breaches"])
         return {"ok": not refusals, "refusals": refusals, "arming": gate,
-                "tte": pl, "latch_slot": slot,
+                "tte": pl, "latch_slot": slot, "side_book": sb,
                 "probe": S.PROBE, "spec_fingerprint": S.S6P_FINGERPRINT}
 
     # ---------------------------------------------------------- the fills
@@ -264,7 +291,8 @@ class PairMachine:
     # --------------------------------------------------------------- legs
     def _place(self, leg_name: str, *, side: str, price: Any,
                qty: Any) -> Dict[str, Any]:
-        pre = self.preflight(for_leg=leg_name, price=price, qty=qty)
+        pre = self.preflight(for_leg=leg_name, side=side, price=price,
+                             qty=qty)
         self._ev("PREFLIGHT_%s" % leg_name, preflight=pre)
         if not pre["ok"]:
             if "DISARMED" in pre["refusals"]:

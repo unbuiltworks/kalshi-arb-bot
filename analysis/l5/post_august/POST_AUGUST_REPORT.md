@@ -1,6 +1,6 @@
 # L5 POST-AUGUST BEHAVIOR & ECONOMICS REPORT
 
-Generated `2026-10-07T04:29:46.889495+00:00` by `scripts/l5_post_august_report.py`.
+Generated `2026-10-07T04:31:49.815160+00:00` by `scripts/l5_post_august_report.py`.
 Subject: Polymarket trader `l5Zn1bWoM8eTsK`, proxy wallet `0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68`.
 
 ## Profit attribution
@@ -66,6 +66,24 @@ byte-identical in every carried field. Identity is by **provenance** --
 the envelope's own `params.user` is L5's wallet -- and only a *contradicting*
 `name`/`proxyWallet` disqualifies a record. A name-only filter would discard
 the ~90% of pages on which the feed omits the profile block.
+
+### Identity corroborated, not merely asserted
+
+The canonical corpus could corroborate identity on only **~0.5%** of its
+nameless transactions (`CANON_CORPUS_VALIDATION.md`), leaving provenance as
+the sole evidence for the rest. The post-August window does better.
+
+The 24/7 ops collector (`data/l5/ops/activity_*.jsonl`) writes **bare**
+records that carry `proxyWallet` on every row -- an identity signal
+*independent* of the fetch envelope. Overlapped against the provenance-
+admitted nameless harvest it produced **4366 exact duplicates, 0
+collisions, and only 5 genuinely new row(s)**.
+
+So on the overlap an independent `proxyWallet` signal agrees with
+provenance **byte-for-byte in every carried field**. That is a real
+corroboration of the identity rule on this window, not an assumption --
+though it still covers only the overlapping day, and the remaining days
+rest on provenance alone.
 
 Rows kept per source:
 
@@ -258,8 +276,9 @@ there is our gap, never L5's silence):
 ### 3.2 Answer
 
 **L5 did NOT abandon the subsidy-harvesting posture. One of three subsidy
-streams ended; the largest one continued, and the trading posture tracked the
-stream that kept paying rather than the one that stopped.**
+streams ended; a larger one continued for 8 further observed day(s), and the
+trading posture tracked the stream that kept paying rather than the one
+that stopped.**
 
 The evidence, in order:
 
@@ -267,7 +286,8 @@ The evidence, in order:
    payout **2026-09-06**. It paid a short trailing tail into September and ceased.
 2. **`MAKER_REBATE` did not stop.** It is an *account-level* program on its own
    payout clock, last observed **2026-09-25**, and it never depended on the August
-   liquidity pool. It is the **largest** incentive stream in the post-August
+   liquidity pool. It kept paying on **8 observed day(s) after `REWARD`'s
+   final payout**, and it is the **largest** incentive stream in the post-August
    window ($15,056.24 vs $8,229.66 of `REWARD`).
 3. **The pricing posture did not retreat to a cheaper, subsidy-free line.**
    If L5 had lost his subsidy and had to live on pair economics alone, the

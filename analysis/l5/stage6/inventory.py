@@ -323,7 +323,16 @@ class Inventory:
         end of a poll batch, so a bound cannot be crossed and uncrossed
         inside one loop without being seen.
         """
-        leg = self.first if leg_name.upper() == "FIRST" else self.complement
+        # accept the leg's own name and the latch slot's name for it, so
+        # the machine and the latch cannot disagree about which leg is
+        # which and silently drop a fill on the floor.
+        name = str(leg_name).upper()
+        if name in ("FIRST", "FIRST_LEG"):
+            leg = self.first
+        elif name == "COMPLEMENT":
+            leg = self.complement
+        else:
+            raise InventoryBoundBreached("unknown leg name %r" % (leg_name,))
         if leg is None:
             raise InventoryBoundBreached(
                 "no %s leg exists to apply a fill to" % leg_name)
