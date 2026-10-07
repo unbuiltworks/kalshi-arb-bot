@@ -1,0 +1,18 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_book_shadow/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_book_shadow/**",
+      "src/l5_book_shadow.py",
+      "scripts/l5_book_shadow_run.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m scripts.l5_book_shadow_run --minutes 0",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_status": "READ-ONLY two-token book-state shadow collector. Records BOTH outcome tokens' books independently (never one token with a derived complement) plus L5's public activity, on one append-only JSONL tape with per-row provenance. Public endpoints, GET only, websocket subscribe only, no credentials required and none logged. Blocking boot gate fails if any order-capable module is importable. One shared pacer caps the WHOLE process at BOOK_SHADOW_MAX_RPM (default 240 req/min) and backs off on HTTP 429. Must NOT be deployed to the service running an armed probe."
+}
