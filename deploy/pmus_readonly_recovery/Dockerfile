@@ -25,6 +25,7 @@ COPY scripts/pmus_order_history_audit.py scripts/pmus_order_history_audit.py
 COPY scripts/pmus_e1_postcancel_confirm.py scripts/pmus_e1_postcancel_confirm.py
 COPY scripts/l5_pmus_order_endpoint_probe.py scripts/l5_pmus_order_endpoint_probe.py
 COPY scripts/l5_e1_1215z_reconcile.py scripts/l5_e1_1215z_reconcile.py
+COPY scripts/l5_pmus_activities_param_probe.py scripts/l5_pmus_activities_param_probe.py
 
 ENV PYTHONUNBUFFERED=1
 CMD ["python3", "-m", "scripts.pmus_readonly_recovery"]
