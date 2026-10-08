@@ -148,6 +148,11 @@ COPY scripts/l5_e1_bbo_recover.py  scripts/l5_e1_bbo_recover.py
 # result.
 COPY scripts/l5_e1_bbo_twosided_proof.py  scripts/l5_e1_bbo_twosided_proof.py
 
+# READ-ONLY window-identity probe. Builds only pmus_auth.ReadOnlyTransport,
+# which raises on any method but GET, so it cannot construct an order.
+COPY scripts/l5_e1_window_identity_probe.py \
+     scripts/l5_e1_window_identity_probe.py
+
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
 
