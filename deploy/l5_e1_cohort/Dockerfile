@@ -190,6 +190,18 @@ COPY scripts/l5_e1_attributed_cashflow.py \
 COPY scripts/l5_e1_prelive_validation.py \
      scripts/l5_e1_prelive_validation.py
 
+# THE OPERATOR'S EXACT-ID EMERGENCY CANCELLATION TOOL.
+#
+# If this process dies with an order resting, its own handover deadman never
+# runs. The only prior operator tool cancelled by MARKET, which on this
+# SHARED account would cancel another desk's orders in the same window --
+# the mechanism that got fingerprint 0c12d361 superseded out of the engine.
+# This one cancels only ids named AND present in E1's own durable tape, one
+# POST /v1/order/{id}/cancel each, through the frozen `cancel_exact`, and it
+# dry-runs unless the operator sets E1_CANCEL_EXECUTE=YES.
+COPY scripts/l5_e1_cancel_by_id.py \
+     scripts/l5_e1_cancel_by_id.py
+
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
 
