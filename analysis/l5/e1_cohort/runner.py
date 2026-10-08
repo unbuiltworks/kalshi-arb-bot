@@ -72,6 +72,7 @@ from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         diff_report)
 from analysis.l5.e1_cohort.stopping import CohortTracker, project_feasibility
 from analysis.l5.live_exec2 import orders as O
+from analysis.l5.e1_cohort import order_registry as ORG
 from analysis.l5.e1_cohort import order_state as OST
 from analysis.l5.e1_cohort import pacing as PACING
 from analysis.l5.e1_cohort import pmus_book as PBK
@@ -716,7 +717,8 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
                      *, now: float,
                      transport_factory: Any = O.BoundedOrderTransport,
                      session_auth: Any = None,
-                     progress: Any = None) -> Dict[str, Any]:
+                     progress: Any = None,
+                     recorder: Any = None) -> Dict[str, Any]:
     """Preview, echo-check, consume a NAMED latch slot, POST once.
 
     Every byte of that sequence is `analysis.l5.live_exec2.orders.submit_one`,
@@ -786,6 +788,19 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     intent_id = "LOCAL_INTENT:w%s:%s:%s:%s" % (window, slug, side, price)
     if isinstance(pending, list):
         pending.append(intent_id)
+    # AND DURABLY, because an in-memory list dies with the process. The row
+    # goes on the append-only tape BEFORE the POST, so a crash between the
+    # request and the acknowledgement leaves evidence the next process can
+    # read: `order_registry.load_from_tape` restores it as pending and the
+    # restart cannot place a second first leg on top of an order that may
+    # or may not exist. Without this row that window is invisible to the
+    # next process.
+    if recorder is not None:
+        recorder.record_event(
+            window=window, slot=-1, event="FIRST_LEG_SUBMISSION_INTENT",
+            detail={"intent_id": intent_id, "slug": slug, "side": side,
+                    "price": str(price), "qty": str(qty),
+                    "recorded_BEFORE_the_post": True})
 
     def _take_slot() -> Dict[str, Any]:
         holder["slot"] = L.consume_attempt(window=window, slug=slug,
@@ -838,6 +853,7 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
         if isinstance(roles, dict):
             roles[oid] = OST.FIRST_LEG
     out["e1_pending_order_id"] = oid or intent_id
+    out["e1_intent_id"] = intent_id
     out["e1_latch_slot"] = holder["slot"]
     out["e1_window"] = window
     out["e1_authorization"] = auth_result
@@ -1318,7 +1334,7 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             out = submit_first_leg(snap, tracker, now=now_fn(),
                                    transport_factory=transport_factory,
                                    session_auth=session_auth,
-                                   progress=progress)
+                                   progress=progress, recorder=recorder)
         except AUTH.NotAuthorized as exc:
             # refused BEFORE transport. Not a venue error and not a
             # placement; recorded and the window moves on.
@@ -1394,6 +1410,23 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             continue
         except O.SubmissionAmbiguous as exc:
             # NEVER retried. The cohort stops and the venue is reconciled.
+            #
+            # AND IT IS RECORDED. This path used to append to the in-memory
+            # refusal list and break, writing NOTHING to the tape -- so the
+            # single most dangerous state E1 can be in, "we may have
+            # created an order and cannot prove we did not", left no
+            # durable trace at all. A restart would have seen a clean tape.
+            # Now it leaves a row, and `order_registry` restores it as a
+            # blocking pending intent.
+            if recorder is not None:
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="AMBIGUOUS_SUBMISSION",
+                    detail={"slug": snap.get("market"),
+                            "detail": LF.redact_detail(
+                                dict(exc.detail or {})),
+                            "never_retried": True,
+                            "blocks_until_venue_reconciled": True})
             stopped_because = "AMBIGUOUS_SUBMISSION_RECONCILE_VENUE_STATE"
             refusals.append({"iteration": it,
                              "refusals": ["AMBIGUOUS_SUBMISSION"],
@@ -1409,6 +1442,9 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 window=out["e1_window"], slot=out["e1_latch_slot"]["slot"],
                 event="FIRST_LEG_SUBMITTED",
                 detail={"order_id": out["order_id"],
+                        # names the intent this confirms, so a restart can
+                        # retire it instead of blocking on it forever
+                        "intent_id": out.get("e1_intent_id"),
                         "latch_path": out["e1_latch_slot"]["path"]})
     if progress is not None and stopped_because:
         v = tracker.verdict()
@@ -1545,9 +1581,29 @@ def main(argv: Optional[List[str]] = None, *,
     rec = recorder_factory(state_dir) if recorder_factory else None
     provider = provider_factory(progress=prog, session_auth=auth,
                                recorder=rec)
+    # AND THE ORDER REGISTRY, off the same durable volume.
+    #
+    # Progress rehydration restores WINDOWS and RISK. It says nothing about
+    # ORDERS, and until now nothing did: a restart came back with an empty
+    # id registry, so the repaired reader -- which can only ask about ids it
+    # knows, because /v1/orders is HTTP 501 -- had nothing to ask about.
+    # These are the ids, the roles and the unacknowledged submission
+    # intents, read from the append-only tape where the forty real
+    # 1215z/1230z ids were in fact found. Installed in place, because
+    # `submit_first_leg` appends to the very same lists.
+    registry = ORG.load_from_tape(state_dir, session_id=A.session_id())
+    installed = ORG.install(provider, registry)
     print(json.dumps({"ARMED": True, "probe": PROBE,
                       "fingerprint": E1_FINGERPRINT,
                       "rehydrated": rehydrated,
+                      "order_registry": {
+                          "tape": registry["tape"],
+                          "rows_scanned": registry["rows_scanned"],
+                          "unparseable_rows": registry["unparseable_rows"],
+                          "known_ids": len(installed["known_ids"]),
+                          "pending_intents": installed["pending"],
+                          "roles": installed["roles"],
+                      },
                       "progress": prog.report(),
                       "authorization": auth.report(),
                       "entering": "run_cohort"},

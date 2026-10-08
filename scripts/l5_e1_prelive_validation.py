@@ -1,0 +1,260 @@
+"""E1 PRE-LIVE VALIDATION. Read-only, against the REAL PMUS venue.
+
+Six things, in one run, with nothing armed and nothing submitted:
+
+  3. the repaired order-state reader, against the live venue, on the four
+     endpoints that actually exist
+  2. the order registry restored from the DURABLE TAPE on this volume --
+     the real forty 1215z/1230z ids
+  5. a live-book SHADOW WINDOW: the actual executable complement price from
+     the real book, available depth, the fee model and the $0.96
+     fee-inclusive pair ceiling, under unchanged limits
+  6. proof that shared-account activity cannot contaminate E1 inventory or
+     P&L
+  7. the cohort's remaining windows and outstanding exposure
+  4. the eligibility and complement gates, on live state
+
+It uses the production functions -- `order_state.read_order_state`,
+`order_registry.load_from_tape`, `runner.eligible`,
+`runner.complement_price`, `runner.complement_tranche` -- so what it
+measures is what would run. It constructs no order body, builds no mutating
+transport, and the only writes anywhere are the log lines it prints.
+
+E1 STAYS DISARMED. This script never reads an arming key, never consumes a
+latch slot and never advances a window.
+"""
+from __future__ import annotations
+
+import json
+import os
+import time
+from decimal import Decimal as D
+from typing import Any, Dict, List
+
+from analysis.l5.e1_cohort import order_registry as ORG
+from analysis.l5.e1_cohort import order_state as OS
+from analysis.l5.e1_cohort import pmus_identity as PI
+from analysis.l5.e1_cohort import runner as R
+from analysis.l5.e1_cohort import stopping as SP
+from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
+                                        MAX_COHORT_REALIZED_LOSS_USD,
+                                        MAX_EXPOSURE_PER_WINDOW_USD,
+                                        MAX_FIRST_LEG_PRICE,
+                                        PAIR_COST_CEILING)
+from src import pmus_auth as A
+
+STATE_DIR = os.environ.get("E1_STATE_DIR", "/state/pmus-ws/e1_cohort")
+SESSION = os.environ.get("PMUS_E1_SESSION_ID") or None
+
+
+def j(tag: str, obj: Any) -> None:
+    print("%s %s" % (tag, json.dumps(obj, default=str)))
+
+
+def main() -> int:
+    t = A.ReadOnlyTransport()
+    reader = OS.venue_reader(t)
+    print("PRELIVE_BEGIN now=%s fingerprint=%s"
+          % (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+             E1_FINGERPRINT))
+    j("LIMITS", {"qty": str(FIRST_LEG_QTY),
+                 "max_first_leg_price": str(MAX_FIRST_LEG_PRICE),
+                 "pair_cost_ceiling": str(PAIR_COST_CEILING),
+                 "max_window_exposure": str(MAX_EXPOSURE_PER_WINDOW_USD),
+                 "max_cohort_loss": str(MAX_COHORT_REALIZED_LOSS_USD),
+                 "UNCHANGED": True})
+
+    # ---------------------------------------------------------------- (2)
+    reg = ORG.load_from_tape(STATE_DIR, session_id=SESSION)
+    j("REGISTRY", {"tape": reg["tape"], "tape_exists": reg["tape_exists"],
+                   "rows_scanned": reg["rows_scanned"],
+                   "unparseable_rows": reg["unparseable_rows"],
+                   "session_id": reg["session_id"],
+                   "n_known_ids": len(reg["known_ids"]),
+                   "known_ids": reg["known_ids"],
+                   "n_pending_intents": len(reg["pending"]),
+                   "pending": reg["pending"],
+                   "event_counts": reg["event_counts"]})
+
+    # ---------------------------------------------------------------- (7)
+    try:
+        from analysis.l5.e1_cohort import latch as LATCH
+        from analysis.l5.e1_cohort.progress import CohortProgress
+        prog = CohortProgress(LATCH.LATCH_DIR)
+        j("COHORT", {"session_id": prog.session_id,
+                     "windows_used": prog.windows_used(),
+                     "windows_remaining": prog.windows_remaining(),
+                     "placements": prog.placements(),
+                     "realized_loss_usd": str(prog.realized_loss_usd()),
+                     "unresolved_residuals": prog.unresolved_residuals(),
+                     "slugs_used": prog.slugs_used()})
+    except Exception as exc:                                   # noqa: BLE001
+        j("COHORT_ERR", {"error": type(exc).__name__,
+                         "detail": str(exc)[:200]})
+
+    # ---------------------------------------------------------------- (3)
+    ws = PI.window_start(time.time())
+    slugs = [PI.slug_for(ws + i * PI.WINDOW_S) for i in range(4)]
+    t0 = time.time()
+    view = OS.read_order_state(reader, slugs=slugs,
+                               outcome_up="OUTCOME_SIDE_YES",
+                               now=t0, now_fn=time.time,
+                               known_ids=reg["known_ids"],
+                               roles=reg["roles"],
+                               pending_ids=reg["pending"])
+    j("READER", {"ok": view.get("ok"), "reason": view.get("reason"),
+                 "latency_s": round(time.time() - t0, 3),
+                 "age_s": view.get("age_s"),
+                 "paths": view.get("paths"),
+                 "n_known": view.get("n_known"),
+                 "n_outstanding": view.get("n_outstanding"),
+                 "n_outstanding_first_legs":
+                     view.get("n_outstanding_first_legs"),
+                 "n_outstanding_complements":
+                     view.get("n_outstanding_complements"),
+                 "ids_absent_at_venue_404":
+                     len(view.get("ids_absent_at_venue_404") or []),
+                 "filled_ids": len(view.get("filled_ids") or []),
+                 "net_filled_by_outcome_side":
+                     view.get("net_filled_by_outcome_side"),
+                 "residual": view.get("residual"),
+                 "venue_positions": view.get("venue_positions"),
+                 "derived_net_qty": view.get("derived_net_qty"),
+                 "venue_net_qty": view.get("venue_net_qty"),
+                 "open_notional_usd": view.get("open_notional_usd"),
+                 "filled_notional_usd": view.get("filled_notional_usd"),
+                 "aggregate_exposure_usd":
+                     view.get("aggregate_exposure_usd")})
+    j("GATES", {"outstanding_for_snapshot":
+                    OS.outstanding_for_snapshot(view),
+                "reconcile_at_startup": OS.reconcile_at_startup(view),
+                "complement_gate": OS.complement_gate(view),
+                "window_exposure": OS.window_exposure(
+                    view, prospective_qty=str(FIRST_LEG_QTY),
+                    prospective_price="0.50")})
+
+    # ---------------------------------------------------------------- (6)
+    # SHARED-ACCOUNT CONTAMINATION. The settlement reader is handed OUR
+    # filled quantity and must refuse to attribute anything that does not
+    # match it exactly. This asks the live venue for every cohort market.
+    for slug in ("cpc-btc-updown-15m-2026-10-08-1215z",
+                 "cpc-btc-updown-15m-2026-10-08-1230z"):
+        expected = "2.60" if slug.endswith("1215z") else "0"
+        st = OS.settlement_for(reader, slug=slug, expected_qty=expected)
+        j("SETTLEMENT", {"slug": slug, "expected_qty": expected,
+                         "label": st.get("label"),
+                         "rows_seen": len(st.get("rows") or []),
+                         "attributed": st.get("attributed"),
+                         "error": st.get("error"),
+                         "NEVER_APPORTIONED": st.get("NEVER_APPORTIONED")})
+    # and a deliberate mismatch: ask for a quantity that is NOT ours
+    bad = OS.settlement_for(reader, slug="cpc-btc-updown-15m-2026-10-08-"
+                                        "1215z", expected_qty="16.21")
+    j("CONTAMINATION_CONTROL", {
+        "asked_for_a_quantity_that_is_not_ours": "16.21",
+        "attributed": bad.get("attributed"),
+        "label": bad.get("label"),
+        "reading": "if this attributes anything, exact-match attribution "
+                   "is broken"})
+
+    # ---------------------------------------------------------------- (5)
+    # THE LIVE-BOOK SHADOW WINDOW. Real book, real depth, real tick, the
+    # production complement pricer and the frozen ceilings. Nothing is
+    # submitted; this says what WOULD be decided.
+    from analysis.l5.e1_cohort import pmus_book as PBK
+    feed = PBK.PmusDecisionFeed(clock=time.time)
+    try:
+        feed.start()
+    except Exception as exc:                                   # noqa: BLE001
+        j("FEED_ERR", {"error": type(exc).__name__})
+    for slug in slugs[:2]:
+        pin = {"slug": slug, "outcome_up": "OUTCOME_SIDE_YES",
+               "outcome_down": "OUTCOME_SIDE_NO",
+               "window_start": ws, "window_end": ws + PI.WINDOW_S}
+        deadline = time.time() + 25.0
+        health = {}
+        while time.time() < deadline:
+            health = feed.health(pin)
+            if health.get("ok"):
+                break
+            time.sleep(0.5)
+        if not health.get("ok"):
+            j("SHADOW", {"slug": slug, "book": "UNAVAILABLE",
+                         "why": health.get("why"),
+                         "timing_authority": health.get("timing_authority")})
+            continue
+        book = feed.book(pin)
+        if not book.get("ok"):
+            j("SHADOW", {"slug": slug, "book": "NOT_READABLE",
+                         "why": book.get("why")})
+            continue
+        fl = book.get("first_leg") or {}
+        comp = book.get("complement") or {}
+        row: Dict[str, Any] = {
+            "slug": slug,
+            "first_leg_side": (book.get("first_leg_side_choice") or {}
+                               ).get("side"),
+            "first_leg_best_bid": fl.get("best_bid"),
+            "first_leg_best_ask": fl.get("best_ask"),
+            "first_leg_depth_at_our_price": fl.get("size_at_our_price"),
+            "complement_best_bid": comp.get("best_bid"),
+            "complement_best_ask": comp.get("best_ask"),
+            "complement_depth": comp.get("size_at_our_price"),
+            "book_age_s": book.get("age_s"),
+        }
+        bid = fl.get("best_bid")
+        if bid is not None:
+            row["first_leg_within_ceiling"] = (
+                D(str(bid)) <= MAX_FIRST_LEG_PRICE)
+            # THE ACTUAL EXECUTABLE COMPLEMENT PRICE, from the production
+            # pricer, against the real complement bid.
+            try:
+                cp = R.complement_price(
+                    first_leg_price=str(bid), qty=str(FIRST_LEG_QTY),
+                    complement_best_bid=str(comp.get("best_bid") or "0"))
+                row["complement_price_usd"] = cp["price_usd"]
+                row["pair_cost"] = cp["pair_cost"]
+                row["within_pair_ceiling"] = cp["pair_cost"].get(
+                    "within_ceiling")
+                row["maker_only"] = cp["maker_only"]
+                row["at_or_below_complement_best_bid"] = cp[
+                    "at_or_below_complement_best_bid"]
+            except Exception as exc:                           # noqa: BLE001
+                row["complement"] = "INFEASIBLE"
+                row["complement_refusal"] = str(exc)[:220]
+                row["ceiling_relaxed"] = False
+            # and the tranche the production sizer would send
+            try:
+                plan = R.complement_tranche(
+                    cumulative_first_leg_filled_qty=str(FIRST_LEG_QTY),
+                    already_complemented_qty="0", tranches_submitted=0)
+                row["tranche_plan"] = plan
+            except Exception as exc:                           # noqa: BLE001
+                row["tranche_plan_error"] = type(exc).__name__
+        j("SHADOW", row)
+
+        # what `eligible` would say, on the LIVE book and LIVE order state
+        snap = {"window": 0, "window_open": True,
+                "within_handover_tte": True, "market": slug,
+                "pin": pin, "qty": str(FIRST_LEG_QTY),
+                "first_leg_price": str(bid) if bid is not None else None,
+                "first_leg": fl, "complement": comp,
+                "ws_state": book.get("ws_state") or {},
+                "order_state": view,
+                "our_outstanding_orders":
+                    OS.outstanding_for_snapshot(view),
+                "our_open_residual": OS.residual_for_snapshot(view)}
+        el = R.eligible(snap, SP.CohortTracker(), now=time.time())
+        j("SHADOW_ELIGIBLE", {"slug": slug, "ok": el["ok"],
+                              "refusals": el["refusals"]})
+
+    j("NOTE", {"armed": False, "orders_submitted": 0,
+               "orders_cancelled": 0, "latch_slots_consumed": 0,
+               "windows_advanced": 0, "limits_changed": False,
+               "READ_ONLY": True})
+    print("PRELIVE_END")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

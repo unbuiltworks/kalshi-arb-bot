@@ -184,6 +184,12 @@ COPY scripts/l5_e1_financial_reconcile.py \
 COPY scripts/l5_e1_attributed_cashflow.py \
      scripts/l5_e1_attributed_cashflow.py
 
+# PRE-LIVE VALIDATION: the repaired reader, the tape-restored registry, a
+# live-book shadow window and the contamination control. GETs only, arms
+# nothing, submits nothing.
+COPY scripts/l5_e1_prelive_validation.py \
+     scripts/l5_e1_prelive_validation.py
+
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
 
