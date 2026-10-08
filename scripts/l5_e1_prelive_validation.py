@@ -34,6 +34,7 @@ from typing import Any, Dict, List
 from analysis.l5.e1_cohort import order_registry as ORG
 from analysis.l5.e1_cohort import pmus_book as PBK
 from analysis.l5.e1_cohort import order_state as OS
+from analysis.l5.e1_cohort import settlement_audit as SA
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import runner as R
 from analysis.l5.e1_cohort import stopping as SP
@@ -212,15 +213,41 @@ def main() -> int:
     # ONE WALK of the activities feed, shared by every market below. The
     # previous run walked it three times in a few seconds and the venue
     # answered the second and third with an HTTPError.
-    res = OS.fetch_resolutions(reader, pages=30, pause_s=0.2,
+    # THE FILTERED, RESUMABLE, 429-AWARE SCANNER -- not the plain walk.
+    #
+    # `OS.fetch_resolutions` restarts from page one every run, so each
+    # attempt spent its page budget re-reading what the last one already
+    # had and the venue answered 429 at around page twenty: the audit
+    # reported ACTIVITIES_UNREADABLE every time and attributed nothing.
+    # `settlement_audit.scan_resolutions` asks the venue for
+    # `&types=ACTIVITY_TYPE_POSITION_RESOLUTION` only, backs off
+    # exponentially within a bounded budget, and keeps its progress on the
+    # durable volume -- so a 429 RESUMES rather than starting over, and
+    # successive runs converge instead of repeating.
+    scan_state = os.path.join(STATE_DIR, "e1.resolution_scan.json")
+    scan = SA.scan_resolutions(reader, state_path=scan_state,
                                sleep_fn=time.sleep)
-    j("ACTIVITIES_WALK", {"pages_read": res.get("pages_read"),
-                          "complete": res.get("complete"),
-                          "resolution_rows": len(res.get("rows") or []),
+    res = {"rows": scan["rows"], "complete": scan["complete"],
+           "pages_read": scan["pages_read"],
+           "error": (scan["errors"][0]["error"] if scan["errors"]
+                     else None)}
+    j("ACTIVITIES_WALK", {"pages_read": scan.get("pages_read"),
+                          "complete": scan.get("complete"),
+                          "resolution_rows": len(scan.get("rows") or []),
+                          "filter": scan.get("filter"),
+                          "filter_honoured": scan.get("filter_honoured"),
+                          "resumed_from_page": scan.get("resumed_from_page"),
+                          "rate_limit_hits": scan.get("rate_limit_hits"),
+                          "state_path": scan_state,
+                          "bounded_retries": True,
                           "error": res.get("error")})
-    for slug in ("cpc-btc-updown-15m-2026-10-08-1215z",
-                 "cpc-btc-updown-15m-2026-10-08-1230z"):
-        expected = "2.60" if slug.endswith("1215z") else "0"
+    # THE 22:00z PROBE'S OWN PAIR is audited first: 0.13 shares on each
+    # side, venue-confirmed FILLED, gross $0.1248. Expected settlement
+    # quantity is the filled quantity of ONE side of the matched set.
+    for slug, expected in (
+            ("cpc-btc-updown-15m-2026-10-08-2200z", "0.13"),
+            ("cpc-btc-updown-15m-2026-10-08-1215z", "2.60"),
+            ("cpc-btc-updown-15m-2026-10-08-1230z", "0")):
         st = OS.settlement_for(reader, slug=slug, expected_qty=expected,
                                resolutions=res)
         j("SETTLEMENT", {"slug": slug, "expected_qty": expected,

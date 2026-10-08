@@ -2030,7 +2030,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # its terminal-order cache was in-process only, so every cold boot
         # asked the venue about all forty known ids and PMUS answered 429
         # after about fifteen -- twice. Terminal rows are now durable.
-        "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59"]
+        "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59",
+        # no multi-trade envelope and no attempt tape: it bounded first-leg
+        # purchases but never the gross outlay after complements, and
+        # production called neither record_attempt nor reconstruct_chain.
+        "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

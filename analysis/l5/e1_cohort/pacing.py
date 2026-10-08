@@ -79,6 +79,35 @@ PACED_PREFIXES = (
     "E10_",
     # this window's $1.56 is spent. Window-scoped, not cohort-scoped.
     "PROJECTED_WINDOW_EXPOSURE_",
+    # THE MULTI-TRADE ENVELOPE, classified by what each bound MEANS.
+    #
+    # Cumulative first-leg shares are counted from THIS WINDOW's durable
+    # latch slots, so the bound binding says "this window is full" -- the
+    # same statement as E11_WINDOW_LATCH_EXHAUSTED, and the same answer:
+    # wait out the window and let the provider roll. Treating it as
+    # terminal would end a twelve-window cohort at the end of its first
+    # window, which is how it was first caught.
+    "MT_CUM_FIRST_LEG_SHARES_",
+    # an outstanding order of ours resolves -- it fills or is cancelled --
+    # and an unhedged residual is complemented or settles. Both are states
+    # that CHANGE, so both are waited out, exactly as the E3 statements
+    # they refine are.
+    "MT_OUTSTANDING_",
+    "MT_RESIDUAL_SHARES_",
+    # we could not establish OUR exposure this instant: an unreadable GET,
+    # a view without rows, an order of ours the venue priced as null.
+    # Nothing was placed and nothing was risked.
+    "MT_ORDER_STATE_NOT_ESTABLISHED",
+    "MT_OWN_EXPOSURE_NOT_ESTABLISHED",
+    "MT_OUR_EXPOSURE_UNPRICEABLE",
+    "MT_LATCH_SCOPE_UNAVAILABLE",
+    "MT_LATCH_SPENT_NOT_FINITE",
+    #
+    # NOTE what is deliberately NOT here: MT_GROSS_NOTIONAL_*. The gross
+    # bound is the probe's whole cash envelope, counted across the window
+    # from venue-confirmed fills. It does not come back by waiting, and a
+    # spent cash envelope is a risk limit -- so it is TERMINAL, like
+    # E3_AGGREGATE_VENUE_EXPOSURE_*.
     # THE SAME TWO E3 STATEMENTS AS ABOVE, now that the provider derives
     # them from authoritative venue state and reports the count and the
     # residual alongside the code ("E3_OUR_ORDER_IS_OUTSTANDING:3"). They

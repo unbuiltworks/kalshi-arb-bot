@@ -61,6 +61,8 @@ from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import budget as BUD
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import local_faults as LF
+from analysis.l5.e1_cohort import multitrade as MT
+from analysis.l5.e1_cohort import attempt_rows as AR
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         MAX_COHORT_REALIZED_LOSS_USD,
                                         MAX_ATTEMPTS_PER_WINDOW,
@@ -448,7 +450,7 @@ def e8_book_executable(snapshot: Mapping[str, Any]) -> list:
 
 
 def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
-             *, now: float) -> Dict[str, Any]:
+             *, now: float, envelope: Any = None) -> Dict[str, Any]:
     """Rules E1..E12, all evaluated and reported together, before any
     network call. `ok` False means NO ORDER and NO LATCH CONSUMPTION."""
     assert_frozen()
@@ -600,8 +602,22 @@ def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
     except Exception as exc:                                   # noqa: BLE001
         r.append("E11_LATCH_UNAVAILABLE:%s" % type(exc).__name__)
 
+    # THE MULTI-TRADE ENVELOPE. Four bounds the attempt budget does not
+    # express -- cumulative first-leg shares, GROSS notional with the
+    # complement counted, outstanding exposure at one instant, and
+    # directional residual -- read from venue-confirmed order state and
+    # the durable latch slots. Additive: it can only refuse.
+    mt = None
+    if envelope is not None:
+        mt = envelope.gate(order_state=snapshot.get("order_state"),
+                           window=window,
+                           qty=snapshot.get("qty", FIRST_LEG_QTY),
+                           first_leg_price=snapshot.get("first_leg_price"))
+        r.extend(mt["refusals"])
+
     return {"ok": not r, "refusals": r, "probe": PROBE,
             "spec_fingerprint": E1_FINGERPRINT,
+            "multitrade": mt,
             "window": window,
             "first_leg": {"price_usd": str(price), "qty_shares": str(qty),
                           "notional_usd": str(notional),
@@ -613,7 +629,9 @@ def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
 
 
 def e1_preflight(snapshot: Mapping[str, Any], tracker: CohortTracker,
-                 *, now: float) -> Dict[str, Any]:
+                 *, now: float,
+                 envelope: Optional["MT.MultiTradeEnvelope"] = None
+                 ) -> Dict[str, Any]:
     """E1's own refusal set, shaped like `orders.preflight_submission`'s so
     it can be handed to `orders.submit_one(checks=...)`.
 
@@ -623,8 +641,9 @@ def e1_preflight(snapshot: Mapping[str, Any], tracker: CohortTracker,
     would-cross, latch -- and relaxes none of them. `live_exec2` is not
     edited to accommodate E1.
     """
-    el = eligible(snapshot, tracker, now=now)
+    el = eligible(snapshot, tracker, now=now, envelope=envelope)
     return {"ok": el["ok"], "refusals": el["refusals"], "e1": el,
+            "multitrade": el.get("multitrade"),
             "shared_preflight_not_used_because":
                 "it requires qty == 0.01 and E1's frozen qty is 0.13",
             "shared_preflight_relaxed": False}
@@ -728,6 +747,7 @@ def _submit_once(t: Any, *, slug: str, outcome_side: str, price: Any,
 
 def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
                      *, now: float,
+                     envelope: Optional["MT.MultiTradeEnvelope"] = None,
                      transport_factory: Any = O.BoundedOrderTransport,
                      session_auth: Any = None,
                      progress: Any = None,
@@ -746,7 +766,8 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     stops, and the venue state is reconciled.
     """
     assert_frozen()
-    checks = e1_preflight(snapshot, tracker, now=now)
+    checks = e1_preflight(snapshot, tracker, now=now,
+                          envelope=envelope)
     if not checks["ok"]:
         raise Ineligible("E1 refused the attempt: %s" % checks["refusals"],
                          refusals=checks["refusals"])
@@ -932,6 +953,11 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     out["e1_latch_slot"] = holder["slot"]
     out["e1_window"] = window
     out["e1_authorization"] = auth_result
+    #: the refusal set this submission PASSED, multi-trade envelope
+    #: included, so the decision log records the bounds that were
+    #: actually consulted rather than re-deriving them later.
+    out["e1_checks"] = {"multitrade": checks.get("multitrade"),
+                        "refusals_passed": []}
     if progress is not None and "slot" in holder:
         progress.record_placement(window_index=window,
                                   slot=holder["slot"]["slot"],
@@ -1188,7 +1214,7 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                now_fn: Any = None, max_iterations: Optional[int] = None,
                session_auth: Any = None, progress: Any = None,
                sleep_fn: Any = None, pace_s: Optional[float] = None,
-               budget: Any = None) -> Dict[str, Any]:
+               budget: Any = None, envelope: Any = None) -> Dict[str, Any]:
     """Drive the cohort: MANY bounded attempts, under the E1 named-slot latch.
 
     THIS IS THE THING THAT WAS MISSING, and its absence was the defect. The
@@ -1241,6 +1267,12 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
     # the attempt budget is global. A sticky global flag here silently
     # stopped a legitimate twelve-window cohort from placing anything in
     # window two once window one's twenty slots were spent.
+    # THE ENVELOPE. Absent, it is the spec's own frozen ceilings, so an
+    # unmodified twelve-window cohort behaves exactly as before and this
+    # parameter narrows nothing by default.
+    if envelope is None:
+        envelope = MT.MultiTradeEnvelope.frozen_maximums()
+    last_order_state_seen: Any = None
     attempts_blocked: Dict[Any, str] = {}
     slept_s = 0.0
     empty_snapshots = 0
@@ -1386,6 +1418,12 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 ":" + str(v.get("truncation_cause") or ""))
             break
         snap = snapshot_provider()
+        if isinstance(snap, Mapping) and snap.get("order_state") is not None:
+            #: the venue-confirmed state THIS LOOP SAW, kept for the
+            #: attempt tape. Read from the snapshot rather than from a
+            #: provider attribute, so every provider shape works and the
+            #: tape records the state the decisions were actually made on.
+            last_order_state_seen = snap.get("order_state")
         if snap is None:
             # A MOMENTARY BOOK GAP IS NOT THE END OF THE COHORT. The provider
             # returns None both when the twelve-window budget is genuinely
@@ -1542,7 +1580,8 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             sleep_fn(wait)
             continue
 
-        checks = e1_preflight(snap, tracker, now=now_fn())
+        checks = e1_preflight(snap, tracker, now=now_fn(),
+                              envelope=envelope)
         if not checks["ok"]:
             # THE REPAIR. A refusal used to `continue` immediately, so a
             # window whose book sat above the $0.60 ceiling got 960 refusals
@@ -1563,6 +1602,40 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             if "E11_WINDOW_LATCH_EXHAUSTED" in checks["refusals"]:
                 attempts_blocked[snap.get("window")] = \
                     "E11_WINDOW_LATCH_EXHAUSTED"
+            # A SPENT CASH ENVELOPE BLOCKS NEW FIRST LEGS, NOT THE
+            # COMPLEMENT THAT CLOSES INVENTORY WE ALREADY HOLD.
+            #
+            # Caught in replay: three first legs placed, two complemented,
+            # and the third FILLED -- then `MT_GROSS_NOTIONAL_*` refused a
+            # fourth attempt, was classified terminal, and the loop broke
+            # out of the window with 0.13 shares unhedged and no deadman
+            # run. The refusal itself was right; stopping on it was not.
+            # Waiting cannot restore a spent envelope, so this is not
+            # paced either -- it is handed to the attempt branch, which is
+            # the same answer E11 and ATTEMPT_BUDGET_EXHAUSTED already
+            # get: keep managing inventory, run the handover, stop clean.
+            _spent = [c for c in checks["refusals"]
+                      if str(c).startswith("MT_GROSS_NOTIONAL_")]
+            if _spent:
+                attempts_blocked[snap.get("window")] = str(_spent[0])
+                refusals.append({"iteration": it,
+                                 "refusals": checks["refusals"],
+                                 "envelope_spent": str(_spent[0]),
+                                 "inventory_management_continues": True})
+                AR.record_decision(
+                    recorder, window=snap.get("window"), slot=-1,
+                    event="FIRST_LEG_REFUSED_GROSS_ENVELOPE_SPENT",
+                    market=snap.get("market"), reason=checks["refusals"],
+                    order_state=snap.get("order_state"), snapshot=snap,
+                    envelope=(checks.get("multitrade") or {}).get("bounds"),
+                    extra={"iteration": it,
+                           "nothing_was_created": True,
+                           "inventory_management_continues": True})
+                # HAND OVER, do not break. The next iteration takes the
+                # attempt-blocked branch, which runs the lifecycle and the
+                # handover deadman before stopping -- so a filled first
+                # leg is still complemented or cancelled by exact id.
+                continue
             decision = PACING.pace_for(snap, checks["refusals"],
                                        now=now_fn(), pace_s=pace_s)
             refusals.append({"iteration": it,
@@ -1570,6 +1643,22 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                              "pacing": decision["action"],
                              "paced_sleep_s": decision["sleep_s"],
                              "terminal_refusals": decision["terminal"]})
+            # EVERY REFUSAL IS AN ACTION, AND IT IS LOGGED AS ONE. The
+            # market state we actually observed, the inventory the venue
+            # reported before the decision, the bounds consulted and the
+            # reason. Refusals cannot go on the attempt tape -- a refusal
+            # is not a position in the SUBMITTED..REALIZED chain, and
+            # `record_attempt` rightly rejects a row whose book is not
+            # streaming, which is precisely a book-unavailable refusal.
+            AR.record_decision(
+                recorder, window=snap.get("window"), slot=-1,
+                event="DECISION_REFUSED", market=snap.get("market"),
+                reason=checks["refusals"],
+                order_state=snap.get("order_state"), snapshot=snap,
+                envelope=(checks.get("multitrade") or {}).get("bounds"),
+                extra={"iteration": it,
+                       "pacing": decision["action"],
+                       "multitrade": checks.get("multitrade")})
             if recorder is not None and decision["action"] == "STOP":
                 recorder.record_event(
                     window=snap.get("window", -1), slot=-1,
@@ -1592,7 +1681,7 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                                    transport_factory=transport_factory,
                                    session_auth=session_auth,
                                    progress=progress, recorder=recorder,
-                                   budget=budget)
+                                   budget=budget, envelope=envelope)
         except (L.WindowExhausted, L.LatchSpent) as exc:
             # DEFENCE IN DEPTH. `submit_first_leg` converts both of these
             # into `AttemptBudgetExhausted` after retiring its intent, so
@@ -1654,8 +1743,8 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             # send. It is paced on exactly the same rules, from the re-check's
             # own refusal list rather than from the stringified exception.
             late = (getattr(exc, "refusals", None)
-                    or e1_preflight(snap, tracker,
-                                    now=now_fn())["refusals"])
+                    or e1_preflight(snap, tracker, now=now_fn(),
+                                    envelope=envelope)["refusals"])
             decision = PACING.pace_for(snap, late, now=now_fn(),
                                        pace_s=pace_s)
             refusals.append({"iteration": it, "refusals": [str(exc)],
@@ -1743,7 +1832,15 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
         placements.append({"iteration": it, "window": out["e1_window"],
                            "slot": out["e1_latch_slot"]["slot"],
                            "latch_path": out["e1_latch_slot"]["path"],
-                           "order_id": out["order_id"]})
+                           "order_id": out["order_id"],
+                           "slug": snap.get("market"),
+                           # THE BOOK STATE AT DECISION TIME, kept with the
+                           # placement rather than re-read later. The
+                           # attempt row must carry the state that actually
+                           # authorized the order, and a state fetched
+                           # afterwards is a different observation.
+                           "ws_state_at_decision": dict(
+                               snap.get("ws_state") or {})})
         if recorder is not None:
             recorder.record_event(
                 window=out["e1_window"], slot=out["e1_latch_slot"]["slot"],
@@ -1753,6 +1850,49 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                         # retire it instead of blocking on it forever
                         "intent_id": out.get("e1_intent_id"),
                         "latch_path": out["e1_latch_slot"]["path"]})
+            AR.record_decision(
+                recorder, window=snap.get("window"), slot=-1,
+                event="DECISION_SUBMITTED", market=snap.get("market"),
+                reason="ELIGIBLE_ON_EVERY_BOUND",
+                order_state=snap.get("order_state"), snapshot=snap,
+                envelope=(out.get("e1_checks") or {}).get("multitrade",
+                                                          {}).get("bounds"),
+                extra={"iteration": it, "order_id": out["order_id"],
+                       "multitrade": (out.get("e1_checks") or {}).get(
+                           "multitrade")})
+    # ===================== THE ATTEMPT TAPE =========================
+    #
+    # ONE ROW PER ATTEMPT THIS RUN MADE, written here because here is
+    # where the outcome is finally known: the venue has been asked what
+    # became of every id, the complements are submitted or not, and the
+    # residuals are registered. `attempts.jsonl` is what
+    # `recorder:reconstruct_chain` reads -- the reconstructor the frozen
+    # spec names -- and until now production never wrote a single row to
+    # it, so the estimation chain would have run over an empty file.
+    #
+    # It is the LAST thing the run does and it cannot change any outcome:
+    # every bound, submission and cancellation is already decided.
+    attempt_tape = None
+    if recorder is not None and placements:
+        _final = last_order_state_seen
+        _comp: Dict[str, str] = {}
+        for _ev in (lifecycle.events or []):
+            for _c in (_ev.get("complements") or []):
+                if _c.get("order_id") and _c.get("complement_order_id"):
+                    _comp[str(_c["order_id"])] = str(
+                        _c["complement_order_id"])
+        _ws_by_id = {str(p["order_id"]): p.get("ws_state_at_decision")
+                     for p in placements if p.get("order_id")}
+        attempt_tape = AR.emit_attempt_rows(
+            recorder, lifecycle=lifecycle, order_state=_final,
+            market=placements[-1].get("slug"),
+            ws_state=placements[-1].get("ws_state_at_decision"),
+            ws_state_by_order_id=_ws_by_id,
+            complement_ids=_comp,
+            cancellations=lifecycle.deadman_result,
+            label="SUBMITTED",
+            windows_in_scope={p["window"] for p in placements})
+
     if progress is not None and stopped_because:
         v = tracker.verdict()
         progress.record_cohort_stopped(
@@ -1761,6 +1901,8 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
     return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
             "budget": budget.report(),
             "budget_events": budget_events,
+            "attempt_tape": attempt_tape,
+            "envelope": envelope.report(),
             "lifecycle": {
                 "first_legs_tracked": lifecycle.legs,
                 "residuals_opened": lifecycle.residuals_opened,
@@ -1920,6 +2062,32 @@ def main(argv: Optional[List[str]] = None, *,
             "no_order_endpoint_reached": True,
         })
         return 2
+    # ============== THE MULTI-TRADE ENVELOPE, BEFORE THE PROVIDER ========
+    #
+    # ALL FOUR KEYS OR NONE. None means the frozen twelve-window cohort
+    # that was authorized before this probe existed, and its ceilings are
+    # unchanged -- so this parameter narrows nothing by default. Any
+    # SUBSET is a refusal: a probe that states three of its four bounds
+    # has not stated its envelope, and guessing the fourth is exactly the
+    # silent authorization `budget.py` exists to prevent.
+    envelope = None
+    _env_set = [k for k in MT.ENVELOPE_KEYS if (os.getenv(k) or "").strip()]
+    if _env_set:
+        try:
+            envelope = MT.MultiTradeEnvelope.from_env()
+        except MT.EnvelopeNotAuthorized as exc:
+            _emit("E1_REFUSED", {
+                "REFUSED": "MULTITRADE_ENVELOPE_NOT_AUTHORIZED",
+                "probe": PROBE, "fingerprint": E1_FINGERPRINT,
+                "env_keys": list(MT.ENVELOPE_KEYS),
+                "keys_set": _env_set,
+                "why": str(exc),
+                "all_four_or_none": True,
+                "first_leg_purchases_are_not_the_gross_outlay": True,
+                "no_window_opened": True, "no_latch_slot_claimed": True,
+                "no_order_endpoint_reached": True})
+            return 2
+
     gate = AUTH.series_authorized()
     if not gate["matches_authorized_series"]:
         _emit("E1_REFUSED", {
@@ -1993,11 +2161,13 @@ def main(argv: Optional[List[str]] = None, *,
                       },
                       "progress": prog.report(),
                       "authorization": auth.report(),
+                      "envelope": (envelope.report() if envelope
+                                   else "FROZEN_COHORT_CEILINGS"),
                       "entering": "run_cohort"})
     out = run_cohort(snapshot_provider=provider, tracker=tracker,
                      recorder=rec, transport_factory=transport_factory,
                      session_auth=auth, progress=prog,
-                     budget=probe_budget)
+                     budget=probe_budget, envelope=envelope)
     out["provider"] = provider.report()
     out["progress"] = prog.report()
     _emit("E1_RESULT", out)

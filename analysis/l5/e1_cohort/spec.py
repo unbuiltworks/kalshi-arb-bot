@@ -755,8 +755,20 @@ DIFF: Dict[str, Any] = {
             "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
             "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
             "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59",
+            "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f",
         ],
         "reasons": {
+        "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f":
+            ("it had no multi-trade envelope and no attempt tape. Its only "
+             "cumulative bound was the window's $1.56, far looser than a "
+             "three-attempt probe needs, and it bounded FIRST-LEG "
+             "purchases without ever bounding the GROSS outlay -- so "
+             "$0.2340 of authorized first legs could become $0.3744 of "
+             "cash once each pair was completed. And production called "
+             "neither record_attempt nor reconstruct_chain, so "
+             "attempts.jsonl was empty after every live run and the "
+             "estimation chain the stopping rule depends on had nothing "
+             "to read"),
         "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59":
             ("its startup reconciliation was correct but NOT DURABLE. "
              "Terminal order rows were cached in process memory only, so "
@@ -1399,6 +1411,109 @@ DIFF: Dict[str, Any] = {
         "may_place_amend_or_cancel_an_order": False,
     },
 
+    # ================================================================
+    # THE MULTI-TRADE ENVELOPE, and the attempt tape that evidences it.
+    # ================================================================
+    "multitrade_envelope": {
+        "module": "analysis.l5.e1_cohort.multitrade",
+        "env_keys": ["PMUS_E1_MAX_CUM_FIRST_LEG_SHARES",
+                     "PMUS_E1_MAX_GROSS_NOTIONAL_USD",
+                     "PMUS_E1_MAX_OUTSTANDING_USD",
+                     "PMUS_E1_MAX_RESIDUAL_SHARES"],
+        "all_four_or_none": True,
+        "a_subset_is_a_refusal": True,
+        "may_only_narrow_the_frozen_ceilings": True,
+        "four_separate_quantities": [
+            "cumulative first-leg shares we may ACQUIRE",
+            "gross notional that may LEAVE, complement included",
+            "outstanding exposure AT RISK at one instant",
+            "directional residual UNHEDGED at one instant",
+        ],
+        "first_leg_purchases_are_not_the_gross_outlay": True,
+        "why": ("3 x 0.13 x $0.60 = $0.2340 bounds the FIRST-LEG "
+                "purchases. Every filled first leg is then followed by a "
+                "complement and the pair may cost $0.96 per share, so "
+                "the cash that can leave is 3 x 0.13 x $0.96 = $0.3744. "
+                "The 22:00z probe is the arithmetic's own witness: one "
+                "pair, filled_notional_usd $0.1248 == 0.13 x $0.96"),
+        "counts_the_prospective_attempt": True,
+        "cumulative_shares_counted_from": "durable latch slot files",
+        "a_spent_slot_counts_even_if_it_did_not_fill": True,
+        "cash_counted_from": "venue-confirmed per-id order rows",
+        "ownership_scoped_not_scope_wide": True,
+        "why_ownership_scoped": ("open_notional_usd and "
+                                 "filled_notional_usd keep every order in "
+                                 "our market, foreign ones included, and "
+                                 "are measured against the loose "
+                                 "account-wide $5.00 bound for that "
+                                 "reason. These four bounds are about "
+                                 "THIS PROBE's cash, so a foreign 16.21 "
+                                 "shares resting in our window must not "
+                                 "refuse our attempt"),
+        "an_unreadable_latch_is_a_refusal_not_a_zero": True,
+        "an_unpriceable_order_of_ours_is_a_refusal_not_a_zero": True,
+        "an_envelope_equal_to_the_frozen_ceilings_narrows_nothing": True,
+        "a_spent_gross_envelope_blocks_new_first_legs_only": True,
+        "a_spent_gross_envelope_never_strands_filled_inventory": True,
+        "why_that_matters": ("found in replay: three first legs placed, "
+                             "two complemented, the third FILLED, then "
+                             "the gross bound refused a fourth attempt "
+                             "and was classified terminal -- so the loop "
+                             "left the window with 0.13 shares unhedged "
+                             "and never ran the handover deadman. The "
+                             "refusal was right; stopping on it was not"),
+        "cumulative_shares_refusal_is_window_scoped_and_paced": True,
+        "gross_notional_refusal_is_a_risk_limit": True,
+        "changes_no_price_quantity_or_tranche_rule": True,
+        "may_place_amend_or_cancel_an_order": False,
+    },
+
+    "attempt_tape": {
+        "module": "analysis.l5.e1_cohort.attempt_rows",
+        "writes": "attempts.jsonl, through recorder:record_attempt",
+        "read_by": "recorder:reconstruct_chain",
+        "the_defect_it_closes": (
+            "record_attempt and reconstruct_chain were both frozen into "
+            "this spec's call graph, covered by unit tests, and called "
+            "from NO production code. A repository-wide search outside "
+            "tests returned the definition and one docstring, so every "
+            "live run wrote events.jsonl only, attempts.jsonl stayed "
+            "empty, and the estimation chain the stopping rule depends on "
+            "would have computed over ZERO attempts. Same defect class as "
+            "7cc94e20, whose production loop never called "
+            "submit_complement"),
+        "written_from": "run_cohort, at the end of the run",
+        "one_row_per_attempt": True,
+        "why_not_at_submission": (
+            "the ledger is append-only, so a row written at submission "
+            "could not be updated at fill, and reconstruct_chain counts "
+            "placements as len(attempts) -- two rows for one attempt "
+            "would inflate every rate derived from it. The submission "
+            "itself is already durable before the POST, as a "
+            "FIRST_LEG_SUBMITTED event"),
+        "queue_state_observed": False,
+        "markouts_observed": False,
+        "nothing_unobserved_is_fabricated": True,
+        "why_not_zero": ("a zero queue figure asserts nothing was ahead "
+                         "of us, which is a claim about the market we did "
+                         "not make"),
+        "refusals_go_to_events_not_attempts": True,
+        "why": ("a refusal is not a position in the "
+                "SUBMITTED..REALIZED chain, and record_attempt rightly "
+                "rejects a row whose pinned book is not streaming -- "
+                "which is exactly a book-unavailable refusal"),
+        "every_decision_carries": ["market state observed",
+                                   "side", "price", "size",
+                                   "inventory before", "inventory after",
+                                   "pair economics", "reason",
+                                   "bounds consulted"],
+        "inventory_is_read_from": "VENUE_AUTHORITATIVE order state",
+        "a_failed_view_is_never_read_as_zero_inventory": True,
+        "pair_cost_is_arithmetic_over_two_confirmed_fills": True,
+        "fees_disclosed": False,
+        "REALIZED_CLAIM": False,
+    },
+
     "probe_budget": {
         "module": "analysis.l5.e1_cohort.budget",
         "env_keys": ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"],
@@ -1839,7 +1954,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
       "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
       "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
-      "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59"]),
+      "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59",
+      "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -2003,6 +2119,48 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("terminal_order_cache."
      "strategy_sizing_budget_or_cancellation_changed", False),
     ("terminal_order_cache.may_place_amend_or_cancel_an_order", False),
+    ("multitrade_envelope.module", "analysis.l5.e1_cohort.multitrade"),
+    ("multitrade_envelope.all_four_or_none", True),
+    ("multitrade_envelope.a_subset_is_a_refusal", True),
+    ("multitrade_envelope.may_only_narrow_the_frozen_ceilings", True),
+    ("multitrade_envelope."
+     "first_leg_purchases_are_not_the_gross_outlay", True),
+    ("multitrade_envelope.counts_the_prospective_attempt", True),
+    ("multitrade_envelope.cumulative_shares_counted_from",
+     "durable latch slot files"),
+    ("multitrade_envelope.cash_counted_from",
+     "venue-confirmed per-id order rows"),
+    ("multitrade_envelope.ownership_scoped_not_scope_wide", True),
+    ("multitrade_envelope."
+     "an_unreadable_latch_is_a_refusal_not_a_zero", True),
+    ("multitrade_envelope."
+     "an_unpriceable_order_of_ours_is_a_refusal_not_a_zero", True),
+    ("multitrade_envelope."
+     "a_spent_gross_envelope_blocks_new_first_legs_only", True),
+    ("multitrade_envelope."
+     "a_spent_gross_envelope_never_strands_filled_inventory", True),
+    ("multitrade_envelope.gross_notional_refusal_is_a_risk_limit", True),
+    ("multitrade_envelope."
+     "changes_no_price_quantity_or_tranche_rule", True),
+    ("multitrade_envelope.may_place_amend_or_cancel_an_order", False),
+    ("attempt_tape.module", "analysis.l5.e1_cohort.attempt_rows"),
+    ("attempt_tape.writes",
+     "attempts.jsonl, through recorder:record_attempt"),
+    ("attempt_tape.read_by", "recorder:reconstruct_chain"),
+    ("attempt_tape.written_from", "run_cohort, at the end of the run"),
+    ("attempt_tape.one_row_per_attempt", True),
+    ("attempt_tape.queue_state_observed", False),
+    ("attempt_tape.markouts_observed", False),
+    ("attempt_tape.nothing_unobserved_is_fabricated", True),
+    ("attempt_tape.refusals_go_to_events_not_attempts", True),
+    ("attempt_tape.inventory_is_read_from",
+     "VENUE_AUTHORITATIVE order state"),
+    ("attempt_tape."
+     "a_failed_view_is_never_read_as_zero_inventory", True),
+    ("attempt_tape."
+     "pair_cost_is_arithmetic_over_two_confirmed_fills", True),
+    ("attempt_tape.fees_disclosed", False),
+    ("attempt_tape.REALIZED_CLAIM", False),
     ("probe_budget.module", "analysis.l5.e1_cohort.budget"),
     ("probe_budget.env_keys",
      ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"]),
@@ -2203,7 +2361,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f"
+    "42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:
