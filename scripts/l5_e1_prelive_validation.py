@@ -106,6 +106,40 @@ def main() -> int:
                                roles=reg["roles"],
                                terminal_cache=TERMINAL_CACHE,
                                pending_ids=reg["pending"])
+    # ---- THE ARMED STARTUP CALL, REPLICATED EXACTLY --------------------
+    #
+    # THE BLIND SPOT THAT HID A REAL DEFECT. The pass below this one reads
+    # with `outcome_up="OUTCOME_SIDE_YES"` and a scope of the four UPCOMING
+    # slugs, so all forty historical orders fell outside the scope filter
+    # and it reported `n_known: 0` -- nothing to price, nothing to catch.
+    # `run_cohort` reconciles BEFORE it opens a window, so the real call has
+    # NO pin: `slugs` empty and `outcome_up` None, with every known id in
+    # scope. That is the call that refused the armed probe at 20:30:43Z
+    # with ORDER_STATE_INCONSISTENT:UNPRICEABLE_EXPOSURE, so it is the call
+    # this validator has to make.
+    t_s = time.time()
+    sview = OS.read_order_state(reader, slugs=[], outcome_up=None,
+                                now=t_s, now_fn=time.time,
+                                known_ids=reg["known_ids"],
+                                roles=reg["roles"],
+                                pending_ids=reg["pending"])
+    j("STARTUP_PATH", {
+        "REPLICATES": "run_cohort's reconcile_at_startup, pin-free",
+        "outcome_up": None, "slugs": [], "no_window_pin": True,
+        "n_known_ids_passed": len(reg["known_ids"]),
+        "ok": sview.get("ok"), "reason": sview.get("reason"),
+        "latency_s": round(time.time() - t_s, 3),
+        "n_known": sview.get("n_known"),
+        "n_outstanding": sview.get("n_outstanding"),
+        "n_resolved_history": sview.get("n_resolved_history"),
+        "historical_resolved_filled_qty":
+            sview.get("historical_resolved_filled_qty"),
+        "held_slugs": sview.get("held_slugs"),
+        "residual": sview.get("residual"),
+        "aggregate_exposure_usd": sview.get("aggregate_exposure_usd"),
+        "reconcile_at_startup": OS.reconcile_at_startup(sview),
+        "THIS_IS_THE_GATE_THAT_BLOCKED_THE_PROBE": True})
+
     j("READER", {"ok": view.get("ok"), "reason": view.get("reason"),
                  "latency_s": round(time.time() - t0, 3),
                  "age_s": view.get("age_s"),

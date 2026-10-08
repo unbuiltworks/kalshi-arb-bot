@@ -2022,7 +2022,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # its attempt budget counted the SESSION total, so with forty
         # historical first legs MAX_ATTEMPTS=1 refused the authorized
         # probe outright. A one-window probe now binds its window.
-        "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165"]
+        "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
+        # its startup reconciliation ran with no window pin, so it could
+        # not price its own settled history: the armed probe refused itself
+        # with UNPRICEABLE_EXPOSURE and placed nothing, on every boot.
+        "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

@@ -753,8 +753,11 @@ DIFF: Dict[str, Any] = {
             "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
             "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
             "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
+            "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
         ],
         "reasons": {
+        "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1":            
+            ("its startup reconciliation ran before any window was opened and therefore with no pin, so own_side_price could not price ANY order, and the tape's twenty FILLED 1215z orders each set priced = False. The armed probe refused itself at 20:30:43Z with ORDER_STATE_INCONSISTENT: UNPRICEABLE_EXPOSURE and placed nothing -- deterministically, on every boot. A fill is now current exposure only while it is still inventory, decided from the order's own market slug and the venue's own positions, needing no pin"),
         "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165":            
             ("its attempt budget counted the SESSION total, so on the live cohort session -- forty historical first legs -- MAX_ATTEMPTS=1 refused the owner's authorized probe outright with ATTEMPT_BUDGET_EXHAUSTED_40_OF_1. A one-window probe now binds its window identity durably and counts attempts against that window alone, so one means one without erasing history or inflating the limit"),
         "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf":            
@@ -1273,6 +1276,54 @@ DIFF: Dict[str, Any] = {
                                      "wrong"),
     },
 
+    "startup_reconciliation": {
+        "module": "analysis.l5.e1_cohort.order_state",
+        "callable": "reconcile_at_startup",
+        "runs_before_any_window_is_opened": True,
+        "therefore_has_no_window_pin": True,
+        "the_20261008_2030z_refusal":
+            ("ORDER_STATE_NOT_ESTABLISHED_AT_STARTUP:"
+             "ORDER_STATE_INCONSISTENT:UNPRICEABLE_EXPOSURE"),
+        "why_it_refused": ("with no pin there is no outcome_up, so "
+                           "own_side_price returned None for every order, "
+                           "and the tape's twenty FILLED 1215z orders each "
+                           "hit `cum > 0 and own is None` and set priced = "
+                           "False. The engine could not price its own "
+                           "settled history, so an armed boot refused "
+                           "deterministically, every time, for as long as "
+                           "the tape carried a fill"),
+        "why_no_read_only_check_caught_it":
+            ("the validator read with a hard-coded outcome_up and a scope "
+             "of the four UPCOMING slugs, so all forty historical orders "
+             "fell outside the scope filter and it reported n_known: 0 -- "
+             "nothing to price and nothing to catch"),
+        "a_fill_is_current_exposure_only_while_it_is_still_inventory": True,
+        "resolution_requires_all_three": [
+            "the order is TERMINAL",
+            "its OWN window has ENDED, from its own market slug",
+            "the venue reports NO position in that market",
+        ],
+        "resolution_authority": "GET /v1/portfolio/positions + the order's "
+                                "own market slug",
+        "resolution_needs_no_window_pin": True,
+        "window_end_is_parsed_from_the_slug": True,
+        "an_unparsable_slug_is_never_resolved": True,
+        "positions_are_read_before_the_pricing_loop": True,
+        "why_reordered": ("the venue's statement of what is held is what "
+                          "decides whether a fill is still inventory, so "
+                          "it has to be known before the fill is priced"),
+        "historical_orders_and_fills_are_preserved_not_discarded": True,
+        "an_outstanding_order_must_still_be_priceable": True,
+        "live_inventory_must_still_be_priceable": True,
+        "a_missing_price_is_never_zero_exposure": True,
+        "an_unpriceable_live_exposure_is_still_inconsistent": True,
+        "ORDER_STATE_INCONSISTENT_is_not_suppressed": True,
+        "ownership_checks_unchanged": True,
+        "a_local_intent_still_blocks": True,
+        "venue_position_exceeding_our_derived_still_refuses": True,
+        "strategy_sizing_budget_cancellation_or_selection_changed": False,
+    },
+
     "probe_budget": {
         "module": "analysis.l5.e1_cohort.budget",
         "env_keys": ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"],
@@ -1711,7 +1762,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
       "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
       "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
-      "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165"]),
+      "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
+      "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1803,6 +1855,36 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("pair_lifecycle.filled_residual_rides_to_settlement", True),
     ("pair_lifecycle.taker_rescue_at_any_tte", False),
     ("pair_lifecycle.handover_tte_s", 120.0),
+    ("startup_reconciliation.callable", "reconcile_at_startup"),
+    ("startup_reconciliation.runs_before_any_window_is_opened", True),
+    ("startup_reconciliation.therefore_has_no_window_pin", True),
+    ("startup_reconciliation."
+     "a_fill_is_current_exposure_only_while_it_is_still_inventory", True),
+    ("startup_reconciliation.resolution_requires_all_three",
+     ["the order is TERMINAL",
+      "its OWN window has ENDED, from its own market slug",
+      "the venue reports NO position in that market"]),
+    ("startup_reconciliation.resolution_needs_no_window_pin", True),
+    ("startup_reconciliation.window_end_is_parsed_from_the_slug", True),
+    ("startup_reconciliation.an_unparsable_slug_is_never_resolved", True),
+    ("startup_reconciliation.positions_are_read_before_the_pricing_loop",
+     True),
+    ("startup_reconciliation."
+     "historical_orders_and_fills_are_preserved_not_discarded", True),
+    ("startup_reconciliation.an_outstanding_order_must_still_be_priceable",
+     True),
+    ("startup_reconciliation.live_inventory_must_still_be_priceable", True),
+    ("startup_reconciliation.a_missing_price_is_never_zero_exposure", True),
+    ("startup_reconciliation."
+     "an_unpriceable_live_exposure_is_still_inconsistent", True),
+    ("startup_reconciliation.ORDER_STATE_INCONSISTENT_is_not_suppressed",
+     True),
+    ("startup_reconciliation.ownership_checks_unchanged", True),
+    ("startup_reconciliation.a_local_intent_still_blocks", True),
+    ("startup_reconciliation."
+     "venue_position_exceeding_our_derived_still_refuses", True),
+    ("startup_reconciliation."
+     "strategy_sizing_budget_cancellation_or_selection_changed", False),
     ("probe_budget.module", "analysis.l5.e1_cohort.budget"),
     ("probe_budget.env_keys",
      ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"]),
@@ -2003,7 +2085,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1"
+    "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

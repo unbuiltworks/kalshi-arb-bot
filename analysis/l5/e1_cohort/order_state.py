@@ -56,8 +56,40 @@ This module performs GET requests only and builds no order body.
 """
 from __future__ import annotations
 
+import calendar
+import re
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
+
+#: A PMUS window slug carries its own window identity: the date, the start
+#: time and the window length. `cpc-btc-updown-15m-2026-10-08-1215z` is the
+#: 15-minute window starting 2026-10-08T12:15Z, so it ENDED at 12:30Z. That
+#: is durable, authoritative and needs no current-window pin, which is what
+#: lets a startup reconciliation tell its own settled history from live
+#: inventory. Parsed here rather than imported, because this module is
+#: copied into the GET-only recovery image on its own.
+_SLUG_WINDOW_RE = re.compile(
+    r"-(?P<mins>\d+)m-(?P<y>\d{4})-(?P<mo>\d{2})-(?P<d>\d{2})-"
+    r"(?P<hh>\d{2})(?P<mm>\d{2})z$")
+
+
+def window_end_unix(slug: Any) -> Optional[float]:
+    """When this order's own window ended, from the slug alone.
+
+    `None` when the slug is absent or not a window slug we can parse, and
+    the caller must then treat the order as UNRESOLVED -- an identity we
+    cannot establish is never read as "settled, nothing to see".
+    """
+    m = _SLUG_WINDOW_RE.search(str(slug or ""))
+    if not m:
+        return None
+    try:
+        start = calendar.timegm((int(m.group("y")), int(m.group("mo")),
+                                 int(m.group("d")), int(m.group("hh")),
+                                 int(m.group("mm")), 0, 0, 0, 0))
+    except (ValueError, OverflowError):
+        return None
+    return float(start) + float(int(m.group("mins")) * 60)
 
 #: how old a venue order-state read may be before it stops being evidence.
 #: Shorter than the book's 2.0s would be pointless (order state does not
@@ -678,11 +710,55 @@ def read_order_state(reader: Callable[[str], Any], *,
     outstanding_first = [c for c in outstanding if c["role"] == FIRST_LEG]
     outstanding_comp = [c for c in outstanding if c["role"] == COMPLEMENT]
 
+    # THE POSITIONS CROSS-CHECK. `/v1/portfolio/positions` is the venue's
+    # own statement of inventory, and it is read as a SECOND OPINION on the
+    # inventory we derived from per-id cumQuantity. If the venue reports a
+    # position in one of our markets that our own orders cannot account
+    # for, something is wrong with our picture and we stop rather than
+    # trade on it. An absent or unparsable positions body is itself a
+    # refusal, for the same reason.
+    try:
+        pos_body = reader(POSITIONS_PATH)
+    except Exception as exc:                                   # noqa: BLE001
+        view["reason"] = "ORDER_STATE_UNREADABLE:%s:%s" % (
+            POSITIONS_PATH, type(exc).__name__)
+        return view
+    venue_positions = _positions_for(pos_body, want)
+    if venue_positions is None:
+        view["reason"] = "ORDER_STATE_UNPARSABLE:%s" % POSITIONS_PATH
+        return view
+    # AND IT IS READ **BEFORE** THE PRICING LOOP, because it is what
+    # decides whether a FILL IS STILL INVENTORY.
+    #
+    # THE DEFECT THIS ORDERING FIXES. The startup reconciliation runs
+    # before any window is pinned, so it has no `outcome_up`, so
+    # `own_side_price` cannot convert the venue's long-side-only wire into
+    # our own-side cost for ANY order. With the tape's forty ids -- twenty
+    # of them FILLED in the already-settled 1215z window -- every one of
+    # those fills hit `cum > 0 and own is None` and set `priced = False`,
+    # so an armed boot refused with
+    # ORDER_STATE_INCONSISTENT:UNPRICEABLE_EXPOSURE every single time. The
+    # engine could not price its own settled history, so it would not
+    # trade. The read-only checks missed it because they passed NO known
+    # ids (`n_known: 0`), leaving nothing to price.
+    #
+    # The repair is not to relax the pricing requirement. It is to ask the
+    # right question: a fill is CURRENT EXPOSURE only while the venue still
+    # holds a position in that market. `/v1/portfolio/positions` is the
+    # venue's own statement of what is held, and the order row carries its
+    # OWN `marketSlug`, so resolution is established from durable,
+    # authoritative data WITHOUT a current-window pin.
+    held_slugs = {str(k) for k, q in (venue_positions or {}).items()
+                  if _fin(q) not in (None, D("0"))}
     # RULE 5. Aggregate, in dollars, on the OWN side.
     open_notional = D("0")
     filled_notional = D("0")
     priced = True
     net: Dict[str, D] = {}
+    #: fills whose position the venue says is gone. Reported, never counted
+    #: as current exposure, and never required to be priceable.
+    historical_filled_qty = D("0")
+    resolved_history_ids: List[str] = []
     for c in by_id.values():
         own = _fin(c["own_side_price"])
         leaves = _fin(c["leaves_quantity"])
@@ -702,6 +778,37 @@ def read_order_state(reader: Callable[[str], Any], *,
         if c["outstanding"] and leaves is not None and own is not None:
             open_notional += max(leaves, D("0")) * own
         if cum is not None and cum > 0:
+            # IS THIS FILL STILL INVENTORY? Terminal, and the venue holds no
+            # position in its market, means the position resolved: it is
+            # HISTORY. History is recorded and carries no current exposure,
+            # so it does not have to be priceable -- which is exactly the
+            # case a startup reconciliation with no pin cannot price.
+            #
+            # ANYTHING ELSE COUNTS. A fill on an order that is still
+            # outstanding, or in a market the venue still reports a position
+            # in, is live inventory: it must be priceable, and if it is not,
+            # `priced` goes false and we refuse. A missing price is NEVER
+            # read as zero exposure.
+            # THREE CONDITIONS, ALL REQUIRED, EACH ONE CONSERVATIVE:
+            #
+            #   * the order is TERMINAL -- nothing can still fill on it;
+            #   * its OWN window has ENDED, read from its own slug, so a
+            #     fill in the window we are trading right now is live
+            #     inventory and still has to be priced and hedged. An
+            #     unparsable slug returns None and is NOT resolved;
+            #   * the venue reports NO position in that market, so if
+            #     settlement is still pending the fill stays live even
+            #     though its window closed.
+            _end = window_end_unix(c["slug"])
+            resolved_history = (
+                c["terminal"]
+                and _end is not None
+                and float(now) >= _end
+                and str(c["slug"]) not in held_slugs)
+            if resolved_history:
+                historical_filled_qty += cum
+                resolved_history_ids.append(str(c["id"]))
+                continue
             if own is not None:
                 filled_notional += cum * own
             else:
@@ -726,23 +833,6 @@ def read_order_state(reader: Callable[[str], Any], *,
                         "is_unmatched_directional_exposure": True}
             break
 
-    # THE POSITIONS CROSS-CHECK. `/v1/portfolio/positions` is the venue's
-    # own statement of inventory, and it is read as a SECOND OPINION on the
-    # inventory we derived from per-id cumQuantity. If the venue reports a
-    # position in one of our markets that our own orders cannot account
-    # for, something is wrong with our picture and we stop rather than
-    # trade on it. An absent or unparsable positions body is itself a
-    # refusal, for the same reason.
-    try:
-        pos_body = reader(POSITIONS_PATH)
-    except Exception as exc:                                   # noqa: BLE001
-        view["reason"] = "ORDER_STATE_UNREADABLE:%s:%s" % (
-            POSITIONS_PATH, type(exc).__name__)
-        return view
-    venue_positions = _positions_for(pos_body, want)
-    if venue_positions is None:
-        view["reason"] = "ORDER_STATE_UNPARSABLE:%s" % POSITIONS_PATH
-        return view
     derived_net_qty = sum(net.values()) if net else D("0")
     venue_net_qty = sum(venue_positions.values()) if venue_positions \
         else D("0")
@@ -789,6 +879,21 @@ def read_order_state(reader: Callable[[str], Any], *,
         "derived_net_qty": str(derived_net_qty),
         "venue_net_qty": str(venue_net_qty),
         "positions_corroborate_our_orders": True,
+        # HISTORY, NAMED AS HISTORY. Terminal fills whose position the venue
+        # no longer reports. They are preserved and reported -- the forty
+        # ids and their fills are never discarded -- but they are not
+        # current exposure and they are not required to be priceable.
+        "historical_resolved_filled_qty": str(historical_filled_qty),
+        "resolved_history_ids": sorted(resolved_history_ids),
+        "n_resolved_history": len(resolved_history_ids),
+        "held_slugs": sorted(held_slugs),
+        "resolution_established_without_a_window_pin": True,
+        "resolution_authority": "GET /v1/portfolio/positions + the order's "
+                                "own marketSlug",
+        "a_fill_in_a_held_market_is_live_inventory_and_must_be_priceable":
+            True,
+        "an_unpriceable_live_exposure_is_still_ORDER_STATE_INCONSISTENT":
+            True,
         "open_ids": sorted(open_ids),
         "unconfirmed_pending_ids": sorted(unseen_pending),
         "pending_ids_resolved_by_this_read": sorted(resolved_pending),
