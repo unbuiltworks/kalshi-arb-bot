@@ -202,6 +202,17 @@ COPY scripts/l5_e1_prelive_validation.py \
 COPY scripts/l5_e1_cancel_by_id.py \
      scripts/l5_e1_cancel_by_id.py
 
+# THE BINDING RETIREMENT TOOL. A second authorization cannot bind a window
+# while the completed probe's immutable binding names the first one -- the
+# three-attempt probe refused itself with PROBE_IS_BOUND_TO_WINDOW_3 having
+# placed nothing. This tool verifies the previous probe is complete at the
+# venue and in the ledger, then COPIES its binding into an O_EXCL archive;
+# it releases nothing, deletes nothing, and the new probe binds in a new
+# epoch namespace. It was missing from this COPY list on its first deploy,
+# which is why the build-time import proof below now names it too.
+COPY scripts/l5_e1_retire_binding.py \
+     scripts/l5_e1_retire_binding.py
+
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
 
@@ -212,6 +223,9 @@ ENV PYTHONUNBUFFERED=1
 # content, the BUILD fails here rather than the container failing at 02:00
 # with a window at stake.
 RUN python3 -c "import scripts.l5_e1_cohort_run as m; \
+import scripts.l5_e1_retire_binding as r; \
+import scripts.l5_e1_cancel_by_id as c; \
+import scripts.l5_e1_prelive_validation as v; \
 from analysis.l5.e1_cohort.spec import E1_FINGERPRINT, assert_frozen; \
 assert_frozen(); print('BUILD OK fingerprint', E1_FINGERPRINT)"
 
