@@ -161,6 +161,10 @@ COPY scripts/l5_pmus_btc15m_availability.py \
 COPY scripts/l5_pmus_btc15m_watcher.py \
      scripts/l5_pmus_btc15m_watcher.py
 
+# READ-ONLY A6 settlement close-out + 15m halt bracket. ReadOnlyTransport.
+COPY scripts/l5_a6_settle_and_halt_bracket.py \
+     scripts/l5_a6_settle_and_halt_bracket.py
+
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
 
