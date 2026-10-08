@@ -2007,7 +2007,9 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # re-read every known id on every snapshot: 41 GETs in 3.03s
         # against a 5.0s bound, so more windows would have failed it closed
         # permanently; and it re-walked the activities feed per market.
-        "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f"]
+        "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
+        # its production loop never called submit_complement at all.
+        "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

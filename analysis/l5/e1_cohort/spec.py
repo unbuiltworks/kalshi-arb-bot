@@ -749,8 +749,24 @@ DIFF: Dict[str, Any] = {
             "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
             "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
             "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
+            "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
         ],
         "reasons": {
+            "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b":
+                ("its production loop NEVER CALLED submit_complement. The "
+                 "function was written, frozen into this spec's call "
+                 "graph, authorized through authorize_complement, given "
+                 "its own latch and covered by tests -- and a grep for "
+                 "its call sites outside tests returned the definition, a "
+                 "string in spec.py and three comments. So the loop "
+                 "placed first legs and stopped: no complement, no "
+                 "open_residual, no deadman. That is why the 1215z window "
+                 "filled twenty first legs and submitted zero "
+                 "complements, and it is the same defect class as the "
+                 "hard-coded our_outstanding_orders: 0 one level up -- a "
+                 "gate wired to a constant, then a function wired to "
+                 "nothing. It also carried HANDOVER_TTE_S = 60.0 against "
+                 "the frozen timing_explicit value of 120.0"),
             "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f":
                 ("it re-read every known order id on every snapshot: the "
                  "live read-only run made 41 GETs in 3.03s against a 5.0s "
@@ -1168,6 +1184,58 @@ DIFF: Dict[str, Any] = {
         "read_only": True,
     },
 
+    # ================================================================
+    # THE PRODUCTION PAIR LIFECYCLE. `submit_complement` had no caller.
+    # ================================================================
+    "pair_lifecycle": {
+        "module": "analysis.l5.e1_cohort.pair_lifecycle",
+        "invoked_from": "analysis.l5.e1_cohort.runner:run_cohort",
+        "submit_complement_had_no_caller": True,
+        "why_it_mattered": ("the function was written, frozen into this "
+                            "spec's call graph, authorized through "
+                            "authorize_complement, given its own latch "
+                            "and covered by tests -- and nothing called "
+                            "it. The loop placed first legs and stopped. "
+                            "That is why the 1215z window filled twenty "
+                            "first legs and submitted zero complements"),
+        "same_defect_class_as_the_hard_coded_outstanding_count": True,
+        "runs_before_the_first_leg_decision": True,
+        "why_before": ("a filled first leg wants hedging and risk "
+                       "headroom now; deferring it behind the placement "
+                       "decision is what left 1215z unhedged"),
+        "residual_opened_before_any_complement": True,
+        "complement_sized_to_cumulative_minus_covered": True,
+        "duplicate_complement_quantity_is_impossible": True,
+        "one_complement_outstanding_at_a_time": True,
+        "fails_closed_when_order_state_is_unavailable": True,
+        "past_cutoff_is_withdraw_only": True,
+        "why_withdraw_only": ("the first version re-placed the uncovered "
+                              "shortfall after the deadman cleared the "
+                              "one-at-a-time block, which is a later "
+                              "worse order past the trading cutoff and "
+                              "contradicts C9; the integration test "
+                              "caught it"),
+        "an_unhedgeable_first_leg_is_never_opened": True,
+        "why": "E10 checks complement feasibility BEFORE the first leg",
+        # the deadman
+        "deadman": "analysis.l5.live_exec2.orders:deadman_cancel_all",
+        "deadman_is_market_scoped": True,
+        "deadman_is_verified_against_open_orders": True,
+        "deadman_failure_is_a_safety_violation": True,
+        "a_cancel_response_is_not_proof": True,
+        "filled_residual_rides_to_settlement": True,
+        "taker_rescue_at_any_tte": False,
+        "handover_tte_s": 120.0,
+        "handover_tte_source": "SPEC.timing_explicit.tte_shutdown_s",
+        "provider_literal_was_60s": True,
+        "why_resolved_to_the_spec": ("60.0 permitted first legs in the "
+                                     "120s-to-60s band the spec refuses "
+                                     "and moved the withdrawal deadline "
+                                     "60s later than required; the spec "
+                                     "is authority and the code was "
+                                     "wrong"),
+    },
+
     "latch": {
         "kind": "BOUNDED_COUNT_NAMED_SLOTS",
         "module": "analysis.l5.e1_cohort.latch",
@@ -1515,7 +1583,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
       "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
       "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
-      "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f"]),
+      "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
+      "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1578,6 +1647,27 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
      "an_unreadable_feed_is_not_an_absent_settlement", True),
     ("outstanding_order_invariant.a_truncated_walk_cannot_claim_absence",
      True),
+    # the production pair lifecycle
+    ("pair_lifecycle.invoked_from",
+     "analysis.l5.e1_cohort.runner:run_cohort"),
+    ("pair_lifecycle.submit_complement_had_no_caller", True),
+    ("pair_lifecycle.runs_before_the_first_leg_decision", True),
+    ("pair_lifecycle.residual_opened_before_any_complement", True),
+    ("pair_lifecycle.complement_sized_to_cumulative_minus_covered", True),
+    ("pair_lifecycle.duplicate_complement_quantity_is_impossible", True),
+    ("pair_lifecycle.one_complement_outstanding_at_a_time", True),
+    ("pair_lifecycle.fails_closed_when_order_state_is_unavailable", True),
+    ("pair_lifecycle.past_cutoff_is_withdraw_only", True),
+    ("pair_lifecycle.an_unhedgeable_first_leg_is_never_opened", True),
+    ("pair_lifecycle.deadman_is_market_scoped", True),
+    ("pair_lifecycle.deadman_is_verified_against_open_orders", True),
+    ("pair_lifecycle.deadman_failure_is_a_safety_violation", True),
+    ("pair_lifecycle.a_cancel_response_is_not_proof", True),
+    ("pair_lifecycle.filled_residual_rides_to_settlement", True),
+    ("pair_lifecycle.taker_rescue_at_any_tte", False),
+    ("pair_lifecycle.handover_tte_s", 120.0),
+    ("pair_lifecycle.handover_tte_source",
+     "SPEC.timing_explicit.tte_shutdown_s"),
     # the order registry, restored from the durable tape
     ("order_registry.module", "analysis.l5.e1_cohort.order_registry"),
     ("order_registry.source", "append_only_tape"),
@@ -1729,7 +1819,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b"
+    "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

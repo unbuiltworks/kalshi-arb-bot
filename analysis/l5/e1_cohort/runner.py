@@ -74,6 +74,7 @@ from analysis.l5.e1_cohort.stopping import CohortTracker, project_feasibility
 from analysis.l5.live_exec2 import orders as O
 from analysis.l5.e1_cohort import order_registry as ORG
 from analysis.l5.e1_cohort import order_state as OST
+from analysis.l5.e1_cohort import pair_lifecycle as PLC
 from analysis.l5.e1_cohort import pacing as PACING
 from analysis.l5.e1_cohort import pmus_book as PBK
 from analysis.l5.e1_cohort import pmus_identity as PIDENT
@@ -1141,6 +1142,12 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
     sleep_fn = sleep_fn or time.sleep
     pace_s = PACING.PACE_S if pace_s is None else float(pace_s)
     paced_waits: List[Dict[str, Any]] = []
+    # THE PAIR LIFECYCLE. This is the thing `run_cohort` did not have.
+    # `submit_complement` existed, was frozen into the spec's call graph,
+    # had its own authorization and latch, and was never called from here
+    # by anything -- which is why 1215z filled twenty first legs and
+    # submitted zero complements.
+    lifecycle = PLC.PairLifecycle()
     slept_s = 0.0
     empty_snapshots = 0
     placements: List[Dict[str, Any]] = []
@@ -1249,6 +1256,20 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                     "signing_proof": signing_proof,
                     "LANGUAGE": "pre-existing venue state is not inherited"}
 
+    # SEED THE LIFECYCLE FROM THE RESTORED REGISTRY, so a restart picks up
+    # the first legs it already owns and complements them instead of
+    # treating them as someone else's orders. The window/slot come from the
+    # latch slot recorded with each placement; where a restart cannot
+    # recover them the leg is still tracked, so its fill is registered as
+    # residual and counts against the ceiling even if no tranche can be
+    # addressed to a slot.
+    _roles = getattr(snapshot_provider, "order_roles", None) or {}
+    _known = getattr(snapshot_provider, "known_order_ids", None) or []
+    for _oid in _known:
+        if str(_roles.get(_oid, OST.FIRST_LEG)) == OST.FIRST_LEG:
+            lifecycle.record_first_leg(order_id=_oid, window=0, slot=0,
+                                       price="0")
+
     # THE CAP IS A SAFETY NET, NOT THE BUDGET. It used to be
     # `MAX_PLACEMENTS * 4` == 960, which is far SMALLER than the number of
     # times a paced loop legitimately reads the book while observing twelve
@@ -1296,6 +1317,49 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             sleep_fn(wait)
             continue
         empty_snapshots = 0
+
+        # ================= THE PAIR LIFECYCLE, EVERY ITERATION ===========
+        #
+        # BEFORE any new first leg is considered. A filled first leg is
+        # inventory that wants hedging and risk headroom RIGHT NOW, and
+        # deferring it behind the placement decision is what left 1215z
+        # unhedged. The step registers residuals, submits an authorized
+        # complement sized to cumulative-minus-covered, and fails closed
+        # when order state could not be established.
+        # the cutoff is read FIRST, because it decides whether this step
+        # may submit anything at all.
+        cutoff = snap.get("trading_cutoff_unix")
+        past_cutoff = (cutoff is not None and now_fn() >= float(cutoff))
+        lc = lifecycle.step(snapshot=snap, tracker=tracker, now=now_fn(),
+                            submit_complement=submit_complement,
+                            transport_factory=transport_factory,
+                            session_auth=session_auth, recorder=recorder,
+                            progress=progress, past_cutoff=past_cutoff)
+        if lc["complements"] or lc["residuals"] or lc["skipped"]:
+            lifecycle.events.append({"iteration": it, **lc})
+
+        # ================= THE HANDOVER DEADMAN =========================
+        #
+        # `SPEC["timing_explicit"]["open_at_boundary"]` is "CANCELLED,
+        # never left to ride to settlement", and rules C6/C9 say an
+        # unfilled complement is cancelled at handover rather than
+        # re-priced. At or past the withdrawal TTE this runs the APPROVED
+        # market-scoped deadman and verifies it against /v1/orders/open.
+        # A FILLED residual is deliberately NOT unwound: there is no taker
+        # rescue at any price or TTE, so inventory rides to settlement.
+        if past_cutoff and not lifecycle.deadman_result:
+            dm = lifecycle.deadman(
+                snapshot=snap, now=now_fn(),
+                transport_factory=transport_factory, orders_module=O,
+                recorder=recorder,
+                read_open=getattr(snapshot_provider, "read_open_orders",
+                                  None))
+            lifecycle.events.append({"iteration": it, "deadman": dm})
+            if dm.get("all_cancelled") is False:
+                tracker.violate(
+                    "HANDOVER_DEADMAN_DID_NOT_CLEAR_OPEN_ORDERS:%s"
+                    % (dm.get("open_after"),))
+
         checks = e1_preflight(snap, tracker, now=now_fn())
         if not checks["ok"]:
             # THE REPAIR. A refusal used to `continue` immediately, so a
@@ -1433,6 +1497,12 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                              "detail": exc.detail})
             break
         tracker.record_venue_ok()
+        # AND HAND IT TO THE LIFECYCLE, which is what makes its fill
+        # reachable by the complement path on the next iteration.
+        lifecycle.record_first_leg(order_id=out["order_id"],
+                                   window=out["e1_window"],
+                                   slot=out["e1_latch_slot"]["slot"],
+                                   price=snap.get("first_leg_price"))
         placements.append({"iteration": it, "window": out["e1_window"],
                            "slot": out["e1_latch_slot"]["slot"],
                            "latch_path": out["e1_latch_slot"]["path"],
@@ -1452,6 +1522,13 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             verdict=v["verdict"],
             truncation_cause=v.get("truncation_cause"))
     return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
+            "lifecycle": {
+                "first_legs_tracked": lifecycle.legs,
+                "residuals_opened": lifecycle.residuals_opened,
+                "events": lifecycle.events,
+                "deadman": lifecycle.deadman_result,
+                "complement_is_reached_from_run_cohort": True,
+            },
             "iterations": it, "placements": placements,
             "windows_used": (progress.windows_used()
                              if progress is not None else None),

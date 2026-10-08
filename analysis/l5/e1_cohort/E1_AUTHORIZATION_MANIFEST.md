@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b
+0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -415,7 +415,7 @@ additive and touches nothing of XR2W's.
 | `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
 | `PMUS_E1_ARM` | must equal the session id |
 | `PMUS_E1_GATE_EVIDENCE` | must equal the authorized **series** `btc-updown-15m`; the exact resolved slug is re-enforced before every submission |
-| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b` |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c` |
 
 **None of these is set.** Reporting is BOOLEAN ONLY — `armed_env_summary()`
 returns presence flags and never a value, asserted by test.
@@ -563,7 +563,7 @@ degraded one.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
 4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
-   `7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b`;
+   `0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many

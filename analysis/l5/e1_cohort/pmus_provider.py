@@ -42,15 +42,36 @@ from analysis.l5.e1_cohort import pmus_book as PBK
 from analysis.l5.e1_cohort import order_state as OS
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import pmus_selector as SEL
-from analysis.l5.e1_cohort.spec import (FIRST_LEG_QTY, PROBE, VENUE_TICK,
-                                        WINDOWS)
+from analysis.l5.e1_cohort.spec import (FIRST_LEG_QTY, PROBE, SPEC,
+                                        VENUE_TICK, WINDOWS)
 
 #: the bounded readiness wait. Same values E1 already shipped.
 WS_READY_TIMEOUT_S = 20.0
 WS_READY_POLL_S = 0.25
 
-#: how long before a window's end E1 stops opening first legs.
-HANDOVER_TTE_S = 60.0
+#: HOW LONG BEFORE A WINDOW'S END E1 STOPS OPENING FIRST LEGS.
+#:
+#: READ FROM THE FROZEN SPEC, NOT WRITTEN HERE. This was the literal `60.0`
+#: while `SPEC["timing_explicit"]` -- which E1 inherits -- says:
+#:
+#:     tte_shutdown_s                    120.0
+#:     placement_allowed_while_tte_gt_s  120.0
+#:     withdraw_required_at_tte_le_s     120.0
+#:     open_at_boundary  "CANCELLED, never left to ride to settlement"
+#:
+#: So 60.0 was a silent policy relaxation in two directions at once: it
+#: permitted first legs in the 120s-to-60s band the spec refuses, and it
+#: moved the withdrawal deadline 60 seconds later than the spec requires.
+#: The owner asked for the discrepancy resolved against the frozen
+#: specification rather than quietly changed, and this is that resolution:
+#: the spec is authority, the code was wrong, and the value is now
+#: DERIVED so it cannot drift again.
+HANDOVER_TTE_S = float(SPEC["timing_explicit"]["tte_shutdown_s"])
+
+#: the same instant, named as the spec names it: at or below this TTE every
+#: open order is withdrawn and nothing new is placed.
+WITHDRAW_AT_TTE_S = float(
+    SPEC["timing_explicit"]["withdraw_required_at_tte_le_s"])
 
 
 class WindowUnavailable(Exception):

@@ -393,6 +393,21 @@ def settlement_for(reader: Callable[[str], Any], *, slug: str,
     return out
 
 
+def slug_of(row: Mapping[str, Any]) -> Optional[str]:
+    """The market a venue order row names.
+
+    It lives here because this is the one module in the package exempted
+    to name the venue's slug key -- `pair_lifecycle` needs the same value
+    to verify a market-scoped cancel, and it can SUBMIT orders, so it does
+    not get the exemption. Routing the read through here keeps the
+    no-duplicate-serializer rule meaningful instead of widened.
+    """
+    if not isinstance(row, Mapping):
+        return None
+    v = row.get("marketSlug") or row.get("slug")
+    return None if v is None else str(v)
+
+
 def classify(order: Mapping[str, Any], *, outcome_up: Any) -> Dict[str, Any]:
     """One venue order row -> what it means for the invariant."""
     state = order.get("state")
