@@ -162,6 +162,12 @@ class PmusWindowProvider:
             [] if known_order_ids is None else known_order_ids)
         self.order_roles: Dict[str, str] = (
             {} if order_roles is None else order_roles)
+        # TERMINAL ORDERS, READ ONCE. The live read-only run made 41 GETs
+        # in 3.03 s against a 5.0 s staleness bound with only 40 ids on the
+        # tape; nine more windows would have crossed it and the reader
+        # would have failed closed for good. A cancelled or filled order
+        # cannot change state, so it is not re-asked about.
+        self.terminal_order_cache: Dict[str, Dict[str, Any]] = {}
         self.last_order_state: Optional[Dict[str, Any]] = None
         self.current_pin: Optional[Dict[str, Any]] = None
         self.current_window_index: Optional[int] = None
@@ -201,6 +207,7 @@ class PmusWindowProvider:
                 now=self.now_fn(), now_fn=self.now_fn,
                 known_ids=list(self.known_order_ids),
                 roles=dict(self.order_roles),
+                terminal_cache=self.terminal_order_cache,
                 pending_ids=list(self.pending_order_ids))
         except Exception as exc:                               # noqa: BLE001
             view = {"ok": False,

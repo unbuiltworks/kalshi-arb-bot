@@ -255,8 +255,59 @@ def _positions_for(body: Any, want: Iterable[str]
     return out if seen_shape else None
 
 
+def fetch_resolutions(reader: Callable[[str], Any], *,
+                      pages: int = 8,
+                      pause_s: float = 0.0,
+                      sleep_fn: Optional[Callable[[float], None]] = None
+                      ) -> Dict[str, Any]:
+    """Walk `/v1/portfolio/activities` ONCE and keep the position
+    resolutions.
+
+    WHY ONCE. The live run walked it three times -- once per market, plus a
+    control -- and the venue answered the second and third walks with an
+    HTTPError. Three twenty-page walks in a few seconds is a rate limit
+    found the hard way, and the failure mode is bad: a settlement that
+    cannot be read looks the same as a settlement that does not exist, and
+    silence is the one thing accounting must never infer from.
+    So: one walk, fewer pages, optional pacing, and the rows are handed to
+    every caller that needs them.
+
+    A page that errors ENDS the walk and is reported. Partial rows are
+    returned with `complete: False` so a caller cannot mistake a truncated
+    walk for an exhaustive one.
+    """
+    out: Dict[str, Any] = {"rows": [], "pages_read": 0, "complete": False,
+                           "error": None}
+    cursor = ""
+    for i in range(int(pages)):
+        path = ACTIVITIES_PATH + ("&cursor=%s" % cursor if cursor else "")
+        try:
+            body = reader(path)
+        except Exception as exc:                               # noqa: BLE001
+            out["error"] = "ACTIVITIES_UNREADABLE:%s:%s" % (
+                type(exc).__name__, getattr(exc, "code", None))
+            return out
+        if not isinstance(body, Mapping):
+            out["error"] = "ACTIVITIES_UNPARSABLE"
+            return out
+        out["pages_read"] = i + 1
+        for a in (body.get("activities") or []):
+            if isinstance(a, Mapping) and str(a.get("type")) == \
+                    "ACTIVITY_TYPE_POSITION_RESOLUTION":
+                out["rows"].append(a)
+        cursor = body.get("nextCursor") or ""
+        if body.get("eof") or not cursor:
+            out["complete"] = True
+            return out
+        if pause_s and sleep_fn is not None:
+            sleep_fn(float(pause_s))
+    return out
+
+
 def settlement_for(reader: Callable[[str], Any], *, slug: str,
-                   expected_qty: Any, pages: int = 20) -> Dict[str, Any]:
+                   expected_qty: Any, pages: int = 8,
+                   resolutions: Optional[Mapping[str, Any]] = None
+                   ) -> Dict[str, Any]:
     """The venue's settlement record for ONE market, attributed by an EXACT
     quantity match against what our own orders filled.
 
@@ -276,22 +327,21 @@ def settlement_for(reader: Callable[[str], Any], *, slug: str,
                            else str(want), "rows": [], "attributed": None,
                            "ATTRIBUTION_IS_BY_EXACT_QTY_MATCH": True,
                            "NEVER_APPORTIONED": True}
-    cursor = ""
-    for _ in range(int(pages)):
-        path = ACTIVITIES_PATH + ("&cursor=%s" % cursor if cursor else "")
-        try:
-            body = reader(path)
-        except Exception as exc:                               # noqa: BLE001
-            out["error"] = "ACTIVITIES_UNREADABLE:%s" % type(exc).__name__
-            return out
-        if not isinstance(body, Mapping):
-            out["error"] = "ACTIVITIES_UNPARSABLE"
-            return out
-        for a in (body.get("activities") or []):
-            if not isinstance(a, Mapping):
-                continue
-            if str(a.get("type")) != "ACTIVITY_TYPE_POSITION_RESOLUTION":
-                continue
+    # ONE WALK, SHARED. Callers that need several markets pass the rows in
+    # rather than walking the feed again and being rate-limited.
+    res = (resolutions if resolutions is not None
+           else fetch_resolutions(reader, pages=pages))
+    out["pages_read"] = res.get("pages_read")
+    out["activities_walk_complete"] = res.get("complete")
+    if res.get("error"):
+        out["error"] = res["error"]
+        out["label"] = "UNCONFIRMED_ACTIVITIES_UNREADABLE"
+        # A FEED WE COULD NOT READ IS NOT AN ABSENT SETTLEMENT. Said
+        # explicitly, because that inference is the whole danger here.
+        out["absence_is_not_evidence"] = True
+        return out
+    if True:
+        for a in res["rows"]:
             pr = a.get("positionResolution") or {}
             if str(pr.get("marketSlug")) != str(slug):
                 continue
@@ -324,11 +374,12 @@ def settlement_for(reader: Callable[[str], Any], *, slug: str,
             out["rows"].append(row)
             if row["exact_qty_match"] and out["attributed"] is None:
                 out["attributed"] = row
-        cursor = body.get("nextCursor") or ""
-        if body.get("eof") or not cursor:
-            break
     if out["attributed"] is None:
-        out["label"] = "UNCONFIRMED_NOT_ATTRIBUTABLE_TO_E1"
+        # and a walk that did not finish cannot claim the row is absent
+        out["label"] = ("UNCONFIRMED_NOT_ATTRIBUTABLE_TO_E1"
+                        if res.get("complete")
+                        else "UNCONFIRMED_WALK_INCOMPLETE")
+        out["absence_is_not_evidence"] = not res.get("complete")
     else:
         out["label"] = "SETTLED_VENUE_CONFIRMED_EXACT_QTY_MATCH"
     return out
@@ -386,6 +437,8 @@ def read_order_state(reader: Callable[[str], Any], *,
                      now: float,
                      known_ids: Iterable[str] = (),
                      roles: Optional[Mapping[str, str]] = None,
+                     terminal_cache: Optional[Dict[str, Dict[str, Any]]]
+                     = None,
                      pending_ids: Iterable[str] = (),
                      max_age_s: float = MAX_ORDER_STATE_AGE_S,
                      now_fn: Optional[Callable[[], float]] = None
@@ -456,6 +509,29 @@ def read_order_state(reader: Callable[[str], Any], *,
         known
         + sorted(resting_ids)
         + [p for p in pend if not p.startswith(LOCAL_INTENT)]))
+
+    # TERMINAL IS FINAL, SO IT IS READ ONCE.
+    #
+    # The live run made 41 GETs and took 3.03 s against the 5.0 s staleness
+    # bound. The registry held 40 ids after three windows; at nine more it
+    # would cross the bound and the reader would fail closed permanently --
+    # a safety mechanism turning into an outage. But a CANCELED, FILLED,
+    # EXPIRED or REJECTED order cannot change state, by definition, so
+    # re-asking about it every snapshot buys nothing. Cached rows are
+    # reused and the per-snapshot read stays proportional to what is
+    # actually live.
+    #
+    # Nothing non-terminal is ever cached, and an id listed as resting is
+    # always re-read even if a stale cache claims otherwise -- so the cache
+    # can only ever shrink work, never change an answer.
+    cache = terminal_cache if terminal_cache is not None else {}
+    cached_used: List[str] = []
+    for oid in list(id_set):
+        c = cache.get(oid)
+        if c is not None and c.get("terminal") and oid not in resting_ids:
+            hist_rows.append(dict(c["raw"]))
+            cached_used.append(oid)
+            id_set.remove(oid)
     for oid in id_set:
         try:
             body = reader(ORDER_PATH % oid)
@@ -489,6 +565,10 @@ def read_order_state(reader: Callable[[str], Any], *,
         r = dict(row)
         r.setdefault("id", oid)
         hist_rows.append(r)
+        # remember it ONLY if the venue says it is finished
+        st = str(r.get("state"))
+        if st in TERMINAL_STATES and oid not in resting_ids:
+            cache[oid] = {"terminal": True, "raw": dict(r)}
 
     # SCOPE. Only this cohort's markets. An unrelated executor's order in
     # another market is not E1's outstanding order, and counting it would
@@ -690,6 +770,10 @@ def read_order_state(reader: Callable[[str], Any], *,
         "unconfirmed_pending_ids": sorted(unseen_pending),
         "pending_ids_resolved_by_this_read": sorted(resolved_pending),
         "ids_absent_at_venue_404": sorted(absent),
+        "ids_served_from_terminal_cache": sorted(cached_used),
+        "per_id_gets_this_read": len(id_set),
+        "TERMINAL_IS_FINAL_SO_IT_IS_READ_ONCE": True,
+        "a_resting_id_is_always_re_read": True,
         "A_404_IS_AN_ANSWER_A_TIMEOUT_IS_NOT": True,
         "partially_filled_ids": sorted(str(c["id"]) for c in by_id.values()
                                        if c["partially_filled"]),

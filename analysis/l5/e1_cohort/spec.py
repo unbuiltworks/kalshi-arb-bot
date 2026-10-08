@@ -748,8 +748,19 @@ DIFF: Dict[str, Any] = {
             "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
             "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
             "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
+            "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
         ],
         "reasons": {
+            "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f":
+                ("it re-read every known order id on every snapshot: the "
+                 "live read-only run made 41 GETs in 3.03s against a 5.0s "
+                 "staleness bound with only 40 ids after three windows, so "
+                 "nine more windows would have crossed the bound and the "
+                 "reader would have failed closed permanently. It also "
+                 "walked the activities feed once per market and the venue "
+                 "answered the second and third walks with an HTTPError, "
+                 "which an accounting path must never read as an absent "
+                 "settlement"),
             "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3":
                 ("it required GET /v1/orders?limit=100 to establish order "
                  "state, and that endpoint returns HTTP 501 Not "
@@ -1064,6 +1075,22 @@ DIFF: Dict[str, Any] = {
         "settlement_is_never_apportioned_or_inferred_from_a_balance": True,
         "an_undisclosed_fee_is_flagged_not_assumed_zero": True,
         "no_rebate_is_assumed_until_credited": True,
+        # WHAT THE LIVE READ-ONLY RUN FOUND, and what was changed for it
+        "terminal_orders_are_read_once": True,
+        "why_read_once": ("the live run made 41 per-id GETs in 3.03s "
+                          "against a 5.0s staleness bound with 40 ids "
+                          "after three windows; nine more would have "
+                          "crossed it and the reader would have failed "
+                          "closed permanently"),
+        "a_resting_id_is_always_re_read": True,
+        "a_non_terminal_order_is_never_cached": True,
+        "the_cache_can_only_shrink_work_never_change_an_answer": True,
+        "activities_feed_is_walked_once_and_shared": True,
+        "why_one_walk": ("three twenty-page walks in a few seconds and the "
+                         "venue answered the second and third with an "
+                         "HTTPError"),
+        "an_unreadable_feed_is_not_an_absent_settlement": True,
+        "a_truncated_walk_cannot_claim_absence": True,
         "read_only": True,
         "transport": "src.pmus_auth.ReadOnlyTransport",
         "transport_refuses_every_method_but_get": True,
@@ -1111,6 +1138,34 @@ DIFF: Dict[str, Any] = {
                        "hard-coded our_outstanding_orders: 0 means the "
                        "declared one-outstanding-order rule is not "
                        "enforced.\""),
+    },
+
+    # ================================================================
+    # THE ORDER REGISTRY. Ids survive a restart or nothing else works.
+    # ================================================================
+    "order_registry": {
+        "module": "analysis.l5.e1_cohort.order_registry",
+        "source": "append_only_tape",
+        "why": ("/v1/orders is HTTP 501, so order state can only be "
+                "established by reading ids individually -- which works "
+                "only if the ids survive. They used to live in memory and "
+                "die with the process"),
+        "intent_recorded_before_the_post": True,
+        "why_before": ("a crash between the request and the "
+                       "acknowledgement is otherwise invisible to the "
+                       "next process"),
+        "ambiguous_submission_is_recorded": True,
+        "ambiguous_submission_used_to_write_nothing": True,
+        "an_intent_without_a_confirmed_id_blocks": True,
+        "a_confirmed_id_supersedes_its_intent": True,
+        "another_sessions_ids_are_not_inherited": True,
+        "a_row_with_no_session_is_kept": True,
+        "a_damaged_last_line_does_not_discard_the_registry": True,
+        "installed_in_place_not_rebound": True,
+        "why_in_place": ("submit_first_leg appends to the very same "
+                         "lists; rebinding would silently disconnect the "
+                         "two halves"),
+        "read_only": True,
     },
 
     "latch": {
@@ -1459,7 +1514,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
       "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
       "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
-      "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3"]),
+      "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
+      "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1510,6 +1566,26 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
      "an_undisclosed_fee_is_flagged_not_assumed_zero", True),
     ("outstanding_order_invariant.no_rebate_is_assumed_until_credited",
      True),
+    ("outstanding_order_invariant.terminal_orders_are_read_once", True),
+    ("outstanding_order_invariant.a_resting_id_is_always_re_read", True),
+    ("outstanding_order_invariant.a_non_terminal_order_is_never_cached",
+     True),
+    ("outstanding_order_invariant."
+     "the_cache_can_only_shrink_work_never_change_an_answer", True),
+    ("outstanding_order_invariant.activities_feed_is_walked_once_and_shared",
+     True),
+    ("outstanding_order_invariant."
+     "an_unreadable_feed_is_not_an_absent_settlement", True),
+    ("outstanding_order_invariant.a_truncated_walk_cannot_claim_absence",
+     True),
+    # the order registry, restored from the durable tape
+    ("order_registry.module", "analysis.l5.e1_cohort.order_registry"),
+    ("order_registry.source", "append_only_tape"),
+    ("order_registry.intent_recorded_before_the_post", True),
+    ("order_registry.ambiguous_submission_is_recorded", True),
+    ("order_registry.an_intent_without_a_confirmed_id_blocks", True),
+    ("order_registry.another_sessions_ids_are_not_inherited", True),
+    ("order_registry.installed_in_place_not_rebound", True),
     ("outstanding_order_invariant.source", "VENUE_AUTHORITATIVE"),
     ("outstanding_order_invariant.read_only", True),
     ("outstanding_order_invariant.was_hard_coded_to_zero", True),
@@ -1653,7 +1729,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f"
+    "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

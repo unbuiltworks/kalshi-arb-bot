@@ -115,7 +115,9 @@ class FakeVenue:
                 "trade paths are 404" % path)
         return _read
 
-    def view(self, *, known, roles, now=1000.0, **kw):
+    def view(self, *, known, roles, now=1000.0, terminal_cache=None, **kw):
+        if terminal_cache is not None:
+            kw["terminal_cache"] = terminal_cache
         return OS.read_order_state(self.reader(), slugs=[SLUG],
                                    outcome_up=UP, now=now,
                                    known_ids=known, roles=roles, **kw)
@@ -551,3 +553,124 @@ def test_no_rebate_is_ever_assumed():
                             expected_qty="2.60")
     assert "rebate" not in str(out).lower()
     assert out["NEVER_APPORTIONED"] is True
+
+
+# =====================================================================
+# THE TWO THINGS THE LIVE READ-ONLY RUN FOUND
+# =====================================================================
+
+def test_terminal_orders_are_read_once_not_every_snapshot():
+    """THE LATENCY BLOCKER, from the live run: 41 GETs, 3.03 s, against a
+    5.0 s staleness bound, with 40 ids after only three windows. Nine more
+    windows would have crossed the bound and the reader would have failed
+    closed permanently -- a safety mechanism becoming an outage.
+
+    Terminal is final, so it is read once.
+    """
+    v = FakeVenue()
+    for i in range(30):
+        oid = "OLD%02d" % i
+        v.rest(oid, side=UP, wire="0.49")
+        v.cancel(oid)
+    known = ["OLD%02d" % i for i in range(30)]
+    roles = {k: OS.FIRST_LEG for k in known}
+    cache = {}
+
+    v.reads = []
+    s1 = v.view(known=known, roles=roles, terminal_cache=cache)
+    assert s1["ok"]
+    first_pass_gets = len([p for p in v.reads if p.startswith("/v1/order/")])
+    assert first_pass_gets == 30
+    assert s1["per_id_gets_this_read"] == 30
+
+    v.reads = []
+    s2 = v.view(known=known, roles=roles, terminal_cache=cache)
+    assert s2["ok"]
+    second_pass_gets = len([p for p in v.reads
+                            if p.startswith("/v1/order/")])
+    assert second_pass_gets == 0, "a cancelled order cannot change state"
+    assert s2["per_id_gets_this_read"] == 0
+    assert len(s2["ids_served_from_terminal_cache"]) == 30
+    # and the ANSWER is identical, which is the only acceptable outcome
+    assert s2["n_outstanding"] == s1["n_outstanding"] == 0
+    assert s2["net_filled_by_outcome_side"] == \
+        s1["net_filled_by_outcome_side"]
+
+
+def test_a_resting_order_is_re_read_even_if_a_cache_claims_terminal():
+    """The cache may only ever shrink work, never change an answer."""
+    v = FakeVenue()
+    v.rest("FL1", side=UP, wire="0.49")
+    cache = {"FL1": {"terminal": True,
+                     "raw": {"id": "FL1", "marketSlug": SLUG,
+                             "outcomeSide": UP,
+                             "state": "ORDER_STATE_CANCELED",
+                             "quantity": "0.13", "cumQuantity": "0",
+                             "leavesQuantity": "0",
+                             "price": {"value": "0.49"}}}}
+    v.reads = []
+    s = v.view(known=["FL1"], roles={"FL1": OS.FIRST_LEG},
+               terminal_cache=cache)
+    assert "/v1/order/FL1" in v.reads, "a resting id must be re-read"
+    assert s["n_outstanding_first_legs"] == 1
+
+
+def test_a_non_terminal_order_is_never_cached():
+    v = FakeVenue()
+    v.rest("P1", side=UP, wire="0.49")
+    v.fill("P1", "0.05")                 # partially filled: still live
+    cache = {}
+    v.view(known=["P1"], roles={"P1": OS.FIRST_LEG}, terminal_cache=cache)
+    assert cache == {}
+
+
+def test_the_activities_feed_is_walked_once_for_many_markets():
+    """THE RATE-LIMIT BLOCKER, from the live run: three twenty-page walks in
+    a few seconds, and the venue answered the second and third with an
+    HTTPError. One walk, shared."""
+    walks = {"n": 0}
+
+    def _read(path):
+        assert path.startswith("/v1/portfolio/activities")
+        walks["n"] += 1
+        return {"activities": [
+            _resolution(SLUG, "2.6000", "1.2740", "2.6"),
+            _resolution("cpc-btc-updown-15m-2026-10-08-1230z",
+                        "0.0000", "0", "0"),
+        ], "eof": True}
+
+    res = OS.fetch_resolutions(_read)
+    assert walks["n"] == 1 and res["complete"] is True
+    a = OS.settlement_for(_read, slug=SLUG, expected_qty="2.60",
+                          resolutions=res)
+    b = OS.settlement_for(_read, slug="cpc-btc-updown-15m-2026-10-08-1230z",
+                          expected_qty="0", resolutions=res)
+    assert walks["n"] == 1, "the feed must not be re-walked per market"
+    assert a["label"] == "SETTLED_VENUE_CONFIRMED_EXACT_QTY_MATCH"
+    assert a["attributed"]["gross_net_usd"] == "1.3260"
+    assert b["attributed"] is None
+
+
+def test_an_unreadable_feed_is_never_read_as_an_absent_settlement():
+    """The inference that must never be made."""
+    def _boom(path):
+        raise OSError("429")
+    out = OS.settlement_for(_boom, slug=SLUG, expected_qty="2.60")
+    assert out["label"] == "UNCONFIRMED_ACTIVITIES_UNREADABLE"
+    assert out["absence_is_not_evidence"] is True
+    assert out["attributed"] is None
+
+
+def test_a_truncated_walk_cannot_claim_a_settlement_is_absent():
+    pages = {"n": 0}
+
+    def _read(path):
+        pages["n"] += 1
+        return {"activities": [], "nextCursor": "more", "eof": False}
+
+    res = OS.fetch_resolutions(_read, pages=3)
+    assert res["complete"] is False and pages["n"] == 3
+    out = OS.settlement_for(_read, slug=SLUG, expected_qty="2.60",
+                            resolutions=res)
+    assert out["label"] == "UNCONFIRMED_WALK_INCOMPLETE"
+    assert out["absence_is_not_evidence"] is True

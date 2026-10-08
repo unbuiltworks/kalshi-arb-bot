@@ -44,6 +44,8 @@ from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
 from src import pmus_auth as A
 
 STATE_DIR = os.environ.get("E1_STATE_DIR", "/state/pmus-ws/e1_cohort")
+#: terminal orders are read once; a second read proves the saving.
+TERMINAL_CACHE: Dict[str, Dict[str, Any]] = {}
 SESSION = os.environ.get("PMUS_E1_SESSION_ID") or None
 
 
@@ -101,6 +103,7 @@ def main() -> int:
                                now=t0, now_fn=time.time,
                                known_ids=reg["known_ids"],
                                roles=reg["roles"],
+                               terminal_cache=TERMINAL_CACHE,
                                pending_ids=reg["pending"])
     j("READER", {"ok": view.get("ok"), "reason": view.get("reason"),
                  "latency_s": round(time.time() - t0, 3),
@@ -125,6 +128,27 @@ def main() -> int:
                  "filled_notional_usd": view.get("filled_notional_usd"),
                  "aggregate_exposure_usd":
                      view.get("aggregate_exposure_usd")})
+    # THE SECOND READ, to show the terminal cache doing its job and the
+    # answer not changing.
+    t1 = time.time()
+    view2 = OS.read_order_state(reader, slugs=slugs,
+                                outcome_up="OUTCOME_SIDE_YES",
+                                now=t1, now_fn=time.time,
+                                known_ids=reg["known_ids"],
+                                roles=reg["roles"],
+                                terminal_cache=TERMINAL_CACHE,
+                                pending_ids=reg["pending"])
+    j("READER_SECOND_PASS", {
+        "ok": view2.get("ok"),
+        "latency_s": round(time.time() - t1, 3),
+        "per_id_gets_this_read": view2.get("per_id_gets_this_read"),
+        "ids_served_from_terminal_cache":
+            len(view2.get("ids_served_from_terminal_cache") or []),
+        "same_answer": (view2.get("n_outstanding") ==
+                        view.get("n_outstanding")
+                        and view2.get("net_filled_by_outcome_side") ==
+                        view.get("net_filled_by_outcome_side"))})
+
     j("GATES", {"outstanding_for_snapshot":
                     OS.outstanding_for_snapshot(view),
                 "reconcile_at_startup": OS.reconcile_at_startup(view),
@@ -137,10 +161,20 @@ def main() -> int:
     # SHARED-ACCOUNT CONTAMINATION. The settlement reader is handed OUR
     # filled quantity and must refuse to attribute anything that does not
     # match it exactly. This asks the live venue for every cohort market.
+    # ONE WALK of the activities feed, shared by every market below. The
+    # previous run walked it three times in a few seconds and the venue
+    # answered the second and third with an HTTPError.
+    res = OS.fetch_resolutions(reader, pages=8, pause_s=0.25,
+                               sleep_fn=time.sleep)
+    j("ACTIVITIES_WALK", {"pages_read": res.get("pages_read"),
+                          "complete": res.get("complete"),
+                          "resolution_rows": len(res.get("rows") or []),
+                          "error": res.get("error")})
     for slug in ("cpc-btc-updown-15m-2026-10-08-1215z",
                  "cpc-btc-updown-15m-2026-10-08-1230z"):
         expected = "2.60" if slug.endswith("1215z") else "0"
-        st = OS.settlement_for(reader, slug=slug, expected_qty=expected)
+        st = OS.settlement_for(reader, slug=slug, expected_qty=expected,
+                               resolutions=res)
         j("SETTLEMENT", {"slug": slug, "expected_qty": expected,
                          "label": st.get("label"),
                          "rows_seen": len(st.get("rows") or []),
@@ -149,7 +183,8 @@ def main() -> int:
                          "NEVER_APPORTIONED": st.get("NEVER_APPORTIONED")})
     # and a deliberate mismatch: ask for a quantity that is NOT ours
     bad = OS.settlement_for(reader, slug="cpc-btc-updown-15m-2026-10-08-"
-                                        "1215z", expected_qty="16.21")
+                                        "1215z", expected_qty="16.21",
+                            resolutions=res)
     j("CONTAMINATION_CONTROL", {
         "asked_for_a_quantity_that_is_not_ours": "16.21",
         "attributed": bad.get("attributed"),
