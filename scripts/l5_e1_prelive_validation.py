@@ -45,7 +45,11 @@ from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
 from src import pmus_auth as A
 
 STATE_DIR = os.environ.get("E1_STATE_DIR", "/state/pmus-ws/e1_cohort")
-#: terminal orders are read once; a second read proves the saving.
+#: terminal orders are read once; a second read proves the saving. This is
+#: the SAME durable cache the armed provider uses, loaded from the same
+#: volume directory -- so a read-only run exercises the real path and
+#: leaves the venue-confirmed terminal rows behind for the armed boot,
+#: instead of making every process pay forty cold GETs and be 429'd.
 TERMINAL_CACHE: Dict[str, Dict[str, Any]] = {}
 SESSION = os.environ.get("PMUS_E1_SESSION_ID") or None
 
@@ -57,6 +61,9 @@ def j(tag: str, obj: Any) -> None:
 def main() -> int:
     t = A.ReadOnlyTransport()
     reader = OS.venue_reader(t)
+    _loaded = OS.load_terminal_cache(STATE_DIR, session_id=SESSION)
+    TERMINAL_CACHE.update(_loaded["cache"])
+    j("TERMINAL_CACHE_LOAD", _loaded["report"])
     print("PRELIVE_BEGIN now=%s fingerprint=%s"
           % (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
              E1_FINGERPRINT))
@@ -122,6 +129,7 @@ def main() -> int:
                                 now=t_s, now_fn=time.time,
                                 known_ids=reg["known_ids"],
                                 roles=reg["roles"],
+                                terminal_cache=TERMINAL_CACHE,
                                 pending_ids=reg["pending"])
     j("STARTUP_PATH", {
         "REPLICATES": "run_cohort's reconcile_at_startup, pin-free",
@@ -130,6 +138,11 @@ def main() -> int:
         "ok": sview.get("ok"), "reason": sview.get("reason"),
         "latency_s": round(time.time() - t_s, 3),
         "n_known": sview.get("n_known"),
+        "per_id_gets_this_read": sview.get("per_id_gets_this_read"),
+        "ids_served_from_terminal_cache":
+            len(sview.get("ids_served_from_terminal_cache") or []),
+        "cached_but_resting_re_read":
+            sview.get("cached_but_resting_re_read"),
         "n_outstanding": sview.get("n_outstanding"),
         "n_resolved_history": sview.get("n_resolved_history"),
         "historical_resolved_filled_qty":
@@ -353,6 +366,13 @@ def main() -> int:
                         "true, the engine would have placed this pair had "
                         "the owner armed it -- and nothing else was "
                         "blocking")})
+
+    # PERSIST WHAT THE VENUE CONFIRMED AS FINISHED. Writing terminal
+    # order rows is not a trading action: it is the same save the armed
+    # provider does, and it is what spares the next process the forty
+    # cold GETs that the venue answered with 429.
+    j("TERMINAL_CACHE_SAVE",
+      OS.save_terminal_cache(TERMINAL_CACHE, STATE_DIR, session_id=SESSION))
 
     j("NOTE", {"armed": False, "orders_submitted": 0,
                "orders_cancelled": 0, "latch_slots_consumed": 0,
