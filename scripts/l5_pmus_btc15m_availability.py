@@ -148,6 +148,34 @@ def main() -> int:
             "oldest_slug": (real[0].get("slug") if real else None),
         }
 
+    # (2b) WHAT THE VENUE HAS FROM NOW ON, time-sorted. The newest-by-id
+    # view above is CREATION order, which is not time order, so it cannot
+    # answer "is there a tradeable window coming". This sorts series 375's
+    # events by startTime, keeps those not yet ended, and asks /bbo whether
+    # each actually has a book.
+    s375 = [s for s in matched if str(s.get("id")) == "375"]
+    out["upcoming"] = []
+    if s375:
+        rows = page_all(t, "/v1/events?series_id=375&limit=%d&offset=%d",
+                        "events")
+        real = [r for r in rows if "_page_error" not in r]
+        dated = []
+        for e in real:
+            st = str(e.get("startTime") or "")
+            if len(st) >= 19:
+                dated.append((st, e))
+        dated.sort(key=lambda x: x[0])
+        nowstamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now - 900))
+        fut = [e for (st, e) in dated if st[:19] >= nowstamp][:6]
+        out["n_upcoming_events"] = len(
+            [1 for (st, e) in dated if st[:19] >= nowstamp])
+        for e in fut:
+            row = slim_event(e)
+            mslug = (row["markets"][0]["slug"] if row["markets"] else None)
+            row["bbo"] = (status_of(t, "/v1/markets/%s/bbo" % mslug)
+                          if mslug else "NO_MARKET_IN_EVENT")
+            out["upcoming"].append(row)
+
     # (3) the live and active catalogues
     live = get(t, "/v1/events?live=true&active=true&closed=false&limit=200")
     if live["ok"]:
