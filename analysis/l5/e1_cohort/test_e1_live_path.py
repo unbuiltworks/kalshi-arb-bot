@@ -233,9 +233,31 @@ def throwaway_secret_b64() -> str:
     return base64.b64encode(raw).decode()
 
 
+def clean_order_state_reader(open_rows=(), hist_rows=None):
+    """A venue that answers "you have no orders", in the two GET shapes
+    `order_state.read_order_state` reads.
+
+    The armed path now RECONCILES AGAINST THE VENUE before it opens a
+    window: `pmus_provider` no longer publishes a hard-coded
+    `our_outstanding_orders: 0`, so a provider with no reader fails closed
+    instead of pretending the slate is clean. These tests therefore have to
+    say what the venue says -- which is the point of the repair.
+    """
+    from analysis.l5.e1_cohort import order_state as _OS
+    hist = list(open_rows if hist_rows is None else hist_rows)
+
+    def _read(path):
+        if path == _OS.OPEN_PATH:
+            return {"orders": list(open_rows)}
+        if path == _OS.ORDERS_PATH:
+            return {"orders": hist}
+        raise AssertionError("unexpected order-state path %r" % path)
+    return _read
+
+
 def drive_main(monkeypatch, tmp_path, *, clock, starts, feed=None,
                selector=None, sid="e1-live-test-session",
-               transport=FakeTransport):
+               transport=FakeTransport, order_state_reader=None):
     """Invoke the REAL `runner.main()` on its ARMED branch, with fakes."""
     arm(monkeypatch, sid)
     state = str(tmp_path / "e1_cohort")
@@ -247,7 +269,10 @@ def drive_main(monkeypatch, tmp_path, *, clock, starts, feed=None,
             feed=feed if feed is not None else FakeFeed(clock=clock),
             recorder=recorder, selector_fn=selector or fake_selector,
             now_fn=clock, sleep_fn=lambda s: None,
-            window_starts=list(starts))
+            window_starts=list(starts),
+            order_state_reader=(order_state_reader
+                                if order_state_reader is not None
+                                else clean_order_state_reader()))
         captured["provider"] = p
         captured["progress"] = progress
         captured["auth"] = session_auth
@@ -670,7 +695,8 @@ def _provider(tmp_path, tag, *, clock, feed=None, selector=None,
         feed=feed if feed is not None else FakeFeed(clock=clock),
         selector_fn=selector or fake_selector,
         now_fn=clock, sleep_fn=lambda s: None,
-        window_starts=list(starts if starts is not None else [BASE]))
+        window_starts=list(starts if starts is not None else [BASE]),
+        order_state_reader=clean_order_state_reader())
 
 
 def test_FAILS_CLOSED_stale_window_rollover(monkeypatch, tmp_path):

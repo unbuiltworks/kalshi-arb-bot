@@ -61,6 +61,7 @@ from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import local_faults as LF
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
+                                        MAX_COHORT_REALIZED_LOSS_USD,
                                         MAX_ATTEMPTS_PER_WINDOW,
                                         MAX_COMPLEMENT_TRANCHES,
                                         MAX_PLACEMENTS,
@@ -71,6 +72,7 @@ from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         diff_report)
 from analysis.l5.e1_cohort.stopping import CohortTracker, project_feasibility
 from analysis.l5.live_exec2 import orders as O
+from analysis.l5.e1_cohort import order_state as OST
 from analysis.l5.e1_cohort import pacing as PACING
 from analysis.l5.e1_cohort import pmus_book as PBK
 from analysis.l5.e1_cohort import pmus_identity as PIDENT
@@ -455,10 +457,48 @@ def eligible(snapshot: Mapping[str, Any], tracker: CohortTracker,
     if not snapshot.get("within_handover_tte"):
         r.append("E4_PAST_HANDOVER_TTE")
 
+    # E3, WHICH UNTIL NOW READ A CONSTANT. `pmus_provider` published
+    # `our_outstanding_orders: 0` and `our_open_residual: None` as literals,
+    # so these two clauses could not fire and the declared
+    # `max_outstanding_orders: 1` bound was decorative. On 2026-10-08 the
+    # 1230z window therefore held TWENTY resting orders. The provider now
+    # derives both fields from authoritative venue order state; the rule
+    # itself is unchanged in meaning and only says more about why.
+    #
+    # THE ORDER STATE MUST EXIST AT ALL. A read that failed publishes a
+    # TRUTHY sentinel, so the first clause refuses on its own -- but the
+    # refusal is named explicitly so a fail-closed is never mistaken for a
+    # resting order.
+    ostate = snapshot.get("order_state")
+    if isinstance(ostate, Mapping) and not ostate.get("ok"):
+        r.append("E3_ORDER_STATE_NOT_ESTABLISHED:%s"
+                 % (ostate.get("reason"),))
     if snapshot.get("our_outstanding_orders"):
-        r.append("E3_OUR_ORDER_IS_OUTSTANDING")
+        r.append("E3_OUR_ORDER_IS_OUTSTANDING:%s"
+                 % (snapshot.get("our_outstanding_orders"),))
     if snapshot.get("our_open_residual"):
         r.append("E3_OUR_RESIDUAL_IS_OPEN")
+
+    # AGGREGATE EXPOSURE, NOT PER-ORDER SIZE. Twenty orders of 0.13 shares
+    # each pass every per-order check ever written. What they cannot pass is
+    # a sum. The tracker already projects our OWN submitted notional into
+    # the per-window bound; this is the independent venue-side reading of
+    # the same quantity -- what we would owe if every resting order and
+    # every filled share were ours right now -- measured against the
+    # cohort-wide ceiling. It relaxes nothing: it is an ADDITIONAL refusal.
+    if isinstance(ostate, Mapping) and ostate.get("ok"):
+        agg = finite_decimal(ostate.get("aggregate_exposure_usd"))
+        if ostate.get("aggregate_exposure_usd") is not None and agg is None:
+            r.append("E3_AGGREGATE_VENUE_EXPOSURE_NOT_FINITE:%r"
+                     % (ostate.get("aggregate_exposure_usd"),))
+        elif agg is not None:
+            projected = agg + (finite_decimal(snapshot.get("qty",
+                                                           FIRST_LEG_QTY))
+                               or FIRST_LEG_QTY) * (
+                finite_decimal(snapshot.get("first_leg_price")) or D("1"))
+            if projected > MAX_COHORT_REALIZED_LOSS_USD:
+                r.append("E3_AGGREGATE_VENUE_EXPOSURE_%s_WOULD_EXCEED_%s"
+                         % (projected, MAX_COHORT_REALIZED_LOSS_USD))
 
     # THE PRICE IS VALIDATED BEFORE IT IS USED. A non-finite Decimal
     # raises InvalidOperation on `<` and `%`, so an unchecked price would
@@ -730,6 +770,23 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
 
     holder: Dict[str, Any] = {}
 
+    # THE SUBMISSION INTENT IS RECORDED BEFORE THE POST, NOT AFTER IT.
+    #
+    # `pending_order_ids` is the list the provider reads when it asks the
+    # venue for outstanding orders. An entry here is "we may have created an
+    # order and cannot prove we did not", and it counts as OUTSTANDING until
+    # a successful venue read either shows it terminal or shows it gone.
+    #
+    # It is appended before the POST because the dangerous case is exactly
+    # the one where the POST's answer never arrives: a crash, a reset or a
+    # timeout between the request and the acknowledgement. Recording after
+    # the fact would leave that window open, which is how twenty orders can
+    # exist while a process believes it has none.
+    pending = snapshot.get("pending_order_ids")
+    intent_id = "LOCAL_INTENT:w%s:%s:%s:%s" % (window, slug, side, price)
+    if isinstance(pending, list):
+        pending.append(intent_id)
+
     def _take_slot() -> Dict[str, Any]:
         holder["slot"] = L.consume_attempt(window=window, slug=slug,
                                            side=side, price=price, qty=qty)
@@ -749,6 +806,26 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
         if "slot" in holder:
             tracker.record_placement(
                 window=window, notional_usd=D(str(qty)) * D(str(price)))
+    # THE INTENT IS RETIRED ONLY BY A CONFIRMED ORDER ID. We swap the local
+    # placeholder for the venue's own id, so the next snapshot's order-state
+    # read resolves it against authoritative state instead of a guess. If the
+    # venue gave us no id, the placeholder STAYS and keeps refusing.
+    oid = None
+    for k in ("orderId", "order_id", "id"):
+        v = (out.get(k) if isinstance(out, dict) else None)
+        if v:
+            oid = str(v)
+            break
+    if oid is None and isinstance(out, dict):
+        inner = out.get("order") or out.get("response") or {}
+        if isinstance(inner, Mapping):
+            oid = str(inner.get("id")) if inner.get("id") else None
+    if isinstance(pending, list) and intent_id in pending:
+        if oid:
+            pending[pending.index(intent_id)] = oid
+        # else: left in place deliberately. An unidentified submission is an
+        # unconfirmed submission.
+    out["e1_pending_order_id"] = oid or intent_id
     out["e1_latch_slot"] = holder["slot"]
     out["e1_window"] = window
     out["e1_authorization"] = auth_result
@@ -1069,6 +1146,64 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 "tracker": tracker.snapshot(),
                 "signing_proof": None,
                 "LANGUAGE": "a local fault is not a venue error"}
+    # NO SUBMISSION BEFORE RECONCILIATION.
+    #
+    # Durable progress already prevents a restart from granting a thirteenth
+    # window. It says nothing about orders still resting at the venue from
+    # the process that died, and nothing asked. So before the first window
+    # is opened, if the provider can establish venue order state, it is
+    # established and checked. Pre-existing outstanding orders or an open
+    # residual stop the cohort here -- they do not get silently inherited
+    # and they are NOT cancelled by this code, which cancels nothing.
+    #
+    # A provider that cannot be asked (the offline test seam) is not a
+    # failure: `eligible()` re-asks E3 on every single snapshot anyway, and
+    # that is the gate that matters. This is the earlier, louder one.
+    startup_reconciliation: Optional[Dict[str, Any]] = None
+    _probe = getattr(snapshot_provider, "order_state", None)
+    _pin_for_reconcile = getattr(snapshot_provider, "current_pin", None)
+    if callable(_probe):
+        try:
+            startup_reconciliation = OST.reconcile_at_startup(
+                _probe(_pin_for_reconcile or {}))
+        except Exception as exc:                               # noqa: BLE001
+            startup_reconciliation = {
+                "may_submit": False, "reconciled": False,
+                "because": "STARTUP_RECONCILIATION_RAISED:%s"
+                           % type(exc).__name__,
+                "FAILS_CLOSED": True}
+        if not startup_reconciliation.get("may_submit"):
+            because = startup_reconciliation.get("because")
+            detail = {"startup_reconciliation": startup_reconciliation}
+            tracker.violate(
+                "STARTUP_RECONCILIATION_REFUSED:%s" % (because,))
+            if recorder is not None:
+                recorder.record_event(
+                    window=-1, slot=-1,
+                    event="STARTUP_RECONCILIATION_REFUSED", detail=detail)
+            v = tracker.verdict()
+            if progress is not None:
+                progress.record_cohort_stopped(
+                    verdict=v["verdict"],
+                    truncation_cause=v.get("truncation_cause"))
+            return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
+                    "iterations": 0, "placements": [], "placement_count": 0,
+                    "windows_used": (progress.windows_used()
+                                     if progress is not None else None),
+                    "refusals": [{"iteration": 0,
+                                  "refusals": ["STARTUP_RECONCILIATION"
+                                               "_REFUSED"],
+                                  "detail": detail}],
+                    "stopped_because": "STARTUP_RECONCILIATION_REFUSED",
+                    "startup_reconciliation": startup_reconciliation,
+                    "windows_opened": 0,
+                    "transport_constructed": False,
+                    "venue_contacted": True,
+                    "latch_slots_consumed": 0,
+                    "tracker": tracker.snapshot(),
+                    "signing_proof": signing_proof,
+                    "LANGUAGE": "pre-existing venue state is not inherited"}
+
     # THE CAP IS A SAFETY NET, NOT THE BUDGET. It used to be
     # `MAX_PLACEMENTS * 4` == 960, which is far SMALLER than the number of
     # times a paced loop legitimately reads the book while observing twelve

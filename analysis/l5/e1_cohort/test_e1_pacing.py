@@ -524,8 +524,11 @@ def test_pacing_waits_out_our_own_resting_order_and_never_doubles_up(
                        max_iterations=25)
 
     # it waited while the order was live, instead of spinning or stopping
+    # the code now carries the COUNT ("...:1"), because the provider derives
+    # it from venue state instead of publishing a hard-coded 0.
     outstanding = [r for r in out["refusals"]
-                   if "E3_OUR_ORDER_IS_OUTSTANDING" in r["refusals"]]
+                   if any(str(g).startswith("E3_OUR_ORDER_IS_OUTSTANDING")
+                          for g in r["refusals"])]
     assert outstanding, out["refusals"]
     assert all(r["pacing"] == "PACE" for r in outstanding)
     # THE CLAIM: not one placement happened while an order of ours was live.

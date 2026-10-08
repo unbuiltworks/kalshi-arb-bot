@@ -79,6 +79,24 @@ PACED_PREFIXES = (
     "E10_",
     # this window's $1.56 is spent. Window-scoped, not cohort-scoped.
     "PROJECTED_WINDOW_EXPOSURE_",
+    # THE SAME TWO E3 STATEMENTS AS ABOVE, now that the provider derives
+    # them from authoritative venue state and reports the count and the
+    # residual alongside the code ("E3_OUR_ORDER_IS_OUTSTANDING:3"). They
+    # were exact matches while the field was a hard-coded 0; a detailed
+    # code must not silently become terminal just because it says more.
+    "E3_OUR_ORDER_IS_OUTSTANDING",
+    "E3_OUR_RESIDUAL_IS_OPEN",
+    # order state could not be ESTABLISHED this instant -- an unreadable
+    # GET, an unparsable body, two endpoints mid-cancellation. Nothing was
+    # placed and nothing was risked, and the next read may well succeed, so
+    # this is observed patiently rather than ending the cohort. It is
+    # recorded on every iteration it occurs, so a persistent failure is
+    # visible in the refusal tape rather than silent.
+    #
+    # NOTE what is deliberately NOT here: E3_AGGREGATE_VENUE_EXPOSURE_*.
+    # An aggregate exposure that would breach the cohort ceiling, or that
+    # cannot be made finite, is a RISK LIMIT, and a risk limit is terminal.
+    "E3_ORDER_STATE_NOT_ESTABLISHED",
 )
 
 

@@ -169,6 +169,11 @@ COPY scripts/l5_a6_settle_and_halt_bracket.py \
 COPY scripts/l5_e1_cancel_outstanding.py \
      scripts/l5_e1_cancel_outstanding.py
 
+# READ-ONLY verification of the repaired outstanding-order invariant against
+# real venue state. GETs only; imports nothing that can place an order.
+COPY scripts/l5_e1_order_state_verify.py \
+     scripts/l5_e1_order_state_verify.py
+
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
 

@@ -39,6 +39,7 @@ from decimal import ROUND_DOWN, Decimal as D
 from typing import Any, Callable, Dict, List, Optional
 
 from analysis.l5.e1_cohort import pmus_book as PBK
+from analysis.l5.e1_cohort import order_state as OS
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import pmus_selector as SEL
 from analysis.l5.e1_cohort.spec import (FIRST_LEG_QTY, PROBE, VENUE_TICK,
@@ -122,7 +123,9 @@ class PmusWindowProvider:
                  now_fn: Any = None, sleep_fn: Any = None,
                  window_starts: Optional[List[int]] = None,
                  ws_ready_timeout_s: Optional[float] = None,
-                 ws_ready_poll_s: Optional[float] = None) -> None:
+                 ws_ready_poll_s: Optional[float] = None,
+                 order_state_reader: Any = None,
+                 pending_order_ids: Any = None) -> None:
         self.progress = progress
         self.auth = session_auth
         self.recorder = recorder
@@ -137,11 +140,63 @@ class PmusWindowProvider:
                                 else ws_ready_poll_s)
         self.feed = feed if feed is not None else PBK.PmusDecisionFeed(
             clock=self.now_fn)
+        # THE VENUE READER THAT FEEDS THE OUTSTANDING-ORDER INVARIANT.
+        # `None` means "build the signed GET-only reader lazily", which is
+        # what production does; the tests inject a callable. It is NEVER
+        # replaced by a constant, which is the whole point of this field.
+        self._order_state_reader = order_state_reader
+        # locally recorded submission intents whose acknowledgement was
+        # ambiguous. A list, shared by reference with the runner, so an
+        # unconfirmed POST keeps refusing the next first leg.
+        self.pending_order_ids: List[str] = (
+            [] if pending_order_ids is None else pending_order_ids)
+        self.last_order_state: Optional[Dict[str, Any]] = None
         self.current_pin: Optional[Dict[str, Any]] = None
         self.current_window_index: Optional[int] = None
         self.refusals: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------ internals
+    def order_state_reader(self) -> Any:
+        if self._order_state_reader is None:
+            self._order_state_reader = OS.venue_reader()
+        return self._order_state_reader
+
+    def order_state(self, pin: Dict[str, Any]) -> Dict[str, Any]:
+        """The AUTHORITATIVE outstanding-order view for this window.
+
+        Every failure -- an unreadable GET, an unparsable body, two
+        endpoints disagreeing, a read that took too long -- comes back with
+        `ok: False`, and `OS.outstanding_for_snapshot` then publishes a
+        TRUTHY sentinel. There is no path from a failed read to a
+        permissive zero. That asymmetry is the repair.
+        """
+        if self._order_state_reader is None and not OS.can_read_venue():
+            # NO CREDENTIALS, NO NETWORK, NO GUESS. A process that cannot
+            # authenticate cannot establish order state, so it publishes the
+            # fail-closed sentinel instead of opening a socket to find out.
+            # This is also why the offline tests make no network call.
+            view = {"ok": False,
+                    "reason": "ORDER_STATE_NO_CREDENTIALS",
+                    "outstanding_sentinel": OS.UNKNOWN_OUTSTANDING,
+                    "FAILS_CLOSED": True}
+            self.last_order_state = view
+            return view
+        try:
+            view = OS.read_order_state(
+                self.order_state_reader(),
+                slugs=[pin.get("slug")],
+                outcome_up=pin.get("outcome_up"),
+                now=self.now_fn(), now_fn=self.now_fn,
+                pending_ids=list(self.pending_order_ids))
+        except Exception as exc:                               # noqa: BLE001
+            view = {"ok": False,
+                    "reason": "ORDER_STATE_READER_RAISED:%s"
+                              % type(exc).__name__,
+                    "outstanding_sentinel": OS.UNKNOWN_OUTSTANDING,
+                    "FAILS_CLOSED": True}
+        self.last_order_state = view
+        return view
+
     def _refuse(self, why: str, **extra: Any) -> None:
         rec = {"refused": why, "unix": self.now_fn(), **extra}
         self.refusals.append(rec)
@@ -338,6 +393,12 @@ class PmusWindowProvider:
                          slug=pin["slug"])
             return None
 
+        # ASKED ONCE PER SNAPSHOT, immediately before the snapshot is
+        # built, for the same reason the book's freshness is re-asked here
+        # rather than trusted from window-open: the only order state worth
+        # anything is the state as of this decision.
+        ostate = self.order_state(pin)
+
         return {
             "probe": PROBE,
             "venue": "polymarket_us",
@@ -356,8 +417,23 @@ class PmusWindowProvider:
             # provider rolls to the next one.
             "trading_cutoff_unix": float(pin["window_end"]) - HANDOVER_TTE_S,
             "window_end_unix": float(pin["window_end"]),
-            "our_outstanding_orders": 0,
-            "our_open_residual": None,
+            # THE INVARIANT'S INPUT, FROM THE VENUE. These two fields
+            # were the literals `0` and `None`, so `eligible()`'s E3 rule
+            # read a constant and the declared one-outstanding-order bound
+            # could not fire -- which is how the 1230z window on
+            # 2026-10-08 came to hold twenty resting orders. They are now
+            # derived from authoritative order state, count partial fills
+            # as outstanding, count unconfirmed submissions as outstanding,
+            # and publish a TRUTHY sentinel when state cannot be
+            # established at all.
+            "our_outstanding_orders": OS.outstanding_for_snapshot(ostate),
+            "our_open_residual": OS.residual_for_snapshot(ostate),
+            "order_state": ostate,
+            # SHARED BY REFERENCE, deliberately. `submit_first_leg` appends
+            # its submission intent to this very list, and the next
+            # snapshot's order-state read sees it.
+            "pending_order_ids": self.pending_order_ids,
+            "aggregate_exposure_usd": ostate.get("aggregate_exposure_usd"),
             "qty": FIRST_LEG_QTY,
             "first_leg_price": str(price),
             # THE CHOSEN ORIENTATION, taken from the book rather than

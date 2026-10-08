@@ -203,6 +203,18 @@ FORBIDDEN = ("marketSlug", "ORDER_TYPE_LIMIT", "ORDER_ACTION_BUY",
              "manualOrderIndicator", "OUTCOME_SIDE_")
 
 
+#: NAMING A RESPONSE KEY IS NOT BUILDING A BODY.
+#:
+#: `order_state.py` exists to READ authoritative venue order state -- it is
+#: the module that replaced `pmus_provider`'s hard-coded
+#: `our_outstanding_orders: 0`, the constant that let twenty orders rest in
+#: one window. To read an order row it must name the key the venue puts the
+#: slug under. It performs GET requests only and constructs no request
+#: envelope, and `test_order_state_module_cannot_mutate_anything` proves
+#: that independently rather than taking this exemption's word for it.
+READ_ONLY_RESPONSE_KEYS = {("order_state.py", "marketSlug")}
+
+
 def code_only(path):
     """Source with every docstring and comment removed, so a scan looks at
     what the module DOES rather than what it says about itself. A call
@@ -230,6 +242,23 @@ def code_only(path):
     return text
 
 
+def test_order_state_module_cannot_mutate_anything():
+    """The exemption above is not taken on trust.
+
+    `order_state.py` may name `marketSlug` because it reads order rows. It
+    may not POST, PUT, PATCH, DELETE, build a request envelope, or import a
+    mutating transport. If any of that ever appears, this fails and the
+    exemption is void.
+    """
+    text = code_only(os.path.join(HERE, "order_state.py"))
+    for forbidden in ('"POST"', "'POST'", '"PUT"', '"PATCH"', '"DELETE"',
+                      "BoundedOrderTransport", "order_body", "submit_one",
+                      "PREVIEW_PATH", "SUBMIT_PATH", "l5_pmus_transport"):
+        assert forbidden not in text, forbidden
+    assert '"GET"' in text
+    assert "ReadOnlyTransport" in text
+
+
 def test_no_file_in_this_package_contains_a_duplicate_serializer():
     """A duplicate serializer caused the A5 HTTP 400, and the repository
     records the same bug happening twice. No file here may build a body."""
@@ -243,7 +272,9 @@ def test_no_file_in_this_package_contains_a_duplicate_serializer():
             # PROVEN serializer put on the wire. Neither builds a body.
             continue
         text = code_only(os.path.join(HERE, name))
-        hits = [tok for tok in FORBIDDEN if tok in text]
+        hits = [tok for tok in FORBIDDEN
+                if tok in text
+                and (name, tok) not in READ_ONLY_RESPONSE_KEYS]
         # a line of PROSE naming the wire call (a call-graph entry) is
         # documentation, not a serializer. Only a constructed envelope
         # counts.
@@ -1102,7 +1133,8 @@ def test_eligibility_refusals_one_at_a_time(armed):
     for want, over in cases.items():
         el = RUN.eligible(snapshot(**over), tr, now=NOW)
         assert el["ok"] is False
-        assert want in el["refusals"], (want, el["refusals"])
+        assert any(str(g) == want or str(g).startswith(want + ":")
+                   for g in el["refusals"]), (want, el["refusals"])
 
 
 def test_a_stale_book_is_refused(armed):
@@ -1964,7 +1996,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # produced an evidenced fill -- on no evidence for 5.0
         "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
         "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
-        "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba"]
+        "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
+        # published `our_outstanding_orders: 0` as a literal, so the declared
+        # one-outstanding-order bound could not fire and the 1230z window on
+        # 2026-10-08 held twenty resting orders.
+        "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

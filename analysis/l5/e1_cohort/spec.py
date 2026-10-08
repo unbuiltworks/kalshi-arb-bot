@@ -746,8 +746,20 @@ DIFF: Dict[str, Any] = {
             "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
             "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
             "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
+            "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
         ],
         "reasons": {
+            "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0":
+                ("it published `our_outstanding_orders: 0` and "
+                 "`our_open_residual: None` as HARD-CODED LITERALS, so the "
+                 "declared max_outstanding_orders of 1 could not fire. On "
+                 "2026-10-08 the 1230z BTC15m window therefore accumulated "
+                 "TWENTY resting orders, one per placement slot, at a "
+                 "worst case of $1.1804 with zero fills. The gate existed "
+                 "in runner.eligible() the whole time; nothing fed it. All "
+                 "twenty were cancelled and the cancellation was verified "
+                 "per order id against the venue: 20 x "
+                 "ORDER_STATE_CANCELED, cumQuantity 0.0, open orders 0"),
             "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba":
                 ("its first leg was HARD-CODED TO YES, and E9 caps the "
                  "opening price at $0.60, so whenever the market leaned "
@@ -978,6 +990,76 @@ DIFF: Dict[str, Any] = {
             "is POLYMARKET.COM's feed. It was correctly implemented and "
             "live-verified on 11,438 frames, and it was still the wrong "
             "venue's book for an order sent to api.polymarket.us."),
+    },
+
+    # ================================================================
+    # THE OUTSTANDING-ORDER INVARIANT, WHICH WAS WIRED TO A CONSTANT
+    # ================================================================
+    #
+    # `cohort_bounds.max_outstanding_orders` has been 1 since the spec was
+    # frozen, and `runner.eligible()` has always carried the E3 clause that
+    # enforces it. `pmus_provider` published its input as the literal `0`,
+    # so the clause read a constant, could not fire, and on 2026-10-08 the
+    # 1230z BTC15m window accumulated TWENTY resting orders -- one per
+    # placement slot -- at a worst case of $1.1804. All twenty were
+    # subsequently cancelled and the cancellation was verified against
+    # `GET /v1/order/{id}` per id: 20 x ORDER_STATE_CANCELED, cumQuantity
+    # 0.0, open orders 0.
+    #
+    # The declared bound is unchanged. What changed is that it now has a
+    # source of truth.
+    "outstanding_order_invariant": {
+        "module": "analysis.l5.e1_cohort.order_state",
+        "max_outstanding_orders": 1,
+        "source": "VENUE_AUTHORITATIVE",
+        "paths": ("/v1/orders/open", "/v1/orders?limit=100"),
+        "read_only": True,
+        "transport": "src.pmus_auth.ReadOnlyTransport",
+        "transport_refuses_every_method_but_get": True,
+        "was_hard_coded_to_zero": True,
+        "defect_date": "2026-10-08",
+        "defect_window": "cpc-btc-updown-15m-2026-10-08-1230z",
+        "defect_resting_orders": 20,
+        "defect_worst_case_usd": "1.1804",
+        "defect_fills": 0,
+        # the rules, each of which has a regression test
+        "a_partial_fill_is_outstanding": True,
+        "an_unrecognised_state_is_outstanding": True,
+        "a_missing_state_is_outstanding": True,
+        "an_unconfirmed_submission_is_outstanding": True,
+        "an_unidentified_submission_blocks_indefinitely": True,
+        "a_confirmed_id_absent_from_a_successful_read_is_resolved": True,
+        "a_failed_read_resolves_nothing": True,
+        "submission_intent_is_recorded_before_the_post": True,
+        "an_unreadable_read_is_a_refusal_not_a_zero": True,
+        "an_unparsable_body_is_not_an_empty_order_list": True,
+        "a_stale_read_is_a_refusal": True,
+        "max_order_state_age_s": 5.0,
+        "two_endpoints_disagreeing_is_a_refusal": True,
+        "the_open_endpoint_wins_on_liveness": True,
+        "reconciled_at_startup_before_any_submission": True,
+        "startup_reconciliation_cancels_nothing": True,
+        "pre_existing_venue_state_is_never_inherited": True,
+        "a_filled_first_leg_is_inventory_not_a_licence_for_another": True,
+        # risk, aggregate rather than per-order
+        "risk_is_aggregate_open_plus_filled": True,
+        "per_order_size_checks_cannot_see_twenty_orders": True,
+        "exposure_is_on_the_own_side_not_the_wire": True,
+        "wire_price_is_always_the_long_side": True,
+        "unpriceable_pending_charged_at_the_frozen_ceiling": True,
+        # scope
+        "scoped_to_this_cohorts_slugs": True,
+        "an_order_with_no_slug_is_counted": True,
+        # what this does NOT do
+        "changes_no_bound": True,
+        "changes_no_price_quantity_or_tranche_rule": True,
+        "is_not_a_strategy_change": True,
+        "may_place_amend_or_cancel_an_order": False,
+        "provenance": ("owner message 2026-10-08: \"STOP E1 FROM OPENING "
+                       "NEW ORDERS. This is a safety-invariant failure. The "
+                       "hard-coded our_outstanding_orders: 0 means the "
+                       "declared one-outstanding-order rule is not "
+                       "enforced.\""),
     },
 
     "latch": {
@@ -1324,7 +1406,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
       "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
       "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
-      "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba"]),
+      "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
+      "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1340,6 +1423,38 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("first_leg_side.a_leg_outside_the_authorized_pair_is_refused", True),
     ("first_leg_side.wire_price_is_always_the_long_side", True),
     ("first_leg_side.changes_no_bound", True),
+    ("outstanding_order_invariant.max_outstanding_orders", 1),
+    ("outstanding_order_invariant.source", "VENUE_AUTHORITATIVE"),
+    ("outstanding_order_invariant.read_only", True),
+    ("outstanding_order_invariant.was_hard_coded_to_zero", True),
+    ("outstanding_order_invariant.a_partial_fill_is_outstanding", True),
+    ("outstanding_order_invariant.an_unrecognised_state_is_outstanding",
+     True),
+    ("outstanding_order_invariant.an_unconfirmed_submission_is_outstanding",
+     True),
+    ("outstanding_order_invariant."
+     "an_unidentified_submission_blocks_indefinitely", True),
+    ("outstanding_order_invariant.a_failed_read_resolves_nothing", True),
+    ("outstanding_order_invariant."
+     "submission_intent_is_recorded_before_the_post", True),
+    ("outstanding_order_invariant."
+     "an_unreadable_read_is_a_refusal_not_a_zero", True),
+    ("outstanding_order_invariant.a_stale_read_is_a_refusal", True),
+    ("outstanding_order_invariant.max_order_state_age_s", 5.0),
+    ("outstanding_order_invariant."
+     "two_endpoints_disagreeing_is_a_refusal", True),
+    ("outstanding_order_invariant."
+     "reconciled_at_startup_before_any_submission", True),
+    ("outstanding_order_invariant.startup_reconciliation_cancels_nothing",
+     True),
+    ("outstanding_order_invariant."
+     "a_filled_first_leg_is_inventory_not_a_licence_for_another", True),
+    ("outstanding_order_invariant.risk_is_aggregate_open_plus_filled", True),
+    ("outstanding_order_invariant.exposure_is_on_the_own_side_not_the_wire",
+     True),
+    ("outstanding_order_invariant.changes_no_bound", True),
+    ("outstanding_order_invariant.may_place_amend_or_cancel_an_order",
+     False),
     ("paced_observation.pace_s", 1.0),
     ("paced_observation.min_pace_s", 0.05),
     ("paced_observation.no_paced_wait_is_ever_zero", True),
@@ -1452,7 +1567,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0"
+    "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:
