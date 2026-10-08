@@ -289,9 +289,9 @@ def test_main_REFUSES_when_the_attempt_limit_is_missing(monkeypatch,
     assert "PROBE_BUDGET_NOT_AUTHORIZED" in out
     # BEFORE any provider, feed, window, latch or order path exists.
     assert built == []
-    assert '"no_window_opened": true' in out
-    assert '"no_latch_slot_claimed": true' in out
-    assert '"no_order_endpoint_reached": true' in out
+    assert '"no_window_opened":true' in out
+    assert '"no_latch_slot_claimed":true' in out
+    assert '"no_order_endpoint_reached":true' in out
 
 
 @pytest.mark.parametrize("attempts,windows", [("0", "1"), ("1", "0"),
@@ -327,8 +327,8 @@ def test_main_reports_the_budget_once_it_is_authorized(monkeypatch, capsys,
     assert seen["budget"].max_attempts == 1
     assert seen["budget"].max_windows == 1
     out = capsys.readouterr().out
-    assert '"max_attempts": 1' in out
-    assert '"max_windows": 1' in out
+    assert '"max_attempts":1' in out
+    assert '"max_windows":1' in out
 
 
 # =====================================================================

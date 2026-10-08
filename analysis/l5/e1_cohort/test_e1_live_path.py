@@ -346,8 +346,8 @@ def test_armed_main_reaches_run_cohort(monkeypatch, tmp_path, capsys):
     assert all(p["post_only"] is True for p in FakeTransport.posts)
     # it printed the ARMED banner and entered run_cohort
     printed = capsys.readouterr().out
-    assert '"ARMED": true' in printed
-    assert '"entering": "run_cohort"' in printed
+    assert '"ARMED":true' in printed
+    assert '"entering":"run_cohort"' in printed
     # and the armed branch is NOT a bare raise
     assert SP.SPEC["live_provider"]["armed_main_is_a_bare_raise"] is False
     assert SP.SPEC["live_provider"]["armed_main_reaches_run_cohort"] is True
@@ -1097,7 +1097,7 @@ def test_disarmed_main_still_refuses(monkeypatch, capsys):
         monkeypatch.delenv(k, raising=False)
     rc = RUN.main([])
     assert rc == 0
-    assert '"REFUSED": "DISARMED"' in capsys.readouterr().out
+    assert '"REFUSED":"DISARMED"' in capsys.readouterr().out
 
 
 def test_an_armed_build_with_the_wrong_pin_is_inert(monkeypatch, tmp_path,

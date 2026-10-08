@@ -1820,6 +1820,27 @@ def _default_recorder_factory(state_dir: str) -> Any:
     return Recorder(os.path.join(state_dir, "tape"))
 
 
+def _emit(tag: str, obj: Any) -> None:
+    """ONE LOG LINE PER REPORT, because a flooded log is an unsupervised
+    probe.
+
+    The armed boot at 2026-10-08T21:45:34Z printed the frozen spec with
+    `indent=1`, which is roughly fifteen hundred lines in one second. The
+    hosting platform's limit is five hundred log lines per second per
+    replica, so it DROPPED 646 MESSAGES -- including the tail that carries
+    `stopped_because`. The deployment read as CRASHED with no recoverable
+    reason, and the authorization requires active supervision, so the
+    probe had to be disarmed on an unknown stop.
+
+    Compact JSON is the whole fix: the same object, the same keys, one
+    line, prefixed with a greppable tag and flushed. Nothing about what is
+    reported changes -- only that it survives the transport.
+    """
+    print("%s %s" % (tag, json.dumps(obj, sort_keys=True,
+                                     separators=(",", ":"), default=str)),
+          flush=True)
+
+
 def main(argv: Optional[List[str]] = None, *,
          provider_factory: Any = _default_provider_factory,
          progress_factory: Any = _default_progress_factory,
@@ -1841,9 +1862,9 @@ def main(argv: Optional[List[str]] = None, *,
     rep["eligibility_without_a_snapshot"] = (
         "no snapshot is requested while disarmed; the arming gate is "
         "checked first and refuses")
-    print(json.dumps(rep, indent=1, sort_keys=True, default=str))
+    _emit("E1_BOOT", rep)
     if not A.armed_env_summary().get("armed"):
-        print(json.dumps({
+        _emit("E1_REFUSED", {
             "REFUSED": "DISARMED",
             "probe": PROBE, "fingerprint": E1_FINGERPRINT,
             "why": ("the owner's arming gate is not set. No snapshot was "
@@ -1851,7 +1872,7 @@ def main(argv: Optional[List[str]] = None, *,
                     "endpoint was reached."),
             "superseded_must_not_be_rearmed":
                 copy.deepcopy(SPEC["supersedes_e1"]["must_not_be_rearmed"]),
-        }, indent=1, sort_keys=True))
+        })
         return 0
     # ---------------------------------------------------------------
     # THE ARMED PATH. This used to be a bare `raise SystemExit`, which
@@ -1863,7 +1884,7 @@ def main(argv: Optional[List[str]] = None, *,
     # ---------------------------------------------------------------
     pin = A.fingerprint_pinned(E1_FINGERPRINT)
     if not pin["matches_this_build"]:
-        print(json.dumps({
+        _emit("E1_REFUSED", {
             "REFUSED": "FINGERPRINT_NOT_PINNED_TO_THIS_BUILD",
             "required": E1_FINGERPRINT, "pin_present": pin["set"],
             "why": ("the owner must pin %s to THIS build. A pin naming a "
@@ -1871,7 +1892,7 @@ def main(argv: Optional[List[str]] = None, *,
                     % A.FINGERPRINT_PIN_ENV),
             "superseded_must_not_be_rearmed":
                 copy.deepcopy(SPEC["supersedes_e1"]["must_not_be_rearmed"]),
-        }, indent=1, sort_keys=True))
+        })
         return 2
     # =============== THE PER-PROBE BUDGET, BEFORE ANYTHING ELSE ==========
     #
@@ -1887,7 +1908,7 @@ def main(argv: Optional[List[str]] = None, *,
     try:
         probe_budget = BUD.ProbeBudget.from_env()
     except BUD.BudgetNotAuthorized as exc:
-        print(json.dumps({
+        _emit("E1_REFUSED", {
             "REFUSED": "PROBE_BUDGET_NOT_AUTHORIZED",
             "probe": PROBE, "fingerprint": E1_FINGERPRINT,
             "env_keys": list(BUD.BUDGET_KEYS),
@@ -1897,11 +1918,11 @@ def main(argv: Optional[List[str]] = None, *,
             "these_keys_may_only_narrow": True,
             "no_window_opened": True, "no_latch_slot_claimed": True,
             "no_order_endpoint_reached": True,
-        }, indent=1, sort_keys=True))
+        })
         return 2
     gate = AUTH.series_authorized()
     if not gate["matches_authorized_series"]:
-        print(json.dumps({
+        _emit("E1_REFUSED", {
             "REFUSED": "SERIES_GATE_NOT_SET",
             "authorized_series": gate["authorized_series"],
             "why": ("the owner's %s must name the authorized series. Only "
@@ -1909,7 +1930,7 @@ def main(argv: Optional[List[str]] = None, *,
                     "this session may be traded, and the exact resolved "
                     "slug is re-enforced before every submission."
                     % AUTH.GATE_EVIDENCE_ENV),
-        }, indent=1, sort_keys=True))
+        })
         return 2
 
     # DURABLE PROGRESS FIRST. A restart RESUMES: the window, placement and
@@ -1958,7 +1979,7 @@ def main(argv: Optional[List[str]] = None, *,
     # `submit_first_leg` appends to the very same lists.
     registry = ORG.load_from_tape(state_dir, session_id=A.session_id())
     installed = ORG.install(provider, registry)
-    print(json.dumps({"ARMED": True, "probe": PROBE,
+    _emit("E1_ARMED", {"ARMED": True, "probe": PROBE,
                       "fingerprint": E1_FINGERPRINT,
                       "probe_budget": probe_budget.report(),
                       "rehydrated": rehydrated,
@@ -1972,15 +1993,14 @@ def main(argv: Optional[List[str]] = None, *,
                       },
                       "progress": prog.report(),
                       "authorization": auth.report(),
-                      "entering": "run_cohort"},
-                     indent=1, sort_keys=True, default=str))
+                      "entering": "run_cohort"})
     out = run_cohort(snapshot_provider=provider, tracker=tracker,
                      recorder=rec, transport_factory=transport_factory,
                      session_auth=auth, progress=prog,
                      budget=probe_budget)
     out["provider"] = provider.report()
     out["progress"] = prog.report()
-    print(json.dumps(out, indent=1, sort_keys=True, default=str))
+    _emit("E1_RESULT", out)
     if out.get("stopped_because") == "LOCAL_EXECUTION_FAULT":
         # A DISTINCT NON-ZERO EXIT. The restart policy is NEVER, so this
         # does not relaunch anything -- it makes the deployment read as

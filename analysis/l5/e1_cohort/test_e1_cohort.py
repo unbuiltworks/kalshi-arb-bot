@@ -2272,7 +2272,7 @@ def test_ENTRYPOINT_EXECUTION_main_is_disarmed_and_places_nothing(capsys):
     rc = main([])
     assert rc == 0
     out = capsys.readouterr().out
-    assert '"REFUSED": "DISARMED"' in out
+    assert '"REFUSED":"DISARMED"' in out
     assert SP.E1_FINGERPRINT in out
     assert "no latch slot was claimed" in out
     # nothing was spent
