@@ -39,7 +39,9 @@ from decimal import ROUND_DOWN, Decimal as D
 from typing import Any, Callable, Dict, List, Optional
 
 from analysis.l5.e1_cohort import pmus_book as PBK
+from analysis.l5.e1_cohort import arming as A
 from analysis.l5.e1_cohort import budget as BUD
+from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import order_state as OS
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import pmus_selector as SEL
@@ -162,7 +164,9 @@ class PmusWindowProvider:
                  pending_order_ids: Any = None,
                  known_order_ids: Any = None,
                  order_roles: Any = None,
-                 budget: Any = None) -> None:
+                 budget: Any = None,
+                 cache_state_dir: Any = None,
+                 cache_session_id: Any = None) -> None:
         self.progress = progress
         self.auth = session_auth
         self.recorder = recorder
@@ -202,7 +206,23 @@ class PmusWindowProvider:
         # tape; nine more windows would have crossed it and the reader
         # would have failed closed for good. A cancelled or filled order
         # cannot change state, so it is not re-asked about.
-        self.terminal_order_cache: Dict[str, Dict[str, Any]] = {}
+        # THE TERMINAL CACHE, NOW DURABLE ACROSS PROCESSES.
+        #
+        # It was in-process only, so every armed boot started cold and
+        # fired one GET per known id. With forty ids the venue answered
+        # HTTP 429 after roughly fifteen, about a second in, and the
+        # startup reconciliation failed closed -- twice on 2026-10-08.
+        # Loading the venue-confirmed terminal rows off the volume means a
+        # cold boot reads only what is actually live. Corrupt, foreign or
+        # unverifiable caches load as {} and the venue is simply asked.
+        self.cache_state_dir = str(cache_state_dir or L.LATCH_DIR)
+        self.cache_session_id = str(cache_session_id
+                                    or A.session_id() or "no-session")
+        _loaded = OS.load_terminal_cache(self.cache_state_dir,
+                                         session_id=self.cache_session_id)
+        self.terminal_order_cache: Dict[str, Dict[str, Any]] = \
+            _loaded["cache"]
+        self.terminal_cache_load = _loaded["report"]
         self.last_order_state: Optional[Dict[str, Any]] = None
         # THE PER-PROBE WINDOW BUDGET. `None` means the frozen twelve, so
         # every existing caller is unchanged; the deployed entrypoint passes
@@ -267,6 +287,13 @@ class PmusWindowProvider:
                               % type(exc).__name__,
                     "outstanding_sentinel": OS.UNKNOWN_OUTSTANDING,
                     "FAILS_CLOSED": True}
+        # PERSIST WHAT THE VENUE CONFIRMED AS FINISHED, so the next
+        # process does not have to ask again. Only terminal rows are ever
+        # written, and a save failure is not a trading failure: the cache
+        # only ever shrinks work.
+        self.terminal_cache_save = OS.save_terminal_cache(
+            self.terminal_order_cache, self.cache_state_dir,
+            session_id=self.cache_session_id)
         self.last_order_state = view
         return view
 
@@ -607,6 +634,8 @@ class PmusWindowProvider:
                 "windows_used": self.progress.windows_used(),
                 "windows_remaining": self.progress.windows_remaining(),
                 "slugs_used": self.progress.slugs_used(),
+                "terminal_cache_load": self.terminal_cache_load,
+                "terminal_cache_entries": len(self.terminal_order_cache),
                 "probe_budget": self.budget.report(),
                 "window_budget_spent": self.window_budget_spent,
                 "current_slug": (self.current_pin or {}).get("slug"),

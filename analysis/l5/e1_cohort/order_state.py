@@ -57,7 +57,10 @@ This module performs GET requests only and builds no order body.
 from __future__ import annotations
 
 import calendar
+import json
+import os
 import re
+import time
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 
@@ -71,6 +74,160 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 _SLUG_WINDOW_RE = re.compile(
     r"-(?P<mins>\d+)m-(?P<y>\d{4})-(?P<mo>\d{2})-(?P<d>\d{2})-"
     r"(?P<hh>\d{2})(?P<mm>\d{2})z$")
+
+
+#: THE DURABLE TERMINAL CACHE.
+#:
+#: "TERMINAL IS FINAL, SO IT IS READ ONCE" was already this module's rule,
+#: but the cache lived only in the process, so every armed boot started
+#: cold and fired one GET per known id. With forty ids on the tape the
+#: venue answered HTTP 429 after roughly fifteen of them, about a second
+#: in, and the startup reconciliation failed closed -- twice, three minutes
+#: apart, on 2026-10-08 at 20:48:49Z and 20:51:51Z. Backoff cannot fix that:
+#: the whole read must land inside the 5.0s freshness bound, so retrying
+#: twenty ids would trade a rate-limit refusal for a staleness refusal.
+#:
+#: So the SAME rule is made durable. Only venue-confirmed terminal rows are
+#: written, and the cache can shrink work without ever changing an answer,
+#: because an id the open-orders list reports as resting is ALWAYS re-read
+#: no matter what the cache claims.
+CACHE_FILE = "terminal_orders.json"
+CACHE_VERSION = 2
+
+
+def account_scope() -> str:
+    """A stable, NON-SECRET identity for the credential in use.
+
+    The cache must not be trusted across accounts, but no key material may
+    be written to disk, so the scope is a digest of the key id -- stable
+    for one account, and reversible to nothing.
+    """
+    import hashlib
+    key = (os.getenv("PMUS_API_KEY_ID") or "").strip()
+    if not key:
+        return "no-key-id"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def terminal_cache_path(state_dir: str) -> str:
+    return os.path.join(str(state_dir), CACHE_FILE)
+
+
+def _cache_digest(entries: Mapping[str, Any]) -> str:
+    import hashlib
+    blob = json.dumps(entries, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def load_terminal_cache(state_dir: str, *, session_id: Any,
+                        scope: Optional[str] = None) -> Dict[str, Any]:
+    """The cache, or {} -- and {} on ANY doubt whatsoever.
+
+    Corrupt, truncated, wrong-version, wrong-account, wrong-session or
+    digest-mismatched files are discarded WHOLE rather than partially
+    trusted: a cache we cannot verify is a cache we must not use. Entries
+    are validated individually too, so one bad row cannot smuggle a
+    non-terminal state in as terminal.
+    """
+    path = terminal_cache_path(state_dir)
+    out: Dict[str, Any] = {}
+    rep: Dict[str, Any] = {"path": path, "loaded": 0, "rejected": 0,
+                           "why": None, "trusted": False}
+    try:
+        with open(path, encoding="utf8") as fh:
+            doc = json.load(fh)
+    except FileNotFoundError:
+        rep["why"] = "NO_CACHE_FILE"
+        return {"cache": out, "report": rep}
+    except (OSError, ValueError) as exc:
+        rep["why"] = "UNREADABLE_OR_CORRUPT:%s" % type(exc).__name__
+        return {"cache": out, "report": rep}
+    if not isinstance(doc, Mapping):
+        rep["why"] = "NOT_A_MAPPING"
+        return {"cache": out, "report": rep}
+    if int(doc.get("version") or 0) != CACHE_VERSION:
+        rep["why"] = "WRONG_VERSION"
+        return {"cache": out, "report": rep}
+    if str(doc.get("account_scope")) != str(scope or account_scope()):
+        rep["why"] = "ACCOUNT_SCOPE_MISMATCH"
+        return {"cache": out, "report": rep}
+    if str(doc.get("session_id")) != str(session_id):
+        rep["why"] = "SESSION_MISMATCH"
+        return {"cache": out, "report": rep}
+    entries = doc.get("entries")
+    if not isinstance(entries, Mapping):
+        rep["why"] = "ENTRIES_NOT_A_MAPPING"
+        return {"cache": out, "report": rep}
+    if str(doc.get("digest")) != _cache_digest(entries):
+        rep["why"] = "DIGEST_MISMATCH"
+        return {"cache": out, "report": rep}
+    for oid, ent in entries.items():
+        raw = ent.get("raw") if isinstance(ent, Mapping) else None
+        if not isinstance(raw, Mapping):
+            rep["rejected"] += 1
+            continue
+        # EVERY ENTRY RE-VALIDATED: the id must match its own key, the
+        # state must be one the venue calls terminal, and the market must
+        # be named. Anything else is dropped, not trusted.
+        if str(raw.get("id")) != str(oid) \
+                or str(raw.get("state")) not in TERMINAL_STATES \
+                or not raw.get("marketSlug"):
+            rep["rejected"] += 1
+            continue
+        out[str(oid)] = {"terminal": True, "raw": dict(raw)}
+    rep["loaded"] = len(out)
+    rep["trusted"] = True
+    rep["why"] = None
+    return {"cache": out, "report": rep}
+
+
+def save_terminal_cache(cache: Mapping[str, Any], state_dir: str, *,
+                        session_id: Any,
+                        scope: Optional[str] = None) -> Dict[str, Any]:
+    """Atomic: a temp file in the same directory, fsynced, then renamed.
+
+    A reader can only ever see the old file or the whole new one. Only
+    terminal rows with a matching id and a named market are written.
+    """
+    entries: Dict[str, Any] = {}
+    skipped = 0
+    for oid, ent in (cache or {}).items():
+        raw = ent.get("raw") if isinstance(ent, Mapping) else None
+        if not isinstance(ent, Mapping) or not ent.get("terminal") \
+                or not isinstance(raw, Mapping) \
+                or str(raw.get("state")) not in TERMINAL_STATES \
+                or str(raw.get("id")) != str(oid) \
+                or not raw.get("marketSlug") \
+                or str(oid).startswith(LOCAL_INTENT):
+            skipped += 1
+            continue
+        entries[str(oid)] = {"raw": dict(raw)}
+    doc = {"version": CACHE_VERSION,
+           "account_scope": str(scope or account_scope()),
+           "session_id": str(session_id),
+           "written_unix": time.time(),
+           "entries": entries,
+           "digest": _cache_digest(entries),
+           "ONLY_VENUE_CONFIRMED_TERMINAL_ROWS": True,
+           "A_RESTING_ID_IS_ALWAYS_RE_READ": True}
+    path = terminal_cache_path(state_dir)
+    tmp = path + ".tmp.%d" % os.getpid()
+    try:
+        os.makedirs(str(state_dir), exist_ok=True)
+        with open(tmp, "w", encoding="utf8") as fh:
+            json.dump(doc, fh, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except OSError as exc:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return {"saved": False, "why": type(exc).__name__, "path": path,
+                "entries": len(entries), "skipped": skipped}
+    return {"saved": True, "path": path, "entries": len(entries),
+            "skipped_non_terminal": skipped, "atomic": "os.replace"}
 
 
 def window_end_unix(slug: Any) -> Optional[float]:
@@ -581,12 +738,29 @@ def read_order_state(reader: Callable[[str], Any], *,
     # can only ever shrink work, never change an answer.
     cache = terminal_cache if terminal_cache is not None else {}
     cached_used: List[str] = []
+    #: a cached id the venue's OPEN-ORDERS list reports as resting. The
+    #: cache is wrong, or was written for a different order; either way the
+    #: id is RE-READ from the venue and reconciled, never trusted. This is
+    #: the one case where a durable cache could have changed an answer, so
+    #: it is counted and published rather than silently handled.
+    cached_but_resting: List[str] = []
     for oid in list(id_set):
         c = cache.get(oid)
-        if c is not None and c.get("terminal") and oid not in resting_ids:
-            hist_rows.append(dict(c["raw"]))
-            cached_used.append(oid)
-            id_set.remove(oid)
+        if c is None or not c.get("terminal"):
+            continue
+        if oid in resting_ids:
+            cached_but_resting.append(oid)
+            continue
+        raw = c.get("raw")
+        # RE-VALIDATED AT USE, not only at load: a terminal state and a
+        # matching id, or the entry is ignored and the venue is asked.
+        if not isinstance(raw, Mapping) \
+                or str(raw.get("state")) not in TERMINAL_STATES \
+                or str(raw.get("id")) != str(oid):
+            continue
+        hist_rows.append(dict(raw))
+        cached_used.append(oid)
+        id_set.remove(oid)
     for oid in id_set:
         try:
             body = reader(ORDER_PATH % oid)
@@ -900,6 +1074,12 @@ def read_order_state(reader: Callable[[str], Any], *,
         "ids_absent_at_venue_404": sorted(absent),
         "ids_served_from_terminal_cache": sorted(cached_used),
         "per_id_gets_this_read": len(id_set),
+        # THE ONE CASE A DURABLE CACHE COULD HAVE GOT WRONG, published
+        # rather than hidden: the venue says these are resting, so they
+        # were re-read and reconciled instead of served from the cache.
+        "cached_but_resting_re_read": sorted(cached_but_resting),
+        "n_cached_but_resting_re_read": len(cached_but_resting),
+        "a_cached_id_the_venue_calls_resting_is_never_trusted": True,
         "TERMINAL_IS_FINAL_SO_IT_IS_READ_ONCE": True,
         "a_resting_id_is_always_re_read": True,
         "A_404_IS_AN_ANSWER_A_TIMEOUT_IS_NOT": True,

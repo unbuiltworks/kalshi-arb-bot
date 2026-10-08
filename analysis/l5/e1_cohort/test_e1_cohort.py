@@ -2026,7 +2026,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # its startup reconciliation ran with no window pin, so it could
         # not price its own settled history: the armed probe refused itself
         # with UNPRICEABLE_EXPOSURE and placed nothing, on every boot.
-        "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1"]
+        "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
+        # its terminal-order cache was in-process only, so every cold boot
+        # asked the venue about all forty known ids and PMUS answered 429
+        # after about fifteen -- twice. Terminal rows are now durable.
+        "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

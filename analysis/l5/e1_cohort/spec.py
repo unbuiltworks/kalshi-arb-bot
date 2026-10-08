@@ -754,8 +754,23 @@ DIFF: Dict[str, Any] = {
             "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
             "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
             "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
+            "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59",
         ],
         "reasons": {
+        "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59":
+            ("its startup reconciliation was correct but NOT DURABLE. "
+             "Terminal order rows were cached in process memory only, so "
+             "every cold boot asked the venue about all forty known ids, "
+             "one GET each, and PMUS answered HTTP 429 after roughly "
+             "fifteen -- twice, at 20:48:49Z and 20:51:51Z, both "
+             "refusing with ORDER_STATE_UNREADABLE and placing nothing. "
+             "There is no order-history endpoint to batch the reads and "
+             "backoff cannot help inside the 5.0s freshness bound. "
+             "Venue-confirmed terminal rows now persist on the durable "
+             "volume, atomically written, versioned, digest-checked and "
+             "scoped to this account and session, while open orders and "
+             "positions are still read fresh every snapshot and any id "
+             "the venue reports resting is re-read"),
         "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1":            
             ("its startup reconciliation ran before any window was opened and therefore with no pin, so own_side_price could not price ANY order, and the tape's twenty FILLED 1215z orders each set priced = False. The armed probe refused itself at 20:30:43Z with ORDER_STATE_INCONSISTENT: UNPRICEABLE_EXPOSURE and placed nothing -- deterministically, on every boot. A fill is now current exposure only while it is still inventory, decided from the order's own market slug and the venue's own positions, needing no pin"),
         "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165":            
@@ -1324,6 +1339,66 @@ DIFF: Dict[str, Any] = {
         "strategy_sizing_budget_cancellation_or_selection_changed": False,
     },
 
+    # ================================================================
+    # THE DURABLE TERMINAL-ORDER CACHE. A finished order is read once,
+    # EVER -- not once per process. The cache may shrink work; it may
+    # never change an answer.
+    # ================================================================
+    "terminal_order_cache": {
+        "module": "analysis.l5.e1_cohort.order_state",
+        "file": "terminal_orders.json",
+        "version": 2,
+        "lives_on": "the existing durable volume (state dir)",
+        "the_20261008_rate_limit_refusals": [
+            "20:48:49Z ORDER_STATE_UNREADABLE:/v1/order/CZGW5Q0DJZ8E:429",
+            "20:51:51Z ORDER_STATE_UNREADABLE:/v1/order/CZGW6T1G8Z84:429",
+        ],
+        "why": ("forty known ids, a cold process, one GET each, and the "
+                "venue answered 429 after roughly fifteen of them. There "
+                "is no order-history endpoint to batch them, and backoff "
+                "cannot help: the whole read must land inside the 5.0s "
+                "freshness bound, so retrying twenty ids would trade a "
+                "rate-limit refusal for a staleness refusal. A TERMINAL "
+                "order cannot change state, so it need never be asked "
+                "about twice -- the rule was already there, it was just "
+                "not durable across a restart"),
+        "only_venue_confirmed_terminal_rows_are_written": True,
+        "active_orders_are_never_cached": True,
+        "ambiguous_states_are_never_cached": True,
+        "pending_intents_are_never_cached": True,
+        "local_intent_ids_are_never_cached": True,
+        "scoped_to": ["account", "session", "order id", "market slug"],
+        "account_scope_is_a_hash_not_a_credential": True,
+        "no_credential_is_ever_written_to_the_volume": True,
+        "written_atomically": "temp file + fsync + os.replace",
+        "integrity_checked_on_load": True,
+        "identity_checked_on_load": True,
+        "load_rejections": [
+            "NO_CACHE_FILE",
+            "UNREADABLE_OR_CORRUPT",
+            "NOT_A_MAPPING",
+            "WRONG_VERSION",
+            "ACCOUNT_SCOPE_MISMATCH",
+            "SESSION_MISMATCH",
+            "ENTRIES_NOT_A_MAPPING",
+            "DIGEST_MISMATCH",
+        ],
+        "an_unverifiable_cache_loads_as_empty_not_trusted": True,
+        "entries_are_revalidated_at_use_not_only_at_load": True,
+        "open_orders_are_always_read_fresh_from_the_venue": True,
+        "positions_are_always_read_fresh_from_the_venue": True,
+        "a_cached_id_the_venue_calls_resting_is_re_read": True,
+        "that_conflict_is_published_not_silently_handled": True,
+        "freshness_bound_s": 5.0,
+        "freshness_bound_unchanged": True,
+        "exposure_checks_unchanged": True,
+        "a_429_on_a_read_we_still_need_is_still_a_refusal": True,
+        "429_is_never_suppressed": True,
+        "changes_no_bound": True,
+        "strategy_sizing_budget_or_cancellation_changed": False,
+        "may_place_amend_or_cancel_an_order": False,
+    },
+
     "probe_budget": {
         "module": "analysis.l5.e1_cohort.budget",
         "env_keys": ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"],
@@ -1763,7 +1838,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
       "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
       "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
-      "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1"]),
+      "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
+      "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1885,6 +1961,48 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
      "venue_position_exceeding_our_derived_still_refuses", True),
     ("startup_reconciliation."
      "strategy_sizing_budget_cancellation_or_selection_changed", False),
+    ("terminal_order_cache.module", "analysis.l5.e1_cohort.order_state"),
+    ("terminal_order_cache.file", "terminal_orders.json"),
+    ("terminal_order_cache.version", 2),
+    ("terminal_order_cache."
+     "only_venue_confirmed_terminal_rows_are_written", True),
+    ("terminal_order_cache.active_orders_are_never_cached", True),
+    ("terminal_order_cache.ambiguous_states_are_never_cached", True),
+    ("terminal_order_cache.pending_intents_are_never_cached", True),
+    ("terminal_order_cache.local_intent_ids_are_never_cached", True),
+    ("terminal_order_cache.scoped_to",
+     ["account", "session", "order id", "market slug"]),
+    ("terminal_order_cache.account_scope_is_a_hash_not_a_credential", True),
+    ("terminal_order_cache.no_credential_is_ever_written_to_the_volume",
+     True),
+    ("terminal_order_cache.written_atomically",
+     "temp file + fsync + os.replace"),
+    ("terminal_order_cache.integrity_checked_on_load", True),
+    ("terminal_order_cache.identity_checked_on_load", True),
+    ("terminal_order_cache.load_rejections",
+     ["NO_CACHE_FILE", "UNREADABLE_OR_CORRUPT", "NOT_A_MAPPING",
+      "WRONG_VERSION", "ACCOUNT_SCOPE_MISMATCH", "SESSION_MISMATCH",
+      "ENTRIES_NOT_A_MAPPING", "DIGEST_MISMATCH"]),
+    ("terminal_order_cache."
+     "an_unverifiable_cache_loads_as_empty_not_trusted", True),
+    ("terminal_order_cache."
+     "entries_are_revalidated_at_use_not_only_at_load", True),
+    ("terminal_order_cache."
+     "open_orders_are_always_read_fresh_from_the_venue", True),
+    ("terminal_order_cache."
+     "positions_are_always_read_fresh_from_the_venue", True),
+    ("terminal_order_cache.a_cached_id_the_venue_calls_resting_is_re_read",
+     True),
+    ("terminal_order_cache.freshness_bound_s", 5.0),
+    ("terminal_order_cache.freshness_bound_unchanged", True),
+    ("terminal_order_cache.exposure_checks_unchanged", True),
+    ("terminal_order_cache."
+     "a_429_on_a_read_we_still_need_is_still_a_refusal", True),
+    ("terminal_order_cache.429_is_never_suppressed", True),
+    ("terminal_order_cache.changes_no_bound", True),
+    ("terminal_order_cache."
+     "strategy_sizing_budget_or_cancellation_changed", False),
+    ("terminal_order_cache.may_place_amend_or_cancel_an_order", False),
     ("probe_budget.module", "analysis.l5.e1_cohort.budget"),
     ("probe_budget.env_keys",
      ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"]),
@@ -2085,7 +2203,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59"
+    "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:
