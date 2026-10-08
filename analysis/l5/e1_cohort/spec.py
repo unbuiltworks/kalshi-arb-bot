@@ -751,8 +751,11 @@ DIFF: Dict[str, Any] = {
             "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
             "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
             "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
+            "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
         ],
         "reasons": {
+        "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf":            
+            ("it had NO per-probe budget. Its entrypoint read no limit, so arming it authorized the frozen twenty attempts in each of twelve windows -- 240 placements -- when the owner had authorized ONE. And its latch exhaustion path raised WindowExhausted uncaught, AFTER the pre-POST intent row was durable and a real preview had been sent, which would have left a false permanent block and abandoned any filled residual. Both are now authorization: PMUS_E1_MAX_ATTEMPTS and PMUS_E1_MAX_WINDOWS, narrowing only, counted from durable state, enforced before the intent row"),
             "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c":
                 ("its handover cancelled by MARKET, via "
                  "deadman_cancel_all's {'slugs': [slug]}, which cancels "
@@ -1267,6 +1270,68 @@ DIFF: Dict[str, Any] = {
                                      "wrong"),
     },
 
+    "probe_budget": {
+        "module": "analysis.l5.e1_cohort.budget",
+        "env_keys": ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"],
+        "namespace": "PMUS_E1_*",
+        "may_only_narrow_the_frozen_maximums": True,
+        "can_never_widen_authorized_risk": True,
+        "frozen_max_attempts": 240,
+        "frozen_max_windows": 12,
+        "missing_is_a_refusal": True,
+        "invalid_is_a_refusal": True,
+        "excessive_is_a_refusal": True,
+        "zero_or_negative_is_a_refusal": True,
+        "no_default_at_the_entrypoint": True,
+        "why_no_default": ("a default IS the silent twenty-attempts-in-"
+                           "twelve-windows this exists to prevent. The "
+                           "owner's 2026-10-08 authorization is one "
+                           "attempt in one window, and before this there "
+                           "was no way to say so: the bound lived in "
+                           "frozen constants, main() read no argument, "
+                           "and the only lever left was pre-creating "
+                           "latch files -- which writes a false pending "
+                           "intent, sends a real preview and then raises "
+                           "an uncaught WindowExhausted"),
+        "established_before_any_provider_feed_window_or_order_path": True,
+        "attempts_counted_from": "durable latch slot files + local intents",
+        "attempts_counted_from_memory": False,
+        "ambiguous_submission_counts_as_a_spent_attempt": True,
+        "why_ambiguous_counts": ("the slot is consumed immediately before "
+                                 "the POST and never released, so an "
+                                 "unknown outcome is spent"),
+        "a_restart_cannot_reset_the_attempt_budget": True,
+        "windows_counted_relative_to_the_ledger_at_boot": True,
+        "existing_cohort_ledger_is_read_never_rewritten": True,
+        "enforced_before_the_intent_row": True,
+        "enforced_before_the_preview": True,
+        "enforced_before_the_post": True,
+        "exhaustion_is_not_a_terminal_refusal": True,
+        "why_not_terminal": ("a terminal refusal breaks the loop at once, "
+                             "which is exactly how a filled residual gets "
+                             "stranded. Exhaustion stops NEW FIRST LEGS "
+                             "only; the lifecycle step and the handover "
+                             "deadman have already run this iteration and "
+                             "keep running"),
+        "complement_management_continues_after_exhaustion": True,
+        "owned_order_cancellation_continues_after_exhaustion": True,
+        "window_budget_spent_is_a_hard_stop": True,
+        "no_automatic_continuation_to_another_market": True,
+        "no_automatic_restart_or_rearm": True,
+        "latch_exhaustion_is_read_before_the_intent_row": True,
+        "latch_exhaustion_cannot_crash_the_process": True,
+        "latch_exhaustion_leaves_no_false_pending_intent": True,
+        "why_the_intent_is_retired": ("consume_attempt runs between the "
+                                      "preview echo and the POST, so the "
+                                      "race case raises after the intent "
+                                      "row exists -- but the create failed "
+                                      "BEFORE the POST, so no order can "
+                                      "exist and the intent is retired in "
+                                      "memory and on the tape"),
+        "window_exhausted_propagated_uncaught": False,
+        "pricing_strategy_economics_or_risk_ceilings_changed": False,
+    },
+
     "latch": {
         "kind": "BOUNDED_COUNT_NAMED_SLOTS",
         "module": "analysis.l5.e1_cohort.latch",
@@ -1616,7 +1681,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
       "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
       "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
-      "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c"]),
+      "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
+      "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1708,6 +1774,39 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("pair_lifecycle.filled_residual_rides_to_settlement", True),
     ("pair_lifecycle.taker_rescue_at_any_tte", False),
     ("pair_lifecycle.handover_tte_s", 120.0),
+    ("probe_budget.module", "analysis.l5.e1_cohort.budget"),
+    ("probe_budget.env_keys",
+     ["PMUS_E1_MAX_ATTEMPTS", "PMUS_E1_MAX_WINDOWS"]),
+    ("probe_budget.may_only_narrow_the_frozen_maximums", True),
+    ("probe_budget.can_never_widen_authorized_risk", True),
+    ("probe_budget.missing_is_a_refusal", True),
+    ("probe_budget.invalid_is_a_refusal", True),
+    ("probe_budget.excessive_is_a_refusal", True),
+    ("probe_budget.zero_or_negative_is_a_refusal", True),
+    ("probe_budget.no_default_at_the_entrypoint", True),
+    ("probe_budget.attempts_counted_from",
+     "durable latch slot files + local intents"),
+    ("probe_budget.attempts_counted_from_memory", False),
+    ("probe_budget.ambiguous_submission_counts_as_a_spent_attempt", True),
+    ("probe_budget.a_restart_cannot_reset_the_attempt_budget", True),
+    ("probe_budget.windows_counted_relative_to_the_ledger_at_boot", True),
+    ("probe_budget.existing_cohort_ledger_is_read_never_rewritten", True),
+    ("probe_budget.enforced_before_the_intent_row", True),
+    ("probe_budget.enforced_before_the_preview", True),
+    ("probe_budget.enforced_before_the_post", True),
+    ("probe_budget.exhaustion_is_not_a_terminal_refusal", True),
+    ("probe_budget.complement_management_continues_after_exhaustion", True),
+    ("probe_budget.owned_order_cancellation_continues_after_exhaustion",
+     True),
+    ("probe_budget.window_budget_spent_is_a_hard_stop", True),
+    ("probe_budget.no_automatic_continuation_to_another_market", True),
+    ("probe_budget.no_automatic_restart_or_rearm", True),
+    ("probe_budget.latch_exhaustion_is_read_before_the_intent_row", True),
+    ("probe_budget.latch_exhaustion_cannot_crash_the_process", True),
+    ("probe_budget.latch_exhaustion_leaves_no_false_pending_intent", True),
+    ("probe_budget.window_exhausted_propagated_uncaught", False),
+    ("probe_budget.pricing_strategy_economics_or_risk_ceilings_changed",
+     False),
     ("pair_lifecycle.handover_tte_source",
      "SPEC.timing_explicit.tte_shutdown_s"),
     # the order registry, restored from the durable tape
@@ -1861,7 +1960,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf"
+    "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

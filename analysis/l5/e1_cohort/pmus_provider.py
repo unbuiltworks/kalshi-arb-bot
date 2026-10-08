@@ -39,6 +39,7 @@ from decimal import ROUND_DOWN, Decimal as D
 from typing import Any, Callable, Dict, List, Optional
 
 from analysis.l5.e1_cohort import pmus_book as PBK
+from analysis.l5.e1_cohort import budget as BUD
 from analysis.l5.e1_cohort import order_state as OS
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import pmus_selector as SEL
@@ -135,6 +136,18 @@ def await_pmus_book_ready(feed: Any, pin: Dict[str, Any], *, now_fn: Any,
         sleep_fn(poll_s)
 
 
+def _windows_used_or_zero(progress: Any) -> int:
+    """A progress stub that cannot be asked contributes a zero BASELINE.
+
+    Only the baseline: the gate still reads `progress.windows_used()` on
+    every open, so a provider whose ledger cannot be read opens nothing.
+    """
+    try:
+        return int(progress.windows_used())
+    except Exception:                                          # noqa: BLE001
+        return 0
+
+
 class PmusWindowProvider:
     """At most `WINDOWS` DISTINCT eligible PMUS windows, one at a time."""
 
@@ -148,7 +161,8 @@ class PmusWindowProvider:
                  order_state_reader: Any = None,
                  pending_order_ids: Any = None,
                  known_order_ids: Any = None,
-                 order_roles: Any = None) -> None:
+                 order_roles: Any = None,
+                 budget: Any = None) -> None:
         self.progress = progress
         self.auth = session_auth
         self.recorder = recorder
@@ -190,6 +204,15 @@ class PmusWindowProvider:
         # cannot change state, so it is not re-asked about.
         self.terminal_order_cache: Dict[str, Dict[str, Any]] = {}
         self.last_order_state: Optional[Dict[str, Any]] = None
+        # THE PER-PROBE WINDOW BUDGET. `None` means the frozen twelve, so
+        # every existing caller is unchanged; the deployed entrypoint passes
+        # the owner's `PMUS_E1_MAX_WINDOWS`. `window_budget_spent` is the
+        # flag the runner reads to HARD STOP rather than pacing an empty
+        # snapshot forever once the authorized window is over.
+        self.budget = budget if budget is not None else (
+            BUD.ProbeBudget.frozen_maximums(
+                windows_used_at_start=_windows_used_or_zero(progress)))
+        self.window_budget_spent = False
         self.current_pin: Optional[Dict[str, Any]] = None
         self.current_window_index: Optional[int] = None
         self.refusals: List[Dict[str, Any]] = []
@@ -283,6 +306,19 @@ class PmusWindowProvider:
 
     # ------------------------------------------------------------- windows
     def open_next_window(self) -> Optional[Dict[str, Any]]:
+        # THIS PROBE'S OWN WINDOW BUDGET, CHECKED FIRST. It can only be
+        # smaller than the frozen twelve, it is counted relative to the
+        # windows already on the append-only ledger at boot, and the ledger
+        # itself is read and never rewritten. Spending it is a HARD STOP:
+        # no next market, no continuation, and -- with the restart policy
+        # NEVER and the budget counted from durable state -- nothing a
+        # relaunch could undo.
+        wg = self.budget.window_gate(
+            windows_used=self.progress.windows_used())
+        if not wg["may_open_window"]:
+            self.window_budget_spent = True
+            self._refuse(wg["because"], **wg)
+            return None
         if self.progress.windows_used() >= WINDOWS:
             self._refuse("COHORT_WINDOW_BUDGET_SPENT",
                          windows_used=self.progress.windows_used(),
@@ -534,6 +570,8 @@ class PmusWindowProvider:
                 "windows_used": self.progress.windows_used(),
                 "windows_remaining": self.progress.windows_remaining(),
                 "slugs_used": self.progress.slugs_used(),
+                "probe_budget": self.budget.report(),
+                "window_budget_spent": self.window_budget_spent,
                 "current_slug": (self.current_pin or {}).get("slug"),
                 "refusals": list(self.refusals),
                 "timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,

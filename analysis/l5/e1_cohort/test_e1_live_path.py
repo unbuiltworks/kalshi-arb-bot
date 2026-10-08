@@ -29,6 +29,7 @@ from decimal import Decimal as D
 import pytest
 
 from analysis.l5.e1_cohort import arming as AR
+from analysis.l5.e1_cohort import budget as BUD
 from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import progress as PG
@@ -203,6 +204,13 @@ def arm(monkeypatch, sid="e1-live-test-session"):
     monkeypatch.setenv("PMUS_E1_ARM", sid)
     monkeypatch.setenv("PMUS_E1_GATE_EVIDENCE", AUTH.AUTHORIZED_SERIES)
     monkeypatch.setenv(AR.FINGERPRINT_PIN_ENV, SP.E1_FINGERPRINT)
+    # THE PER-PROBE BUDGET. These tests predate it and exercise the FULL
+    # frozen cohort -- twelve windows, twenty attempts each -- so they arm at
+    # the frozen maximums, which narrows nothing and leaves their behaviour
+    # exactly as it was. The one-attempt/one-window probe has its own
+    # end-to-end tests in test_e1_probe_budget.py.
+    monkeypatch.setenv(BUD.MAX_ATTEMPTS_ENV, str(BUD.FROZEN_MAX_ATTEMPTS))
+    monkeypatch.setenv(BUD.MAX_WINDOWS_ENV, str(BUD.FROZEN_MAX_WINDOWS))
     # THE PRODUCTION CREDENTIAL CONTRACT, with a THROWAWAY key.
     #
     # This used to set `PMUS_API_SECRET`, which NO CODE READS -- the real

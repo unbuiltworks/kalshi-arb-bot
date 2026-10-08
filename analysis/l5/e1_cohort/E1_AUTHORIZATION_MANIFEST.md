@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf
+c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -415,7 +415,9 @@ additive and touches nothing of XR2W's.
 | `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
 | `PMUS_E1_ARM` | must equal the session id |
 | `PMUS_E1_GATE_EVIDENCE` | must equal the authorized **series** `btc-updown-15m`; the exact resolved slug is re-enforced before every submission |
-| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf` |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165` |
+| `PMUS_E1_MAX_ATTEMPTS` | how many first-leg submission **attempts** this process may make in total. May only **narrow** the frozen 240; missing, blank, non-integer, zero, negative or excessive all **refuse**. Counted from durable latch files plus unretired local intents, so an ambiguous submission and a restart both count as spent |
+| `PMUS_E1_MAX_WINDOWS` | how many **new** market windows this process may open, counted relative to the append-only ledger at boot. May only narrow the frozen 12; same fail-closed rules. Spending it is a hard stop with no continuation to another market |
 
 **None of these is set.** Reporting is BOOLEAN ONLY — `armed_env_summary()`
 returns presence flags and never a value, asserted by test.
@@ -563,7 +565,7 @@ degraded one.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
 4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
-   `c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf`;
+   `c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many

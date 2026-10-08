@@ -58,6 +58,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from analysis.l5.e1_cohort import arming as A
 from analysis.l5.e1_cohort import authorization as AUTH
+from analysis.l5.e1_cohort import budget as BUD
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import local_faults as LF
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
@@ -90,6 +91,17 @@ from src import pmus_fee_schedule as FEE
 #: bound rather than chosen here.
 MAX_BOOK_AGE_S = 2.0
 
+
+class AttemptBudgetExhausted(AUTH.NotAuthorized):
+    """This probe's authorized first-leg ATTEMPTS are spent.
+
+    A subclass of `NotAuthorized` on purpose: it is refused BEFORE the
+    intent row, BEFORE the preview and BEFORE the POST, by the same
+    authorization machinery that refuses an unarmed process -- and the
+    runner's existing handler already records it without stopping, because
+    an exhausted attempt budget must NEVER end management of a first leg
+    that may already be filled.
+    """
 
 class Ineligible(RuntimeError):
     """Refused by E1's own preflight. CARRIES THE REFUSAL LIST.
@@ -719,7 +731,8 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
                      transport_factory: Any = O.BoundedOrderTransport,
                      session_auth: Any = None,
                      progress: Any = None,
-                     recorder: Any = None) -> Dict[str, Any]:
+                     recorder: Any = None,
+                     budget: Any = None) -> Dict[str, Any]:
     """Preview, echo-check, consume a NAMED latch slot, POST once.
 
     Every byte of that sequence is `analysis.l5.live_exec2.orders.submit_one`,
@@ -773,6 +786,43 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
 
     holder: Dict[str, Any] = {}
 
+    # ============ THE PER-PROBE ATTEMPT BUDGET, AND THE LATCH, FIRST ======
+    #
+    # BEFORE the intent row, BEFORE the preview and BEFORE the POST, in that
+    # order of importance. Two separate reads, both of DURABLE state:
+    #
+    #   * the owner's `PMUS_E1_MAX_ATTEMPTS`, counted against latch files
+    #     plus unretired local intents, so an ambiguous submission and a
+    #     restart both count as spent;
+    #   * the latch itself, read-only, so a window whose twenty slots are
+    #     all taken is discovered HERE, rather than deep in the
+    #     submit helper between the preview echo and the POST.
+    #
+    # The second is the repair of a real defect. `consume_attempt` is called
+    # between the preview echo and the POST, so an exhausted window used to
+    # raise `WindowExhausted` AFTER the intent row was already on the
+    # durable tape and AFTER a real preview had been sent -- leaving a false
+    # pending intent that `order_registry` would restore as a permanent
+    # block, and propagating an uncaught `RuntimeError` out of `main()` that
+    # would abandon any filled residual. Checking first means neither
+    # happens on the ordinary path, and the `except` below covers the race.
+    if budget is not None:
+        gate = budget.attempt_gate(
+            pending_order_ids=snapshot.get("pending_order_ids") or [])
+        if not gate["may_attempt"]:
+            raise AttemptBudgetExhausted(
+                "%s; refused before the intent row, the preview and the "
+                "POST. Inventory management continues." % gate["because"])
+    _latch_now = L.window_state(window=window)
+    if not _latch_now.get("available") or _latch_now.get("exhausted"):
+        raise AttemptBudgetExhausted(
+            "LATCH_EXHAUSTED_WINDOW_%d: %s. Refused before the intent row, "
+            "the preview and the POST, so no false pending intent is "
+            "recorded and no preview is sent."
+            % (window, _latch_now.get("why")
+               or "all %d attempt slots are spent"
+               % MAX_ATTEMPTS_PER_WINDOW))
+
     # THE SUBMISSION INTENT IS RECORDED BEFORE THE POST, NOT AFTER IT.
     #
     # `pending_order_ids` is the list the provider reads when it asks the
@@ -815,6 +865,29 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     except O.SubmissionAmbiguous:
         tracker.record_ambiguous_submission()
         raise
+    except (L.WindowExhausted, L.LatchSpent) as exc:
+        # THE RACE, AND ONLY THE RACE. The read-only check above already
+        # refused the ordinary exhausted case; reaching here means a slot
+        # was taken between that read and the O_EXCL create. The latch did
+        # its job -- NOTHING was POSTed, because the create failed before
+        # the POST -- so the intent this function recorded is retired, in
+        # memory and on the tape, and the exhaustion is raised as an
+        # authorization refusal instead of an uncaught RuntimeError.
+        if isinstance(pending, list) and intent_id in pending:
+            pending.remove(intent_id)
+        if recorder is not None:
+            recorder.record_event(
+                window=window, slot=-1,
+                event="FIRST_LEG_INTENT_RETIRED_LATCH_EXHAUSTED",
+                detail={"intent_id": intent_id, "slug": slug,
+                        "why": type(exc).__name__,
+                        "no_post_was_made": True,
+                        "retired_because": ("the latch refused BEFORE the "
+                                            "POST, so no order can exist"),
+                        "not_a_false_pending_intent": True})
+        raise AttemptBudgetExhausted(
+            "LATCH_EXHAUSTED_AT_CONSUME_WINDOW_%d: %s. No POST was made "
+            "and the pre-POST intent has been retired." % (window, exc))
     finally:
         # the attempt is counted the moment a slot was taken, whatever the
         # POST then did. A spent slot that we did not count would let the
@@ -1113,8 +1186,8 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                transport_factory: Any = O.BoundedOrderTransport,
                now_fn: Any = None, max_iterations: Optional[int] = None,
                session_auth: Any = None, progress: Any = None,
-               sleep_fn: Any = None, pace_s: Optional[float] = None
-               ) -> Dict[str, Any]:
+               sleep_fn: Any = None, pace_s: Optional[float] = None,
+               budget: Any = None) -> Dict[str, Any]:
     """Drive the cohort: MANY bounded attempts, under the E1 named-slot latch.
 
     THIS IS THE THING THAT WAS MISSING, and its absence was the defect. The
@@ -1148,6 +1221,26 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
     # by anything -- which is why 1215z filled twenty first legs and
     # submitted zero complements.
     lifecycle = PLC.PairLifecycle()
+    # THE PER-PROBE BUDGET. The default is the FROZEN maximums, so every
+    # existing caller behaves exactly as before; the deployed `main()`
+    # builds it from the owner's `PMUS_E1_MAX_ATTEMPTS`/`PMUS_E1_MAX_WINDOWS`
+    # and fails closed when they are missing, invalid or excessive.
+    if budget is None:
+        budget = BUD.ProbeBudget.frozen_maximums(
+            windows_used_at_start=(progress.windows_used()
+                                   if progress is not None else 0))
+    budget_events: List[Dict[str, Any]] = []
+    # LATCH EXHAUSTION IS AS BINDING AS THE BUDGET. The latch is the other
+    # durable bound on attempts, and once it refuses, no further first leg
+    # can be submitted in this window however much budget is left. Without
+    # this flag the refusal was a bare `continue`, which spun the loop at
+    # full speed until the iteration cap -- never crashing, but never
+    # stopping either, and never reaching the clean handover stop.
+    # keyed by WINDOW INDEX, because the latch bound is per window while
+    # the attempt budget is global. A sticky global flag here silently
+    # stopped a legitimate twelve-window cohort from placing anything in
+    # window two once window one's twenty slots were spent.
+    attempts_blocked: Dict[Any, str] = {}
     slept_s = 0.0
     empty_snapshots = 0
     placements: List[Dict[str, Any]] = []
@@ -1302,6 +1395,16 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             # permanently broken feed stops instead of retrying forever.
             budget_spent = (progress is not None
                             and progress.windows_used() >= WINDOWS)
+            # THE HARD STOP AFTER THE AUTHORIZED WINDOW. The provider
+            # refuses to open another one once this probe's window budget is
+            # spent, and that refusal is NOT a momentary book gap to be
+            # paced: it is the end of the authorized probe. Reached only
+            # AFTER the handover deadman has run inside the window that was
+            # authorized, so no owned order is left resting by stopping
+            # here, and a filled residual rides to settlement as specified.
+            if getattr(snapshot_provider, "window_budget_spent", False):
+                stopped_because = "PROBE_WINDOW_BUDGET_SPENT"
+                break
             empty_snapshots += 1
             if budget_spent:
                 stopped_because = "SNAPSHOT_PROVIDER_EXHAUSTED"
@@ -1377,6 +1480,66 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                     "HANDOVER_CANCEL_TOUCHED_ORDERS_WE_DO_NOT_OWN:%s"
                     % (dm.get("foreign_open_ids_left_untouched"),))
 
+        # ============ THE ATTEMPT BUDGET, AFTER THE LIFECYCLE ============
+        #
+        # ORDER MATTERS, AND THIS IS WHY IT IS HERE AND NOT EARLIER. The
+        # lifecycle step and the handover deadman have already run this
+        # iteration, so an exhausted attempt budget stops NEW FIRST LEGS
+        # while complement management and exact-id cancellation carry on
+        # exactly as before. The owner's requirement is "one first-leg
+        # submission attempt total", not "stop the process after one
+        # attempt" -- a filled or possibly-filled leg still needs hedging
+        # and still needs cancelling at handover.
+        #
+        # It is also deliberately NOT a terminal refusal routed through
+        # `pace_for`: a terminal refusal breaks the loop immediately, which
+        # is precisely how a filled residual would be stranded.
+        agate = budget.attempt_gate(
+            pending_order_ids=snap.get("pending_order_ids") or [])
+        blocked_here = attempts_blocked.get(snap.get("window"))
+        if not agate["may_attempt"] or blocked_here:
+            # is anything of ours still live? Unknown order state counts as
+            # live, because the conservative direction is to keep managing.
+            out_n = snap.get("our_outstanding_orders")
+            residual_open = bool(snap.get("our_open_residual"))
+            _view = snap.get("order_state") or {}
+            comp_n = _view.get("n_outstanding_complements")
+            if not _view.get("ok", True):
+                # order state could not be established: assume live.
+                comp_n = 1
+            unresolved = bool(out_n) or residual_open or bool(comp_n)
+            first = not budget_events
+            if first:
+                budget_events.append({"iteration": it,
+                                      "event": "ATTEMPT_BUDGET_EXHAUSTED",
+                                      "gate": agate,
+                                      "latch_blocked": blocked_here})
+                if recorder is not None:
+                    recorder.record_event(
+                        window=snap.get("window", -1), slot=-1,
+                        event="ATTEMPT_BUDGET_EXHAUSTED",
+                        detail={"slug": snap.get("market"),
+                                "max_attempts": agate["max_attempts"],
+                                "usage": agate["usage"],
+                                "no_further_first_leg_will_be_attempted":
+                                    True,
+                                "inventory_management_continues": True})
+            if past_cutoff and lifecycle.deadman_result is not None:
+                # the handover has run: our resting orders are cancelled and
+                # verified, and there is nothing further this process can do.
+                stopped_because = "ATTEMPT_BUDGET_EXHAUSTED_AT_HANDOVER"
+                break
+            if not unresolved:
+                stopped_because = (
+                    "ATTEMPT_BUDGET_EXHAUSTED_NOTHING_OUTSTANDING")
+                break
+            wait = PACING.pace_seconds(now=now_fn(), pace_s=pace_s)
+            paced_waits.append({"iteration": it, "sleep_s": wait,
+                                "because": ["ATTEMPT_BUDGET_EXHAUSTED"]})
+            slept_s += wait
+            sleep_fn(wait)
+            continue
+
         checks = e1_preflight(snap, tracker, now=now_fn())
         if not checks["ok"]:
             # THE REPAIR. A refusal used to `continue` immediately, so a
@@ -1387,6 +1550,17 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             # refusal this code has never seen -- is terminal and stops the
             # cohort. No bound, price, quantity or risk rule is consulted
             # here, let alone relaxed; this decides only wait-or-stop.
+            # E11 IS NOT A BOOK STATEMENT. Every other paced refusal
+            # describes a market that moves, and waiting is the right
+            # answer. An exhausted window latch describes FILES on the
+            # volume that only ever accumulate, so waiting changes nothing:
+            # before this, a pre-exhausted window paced the loop to its
+            # iteration cap instead of running the handover and stopping.
+            # It is handed to the attempt branch above, which keeps
+            # managing inventory and then stops cleanly.
+            if "E11_WINDOW_LATCH_EXHAUSTED" in checks["refusals"]:
+                attempts_blocked[snap.get("window")] = \
+                    "E11_WINDOW_LATCH_EXHAUSTED"
             decision = PACING.pace_for(snap, checks["refusals"],
                                        now=now_fn(), pace_s=pace_s)
             refusals.append({"iteration": it,
@@ -1415,7 +1589,51 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             out = submit_first_leg(snap, tracker, now=now_fn(),
                                    transport_factory=transport_factory,
                                    session_auth=session_auth,
-                                   progress=progress, recorder=recorder)
+                                   progress=progress, recorder=recorder,
+                                   budget=budget)
+        except (L.WindowExhausted, L.LatchSpent) as exc:
+            # DEFENCE IN DEPTH. `submit_first_leg` converts both of these
+            # into `AttemptBudgetExhausted` after retiring its intent, so
+            # reaching here means one escaped from somewhere else. It is a
+            # bound doing its job, never a crash: recorded, paced, and the
+            # next iteration's budget branch decides whether to stop.
+            refusals.append({"iteration": it,
+                             "refusals": ["LATCH_EXHAUSTED:%s"
+                                          % type(exc).__name__],
+                             "detail": str(exc)})
+            if recorder is not None:
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="LATCH_EXHAUSTED",
+                    detail={"slug": snap.get("market"),
+                            "kind": type(exc).__name__,
+                            "did_not_crash_the_process": True,
+                            "inventory_management_continues": True})
+            wait = PACING.pace_seconds(now=now_fn(), pace_s=pace_s)
+            paced_waits.append({"iteration": it, "sleep_s": wait,
+                                "because": ["LATCH_EXHAUSTED"]})
+            slept_s += wait
+            sleep_fn(wait)
+            continue
+        except AttemptBudgetExhausted as exc:
+            # NO FURTHER FIRST LEG IS POSSIBLE. Refused before the intent
+            # row, the preview and the POST, so nothing was created and
+            # nothing needs retiring. The flag makes the branch above own
+            # the decision from here: keep managing inventory, run the
+            # handover, then stop cleanly -- rather than spinning on a
+            # refusal that cannot change.
+            attempts_blocked[snap.get("window")] = str(exc)
+            refusals.append({"iteration": it,
+                             "refusals": ["ATTEMPT_BUDGET_EXHAUSTED"],
+                             "detail": str(exc)})
+            if recorder is not None:
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="FIRST_LEG_REFUSED_ATTEMPT_BUDGET",
+                    detail={"slug": snap.get("market"), "why": str(exc),
+                            "nothing_was_created": True,
+                            "inventory_management_continues": True})
+            continue
         except AUTH.NotAuthorized as exc:
             # refused BEFORE transport. Not a venue error and not a
             # placement; recorded and the window moves on.
@@ -1539,6 +1757,8 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             verdict=v["verdict"],
             truncation_cause=v.get("truncation_cause"))
     return {"probe": PROBE, "spec_fingerprint": E1_FINGERPRINT,
+            "budget": budget.report(),
+            "budget_events": budget_events,
             "lifecycle": {
                 "first_legs_tracked": lifecycle.legs,
                 "residuals_opened": lifecycle.residuals_opened,
@@ -1572,7 +1792,7 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
 
 
 def _default_provider_factory(*, progress: Any, session_auth: Any,
-                              recorder: Any) -> Any:
+                              recorder: Any, budget: Any = None) -> Any:
     """The production provider: PMUS identity, PMUS's own book.
 
     Imported lazily so the DISARMED path constructs no feed at all. The
@@ -1581,7 +1801,7 @@ def _default_provider_factory(*, progress: Any, session_auth: Any,
     """
     from analysis.l5.e1_cohort.pmus_provider import PmusWindowProvider
     return PmusWindowProvider(progress=progress, session_auth=session_auth,
-                              recorder=recorder)
+                              recorder=recorder, budget=budget)
 
 
 def _default_progress_factory(state_dir: str) -> Any:
@@ -1651,6 +1871,32 @@ def main(argv: Optional[List[str]] = None, *,
                 copy.deepcopy(SPEC["supersedes_e1"]["must_not_be_rearmed"]),
         }, indent=1, sort_keys=True))
         return 2
+    # =============== THE PER-PROBE BUDGET, BEFORE ANYTHING ELSE ==========
+    #
+    # The owner's authorization is for ONE bounded probe, and the frozen
+    # spec's own maximums are twenty attempts in each of twelve windows.
+    # Those two numbers have to be reconciled somewhere, and the only safe
+    # place is here, in authorization, where a missing value is a REFUSAL
+    # rather than a silent 240-placement default. `PMUS_E1_MAX_ATTEMPTS`
+    # and `PMUS_E1_MAX_WINDOWS` may only narrow the frozen maximums;
+    # missing, blank, non-integer, zero, negative or excessive all fail
+    # closed here, before any provider, any feed, any window and any order
+    # path exists.
+    try:
+        probe_budget = BUD.ProbeBudget.from_env()
+    except BUD.BudgetNotAuthorized as exc:
+        print(json.dumps({
+            "REFUSED": "PROBE_BUDGET_NOT_AUTHORIZED",
+            "probe": PROBE, "fingerprint": E1_FINGERPRINT,
+            "env_keys": list(BUD.BUDGET_KEYS),
+            "why": str(exc),
+            "frozen_max_attempts": BUD.FROZEN_MAX_ATTEMPTS,
+            "frozen_max_windows": BUD.FROZEN_MAX_WINDOWS,
+            "these_keys_may_only_narrow": True,
+            "no_window_opened": True, "no_latch_slot_claimed": True,
+            "no_order_endpoint_reached": True,
+        }, indent=1, sort_keys=True))
+        return 2
     gate = AUTH.series_authorized()
     if not gate["matches_authorized_series"]:
         print(json.dumps({
@@ -1673,8 +1919,31 @@ def main(argv: Optional[List[str]] = None, *,
     tracker = CohortTracker()
     rehydrated = prog.rehydrate(tracker)
     rec = recorder_factory(state_dir) if recorder_factory else None
-    provider = provider_factory(progress=prog, session_auth=auth,
-                               recorder=rec)
+    # the window budget counts NEW windows, so its baseline is whatever the
+    # append-only ledger already holds at boot. Rebuilt here, after
+    # rehydration, from the same env values already validated above.
+    probe_budget = BUD.ProbeBudget(
+        max_attempts=probe_budget.max_attempts,
+        max_windows=probe_budget.max_windows,
+        windows_used_at_start=prog.windows_used(),
+        source=probe_budget.source)
+    try:
+        provider = provider_factory(progress=prog, session_auth=auth,
+                                   recorder=rec, budget=probe_budget)
+    except TypeError:
+        # an injected provider factory (the offline test seam) need not
+        # accept the budget as a constructor argument; it is attached below,
+        # which is where the hard stop actually reads it from.
+        provider = provider_factory(progress=prog, session_auth=auth,
+                                    recorder=rec)
+    # a provider that does not accept the budget as a constructor argument
+    # (the offline test seam) still gets it, because the HARD STOP after the
+    # authorized window is read off this attribute.
+    if getattr(provider, "budget", None) is not probe_budget:
+        try:
+            provider.budget = probe_budget
+        except Exception:                                      # noqa: BLE001
+            pass
     # AND THE ORDER REGISTRY, off the same durable volume.
     #
     # Progress rehydration restores WINDOWS and RISK. It says nothing about
@@ -1689,6 +1958,7 @@ def main(argv: Optional[List[str]] = None, *,
     installed = ORG.install(provider, registry)
     print(json.dumps({"ARMED": True, "probe": PROBE,
                       "fingerprint": E1_FINGERPRINT,
+                      "probe_budget": probe_budget.report(),
                       "rehydrated": rehydrated,
                       "order_registry": {
                           "tape": registry["tape"],
@@ -1704,7 +1974,8 @@ def main(argv: Optional[List[str]] = None, *,
                      indent=1, sort_keys=True, default=str))
     out = run_cohort(snapshot_provider=provider, tracker=tracker,
                      recorder=rec, transport_factory=transport_factory,
-                     session_auth=auth, progress=prog)
+                     session_auth=auth, progress=prog,
+                     budget=probe_budget)
     out["provider"] = provider.report()
     out["progress"] = prog.report()
     print(json.dumps(out, indent=1, sort_keys=True, default=str))
@@ -1733,6 +2004,7 @@ def boot() -> Dict[str, Any]:
         "diff_report": diff_report(),
         "feasibility": project_feasibility(),
         "arming": A.armed_env_summary(),
+        "probe_budget": BUD.env_report(),
         "latch_isolation": L.assert_no_collision_with_xr2w(),
         # the latch is NOT read here: reading it needs the owner's session
         # id, and boot() must not require an owner value to run.

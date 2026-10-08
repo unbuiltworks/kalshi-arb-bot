@@ -2013,7 +2013,12 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # its handover cancelled by MARKET, which on this shared account
         # would have cancelled another strategy's orders in the same
         # window. Cancellation is now scoped to E1-owned order ids.
-        "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c"]
+        "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
+        # it had NO per-probe budget: arming it authorized the frozen 240
+        # placements when the owner had authorized ONE, and its latch
+        # exhaustion raised WindowExhausted uncaught after the pre-POST
+        # intent row was already durable.
+        "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this
