@@ -174,6 +174,12 @@ COPY scripts/l5_e1_cancel_outstanding.py \
 COPY scripts/l5_e1_order_state_verify.py \
      scripts/l5_e1_order_state_verify.py
 
+# READ-ONLY financial reconciliation of the 1215z and 1230z windows. Runs
+# here because this is the service with the ledger volume mounted. GETs the
+# venue, reads the append-only ledgers, writes nothing.
+COPY scripts/l5_e1_financial_reconcile.py \
+     scripts/l5_e1_financial_reconcile.py
+
 RUN touch scripts/__init__.py analysis/__init__.py analysis/l5/__init__.py \
           analysis/l5/live_exec3/__init__.py analysis/l5/live_exec5/__init__.py
 
