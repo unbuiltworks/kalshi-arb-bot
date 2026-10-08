@@ -137,3 +137,32 @@ deadman test for machinery that is not here.
 repair.** Nothing was placed; realized P&L remains **$0.00**. Deployed
 **DISARMED**. The session's one consumed window and both invalidated cohorts
 are untouched.
+
+## Deployed DISARMED — proof
+
+| | |
+|---|---|
+| SHA | `5ab83661248cd8b21ce92a7e39b1a0c3e06373dd` |
+| deployment | `08e0fb45-1dce-41e8-8423-458da5b85ee1`, SUCCESS |
+| build proof | `BUILD OK fingerprint b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba` |
+| booted spec | `paced_observation` present, `pace_s 1.0`, `min_pace_s 0.05`, `iteration_cap 11760`, `old_iteration_cap 960` |
+| arming | `NO_ORDER_WILL_BE_PLACED: true` |
+| DNS lookups | **none** — the disarmed path requests no snapshot, so no venue host was resolved. This bounds what E1 did NOT do; it says nothing about the feed working. |
+
+### Arming is NOT staged, and one interlock will refuse until you move it
+
+`PMUS_E1_AUTHORIZED_FINGERPRINT` is still the **superseded**
+`b32e8c7b…1cf1`. The deployed build is `b0f15c95…f3ba`, so if the three arm
+keys were set right now `main()` would refuse with
+`FINGERPRINT_NOT_PINNED_TO_THIS_BUILD` and exit 2. That is the interlock
+working. Arming therefore requires, all yours to set:
+
+```
+PMUS_E1_AUTHORIZED_FINGERPRINT = b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba
+PMUS_E1_LIVE                   = YES
+PMUS_E1_ARM                    = E1-COHORT-20261008T005816Z-051888d8
+PMUS_E1_GATE_EVIDENCE          = cpc-btc-updown-15m
+```
+
+`PMUS_E1_SESSION_ID` is already `E1-COHORT-20261008T005816Z-051888d8` and
+unchanged, so arming resumes that session at **1/12 used, 11 remaining**.
