@@ -32,6 +32,7 @@ from decimal import Decimal as D
 from typing import Any, Dict, List
 
 from analysis.l5.e1_cohort import order_registry as ORG
+from analysis.l5.e1_cohort import pmus_book as PBK
 from analysis.l5.e1_cohort import order_state as OS
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import runner as R
@@ -196,13 +197,12 @@ def main() -> int:
     # THE LIVE-BOOK SHADOW WINDOW. Real book, real depth, real tick, the
     # production complement pricer and the frozen ceilings. Nothing is
     # submitted; this says what WOULD be decided.
-    from analysis.l5.e1_cohort import pmus_book as PBK
     feed = PBK.PmusDecisionFeed(clock=time.time)
     try:
         feed.start()
     except Exception as exc:                                   # noqa: BLE001
         j("FEED_ERR", {"error": type(exc).__name__})
-    for slug in slugs[:2]:
+    for slug in slugs:
         pin = {"slug": slug, "outcome_up": "OUTCOME_SIDE_YES",
                "outcome_down": "OUTCOME_SIDE_NO",
                "window_start": ws, "window_end": ws + PI.WINDOW_S}
@@ -268,20 +268,57 @@ def main() -> int:
                 row["tranche_plan_error"] = type(exc).__name__
         j("SHADOW", row)
 
-        # what `eligible` would say, on the LIVE book and LIVE order state
-        snap = {"window": 0, "window_open": True,
+        # WHAT `eligible` WOULD SAY, on the LIVE book and LIVE order state.
+        #
+        # `ws_state` IS BUILT THE WAY `pmus_provider` BUILDS IT, field for
+        # field, because the previous run read it off `book` -- where it
+        # does not exist -- and produced E7 refusals that were my
+        # harness's fault rather than the engine's judgement. A shadow that
+        # reports a refusal the engine would not make is worse than no
+        # shadow: it hides whatever the real answer was.
+        ws_state = {
+            "timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
+            "pinned_market_streaming": True,
+            "book_unix": book.get("book_unix"),
+            "market": slug,
+            "identity": "slug_plus_outcome_side",
+            "ctf_token_ids_used": False,
+            "rest_is_sufficient_timing_authority": False,
+            "health": health,
+            "first_leg": {"best_bid": fl.get("best_bid"),
+                          "best_ask": fl.get("best_ask")},
+            "complement": {"best_bid": comp.get("best_bid"),
+                           "best_ask": comp.get("best_ask")},
+            "first_leg_side": fl.get("side"),
+        }
+        snap = {"probe": "COHORT-E1-LIVE", "venue": "polymarket_us",
+                "window": 0, "window_open": True,
                 "within_handover_tte": True, "market": slug,
                 "pin": pin, "qty": str(FIRST_LEG_QTY),
                 "first_leg_price": str(bid) if bid is not None else None,
                 "first_leg": fl, "complement": comp,
-                "ws_state": book.get("ws_state") or {},
+                "ws_state": ws_state,
+                "fingerprint_pinned": None,
                 "order_state": view,
                 "our_outstanding_orders":
                     OS.outstanding_for_snapshot(view),
                 "our_open_residual": OS.residual_for_snapshot(view)}
         el = R.eligible(snap, SP.CohortTracker(), now=time.time())
-        j("SHADOW_ELIGIBLE", {"slug": slug, "ok": el["ok"],
-                              "refusals": el["refusals"]})
+        # THE ONLY REFUSALS A DISARMED, UNPINNED BUILD SHOULD PRODUCE on a
+        # tradeable book. Anything else is a real finding.
+        expected = {"E1_DISARMED",
+                    "E1_FINGERPRINT_NOT_PINNED_TO_THIS_BUILD"}
+        got = {str(r).split(":")[0] for r in el["refusals"]}
+        j("SHADOW_ELIGIBLE", {
+            "slug": slug, "ok": el["ok"], "refusals": el["refusals"],
+            "ws_state_built_as_the_provider_builds_it": True,
+            "only_arming_and_pinning_stand_in_the_way":
+                got.issubset(expected),
+            "unexpected_refusals": sorted(got - expected),
+            "reading": ("if only_arming_and_pinning_stand_in_the_way is "
+                        "true, the engine would have placed this pair had "
+                        "the owner armed it -- and nothing else was "
+                        "blocking")})
 
     j("NOTE", {"armed": False, "orders_submitted": 0,
                "orders_cancelled": 0, "latch_slots_consumed": 0,
