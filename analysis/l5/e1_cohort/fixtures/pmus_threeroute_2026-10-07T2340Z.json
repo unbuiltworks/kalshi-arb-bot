@@ -1,0 +1,79 @@
+{
+ "LABEL": "GENUINE DISAGREEMENT between three PMUS routes at one instant, inside a bounded and verified-stable window. Captured read-only.",
+ "verdict": "GENUINE DISAGREEMENT",
+ "provenance": {
+  "venue": "polymarket_us",
+  "slug": "cpc-btc-updown-15m-2026-10-07-2330z",
+  "deployment": "ac12491f-9a84-4a4c-949d-9e4ae34c8fb5",
+  "artifact_sha": "399991e0210e059120210d0d90bb297b6c93f0a6",
+  "probe": "scripts/l5_e1_bbo_twosided_proof.py",
+  "read_only": true,
+  "venue_post": "none",
+  "order_submitted": false,
+  "latch_touched": false,
+  "cohort_advanced": false
+ },
+ "readings_at_one_instant": {
+  "raw_ws_frame": {
+   "bid": "0.4900", "ask": "0.5000", "n_bids": 32, "n_offers": 33,
+   "path": "the ingested frame's own bids[0]/offers[0]",
+   "venue_transact_time": "2026-10-07T23:40:37.598998582Z",
+   "bid0_qty": "1000.0000", "offer0_qty": "605.3800",
+   "frame_keys": ["bids", "marketSlug", "offers", "state", "stats", "transactTime"],
+   "bestBid": null, "bestAsk": null
+  },
+  "authbook_snapshot": {
+   "bid": "0.4900", "ask": "0.5000", "path": "AuthBook.snapshot()",
+   "last_update_t": 1791416437.6331604, "stream_age_s": 0.019
+  },
+  "rest_book_top": {
+   "bid": "0.6100", "ask": "0.6300", "n_bids": 30, "n_offers": 35,
+   "path": "marketData.bids[0]/offers[0]",
+   "request_start_utc": "2026-10-07T23:40:37.652Z",
+   "request_end_utc": "2026-10-07T23:40:37.691Z",
+   "duration_s": 0.0392
+  },
+  "rest_bbo_supplementary": {
+   "bid": "0.5200", "ask": "0.5300",
+   "t_utc": "2026-10-07T23:40:37.692Z",
+   "bidDepth": 28, "askDepth": 33,
+   "bidShares": "68000", "askShares": "69000",
+   "currentPx": "0.5250", "lastTradePx": "0.5300",
+   "longQuote": "0.5300", "shortQuote": "0.48",
+   "ROLE": "supplementary; never gated the verdict"
+  }
+ },
+ "why_this_is_determinate_and_not_a_measurement_artifact": {
+  "T_ws_capture_utc": "2026-10-07T23:40:37.652Z",
+  "skew_ws_to_rest_start_s": 0.0,
+  "skew_ws_to_rest_end_s": 0.0392,
+  "max_skew_s": 1.0,
+  "book_updates_during_rest": 0,
+  "ws_state_after": {"bid": "0.4900", "ask": "0.5000"},
+  "ws_top_of_book_moved_during_rest": false,
+  "samples_taken": 3,
+  "samples_rejected_as_inconclusive": 2,
+  "inconclusive_reasons": ["BOOK_UPDATED_DURING_THE_REST_REQUEST:1"],
+  "note": "the stability gates DID reject two samples; the reported one passed all of them, so the 12-tick gap is not latency or an intervening update."
+ },
+ "the_finding": {
+  "three_routes_three_answers": {
+   "authenticated_ws": "0.4900 / 0.5000",
+   "rest_book": "0.6100 / 0.6300",
+   "rest_bbo": "0.5200 / 0.5300"
+  },
+  "ws_and_authbook_agree_exactly": true,
+  "so_authbooks_fold_is_faithful_to_the_frame_it_received": true,
+  "both_ladders_internally_well_formed": {
+   "rest_bids_first_5": ["0.6100", "0.6000", "0.5900", "0.5800", "0.5500"],
+   "rest_offers_first_5": ["0.6300", "0.6400", "0.6500", "0.6800", "0.6900"],
+   "rest_bid_level_0_is_the_best": true,
+   "rest_offer_level_0_is_the_best": true,
+   "rest_monotonic_best_first_both_sides": true
+  },
+  "reading": "This is NOT a parser defect on either side. Each route's own payload is self-consistent and best-first. The three PMUS routes are not serving one coherent book state at one instant.",
+  "what_it_blocks": "E1 prices its first leg off the WS ladder. If the venue's own /book differs by 12 ticks and /bbo by 3 ticks at the same instant, 'the executable price' is not a settled quantity on this venue yet. That is a prerequisite to arming, and a larger one than the original parse question."
+ },
+ "what_was_NOT_computed": "the YES/NO serialization proof. With no agreed A/B there is nothing to serialize against, so A_bid, B_ask, e1_yes, e1_no and e1_complement are all null rather than guessed.",
+ "NOT_A_REGRESSION_FIXTURE": "Evidence, not a pinned expectation. Pinning a disagreement would encode an unresolved venue question as correct behaviour."
+}
