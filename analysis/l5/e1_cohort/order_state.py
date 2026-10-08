@@ -109,8 +109,34 @@ UNKNOWN_OUTSTANDING = "ORDER_STATE_UNKNOWN_FAIL_CLOSED"
 #: could not identify. See RULE 3 below.
 LOCAL_INTENT = "LOCAL_INTENT:"
 
+#: THE ONLY ORDER-STATE ENDPOINTS PMUS ACTUALLY SERVES.
+#:
+#: The first version of this module required `/v1/orders?limit=100`, which
+#: returns **HTTP 501 Not Implemented** on the account host. So every read
+#: failed closed -- safe, and unusable. A venue probe established the whole
+#: surface: `/v1/orders`, `?status=all`, `/v1/orders/history`,
+#: `/v1/orders/closed`, `/v1/mytrades`, `/v1/trades` and `/v1/fills` are all
+#: 501 or 404. There is NO order-history and NO trade endpoint.
+#:
+#: What exists, and what each is authority for:
+#:
+#:   /v1/orders/open          what is RESTING right now
+#:   /v1/order/{id}           one order's final state and cumQuantity
+#:   /v1/portfolio/positions  current inventory
+#:   /v1/portfolio/activities fills and settlements, by order id
+#:
+#: Fills therefore come from per-id `cumQuantity`, which is both simpler and
+#: stronger than a trade feed: it is the venue's own figure for OUR order.
 OPEN_PATH = "/v1/orders/open"
-ORDERS_PATH = "/v1/orders?limit=100"
+ORDER_PATH = "/v1/order/%s"
+POSITIONS_PATH = "/v1/portfolio/positions"
+ACTIVITIES_PATH = "/v1/portfolio/activities?limit=50"
+
+#: roles an order can play. The distinction is load-bearing: a resting FIRST
+#: LEG must block another first leg, and must NOT block the complement that
+#: closes it.
+FIRST_LEG = "first_leg"
+COMPLEMENT = "complement"
 
 
 class OrderStateUnavailable(Exception):
@@ -172,6 +198,142 @@ def rows(body: Any, *keys: str) -> Optional[List[Dict[str, Any]]]:
     return None
 
 
+#: how much venue-reported inventory may exceed what our own filled orders
+#: account for before the view refuses.
+#:
+#: ONE THOUSANDTH OF A SHARE, not one share. My first value here was 0.999,
+#: reasoning that the venue rounds its display position to whole shares --
+#: which is true of the integer `netPosition` field and irrelevant, because
+#: this code reads `netPositionDecimal` when it is present, and the real
+#: 1215z row carried `2.6000`. At 0.999 an ENTIRE untracked 0.13-share fill
+#: would have slipped through the cross-check, which is precisely the
+#: inventory-we-do-not-know-about case the check exists for. E1's whole
+#: order size is 0.13; a tolerance larger than an order is not a tolerance.
+POSITION_TOLERANCE = D("0.001")
+
+
+def _positions_for(body: Any, want: Iterable[str]
+                   ) -> Optional[Dict[str, D]]:
+    """Venue inventory for OUR markets, or None if the body is unreadable.
+
+    None is not "no positions". `/v1/portfolio/positions` answers with both
+    a `positions` mapping and an `availablePositions` list depending on
+    state, and an empty account answers `{"positions": {}, ...}`, so an
+    empty-but-recognised body is {} while an unrecognised one is None.
+    """
+    if not isinstance(body, Mapping):
+        return None
+    scope = {str(w) for w in want}
+    out: Dict[str, D] = {}
+    seen_shape = False
+    for key in ("positions", "availablePositions", "data"):
+        v = body.get(key)
+        if isinstance(v, Mapping):
+            seen_shape = True
+            for slug, row in v.items():
+                if scope and str(slug) not in scope:
+                    continue
+                q = _fin(row.get("netPositionDecimal")
+                         if isinstance(row, Mapping) else row) \
+                    or _fin(row.get("netPosition")
+                            if isinstance(row, Mapping) else None)
+                if q is not None and q != 0:
+                    out[str(slug)] = q
+        elif isinstance(v, list):
+            seen_shape = True
+            for row in v:
+                if not isinstance(row, Mapping):
+                    continue
+                slug = str(row.get("marketSlug") or row.get("slug") or "")
+                if scope and slug not in scope:
+                    continue
+                q = (_fin(row.get("netPositionDecimal"))
+                     or _fin(row.get("netPosition"))
+                     or _fin(row.get("quantity")))
+                if q is not None and q != 0:
+                    out[slug] = out.get(slug, D("0")) + q
+    return out if seen_shape else None
+
+
+def settlement_for(reader: Callable[[str], Any], *, slug: str,
+                   expected_qty: Any, pages: int = 20) -> Dict[str, Any]:
+    """The venue's settlement record for ONE market, attributed by an EXACT
+    quantity match against what our own orders filled.
+
+    THIS IS THE 1215z RULE, MADE REUSABLE. The account is shared: 1,100
+    activity rows, 901 of them trades, mostly other strategies at sizes
+    like 16.21 and 23.49 shares. A position resolution naming our market is
+    therefore not automatically ours. It is treated as E1's only when its
+    net position equals our filled quantity exactly -- 2.6000 against
+    2.60 -- and otherwise returned UNCONFIRMED with its own figures intact
+    so a human can see why.
+
+    No cashflow is ever apportioned, inferred from a balance delta, or
+    netted to zero.
+    """
+    want = _fin(expected_qty)
+    out: Dict[str, Any] = {"slug": slug, "expected_qty": None if want is None
+                           else str(want), "rows": [], "attributed": None,
+                           "ATTRIBUTION_IS_BY_EXACT_QTY_MATCH": True,
+                           "NEVER_APPORTIONED": True}
+    cursor = ""
+    for _ in range(int(pages)):
+        path = ACTIVITIES_PATH + ("&cursor=%s" % cursor if cursor else "")
+        try:
+            body = reader(path)
+        except Exception as exc:                               # noqa: BLE001
+            out["error"] = "ACTIVITIES_UNREADABLE:%s" % type(exc).__name__
+            return out
+        if not isinstance(body, Mapping):
+            out["error"] = "ACTIVITIES_UNPARSABLE"
+            return out
+        for a in (body.get("activities") or []):
+            if not isinstance(a, Mapping):
+                continue
+            if str(a.get("type")) != "ACTIVITY_TYPE_POSITION_RESOLUTION":
+                continue
+            pr = a.get("positionResolution") or {}
+            if str(pr.get("marketSlug")) != str(slug):
+                continue
+            before = pr.get("beforePosition") or {}
+            netq = (_fin(before.get("netPositionDecimal"))
+                    or _fin(pr.get("netPositionDecimal")))
+            cost = _fin(_price_value(before.get("cost")))
+            cash = _fin(_price_value(before.get("cashValue")))
+            fees_raw = _price_value(before.get("fees"))
+            fees = _fin(fees_raw)
+            row = {
+                "net_position_decimal": None if netq is None else str(netq),
+                "cost_usd": None if cost is None else str(cost),
+                "cash_value_usd": None if cash is None else str(cash),
+                # null is NOT zero. Other strategies' rows on this account
+                # populate `fees`, so an absent value is undisclosed, and
+                # the net below says so instead of assuming.
+                "settlement_fees_usd": None if fees is None else str(fees),
+                "settlement_fees_disclosed": fees_raw is not None,
+                "avg_px": str(_fin(_price_value(before.get("avgPx")))),
+                "outcome": ((before.get("marketMetadata") or {})
+                            .get("outcome")),
+                "exact_qty_match": (want is not None and netq is not None
+                                    and netq == want),
+            }
+            if cost is not None and cash is not None:
+                row["gross_net_usd"] = str(cash - cost)
+                row["net_usd_less_undisclosed_fees"] = str(
+                    cash - cost - (fees or D("0")))
+            out["rows"].append(row)
+            if row["exact_qty_match"] and out["attributed"] is None:
+                out["attributed"] = row
+        cursor = body.get("nextCursor") or ""
+        if body.get("eof") or not cursor:
+            break
+    if out["attributed"] is None:
+        out["label"] = "UNCONFIRMED_NOT_ATTRIBUTABLE_TO_E1"
+    else:
+        out["label"] = "SETTLED_VENUE_CONFIRMED_EXACT_QTY_MATCH"
+    return out
+
+
 def classify(order: Mapping[str, Any], *, outcome_up: Any) -> Dict[str, Any]:
     """One venue order row -> what it means for the invariant."""
     state = order.get("state")
@@ -222,49 +384,111 @@ def read_order_state(reader: Callable[[str], Any], *,
                      slugs: Iterable[str],
                      outcome_up: Any,
                      now: float,
+                     known_ids: Iterable[str] = (),
+                     roles: Optional[Mapping[str, str]] = None,
                      pending_ids: Iterable[str] = (),
                      max_age_s: float = MAX_ORDER_STATE_AGE_S,
                      now_fn: Optional[Callable[[], float]] = None
                      ) -> Dict[str, Any]:
     """Establish outstanding orders and filled inventory FROM THE VENUE.
 
-    `reader` is a one-argument GET callable: path -> decoded body. It is the
-    seam the tests drive and in production it is a signed GET-only
-    transport. Nothing in this function builds, previews or sends an order.
+    ON THE FOUR ENDPOINTS, AND WHY THERE IS NO HISTORY READ. `/v1/orders`
+    is HTTP 501 here and every history and trade path is 404, so there is
+    no way to ask "what were all my orders". The answer is to stop asking:
+    E1 KNOWS ITS OWN ORDER IDS -- they are in its append-only tape -- so
+    `known_ids` names them and each one is read individually. That is
+    stronger than a history feed, because it is exact-id attribution on an
+    account shared with other strategies, where a slug-scoped sum pulled in
+    a counterparty's $28.92 commission and other desks' 16-share trades.
+
+    `roles` maps an order id to `FIRST_LEG` or `COMPLEMENT`. An id with no
+    role is treated as a FIRST LEG, which is the conservative reading: it
+    blocks another first leg rather than being waved through.
+
+    `reader` is a one-argument GET callable: path -> decoded body, the seam
+    the tests drive; in production it is a signed GET-only transport.
+    Nothing here builds, previews or sends an order.
 
     Returns a view with `ok`. When `ok` is False the view still carries
     `outstanding_sentinel`, which is TRUTHY, so the eligibility rule that
-    consumes it refuses. There is no code path that returns a permissive
-    zero on a failed read.
+    consumes it refuses. There is no code path from a failed read to a
+    permissive zero.
     """
     want = {str(s) for s in slugs if s}
     pend = [str(p) for p in pending_ids if p]
+    known = [str(i) for i in known_ids if i]
+    role_of = {str(k): str(v) for k, v in (roles or {}).items()}
     view: Dict[str, Any] = {
         "ok": False,
         "as_of": float(now),
         "age_s": 0.0,
         "source": "VENUE_AUTHORITATIVE",
-        "paths": [OPEN_PATH, ORDERS_PATH],
+        "paths": [OPEN_PATH, ORDER_PATH % "{id}", POSITIONS_PATH],
+        "endpoint_note": "/v1/orders is HTTP 501 on this venue; there is no "
+                         "order-history or trade endpoint, so fills come "
+                         "from per-id cumQuantity",
         "slugs": sorted(want),
+        "known_ids": sorted(known),
         "pending_ids": list(pend),
         "outstanding_sentinel": UNKNOWN_OUTSTANDING,
         "FAILS_CLOSED": True,
     }
 
-    bodies: Dict[str, Any] = {}
-    for path in (OPEN_PATH, ORDERS_PATH):
-        try:
-            bodies[path] = reader(path)
-        except Exception as exc:                               # noqa: BLE001
-            view["reason"] = "ORDER_STATE_UNREADABLE:%s:%s" % (
-                path, type(exc).__name__)
-            return view
-
-    open_rows = rows(bodies[OPEN_PATH], "orders", "data")
-    hist_rows = rows(bodies[ORDERS_PATH], "orders", "data")
-    if open_rows is None or hist_rows is None:
-        view["reason"] = "ORDER_STATE_UNPARSABLE"
+    try:
+        open_body = reader(OPEN_PATH)
+    except Exception as exc:                                   # noqa: BLE001
+        view["reason"] = "ORDER_STATE_UNREADABLE:%s:%s" % (
+            OPEN_PATH, type(exc).__name__)
         return view
+    open_rows = rows(open_body, "orders", "data")
+    if open_rows is None:
+        view["reason"] = "ORDER_STATE_UNPARSABLE:%s" % OPEN_PATH
+        return view
+
+    # PER-ID READS. Every id this cohort has ever submitted, plus anything
+    # resting, plus any confirmed pending id. An id we cannot read is NOT
+    # assumed finished -- it fails the whole view closed, because an
+    # unreadable order of ours is exactly the state we must not trade over.
+    hist_rows: List[Dict[str, Any]] = []
+    resting_ids = {str(r.get("id")) for r in open_rows if r.get("id")}
+    absent: List[str] = []
+    id_set = list(dict.fromkeys(
+        known
+        + sorted(resting_ids)
+        + [p for p in pend if not p.startswith(LOCAL_INTENT)]))
+    for oid in id_set:
+        try:
+            body = reader(ORDER_PATH % oid)
+        except Exception as exc:                               # noqa: BLE001
+            code = getattr(exc, "code", None)
+            # A 404 IS AN ANSWER, NOT A FAILURE. The venue is saying "no
+            # such order", which is definite -- unlike a timeout or a 5xx,
+            # where we learn nothing. An id the venue does not have is not
+            # outstanding.
+            #
+            # UNLESS the open-orders list just told us it IS resting. Then
+            # the two endpoints contradict each other about an order of
+            # ours, and we stop rather than pick the convenient one.
+            if code == 404 and oid not in resting_ids:
+                absent.append(oid)
+                continue
+            if code == 404:
+                view["reason"] = ("ORDER_STATE_INCONSISTENT:%s_IS_RESTING_"
+                                  "BUT_404_ON_ITS_OWN_RECORD" % oid)
+                return view
+            view["reason"] = "ORDER_STATE_UNREADABLE:%s:%s:%s" % (
+                ORDER_PATH % oid, type(exc).__name__, code)
+            return view
+        row = body.get("order") if isinstance(body, Mapping) else None
+        if row is None and isinstance(body, Mapping) and body.get("id"):
+            row = body
+        if not isinstance(row, Mapping):
+            view["reason"] = "ORDER_STATE_UNPARSABLE:%s" % (
+                ORDER_PATH % oid)
+            return view
+        r = dict(row)
+        r.setdefault("id", oid)
+        hist_rows.append(r)
 
     # SCOPE. Only this cohort's markets. An unrelated executor's order in
     # another market is not E1's outstanding order, and counting it would
@@ -341,7 +565,15 @@ def read_order_state(reader: Callable[[str], Any], *,
             "filled": False, "locally_pending": True,
         }
 
+    # ROLES. An id with no recorded role is a FIRST LEG, conservatively: it
+    # then blocks another first leg rather than slipping through as "some
+    # other order".
+    for oid, c in by_id.items():
+        c["role"] = role_of.get(str(oid), FIRST_LEG)
+
     outstanding = [c for c in by_id.values() if c["outstanding"]]
+    outstanding_first = [c for c in outstanding if c["role"] == FIRST_LEG]
+    outstanding_comp = [c for c in outstanding if c["role"] == COMPLEMENT]
 
     # RULE 5. Aggregate, in dollars, on the OWN side.
     open_notional = D("0")
@@ -391,6 +623,37 @@ def read_order_state(reader: Callable[[str], Any], *,
                         "is_unmatched_directional_exposure": True}
             break
 
+    # THE POSITIONS CROSS-CHECK. `/v1/portfolio/positions` is the venue's
+    # own statement of inventory, and it is read as a SECOND OPINION on the
+    # inventory we derived from per-id cumQuantity. If the venue reports a
+    # position in one of our markets that our own orders cannot account
+    # for, something is wrong with our picture and we stop rather than
+    # trade on it. An absent or unparsable positions body is itself a
+    # refusal, for the same reason.
+    try:
+        pos_body = reader(POSITIONS_PATH)
+    except Exception as exc:                                   # noqa: BLE001
+        view["reason"] = "ORDER_STATE_UNREADABLE:%s:%s" % (
+            POSITIONS_PATH, type(exc).__name__)
+        return view
+    venue_positions = _positions_for(pos_body, want)
+    if venue_positions is None:
+        view["reason"] = "ORDER_STATE_UNPARSABLE:%s" % POSITIONS_PATH
+        return view
+    derived_net_qty = sum(net.values()) if net else D("0")
+    venue_net_qty = sum(venue_positions.values()) if venue_positions \
+        else D("0")
+    # A venue position we cannot source from our own filled orders is the
+    # 1215z lesson in the other direction: never let inventory exist that
+    # our accounting does not know about.
+    if abs(venue_net_qty) > abs(derived_net_qty) + POSITION_TOLERANCE:
+        view["reason"] = (
+            "ORDER_STATE_INCONSISTENT:VENUE_POSITION_%s_EXCEEDS_OUR_"
+            "DERIVED_%s" % (venue_net_qty, derived_net_qty))
+        view["venue_positions"] = {k: str(v)
+                                   for k, v in venue_positions.items()}
+        return view
+
     # STALENESS IS MEASURED ACROSS THE READ ITSELF, not against the
     # timestamp we wrote a moment earlier. `as_of` is when the first GET
     # went out; the age is how long the whole read took to come back. A
@@ -410,9 +673,24 @@ def read_order_state(reader: Callable[[str], Any], *,
         "n_known": len(by_id),
         "outstanding_ids": sorted(str(c["id"]) for c in outstanding),
         "n_outstanding": len(outstanding),
+        # THE ROLE SPLIT, which is what makes a correctly managed pair
+        # possible at all. A resting FIRST LEG blocks another first leg and
+        # must NOT block the complement that closes it.
+        "n_outstanding_first_legs": len(outstanding_first),
+        "n_outstanding_complements": len(outstanding_comp),
+        "outstanding_first_leg_ids": sorted(str(c["id"])
+                                            for c in outstanding_first),
+        "outstanding_complement_ids": sorted(str(c["id"])
+                                             for c in outstanding_comp),
+        "venue_positions": {k: str(v) for k, v in venue_positions.items()},
+        "derived_net_qty": str(derived_net_qty),
+        "venue_net_qty": str(venue_net_qty),
+        "positions_corroborate_our_orders": True,
         "open_ids": sorted(open_ids),
         "unconfirmed_pending_ids": sorted(unseen_pending),
         "pending_ids_resolved_by_this_read": sorted(resolved_pending),
+        "ids_absent_at_venue_404": sorted(absent),
+        "A_404_IS_AN_ANSWER_A_TIMEOUT_IS_NOT": True,
         "partially_filled_ids": sorted(str(c["id"]) for c in by_id.values()
                                        if c["partially_filled"]),
         "filled_ids": sorted(str(c["id"]) for c in by_id.values()
@@ -432,16 +710,112 @@ def read_order_state(reader: Callable[[str], Any], *,
 
 
 def outstanding_for_snapshot(view: Mapping[str, Any]) -> Any:
-    """What `pmus_provider` publishes as `our_outstanding_orders`.
+    """What `pmus_provider` publishes as `our_outstanding_orders`, read by
+    E1's E3 rule on the FIRST-LEG path.
 
-    On a good read it is the COUNT -- 0 permits, anything else refuses. On a
-    failed read it is the truthy sentinel, so the SAME eligibility rule
-    refuses without needing to know why. The field can never again be a
-    constant that cannot refuse.
+    It counts OUTSTANDING FIRST LEGS, not every outstanding order. That is
+    the point of the role split: a resting first leg must block another
+    first leg, while the complement that closes it is submitted through
+    `submit_complement`, which has its own authorization
+    (`authorize_complement`) and its own latch (`consume_complement`) and
+    never consults `eligible()`. If this counted complements too, a filled
+    first leg would block its own hedge -- turning a safety rule into the
+    cause of an unhedged position, which is the exact failure the 1215z
+    window already produced once.
+
+    On a good read it is the count -- 0 permits, anything else refuses. On a
+    failed read it is the truthy sentinel, so the SAME rule refuses without
+    needing to know why. The field can never again be a constant that
+    cannot refuse.
     """
     if not view or not view.get("ok"):
         return UNKNOWN_OUTSTANDING
-    return int(view.get("n_outstanding") or 0)
+    n = view.get("n_outstanding_first_legs")
+    if n is None:                      # older view shape: be conservative
+        n = view.get("n_outstanding")
+    return int(n or 0)
+
+
+def complement_gate(view: Mapping[str, Any], *,
+                    residual_qty: Any = None) -> Dict[str, Any]:
+    """May a COMPLEMENT be submitted right now?
+
+    DELIBERATELY NOT THE FIRST-LEG GATE. A resting or filled first leg is
+    the REASON to submit a complement, so it cannot be the thing that
+    blocks one. What does block one:
+
+      * order state that could not be established (fail closed, as ever);
+      * a complement of ours already outstanding -- one at a time, the same
+        discipline as first legs, so tranches cannot stack;
+      * nothing to complement.
+
+    This returns a decision and its reasons; it submits nothing, and it
+    cannot relax a price, a ceiling or a tranche rule.
+    """
+    if not view or not view.get("ok"):
+        return {"may_submit_complement": False,
+                "because": ["COMPLEMENT_ORDER_STATE_NOT_ESTABLISHED:%s"
+                            % (view or {}).get("reason")],
+                "FAILS_CLOSED": True,
+                "blocked_by_first_leg_guard": False}
+    reasons: List[str] = []
+    n_comp = int(view.get("n_outstanding_complements") or 0)
+    if n_comp:
+        reasons.append("COMPLEMENT_ALREADY_OUTSTANDING:%d:%s"
+                       % (n_comp, ",".join(
+                           view.get("outstanding_complement_ids") or [])))
+    resid = view.get("residual")
+    q = _fin(residual_qty) if residual_qty is not None else (
+        _fin((resid or {}).get("qty")) if resid else None)
+    if q is None or q <= 0:
+        reasons.append("NOTHING_TO_COMPLEMENT")
+    return {
+        "may_submit_complement": not reasons,
+        "because": reasons or None,
+        "qty_to_complement": None if q is None else str(q),
+        "residual": resid,
+        # stated explicitly so a future reader cannot re-conflate the two
+        # gates: an outstanding FIRST LEG is visible here and is NOT a
+        # blocker.
+        "n_outstanding_first_legs": int(
+            view.get("n_outstanding_first_legs") or 0),
+        "blocked_by_first_leg_guard": False,
+        "has_its_own_authorized_path": "authorization.authorize_complement",
+        "has_its_own_latch": "latch.consume_complement",
+        "does_not_consume_a_first_leg_attempt_slot": True,
+    }
+
+
+def window_exposure(view: Mapping[str, Any], *,
+                    prospective_qty: Any = None,
+                    prospective_price: Any = None) -> Dict[str, Any]:
+    """Aggregate dollars at risk in this window: resting first legs, resting
+    complements, filled inventory, and the attempt about to be sent.
+
+    BOTH ROLES COUNT. A complement is a real order at a real price and its
+    cost is real money, so excluding it would reproduce the original defect
+    one level up -- a bound that cannot see half the orders. Twenty 0.13
+    orders pass every per-order check ever written; only a sum objects.
+    """
+    if not view or not view.get("ok"):
+        return {"ok": False,
+                "because": "EXPOSURE_UNKNOWN:%s" % (view or {}).get("reason"),
+                "FAILS_CLOSED": True}
+    openn = _fin(view.get("open_notional_usd")) or D("0")
+    filled = _fin(view.get("filled_notional_usd")) or D("0")
+    q = _fin(prospective_qty) or D("0")
+    px = _fin(prospective_price) or D("0")
+    prospective = q * px
+    return {
+        "ok": True,
+        "open_notional_usd": str(openn),
+        "filled_notional_usd": str(filled),
+        "prospective_usd": str(prospective),
+        "total_usd": str(openn + filled + prospective),
+        "counts_first_legs_and_complements": True,
+        "counts_filled_inventory": True,
+        "counts_the_attempt_about_to_be_sent": True,
+    }
 
 
 def residual_for_snapshot(view: Mapping[str, Any]) -> Any:

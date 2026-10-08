@@ -125,7 +125,9 @@ class PmusWindowProvider:
                  ws_ready_timeout_s: Optional[float] = None,
                  ws_ready_poll_s: Optional[float] = None,
                  order_state_reader: Any = None,
-                 pending_order_ids: Any = None) -> None:
+                 pending_order_ids: Any = None,
+                 known_order_ids: Any = None,
+                 order_roles: Any = None) -> None:
         self.progress = progress
         self.auth = session_auth
         self.recorder = recorder
@@ -150,6 +152,16 @@ class PmusWindowProvider:
         # unconfirmed POST keeps refusing the next first leg.
         self.pending_order_ids: List[str] = (
             [] if pending_order_ids is None else pending_order_ids)
+        # EVERY ORDER ID THIS COHORT HAS SUBMITTED, and what role each
+        # played. `/v1/orders` is HTTP 501 on this venue and there is no
+        # history or trade endpoint, so "what were all my orders" cannot be
+        # asked -- it has to be KNOWN. These two are shared by reference
+        # with the runner, which appends to them as it submits, and the
+        # durable tape is the same information on disk for a restart.
+        self.known_order_ids: List[str] = (
+            [] if known_order_ids is None else known_order_ids)
+        self.order_roles: Dict[str, str] = (
+            {} if order_roles is None else order_roles)
         self.last_order_state: Optional[Dict[str, Any]] = None
         self.current_pin: Optional[Dict[str, Any]] = None
         self.current_window_index: Optional[int] = None
@@ -187,6 +199,8 @@ class PmusWindowProvider:
                 slugs=[pin.get("slug")],
                 outcome_up=pin.get("outcome_up"),
                 now=self.now_fn(), now_fn=self.now_fn,
+                known_ids=list(self.known_order_ids),
+                roles=dict(self.order_roles),
                 pending_ids=list(self.pending_order_ids))
         except Exception as exc:                               # noqa: BLE001
             view = {"ok": False,
@@ -433,6 +447,11 @@ class PmusWindowProvider:
             # its submission intent to this very list, and the next
             # snapshot's order-state read sees it.
             "pending_order_ids": self.pending_order_ids,
+            "known_order_ids": self.known_order_ids,
+            "order_roles": self.order_roles,
+            # the complement's OWN gate, which an outstanding first leg
+            # deliberately does not close. See order_state.complement_gate.
+            "complement_gate": OS.complement_gate(ostate),
             "aggregate_exposure_usd": ostate.get("aggregate_exposure_usd"),
             "qty": FIRST_LEG_QTY,
             "first_leg_price": str(price),

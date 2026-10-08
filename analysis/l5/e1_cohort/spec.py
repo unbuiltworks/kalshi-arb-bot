@@ -747,8 +747,20 @@ DIFF: Dict[str, Any] = {
             "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
             "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
             "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
+            "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
         ],
         "reasons": {
+            "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3":
+                ("it required GET /v1/orders?limit=100 to establish order "
+                 "state, and that endpoint returns HTTP 501 Not "
+                 "Implemented on this venue -- as do every history and "
+                 "trade path -- so every read failed closed and the engine "
+                 "could not establish its own outstanding orders at all. "
+                 "Safe, and unusable. It also counted complements in the "
+                 "first-leg guard, so a filled first leg would have "
+                 "blocked its own hedge, and carried a 0.999-share "
+                 "position tolerance larger than E1's entire 0.13 order "
+                 "size"),
             "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0":
                 ("it published `our_outstanding_orders: 0` and "
                  "`our_open_residual: None` as HARD-CODED LITERALS, so the "
@@ -1012,7 +1024,46 @@ DIFF: Dict[str, Any] = {
         "module": "analysis.l5.e1_cohort.order_state",
         "max_outstanding_orders": 1,
         "source": "VENUE_AUTHORITATIVE",
-        "paths": ("/v1/orders/open", "/v1/orders?limit=100"),
+        # THE FOUR ENDPOINTS PMUS ACTUALLY SERVES, established by probe.
+        # `/v1/orders`, `?status=all`, `/v1/orders/history`,
+        # `/v1/orders/closed`, `/v1/mytrades`, `/v1/trades` and `/v1/fills`
+        # are 501 or 404: there is no order-history and no trade endpoint.
+        # The first version of this module required `/v1/orders?limit=100`
+        # and therefore failed closed on every read.
+        "paths": ("/v1/orders/open", "/v1/order/{id}",
+                  "/v1/portfolio/positions", "/v1/portfolio/activities"),
+        "orders_list_endpoint_is_http_501": True,
+        "no_order_history_or_trade_endpoint_exists": True,
+        "fills_come_from_per_id_cum_quantity": True,
+        "ids_are_known_from_our_own_append_only_tape": True,
+        "a_404_on_an_id_is_an_answer_a_timeout_is_not": True,
+        "a_resting_id_that_404s_on_its_own_record_is_inconsistent": True,
+        # ROLE SEPARATION, which is what makes a managed pair possible
+        "first_leg_and_complement_are_separate_roles": True,
+        "e3_counts_outstanding_first_legs_only": True,
+        "a_resting_first_leg_blocks_another_first_leg": True,
+        "a_resting_first_leg_does_not_block_its_complement": True,
+        "an_unroled_id_is_treated_as_a_first_leg": True,
+        "complement_has_its_own_authorization": "authorize_complement",
+        "complement_has_its_own_latch": "consume_complement",
+        "complement_path_never_calls_eligible": True,
+        "one_complement_outstanding_at_a_time": True,
+        "a_refused_attempt_consumes_no_slot_and_no_exposure": True,
+        # the positions cross-check
+        "positions_cross_check": "/v1/portfolio/positions",
+        "position_tolerance_shares": "0.001",
+        "why_not_one_share": ("a tolerance larger than E1's whole 0.13 "
+                              "order size would wave through an entire "
+                              "untracked fill, which is the case the "
+                              "check exists for"),
+        "venue_inventory_we_cannot_source_is_a_refusal": True,
+        # settlement attribution on a SHARED account
+        "settlement_attribution": "exact_quantity_match_against_our_fills",
+        "account_is_shared_with_other_strategies": True,
+        "other_strategies_activity_is_never_attributed_to_e1": True,
+        "settlement_is_never_apportioned_or_inferred_from_a_balance": True,
+        "an_undisclosed_fee_is_flagged_not_assumed_zero": True,
+        "no_rebate_is_assumed_until_credited": True,
         "read_only": True,
         "transport": "src.pmus_auth.ReadOnlyTransport",
         "transport_refuses_every_method_but_get": True,
@@ -1407,7 +1458,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
       "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
       "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
-      "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0"]),
+      "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
+      "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1424,6 +1476,40 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("first_leg_side.wire_price_is_always_the_long_side", True),
     ("first_leg_side.changes_no_bound", True),
     ("outstanding_order_invariant.max_outstanding_orders", 1),
+    ("outstanding_order_invariant.orders_list_endpoint_is_http_501", True),
+    ("outstanding_order_invariant."
+     "no_order_history_or_trade_endpoint_exists", True),
+    ("outstanding_order_invariant.fills_come_from_per_id_cum_quantity",
+     True),
+    ("outstanding_order_invariant."
+     "a_404_on_an_id_is_an_answer_a_timeout_is_not", True),
+    ("outstanding_order_invariant.e3_counts_outstanding_first_legs_only",
+     True),
+    ("outstanding_order_invariant."
+     "a_resting_first_leg_blocks_another_first_leg", True),
+    ("outstanding_order_invariant."
+     "a_resting_first_leg_does_not_block_its_complement", True),
+    ("outstanding_order_invariant.an_unroled_id_is_treated_as_a_first_leg",
+     True),
+    ("outstanding_order_invariant.complement_path_never_calls_eligible",
+     True),
+    ("outstanding_order_invariant.one_complement_outstanding_at_a_time",
+     True),
+    ("outstanding_order_invariant."
+     "a_refused_attempt_consumes_no_slot_and_no_exposure", True),
+    ("outstanding_order_invariant.position_tolerance_shares", "0.001"),
+    ("outstanding_order_invariant."
+     "venue_inventory_we_cannot_source_is_a_refusal", True),
+    ("outstanding_order_invariant.settlement_attribution",
+     "exact_quantity_match_against_our_fills"),
+    ("outstanding_order_invariant."
+     "other_strategies_activity_is_never_attributed_to_e1", True),
+    ("outstanding_order_invariant."
+     "settlement_is_never_apportioned_or_inferred_from_a_balance", True),
+    ("outstanding_order_invariant."
+     "an_undisclosed_fee_is_flagged_not_assumed_zero", True),
+    ("outstanding_order_invariant.no_rebate_is_assumed_until_credited",
+     True),
     ("outstanding_order_invariant.source", "VENUE_AUTHORITATIVE"),
     ("outstanding_order_invariant.read_only", True),
     ("outstanding_order_invariant.was_hard_coded_to_zero", True),
@@ -1567,7 +1653,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3"
+    "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

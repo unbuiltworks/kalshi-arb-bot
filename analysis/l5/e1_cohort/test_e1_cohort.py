@@ -2000,7 +2000,10 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # published `our_outstanding_orders: 0` as a literal, so the declared
         # one-outstanding-order bound could not fire and the 1230z window on
         # 2026-10-08 held twenty resting orders.
-        "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0"]
+        "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
+        # required GET /v1/orders?limit=100, which is HTTP 501 here, so it
+        # could never establish order state at all.
+        "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

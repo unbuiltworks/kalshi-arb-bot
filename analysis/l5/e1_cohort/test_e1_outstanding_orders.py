@@ -40,21 +40,61 @@ def order(oid, *, state="ORDER_STATE_NEW", qty="0.13", cum="0",
             "price": {"value": wire, "currency": "USD"}}
 
 
-def reader_for(open_rows, hist_rows=None):
+class _NotFound(Exception):
+    """What a GET for an id the venue does not have looks like."""
+
+    def __init__(self, code, msg=""):
+        super().__init__(msg)
+        self.code = code
+
+
+def reader_for(open_rows, hist_rows=None, positions=None,
+              activities=None):
+    """A fake PMUS, serving ONLY the endpoints the real one serves.
+
+    `/v1/orders` is HTTP 501 on this venue and every history and trade path
+    is 404, so this fake refuses them too -- if the module ever reaches for
+    one again, these tests fail rather than pass against a venue that would
+    have refused.
+    """
     hist_rows = open_rows if hist_rows is None else hist_rows
+    by_id = {str(r.get("id")): r for r in hist_rows if r.get("id")}
 
     def _read(path):
         if path == OS.OPEN_PATH:
             return {"orders": list(open_rows)}
-        if path == OS.ORDERS_PATH:
-            return {"orders": list(hist_rows)}
-        raise AssertionError("unexpected path %r" % path)
+        if path == OS.POSITIONS_PATH:
+            return (positions if positions is not None
+                    else {"positions": {}, "availablePositions": [],
+                          "eof": True})
+        if path.startswith("/v1/portfolio/activities"):
+            return (activities if activities is not None
+                    else {"activities": [], "eof": True})
+        if path.startswith("/v1/order/"):
+            oid = path.rsplit("/", 1)[-1]
+            if oid in by_id:
+                return {"order": by_id[oid]}
+            # the venue's own shape: urllib raises HTTPError, which carries
+            # `.code`. A 404 is an answer ("no such order"); the module
+            # distinguishes it from a timeout, so the fake must too.
+            raise _NotFound(404, "no such order %s" % oid)
+        raise AssertionError(
+            "the venue does not serve %r -- /v1/orders is 501 and history "
+            "and trade paths are 404" % path)
     return _read
 
 
-def view(open_rows, hist_rows=None, **kw):
-    return OS.read_order_state(reader_for(open_rows, hist_rows),
-                               slugs=[SLUG], outcome_up=UP, now=1000.0, **kw)
+def view(open_rows, hist_rows=None, *, positions=None, activities=None,
+         known=None, **kw):
+    """`known_ids` defaults to every id the fake venue knows about, which is
+    what the runner's registry holds in production."""
+    rows_ = open_rows if hist_rows is None else hist_rows
+    if known is None:
+        known = sorted({str(r.get("id")) for r in list(open_rows) + list(rows_)
+                        if r.get("id")})
+    return OS.read_order_state(
+        reader_for(open_rows, hist_rows, positions, activities),
+        slugs=[SLUG], outcome_up=UP, now=1000.0, known_ids=known, **kw)
 
 
 # --------------------------------------------------------------- the source
@@ -173,7 +213,7 @@ def test_an_unparsable_body_is_not_an_empty_book_of_orders():
         return {"somethingElse": "surprise"}
     v = OS.read_order_state(_read, slugs=[SLUG], outcome_up=UP, now=1.0)
     assert v["ok"] is False
-    assert v["reason"] == "ORDER_STATE_UNPARSABLE"
+    assert v["reason"].startswith("ORDER_STATE_UNPARSABLE")
 
 
 def test_an_empty_orders_list_IS_recognised_as_zero():
@@ -203,6 +243,8 @@ def test_a_slow_read_is_stale_evidence():
 
     def _read(path):
         clock["t"] += 4.0
+        if path == OS.POSITIONS_PATH:
+            return {"positions": {}, "availablePositions": [], "eof": True}
         return {"orders": []}
     v = OS.read_order_state(_read, slugs=[SLUG], outcome_up=UP,
                             now=clock["t"], now_fn=lambda: clock["t"],
@@ -260,11 +302,24 @@ def test_an_open_order_with_no_id_cannot_be_reconciled_so_it_refuses():
     assert v["reason"] == "ORDER_STATE_INCONSISTENT:OPEN_ROW_WITHOUT_ID"
 
 
-def test_the_open_endpoint_wins_on_liveness_over_a_stale_history_page():
-    """History says NEW-and-paged-away; open says resting. Open wins, and
-    that is not a conflict -- both mean live."""
-    v = view([order("L1")], [])
-    assert v["n_outstanding"] == 1
+def test_a_resting_order_whose_own_record_404s_is_INCONSISTENT():
+    """The two endpoints contradict each other about an order of ours.
+
+    `/v1/orders/open` says L1 is resting; `/v1/order/L1` says no such
+    order. There is no history endpoint to arbitrate (it is 501 here), so
+    we stop instead of picking the convenient answer.
+    """
+    v = view([order("L1")], [], known=[])
+    assert v["ok"] is False
+    assert v["reason"] == (
+        "ORDER_STATE_INCONSISTENT:L1_IS_RESTING_BUT_404_ON_ITS_OWN_RECORD")
+    assert bool(OS.outstanding_for_snapshot(v))
+
+
+def test_a_resting_order_readable_by_id_is_outstanding():
+    """The ordinary case: open lists it and its own record agrees."""
+    v = view([order("L1")], [order("L1")])
+    assert v["ok"] and v["n_outstanding"] == 1
     assert v["open_ids"] == ["L1"]
 
 
@@ -487,9 +542,11 @@ def test_a_confirmed_id_absent_from_a_successful_read_is_resolved():
     """`/v1/orders/open` is the venue's statement of what rests. A
     confirmed id it does not list is not resting -- otherwise an order that
     filled and paged out of the history window would block E1 forever."""
-    v = view([], [], pending_ids=["CZH22KCSPZ8H"])
+    v = view([], [], pending_ids=["CZH22KCSPZ8H"], known=[])
     assert v["ok"] and v["n_outstanding"] == 0
     assert v["pending_ids_resolved_by_this_read"] == ["CZH22KCSPZ8H"]
+    # and the venue's 404 is recorded as the answer it is
+    assert v["ids_absent_at_venue_404"] == ["CZH22KCSPZ8H"]
 
 
 def test_an_unidentified_submission_blocks_INDEFINITELY():

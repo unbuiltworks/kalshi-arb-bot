@@ -245,13 +245,30 @@ def clean_order_state_reader(open_rows=(), hist_rows=None):
     """
     from analysis.l5.e1_cohort import order_state as _OS
     hist = list(open_rows if hist_rows is None else hist_rows)
+    by_id = {str(r.get("id")): r for r in hist if r.get("id")}
+
+    class _NotFound(Exception):
+        def __init__(self):
+            super().__init__("no such order")
+            self.code = 404
 
     def _read(path):
         if path == _OS.OPEN_PATH:
             return {"orders": list(open_rows)}
-        if path == _OS.ORDERS_PATH:
-            return {"orders": hist}
-        raise AssertionError("unexpected order-state path %r" % path)
+        if path == _OS.POSITIONS_PATH:
+            return {"positions": {}, "availablePositions": [], "eof": True}
+        if path.startswith("/v1/portfolio/activities"):
+            return {"activities": [], "eof": True}
+        if path.startswith("/v1/order/"):
+            oid = path.rsplit("/", 1)[-1]
+            if oid in by_id:
+                return {"order": by_id[oid]}
+            raise _NotFound()
+        # `/v1/orders` is HTTP 501 on the real venue and every history and
+        # trade path is 404, so this fake refuses them too: if the code
+        # reaches for one again, the test fails here rather than passing
+        # against a venue that would have refused.
+        raise AssertionError("PMUS does not serve %r" % path)
     return _read
 
 

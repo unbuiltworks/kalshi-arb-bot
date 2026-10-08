@@ -825,6 +825,18 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
             pending[pending.index(intent_id)] = oid
         # else: left in place deliberately. An unidentified submission is an
         # unconfirmed submission.
+    # AND REMEMBER IT, because the venue cannot be asked. `/v1/orders` is
+    # HTTP 501 here, so the only way to read this order again is by its id;
+    # an id we fail to record is an order we can never reconcile. The role
+    # is recorded with it, so a resting first leg blocks another first leg
+    # without blocking the complement that closes it.
+    known = snapshot.get("known_order_ids")
+    roles = snapshot.get("order_roles")
+    if oid:
+        if isinstance(known, list) and oid not in known:
+            known.append(oid)
+        if isinstance(roles, dict):
+            roles[oid] = OST.FIRST_LEG
     out["e1_pending_order_id"] = oid or intent_id
     out["e1_latch_slot"] = holder["slot"]
     out["e1_window"] = window
@@ -919,7 +931,24 @@ def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
     except O.SubmissionAmbiguous:
         tracker.record_ambiguous_submission()
         raise
+    # the complement's own id is registered under the COMPLEMENT role, so
+    # the next order-state read counts it against the one-complement-at-a-
+    # time rule and NOT against the first-leg guard.
+    _coid = None
+    for _k in ("orderId", "order_id", "id"):
+        if isinstance(out, dict) and out.get(_k):
+            _coid = str(out[_k])
+            break
+    _known = snapshot.get("known_order_ids")
+    _roles = snapshot.get("order_roles")
+    if _coid:
+        if isinstance(_known, list) and _coid not in _known:
+            _known.append(_coid)
+        if isinstance(_roles, dict):
+            _roles[_coid] = OST.COMPLEMENT
     out.update({"submitted": True, "tranche_plan": plan,
+                "e1_complement_order_id": _coid,
+                "e1_complement_role": OST.COMPLEMENT,
                 "e1_complement_plan": price,
                 "e1_complement_qty": str(q),
                 "e1_tranche_index": spent,
