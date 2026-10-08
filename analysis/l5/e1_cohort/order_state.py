@@ -256,7 +256,7 @@ def _positions_for(body: Any, want: Iterable[str]
 
 
 def fetch_resolutions(reader: Callable[[str], Any], *,
-                      pages: int = 8,
+                      pages: int = 30,
                       pause_s: float = 0.0,
                       sleep_fn: Optional[Callable[[float], None]] = None
                       ) -> Dict[str, Any]:
@@ -269,8 +269,16 @@ def fetch_resolutions(reader: Callable[[str], Any], *,
     found the hard way, and the failure mode is bad: a settlement that
     cannot be read looks the same as a settlement that does not exist, and
     silence is the one thing accounting must never infer from.
-    So: one walk, fewer pages, optional pacing, and the rows are handed to
-    every caller that needs them.
+    So: one walk, optional pacing, and the rows are handed to every caller
+    that needs them.
+
+    ON THE PAGE BUDGET. The first repair set this to 8 and the live run
+    came back `complete: False` after 8 pages of a 1,100-row feed, so two
+    of the three settlement questions answered UNCONFIRMED_WALK_INCOMPLETE
+    -- correct, and useless. Eight was me over-correcting for a rate limit
+    that only appeared because the feed was being walked three times. One
+    paced walk can afford the pages, and an audit that cannot reach the row
+    it is auditing is not an audit.
 
     A page that errors ENDS the walk and is reported. Partial rows are
     returned with `complete: False` so a caller cannot mistake a truncated
@@ -305,7 +313,7 @@ def fetch_resolutions(reader: Callable[[str], Any], *,
 
 
 def settlement_for(reader: Callable[[str], Any], *, slug: str,
-                   expected_qty: Any, pages: int = 8,
+                   expected_qty: Any, pages: int = 30,
                    resolutions: Optional[Mapping[str, Any]] = None
                    ) -> Dict[str, Any]:
     """The venue's settlement record for ONE market, attributed by an EXACT

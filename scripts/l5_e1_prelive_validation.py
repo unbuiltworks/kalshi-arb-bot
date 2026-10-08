@@ -165,7 +165,7 @@ def main() -> int:
     # ONE WALK of the activities feed, shared by every market below. The
     # previous run walked it three times in a few seconds and the venue
     # answered the second and third with an HTTPError.
-    res = OS.fetch_resolutions(reader, pages=8, pause_s=0.25,
+    res = OS.fetch_resolutions(reader, pages=30, pause_s=0.2,
                                sleep_fn=time.sleep)
     j("ACTIVITIES_WALK", {"pages_read": res.get("pages_read"),
                           "complete": res.get("complete"),
