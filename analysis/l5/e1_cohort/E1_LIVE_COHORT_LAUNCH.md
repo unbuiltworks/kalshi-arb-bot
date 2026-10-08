@@ -69,3 +69,69 @@ after the process had exited.
 P&L is asserted here; the labels remain
 historical replay -> shadow -> live probe -> submitted -> filled -> settled ->
 realized.
+
+## WINDOW 1 RESULT — read from the durable volume, not the logs
+
+| field | value |
+|---|---|
+| window | `cpc-btc-updown-15m-2026-10-08-0100z`, `market_id` 1274078 |
+| window_index | 0 |
+| authorized | 2026-10-08T01:01:23Z, `AUTHORIZED` |
+| identity | `slug_plus_outcome_side`, `ctf_token_ids_used` false, tokens null |
+| venue confirmed slug | true, via `src.l5_pmus_transport:resolve_market` |
+| **orders submitted** | **0** (`placement_count: 0`) |
+| **latch slots claimed** | **0** (no file carries the session stem) |
+| **`.submitted` markers** | **none new**; only XR2W's boot-selftest and A6 |
+| tape files | none |
+| iterations | **960** — the hard cap `MAX_PLACEMENTS * 4` |
+| every refusal | `E9_PRICE_ABOVE_CEILING:0.62` |
+| windows | authorized 12, **used 1**, remaining 11 |
+| residual exposure | none |
+| realized P&L | **$0.00. Nothing filled, nothing settled, nothing claimed.** |
+
+The frozen $0.60 first-leg ceiling did its job: the same-side best bid was
+**0.62**, so E9 refused every attempt. No order was ever priced or sent. This
+is the correct behaviour of a frozen bound, not a fault.
+
+Both prior cohorts are preserved untouched: progress rows 1530Z 3, 1849Z 6,
+this session 1, and authorization rows 13 / 4 / 1 in the same append-only
+files.
+
+## THE CONCRETE LIVE FAILURE — no patience in the decision loop
+
+`run_cohort`'s refusal branch is a bare `continue` with no pacing, and the
+960-iteration cap is `MAX_PLACEMENTS * 4`. The provider paces only its
+READINESS wait (`sleep_fn(poll_s)` inside `await_pmus_book_ready`); the
+DECISION loop is unpaced. So when a window's book sits above the ceiling, the
+cohort does not wait for the price to come to it across the window's
+15 minutes -- it spends all 960 iterations in about one second, consumes one
+of twelve authorized windows, places nothing, and exits. No `COHORT_STOPPED`
+row is written because the loop leaves via the iteration cap rather than a
+verdict stop.
+
+Measured: network from 01:01:23.38Z to 01:01:24.53Z, then nothing.
+
+Compare XR2W Attempt 6, which filled: it paced itself, 1,230 polls over
+6,150.1 s. E1's loop does not.
+
+**Consequence, and why this run was not repeated.** Relaunching as-is would
+very likely spend the remaining 11 authorized windows in a few minutes with
+zero orders, destroying the owner's authorization without producing the
+decision -> submission -> fill -> complement -> settlement chain it was
+granted for. So the cohort was NOT relaunched.
+
+Smallest defensible fix, not applied: pace the refusal branch so a transient
+market-state refusal waits a bounded interval before re-deciding, letting one
+window be observed across its life to the TTE cutoff. It changes no bound, no
+price, no quantity and no risk parameter -- it adds the patience the operating
+model puts first. But it changes the artifact and therefore the fingerprint,
+and the owner's GO authorizes SHA `4cff4c8d` / fingerprint `b32e8c7b` only, so
+it needs fresh owner authorization.
+
+## Resting state
+
+Start command restored to `python3 -m scripts.l5_e1_cohort_run`. The three
+arming keys were blanked with `skipDeploys: true` so no incidental redeploy
+can spend another window while the defect is open; `PMUS_E1_SESSION_ID` and
+`PMUS_E1_AUTHORIZED_FINGERPRINT` are left in place so the 11 unspent windows
+stay attached to this session. Re-arming is one variable set.
