@@ -71,7 +71,14 @@ from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         diff_report)
 from analysis.l5.e1_cohort.stopping import CohortTracker, project_feasibility
 from analysis.l5.live_exec2 import orders as O
+from analysis.l5.e1_cohort import pacing as PACING
 from analysis.l5.e1_cohort import pmus_book as PBK
+from analysis.l5.e1_cohort import pmus_identity as PIDENT
+
+#: THE SAME 900 THAT COMPUTES `window_end`. Taken from the identity module
+#: the selector itself uses, so the pacing horizon and the window boundary
+#: cannot drift apart into a cap that is wrong by a constant.
+WINDOW_LEN_S = float(PIDENT.WINDOW_S)
 from src import l5_preview_gate as G
 from src import pmus_fee_schedule as FEE
 
@@ -81,6 +88,20 @@ MAX_BOOK_AGE_S = 2.0
 
 
 class Ineligible(RuntimeError):
+    """Refused by E1's own preflight. CARRIES THE REFUSAL LIST.
+
+    It carries `refusals` because the caller has to classify them: a refusal
+    about a book that moves is waited out, and a safety refusal stops the
+    cohort. Re-deriving the list by re-running preflight would classify a
+    DIFFERENT instant than the one that actually refused.
+    """
+
+    def __init__(self, message: str,
+                 refusals: Optional[List[Any]] = None) -> None:
+        super().__init__(message)
+        self.refusals = list(refusals or [])
+
+
     """The state does not satisfy E1's eligibility rules. No order."""
 
 
@@ -671,7 +692,8 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     assert_frozen()
     checks = e1_preflight(snapshot, tracker, now=now)
     if not checks["ok"]:
-        raise Ineligible("E1 refused the attempt: %s" % checks["refusals"])
+        raise Ineligible("E1 refused the attempt: %s" % checks["refusals"],
+                         refusals=checks["refusals"])
     window = checks["e1"]["window"]
     slug = snapshot["market"]
     # BOUNDARY 2: the SPECIFIC RESOLVED SLUG and both token ids, enforced
@@ -944,7 +966,8 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                = None, recorder: Any = None,
                transport_factory: Any = O.BoundedOrderTransport,
                now_fn: Any = None, max_iterations: Optional[int] = None,
-               session_auth: Any = None, progress: Any = None
+               session_auth: Any = None, progress: Any = None,
+               sleep_fn: Any = None, pace_s: Optional[float] = None
                ) -> Dict[str, Any]:
     """Drive the cohort: MANY bounded attempts, under the E1 named-slot latch.
 
@@ -970,6 +993,11 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
     assert_frozen()
     tracker = tracker if tracker is not None else CohortTracker()
     now_fn = now_fn or time.time
+    sleep_fn = sleep_fn or time.sleep
+    pace_s = PACING.PACE_S if pace_s is None else float(pace_s)
+    paced_waits: List[Dict[str, Any]] = []
+    slept_s = 0.0
+    empty_snapshots = 0
     placements: List[Dict[str, Any]] = []
     refusals: List[Dict[str, Any]] = []
     stopped_because: Optional[str] = None
@@ -1018,7 +1046,19 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 "tracker": tracker.snapshot(),
                 "signing_proof": None,
                 "LANGUAGE": "a local fault is not a venue error"}
-    limit = MAX_PLACEMENTS * 4 if max_iterations is None else max_iterations
+    # THE CAP IS A SAFETY NET, NOT THE BUDGET. It used to be
+    # `MAX_PLACEMENTS * 4` == 960, which is far SMALLER than the number of
+    # times a paced loop legitimately reads the book while observing twelve
+    # 15-minute windows -- so on 2026-10-08 the cap, not the market, ended the
+    # cohort after one window and one second. The budget is windows,
+    # placements and the trading deadline; reaching this cap is an anomaly.
+    # NOTE the guard is derived from the PRODUCTION pace, never from the
+    # possibly-shrunk `pace_s` above: a fast test pace must not inflate the
+    # runaway guard, which is how it first became ten million.
+    limit = (PACING.iteration_cap(windows=WINDOWS,
+                                  window_len_s=WINDOW_LEN_S,
+                                  max_placements=MAX_PLACEMENTS)
+             if max_iterations is None else max_iterations)
     while it < limit:
         it += 1
         v = tracker.verdict()
@@ -1029,12 +1069,63 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             break
         snap = snapshot_provider()
         if snap is None:
-            stopped_because = "SNAPSHOT_PROVIDER_EXHAUSTED"
-            break
+            # A MOMENTARY BOOK GAP IS NOT THE END OF THE COHORT. The provider
+            # returns None both when the twelve-window budget is genuinely
+            # spent and when this instant has no usable book, and treating
+            # the second as the first would end a live cohort on one hiccup.
+            # So the window budget decides, and a transient None is paced --
+            # but only MAX_CONSECUTIVE_EMPTY_SNAPSHOTS times, so a
+            # permanently broken feed stops instead of retrying forever.
+            budget_spent = (progress is not None
+                            and progress.windows_used() >= WINDOWS)
+            empty_snapshots += 1
+            if budget_spent:
+                stopped_because = "SNAPSHOT_PROVIDER_EXHAUSTED"
+                break
+            if empty_snapshots > PACING.MAX_CONSECUTIVE_EMPTY_SNAPSHOTS:
+                stopped_because = "SNAPSHOT_PROVIDER_EMPTY_%d_TIMES" % (
+                    empty_snapshots,)
+                break
+            wait = PACING.pace_seconds(now=now_fn(), pace_s=pace_s)
+            paced_waits.append({"iteration": it, "sleep_s": wait,
+                                "because": ["EMPTY_SNAPSHOT"]})
+            slept_s += wait
+            sleep_fn(wait)
+            continue
+        empty_snapshots = 0
         checks = e1_preflight(snap, tracker, now=now_fn())
         if not checks["ok"]:
+            # THE REPAIR. A refusal used to `continue` immediately, so a
+            # window whose book sat above the $0.60 ceiling got 960 refusals
+            # in one second instead of fifteen minutes of patience. Now every
+            # refusal is classified: a statement about a book that MOVES is
+            # waited out and re-observed, and anything else -- including a
+            # refusal this code has never seen -- is terminal and stops the
+            # cohort. No bound, price, quantity or risk rule is consulted
+            # here, let alone relaxed; this decides only wait-or-stop.
+            decision = PACING.pace_for(snap, checks["refusals"],
+                                       now=now_fn(), pace_s=pace_s)
             refusals.append({"iteration": it,
-                             "refusals": checks["refusals"]})
+                             "refusals": checks["refusals"],
+                             "pacing": decision["action"],
+                             "paced_sleep_s": decision["sleep_s"],
+                             "terminal_refusals": decision["terminal"]})
+            if recorder is not None and decision["action"] == "STOP":
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="TERMINAL_REFUSAL",
+                    detail={"slug": snap.get("market"),
+                            "terminal": decision["terminal"],
+                            "paced": decision["paced"]})
+            if decision["action"] == "STOP":
+                stopped_because = "TERMINAL_REFUSAL:%s" % (
+                    ",".join(str(x) for x in decision["terminal"]),)
+                break
+            paced_waits.append({"iteration": it,
+                                "sleep_s": decision["sleep_s"],
+                                "because": decision["paced"]})
+            slept_s += decision["sleep_s"]
+            sleep_fn(decision["sleep_s"])
             continue
         try:
             out = submit_first_leg(snap, tracker, now=now_fn(),
@@ -1053,7 +1144,30 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                     detail={"slug": snap.get("market"), "why": str(exc)})
             continue
         except Ineligible as exc:
-            refusals.append({"iteration": it, "refusals": [str(exc)]})
+            # `submit_first_leg` re-runs the SAME preflight immediately before
+            # submitting, so this is the identical refusal set arriving a few
+            # milliseconds later -- the book moved between the check and the
+            # send. It is paced on exactly the same rules, from the re-check's
+            # own refusal list rather than from the stringified exception.
+            late = (getattr(exc, "refusals", None)
+                    or e1_preflight(snap, tracker,
+                                    now=now_fn())["refusals"])
+            decision = PACING.pace_for(snap, late, now=now_fn(),
+                                       pace_s=pace_s)
+            refusals.append({"iteration": it, "refusals": [str(exc)],
+                             "late_refusals": list(late),
+                             "pacing": decision["action"],
+                             "paced_sleep_s": decision["sleep_s"],
+                             "terminal_refusals": decision["terminal"]})
+            if decision["action"] == "STOP":
+                stopped_because = "TERMINAL_REFUSAL_AT_SUBMIT:%s" % (
+                    ",".join(str(x) for x in decision["terminal"]),)
+                break
+            paced_waits.append({"iteration": it,
+                                "sleep_s": decision["sleep_s"],
+                                "because": decision["paced"]})
+            slept_s += decision["sleep_s"]
+            sleep_fn(decision["sleep_s"])
             continue
         except LF.LocalExecutionFault as fault:
             # DEFENCE IN DEPTH. The contract was proven above, so reaching
@@ -1121,6 +1235,13 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             "authorized_slugs": (session_auth.slugs()
                                  if session_auth is not None else None),
             "placement_count": len(placements),
+            "iteration_cap": limit,
+            "iteration_cap_reached": it >= limit and stopped_because is None,
+            "pace_s": pace_s,
+            "paced_wait_count": len(paced_waits),
+            "paced_total_sleep_s": slept_s,
+            "paced_waits": paced_waits[:50],
+            "PACING_CHANGES_NO_BOUND": True,
             "distinct_latch_slots": len({p["latch_path"]
                                          for p in placements}),
             "refusals": refusals,

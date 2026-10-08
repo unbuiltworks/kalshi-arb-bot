@@ -65,3 +65,21 @@ def _production_credential_contract(monkeypatch):
     monkeypatch.setenv(A.SECRET_ENV, base64.b64encode(raw).decode())
     monkeypatch.delenv("PMUS_API_SECRET", raising=False)
     yield
+
+
+#: THE SAME TREATMENT FOR THE DECISION-LOOP PACE. Production waits 1.0 s
+#: between re-observations, which is right for a 15-minute window and wrong
+#: for a suite: a test that drives twenty refusals would sit for twenty
+#: seconds. So the INTERVAL is shrunk and only the interval. The
+#: classification -- which refusals are waited out and which stop the cohort
+#: -- is the production code either way, and the production literals are
+#: asserted in `test_e1_pacing.py`, which pytest actually collects.
+TEST_PACE_S = 0.001
+
+
+@pytest.fixture(autouse=True)
+def _fast_pacing(monkeypatch):
+    from analysis.l5.e1_cohort import pacing as PACING
+    monkeypatch.setattr(PACING, "PACE_S", TEST_PACE_S)
+    monkeypatch.setattr(PACING, "MIN_PACE_S", 0.0)
+    yield

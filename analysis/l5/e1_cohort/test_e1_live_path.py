@@ -33,6 +33,7 @@ from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import progress as PG
 from analysis.l5.e1_cohort import pmus_book as PBK
+from analysis.l5.e1_cohort import pmus_provider as PROV
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import pmus_provider as PV
 from analysis.l5.e1_cohort import pmus_selector as SEL
@@ -521,6 +522,12 @@ def _snapshot_from(pin, *, window=0):
     return {"market": pin["slug"], "pin": pin, "window": window,
             "venue": "polymarket_us",
             "window_open": True, "within_handover_tte": True,
+            # the two pacing deadlines, derived from the pin exactly as
+            # `pmus_provider` derives them, so the suite exercises the real
+            # deadline-aware pacing rather than a deadline-free fallback.
+            "trading_cutoff_unix": (float(pin["window_end"])
+                                    - PROV.HANDOVER_TTE_S),
+            "window_end_unix": float(pin["window_end"]),
             "our_outstanding_orders": 0, "our_open_residual": None,
             "qty": SP.FIRST_LEG_QTY, "first_leg_price": "0.50",
             "first_leg": {"side": "UP",

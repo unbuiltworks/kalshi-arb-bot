@@ -606,6 +606,79 @@ DIFF: Dict[str, Any] = {
                          "instead."),
     },
 
+    # ===================== PACED OBSERVATION =============================
+    # On 2026-10-08 the fresh cohort armed, opened
+    # cpc-btc-updown-15m-2026-10-08-0100z, and spent all 960 of its
+    # iterations in about ONE SECOND. Every refusal was
+    # E9_PRICE_ABOVE_CEILING:0.62 -- the best bid was 0.62 against the
+    # frozen $0.60 ceiling, so the bound did its job and nothing was ever
+    # priced -- but the loop did not WAIT. It consumed one of twelve
+    # authorized windows, placed nothing, and exited.
+    "paced_observation": {
+        "module": "analysis.l5.e1_cohort.pacing",
+        "pace_s": 1.0,
+        "min_pace_s": 0.05,
+        "no_paced_wait_is_ever_zero": True,
+        "max_consecutive_empty_snapshots": 30,
+        # THE TWO DEADLINES, and they are not the same instant.
+        "deadline_aware": True,
+        "never_sleeps_past_the_trading_cutoff": True,
+        "trading_cutoff_is_the_handover_tte": True,
+        "waits_out_the_window_after_the_cutoff_so_it_rolls_over": True,
+        "snapshot_carries_trading_cutoff_unix": True,
+        "snapshot_carries_window_end_unix": True,
+        # FAIL CLOSED: only an explicit allowlist is paced.
+        "classification_is_an_allowlist": True,
+        "an_unrecognised_refusal_is_terminal": True,
+        "paced_are_statements_about_a_book_that_moves": [
+            "E3_OUR_ORDER_IS_OUTSTANDING", "E3_OUR_RESIDUAL_IS_OPEN",
+            "E4_WINDOW_NOT_OPEN", "E4_PAST_HANDOVER_TTE",
+            "E7_*", "E8_*", "E9_*", "E10_*",
+            "E11_WINDOW_LATCH_EXHAUSTED",
+            "PROJECTED_WINDOW_EXPOSURE_*",
+            "WINDOW_<n>_ATTEMPT_<k>_REFUSED_MAX_20"],
+        "terminal_are_safety": [
+            "E1_DISARMED", "E1_FINGERPRINT_NOT_PINNED_TO_THIS_BUILD",
+            "E12_SAFETY_INVARIANT_VIOLATION", "QTY_*",
+            "E11_LATCH_UNAVAILABLE", "COHORT_PLACEMENT_CAP_240",
+            "FORWARD_LOOKING_LOSS_BOUND", "VERDICT_IS_*",
+            "E4_WINDOW_OUT_OF_RANGE"],
+        "ambiguous_submission_is_still_never_retried": True,
+        "a_paced_refusal_is_not_a_venue_error": True,
+        # AN INELIGIBLE MARKET COSTS NOTHING. may_place is only ASKED; the
+        # attempt counter and the latch slot are consumed inside
+        # submit_first_leg, which a refusal never reaches.
+        "consumes_no_attempt": True,
+        "consumes_no_latch_slot": True,
+        "consumes_no_risk_budget": True,
+        # THE CAP IS A NET, NOT A BUDGET.
+        "iteration_cap": 11760,
+        "iteration_cap_formula": ("windows * window_len_s / "
+                                 "PRODUCTION_PACE_S + max_placements * 4"),
+        "old_iteration_cap": 960,
+        "old_cap_was_smaller_than_one_paced_cohort": True,
+        "iteration_cap_is_derived_from_the_production_pace_not_the_test_one":
+            True,
+        "reaching_the_cap_is_an_anomaly_not_a_normal_ending": True,
+        "changes_no_bound": True,
+        "bounds_unchanged": {
+            "first_leg_qty_shares": "0.13",
+            "max_first_leg_price_usd": "0.60",
+            "pair_cost_ceiling_usd": "0.96",
+            "max_attempts_per_window": 20,
+            "max_exposure_per_window_usd": "1.56",
+            "max_cohort_realized_loss_usd": "5.00",
+            "windows": 12},
+        "provenance": ("analysis/l5/e1_cohort/E1_LIVE_COHORT_LAUNCH.md: "
+                       "window cpc-btc-updown-15m-2026-10-08-0100z, "
+                       "iterations 960 == the old cap, every refusal "
+                       "E9_PRICE_ABOVE_CEILING:0.62, placements 0, "
+                       "windows_used 1 of 12"),
+        "patience_precedent": ("XR2W Attempt 6, the only evidenced fill "
+                              "from our own order path, paced itself: "
+                              "1,230 polls over 6,150.1 s"),
+    },
+
     "supersedes_e1": {
         "reason": ("the complement accounting was CORRECTED: quantity now "
                    "tracks the CUMULATIVE first-leg fill rather than only "
@@ -621,8 +694,18 @@ DIFF: Dict[str, Any] = {
             "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
             "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
             "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
+            "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
         ],
         "reasons": {
+            "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1":
+                ("its decision loop had NO PACING: a refusal was a bare "
+                 "`continue`, so a window whose book sat above the $0.60 "
+                 "ceiling got 960 refusals in about one second instead of "
+                 "fifteen minutes of patience. It armed on 2026-10-08, "
+                 "opened cpc-btc-updown-15m-2026-10-08-0100z, refused "
+                 "every iteration with E9_PRICE_ABOVE_CEILING:0.62, "
+                 "placed nothing, consumed one of twelve authorized "
+                 "windows and exited. The cap, not the market, ended it"),
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
                 ("the complement sized to only the first partial, so later "
                  "first-leg fills fell silently into residual"),
@@ -1179,7 +1262,22 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
       "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
       "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
-      "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5"]),
+      "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
+      "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1"]),
+    ("paced_observation.pace_s", 1.0),
+    ("paced_observation.min_pace_s", 0.05),
+    ("paced_observation.no_paced_wait_is_ever_zero", True),
+    ("paced_observation.deadline_aware", True),
+    ("paced_observation.never_sleeps_past_the_trading_cutoff", True),
+    ("paced_observation.classification_is_an_allowlist", True),
+    ("paced_observation.an_unrecognised_refusal_is_terminal", True),
+    ("paced_observation.ambiguous_submission_is_still_never_retried", True),
+    ("paced_observation.consumes_no_attempt", True),
+    ("paced_observation.consumes_no_latch_slot", True),
+    ("paced_observation.consumes_no_risk_budget", True),
+    ("paced_observation.iteration_cap", 11760),
+    ("paced_observation.old_iteration_cap", 960),
+    ("paced_observation.changes_no_bound", True),
     ("entrypoint.module", "scripts.l5_e1_cohort_run"),
     ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
     ("entrypoint.cohort_driver",
@@ -1278,7 +1376,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1"
+    "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

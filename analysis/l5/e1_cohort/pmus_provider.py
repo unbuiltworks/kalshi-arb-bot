@@ -338,6 +338,16 @@ class PmusWindowProvider:
             "window": idx,
             "window_open": self._window_is_live(pin),
             "within_handover_tte": self._within_handover(pin),
+            # THE TWO DEADLINES THE PACED DECISION LOOP NEEDS, carried
+            # explicitly so `run_cohort` never has to reach into the pin or
+            # re-derive a bound. `trading_cutoff_unix` is the last instant a
+            # placement is permitted and is EXACTLY the instant
+            # `within_handover_tte` flips, computed from the same two values,
+            # so the pacing horizon and the eligibility rule can never
+            # disagree. `window_end_unix` is when this window dies and the
+            # provider rolls to the next one.
+            "trading_cutoff_unix": float(pin["window_end"]) - HANDOVER_TTE_S,
+            "window_end_unix": float(pin["window_end"]),
             "our_outstanding_orders": 0,
             "our_open_residual": None,
             "qty": FIRST_LEG_QTY,

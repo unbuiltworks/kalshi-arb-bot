@@ -1962,7 +1962,8 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # the build whose AuthBook staleness bound was 5.0s -- LOOSER than
         # the 2.0s bound of XR2W Attempt 6, the only order path that has
         # produced an evidenced fill -- on no evidence for 5.0
-        "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5"]
+        "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
+        "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this
