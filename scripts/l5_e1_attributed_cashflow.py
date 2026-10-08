@@ -194,10 +194,19 @@ def main() -> int:
                             else "NOT_E1_OR_UNCONFIRMED"),
         }, default=str))
 
-    print("NOW_EXPOSURE %s" % json.dumps({
-        "open_orders": scrub(t.request("GET", "/v1/orders/open")),
-        "positions": scrub(t.request("GET", "/v1/portfolio/positions")),
-    }, default=str)[:500])
+    # GUARDED. The first run printed every figure and then exited non-zero
+    # here, because these two GETs sat unguarded inside json.dumps. The data
+    # was complete; the exit code was not. A reconciliation must not report
+    # failure after succeeding.
+    now: Dict[str, Any] = {}
+    for label, path in (("open_orders", "/v1/orders/open"),
+                        ("positions", "/v1/portfolio/positions")):
+        try:
+            now[label] = scrub(t.request("GET", path))
+        except Exception as exc:                               # noqa: BLE001
+            now[label] = {"error": type(exc).__name__,
+                          "code": getattr(exc, "code", None)}
+    print("NOW_EXPOSURE %s" % json.dumps(now, default=str)[:500])
     print("ATTRIB_END")
     return 0
 
