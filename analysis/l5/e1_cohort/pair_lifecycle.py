@@ -267,18 +267,39 @@ class PairLifecycle:
     # ------------------------------------------------------------- deadman
     def deadman(self, *, snapshot: Mapping[str, Any], now: float,
                 transport_factory: Any, orders_module: Any,
+                owned_ids: Iterable[str] = (),
                 recorder: Any = None,
-                read_open: Optional[Callable[[], Any]] = None
+                read_open: Optional[Callable[[], Any]] = None,
+                read_order: Optional[Callable[[str], Any]] = None
                 ) -> Dict[str, Any]:
         """RULES C6 AND C9, AND `open_at_boundary` FROM THE FROZEN SPEC:
         "CANCELLED, never left to ride to settlement".
 
-        At or below the frozen withdrawal TTE every open order of ours in
-        this market is cancelled with the APPROVED market-scoped deadman --
-        the same `deadman_cancel_all` that cancelled the twenty 1230z
-        orders -- and the result is VERIFIED against `/v1/orders/open`,
-        because a cancel response is a claim and the open-orders list is
-        the fact.
+        CANCELLED BY OWNED ORDER ID, NOT BY MARKET.
+        ===========================================
+        The first version used `deadman_cancel_all`, which POSTs
+        `{"slugs": [slug]}` and therefore cancels EVERY open order in that
+        market. On a shared PMUS account -- and this account is shared:
+        1,100 activity rows, 901 trades, other desks at sizes like 16.21
+        and 23.49 -- that would cancel another strategy's orders whenever
+        it happened to be quoting the same BTC15m window. Market scope is
+        not ownership scope, and the two only coincide by luck. (The
+        twenty 1230z orders I cancelled that way earlier were all E1's, so
+        nothing was harmed -- but that was luck, not design.)
+
+        The venue supports `POST /v1/order/{id}/cancel`, which
+        `orders.cancel_exact` wraps and `BoundedOrderTransport` permits as
+        one of its four routes with no once-per-process bound. So the
+        handover cancels EXACTLY the ids E1 submitted, taken from its own
+        registry, and verifies each one individually.
+
+        AN ID WE DO NOT OWN IS NEVER CANCELLED. If an unattributable order
+        is resting in our market it is reported and left alone; E3 already
+        counts it as outstanding, so it blocks our placements rather than
+        being swept away. Membership in our registry is the ownership
+        test, deliberately -- NOT the role field, which defaults an
+        unknown id to `first_leg` and would otherwise claim a stranger's
+        order as ours.
 
         A FILLED RESIDUAL IS NOT CANCELLED AND NOT UNWOUND. There is no
         taker rescue at any price and at any TTE, so inventory rides to
@@ -286,35 +307,95 @@ class PairLifecycle:
         is the authorized behaviour, not a gap.
         """
         slug = snapshot.get("market")
-        out: Dict[str, Any] = {"ran": False, "slug": slug,
-                               "NOT_A_TAKER_RESCUE": True,
-                               "filled_residual_rides_to_settlement": True}
+        owned = {str(i) for i in owned_ids if i}
+        out: Dict[str, Any] = {
+            "ran": False, "slug": slug,
+            "CANCELS_BY_OWNED_ORDER_ID_NOT_BY_MARKET": True,
+            "NOT_A_TAKER_RESCUE": True,
+            "filled_residual_rides_to_settlement": True,
+            "an_unowned_order_is_never_cancelled": True,
+        }
         if not slug:
             out["because"] = "NO_SLUG"
             return out
-        t = transport_factory()
-        res = orders_module.deadman_cancel_all(t, slug=slug)
+
+        view = snapshot.get("order_state")
+        if not isinstance(view, Mapping) or not view.get("ok"):
+            # FAIL CLOSED. We will not fire a cancel sweep against a state
+            # we cannot read, because we could not then tell our orders
+            # from anyone else's.
+            out["because"] = "ORDER_STATE_NOT_ESTABLISHED"
+            out["FAILS_CLOSED"] = True
+            self.deadman_result = out
+            if recorder is not None:
+                recorder.record_event(
+                    window=int(snapshot.get("window", -1)), slot=-1,
+                    event="HANDOVER_DEADMAN_REFUSED", detail=dict(out))
+            return out
+
+        outstanding = {str(i) for i in (view.get("outstanding_ids") or [])}
+        targets = sorted(outstanding & owned)
+        foreign = sorted(outstanding - owned)
+        out["targets"] = targets
+        out["foreign_open_ids_left_untouched"] = foreign
         out["ran"] = True
-        out["cancel_response_ok"] = bool(res.get("ok"))
-        out["cancel_response"] = res
-        # VERIFY. Never trust the cancel's own answer.
+
+        cancels: List[Dict[str, Any]] = []
+        for oid in targets:
+            t = transport_factory()
+            try:
+                resp = orders_module.cancel_exact(t, order_id=oid,
+                                                  slug=slug)
+                cancels.append({"order_id": oid, "ok": True,
+                                "response": resp})
+            except Exception as exc:                            # noqa: BLE001
+                # NEVER RETRIED. Recorded, and the verification below is
+                # what decides whether it actually went.
+                cancels.append({"order_id": oid, "ok": False,
+                                "error": type(exc).__name__})
+        out["cancels"] = cancels
+
+        # VERIFY. Never trust a cancel's own answer.
+        if read_order is not None:
+            states: Dict[str, Any] = {}
+            for oid in targets:
+                try:
+                    body = read_order(oid)
+                    row = (body.get("order")
+                           if isinstance(body, Mapping) else None) or body
+                    states[oid] = (str(row.get("state"))
+                                   if isinstance(row, Mapping) else None)
+                except Exception as exc:                        # noqa: BLE001
+                    states[oid] = "UNREADABLE:%s" % type(exc).__name__
+            out["per_id_states_after"] = states
+            out["all_cancelled"] = bool(targets) and all(
+                str(v) in OS.TERMINAL_STATES for v in states.values())
+            if not targets:
+                out["all_cancelled"] = True
+            out["VERIFIED_AGAINST"] = "GET /v1/order/{id} per owned id"
         if read_open is not None:
             try:
                 body = read_open()
                 rows = OS.rows(body, "orders", "data")
                 still = [str(r.get("id")) for r in (rows or [])
                          if OS.slug_of(r) == str(slug)]
-                out["open_after"] = still
-                out["all_cancelled"] = (rows is not None and not still)
-                out["VERIFIED_AGAINST"] = "GET /v1/orders/open"
+                out["open_after_in_our_market"] = still
+                out["owned_still_open"] = sorted(set(still) & owned)
+                # the foreign orders MUST still be there: if they vanished,
+                # our cancel was not ownership-scoped after all.
+                out["foreign_still_open"] = sorted(set(still) & set(foreign))
+                out["foreign_untouched"] = (
+                    sorted(set(still) & set(foreign)) == foreign)
+                if out.get("all_cancelled") is None:
+                    out["all_cancelled"] = not out["owned_still_open"]
+                    out["VERIFIED_AGAINST"] = "GET /v1/orders/open"
             except Exception as exc:                            # noqa: BLE001
                 out["verify_error"] = type(exc).__name__
-                out["all_cancelled"] = None
+                out.setdefault("all_cancelled", None)
         self.deadman_result = out
         if recorder is not None:
             recorder.record_event(
                 window=int(snapshot.get("window", -1)), slot=-1,
                 event="HANDOVER_DEADMAN",
-                detail={k: v for k, v in out.items()
-                        if k != "cancel_response"})
+                detail={k: v for k, v in out.items() if k != "cancels"})
         return out

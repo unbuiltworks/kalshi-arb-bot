@@ -750,8 +750,17 @@ DIFF: Dict[str, Any] = {
             "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
             "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
             "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
+            "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
         ],
         "reasons": {
+            "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c":
+                ("its handover cancelled by MARKET, via "
+                 "deadman_cancel_all's {'slugs': [slug]}, which cancels "
+                 "every open order in that market. This PMUS account is "
+                 "shared, so that would have cancelled another "
+                 "strategy's orders whenever it quoted the same BTC15m "
+                 "window. Cancellation is now scoped to ids in E1's own "
+                 "registry and verified per id"),
             "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b":
                 ("its production loop NEVER CALLED submit_complement. The "
                  "function was written, frozen into this spec's call "
@@ -1218,8 +1227,30 @@ DIFF: Dict[str, Any] = {
         "an_unhedgeable_first_leg_is_never_opened": True,
         "why": "E10 checks complement feasibility BEFORE the first leg",
         # the deadman
-        "deadman": "analysis.l5.live_exec2.orders:deadman_cancel_all",
-        "deadman_is_market_scoped": True,
+        # CANCELLATION IS OWNERSHIP-SCOPED, NOT MARKET-SCOPED.
+        "deadman": "analysis.l5.live_exec2.orders:cancel_exact",
+        "deadman_cancels_by_owned_order_id": True,
+        "deadman_is_market_scoped": False,
+        "why_not_market_scoped": ("deadman_cancel_all POSTs {'slugs': "
+                                  "[slug]} and cancels EVERY open order in "
+                                  "that market. This PMUS account is "
+                                  "shared -- 1,100 activity rows, 901 "
+                                  "trades, other desks at sizes like "
+                                  "16.21 and 23.49 -- so a market sweep "
+                                  "would cancel another strategy's orders "
+                                  "whenever it quoted the same window. "
+                                  "Market scope and ownership scope "
+                                  "coincide only by luck"),
+        "ownership_test_is_registry_membership": True,
+        "why_not_the_role_field": ("read_order_state defaults an unknown "
+                                   "id to first_leg, which would claim a "
+                                   "stranger's resting order as ours"),
+        "an_unowned_order_is_never_cancelled": True,
+        "an_unowned_order_blocks_us_instead": True,
+        "cancelling_what_we_do_not_own_is_a_safety_violation": True,
+        "verified_per_owned_id": "GET /v1/order/{id}",
+        "foreign_orders_verified_still_present": True,
+        "deadman_fails_closed_without_readable_state": True,
         "deadman_is_verified_against_open_orders": True,
         "deadman_failure_is_a_safety_violation": True,
         "a_cancel_response_is_not_proof": True,
@@ -1584,7 +1615,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0",
       "5e15bdc02c40416b1137e8bff94f7f07262277a3f76c47a6b1d99655f32a8da3",
       "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
-      "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b"]),
+      "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
+      "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1659,7 +1691,17 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("pair_lifecycle.fails_closed_when_order_state_is_unavailable", True),
     ("pair_lifecycle.past_cutoff_is_withdraw_only", True),
     ("pair_lifecycle.an_unhedgeable_first_leg_is_never_opened", True),
-    ("pair_lifecycle.deadman_is_market_scoped", True),
+    ("pair_lifecycle.deadman", "analysis.l5.live_exec2.orders:cancel_exact"),
+    ("pair_lifecycle.deadman_cancels_by_owned_order_id", True),
+    ("pair_lifecycle.deadman_is_market_scoped", False),
+    ("pair_lifecycle.ownership_test_is_registry_membership", True),
+    ("pair_lifecycle.an_unowned_order_is_never_cancelled", True),
+    ("pair_lifecycle.an_unowned_order_blocks_us_instead", True),
+    ("pair_lifecycle.cancelling_what_we_do_not_own_is_a_safety_violation",
+     True),
+    ("pair_lifecycle.verified_per_owned_id", "GET /v1/order/{id}"),
+    ("pair_lifecycle.foreign_orders_verified_still_present", True),
+    ("pair_lifecycle.deadman_fails_closed_without_readable_state", True),
     ("pair_lifecycle.deadman_is_verified_against_open_orders", True),
     ("pair_lifecycle.deadman_failure_is_a_safety_violation", True),
     ("pair_lifecycle.a_cancel_response_is_not_proof", True),
@@ -1819,7 +1861,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c"
+    "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

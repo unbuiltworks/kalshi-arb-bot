@@ -200,6 +200,14 @@ class PmusWindowProvider:
             self._order_state_reader = OS.venue_reader()
         return self._order_state_reader
 
+    def read_open_orders(self) -> Any:
+        """GET /v1/orders/open, for the handover's cancel verification."""
+        return self.order_state_reader()(OS.OPEN_PATH)
+
+    def read_order(self, order_id: str) -> Any:
+        """GET /v1/order/{id}, so a cancel is verified per owned id."""
+        return self.order_state_reader()(OS.ORDER_PATH % order_id)
+
     def order_state(self, pin: Dict[str, Any]) -> Dict[str, Any]:
         """The AUTHORITATIVE outstanding-order view for this window.
 

@@ -1348,17 +1348,34 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
         # A FILLED residual is deliberately NOT unwound: there is no taker
         # rescue at any price or TTE, so inventory rides to settlement.
         if past_cutoff and not lifecycle.deadman_result:
+            # OWNERSHIP, NOT MARKET. `owned_ids` is E1's own registry --
+            # the ids it submitted, restored from the durable tape -- so
+            # the handover cancels exactly our orders and leaves another
+            # strategy's alone even in the SAME market.
             dm = lifecycle.deadman(
                 snapshot=snap, now=now_fn(),
                 transport_factory=transport_factory, orders_module=O,
+                owned_ids=list(snap.get("known_order_ids")
+                               or getattr(snapshot_provider,
+                                          "known_order_ids", None) or []),
                 recorder=recorder,
                 read_open=getattr(snapshot_provider, "read_open_orders",
-                                  None))
+                                  None),
+                read_order=getattr(snapshot_provider, "read_order", None))
             lifecycle.events.append({"iteration": it, "deadman": dm})
             if dm.get("all_cancelled") is False:
                 tracker.violate(
-                    "HANDOVER_DEADMAN_DID_NOT_CLEAR_OPEN_ORDERS:%s"
-                    % (dm.get("open_after"),))
+                    "HANDOVER_DEADMAN_DID_NOT_CLEAR_OUR_OPEN_ORDERS:%s"
+                    % (dm.get("owned_still_open")
+                       or dm.get("per_id_states_after"),))
+            # AND THE OTHER DIRECTION, which is the safety issue that
+            # motivated ownership scoping: if a cancel of ours removed an
+            # order we do not own, that is a violation even though every
+            # order of ours went away correctly.
+            if dm.get("foreign_untouched") is False:
+                tracker.violate(
+                    "HANDOVER_CANCEL_TOUCHED_ORDERS_WE_DO_NOT_OWN:%s"
+                    % (dm.get("foreign_open_ids_left_untouched"),))
 
         checks = e1_preflight(snap, tracker, now=now_fn())
         if not checks["ok"]:

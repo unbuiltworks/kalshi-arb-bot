@@ -122,15 +122,21 @@ def cancelling_transport(venue):
 
     class T(FakeTransport):
         def request(self, method, path, body=None, base=None):
+            # PER-ID CANCEL, which is what the handover now uses. The
+            # slug sweep is deliberately NOT implemented here any more:
+            # if the lifecycle ever reaches for it again, this raises.
+            if path.startswith("/v1/order/") and path.endswith("/cancel"):
+                oid = path.split("/")[3]
+                if oid in venue.orders and \
+                        D(venue.orders[oid]["leavesQuantity"]) > 0:
+                    venue.cancel(oid)
+                    return {"canceledOrderIds": [oid]}
+                return {"canceledOrderIds": []}
             if path == O.DEADMAN_PATH:
-                slugs = set((body or {}).get("slugs") or [])
-                cancelled = []
-                for oid, o in list(venue.orders.items()):
-                    if (o["marketSlug"] in slugs
-                            and D(o["leavesQuantity"]) > 0):
-                        venue.cancel(oid)
-                        cancelled.append(oid)
-                return {"canceledOrderIds": cancelled}
+                raise AssertionError(
+                    "the handover must cancel by OWNED ORDER ID, not by "
+                    "market: a slug sweep cancels another strategy's "
+                    "orders on this shared account")
             return super().request(method, path, body=body, base=base)
 
     return T
@@ -152,6 +158,9 @@ def _provider(venue, clock, *, pin, known, roles, pending,
 
         def read_open_orders(self):
             return venue.reader()(OS.OPEN_PATH)
+
+        def read_order(self, order_id):
+            return venue.reader()(OS.ORDER_PATH % order_id)
 
         def __call__(self):
             self.calls += 1
@@ -328,8 +337,9 @@ def test_run_cohort_completes_partial_fill_complement_fill_and_deadman(
     # --- the deadman ran at the handover and verified itself ---------
     dm = out["lifecycle"]["deadman"]
     assert dm is not None and dm["ran"] is True
-    assert dm["VERIFIED_AGAINST"] == "GET /v1/orders/open"
+    assert dm["VERIFIED_AGAINST"] == "GET /v1/order/{id} per owned id"
     assert dm["all_cancelled"] is True, dm
+    assert dm["CANCELS_BY_OWNED_ORDER_ID_NOT_BY_MARKET"] is True
     assert dm["NOT_A_TAKER_RESCUE"] is True
     assert dm["filled_residual_rides_to_settlement"] is True
     assert "HANDOVER_DEADMAN" in rec.kinds()
@@ -528,8 +538,12 @@ def test_a_deadman_that_does_not_clear_is_a_safety_violation(wired):
                        now_fn=clock, sleep_fn=clock.sleep, pace_s=2.0,
                        progress=_Prog(), max_iterations=200)
     dm = out["lifecycle"]["deadman"]
-    assert dm["cancel_response_ok"] is True, "the venue said ok"
-    assert dm["all_cancelled"] is False, "but the orders are still there"
+    # the cancel POSTs "succeed" against the plain FakeTransport, which
+    # returns {} for the per-id cancel route without removing anything
+    assert all(c["ok"] for c in dm["cancels"]), dm["cancels"]
+    # BUT THE VENUE STILL SHOWS THEM, so the verification refuses
+    assert dm["all_cancelled"] is False, dm
+    assert dm["owned_still_open"], dm
     assert any("HANDOVER_DEADMAN_DID_NOT_CLEAR" in v
                for v in tracker.safety_violations), \
         tracker.safety_violations
@@ -633,6 +647,10 @@ def test_a_cancel_fill_race_is_refused_not_resolved_conveniently(wired):
 
         def read_open_orders(self):
             return {"orders": []}
+
+        def read_order(self, order_id):
+            return {"order": {"id": order_id,
+                              "state": "ORDER_STATE_CANCELED"}}
 
         def __call__(self):
             row = {"id": "R1", "marketSlug": pin["slug"],
@@ -775,3 +793,108 @@ def test_the_deadman_names_only_our_slug(wired):
     assert D(other["leavesQuantity"]) == D("0.13")
     # and it never entered our inventory either
     assert "OTHER-DESK" not in out["lifecycle"]["first_legs_tracked"]
+
+
+# =====================================================================
+# THE SHARED-ACCOUNT CANCELLATION SAFETY ISSUE
+# =====================================================================
+
+def test_the_handover_does_not_cancel_another_desks_order_in_OUR_market(
+        wired):
+    """THE ONE THE OWNER ASKED FOR, and the hard case.
+
+    Market scope is not ownership scope. `deadman_cancel_all` POSTs
+    {"slugs": [slug]} and cancels EVERY open order in that market, so on a
+    shared account it would cancel another strategy's orders whenever that
+    strategy happened to be quoting the same BTC15m window. Here one is,
+    at a size that is obviously not ours, and it must survive.
+    """
+    pin = wired
+    clock = Clock(BASE + 10)
+    venue = LoopVenue(clock, pin["slug"])
+    # ANOTHER DESK, IN OUR MARKET, resting 16.21 shares
+    venue.rest("OTHER-SAME-MARKET", side=DOWN, wire="0.80", qty="16.21",
+               slug=pin["slug"])
+    known, roles, pending = [], {}, []
+    prov = _provider(venue, clock, pin=pin, known=known, roles=roles,
+                     pending=pending)
+    tracker = SP.CohortTracker()
+    venue.fill_plan = [{"at": BASE + 14, "qty": "0.05",
+                        "match": lambda oid, o: o["outcomeSide"] == UP
+                        and oid != "OTHER-SAME-MARKET"}]
+    out = R.run_cohort(snapshot_provider=prov, tracker=tracker,
+                       recorder=_Rec(),
+                       transport_factory=cancelling_transport(venue),
+                       now_fn=clock, sleep_fn=clock.sleep, pace_s=2.0,
+                       progress=_Prog(), max_iterations=200)
+    dm = out["lifecycle"]["deadman"]
+    assert dm["ran"] is True
+    # it cancelled ONLY ids in E1's own registry
+    assert "OTHER-SAME-MARKET" not in dm["targets"], dm["targets"]
+    assert "OTHER-SAME-MARKET" in dm["foreign_open_ids_left_untouched"]
+    assert dm["foreign_untouched"] is True, dm
+    # THE OTHER DESK'S ORDER IS STILL RESTING, UNTOUCHED
+    other = venue.orders["OTHER-SAME-MARKET"]
+    assert other["state"] == "ORDER_STATE_NEW", other
+    assert D(other["leavesQuantity"]) == D("16.21")
+    # and no violation was raised about touching what we do not own
+    assert not any("TOUCHED_ORDERS_WE_DO_NOT_OWN" in v
+                   for v in tracker.safety_violations), \
+        tracker.safety_violations
+
+
+def test_an_unowned_resting_order_blocks_us_rather_than_being_swept(wired):
+    """E3 already counts it as outstanding, so the right response to an
+    unattributable order in our market is to stop placing, not to cancel
+    it."""
+    pin = wired
+    clock = Clock(BASE + 10)
+    venue = LoopVenue(clock, pin["slug"])
+    venue.rest("STRANGER", side=UP, wire="0.49", qty="0.13",
+               slug=pin["slug"])
+    known, roles, pending = [], {}, []
+    prov = _provider(venue, clock, pin=pin, known=known, roles=roles,
+                     pending=pending)
+    out = R.run_cohort(snapshot_provider=prov, tracker=SP.CohortTracker(),
+                       recorder=_Rec(),
+                       transport_factory=cancelling_transport(venue),
+                       now_fn=clock, sleep_fn=clock.sleep, pace_s=2.0,
+                       progress=_Prog(), max_iterations=30)
+    # we placed nothing, because an order we cannot attribute is
+    # outstanding
+    assert FakeTransport.posts == [], FakeTransport.posts
+    assert any(any(str(r).startswith("E3_OUR_ORDER_IS_OUTSTANDING")
+                   for r in e["refusals"]) for e in out["refusals"])
+    # and it is still there
+    assert venue.orders["STRANGER"]["state"] == "ORDER_STATE_NEW"
+
+
+def test_the_deadman_fails_closed_when_it_cannot_tell_ours_from_theirs(
+        wired):
+    """No ownership without readable state: a cancel sweep against an
+    unreadable view could not distinguish our orders from anyone's."""
+    from analysis.l5.e1_cohort import pair_lifecycle as PLC
+    lc = PLC.PairLifecycle()
+    dm = lc.deadman(
+        snapshot={"market": "cpc-btc-updown-15m-2026-10-08-1215z",
+                  "order_state": {"ok": False, "reason": "UNREADABLE"}},
+        now=0.0, transport_factory=FakeTransport,
+        orders_module=__import__(
+            "analysis.l5.live_exec2.orders", fromlist=["x"]),
+        owned_ids=["X1"])
+    assert dm["ran"] is False
+    assert dm["FAILS_CLOSED"] is True
+    assert dm["because"] == "ORDER_STATE_NOT_ESTABLISHED"
+    assert FakeTransport.posts == []
+
+
+def test_the_slug_sweep_is_no_longer_used_at_handover():
+    """Read from the SOURCE. `deadman_cancel_all` cancels by market and
+    must not appear in the handover path any more."""
+    import inspect
+    from analysis.l5.e1_cohort import pair_lifecycle as PLC
+    src = inspect.getsource(PLC.PairLifecycle.deadman)
+    assert "cancel_exact" in src
+    assert "deadman_cancel_all" not in src.split('"""')[2], \
+        "the slug sweep must not be in the deadman's code, only named in " \
+        "its docstring explaining why it was removed"
