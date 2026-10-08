@@ -45,6 +45,7 @@ from decimal import Decimal as D
 from typing import Any, Dict, Mapping, Optional
 
 from analysis.l5.e1_cohort import pmus_identity as PI
+from analysis.l5.e1_cohort.spec import MAX_FIRST_LEG_PRICE
 
 #: the frozen name of the only acceptable timing authority.
 TIMING_PMUS_AUTHENTICATED_WS = "pmus_authenticated_ws_strict"
@@ -190,6 +191,24 @@ class PmusDecisionFeed:
                     "first_leg": {}, "complement": {}}
         yes_bid, yes_ask = snap.get("bid"), snap.get("ask")
         comp = complement_of(yes_bid, yes_ask)
+        sides = PI.outcome_sides({})
+        yes_leg = {"side": "UP", "outcome_side": sides["up_is"],
+                   "slug": slug,
+                   "best_bid": _s(yes_bid), "best_ask": _s(yes_ask),
+                   "size_at_our_price": _s(snap.get("bid_shares")),
+                   "size_at_best_ask": _s(snap.get("ask_shares")),
+                   "quoted_directly": True}
+        no_leg = {"side": "DOWN", "outcome_side": sides["down_is"],
+                  "slug": slug,
+                  "best_bid": _s(comp.get("bid")),
+                  "best_ask": _s(comp.get("ask")),
+                  "derived_from_the_same_quoted_book": True}
+        # WHICH SIDE OPENS. See `choose_first_leg`: side-agnostic for a
+        # matched pair, so this is about which price fits the ceiling.
+        choice = choose_first_leg(yes_bid, yes_ask,
+                                  max_price=MAX_FIRST_LEG_PRICE)
+        first, comp_leg = ((yes_leg, no_leg) if choice["side"] == "UP"
+                           else (no_leg, yes_leg))
         return {
             "market": slug,
             "ok": True,
@@ -198,24 +217,82 @@ class PmusDecisionFeed:
             "stream_age_s": snap.get("stream_age_s"),
             "book_unix": self.clock() - float(snap.get("stream_age_s") or 0),
             "market_state": snap.get("market_state"),
-            # UP is the venue's YES side, quoted directly.
-            "first_leg": {"side": "UP",
-                          "outcome_side": PI.outcome_sides({})["up_is"],
-                          "slug": slug,
-                          "best_bid": _s(yes_bid),
-                          "best_ask": _s(yes_ask),
-                          "size_at_our_price": _s(snap.get("bid_shares")),
-                          "size_at_best_ask": _s(snap.get("ask_shares"))},
-            # DOWN is the venue's NO side: the arithmetic complement of
-            # the one quoted book, per the venue's own convention.
-            "complement": {"side": "DOWN",
-                           "outcome_side": PI.outcome_sides({})["down_is"],
-                           "slug": slug,
-                           "best_bid": _s(comp.get("bid")),
-                           "best_ask": _s(comp.get("ask")),
-                           "derived_from_the_same_quoted_book": True},
+            # EITHER SIDE MAY OPEN. UP is the venue's YES side, quoted
+            # directly; DOWN is its NO side, the arithmetic complement of
+            # the one quoted book per the venue's own convention. Both are
+            # always published under their own names as well, so a reader
+            # can see the whole book regardless of which one opened.
+            "first_leg": first,
+            "complement": comp_leg,
+            "yes": yes_leg,
+            "no": no_leg,
+            "first_leg_side_choice": choice,
             "COMPLEMENT_IS_ARITHMETIC_NOT_A_SECOND_FEED": True,
         }
+
+
+def choose_first_leg(yes_bid: Any, yes_ask: Any, *,
+                     max_price: Any) -> Dict[str, Any]:
+    """WHICH SIDE OPENS. Deterministic from the book, and NEVER a forecast.
+
+    E1 used to open on YES unconditionally, and E9 requires the opening
+    price to be at or below the frozen $0.60 ceiling. So whenever the market
+    leaned more than 60% to UP, E1 was locked out of the whole window -- as
+    it was on 2026-10-08, when the YES bid was 0.62 and NO was sitting at
+    about 0.36: cheaper, fully tradeable, and giving the SAME matched pair.
+    We refused a trade we could have made, on the wrong side of a symmetric
+    bet. The lockout was also CORRELATED: while BTC trends, consecutive
+    windows all lean the same way.
+
+    THIS IS NOT A DIRECTIONAL VIEW AND CARRIES NONE. A matched pair is
+    side-agnostic -- YES 0.59 then NO 0.37 and NO 0.37 then YES 0.59 are the
+    same $0.96 position -- so choosing which leg to open first is a question
+    about which price fits the ceiling, not about where BTC is going. No
+    predictive skill is claimed or used.
+
+    THE RULE:
+      * a side is a candidate only if its OWN-SIDE best bid is at or below
+        `max_price`;
+      * of the candidates, the CHEAPER one opens, because a cheaper first
+        leg leaves more headroom under the fee-inclusive pair ceiling;
+      * ties go to UP, so the choice is deterministic and replayable;
+      * if neither qualifies, UP is reported with
+        `eligible_side_exists: False` and E9 refuses it downstream in the
+        usual way. Nothing here decides eligibility.
+
+    Note the arithmetic: NO bid = 1 - YES ask, so
+    `yes_bid + no_bid = 1 - spread`. Both sides can therefore only exceed
+    0.60 if the book is CROSSED by more than 0.20, which is not a market.
+    In any sane book at least one side qualifies.
+    """
+    comp = complement_of(yes_bid, yes_ask)
+    ceiling = _fin(max_price)
+    yb = _fin(yes_bid)
+    nb = _fin(comp.get("bid"))
+    cands = []
+    if ceiling is not None:
+        if yb is not None and yb <= ceiling:
+            cands.append(("UP", yb))
+        if nb is not None and nb <= ceiling:
+            cands.append(("DOWN", nb))
+    # cheaper first; UP wins a tie (False sorts before True)
+    cands.sort(key=lambda c: (c[1], c[0] != "UP"))
+    out = {"rule": "cheaper own-side bid at or below the ceiling opens",
+           "is_a_forecast": False,
+           "carries_no_directional_view": True,
+           "ceiling_usd": _s(ceiling),
+           "up_own_side_bid": _s(yb),
+           "down_own_side_bid": _s(nb),
+           "candidates": [c[0] for c in cands],
+           "both_sides_qualified": len(cands) == 2}
+    if not cands:
+        out.update({"side": "UP", "eligible_side_exists": False,
+                    "why": ("neither own-side bid is at or below the "
+                            "ceiling; E9 refuses this downstream")})
+        return out
+    out.update({"side": cands[0][0], "eligible_side_exists": True,
+                "own_side_bid": _s(cands[0][1])})
+    return out
 
 
 def _s(x: Any) -> Optional[str]:

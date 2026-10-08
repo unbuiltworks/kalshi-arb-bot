@@ -606,6 +606,56 @@ DIFF: Dict[str, Any] = {
                          "instead."),
     },
 
+    # ===================== EITHER SIDE MAY OPEN ==========================
+    # E1 opened on YES unconditionally, and E9 caps the opening price at
+    # $0.60. So whenever the market leaned more than 60% to UP, E1 was
+    # LOCKED OUT OF THE WHOLE WINDOW. On 2026-10-08 the YES bid was 0.62,
+    # all 960 iterations refused with E9_PRICE_ABOVE_CEILING:0.62, and
+    # nothing was placed -- while NO sat at about 0.36: cheaper, fully
+    # tradeable, and the SAME matched pair. The lockout was also
+    # CORRELATED: while BTC trends, consecutive windows lean the same way.
+    "first_leg_side": {
+        "module": "analysis.l5.e1_cohort.pmus_book",
+        "function": "choose_first_leg",
+        "either_side_may_open": True,
+        "was_hard_coded_to_yes": True,
+        "rule": "the cheaper own-side bid at or below the ceiling opens",
+        "why_cheaper": ("a cheaper first leg leaves more headroom under "
+                       "the fee-inclusive pair ceiling"),
+        "ties_go_to": "UP",
+        "is_deterministic_and_replayable": True,
+        # THE POINT THAT KEEPS THIS OUT OF DIRECTIONAL TERRITORY.
+        "is_a_forecast": False,
+        "carries_no_directional_view": True,
+        "why_not_directional": ("a matched pair is side-agnostic: YES 0.59 "
+                               "then NO 0.37 and NO 0.37 then YES 0.59 are "
+                               "the same $0.96 position, so which leg opens "
+                               "is a question about which price fits the "
+                               "ceiling, not about where BTC is going"),
+        "claims_no_predictive_skill": True,
+        # THE ARITHMETIC THAT MAKES THE CEILING STOP BEING A LOCKOUT.
+        "no_bid_equals_one_minus_yes_ask": True,
+        "yes_bid_plus_no_bid_equals_one_minus_spread": True,
+        "both_sides_exceed_the_ceiling_only_if_the_book_is_crossed": True,
+        "a_sane_book_always_has_an_eligible_side": True,
+        "no_eligible_side_is_reported_not_guessed": True,
+        # the boundary this fix had to repair rather than weaken
+        "boundary_2_checks_the_markets_two_outcome_sides": True,
+        "boundary_2_is_not_positional": True,
+        "boundary_2_outcome_sides_come_from_the_pin": True,
+        "both_legs_naming_one_side_is_refused": True,
+        "a_leg_outside_the_authorized_pair_is_refused": True,
+        "book_always_publishes_both_sides_under_their_own_names": True,
+        "wire_price_is_always_the_long_side": True,
+        "wire_provenance": ("XR2W Attempt 6: DOWN at own-side 0.6700 went "
+                           "on the wire as price.value 0.3300 = 1 - 0.6700, "
+                           "and the venue filled it"),
+        "changes_no_bound": True,
+        "provenance": ("analysis/l5/e1_cohort/E1_LIVE_COHORT_LAUNCH.md: "
+                       "window cpc-btc-updown-15m-2026-10-08-0100z, YES bid "
+                       "0.62, NO bid 0.36, placements 0"),
+    },
+
     # ===================== PACED OBSERVATION =============================
     # On 2026-10-08 the fresh cohort armed, opened
     # cpc-btc-updown-15m-2026-10-08-0100z, and spent all 960 of its
@@ -695,8 +745,18 @@ DIFF: Dict[str, Any] = {
             "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
             "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
             "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
+            "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba",
         ],
         "reasons": {
+            "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba":
+                ("its first leg was HARD-CODED TO YES, and E9 caps the "
+                 "opening price at $0.60, so whenever the market leaned "
+                 "more than 60% to UP it was locked out of the entire "
+                 "window -- as on 2026-10-08, YES bid 0.62, zero "
+                 "placements, while NO sat at about 0.36: cheaper, "
+                 "tradeable, the same matched pair. It also carried the "
+                 "latent conflation that boundary 2 read the market's two "
+                 "outcome sides off the LEG ORIENTATION"),
             "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1":
                 ("its decision loop had NO PACING: a refusal was a bare "
                  "`continue`, so a window whose book sat above the $0.60 "
@@ -1263,7 +1323,23 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
       "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
       "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
-      "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1"]),
+      "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1",
+      "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba"]),
+    ("first_leg_side.either_side_may_open", True),
+    ("first_leg_side.rule",
+     "the cheaper own-side bid at or below the ceiling opens"),
+    ("first_leg_side.ties_go_to", "UP"),
+    ("first_leg_side.is_a_forecast", False),
+    ("first_leg_side.carries_no_directional_view", True),
+    ("first_leg_side.claims_no_predictive_skill", True),
+    ("first_leg_side.a_sane_book_always_has_an_eligible_side", True),
+    ("first_leg_side.no_eligible_side_is_reported_not_guessed", True),
+    ("first_leg_side.boundary_2_checks_the_markets_two_outcome_sides", True),
+    ("first_leg_side.boundary_2_is_not_positional", True),
+    ("first_leg_side.both_legs_naming_one_side_is_refused", True),
+    ("first_leg_side.a_leg_outside_the_authorized_pair_is_refused", True),
+    ("first_leg_side.wire_price_is_always_the_long_side", True),
+    ("first_leg_side.changes_no_bound", True),
     ("paced_observation.pace_s", 1.0),
     ("paced_observation.min_pace_s", 0.05),
     ("paced_observation.no_paced_wait_is_ever_zero", True),
@@ -1376,7 +1452,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "b0f15c958c8fee779e3b9518885c7ddd3ea379afd5bb9759c44f878d7322f3ba"
+    "5e1413ca6c9af7c320f2be927971f3a4c0ddbf5e1691ca50d8b7cc289b451fe0"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

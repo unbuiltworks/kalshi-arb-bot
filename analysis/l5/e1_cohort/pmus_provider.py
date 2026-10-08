@@ -312,15 +312,23 @@ class PmusWindowProvider:
                 self._refuse("LEG_SLUG_MISMATCH_%s" % name,
                              slug=pin["slug"], leg_slug=leg.get("slug"))
                 return None
-        if str(up.get("outcome_side")) != str(pin["outcome_up"]):
-            self._refuse("OUTCOME_MISMATCH_FIRST_LEG",
-                         slug=pin["slug"], got=up.get("outcome_side"),
-                         want=pin["outcome_up"])
+        # EITHER SIDE MAY OPEN, so the assertion is about the SET of the
+        # two outcome sides rather than which one is in which slot: they
+        # must be EXACTLY the pin's two, and they must be distinct. That is
+        # strictly stronger than the old positional check, which could not
+        # have caught both legs naming the same side.
+        want_pair = {str(pin["outcome_up"]), str(pin["outcome_down"])}
+        got_first = str(up.get("outcome_side"))
+        got_comp = str(down.get("outcome_side"))
+        if got_first == got_comp:
+            self._refuse("BOTH_LEGS_NAME_THE_SAME_OUTCOME_SIDE",
+                         slug=pin["slug"], got=got_first)
             return None
-        if str(down.get("outcome_side")) != str(pin["outcome_down"]):
-            self._refuse("OUTCOME_MISMATCH_COMPLEMENT",
-                         slug=pin["slug"], got=down.get("outcome_side"),
-                         want=pin["outcome_down"])
+        if {got_first, got_comp} != want_pair:
+            self._refuse("OUTCOME_SIDES_ARE_NOT_THE_AUTHORIZED_PAIR",
+                         slug=pin["slug"],
+                         got=sorted([got_first, got_comp]),
+                         want=sorted(want_pair))
             return None
 
         try:
@@ -352,17 +360,21 @@ class PmusWindowProvider:
             "our_open_residual": None,
             "qty": FIRST_LEG_QTY,
             "first_leg_price": str(price),
-            "first_leg": {"side": "UP",
-                          "outcome_side": pin["outcome_up"],
+            # THE CHOSEN ORIENTATION, taken from the book rather than
+            # hard-coded: `up` and `down` here are whichever legs the book
+            # put in the first-leg and complement slots.
+            "first_leg": {"side": up.get("side"),
+                          "outcome_side": up.get("outcome_side"),
                           "slug": pin["slug"],
                           "best_bid": up.get("best_bid"),
                           "best_ask": up.get("best_ask"),
                           "size_at_our_price": up.get("size_at_our_price")},
-            "complement": {"side": "DOWN",
-                           "outcome_side": pin["outcome_down"],
+            "complement": {"side": down.get("side"),
+                           "outcome_side": down.get("outcome_side"),
                            "slug": pin["slug"],
                            "best_bid": down.get("best_bid"),
                            "best_ask": down.get("best_ask")},
+            "first_leg_side_choice": book.get("first_leg_side_choice"),
             "fingerprint_pinned": None,
             "ws_state": {
                 "timing_authority": PBK.TIMING_PMUS_AUTHENTICATED_WS,
@@ -377,6 +389,7 @@ class PmusWindowProvider:
                               "best_ask": up.get("best_ask")},
                 "complement": {"best_bid": down.get("best_bid"),
                                "best_ask": down.get("best_ask")},
+                "first_leg_side": up.get("side"),
             },
             "provider": ("analysis.l5.e1_cohort.pmus_provider:"
                          "PmusWindowProvider"),

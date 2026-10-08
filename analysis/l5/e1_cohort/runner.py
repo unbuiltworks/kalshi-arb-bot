@@ -702,12 +702,28 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     # is refused here, not discovered at the venue.
     auth_result = None
     if session_auth is not None:
+        # THE PIN'S OWN TWO OUTCOME SIDES, not the leg orientation. These
+        # used to be read from first_leg/complement, which conflated "which
+        # leg are we opening" with "what are this market's two outcome
+        # sides" -- so once either side could open, a DOWN first leg would
+        # have presented OUTCOME_SIDE_NO as `outcome_up` and boundary 2
+        # would have refused a perfectly authorized market. The boundary is
+        # about the MARKET's identity, so it gets the market's values.
+        p = snapshot.get("pin") or {}
         auth_result = session_auth.enforce_before_submission(
-            slug=slug, pin=snapshot.get("pin") or {},
-            outcome_up=(snapshot.get("first_leg") or {}).get("outcome_side"),
-            outcome_down=(snapshot.get("complement")
-                          or {}).get("outcome_side"),
+            slug=slug, pin=p,
+            outcome_up=p.get("outcome_up"),
+            outcome_down=p.get("outcome_down"),
             role="first_leg")
+        # and the leg we are about to send must be ONE OF that market's two
+        # sides. Checked here, before any transport exists.
+        _leg = (snapshot.get("first_leg") or {}).get("outcome_side")
+        if str(_leg) not in {str(p.get("outcome_up")),
+                             str(p.get("outcome_down"))}:
+            raise AUTH.NotAuthorized(
+                "first-leg outcome side %r is not one of the authorized "
+                "pair %r/%r for %s. Refused BEFORE transport."
+                % (_leg, p.get("outcome_up"), p.get("outcome_down"), slug))
     side = snapshot["first_leg"]["side"]
     price = snapshot["first_leg_price"]
     qty = snapshot.get("qty", FIRST_LEG_QTY)
@@ -797,12 +813,19 @@ def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
     # market. It cannot independently select another.
     comp_auth = None
     if session_auth is not None:
+        _p = snapshot.get("pin") or {}
         comp_auth = session_auth.authorize_complement(
             slug=snapshot["market"],
-            first_leg_pin=snapshot.get("pin") or {},
-            outcome_up=(snapshot.get("first_leg") or {}).get("outcome_side"),
-            outcome_down=(snapshot.get("complement")
-                          or {}).get("outcome_side"))
+            first_leg_pin=_p,
+            outcome_up=_p.get("outcome_up"),
+            outcome_down=_p.get("outcome_down"))
+        _cleg = (snapshot.get("complement") or {}).get("outcome_side")
+        if str(_cleg) not in {str(_p.get("outcome_up")),
+                              str(_p.get("outcome_down"))}:
+            raise AUTH.NotAuthorized(
+                "complement outcome side %r is not one of the authorized "
+                "pair for %s. Refused BEFORE transport."
+                % (_cleg, snapshot["market"]))
     holder: Dict[str, Any] = {}
 
     def _take_slot() -> Dict[str, Any]:

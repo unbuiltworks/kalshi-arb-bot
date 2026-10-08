@@ -215,8 +215,8 @@ def test_a_wrong_market_book_is_refused_by_the_provider():
                             "pmus_provider.py"), encoding="utf8").read()
     for refusal in ("BOOK_IS_FOR_ANOTHER_MARKET",
                     "LEG_SLUG_MISMATCH_",
-                    "OUTCOME_MISMATCH_FIRST_LEG",
-                    "OUTCOME_MISMATCH_COMPLEMENT",
+                    "BOTH_LEGS_NAME_THE_SAME_OUTCOME_SIDE",
+                    "OUTCOME_SIDES_ARE_NOT_THE_AUTHORIZED_PAIR",
                     "TIMING_AUTHORITY_IS_NOT_THE_PMUS_AUTHENTICATED_WS",
                     "REST_CLAIMED_AS_TIMING_AUTHORITY"):
         assert refusal in src, refusal

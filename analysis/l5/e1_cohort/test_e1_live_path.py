@@ -853,7 +853,11 @@ def test_FAILS_CLOSED_wrong_market_or_wrong_outcome(monkeypatch, tmp_path):
     feed4.book = _outcomemismatch
     p4 = _provider(tmp_path, "outcomeup", clock=clock, feed=feed4)
     assert p4() is None
-    assert any(r["refused"] == "OUTCOME_MISMATCH_FIRST_LEG"
+    # EITHER SIDE MAY NOW OPEN, so the check is on the SET of the two
+    # outcome sides. Relabelling the first leg as the DOWN side makes BOTH
+    # legs name the same side, which the old positional check could not even
+    # have caught.
+    assert any(r["refused"] == "BOTH_LEGS_NAME_THE_SAME_OUTCOME_SIDE"
                for r in p4.refusals), p4.refusals
 
     # the DOWN leg carries the wrong outcome side
@@ -867,8 +871,22 @@ def test_FAILS_CLOSED_wrong_market_or_wrong_outcome(monkeypatch, tmp_path):
     feed5.book = _compmismatch
     p5 = _provider(tmp_path, "outcomedown", clock=clock, feed=feed5)
     assert p5() is None
-    assert any(r["refused"] == "OUTCOME_MISMATCH_COMPLEMENT"
+    assert any(r["refused"] == "BOTH_LEGS_NAME_THE_SAME_OUTCOME_SIDE"
                for r in p5.refusals), p5.refusals
+
+    # and a side that is not one of the market's two at all
+    feed6 = FakeFeed(clock=clock)
+    rb6 = feed6.book
+    def _foreignside(pin):
+        b = rb6(pin)
+        b["complement"] = dict(b["complement"],
+                               outcome_side="OUTCOME_SIDE_ELSEWHERE")
+        return b
+    feed6.book = _foreignside
+    p6 = _provider(tmp_path, "outcomeforeign", clock=clock, feed=feed6)
+    assert p6() is None
+    assert any(r["refused"] == "OUTCOME_SIDES_ARE_NOT_THE_AUTHORIZED_PAIR"
+               for r in p6.refusals), p6.refusals
 
 
 def test_FAILS_CLOSED_the_per_submission_boundary_checks_outcome_sides(

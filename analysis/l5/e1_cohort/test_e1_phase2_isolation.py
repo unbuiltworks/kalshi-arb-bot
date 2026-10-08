@@ -531,11 +531,20 @@ def test_yes_no_semantics_survive_the_switchover():
     feed = PBK.PmusDecisionFeed(clock=lambda: 1.0, book=_Book(slug))
     feed.start()
     b = feed.book({"slug": slug})
-    assert b["first_leg"]["side"] == "UP"
-    assert b["first_leg"]["outcome_side"] == sides["up_is"]
-    assert b["complement"]["side"] == "DOWN"
-    assert b["complement"]["outcome_side"] == sides["down_is"]
-    assert b["complement"]["derived_from_the_same_quoted_book"] is True
+    # EITHER SIDE MAY OCCUPY THE FIRST-LEG SLOT now, so the YES/NO labelling
+    # is asserted on the `yes`/`no` keys the book always publishes under
+    # their own names, which is exactly what they are there for.
+    assert b["yes"]["side"] == "UP"
+    assert b["yes"]["outcome_side"] == sides["up_is"]
+    assert b["no"]["side"] == "DOWN"
+    assert b["no"]["outcome_side"] == sides["down_is"]
+    assert b["no"]["derived_from_the_same_quoted_book"] is True
+    # and whichever opened, the two slots are still the two distinct sides
+    assert (b["first_leg"]["outcome_side"]
+            != b["complement"]["outcome_side"])
+    assert {b["first_leg"]["outcome_side"],
+            b["complement"]["outcome_side"]} == {sides["up_is"],
+                                                sides["down_is"]}
 
 
 def test_authbook_failure_cannot_silently_fall_back_to_rest():
