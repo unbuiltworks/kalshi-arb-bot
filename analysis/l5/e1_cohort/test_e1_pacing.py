@@ -472,7 +472,23 @@ def test_the_production_readiness_bound_is_what_ships():
     src = open(PROV.__file__).read()
     assert re.search(r"^WS_READY_TIMEOUT_S = 20\.0$", src, re.M)
     assert re.search(r"^WS_READY_POLL_S = 0\.25$", src, re.M)
-    assert re.search(r"^HANDOVER_TTE_S = 60\.0$", src, re.M)
+    # THE HANDOVER TTE IS DERIVED FROM THE FROZEN SPEC, NOT A LITERAL.
+    #
+    # This guard used to pin the literal 60.0. That literal was itself the
+    # drift: SPEC["timing_explicit"], which E1 inherits, says
+    # tte_shutdown_s 120.0 and withdraw_required_at_tte_le_s 120.0, so 60.0
+    # permitted first legs in the 120s-to-60s band the spec refuses and
+    # moved withdrawal 60s later than required. A guard that pins the wrong
+    # value defends the wrong thing, so it now pins the DERIVATION -- which
+    # is what makes the value undriftable -- and the effective number.
+    assert re.search(
+        r'^HANDOVER_TTE_S = float\(SPEC\["timing_explicit"\]'
+        r'\["tte_shutdown_s"\]\)$', src, re.M)
+    assert PROV.HANDOVER_TTE_S == 120.0
+    assert PROV.WITHDRAW_AT_TTE_S == 120.0
+    from analysis.l5.e1_cohort.spec import SPEC as _S
+    assert PROV.HANDOVER_TTE_S == float(
+        _S["timing_explicit"]["tte_shutdown_s"])
 
 
 def test_the_provider_publishes_both_pacing_deadlines():
