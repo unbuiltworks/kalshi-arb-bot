@@ -104,6 +104,15 @@ def _stem(session_id: str) -> str:
     return "e1.%s.%s" % (stem, digest)
 
 
+def stem(session_id: str) -> str:
+    """The session's file-name stem, exposed so `budget` can name its own
+    durable file in THIS directory without reimplementing the hashing.
+
+    Read-only and additive: it creates nothing, and no slot path changes.
+    """
+    return _stem(session_id)
+
+
 def _check_window(window: int) -> None:
     if not isinstance(window, int) or isinstance(window, bool):
         raise LatchUnavailable("window must be an int, got %r" % (window,))

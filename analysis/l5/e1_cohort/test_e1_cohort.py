@@ -2018,7 +2018,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # placements when the owner had authorized ONE, and its latch
         # exhaustion raised WindowExhausted uncaught after the pre-POST
         # intent row was already durable.
-        "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf"]
+        "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
+        # its attempt budget counted the SESSION total, so with forty
+        # historical first legs MAX_ATTEMPTS=1 refused the authorized
+        # probe outright. A one-window probe now binds its window.
+        "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

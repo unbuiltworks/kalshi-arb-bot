@@ -752,8 +752,11 @@ DIFF: Dict[str, Any] = {
             "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
             "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
             "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
+            "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
         ],
         "reasons": {
+        "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165":            
+            ("its attempt budget counted the SESSION total, so on the live cohort session -- forty historical first legs -- MAX_ATTEMPTS=1 refused the owner's authorized probe outright with ATTEMPT_BUDGET_EXHAUSTED_40_OF_1. A one-window probe now binds its window identity durably and counts attempts against that window alone, so one means one without erasing history or inflating the limit"),
         "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf":            
             ("it had NO per-probe budget. Its entrypoint read no limit, so arming it authorized the frozen twenty attempts in each of twelve windows -- 240 placements -- when the owner had authorized ONE. And its latch exhaustion path raised WindowExhausted uncaught, AFTER the pre-POST intent row was durable and a real preview had been sent, which would have left a false permanent block and abandoned any filled residual. Both are now authorization: PMUS_E1_MAX_ATTEMPTS and PMUS_E1_MAX_WINDOWS, narrowing only, counted from durable state, enforced before the intent row"),
             "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c":
@@ -1295,6 +1298,31 @@ DIFF: Dict[str, Any] = {
                            "an uncaught WindowExhausted"),
         "established_before_any_provider_feed_window_or_order_path": True,
         "attempts_counted_from": "durable latch slot files + local intents",
+        "attempts_counted_against_the_probes_bound_window": True,
+        "attempts_counted_against_the_session_total": False,
+        "why_the_scope_changed": ("counting the SESSION total refused the "
+                                 "owner's authorized probe outright: the "
+                                 "live cohort session carries forty "
+                                 "historical first legs, so MAX_ATTEMPTS=1 "
+                                 "read ATTEMPT_BUDGET_EXHAUSTED_40_OF_1 on "
+                                 "the first iteration. Erasing that history "
+                                 "was not an option and raising the limit "
+                                 "to forty-one would have rested the "
+                                 "one-attempt property on an arithmetic "
+                                 "coincidence, so a one-window probe now "
+                                 "binds its window and counts against it"),
+        "session_history_is_read_never_recounted_or_touched": True,
+        "one_window_probe_binds_its_window_identity": True,
+        "binding_is_written_before_the_window_is_recorded_opened": True,
+        "binding_is_written_before_any_intent_preview_or_post": True,
+        "binding_is_o_excl_and_immutable": True,
+        "binding_is_never_released_or_rewritten": True,
+        "a_rebind_is_refused_not_resolved": True,
+        "why_refused": ("a probe that could rebind would collect a fresh "
+                        "attempt allowance for every window it chose"),
+        "a_restart_resumes_the_bound_window": True,
+        "a_restart_cannot_select_another_window": True,
+        "an_unreadable_binding_fails_closed": True,
         "attempts_counted_from_memory": False,
         "ambiguous_submission_counts_as_a_spent_attempt": True,
         "why_ambiguous_counts": ("the slot is consumed immediately before "
@@ -1682,7 +1710,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "78ad6ff97258c05553b7b3d3b62e6a3eb1c3b468fd15313ce104e8a633fb554f",
       "7cc94e203ad362edf9d9551de45837ced52d044169f636bac0ada37dfadcc38b",
       "0c12d361915fdba62127175a53e53178963e148c03ed7f82e713e7dfe7c1c92c",
-      "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf"]),
+      "c576f7413575825c737cbd52726e3f2b9ee6b1efb8d45747fcfcd98737bcadcf",
+      "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -1786,6 +1815,20 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("probe_budget.no_default_at_the_entrypoint", True),
     ("probe_budget.attempts_counted_from",
      "durable latch slot files + local intents"),
+    ("probe_budget.attempts_counted_against_the_probes_bound_window", True),
+    ("probe_budget.attempts_counted_against_the_session_total", False),
+    ("probe_budget.session_history_is_read_never_recounted_or_touched", True),
+    ("probe_budget.one_window_probe_binds_its_window_identity", True),
+    ("probe_budget.binding_is_written_before_the_window_is_recorded_opened",
+     True),
+    ("probe_budget.binding_is_written_before_any_intent_preview_or_post",
+     True),
+    ("probe_budget.binding_is_o_excl_and_immutable", True),
+    ("probe_budget.binding_is_never_released_or_rewritten", True),
+    ("probe_budget.a_rebind_is_refused_not_resolved", True),
+    ("probe_budget.a_restart_resumes_the_bound_window", True),
+    ("probe_budget.a_restart_cannot_select_another_window", True),
+    ("probe_budget.an_unreadable_binding_fails_closed", True),
     ("probe_budget.attempts_counted_from_memory", False),
     ("probe_budget.ambiguous_submission_counts_as_a_spent_attempt", True),
     ("probe_budget.a_restart_cannot_reset_the_attempt_budget", True),
@@ -1960,7 +2003,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165"
+    "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

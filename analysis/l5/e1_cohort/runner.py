@@ -808,6 +808,7 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
     # happens on the ordinary path, and the `except` below covers the race.
     if budget is not None:
         gate = budget.attempt_gate(
+            window=window,
             pending_order_ids=snapshot.get("pending_order_ids") or [])
         if not gate["may_attempt"]:
             raise AttemptBudgetExhausted(
@@ -1495,6 +1496,7 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
         # `pace_for`: a terminal refusal breaks the loop immediately, which
         # is precisely how a filled residual would be stranded.
         agate = budget.attempt_gate(
+            window=snap.get("window"),
             pending_order_ids=snap.get("pending_order_ids") or [])
         blocked_here = attempts_blocked.get(snap.get("window"))
         if not agate["may_attempt"] or blocked_here:

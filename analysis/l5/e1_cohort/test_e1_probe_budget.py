@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import time as time_mod
 from decimal import Decimal as D
 from typing import Any, Dict, List
 
@@ -178,17 +179,28 @@ def test_the_attempt_count_comes_from_DURABLE_LATCH_FILES(monkeypatch,
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     monkeypatch.setenv("PMUS_E1_SESSION_ID", SID)
     b = one_probe()
-    assert b.attempt_gate()["may_attempt"] is True
+    assert b.attempt_gate(window=0)["may_attempt"] is True
     # consume one slot exactly as the pre-POST latch does
     L.consume_attempt(window=0, slug="s", side=UP, price="0.49", qty="0.13")
-    g = b.attempt_gate()
+    g = b.attempt_gate(window=0)
     assert g["may_attempt"] is False
     assert g["usage"]["latch_slots_spent"] == 1
     assert "ATTEMPT_BUDGET_EXHAUSTED_1_OF_1" in g["because"]
     # A FRESH PROCESS -- a brand new budget object, nothing in memory --
     # reads the same answer off the volume. This is what makes a restart
     # unable to buy a second attempt.
-    assert one_probe().attempt_gate()["may_attempt"] is False
+    assert one_probe().attempt_gate(window=0)["may_attempt"] is False
+    # AND THE SESSION'S HISTORY IS NOT WHAT WAS COUNTED. Another window of
+    # the same session carries its own slots and is not this probe's scope:
+    # this is what lets MAX_ATTEMPTS=1 mean one NEW leg on a session that
+    # already holds forty.
+    for _ in range(20):
+        L.consume_attempt(window=5, slug="s", side=UP, price="0.49",
+                          qty="0.13")
+    g2 = one_probe().attempt_gate(window=1)
+    assert g2["may_attempt"] is True, g2
+    assert g2["usage"]["counted_window"] == 1
+    assert g2["usage"]["session_history_is_read_never_recounted"] is True
 
 
 def test_an_unretired_local_intent_counts_as_a_spent_attempt(monkeypatch,
@@ -213,15 +225,21 @@ def test_an_unreadable_latch_fails_CLOSED(monkeypatch, tmp_path):
         def cohort_state(sid=None):
             raise OSError("volume gone")
 
-    g = one_probe().attempt_gate(latch_module=Broken)
+        @staticmethod
+        def window_state(**k):
+            raise OSError("volume gone")
+
+    g = one_probe().attempt_gate(window=0, latch_module=Broken)
     assert g["may_attempt"] is False
     assert g["usage"]["latch_readable"] is False
     assert "LATCH_UNREADABLE" in g["usage"]["why"]
 
 
-def test_the_window_gate_counts_NEW_windows_only(monkeypatch):
+def test_the_window_gate_counts_NEW_windows_only(monkeypatch, tmp_path):
     """The cohort ledger already holds spent windows and is not rewritten:
     the probe's one window is counted on top of whatever is there."""
+    monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
+    monkeypatch.setenv("PMUS_E1_SESSION_ID", SID)
     b = one_probe(windows_used_at_start=3)
     assert b.window_gate(windows_used=3)["may_open_window"] is True
     g = b.window_gate(windows_used=4)
@@ -664,8 +682,13 @@ def test_the_provider_refuses_a_second_window_and_the_loop_HARD_STOPS(
     assert p() is None
     assert p.window_budget_spent is True
     assert any(str(r["refused"]).startswith("PROBE_WINDOW_BUDGET_SPENT")
+               or str(r["refused"]).startswith("PROBE_IS_BOUND_TO_WINDOW")
                for r in p.refusals), p.refusals
     assert p.progress.windows_used() == 1, "no second window was consumed"
+    # AND THE BINDING EXISTS, naming the one authorized window identity.
+    bound = BUD.read_binding()
+    assert bound is not None and bound["window"] == 0, bound
+    assert bound["IMMUTABLE"] is True and bound["NEVER_RELEASED"] is True
 
 
 def test_run_cohort_stops_at_once_when_the_window_budget_is_spent():
@@ -723,3 +746,308 @@ def test_the_one_probe_posts_the_frozen_size_and_is_maker_only(wired):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([os.path.abspath(__file__), "-q"]))
+
+
+# =====================================================================
+# 10. THE PRODUCTION ENTRY POINT, AND RESTARTS THROUGH IT
+# =====================================================================
+#
+# Everything above drives `run_cohort`. These drive `runner.main()` itself,
+# twice, on ONE state directory -- which is what a restart actually is. The
+# binding, the latch slots, the progress ledger and the tape are the only
+# things that carry over, and they have to be enough.
+
+def _probe_env(monkeypatch, sid):
+    arm(monkeypatch, sid)
+    monkeypatch.setenv(BUD.MAX_ATTEMPTS_ENV, "1")
+    monkeypatch.setenv(BUD.MAX_WINDOWS_ENV, "1")
+
+
+def _venue_transport(venue, *, submit_raises=None):
+    """The cancelling transport, plus the venue actually RESTING what the
+    production path posts. Nothing mirrors posts for us here: the real
+    provider is in play, so the venue has to learn about an order the same
+    way it would in production -- from the POST itself."""
+    inner = cancelling_transport(venue)
+
+    class T(inner):                                            # type: ignore
+        def request(self, method, path, body=None, base=None):
+            if path == O.SUBMIT_PATH and submit_raises is not None:
+                raise submit_raises
+            out = super().request(method, path, body=body, base=base)
+            if path == O.SUBMIT_PATH and isinstance(out, dict) \
+                    and out.get("id"):
+                venue.on_post(str(out["id"]),
+                              side=body["outcomeSide"],
+                              wire=str(body["price"]["value"]),
+                              qty=str(body["quantity"]))
+            return out
+
+    return T
+
+
+def _pumping_reader(venue):
+    inner = venue.reader()
+
+    def read(path):
+        venue.pump()
+        return inner(path)
+
+    return read
+
+
+def _run_main(monkeypatch, state_dir, *, venue, clock, sid, starts,
+              submit_raises=None, cutoff_window_end=None):
+    """ONE invocation of the REAL production entry point."""
+    from analysis.l5.e1_cohort import authorization as AU
+    from analysis.l5.e1_cohort import progress as PG
+    from analysis.l5.e1_cohort import pmus_provider as PV
+    from analysis.l5.e1_cohort import recorder as RC
+    from analysis.l5.e1_cohort.test_e1_live_path import (FakeFeed,
+                                                        fake_selector)
+
+    _probe_env(monkeypatch, sid)
+    monkeypatch.setattr(L, "LATCH_DIR", state_dir)
+    # THE CLOCK, INTO `run_cohort` TOO. `main()` passes it no now_fn or
+    # sleep_fn -- production reads the wall clock, which is right -- so a
+    # harness driving the real entry point has to substitute the module's
+    # own time functions, or the loop paces against real time while the
+    # provider paces against the fake one and nothing ever advances.
+    class _Time(object):
+        time = staticmethod(clock)
+        sleep = staticmethod(clock.sleep)
+        strftime = staticmethod(time_mod.strftime)
+        gmtime = staticmethod(time_mod.gmtime)
+
+    monkeypatch.setattr(R, "time", _Time)
+    captured: Dict[str, Any] = {}
+
+    def provider_factory(*, progress, session_auth, recorder):
+        p = PV.PmusWindowProvider(
+            progress=progress, session_auth=session_auth,
+            feed=FakeFeed(clock=clock), recorder=recorder,
+            selector_fn=fake_selector, now_fn=clock,
+            sleep_fn=clock.sleep, window_starts=list(starts),
+            # THE VENUE ADVANCES ON ITS OWN, and reading it is when we
+            # observe that. Nothing in the production path mirrors our posts
+            # or triggers fills, so the pump belongs here, on the read.
+            order_state_reader=_pumping_reader(venue))
+        captured["provider"] = p
+        captured["progress"] = progress
+        return p
+
+    rc = R.main([], provider_factory=provider_factory,
+                progress_factory=lambda d: PG.CohortProgress(d),
+                auth_factory=lambda d: AU.SessionAuthorization(d),
+                recorder_factory=lambda d: RC.Recorder(
+                    os.path.join(d, "tape")),
+                transport_factory=_venue_transport(
+                    venue, submit_raises=submit_raises))
+    captured["rc"] = rc
+    return captured
+
+
+@pytest.fixture()
+def probe_sid():
+    return "E1-PROBE-TEST-SESSION"
+
+
+def test_main_places_exactly_ONE_first_leg_and_binds_its_window(
+        monkeypatch, tmp_path, probe_sid):
+    state = str(tmp_path / "e1_cohort")
+    clock = Clock(BASE + 10)
+    venue = LoopVenue(clock, fake_pin(BASE)["slug"])
+    FakeTransport.posts = []
+    cap = _run_main(monkeypatch, state, venue=venue, clock=clock,
+                    sid=probe_sid, starts=[BASE, BASE + W, BASE + 2 * W])
+    assert cap["rc"] == 0
+    # exactly ONE POST, ever
+    assert len(FakeTransport.posts) == 1, FakeTransport.posts
+    assert str(FakeTransport.posts[0]["quantity"]) == "0.13"
+    assert FakeTransport.posts[0]["post_only"] is True
+    # ONE window, bound and durable
+    assert cap["progress"].windows_used() == 1
+    bound = BUD.read_binding(session_id=probe_sid)
+    assert bound is not None and bound["window"] == 0
+    assert bound["IMMUTABLE"] is True
+    # and the latch shows ONE spent attempt in that window
+    assert L.window_state(window=0,
+                          session_id=probe_sid)["attempts_spent"] == 1
+
+
+def test_main_RESTART_after_an_AMBIGUOUS_submission_places_nothing(
+        monkeypatch, tmp_path, probe_sid):
+    """PROCESS 1 loses the POST's answer. PROCESS 2 starts on the same
+    volume and must not place a replacement, must not rebind, and must not
+    open another window."""
+    state = str(tmp_path / "e1_cohort")
+    starts = [BASE, BASE + W, BASE + 2 * W]
+
+    clock = Clock(BASE + 10)
+    venue = LoopVenue(clock, fake_pin(BASE)["slug"])
+    FakeTransport.posts = []
+    cap1 = _run_main(monkeypatch, state, venue=venue, clock=clock,
+                     sid=probe_sid, starts=starts,
+                     submit_raises=O.SubmissionAmbiguous(
+                         "504", detail={"status": 504}))
+    # nothing acknowledged, but the attempt IS spent and the window IS bound
+    assert FakeTransport.posts == []
+    assert L.window_state(window=0,
+                          session_id=probe_sid)["attempts_spent"] == 1
+    bound1 = BUD.read_binding(session_id=probe_sid)
+    assert bound1["window"] == 0
+    # the durable intent is on the tape for the next process to find
+    tape = os.path.join(state, "tape", "events.jsonl")
+    rows = open(tape, encoding="utf8").read()
+    assert "AMBIGUOUS_SUBMISSION" in rows
+    assert "FIRST_LEG_SUBMISSION_INTENT" in rows
+
+    # ---- PROCESS 2: a different process, the same volume ---------------
+    clock2 = Clock(BASE + 40)
+    venue2 = LoopVenue(clock2, fake_pin(BASE)["slug"])
+    FakeTransport.posts = []
+    cap2 = _run_main(monkeypatch, state, venue=venue2, clock=clock2,
+                     sid=probe_sid, starts=starts)
+    assert FakeTransport.posts == [], "a restart placed a second first leg"
+    # the budget was NOT reset: still one spent slot, nothing added
+    assert L.window_state(window=0,
+                          session_id=probe_sid)["attempts_spent"] == 1
+    # the binding is unchanged -- no rebind, no new window identity
+    assert BUD.read_binding(session_id=probe_sid) == bound1
+    # and no second window was consumed from the append-only ledger
+    assert cap2["progress"].windows_used() == 1
+    # AND IT FAILED CLOSED FOR A NAMED REASON. Two independent guards can
+    # stop the restart and either is correct: the startup reconciliation
+    # refuses while the unacknowledged intent is unresolved, and the window
+    # binding refuses to open a different window. Whichever fires first, the
+    # outcome asserted above is the same -- nothing placed, nothing rebound,
+    # no window consumed.
+    guards = _why_it_stopped(state, cap2)
+    assert guards, "the restart stopped for no recorded reason"
+
+
+def _why_it_stopped(state_dir, cap):
+    """The named fail-closed reasons a restart can stop for."""
+    found = []
+    tape = os.path.join(state_dir, "tape", "events.jsonl")
+    if os.path.exists(tape):
+        rows = open(tape, encoding="utf8").read()
+        for ev in ("STARTUP_RECONCILIATION_REFUSED",
+                   "ATTEMPT_BUDGET_EXHAUSTED",
+                   "FIRST_LEG_REFUSED_ATTEMPT_BUDGET"):
+            if ev in rows:
+                found.append(ev)
+    prov = cap.get("provider")
+    for r in (getattr(prov, "refusals", None) or []):
+        why = str(r.get("refused"))
+        if why.startswith("PROBE_IS_BOUND_TO_WINDOW") \
+                or why.startswith("PROBE_WINDOW_BUDGET_SPENT"):
+            found.append(why)
+    return sorted(set(found))
+
+
+def test_main_RESTART_after_a_CONFIRMED_FILL_adds_no_leg_and_keeps_the_fill(
+        monkeypatch, tmp_path, probe_sid):
+    """PROCESS 1 posts and the venue FILLS it. PROCESS 2 must not place
+    another first leg, must not unwind the inventory, and must not open
+    another window to 'try again'."""
+    state = str(tmp_path / "e1_cohort")
+    starts = [BASE, BASE + W, BASE + 2 * W]
+
+    clock = Clock(BASE + 10)
+    venue = LoopVenue(clock, fake_pin(BASE)["slug"])
+    # The venue fills whatever first leg appears, on its own schedule.
+    # The time is close to the start deliberately: the suite's `_fast_pacing`
+    # fixture shrinks the loop pace to 1 ms, so the injected clock advances a
+    # millisecond per iteration and a fill scheduled seconds away would never
+    # be reached inside the iteration cap.
+    venue.fill_plan = [{"at": BASE + 10.05, "qty": None, "repeat": True,
+                        "match": lambda oid, o: o["outcomeSide"] == UP}]
+    FakeTransport.posts = []
+    _run_main(monkeypatch, state, venue=venue, clock=clock, sid=probe_sid,
+              starts=starts)
+    assert len(FakeTransport.posts) >= 1
+    filled = {oid: o for oid, o in venue.orders.items()
+              if D(o["cumQuantity"]) > 0}
+    assert filled, venue.orders
+
+    # ---- PROCESS 2, same volume, with the fill visible at the venue ----
+    clock2 = Clock(BASE + 120)
+    venue.clock = clock2
+    venue.fill_plan = []
+    before = len(FakeTransport.posts)
+    cap2 = _run_main(monkeypatch, state, venue=venue, clock=clock2,
+                     sid=probe_sid, starts=starts)
+    assert len(FakeTransport.posts) == before, \
+        "a restart after a fill placed another order"
+    assert cap2["progress"].windows_used() == 1, "a second window was opened"
+    assert BUD.read_binding(session_id=probe_sid)["window"] == 0
+    assert _why_it_stopped(state, cap2), "stopped for no recorded reason"
+    # THE INVENTORY IS UNTOUCHED. No unwind, at any price, ever.
+    for oid, o in filled.items():
+        assert D(venue.orders[oid]["cumQuantity"]) == D(o["cumQuantity"])
+
+
+def test_a_REBIND_to_another_window_is_REFUSED(monkeypatch, tmp_path,
+                                              probe_sid):
+    """The property the binding exists for: a probe that could rebind would
+    collect a fresh attempt allowance in every window it chose."""
+    monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
+    monkeypatch.setenv("PMUS_E1_SESSION_ID", probe_sid)
+    BUD.bind_window(window=3, slug="cpc-btc-updown-15m-2026-10-08-1730z")
+    again = BUD.bind_window(window=3,
+                            slug="cpc-btc-updown-15m-2026-10-08-1730z")
+    assert again["already_bound"] is True
+    with pytest.raises(BUD.ProbeBindingConflict):
+        BUD.bind_window(window=4,
+                        slug="cpc-btc-updown-15m-2026-10-08-1745z")
+    with pytest.raises(BUD.ProbeBindingConflict):
+        BUD.bind_window(window=3, slug="some-other-market")
+    # and the bound window still governs the attempt count
+    b = one_probe(windows_used_at_start=3)
+    assert b.attempt_gate(window=4)["because"] == \
+        "PROBE_IS_BOUND_TO_WINDOW_3_NOT_4"
+    assert b.attempt_gate(window=3)["may_attempt"] is True
+
+
+def test_a_corrupt_binding_FAILS_CLOSED(monkeypatch, tmp_path, probe_sid):
+    monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
+    monkeypatch.setenv("PMUS_E1_SESSION_ID", probe_sid)
+    p = BUD.binding_path(session_id=probe_sid)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    open(p, "w", encoding="utf8").write("{not json")
+    with pytest.raises(BUD.BudgetNotAuthorized):
+        BUD.read_binding(session_id=probe_sid)
+
+
+def test_the_live_sessions_forty_historical_legs_do_not_exhaust_the_probe(
+        monkeypatch, tmp_path):
+    """THE EXACT CASE THAT BLOCKED THE AUTHORIZATION.
+
+    The live cohort session carries forty first legs across windows 0..2 and
+    nine remaining windows. `MAX_ATTEMPTS=1` must authorize ONE new leg in
+    the probe's own window -- not read 40_OF_1 and refuse.
+    """
+    monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
+    live_sid = "E1-COHORT-20261008T005816Z-051888d8"
+    monkeypatch.setenv("PMUS_E1_SESSION_ID", live_sid)
+    for w, n in ((0, 0), (1, 20), (2, 20)):
+        for _ in range(n):
+            L.consume_attempt(window=w, slug="s", side=UP, price="0.49",
+                              qty="0.13")
+    assert L.cohort_state(live_sid)["attempts_spent_total"] == 40
+
+    b = BUD.ProbeBudget(max_attempts=1, max_windows=1,
+                        windows_used_at_start=3, source="owner:one_probe")
+    # before the probe binds, window 3 is clean
+    g = b.attempt_gate(window=3)
+    assert g["may_attempt"] is True, g
+    assert g["usage"]["session_history_is_read_never_recounted"] is True
+    # bind it, spend the one attempt, and it is spent for good
+    BUD.bind_window(window=3, slug="cpc-btc-updown-15m-2026-10-08-1730z")
+    L.consume_attempt(window=3, slug="x", side=UP, price="0.49", qty="0.13")
+    g2 = b.attempt_gate(window=3)
+    assert g2["may_attempt"] is False
+    assert g2["because"] == "ATTEMPT_BUDGET_EXHAUSTED_1_OF_1"
+    # the history is still there, untouched
+    assert L.cohort_state(live_sid)["attempts_spent_total"] == 41

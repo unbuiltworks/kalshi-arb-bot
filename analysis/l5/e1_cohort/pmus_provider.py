@@ -319,6 +319,12 @@ class PmusWindowProvider:
             self.window_budget_spent = True
             self._refuse(wg["because"], **wg)
             return None
+        # AND IF THIS PROBE IS ALREADY BOUND, only its bound window may be
+        # worked. A restart therefore resumes the window it was authorized
+        # for; it cannot select another one and collect a fresh allowance.
+        bound = (BUD.read_binding() if getattr(self.budget,
+                                               "binds_one_window", False)
+                 else None)
         if self.progress.windows_used() >= WINDOWS:
             self._refuse("COHORT_WINDOW_BUDGET_SPENT",
                          windows_used=self.progress.windows_used(),
@@ -344,6 +350,15 @@ class PmusWindowProvider:
                              window_end=pin.get("window_end"),
                              now=self.now_fn())
                 continue
+            if bound is not None and int(bound["window"]) != int(idx):
+                self._refuse("PROBE_IS_BOUND_TO_WINDOW_%d"
+                             % int(bound["window"]),
+                             bound_window=int(bound["window"]),
+                             bound_slug=bound.get("slug"),
+                             candidate_window=int(idx),
+                             window_start=start)
+                self.window_budget_spent = True
+                return None
             try:
                 auth = self.auth.authorize_selected(pin)
             except Exception as exc:                           # noqa: BLE001
@@ -366,6 +381,28 @@ class PmusWindowProvider:
                              is_a_feed_startup_failure=True,
                              candidates_not_enumerated=True)
                 return None
+            # ================= THE DURABLE WINDOW BINDING ============
+            #
+            # BEFORE the window is recorded as opened, and therefore before
+            # any submission intent, any preview and any POST. One O_EXCL
+            # file naming this probe's one authorized window identity; a
+            # restart reads it back and is held to it, and a mismatch
+            # refuses rather than rebinding. Attempts are counted against
+            # this window alone, which is what lets MAX_ATTEMPTS=1 mean one
+            # new first leg on a session that already carries forty.
+            if getattr(self.budget, "binds_one_window", False):
+                try:
+                    binding = BUD.bind_window(window=int(idx),
+                                              slug=str(pin["slug"]))
+                except BUD.BudgetNotAuthorized as exc:
+                    self._refuse("PROBE_WINDOW_BINDING_REFUSED:%s" % exc,
+                                 slug=pin.get("slug"), window_index=idx)
+                    self.window_budget_spent = True
+                    return None
+                if self.recorder is not None:
+                    self.recorder.record_event(
+                        window=idx, slot=-1, event="PROBE_WINDOW_BOUND",
+                        detail=dict(binding))
             self.current_pin = pin
             self.current_window_index = idx
             self.progress.record_window_opened(
