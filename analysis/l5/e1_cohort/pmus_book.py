@@ -52,7 +52,17 @@ TIMING_PMUS_AUTHENTICATED_WS = "pmus_authenticated_ws_strict"
 #: a book older than this is not a decision input. Deliberately the same
 #: 5.0s E1 already used for the CLOB feed, so the freshness bar does not
 #: move with the venue.
-MAX_BOOK_AGE_S = 5.0
+#: THE PROVEN BOUND, taken from the only order path that has produced an
+#: evidenced fill. XR2W Attempt 6 (analysis/l5/live_exec5/XR2W_ATTEMPT_6.md)
+#: read AuthBook two-sided at age 0.084 s against a 2.0 s BOUND, priced
+#: DOWN at the own-side touch 0.6700 = 1 - 0.3300, sent wire
+#: price.value 0.3300, and the venue took it: ORDER_STATE_NEW 02:00:01Z ->
+#: ORDER_STATE_FILLED 02:00:15.69Z, cumQuantity 0.01.
+#:
+#: E1 carried 5.0 s, which is LOOSER than the bound that has actually
+#: filled. There is no evidence for 5.0 and there is evidence for 2.0, so
+#: E1 now uses 2.0.
+MAX_BOOK_AGE_S = 2.0
 
 ONE = D("1")
 

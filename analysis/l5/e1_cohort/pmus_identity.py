@@ -133,15 +133,33 @@ def resolve(slug: str, http: Any = None) -> Dict[str, Any]:
 
 
 def bbo(slug: str, http: Any = None) -> Dict[str, Any]:
-    """PMUS's own top of book. Identity/cross-check only -- never the
-    decision feed and never a timing authority."""
+    """PMUS's own top of book, FROM THE PUBLIC GATEWAY. Identity and
+    cross-check only -- never the decision feed, never a timing
+    authority, and NEVER a price.
+
+    THE GATEWAY BOOK IS A ~30-SECOND CACHE. This is measured, not
+    supposed: `pmus_ws_evidence_recorder` records that inferring trade
+    direction against the gateway book held 46.2% forward and 35.3%
+    inverted over 184 resolvable rows, with 18.5% of prints strictly
+    inside the quoted spread where neither reading can apply -- its own
+    conclusion being "that is not a close call between two hypotheses,
+    it is the wrong book."
+
+    So a difference between this and AuthBook is EXPECTED and says
+    nothing about either parser. I compared the two on 2026-10-07 and
+    reported a 12-tick "genuine disagreement"; it was a live
+    authenticated feed against a stale public cache, and the verdict was
+    withdrawn.
+    """
     t = http or read_only_transport()
     return t.request("GET", "/v1/markets/%s/bbo" % assert_pmus_slug(slug),
                      None, GATEWAY) or {}
 
 
 def book(slug: str, http: Any = None) -> Dict[str, Any]:
-    """PMUS's own depth. Identity/cross-check only, same caveat."""
+    """PMUS's own depth, FROM THE PUBLIC GATEWAY. Same ~30-second cache
+    caveat as `bbo` above: identity and cross-check only, never a price
+    and never a timing authority."""
     t = http or read_only_transport()
     return t.request("GET", "/v1/markets/%s/book" % assert_pmus_slug(slug),
                      None, GATEWAY) or {}

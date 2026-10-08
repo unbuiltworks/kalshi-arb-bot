@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5
+b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -415,7 +415,7 @@ additive and touches nothing of XR2W's.
 | `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
 | `PMUS_E1_ARM` | must equal the session id |
 | `PMUS_E1_GATE_EVIDENCE` | must equal the authorized **series** `btc-updown-15m`; the exact resolved slug is re-enforced before every submission |
-| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5` |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1` |
 
 **None of these is set.** Reporting is BOOLEAN ONLY — `armed_env_summary()`
 returns presence flags and never a value, asserted by test.
@@ -563,7 +563,7 @@ degraded one.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
 4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
-   `9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5`;
+   `b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many
@@ -615,6 +615,7 @@ their reasons, asserted by test.
 | `cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60` | **`live_book` parsed a frame shape the venue does not send** — it dropped 11,438 of 11,523 real frames (99.3%), so the top of book populated once and never moved, and health reported HEALTHY while serving that stale book. **It failed OPEN** |
 | `481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486` | **it ordered POLYMARKET.COM identity to POLYMARKET US**: the market was discovered on `gamma-api.polymarket.com`, pinned as two CTF token ids and streamed over Polymarket.com's public CLOB websocket, then serialized into an order to `api.polymarket.us`, which answered **Market not found** five times. It also treated an **absent first-leg bid as `0.00`** and therefore as a cheap maker opportunity |
 | `9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920` | **its websocket book parse let a NESTED OBJECT replace the authoritative top of book** -- a nested `bids`/`offers` key inherited the market slug, became a second book event, and the fold applied it LAST. Reproduced on the venue's real frame shape: `bids[0]` 0.9900 became `stats.bids[0]` 0.4900. It also shipped **without the `websockets` dependency**, so the decision feed could never connect at all |
+| `9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5` | **its AuthBook staleness bound was 5.0 s, LOOSER than the 2.0 s bound of XR2W Attempt 6** -- the only order path that has produced an evidenced fill -- and there was no evidence for 5.0. A6 read AuthBook two-sided at age 0.084 s, priced DOWN at the own-side touch 0.6700 = 1 − 0.3300, sent wire `price.value` 0.3300, and the venue filled it (`ORDER_STATE_NEW` 02:00:01Z → `ORDER_STATE_FILLED` 02:00:15.69Z, `cumQuantity` 0.01) |
 
 ## 12.1 The entrypoint, and the defect it closes
 
@@ -668,7 +669,7 @@ one-order runner fails while passing import resolution.
 
 | artifact | path |
 |---|---|
-| frozen spec `9de41c17…59d5` | `analysis/l5/e1_cohort/spec.py` |
+| frozen spec `b32e8c7b…1cf1` | `analysis/l5/e1_cohort/spec.py` |
 | bounded-count named-slot latch | `analysis/l5/e1_cohort/latch.py` |
 | append-only recorder + chain reconstructor | `analysis/l5/e1_cohort/recorder.py` |
 | stopping rules + forward-looking bound | `analysis/l5/e1_cohort/stopping.py` |

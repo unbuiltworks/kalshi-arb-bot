@@ -1958,7 +1958,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # the build whose WS parse let a nested object replace the top of
         # book, and which shipped without the `websockets` dependency so
         # the decision feed could never connect
-        "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920"]
+        "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
+        # the build whose AuthBook staleness bound was 5.0s -- LOOSER than
+        # the 2.0s bound of XR2W Attempt 6, the only order path that has
+        # produced an evidenced fill -- on no evidence for 5.0
+        "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this

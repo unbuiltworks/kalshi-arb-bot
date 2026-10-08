@@ -289,7 +289,25 @@ DIFF: Dict[str, Any] = {
         # when it is connected AND the book is two-sided, so "no snapshot"
         # is itself the fail-closed answer.
         "a_snapshot_requires_a_connected_two_sided_book": True,
-        "max_book_age_s": 5.0,
+        # THE PROVEN BOUND. XR2W Attempt 6 -- the only order path that
+        # has produced an evidenced fill -- read AuthBook two-sided at
+        # age 0.084s against a 2.0s bound and the venue filled the
+        # resulting maker order. E1 carried 5.0s, looser than the bound
+        # that has actually filled, on no evidence.
+        "max_book_age_s": 2.0,
+        "max_book_age_provenance": (
+            "analysis/l5/live_exec5/XR2W_ATTEMPT_6.md: AuthBook "
+            "two-sided at age 0.084s against the 2.0s bound; DOWN priced "
+            "at own-side touch 0.6700 = 1 - 0.3300; wire price.value "
+            "0.3300; ORDER_STATE_NEW 02:00:01Z -> ORDER_STATE_FILLED "
+            "02:00:15.69Z, cumQuantity 0.01"),
+        # THE PROVEN EXECUTION FEED IS AUTHBOOK, not either REST route.
+        # The gateway book is a ~30-second cache, measured: direction
+        # inference against it held 46.2% forward / 35.3% inverted over
+        # 184 rows, 18.5% inside the spread.
+        "execution_feed_proven_by_a_fill": "src.l5_pmus_auth_book.AuthBook",
+        "rest_gateway_book_is_a_cache": True,
+        "rest_gateway_book_may_price_an_order": False,
         "staleness_is_the_authenticated_stream_age": True,
         "staleness_depends_on_silence_alone": False,
         "source_must_be_the_authenticated_ws": True,
@@ -602,6 +620,7 @@ DIFF: Dict[str, Any] = {
             "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
             "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
             "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
+            "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5",
         ],
         "reasons": {
             "110a4fc49cc936431aa1d099623128ceb77cd91fc7625e6518f2ede4f01ba99c":
@@ -640,6 +659,10 @@ DIFF: Dict[str, Any] = {
                  "bids[0] 0.9900 became stats.bids[0] 0.4900. It also "
                  "shipped WITHOUT the `websockets` dependency, so the "
                  "decision feed could never connect at all"),
+            "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5":
+                ("it carried a 5.0s AuthBook staleness bound, LOOSER than the "
+                 "2.0s bound of XR2W Attempt 6 -- the only order path that "
+                 "has produced an evidenced fill -- on no evidence for 5.0"),
         },
     },
 
@@ -1102,6 +1125,11 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("decision_feed.a_snapshot_requires_a_connected_two_sided_book", True),
     ("decision_feed.source_must_be_the_authenticated_ws", True),
     ("decision_feed.a_rest_sourced_snapshot_is_refused", True),
+    ("decision_feed.max_book_age_s", 2.0),
+    ("decision_feed.execution_feed_proven_by_a_fill",
+     "src.l5_pmus_auth_book.AuthBook"),
+    ("decision_feed.rest_gateway_book_is_a_cache", True),
+    ("decision_feed.rest_gateway_book_may_price_an_order", False),
     ("decision_feed.staleness_is_the_authenticated_stream_age", True),
     ("decision_feed.staleness_depends_on_silence_alone", False),
     ("decision_feed."
@@ -1150,7 +1178,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "e11fc1abb9f5d0a4fa2ee95aff14ead8246edfc9bf08f88372bea5e60ce44310",
       "cdc635190765732e478169e172d2a638f6fed31468379fbf3e3fdc4e3930ae60",
       "481d1d3f04a54cb4a9c7e701f2a4c364bc9cefad88c6cec4245b39784d8e2486",
-      "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920"]),
+      "9db0d2a77a88a16415c69a84f385af39a272f04aff4e7b3fd554dd1baaded920",
+      "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5"]),
     ("entrypoint.module", "scripts.l5_e1_cohort_run"),
     ("entrypoint.callable", "analysis.l5.e1_cohort.runner:main"),
     ("entrypoint.cohort_driver",
@@ -1249,7 +1278,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "9de41c1762342557668cdcdf6b57538122d5fb2e50d7546d57c22e0b37c759d5"
+    "b32e8c7bbc4d496bbf05c633f151892ad74a8bf5b34a5750fc70715520881cf1"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:
