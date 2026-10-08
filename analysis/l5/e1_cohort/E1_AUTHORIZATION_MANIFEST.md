@@ -20,7 +20,7 @@
 **Frozen spec fingerprint**
 
 ```
-42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63
+788628f096f5b255e7e4c8fa1f99b31928aada31ae4e0ce56f0f829d45ef1b6a
 ```
 
 Probe `COHORT-E1-LIVE`. Derived from LIVE-L5-EXEC-1-XR2W
@@ -415,7 +415,7 @@ additive and touches nothing of XR2W's.
 | `PMUS_E1_SESSION_ID` | scopes the latch; a fresh cohort needs a fresh id |
 | `PMUS_E1_ARM` | must equal the session id |
 | `PMUS_E1_GATE_EVIDENCE` | must equal the authorized **series** `btc-updown-15m`; the exact resolved slug is re-enforced before every submission |
-| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63` |
+| `PMUS_E1_AUTHORIZED_FINGERPRINT` | must equal `788628f096f5b255e7e4c8fa1f99b31928aada31ae4e0ce56f0f829d45ef1b6a` |
 | `PMUS_E1_MAX_ATTEMPTS` | how many first-leg submission **attempts** this process may make in total. May only **narrow** the frozen 240; missing, blank, non-integer, zero, negative or excessive all **refuse**. Counted from durable latch files plus unretired local intents, so an ambiguous submission and a restart both count as spent |
 | `PMUS_E1_MAX_WINDOWS` | how many **new** market windows this process may open, counted relative to the append-only ledger at boot. May only narrow the frozen 12; same fail-closed rules. Spending it is a hard stop with no continuation to another market |
 
@@ -565,7 +565,7 @@ degraded one.
    id, and **Claude never clears a latch**;
 3. the four `PMUS_E1_*` arming keys, naming the exact market slug;
 4. `PMUS_E1_AUTHORIZED_FINGERPRINT` =
-   `42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63`;
+   `788628f096f5b255e7e4c8fa1f99b31928aada31ae4e0ce56f0f829d45ef1b6a`;
 5. reconciliation of `bounds.py`'s `MAX_FIRST_LEGS = 1` and
    `MAX_DAILY_REALIZED_LOSS_USD = $0.60` with a 240-placement cohort — those
    are written for a **single** probe and this is many

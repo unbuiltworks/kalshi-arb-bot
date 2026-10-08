@@ -756,8 +756,19 @@ DIFF: Dict[str, Any] = {
             "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
             "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59",
             "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f",
+            "42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63",
         ],
         "reasons": {
+        "42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63":
+            ("its window binding had no epoch, so a SECOND authorization "
+             "inherited the first one's bound window. The three-attempt "
+             "probe read the completed 22:00z probe's binding, found "
+             "window 4 did not match, and refused with "
+             "PROBE_IS_BOUND_TO_WINDOW_3 having placed nothing -- and "
+             "every later window would have refused the same way. Each "
+             "authorization now binds inside its own epoch namespace, "
+             "and the previous epoch's file is never read, written or "
+             "deleted"),
         "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f":
             ("it had no multi-trade envelope and no attempt tape. Its only "
              "cumulative bound was the window's $1.56, far looser than a "
@@ -1414,6 +1425,62 @@ DIFF: Dict[str, Any] = {
     # ================================================================
     # THE MULTI-TRADE ENVELOPE, and the attempt tape that evidences it.
     # ================================================================
+    # ================================================================
+    # THE PROBE EPOCH. A second authorization binds its own window,
+    # without releasing, resetting or deleting the first one's binding.
+    # ================================================================
+    "probe_epoch": {
+        "module": "analysis.l5.e1_cohort.budget",
+        "env_key": "PMUS_E1_PROBE_EPOCH",
+        "retirement_tool": "scripts/l5_e1_retire_binding.py",
+        "the_defect_it_closes": (
+            "the window binding is immutable and never released, so a "
+            "probe cannot collect a fresh attempt allowance in each "
+            "window it chooses. Across TWO authorizations that same "
+            "property refuses the second outright: the 22:00z "
+            "one-attempt probe bound window 3, and the three-attempt "
+            "probe that followed read that binding, found window 4 did "
+            "not match, and refused with PROBE_IS_BOUND_TO_WINDOW_3 "
+            "having placed nothing"),
+        "it_is_a_namespace_not_a_reset": True,
+        "previous_epoch_is_never_read_in_a_new_namespace": True,
+        "previous_binding_is_never_deleted_or_rewritten": True,
+        "archive_is_a_copy": True,
+        "archive_is_o_excl_and_never_overwritten": True,
+        "retiring_twice_under_one_label_is_refused": True,
+        "a_malformed_epoch_is_refused_not_sanitised": True,
+        "why_refused_not_sanitised": ("the epoch names the durable "
+                                      "binding file this process may "
+                                      "write, and guessing what the "
+                                      "operator meant is how two "
+                                      "authorizations end up sharing one"),
+        "a_rebind_inside_one_epoch_is_still_a_conflict": True,
+        "a_restart_inside_an_epoch_grants_no_new_attempts": True,
+        "attempts_in_the_new_window_start_at_zero_without_a_reset": True,
+        "why_no_reset_is_needed": ("the budget counts the BOUND window's "
+                                   "own durable latch slots, and a new "
+                                   "window simply has none yet. The "
+                                   "completed window's slot files stay "
+                                   "on disk exactly as it left them"),
+        "retirement_verifies_before_archiving": [
+            "the bound slug is in the ledger's used windows",
+            "every order of ours is terminal at the venue",
+            "no outstanding order",
+            "no open residual",
+            "no pending intent",
+            "aggregate exposure is zero",
+        ],
+        "retirement_stops_rather_than_resetting": True,
+        "nothing_archived_when_the_probe_is_not_complete": True,
+        "preserved_across_retirement": ["session id", "append-only tape",
+                                        "ledger", "all order ids",
+                                        "cumulative realized loss",
+                                        "per-window attempt slots"],
+        "cumulative_loss_limits_reset": False,
+        "the_tool_holds_no_mutating_transport": True,
+        "may_place_amend_or_cancel_an_order": False,
+    },
+
     "multitrade_envelope": {
         "module": "analysis.l5.e1_cohort.multitrade",
         "env_keys": ["PMUS_E1_MAX_CUM_FIRST_LEG_SHARES",
@@ -1955,7 +2022,8 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
       "c22595436638b54f86293b9b9d4bd556cfc6a36c4e24b1b9f99dbde07627d165",
       "1ba9f9c95c31f1c046e15b7ef3851d41d9e5494586006e2f81135f004569a3d1",
       "e66448635a5e0b50346e7af34df39aa04e7caf207a6743d2c3a89077281efb59",
-      "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f"]),
+      "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f",
+      "42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63"]),
     ("first_leg_side.either_side_may_open", True),
     ("first_leg_side.rule",
      "the cheaper own-side bid at or below the ceiling opens"),
@@ -2119,6 +2187,25 @@ INVARIANTS: Tuple[Tuple[str, Any], ...] = (
     ("terminal_order_cache."
      "strategy_sizing_budget_or_cancellation_changed", False),
     ("terminal_order_cache.may_place_amend_or_cancel_an_order", False),
+    ("probe_epoch.module", "analysis.l5.e1_cohort.budget"),
+    ("probe_epoch.env_key", "PMUS_E1_PROBE_EPOCH"),
+    ("probe_epoch.it_is_a_namespace_not_a_reset", True),
+    ("probe_epoch."
+     "previous_epoch_is_never_read_in_a_new_namespace", True),
+    ("probe_epoch."
+     "previous_binding_is_never_deleted_or_rewritten", True),
+    ("probe_epoch.archive_is_a_copy", True),
+    ("probe_epoch.archive_is_o_excl_and_never_overwritten", True),
+    ("probe_epoch.a_malformed_epoch_is_refused_not_sanitised", True),
+    ("probe_epoch.a_rebind_inside_one_epoch_is_still_a_conflict", True),
+    ("probe_epoch."
+     "a_restart_inside_an_epoch_grants_no_new_attempts", True),
+    ("probe_epoch."
+     "attempts_in_the_new_window_start_at_zero_without_a_reset", True),
+    ("probe_epoch.retirement_stops_rather_than_resetting", True),
+    ("probe_epoch.nothing_archived_when_the_probe_is_not_complete", True),
+    ("probe_epoch.cumulative_loss_limits_reset", False),
+    ("probe_epoch.may_place_amend_or_cancel_an_order", False),
     ("multitrade_envelope.module", "analysis.l5.e1_cohort.multitrade"),
     ("multitrade_envelope.all_four_or_none", True),
     ("multitrade_envelope.a_subset_is_a_refusal", True),
@@ -2361,7 +2448,7 @@ def fingerprint(spec: Dict[str, Any] = SPEC) -> str:
 #: assert_frozen() vacuous: it would recompute the value it compares against
 #: and pass for every possible edit.
 E1_FINGERPRINT = \
-    "42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63"
+    "788628f096f5b255e7e4c8fa1f99b31928aada31ae4e0ce56f0f829d45ef1b6a"
 
 
 def assert_frozen(spec: Dict[str, Any] = SPEC) -> None:

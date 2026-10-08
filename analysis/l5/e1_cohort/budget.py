@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any, Dict, Iterable, Optional
 
@@ -83,6 +84,29 @@ FROZEN_MAX_WINDOWS = WINDOWS
 
 #: the durable file that pins a one-window probe to ONE window identity.
 BINDING_SUFFIX = ".probe_window_binding.json"
+
+#: THE PROBE EPOCH, and why a second authorization needs one.
+#:
+#: The window binding is immutable and never released, so that a probe
+#: cannot collect a fresh attempt allowance in each window it chooses.
+#: That is exactly right WITHIN one authorization -- and it means a SECOND
+#: authorization inherits the first one's bound window and refuses every
+#: window thereafter. The 22:00z one-attempt probe bound window 3; the
+#: three-attempt probe that followed it read that binding, found window 4
+#: did not match, and refused with PROBE_IS_BOUND_TO_WINDOW_3 having
+#: placed nothing.
+#:
+#: The fix is a NAMESPACE, not a reset. Each authorization names its own
+#: epoch and binds inside it. The previous epoch's file is never read,
+#: never written and never deleted -- it stays on the volume as the
+#: evidence of what that probe was authorized to do. Nothing is reused
+#: silently, because an epoch is explicit: set it and only that namespace
+#: exists for this process; leave it unset and the legacy path is used,
+#: which is what the already-completed probes bound within.
+EPOCH_ENV = "PMUS_E1_PROBE_EPOCH"
+
+#: an epoch is a short durable label, not free text: it becomes a filename.
+EPOCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 class BudgetNotAuthorized(RuntimeError):
@@ -128,23 +152,47 @@ class ProbeBindingConflict(BudgetNotAuthorized):
     """
 
 
-def binding_path(*, session_id: Optional[str] = None) -> str:
+def probe_epoch(*, epoch: Optional[str] = None) -> Optional[str]:
+    """This authorization's binding namespace, or None for the legacy one.
+
+    A malformed epoch is a REFUSAL rather than a sanitised filename: it
+    decides which durable binding this process may write, and guessing
+    what the operator meant is how two authorizations end up sharing one.
+    """
+    raw = epoch if epoch is not None else (os.getenv(EPOCH_ENV) or "")
+    raw = str(raw).strip()
+    if not raw:
+        return None
+    if not EPOCH_RE.match(raw):
+        raise BudgetNotAuthorized(
+            "%s=%r is not a valid probe epoch. It must be 1-64 characters "
+            "of letters, digits, dot, dash or underscore, starting "
+            "alphanumeric, because it names a durable binding file."
+            % (EPOCH_ENV, raw))
+    return raw
+
+
+def binding_path(*, session_id: Optional[str] = None,
+                 epoch: Optional[str] = None) -> str:
     sid = session_id or os.getenv("PMUS_E1_SESSION_ID", "").strip()
     if not sid:
         raise BudgetNotAuthorized(
             "PMUS_E1_SESSION_ID is not set, so this probe has no session to "
             "bind a window identity within. Refused.")
-    return os.path.join(L.LATCH_DIR, L.stem(sid) + BINDING_SUFFIX)
+    ep = probe_epoch(epoch=epoch)
+    stem = L.stem(sid) if ep is None else "%s.epoch-%s" % (L.stem(sid), ep)
+    return os.path.join(L.LATCH_DIR, stem + BINDING_SUFFIX)
 
 
-def read_binding(*, session_id: Optional[str] = None
+def read_binding(*, session_id: Optional[str] = None,
+                 epoch: Optional[str] = None
                  ) -> Optional[Dict[str, Any]]:
     """The bound window identity, or None when nothing is bound yet.
 
     FAILS CLOSED on a file that exists but cannot be read or parsed: a
     binding we cannot read is a binding we must not contradict.
     """
-    path = binding_path(session_id=session_id)
+    path = binding_path(session_id=session_id, epoch=epoch)
     if not os.path.exists(path):
         return None
     try:
@@ -162,8 +210,89 @@ def read_binding(*, session_id: Optional[str] = None
     return rec
 
 
+#: archives are named so they can never collide with a live binding.
+ARCHIVE_SUFFIX = ".probe_window_binding.RETIRED.json"
+
+
+def archive_binding(*, session_id: Optional[str] = None,
+                    epoch: Optional[str] = None,
+                    label: str,
+                    reason: str,
+                    evidence: Optional[Dict[str, Any]] = None
+                    ) -> Dict[str, Any]:
+    """COPY a completed probe's binding into an immutable archive.
+
+    The original is NEVER touched: not rewritten, not renamed, not
+    deleted. It stays exactly where the probe wrote it, because it is the
+    durable record of what that probe was authorized to do and the proof
+    that it bound one window and only one.
+
+    The archive is created `O_CREAT|O_EXCL`, so an archive that already
+    exists is never overwritten either -- retiring twice is refused
+    rather than silently reproducing a different record under the same
+    name. It carries the original's full contents plus the provenance of
+    the retirement, so the pair reads as a closed authorization.
+
+    This function authorizes nothing and releases nothing. A new probe
+    becomes able to bind only because it names a NEW EPOCH, which is a
+    different file; retiring is the bookkeeping that makes that honest.
+    """
+    if not EPOCH_RE.match(str(label or "")):
+        raise BudgetNotAuthorized(
+            "the archive label %r is not valid; it names a file." % (label,))
+    src = binding_path(session_id=session_id, epoch=epoch)
+    rec = read_binding(session_id=session_id, epoch=epoch)
+    if rec is None:
+        return {"archived": False,
+                "why": "NO_BINDING_AT_%s" % src,
+                "original_path": src,
+                "original_untouched": True}
+    dst = os.path.join(L.LATCH_DIR,
+                       "%s.%s" % (L.stem(session_id or os.getenv(
+                           "PMUS_E1_SESSION_ID", "").strip()), label)
+                       + ARCHIVE_SUFFIX)
+    payload = {
+        "ARCHIVE_OF": src,
+        "label": label,
+        "retired_reason": reason,
+        "retired_unix": time.time(),
+        "retired_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "original_binding": dict(rec),
+        "window": rec.get("window"),
+        "slug": rec.get("slug"),
+        "epoch": rec.get("epoch"),
+        "session_id": (session_id
+                       or os.getenv("PMUS_E1_SESSION_ID", "").strip()),
+        "evidence_at_retirement": dict(evidence or {}),
+        "ORIGINAL_WAS_NOT_DELETED_OR_REWRITTEN": True,
+        "THIS_AUTHORIZES_NOTHING": True,
+        "a_new_probe_binds_in_a_NEW_EPOCH_not_by_reusing_this": True,
+    }
+    try:
+        os.makedirs(L.LATCH_DIR, exist_ok=True)
+        fd = os.open(dst, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return {"archived": False,
+                "why": "ARCHIVE_ALREADY_EXISTS_NOT_OVERWRITTEN",
+                "archive_path": dst, "original_path": src,
+                "original_untouched": True}
+    except OSError as exc:
+        raise BudgetNotAuthorized(
+            "the binding archive could not be written to %s (%s)."
+            % (dst, type(exc).__name__)) from exc
+    with os.fdopen(fd, "w", encoding="utf8") as fh:
+        json.dump(payload, fh, sort_keys=True)
+        fh.flush()
+        os.fsync(fh.fileno())
+    return {"archived": True, "archive_path": dst, "original_path": src,
+            "original_untouched": os.path.exists(src),
+            "window": rec.get("window"), "slug": rec.get("slug"),
+            "record": payload}
+
+
 def bind_window(*, window: int, slug: str,
-                session_id: Optional[str] = None) -> Dict[str, Any]:
+                session_id: Optional[str] = None,
+                epoch: Optional[str] = None) -> Dict[str, Any]:
     """Pin this probe to ONE window identity, once, durably.
 
     Called BEFORE the window is recorded as opened, and therefore before any
@@ -179,7 +308,7 @@ def bind_window(*, window: int, slug: str,
         raise BudgetNotAuthorized(
             "window %r is outside the authorized 0..%d"
             % (window, WINDOWS - 1))
-    existing = read_binding(session_id=session_id)
+    existing = read_binding(session_id=session_id, epoch=epoch)
     if existing is not None:
         if int(existing["window"]) != int(window) or (
                 existing.get("slug") and slug
@@ -191,8 +320,9 @@ def bind_window(*, window: int, slug: str,
                 % (existing.get("window"), existing.get("slug"), window,
                    slug))
         return dict(existing, already_bound=True)
-    path = binding_path(session_id=session_id)
+    path = binding_path(session_id=session_id, epoch=epoch)
     rec = {"window": int(window), "slug": str(slug),
+           "epoch": probe_epoch(epoch=epoch),
            "bound_unix": time.time(),
            "bound_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "pid": os.getpid(),
@@ -205,7 +335,8 @@ def bind_window(*, window: int, slug: str,
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError:
         # lost the race; the winner's binding is authoritative.
-        return bind_window(window=window, slug=slug, session_id=session_id)
+        return bind_window(window=window, slug=slug,
+                           session_id=session_id, epoch=epoch)
     except OSError as exc:
         raise BudgetNotAuthorized(
             "the probe's window binding could not be written to %s (%s). "

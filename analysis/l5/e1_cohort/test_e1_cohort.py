@@ -2034,7 +2034,11 @@ def test_all_superseded_fingerprints_are_structurally_non_armable():
         # no multi-trade envelope and no attempt tape: it bounded first-leg
         # purchases but never the gross outlay after complements, and
         # production called neither record_attempt nor reconstruct_chain.
-        "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f"]
+        "b4b71cd421af65a4e54bc9579af3d09218dc3452d365d71d4c8cc46886f64a3f",
+        # its window binding had no epoch, so the three-attempt probe
+        # inherited the completed 22:00z probe's bound window and refused
+        # every window thereafter with PROBE_IS_BOUND_TO_WINDOW_3.
+        "42e98e3292d21d267124c198159586b99d05055e263847e027bab3cef0406f63"]
     assert SP.E1_FINGERPRINT not in must_not
     assert set(SP.SPEC["supersedes_e1"]["reasons"]) == set(must_not)
     # STRUCTURALLY non-armable: pinning any of them does not match this
