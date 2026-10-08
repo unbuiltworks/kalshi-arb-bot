@@ -23,6 +23,7 @@ COPY scripts/pmus_readonly_recovery.py scripts/pmus_readonly_recovery.py
 # Authoritative venue order-history audit. GET only, same ReadOnlyTransport.
 COPY scripts/pmus_order_history_audit.py scripts/pmus_order_history_audit.py
 COPY scripts/pmus_e1_postcancel_confirm.py scripts/pmus_e1_postcancel_confirm.py
+COPY scripts/l5_pmus_order_endpoint_probe.py scripts/l5_pmus_order_endpoint_probe.py
 
 ENV PYTHONUNBUFFERED=1
 CMD ["python3", "-m", "scripts.pmus_readonly_recovery"]
