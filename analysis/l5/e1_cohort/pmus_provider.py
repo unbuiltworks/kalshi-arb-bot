@@ -42,6 +42,7 @@ from analysis.l5.e1_cohort import pmus_book as PBK
 from analysis.l5.e1_cohort import arming as A
 from analysis.l5.e1_cohort import budget as BUD
 from analysis.l5.e1_cohort import latch as L
+from analysis.l5.e1_cohort import obligations as OB
 from analysis.l5.e1_cohort import order_state as OS
 from analysis.l5.e1_cohort import pmus_identity as PI
 from analysis.l5.e1_cohort import pmus_selector as SEL
@@ -166,7 +167,8 @@ class PmusWindowProvider:
                  order_roles: Any = None,
                  budget: Any = None,
                  cache_state_dir: Any = None,
-                 cache_session_id: Any = None) -> None:
+                 cache_session_id: Any = None,
+                 obligations: Any = None) -> None:
         self.progress = progress
         self.auth = session_auth
         self.recorder = recorder
@@ -186,6 +188,19 @@ class PmusWindowProvider:
         # what production does; the tests inject a callable. It is NEVER
         # replaced by a constant, which is the whole point of this field.
         self._order_state_reader = order_state_reader
+        # OUR OWN DURABLE RECORD OF WHAT WE SENT. The venue view may
+        # confirm, advance and reconcile these; it may never erase one.
+        # `None` is accepted so the offline seams that do not exercise the
+        # submission path construct nothing, and `merge_into_snapshot` is
+        # then a no-op.
+        self.obligations = obligations
+        # EVERY ID A SUCCESSFUL READ HAS POSITIVELY SHOWN, accumulated here
+        # so it survives the venue later forgetting one. It is maintained
+        # whether or not an obligation ledger exists, because the release
+        # path must not depend on the ledger: an id that can never be
+        # observed could never be resolved, and fail-closed would become a
+        # permanent deadlock.
+        self.observed_order_ids: set = set()
         # locally recorded submission intents whose acknowledgement was
         # ambiguous. A list, shared by reference with the runner, so an
         # unconfirmed POST keeps refusing the next first leg.
@@ -251,6 +266,13 @@ class PmusWindowProvider:
         """GET /v1/order/{id}, so a cancel is verified per owned id."""
         return self.order_state_reader()(OS.ORDER_PATH % order_id)
 
+    def _observed_ids(self) -> frozenset:
+        """Our own accumulated observations, plus the ledger's if present."""
+        seen = set(self.observed_order_ids)
+        if self.obligations is not None:
+            seen |= set(self.obligations.observed_ids())
+        return frozenset(seen)
+
     def order_state(self, pin: Dict[str, Any]) -> Dict[str, Any]:
         """The AUTHORITATIVE outstanding-order view for this window.
 
@@ -280,13 +302,22 @@ class PmusWindowProvider:
                 known_ids=list(self.known_order_ids),
                 roles=dict(self.order_roles),
                 terminal_cache=self.terminal_order_cache,
-                pending_ids=list(self.pending_order_ids))
+                pending_ids=list(self.pending_order_ids),
+                # AN ABSENT ID IS RESOLVED ONLY ONCE IT WAS OBSERVED.
+                # Without this, a venue that acknowledges an order and
+                # then denies it exists lets a second first leg through.
+                observed_ids=self._observed_ids())
         except Exception as exc:                               # noqa: BLE001
             view = {"ok": False,
                     "reason": "ORDER_STATE_READER_RAISED:%s"
                               % type(exc).__name__,
                     "outstanding_sentinel": OS.UNKNOWN_OUTSTANDING,
                     "FAILS_CLOSED": True}
+        # ACCUMULATE OBSERVATION, before anything else is derived from the
+        # view. An id this read positively showed is real, and stays known
+        # to be real even if a later read omits it.
+        for _oid in (view.get("ids_observed_this_read") or []):
+            self.observed_order_ids.add(str(_oid))
         # PERSIST WHAT THE VENUE CONFIRMED AS FINISHED, so the next
         # process does not have to ask again. Only terminal rows are ever
         # written, and a save failure is not a trading failure: the cache
@@ -548,8 +579,25 @@ class PmusWindowProvider:
         # rather than trusted from window-open: the only order state worth
         # anything is the state as of this decision.
         ostate = self.order_state(pin)
+        # RECONCILE OUR OWN RECORD AGAINST WHAT THE VENUE JUST SAID, before
+        # the snapshot is assembled. A view that is not `ok` advances
+        # nothing in either direction: an unreadable venue is not evidence
+        # about our obligations.
+        if self.obligations is not None:
+            try:
+                self._last_obligation_reconcile = self.obligations.reconcile(
+                    ostate)
+            except OB.LedgerUnavailable as exc:
+                # THE DURABLE RECORD IS THE AUTHORITY, so losing it is a
+                # refusal and not a shrug. The snapshot carries the
+                # truthy sentinel the same way an unreadable venue does.
+                ostate = {"ok": False,
+                          "reason": "OBLIGATION_LEDGER_UNAVAILABLE:%s"
+                                    % type(exc).__name__,
+                          "outstanding_sentinel": OS.UNKNOWN_OUTSTANDING,
+                          "FAILS_CLOSED": True}
 
-        return {
+        snap = {
             "probe": PROBE,
             "venue": "polymarket_us",
             "market": pin["slug"],
@@ -583,6 +631,10 @@ class PmusWindowProvider:
             # its submission intent to this very list, and the next
             # snapshot's order-state read sees it.
             "pending_order_ids": self.pending_order_ids,
+            # SHARED BY REFERENCE too, for the same reason: the submission
+            # path is handed a snapshot and must be able to record an
+            # obligation before its POST.
+            "obligation_ledger": self.obligations,
             "known_order_ids": self.known_order_ids,
             "order_roles": self.order_roles,
             # the complement's OWN gate, which an outstanding first leg
@@ -626,6 +678,11 @@ class PmusWindowProvider:
                          "PmusWindowProvider"),
             "LABEL": "SNAPSHOT -- eligibility is still eligible()'s to decide",
         }
+        # OUR RECORD RAISES THE FLOOR, and only ever raises it: the counts
+        # and the exposure become the maximum of the venue's and ours, so
+        # every existing refusal still fires on at least the input it fired
+        # on before and nothing that refused can now permit.
+        return OB.merge_into_snapshot(snap, ledger=self.obligations)
 
     def report(self) -> Dict[str, Any]:
         return {"probe": PROBE,

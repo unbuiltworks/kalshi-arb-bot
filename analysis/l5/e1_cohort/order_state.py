@@ -652,6 +652,7 @@ def read_order_state(reader: Callable[[str], Any], *,
                      terminal_cache: Optional[Dict[str, Dict[str, Any]]]
                      = None,
                      pending_ids: Iterable[str] = (),
+                     observed_ids: Iterable[str] = (),
                      max_age_s: float = MAX_ORDER_STATE_AGE_S,
                      now_fn: Optional[Callable[[], float]] = None
                      ) -> Dict[str, Any]:
@@ -857,11 +858,27 @@ def read_order_state(reader: Callable[[str], Any], *,
     #     that id is not resting. It is treated as resolved, which is also
     #     what stops a filled order paging out of the history window from
     #     blocking E1 forever.
+    #
+    #   AND THE CASE THAT WAS WRONG. "A successful read that omits an id
+    #   means that id is not resting" is true at steady state and FALSE
+    #   immediately after a POST: a venue that acknowledges an order and
+    #   has not yet published it will omit it from `/v1/orders/open` and
+    #   404 its own record, both endpoints agreeing, so nothing looks
+    #   inconsistent. `test_e1_burst_1215z.py` places a second first leg
+    #   through exactly that gap. So an id is only resolved by absence once
+    #   a successful read has POSITIVELY SHOWN IT at least once --
+    #   `observed_ids`, which the obligation ledger supplies from its own
+    #   durable record. An acknowledged id the venue has never admitted to
+    #   is treated like a local intent: it counts.
+    seen_before = {str(o) for o in observed_ids if o}
     unseen_pending = [p for p in pend
-                      if p not in by_id and str(p).startswith(LOCAL_INTENT)]
+                      if p not in by_id
+                      and (str(p).startswith(LOCAL_INTENT)
+                           or str(p) not in seen_before)]
     resolved_pending = [p for p in pend
                         if p not in by_id
-                        and not str(p).startswith(LOCAL_INTENT)]
+                        and not str(p).startswith(LOCAL_INTENT)
+                        and str(p) in seen_before]
     for p in unseen_pending:
         by_id[p] = {
             "id": p, "slug": None, "outcome_side": None,
@@ -872,6 +889,7 @@ def read_order_state(reader: Callable[[str], Any], *,
             "own_side_price": None, "terminal": False,
             "outstanding": True, "partially_filled": False,
             "filled": False, "locally_pending": True,
+            "never_observed_at_venue": not str(p).startswith(LOCAL_INTENT),
         }
 
     # ROLES. An id with no recorded role is a FIRST LEG, conservatively: it
@@ -1069,7 +1087,18 @@ def read_order_state(reader: Callable[[str], Any], *,
         "an_unpriceable_live_exposure_is_still_ORDER_STATE_INCONSISTENT":
             True,
         "open_ids": sorted(open_ids),
+        # WHICH IDS THIS READ POSITIVELY SHOWED. Published so the caller can
+        # accumulate observation DURABLY and absence can resolve an id that
+        # was once real. Without this, "never observed" would be sticky with
+        # no release path and a confirmed id the venue later stops listing
+        # would block E1 for ever -- fail-closed turning into a deadlock.
+        "ids_observed_this_read": sorted(
+            str(c["id"]) for c in by_id.values()
+            if c.get("id") is not None and not c.get("locally_pending")),
         "unconfirmed_pending_ids": sorted(unseen_pending),
+        "acknowledged_but_never_observed_ids": sorted(
+            p for p in unseen_pending if not str(p).startswith(LOCAL_INTENT)),
+        "an_absent_id_is_resolved_only_after_it_was_once_observed": True,
         "pending_ids_resolved_by_this_read": sorted(resolved_pending),
         "ids_absent_at_venue_404": sorted(absent),
         "ids_served_from_terminal_cache": sorted(cached_used),

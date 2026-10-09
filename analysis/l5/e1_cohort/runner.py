@@ -60,6 +60,7 @@ from analysis.l5.e1_cohort import arming as A
 from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import budget as BUD
 from analysis.l5.e1_cohort import latch as L
+from analysis.l5.e1_cohort import obligations as OB
 from analysis.l5.e1_cohort import local_faults as LF
 from analysis.l5.e1_cohort import multitrade as MT
 from analysis.l5.e1_cohort import attempt_rows as AR
@@ -875,6 +876,38 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
             detail={"intent_id": intent_id, "slug": slug, "side": side,
                     "price": str(price), "qty": str(qty),
                     "recorded_BEFORE_the_post": True})
+    # AND IN THE OBLIGATION LEDGER, which is the record that outranks the
+    # venue's view. The tape above is append-only evidence for a restart;
+    # this is the live predicate the eligibility floor reads, and it is
+    # written before the POST for the same reason.
+    # SHARED BY REFERENCE in the snapshot, exactly as `pending_order_ids`
+    # is: this function is handed a snapshot and nothing else.
+    _ledger = snapshot.get("obligation_ledger")
+    if _ledger is not None:
+        try:
+            _ledger.record_submission(
+                intent_id=intent_id, window=window, slot=-1, slug=slug,
+                side=side, price=price, qty=qty)
+        except OB.ReservationHeld as held:
+            # ANOTHER WORKER HOLDS THE SINGLE FIRST-LEG RESERVATION. This
+            # is a refusal, not a queue and not a retry: the whole point of
+            # an O_EXCL token is that the loser does not proceed. The local
+            # intent recorded a moment ago is withdrawn because NOTHING was
+            # POSTed -- we never reached the latch, let alone the preview.
+            if isinstance(pending, list) and intent_id in pending:
+                pending.remove(intent_id)
+            raise Ineligible(
+                "E3_FIRST_LEG_RESERVATION_HELD by %s; no order was created"
+                % (held.holder.get("intent_id"),),
+                refusals=["E3_FIRST_LEG_RESERVATION_HELD"]) from None
+        except OB.LedgerUnavailable as exc:
+            if isinstance(pending, list) and intent_id in pending:
+                pending.remove(intent_id)
+            raise Ineligible(
+                "E3_OBLIGATION_LEDGER_UNAVAILABLE:%s; a submission we "
+                "cannot record is a submission we do not make"
+                % type(exc).__name__,
+                refusals=["E3_OBLIGATION_LEDGER_UNAVAILABLE"]) from None
 
     def _take_slot() -> Dict[str, Any]:
         holder["slot"] = L.consume_attempt(window=window, slug=slug,
@@ -898,6 +931,12 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
         # authorization refusal instead of an uncaught RuntimeError.
         if isinstance(pending, list) and intent_id in pending:
             pending.remove(intent_id)
+        if _ledger is not None:
+            # SAFE HERE AND NOWHERE ELSE: the O_EXCL create failed, so the
+            # POST provably never happened and no order can exist. An
+            # ambiguous submission is NOT retired -- it keeps blocking.
+            _ledger.retire_never_sent(
+                intent_id, why="LATCH_REFUSED_BEFORE_THE_POST")
         if recorder is not None:
             recorder.record_event(
                 window=window, slot=-1,
@@ -932,6 +971,8 @@ def submit_first_leg(snapshot: Mapping[str, Any], tracker: CohortTracker,
         inner = out.get("order") or out.get("response") or {}
         if isinstance(inner, Mapping):
             oid = str(inner.get("id")) if inner.get("id") else None
+    if _ledger is not None and oid:
+        _ledger.bind_venue_id(intent_id, oid)
     if isinstance(pending, list) and intent_id in pending:
         if oid:
             pending[pending.index(intent_id)] = oid
@@ -2127,8 +2168,14 @@ def _default_provider_factory(*, progress: Any, session_auth: Any,
     package -- it proved freshness on a venue E1 does not trade.
     """
     from analysis.l5.e1_cohort.pmus_provider import PmusWindowProvider
+    # THE DURABLE OBLIGATION LEDGER, on the same mounted volume as the
+    # latch and scoped to the same owner session. Construction FAILS CLOSED:
+    # `LedgerUnavailable` propagates, because a cohort that cannot record
+    # what it sends must not send anything.
+    ledger = OB.ObligationLedger(L.LATCH_DIR, session_id=A.session_id())
     return PmusWindowProvider(progress=progress, session_auth=session_auth,
-                              recorder=recorder, budget=budget)
+                              recorder=recorder, budget=budget,
+                              obligations=ledger)
 
 
 def _default_progress_factory(state_dir: str) -> Any:
