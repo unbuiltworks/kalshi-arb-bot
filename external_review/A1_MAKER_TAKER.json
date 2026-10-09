@@ -1,0 +1,135 @@
+{
+ "feed_verification": {
+  "url": "https://data-api.polymarket.com/trades",
+  "params": {
+   "limit": 500,
+   "offset": 0,
+   "sortBy": "TIMESTAMP",
+   "sortDirection": "DESC",
+   "takerOnly": "true",
+   "user": "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
+  },
+  "envelopes": 27,
+  "statuses": {
+   "200": 27
+  },
+  "distinct_offsets": [
+   0,
+   500,
+   1000,
+   1500,
+   2000,
+   2500,
+   3000,
+   3500,
+   4000
+  ],
+  "max_offset_reached": 4000,
+  "raw_rows": 13500,
+  "unique_rows": 11810,
+  "span_epoch": [
+   1787875677,
+   1788217879
+  ],
+  "span_days": 3.961,
+  "hours_spanned": 96,
+  "hours_with_any_taker": 92,
+  "hourly_coverage": 0.9583,
+  "largest_gap_between_taker_trades_s": 15145,
+  "median_gap_s": 11,
+  "dense_window_epoch": [
+   1787893200,
+   1788159599
+  ],
+  "dense_window_hours": 74,
+  "PAGINATION_TRUNCATED": true,
+  "_truncation_note": "Paginated DESC from newest and stopped at offset 4000, so each run saw roughly the newest 4,500 taker trades. Absence from the feed is therefore evidence of maker execution ONLY inside the dense window, and even there it assumes no hole within an hour."
+ },
+ "classification": {
+  "corpus_fills_inside_feed_span": 72550,
+  "TAKER_OBSERVED": 11810,
+  "MAKER_INFERRED": 49929,
+  "COVERAGE_UNKNOWN": 10811,
+  "taker_share_of_classifiable": 0.1913,
+  "maker_share_of_classifiable": 0.8087,
+  "_what_is_evidence": "TAKER_OBSERVED is directly evidenced -- the row is in the takerOnly feed. MAKER_INFERRED is an INFERENCE from absence inside the dense window. COVERAGE_UNKNOWN carries no claim."
+ },
+ "by_leg": {
+  "DOWN": {
+   "COVERAGE_UNKNOWN": 5271,
+   "TAKER_OBSERVED": 5984,
+   "MAKER_INFERRED": 25276
+  },
+  "UP": {
+   "COVERAGE_UNKNOWN": 5540,
+   "TAKER_OBSERVED": 5826,
+   "MAKER_INFERRED": 24653
+  }
+ },
+ "by_asset_duration": {
+  "BTC-15": {
+   "COVERAGE_UNKNOWN": 10811,
+   "TAKER_OBSERVED": 2875,
+   "MAKER_INFERRED": 49921
+  },
+  "BTC-5": {
+   "TAKER_OBSERVED": 6567,
+   "MAKER_INFERRED": 3
+  },
+  "ETH-5": {
+   "TAKER_OBSERVED": 2251,
+   "MAKER_INFERRED": 5
+  },
+  "ETH-15": {
+   "TAKER_OBSERVED": 117
+  }
+ },
+ "taker_share_by_price_bucket": {
+  "px_>=0.9": 0.3867,
+  "px_[0,0.1)": 0.2242,
+  "px_[0.1,0.2)": 0.1101,
+  "px_[0.2,0.3)": 0.0824,
+  "px_[0.3,0.4)": 0.1024,
+  "px_[0.4,0.5)": 0.1382,
+  "px_[0.5,0.6)": 0.2179,
+  "px_[0.6,0.7)": 0.2418,
+  "px_[0.7,0.8)": 0.236,
+  "px_[0.8,0.9)": 0.2838
+ },
+ "taker_share_by_size_bucket": {
+  "sz_[0,5)": 0.0403,
+  "sz_[10,20)": 0.1696,
+  "sz_[20,50)": 0.2261,
+  "sz_[5,10)": 0.1244,
+  "sz_[50,100)": 0.3622
+ },
+ "taker_share_by_time_to_settlement": {
+  "tts_>=600": 0.0359,
+  "tts_[0,30)": 0.6647,
+  "tts_[120,300)": 0.3222,
+  "tts_[30,60)": 0.5023,
+  "tts_[300,600)": 0.0436,
+  "tts_[60,120)": 0.4553
+ },
+ "price_and_size_by_class": {
+  "TAKER_OBSERVED": {
+   "n": 11810,
+   "mean_price": 0.53363,
+   "median_size": 38.0,
+   "median_seconds_to_settlement": 144.0
+  },
+  "MAKER_INFERRED": {
+   "n": 49929,
+   "mean_price": 0.42201,
+   "median_size": 10.5769,
+   "median_seconds_to_settlement": 441.0
+  },
+  "COVERAGE_UNKNOWN": {
+   "n": 10811,
+   "mean_price": 0.42774,
+   "median_size": 10.7181,
+   "median_seconds_to_settlement": 417.0
+  }
+ },
+ "labels_file": "A1_fill_labels.csv.gz"
+}

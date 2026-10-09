@@ -125,6 +125,10 @@ def main() -> int:
         "external_review/VENUE_GATE_AND_PASSIVITY.md",
         "external_review/ACROSS_TIME_GATE_v2_polymarket.json",
         "external_review/PASSIVE_VS_AGGRESSIVE_RESULT.json",
+        "external_review/CONSOLIDATED_ECONOMIC_VERDICT.md",
+        "external_review/A1_MAKER_TAKER.json",
+        "external_review/B1_CROSS_TIME_REPLAY.json",
+        "scripts/A1_maker_taker.py", "scripts/B1_cross_time_replay.py",
         "scripts/91_across_time_gate_v2.py",
         "scripts/92_passive_vs_aggressive.py",
     ]

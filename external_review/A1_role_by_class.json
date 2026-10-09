@@ -1,0 +1,14 @@
+{
+ "COVERAGE_UNKNOWN": {
+  "EXTENDS_residual": 5333,
+  "COMPLETES_a_pair": 5424
+ },
+ "TAKER_OBSERVED": {
+  "EXTENDS_residual": 5384,
+  "COMPLETES_a_pair": 4557
+ },
+ "MAKER_INFERRED": {
+  "EXTENDS_residual": 25541,
+  "COMPLETES_a_pair": 24148
+ }
+}

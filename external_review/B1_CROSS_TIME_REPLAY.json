@@ -1,0 +1,272 @@
+{
+ "tape_files": 63,
+ "venues": {
+  "kalshi": {
+   "markets": 192,
+   "events": 744525
+  },
+  "gemini": {
+   "markets": 1012,
+   "events": 250815,
+   "prints": 833,
+   "up_leg_markets": 1012,
+   "down_leg_markets": 0,
+   "markets_with_BOTH_legs": 0,
+   "VERDICT": "NOT TESTABLE: 833 prints across 1012 leg markets, and 0 markets quote BOTH legs. A passive strategy cannot be evaluated without aggressive flow to fill against, and a cross-time pair cannot be assembled where the complement leg is not quoted. This is a data limitation, not a profitability finding."
+  }
+ },
+ "settlement_method": "PROXY: last print in the window decides the winner (yes_price > 0.5 -> YES). The tapes carry no settlement record. Markets without a usable final print are DROPPED.",
+ "fees": "Kalshi schedule from CLAUDE.md: taker ceil(0.07*C*P*(1-P)), maker ceil(0.0175*C*P*(1-P)), rounded UP to the cent.",
+ "kalshi": {
+  "0.20": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.0312,
+    "either_leg": 0.7917
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.0312,
+    "one_leg_only": 0.7604,
+    "mean_pnl_per_market": -0.07692,
+    "ci95": [
+     -0.10509,
+     -0.04419
+    ],
+    "share_profitable": 0.0573
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.0469,
+    "one_leg_only": 0.7135,
+    "never_filled": 0.2396,
+    "mean_pnl_per_market": -0.10182,
+    "ci95": [
+     -0.13224,
+     -0.07026
+    ],
+    "share_profitable": 0.0677
+   }
+  },
+  "0.25": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.0573,
+    "either_leg": 0.8438
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.0573,
+    "one_leg_only": 0.7865,
+    "mean_pnl_per_market": -0.07137,
+    "ci95": [
+     -0.10764,
+     -0.03442
+    ],
+    "share_profitable": 0.1042
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.0729,
+    "one_leg_only": 0.7448,
+    "never_filled": 0.1823,
+    "mean_pnl_per_market": -0.11698,
+    "ci95": [
+     -0.15479,
+     -0.0774
+    ],
+    "share_profitable": 0.1146
+   }
+  },
+  "0.30": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.0781,
+    "either_leg": 0.8802
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.0781,
+    "one_leg_only": 0.8021,
+    "mean_pnl_per_market": -0.09974,
+    "ci95": [
+     -0.13507,
+     -0.0605
+    ],
+    "share_profitable": 0.1146
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.099,
+    "one_leg_only": 0.75,
+    "never_filled": 0.151,
+    "mean_pnl_per_market": -0.16365,
+    "ci95": [
+     -0.19885,
+     -0.12448
+    ],
+    "share_profitable": 0.1302
+   }
+  },
+  "0.35": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.1667,
+    "either_leg": 0.9375
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.1667,
+    "one_leg_only": 0.7708,
+    "mean_pnl_per_market": -0.10229,
+    "ci95": [
+     -0.1414,
+     -0.06042
+    ],
+    "share_profitable": 0.1927
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.1562,
+    "one_leg_only": 0.7396,
+    "never_filled": 0.1042,
+    "mean_pnl_per_market": -0.18083,
+    "ci95": [
+     -0.22271,
+     -0.13729
+    ],
+    "share_profitable": 0.1979
+   }
+  },
+  "0.40": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.2396,
+    "either_leg": 0.9635
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.2396,
+    "one_leg_only": 0.724,
+    "mean_pnl_per_market": -0.09328,
+    "ci95": [
+     -0.13273,
+     -0.04994
+    ],
+    "share_profitable": 0.2708
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.2448,
+    "one_leg_only": 0.6979,
+    "never_filled": 0.0573,
+    "mean_pnl_per_market": -0.20563,
+    "ci95": [
+     -0.24823,
+     -0.16542
+    ],
+    "share_profitable": 0.2812
+   }
+  },
+  "0.45": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.3333,
+    "either_leg": 0.9792
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.3333,
+    "one_leg_only": 0.6458,
+    "mean_pnl_per_market": -0.08234,
+    "ci95": [
+     -0.1209,
+     -0.04269
+    ],
+    "share_profitable": 0.3542
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.3542,
+    "one_leg_only": 0.6042,
+    "never_filled": 0.0417,
+    "mean_pnl_per_market": -0.23396,
+    "ci95": [
+     -0.27417,
+     -0.19458
+    ],
+    "share_profitable": 0.3698
+   }
+  },
+  "0.48": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.3958,
+    "either_leg": 0.9844
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.3958,
+    "one_leg_only": 0.5885,
+    "mean_pnl_per_market": -0.08395,
+    "ci95": [
+     -0.1178,
+     -0.05016
+    ],
+    "share_profitable": 0.3958
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.401,
+    "one_leg_only": 0.5573,
+    "never_filled": 0.0417,
+    "mean_pnl_per_market": -0.25464,
+    "ci95": [
+     -0.29193,
+     -0.21766
+    ],
+    "share_profitable": 0.4115
+   }
+  },
+  "0.50": {
+   "markets_settled": 192,
+   "dropped_no_final_print": 0,
+   "QUOTED_opportunity": {
+    "both_legs_quoted_at_or_below_theta": 0.4375,
+    "either_leg": 0.9844
+   },
+   "AGGRESSIVE_taker": {
+    "both_legs_filled": 0.4375,
+    "one_leg_only": 0.5469,
+    "mean_pnl_per_market": -0.07619,
+    "ci95": [
+     -0.10795,
+     -0.04369
+    ],
+    "share_profitable": 0.3542
+   },
+   "PASSIVE_queue_cleared": {
+    "both_legs_filled": 0.4375,
+    "one_leg_only": 0.5208,
+    "never_filled": 0.0417,
+    "mean_pnl_per_market": -0.26917,
+    "ci95": [
+     -0.305,
+     -0.23344
+    ],
+    "share_profitable": 0.0052
+   }
+  }
+ },
+ "VERDICT": {
+  "best": {
+   "theta": "0.25",
+   "mode": "AGGRESSIVE_taker",
+   "mean_pnl_per_market": -0.07137,
+   "ci95": [
+    -0.10764,
+    -0.03442
+   ]
+  },
+  "gate": "NEGATIVE: the best configuration's whole CI is below zero.",
+  "_caveats": [
+   "settlement is a last-print proxy, not a settlement record",
+   "one unit per leg; no capacity or size scaling modelled",
+   "queue model assumes we join BEHIND all depth at or better than our price and never re-price or cancel",
+   "no latency, no rejects, no partial fills"
+  ]
+ }
+}
