@@ -1,0 +1,296 @@
+{
+ "item2_causality_placebos": {
+  "_what": "P&L effect of REMOVING a set of fills, per window. Positive means the removed fills were adding P&L. The aggression claim survives only if REAL moves P&L materially more than every placebo.",
+  "windows": 1359,
+  "by_variant": {
+   "REAL_remove_taker": {
+    "n": 1359,
+    "mean_pnl_effect": 2.2867,
+    "ci95": [
+     -0.1504,
+     4.8013
+    ],
+    "mean_residual_effect": 73.3475,
+    "residual_ci95": [
+     68.4138,
+     78.0725
+    ]
+   },
+   "P_RANDOM_maker": {
+    "n": 269,
+    "mean_pnl_effect": -0.5759,
+    "ci95": [
+     -4.2195,
+     3.051
+    ],
+    "mean_residual_effect": 5.4552,
+    "residual_ci95": [
+     -3.2224,
+     14.5338
+    ]
+   },
+   "P_LATE_any_class": {
+    "n": 1359,
+    "mean_pnl_effect": 0.6592,
+    "ci95": [
+     -1.6794,
+     2.9055
+    ],
+    "mean_residual_effect": 82.3828,
+    "residual_ci95": [
+     77.969,
+     87.4644
+    ]
+   },
+   "P_SIZE_largest": {
+    "n": 1359,
+    "mean_pnl_effect": 1.6182,
+    "ci95": [
+     -1.2363,
+     4.4697
+    ],
+    "mean_residual_effect": 69.0702,
+    "residual_ci95": [
+     63.3523,
+     74.7408
+    ]
+   }
+  },
+  "VERDICT": "NOT AGGRESSION-SPECIFIC: at least one placebo reproduces the effect, so removal-of-trades measures fill count, timing or size rather than aggression. The earlier +2.224 figure must NOT be read as causal.",
+  "placebo_means": [
+   -0.5759,
+   0.6592,
+   1.6182
+  ]
+ },
+ "item3_mode_economics": {
+  "_scope": "the 72,550 fills carrying a real execution label (2026-08-28..31). Residual lots are attributed FIFO to the mode that bought them.",
+  "by_mode": {
+   "TAKER_OBSERVED": {
+    "fills": 11810,
+    "spend": 204957.31,
+    "qty": 406320.45,
+    "resid_qty_created": 143581.66,
+    "resid_won_qty": 71997.26,
+    "resid_lost_qty": 71584.4,
+    "resid_spend": 69584.47,
+    "mean_price": 0.50442,
+    "residual_settlement_pnl": 2412.79
+   },
+   "MAKER_INFERRED": {
+    "fills": 49929,
+    "spend": 452189.58,
+    "qty": 966239.75,
+    "resid_qty_created": 75655.8,
+    "resid_won_qty": 9346.4,
+    "resid_lost_qty": 66309.39,
+    "resid_spend": 14974.02,
+    "mean_price": 0.46799,
+    "residual_settlement_pnl": -5627.62
+   }
+  },
+  "matched_book": {
+   "matched_pairs": 677011.29,
+   "locked_profit": 6077.09,
+   "_note": "the matched book's profit is settlement-independent and cannot be attributed to one mode: a pair needs one unit from each leg, often bought in different modes."
+  },
+  "incentives": {
+   "_note": "MAKER_REBATE / TAKER_REBATE / REWARD records carry an EMPTY slug, so they cannot be attributed to a window or a mode. Account-level only; see cashflow.csv.gz."
+  }
+ },
+ "item4_heldout": {
+  "mode_proxy": {
+   "rule": "size >= 15 AND seconds_to_settlement < 300 -> late-aggressive, else early-passive",
+   "calibrated_on": "the 72,550 real labels",
+   "precision": 0.5054,
+   "recall": 0.6671,
+   "f1": 0.5751
+  },
+  "by_heldout_month": {
+   "2026-03": {
+    "BOTH_MODES": {
+     "n": 88,
+     "mean_pnl": 0.0093,
+     "ci95": [
+      -4.585,
+      4.9132
+     ]
+    },
+    "EARLY_PASSIVE_ONLY": {
+     "n": 88,
+     "mean_pnl": 0.0434,
+     "ci95": [
+      -4.7687,
+      4.6936
+     ]
+    },
+    "LATE_AGGRESSIVE_ONLY": {
+     "n": 88,
+     "mean_pnl": -0.0341,
+     "ci95": [
+      -0.1023,
+      0.0
+     ]
+    }
+   },
+   "2026-04": {
+    "BOTH_MODES": {
+     "n": 548,
+     "mean_pnl": 9.9882,
+     "ci95": [
+      3.2716,
+      17.5388
+     ]
+    },
+    "EARLY_PASSIVE_ONLY": {
+     "n": 548,
+     "mean_pnl": 6.5802,
+     "ci95": [
+      0.6489,
+      11.9139
+     ]
+    },
+    "LATE_AGGRESSIVE_ONLY": {
+     "n": 548,
+     "mean_pnl": 3.408,
+     "ci95": [
+      -1.1789,
+      8.0943
+     ]
+    }
+   },
+   "2026-05": {
+    "BOTH_MODES": {
+     "n": 919,
+     "mean_pnl": 10.9567,
+     "ci95": [
+      4.9881,
+      16.6096
+     ]
+    },
+    "EARLY_PASSIVE_ONLY": {
+     "n": 919,
+     "mean_pnl": 10.3491,
+     "ci95": [
+      5.784,
+      15.3938
+     ]
+    },
+    "LATE_AGGRESSIVE_ONLY": {
+     "n": 919,
+     "mean_pnl": 0.6076,
+     "ci95": [
+      -2.89,
+      4.1397
+     ]
+    }
+   },
+   "2026-06": {
+    "BOTH_MODES": {
+     "n": 1031,
+     "mean_pnl": 11.9558,
+     "ci95": [
+      7.3427,
+      16.09
+     ]
+    },
+    "EARLY_PASSIVE_ONLY": {
+     "n": 1031,
+     "mean_pnl": 5.5567,
+     "ci95": [
+      2.4251,
+      9.0116
+     ]
+    },
+    "LATE_AGGRESSIVE_ONLY": {
+     "n": 1031,
+     "mean_pnl": 6.3991,
+     "ci95": [
+      3.2045,
+      9.3496
+     ]
+    }
+   },
+   "2026-07": {
+    "BOTH_MODES": {
+     "n": 3666,
+     "mean_pnl": 5.3975,
+     "ci95": [
+      3.3728,
+      7.2745
+     ]
+    },
+    "EARLY_PASSIVE_ONLY": {
+     "n": 3666,
+     "mean_pnl": 2.3256,
+     "ci95": [
+      1.1458,
+      3.4358
+     ]
+    },
+    "LATE_AGGRESSIVE_ONLY": {
+     "n": 3666,
+     "mean_pnl": 3.0719,
+     "ci95": [
+      1.3633,
+      4.8082
+     ]
+    }
+   },
+   "2026-08": {
+    "BOTH_MODES": {
+     "n": 10790,
+     "mean_pnl": 2.1557,
+     "ci95": [
+      1.0216,
+      3.2824
+     ]
+    },
+    "EARLY_PASSIVE_ONLY": {
+     "n": 10790,
+     "mean_pnl": 0.6121,
+     "ci95": [
+      -0.1607,
+      1.4046
+     ]
+    },
+    "LATE_AGGRESSIVE_ONLY": {
+     "n": 10790,
+     "mean_pnl": 1.5436,
+     "ci95": [
+      0.6377,
+      2.5245
+     ]
+    }
+   }
+  },
+  "BOTH_MODES": {
+   "windows": 17042,
+   "mean_pnl": 4.1613,
+   "ci95": [
+    3.2661,
+    5.1687
+   ],
+   "total_pnl": 70917.15
+  },
+  "EARLY_PASSIVE_ONLY": {
+   "windows": 17042,
+   "mean_pnl": 1.9939,
+   "ci95": [
+    1.2788,
+    2.6243
+   ],
+   "total_pnl": 33979.61
+  },
+  "LATE_AGGRESSIVE_ONLY": {
+   "windows": 17042,
+   "mean_pnl": 2.1674,
+   "ci95": [
+    1.378,
+    2.9244
+   ],
+   "total_pnl": 36937.54
+  },
+  "VERDICT": "BOTH beats each single mode (CIs disjoint from both)"
+ }
+}
