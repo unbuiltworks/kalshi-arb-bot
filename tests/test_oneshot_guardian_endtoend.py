@@ -129,10 +129,48 @@ def test_a_blocked_gate_means_no_body_ever_reaches_the_transport(tmp_path):
 # ------------------------------------------------------- the store wiring ---
 def test_the_guardian_store_defaults_onto_the_durable_volume(monkeypatch,
                                                              tmp_path):
+    """When a run needs the guardian, the store lands on the durable volume
+    beside the journal, so it survives the process."""
     monkeypatch.delenv(ONE.GUARDIAN_STATE_ENV, raising=False)
     monkeypatch.setenv("PMUS_Q1_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(ONE.Q1X, "armed", lambda: True)
     g = ONE._build_guardian(FakeProbe(FakeTp()), None)
     assert g.path == tmp_path / "guardian_ownership.json"
+
+
+def test_an_armed_run_always_requires_the_guardian(monkeypatch):
+    monkeypatch.delenv(ONE.GUARDIAN_STATE_ENV, raising=False)
+    monkeypatch.setattr(ONE.Q1X, "armed", lambda: True)
+    assert ONE.guardian_required() is True
+
+
+def test_a_disarmed_run_does_not_require_it_because_it_cannot_submit(
+        monkeypatch):
+    """Not a loophole: a disarmed run cannot submit, so there is no order to
+    reconcile. Binding the gate to arming is what the requirement says."""
+    monkeypatch.delenv(ONE.GUARDIAN_STATE_ENV, raising=False)
+    monkeypatch.setattr(ONE.Q1X, "armed", lambda: False)
+    assert ONE.guardian_required() is False
+    assert ONE._build_guardian(FakeProbe(FakeTp()), None) is None
+
+
+def test_an_explicit_store_path_requires_it_even_when_disarmed(monkeypatch,
+                                                               tmp_path):
+    monkeypatch.setenv(ONE.GUARDIAN_STATE_ENV,
+                       str(tmp_path / "explicit.json"))
+    monkeypatch.setattr(ONE.Q1X, "armed", lambda: False)
+    assert ONE.guardian_required() is True
+
+
+def test_an_unknowable_arm_state_requires_it(monkeypatch):
+    """Failing closed: if we cannot tell whether we are armed, assume we are."""
+    monkeypatch.delenv(ONE.GUARDIAN_STATE_ENV, raising=False)
+
+    def boom():
+        raise RuntimeError("cannot read arm state")
+
+    monkeypatch.setattr(ONE.Q1X, "armed", boom)
+    assert ONE.guardian_required() is True
 
 
 def test_an_unusable_store_path_blocks_rather_than_trading_unprotected(
@@ -140,6 +178,7 @@ def test_an_unusable_store_path_blocks_rather_than_trading_unprotected(
     bad = tmp_path / "not-a-dir"
     bad.write_text("x")
     monkeypatch.setenv(ONE.GUARDIAN_STATE_ENV, str(bad / "own.json"))
+    monkeypatch.setattr(ONE.Q1X, "armed", lambda: True)
     g = ONE._build_guardian(FakeProbe(FakeTp()), None)
     # the store opens lazily; the write that matters is the INTENT, so prove
     # that an intent against an unusable path raises rather than passing

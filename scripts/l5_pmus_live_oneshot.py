@@ -46,6 +46,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from src import pmus_guardian_gate as GATE
 from src import pmus_order_guardian as GUARD
+from src import pmus_q1_executor as Q1X
 from src import l5_live_authorization as AUTH
 from src import l5_live_book_feed as FEED
 from src import l5_live_execution as EX
@@ -916,13 +917,34 @@ _LAST_PROBE: Optional["Probe"] = None
 GUARDIAN_STATE_ENV = "L5_GUARDIAN_STATE"
 
 
-def _build_guardian(probe, journal):
-    """The ownership store, or None when no path is configured.
+def guardian_required() -> bool:
+    """Is startup reconciliation mandatory for THIS run?
 
-    Returning None keeps every existing caller and test working unchanged;
-    a configured path makes reconciliation mandatory. The default lives
-    beside the journal on the same volume, so it survives the process.
+    Mandatory whenever the run can move money -- `Q1X.armed()` is the same
+    predicate that gates submit and cancel -- or whenever a store path is
+    named explicitly, which is how a disarmed run opts in to exercising it.
+
+    A DISARMED run skips it, and that is not a loophole: a disarmed run
+    cannot submit at all, so there is no order to reconcile. Making the gate
+    unconditional was my own defect. It broke 20 existing tests whose
+    transport doubles expose no `request`, and in production it would have
+    blocked any transport lacking that method -- converting a safety check
+    into an outage. The requirement is reconciliation before ARMING or
+    SUBMITTING, and this binds to exactly that.
     """
+    if os.getenv(GUARDIAN_STATE_ENV, "").strip():
+        return True
+    try:
+        return bool(Q1X.armed())
+    except BaseException:                                      # noqa: BLE001
+        # unable to tell whether we are armed -> assume we are
+        return True
+
+
+def _build_guardian(probe, journal):
+    """The ownership store for a run that needs one, else None."""
+    if not guardian_required():
+        return None
     path = os.getenv(GUARDIAN_STATE_ENV, "").strip()
     if not path:
         base = os.getenv("PMUS_Q1_STATE_DIR", "").strip() or "/state/pmus-ws"

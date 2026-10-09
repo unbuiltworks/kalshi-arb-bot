@@ -54,6 +54,8 @@ COPY scripts/audit_economic_complete.py scripts/audit_economic_complete.py
 COPY src/l5_replay_input.py src/l5_replay_input.py
 COPY data/pmus_btc15m_tape_oos/oos_tape.jsonl data/pmus_btc15m_tape_oos/oos_tape.jsonl
 COPY src/__init__.py src/__init__.py
+COPY src/pmus_order_guardian.py src/pmus_order_guardian.py
+COPY src/pmus_guardian_gate.py src/pmus_guardian_gate.py
 COPY src/l5_authenticated_observation.py src/l5_authenticated_observation.py
 COPY src/l5_evidence_freeze.py src/l5_evidence_freeze.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
