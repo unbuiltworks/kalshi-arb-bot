@@ -560,31 +560,58 @@ def _mark(cand: dict, later: Sequence[Mapping[str, Any]]) -> None:
 
 
 # ------------------------------------------------------------- discovery ---
+# The venue serves `categories=` on /v1/markets (see
+# pmus_live_discovery_diag). An UNFILTERED walk is capped by max_pages, and
+# the first live cycle hit that cap exactly -- 15,000 rows, 30 pages of 500
+# -- so whatever sits past it was invisible. Walking per category first
+# guarantees the short-dated crypto windows are reached even when a few
+# thousand sports markets are served ahead of them.
+CATEGORIES = tuple((os.getenv("L5_CLONE_CATEGORIES") or
+                    "crypto,sports,economics,politics,commodities,weather,"
+                    "culture").split(","))
+
+
 def discover(get_json, *, max_pages: int = 30, page: int = 500,
-             sleep=time.sleep, pause: float = 0.35) -> List[dict]:
+             sleep=time.sleep, pause: float = 0.35,
+             categories: Optional[Sequence[str]] = None) -> List[dict]:
     """Every live open market the gateway will serve, all categories.
 
     Market-agnostic on purpose (CLAUDE.md): crypto, sports, econ, politics
     and anything else lawful compete for the same observation slots. Paced,
     because this shares a gateway with other services and an unpaced walk
     has drawn 429s before. Degrades to what it gathered rather than raising.
+
+    Each category is walked on its own, then the unfiltered slate, and the
+    union is de-duplicated by slug. A category the venue does not know
+    simply contributes nothing.
     """
-    rows: List[dict] = []
-    for p in range(max_pages):
-        if p and sleep:
-            sleep(pause)
-        try:
-            resp = get_json("/v1/markets?active=true&closed=false"
-                            "&limit=%d&offset=%d" % (page, p * page))
-        except Exception:                                      # noqa: BLE001
-            break
-        ms = (resp or {}).get("markets") if isinstance(resp, Mapping) else None
-        if not isinstance(ms, list) or not ms:
-            break
-        rows.extend(m for m in ms if isinstance(m, Mapping) and m.get("slug"))
-        if len(ms) < page:
-            break
-    return rows
+    seen: Dict[str, dict] = {}
+    cats = list(categories if categories is not None else CATEGORIES)
+    walks = [("&categories=%s" % c.strip(), c.strip())
+             for c in cats if c.strip()] + [("", None)]
+    for suffix, cat in walks:
+        for p in range(max_pages):
+            if sleep:
+                sleep(pause)
+            try:
+                resp = get_json("/v1/markets?active=true&closed=false"
+                                "&limit=%d&offset=%d%s"
+                                % (page, p * page, suffix))
+            except Exception:                                  # noqa: BLE001
+                break
+            ms = ((resp or {}).get("markets")
+                  if isinstance(resp, Mapping) else None)
+            if not isinstance(ms, list) or not ms:
+                break
+            for m in ms:
+                if isinstance(m, Mapping) and m.get("slug"):
+                    row = dict(m)
+                    if cat and not row.get("category"):
+                        row["category"] = cat
+                    seen.setdefault(str(row["slug"]), row)
+            if len(ms) < page:
+                break
+    return list(seen.values())
 
 
 TIME_KEY_HINTS = ("time", "date", "expir", "close", "start", "end", "resolve")

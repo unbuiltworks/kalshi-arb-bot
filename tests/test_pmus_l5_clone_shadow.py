@@ -292,3 +292,35 @@ def test_no_credentials_and_no_order_path_in_the_module():
     for name, obj in vars(mod).items():
         if inspect.ismodule(obj):
             assert "executor" not in obj.__name__, obj.__name__
+
+
+def test_discovery_walks_each_category_then_the_unfiltered_slate():
+    """The first live cycle served exactly 15,000 rows -- the 30x500 cap --
+    so anything past it, including the short-dated crypto windows, was
+    never seen. Discovery must reach past a single capped walk."""
+    pages = {}
+
+    def gw(path):
+        pages[path] = pages.get(path, 0) + 1
+        if "categories=crypto" in path and "offset=0" in path:
+            return {"markets": [{"slug": "cpc-btc-updown-15m-2026-10-09-0215z"}]}
+        if "categories=" not in path and "offset=0" in path:
+            return {"markets": [{"slug": "aec-nfl-a-b-2026-10-09"}]}
+        return {"markets": []}
+
+    rows = CS.discover(gw, sleep=None, categories=["crypto", "sports"])
+    slugs = {r["slug"] for r in rows}
+    assert "cpc-btc-updown-15m-2026-10-09-0215z" in slugs
+    assert "aec-nfl-a-b-2026-10-09" in slugs
+    # the category walk tags the row so ranking/reporting still has one
+    crypto = [r for r in rows if r["slug"].startswith("cpc-")][0]
+    assert crypto["category"] == "crypto"
+
+
+def test_discovery_deduplicates_across_walks():
+    def gw(path):
+        if "offset=0" in path:
+            return {"markets": [{"slug": "dup", "category": "crypto"}]}
+        return {"markets": []}
+    rows = CS.discover(gw, sleep=None, categories=["crypto", "sports"])
+    assert [r["slug"] for r in rows] == ["dup"]
