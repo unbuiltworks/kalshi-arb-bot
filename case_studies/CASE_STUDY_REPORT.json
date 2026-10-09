@@ -1,0 +1,182 @@
+{
+ "windows_scanned": 17046,
+ "case_studies": 29,
+ "strata_requested": 30,
+ "combined_bytes": 1121775,
+ "selected": [
+  {
+   "stratum": "R1-early-regime",
+   "event_slug": "btc-updown-15m-1774541700",
+   "n_fills": 40,
+   "pnl": -9.2888
+  },
+  {
+   "stratum": "R2-late-regime",
+   "event_slug": "btc-updown-15m-1788217200",
+   "n_fills": 166,
+   "pnl": 147.641
+  },
+  {
+   "stratum": "P1-most-profitable",
+   "event_slug": "btc-updown-15m-1787166900",
+   "n_fills": 344,
+   "pnl": 981.3209
+  },
+  {
+   "stratum": "P1b-most-profitable-early",
+   "event_slug": "btc-updown-15m-1777453200",
+   "n_fills": 68,
+   "pnl": 797.3492
+  },
+  {
+   "stratum": "P2-most-unprofitable",
+   "event_slug": "btc-updown-15m-1777957200",
+   "n_fills": 166,
+   "pnl": -505.6672
+  },
+  {
+   "stratum": "P2b-most-unprofitable-early",
+   "event_slug": "btc-updown-15m-1777966200",
+   "n_fills": 168,
+   "pnl": -258.0426
+  },
+  {
+   "stratum": "P3-near-zero-pnl",
+   "event_slug": "btc-updown-15m-1785367800",
+   "n_fills": 98,
+   "pnl": 0.0171
+  },
+  {
+   "stratum": "D1-one-sided-accumulation",
+   "event_slug": "btc-updown-15m-1786597200",
+   "n_fills": 54,
+   "pnl": 299.7779
+  },
+  {
+   "stratum": "D1b-one-sided-accumulation-early",
+   "event_slug": "btc-updown-15m-1777614300",
+   "n_fills": 47,
+   "pnl": -144.7123
+  },
+  {
+   "stratum": "D2-one-sided-accumulation-that-lost",
+   "event_slug": "btc-updown-15m-1781270100",
+   "n_fills": 54,
+   "pnl": -104.6308
+  },
+  {
+   "stratum": "C1-deepest-compression",
+   "event_slug": "btc-updown-15m-1787153400",
+   "n_fills": 621,
+   "pnl": 141.8781
+  },
+  {
+   "stratum": "C1b-deepest-compression-early",
+   "event_slug": "btc-updown-15m-1777815900",
+   "n_fills": 237,
+   "pnl": 11.9327
+  },
+  {
+   "stratum": "C2-pair-cost-worsened",
+   "event_slug": "btc-updown-15m-1787121900",
+   "n_fills": 756,
+   "pnl": 106.5486
+  },
+  {
+   "stratum": "C3-highest-final-pair-cost",
+   "event_slug": "btc-updown-15m-1778234400",
+   "n_fills": 48,
+   "pnl": -123.8872
+  },
+  {
+   "stratum": "C4-lowest-final-pair-cost",
+   "event_slug": "btc-updown-15m-1781198100",
+   "n_fills": 56,
+   "pnl": 252.1225
+  },
+  {
+   "stratum": "S1-highest-switch-rate",
+   "event_slug": "btc-updown-15m-1776710700",
+   "n_fills": 53,
+   "pnl": -0.3956
+  },
+  {
+   "stratum": "S1b-highest-switch-rate-early",
+   "event_slug": "btc-updown-15m-1774986300",
+   "n_fills": 42,
+   "pnl": 14.0534
+  },
+  {
+   "stratum": "S2-longest-single-leg-run",
+   "event_slug": "btc-updown-15m-1786179600",
+   "n_fills": 146,
+   "pnl": -123.1658
+  },
+  {
+   "stratum": "S3-zero-switch",
+   "event_slug": "btc-updown-5m-1783063800",
+   "n_fills": 22,
+   "pnl": 140.2515
+  },
+  {
+   "stratum": "V1-largest-notional",
+   "event_slug": "btc-updown-15m-1787615100",
+   "n_fills": 664,
+   "pnl": -112.0785
+  },
+  {
+   "stratum": "V2-most-fills",
+   "event_slug": "btc-updown-15m-1787875200",
+   "n_fills": 749,
+   "pnl": -36.1111
+  },
+  {
+   "stratum": "T1-fastest-cadence",
+   "event_slug": "btc-updown-15m-1776843900",
+   "n_fills": 144,
+   "pnl": 72.3225
+  },
+  {
+   "stratum": "T2-slowest-cadence",
+   "event_slug": "btc-updown-15m-1774909800",
+   "n_fills": 44,
+   "pnl": -27.34
+  },
+  {
+   "stratum": "A1-eth",
+   "event_slug": "eth-updown-15m-1787564700",
+   "n_fills": 37,
+   "pnl": -60.166
+  },
+  {
+   "stratum": "A2-5-minute",
+   "event_slug": "btc-updown-5m-1782806100",
+   "n_fills": 69,
+   "pnl": 8.8161
+  },
+  {
+   "stratum": "A3-15-minute",
+   "event_slug": "btc-updown-15m-1787042700",
+   "n_fills": 720,
+   "pnl": -277.1127
+  },
+  {
+   "stratum": "X1-ended-perfectly-matched",
+   "event_slug": "btc-updown-5m-1783939200",
+   "n_fills": 10,
+   "pnl": -25.8
+  },
+  {
+   "stratum": "X2-residual-side-won",
+   "event_slug": "btc-updown-15m-1787030100",
+   "n_fills": 364,
+   "pnl": 885.6261
+  },
+  {
+   "stratum": "X3-residual-side-lost",
+   "event_slug": "btc-updown-15m-1787706000",
+   "n_fills": 317,
+   "pnl": -170.4642
+  }
+ ]
+}

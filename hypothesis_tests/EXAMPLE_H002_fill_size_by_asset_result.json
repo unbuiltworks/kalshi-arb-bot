@@ -1,0 +1,65 @@
+{
+ "hypothesis_id": "EXAMPLE-H002",
+ "statement": "Median fill size differs between BTC and ETH windows. (FORMAT EXAMPLE only.)",
+ "unit": "fill",
+ "filter": [],
+ "group_by": "asset",
+ "metric": {
+  "column": "size",
+  "stat": "median"
+ },
+ "rows_scanned": 760817,
+ "rows_after_filter": 760817,
+ "groups": {
+  "BTC": {
+   "n": 745519,
+   "value": 15.0,
+   "ci95": [
+    15.0,
+    15.235384
+   ],
+   "bootstrap_resample_size": 20000
+  },
+  "ETH": {
+   "n": 15298,
+   "value": 15.825,
+   "ci95": [
+    15.0,
+    16.46
+   ],
+   "bootstrap_resample_size": 15298
+  }
+ },
+ "bootstrap": {
+  "resamples": 5000,
+  "seed": 20261009,
+  "ci": "95% percentile",
+  "resample_size_cap": 20000,
+  "_note": "Where a group exceeds the cap, each resample is drawn at the cap rather than at n. The interval is then wider than a full-size bootstrap would give -- conservative, not optimistic. Each group reports the size actually used."
+ },
+ "comparison": {
+  "between": [
+   "BTC",
+   "ETH"
+  ],
+  "a_minus_b": -0.825,
+  "a_minus_b_ci95": [
+   -1.36,
+   0.0
+  ],
+  "permutation_p_two_sided": 0.370326,
+  "bootstrap_resample_sizes": {
+   "BTC": 20000,
+   "ETH": 15298
+  },
+  "permutation_pool_size": 40000,
+  "predicted_direction": "greater",
+  "ci_spans_zero": true,
+  "VERDICT": "INDETERMINATE",
+  "_note": "p-value is reported only alongside the effect size and n. A CI spanning zero is INDETERMINATE, never SUPPORTED, whatever the p-value."
+ },
+ "ledger": {
+  "tests_run_against_this_corpus": 2,
+  "note": "2 hypotheses have now been tested against this one corpus. A naive 0.05 threshold expects ~0.1 false positives at this count; a Bonferroni-adjusted threshold is 0.02500."
+ }
+}

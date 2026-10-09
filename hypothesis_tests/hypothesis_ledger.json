@@ -1,0 +1,16 @@
+{
+ "corpus_fills": 760817,
+ "tests": [
+  {
+   "id": "EXAMPLE-H001",
+   "statement": "Among windows with at least 20 fills, mean window P&L differs between 15-minute and 5-minute windows. (This is a FORMAT EXAMPLE, not a claim anyone is making -- it exists to show the harness working.)",
+   "verdict": "INDETERMINATE"
+  },
+  {
+   "id": "EXAMPLE-H002",
+   "statement": "Median fill size differs between BTC and ETH windows. (FORMAT EXAMPLE only.)",
+   "verdict": "INDETERMINATE"
+  }
+ ],
+ "multiple_comparison_note": "2 hypotheses have now been tested against this one corpus. A naive 0.05 threshold expects ~0.1 false positives at this count; a Bonferroni-adjusted threshold is 0.02500."
+}

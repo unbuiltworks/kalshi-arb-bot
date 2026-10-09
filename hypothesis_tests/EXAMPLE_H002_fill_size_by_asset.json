@@ -1,0 +1,9 @@
+{
+ "id": "EXAMPLE-H002",
+ "statement": "Median fill size differs between BTC and ETH windows. (FORMAT EXAMPLE only.)",
+ "unit": "fill",
+ "filter": [],
+ "group_by": "asset",
+ "metric": {"column": "size", "stat": "median"},
+ "predicts": {"direction": "greater", "between": ["BTC", "ETH"]}
+}

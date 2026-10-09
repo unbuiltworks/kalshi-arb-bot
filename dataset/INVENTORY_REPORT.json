@@ -1,0 +1,36 @@
+{
+ "fills_in": 760817,
+ "fills_out": 760817,
+ "legs": {
+  "DOWN": 384311,
+  "UP": 376506
+ },
+ "matched_pairs_total": 6815895.88427407,
+ "reconciles": true,
+ "sell_fills": 2,
+ "shard_files": {
+  "2026-03": "l5_fills_enriched_2026-03.csv.gz",
+  "2026-04": "l5_fills_enriched_2026-04.csv.gz",
+  "2026-05": "l5_fills_enriched_2026-05.csv.gz",
+  "2026-06": "l5_fills_enriched_2026-06.csv.gz",
+  "2026-07": "l5_fills_enriched_2026-07.csv.gz",
+  "2026-08": "l5_fills_enriched_2026-08.csv.gz"
+ },
+ "shards": {
+  "2026-03": 1931,
+  "2026-04": 34223,
+  "2026-05": 89095,
+  "2026-06": 77097,
+  "2026-07": 133996,
+  "2026-08": 424475
+ },
+ "spend_total": 7551796.777254804,
+ "unlabelled_fills": 0,
+ "windows": 17046,
+ "windows_fully_matched_at_end": 138,
+ "windows_with_leg_switch": 12977,
+ "windows_with_residual_at_end": 16908,
+ "windows_with_settlement": 17042,
+ "windows_without_settlement": 4,
+ "windows_without_slug": 0
+}

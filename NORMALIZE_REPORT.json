@@ -1,0 +1,72 @@
+{
+ "admitted": 784500,
+ "by_type": {
+  "MAKER_REBATE": 110,
+  "REDEEM": 15729,
+  "REWARD": 20,
+  "TAKER_REBATE": 73,
+  "TRADE": 760817
+ },
+ "contradicting_names": 0,
+ "dup_exact": 7751,
+ "dup_key_conflicts": 0,
+ "envelope_status": {
+  "data/l5/raw/activity.jsonl:200": 156,
+  "data/l5/raw/activity.jsonl:400": 1,
+  "data/l5/raw/activity_gap.jsonl.gz:200": 1413
+ },
+ "envelopes": {
+  "data/l5/raw/activity.jsonl": 157,
+  "data/l5/raw/activity_gap.jsonl.gz": 1413
+ },
+ "fill_asset": {
+  "BTC": 745519,
+  "ETH": 15298
+ },
+ "fill_duration": {
+  "15": 698001,
+  "5": 62816
+ },
+ "fill_missing": {
+  "eventSlug": 3202
+ },
+ "fill_side": {
+  "BUY": 760815,
+  "SELL": 2
+ },
+ "malformed_envelopes": 0,
+ "name_block": {
+  "absent": 706500,
+  "matches_L5": 78000
+ },
+ "payload_not_list": 1,
+ "price_out_of_range": 0,
+ "provenance": {
+  "ok": 784500
+ },
+ "qty_not_positive": 0,
+ "records_seen": {
+  "data/l5/raw/activity.jsonl": 78000,
+  "data/l5/raw/activity_gap.jsonl.gz": 706500
+ },
+ "rows_written": {
+  "cashflow.csv": 15932,
+  "fills_raw.jsonl.gz": 760817,
+  "settlement.csv": 17042
+ },
+ "settlement": {
+  "both_sources_DISAGREE": 0,
+  "both_sources_agree": 2002,
+  "events_with_conflicting_redeem_outcomes": 0,
+  "events_with_label": 17042,
+  "from_gamma_markets_jsonl": 3525,
+  "from_redeem": 15519
+ },
+ "sources": [
+  "data/l5/raw/activity.jsonl",
+  "data/l5/raw/activity_gap.jsonl.gz"
+ ],
+ "ts_max": 1788218236,
+ "ts_min": 1773914977,
+ "unique": 776749
+}

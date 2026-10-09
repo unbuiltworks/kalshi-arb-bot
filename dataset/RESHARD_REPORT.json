@@ -1,0 +1,129 @@
+{
+ "rows_in": 760817,
+ "rows_in_parts": 760817,
+ "parts": [
+  {
+   "part": 1,
+   "file": "l5_fills_enriched_part01_2026-03-19_to_2026-05-05.csv.gz",
+   "rows": 54932,
+   "first_date": "2026-03-19",
+   "last_date": "2026-05-05",
+   "bytes": 6009288
+  },
+  {
+   "part": 2,
+   "file": "l5_fills_enriched_part02_2026-05-05_to_2026-05-25.csv.gz",
+   "rows": 54843,
+   "first_date": "2026-05-05",
+   "last_date": "2026-05-25",
+   "bytes": 5843801
+  },
+  {
+   "part": 3,
+   "file": "l5_fills_enriched_part03_2026-05-26_to_2026-06-15.csv.gz",
+   "rows": 54953,
+   "first_date": "2026-05-26",
+   "last_date": "2026-06-15",
+   "bytes": 5913138
+  },
+  {
+   "part": 4,
+   "file": "l5_fills_enriched_part04_2026-06-15_to_2026-07-07.csv.gz",
+   "rows": 54937,
+   "first_date": "2026-06-15",
+   "last_date": "2026-07-07",
+   "bytes": 5866155
+  },
+  {
+   "part": 5,
+   "file": "l5_fills_enriched_part05_2026-07-07_to_2026-07-21.csv.gz",
+   "rows": 54988,
+   "first_date": "2026-07-07",
+   "last_date": "2026-07-21",
+   "bytes": 5896357
+  },
+  {
+   "part": 6,
+   "file": "l5_fills_enriched_part06_2026-07-21_to_2026-07-30.csv.gz",
+   "rows": 54921,
+   "first_date": "2026-07-21",
+   "last_date": "2026-07-30",
+   "bytes": 5897403
+  },
+  {
+   "part": 7,
+   "file": "l5_fills_enriched_part07_2026-07-31_to_2026-08-08.csv.gz",
+   "rows": 54869,
+   "first_date": "2026-07-31",
+   "last_date": "2026-08-08",
+   "bytes": 5969753
+  },
+  {
+   "part": 8,
+   "file": "l5_fills_enriched_part08_2026-08-08_to_2026-08-14.csv.gz",
+   "rows": 54880,
+   "first_date": "2026-08-08",
+   "last_date": "2026-08-14",
+   "bytes": 6016582
+  },
+  {
+   "part": 9,
+   "file": "l5_fills_enriched_part09_2026-08-14_to_2026-08-17.csv.gz",
+   "rows": 54950,
+   "first_date": "2026-08-14",
+   "last_date": "2026-08-17",
+   "bytes": 6022225
+  },
+  {
+   "part": 10,
+   "file": "l5_fills_enriched_part10_2026-08-17_to_2026-08-19.csv.gz",
+   "rows": 54997,
+   "first_date": "2026-08-17",
+   "last_date": "2026-08-19",
+   "bytes": 6026186
+  },
+  {
+   "part": 11,
+   "file": "l5_fills_enriched_part11_2026-08-19_to_2026-08-22.csv.gz",
+   "rows": 54819,
+   "first_date": "2026-08-19",
+   "last_date": "2026-08-22",
+   "bytes": 6035829
+  },
+  {
+   "part": 12,
+   "file": "l5_fills_enriched_part12_2026-08-22_to_2026-08-26.csv.gz",
+   "rows": 54863,
+   "first_date": "2026-08-22",
+   "last_date": "2026-08-26",
+   "bytes": 6035633
+  },
+  {
+   "part": 13,
+   "file": "l5_fills_enriched_part13_2026-08-26_to_2026-08-29.csv.gz",
+   "rows": 54998,
+   "first_date": "2026-08-26",
+   "last_date": "2026-08-29",
+   "bytes": 5934626
+  },
+  {
+   "part": 14,
+   "file": "l5_fills_enriched_part14_2026-08-29_to_2026-08-31.csv.gz",
+   "rows": 46867,
+   "first_date": "2026-08-29",
+   "last_date": "2026-08-31",
+   "bytes": 5102586
+  }
+ ],
+ "n_parts": 14,
+ "windows": 17046,
+ "max_rows_per_part": 55000,
+ "largest_part_bytes": 6035829,
+ "sample": {
+  "file": "l5_fills_enriched_SAMPLE.csv.gz",
+  "rows": 56154,
+  "bytes": 6095816,
+  "every_nth_window": 14
+ },
+ "reconciles": true
+}

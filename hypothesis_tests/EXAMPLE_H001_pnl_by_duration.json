@@ -1,0 +1,9 @@
+{
+ "id": "EXAMPLE-H001",
+ "statement": "Among windows with at least 20 fills, mean window P&L differs between 15-minute and 5-minute windows. (This is a FORMAT EXAMPLE, not a claim anyone is making -- it exists to show the harness working.)",
+ "unit": "window",
+ "filter": [["n_fills", ">=", 20]],
+ "group_by": "duration_minutes",
+ "metric": {"column": "window_pnl", "stat": "mean"},
+ "predicts": {"direction": "greater", "between": ["15", "5"]}
+}

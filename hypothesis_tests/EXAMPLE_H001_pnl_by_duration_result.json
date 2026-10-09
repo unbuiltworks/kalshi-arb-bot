@@ -1,0 +1,71 @@
+{
+ "hypothesis_id": "EXAMPLE-H001",
+ "statement": "Among windows with at least 20 fills, mean window P&L differs between 15-minute and 5-minute windows. (This is a FORMAT EXAMPLE, not a claim anyone is making -- it exists to show the harness working.)",
+ "unit": "window",
+ "filter": [
+  [
+   "n_fills",
+   ">=",
+   20
+  ]
+ ],
+ "group_by": "duration_minutes",
+ "metric": {
+  "column": "window_pnl",
+  "stat": "mean"
+ },
+ "rows_scanned": 17046,
+ "rows_after_filter": 5631,
+ "groups": {
+  "15": {
+   "n": 5384,
+   "value": 8.394167,
+   "ci95": [
+    5.968827,
+    10.887068
+   ],
+   "bootstrap_resample_size": 5384
+  },
+  "5": {
+   "n": 247,
+   "value": -2.278726,
+   "ci95": [
+    -15.25017,
+    11.00903
+   ],
+   "bootstrap_resample_size": 247
+  }
+ },
+ "bootstrap": {
+  "resamples": 5000,
+  "seed": 20261009,
+  "ci": "95% percentile",
+  "resample_size_cap": 20000,
+  "_note": "Where a group exceeds the cap, each resample is drawn at the cap rather than at n. The interval is then wider than a full-size bootstrap would give -- conservative, not optimistic. Each group reports the size actually used."
+ },
+ "comparison": {
+  "between": [
+   "15",
+   "5"
+  ],
+  "a_minus_b": 10.672893,
+  "a_minus_b_ci95": [
+   -3.107436,
+   24.231415
+  ],
+  "permutation_p_two_sided": 0.074185,
+  "bootstrap_resample_sizes": {
+   "15": 5384,
+   "5": 247
+  },
+  "permutation_pool_size": 5631,
+  "predicted_direction": "greater",
+  "ci_spans_zero": true,
+  "VERDICT": "INDETERMINATE",
+  "_note": "p-value is reported only alongside the effect size and n. A CI spanning zero is INDETERMINATE, never SUPPORTED, whatever the p-value."
+ },
+ "ledger": {
+  "tests_run_against_this_corpus": 1,
+  "note": "1 hypotheses have now been tested against this one corpus. A naive 0.05 threshold expects ~0.1 false positives at this count; a Bonferroni-adjusted threshold is 0.05000."
+ }
+}
