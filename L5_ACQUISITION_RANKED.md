@@ -92,16 +92,20 @@ significant part of the count gap.
 
 ---
 
-## What is still unmeasured
+## The measurement has now landed
 
-The P7–P10 placement comparison on the live PMUS tape is deployed
-(`eb57cf5d4`) but has not yet produced a result at the time of writing: fills
-per market, matched fraction of purchased shares, time to complement, residual
-exposure and full-inventory net P&L per placement policy, with undecidable
-settlement reported separately rather than dropped. That measurement is what
-decides whether the 58% reproducible remainder is worth anything on PMUS, or
-whether PMUS simply lacks the opposite-side flow. Until it lands, **no
-placement mechanism is recommended for live use**, and the BTC NO-GO stands.
+`PLACEMENT_VERDICT.md` carries it. In short: continuous re-quoting lifts
+attainable pair cost from 1.02-1.07 to **0.705-0.79 median**, all of it under
+$1 and under the 0.96 ceiling, with positive matched-pair P&L per entry. So
+cause 1 above was real and is fixed.
+
+It does not make the strategy work. Completion rate is **14-40%** against
+L5's 98.3% two-sided, so 71-100% of residuals lose and full-inventory net is
+negative for every policy, in sample and out. Cause 2 -- the missing CTF
+primitive, and with it the opposite-side flow that primitive creates -- is
+what remains, and it is the venue-dependent one.
+
+The BTC NO-GO stands. No live probe is justified by this evidence.
 
 ## Labels
 
