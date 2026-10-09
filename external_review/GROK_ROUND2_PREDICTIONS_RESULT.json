@@ -1,0 +1,291 @@
+{
+ "R2-P1": {
+  "grok_statement": "Conditional on residual>0, P(next fill same leg) is independent of residual-VWAP decile in EVERY calendar month (flat within +/-0.05)",
+  "months_tested": 5,
+  "months_flat_within_0.10_range": 5,
+  "VERDICT": "SUPPORTED",
+  "per_month": {
+   "2026-04": {
+    "deciles_used": 10,
+    "p_same_min": 0.6158,
+    "p_same_max": 0.7002,
+    "range": 0.0844,
+    "within_plus_minus_0.05": true,
+    "by_decile": {
+     "[0.0,0.1)": 0.6158,
+     "[0.1,0.2)": 0.6734,
+     "[0.2,0.3)": 0.6954,
+     "[0.3,0.4)": 0.7002,
+     "[0.4,0.5)": 0.6929,
+     "[0.5,0.6)": 0.6906,
+     "[0.6,0.7)": 0.6576,
+     "[0.7,0.8)": 0.6817,
+     "[0.8,0.9)": 0.6621,
+     "[0.9,1.0)": 0.6249
+    }
+   },
+   "2026-05": {
+    "deciles_used": 10,
+    "p_same_min": 0.6759,
+    "p_same_max": 0.7428,
+    "range": 0.0669,
+    "within_plus_minus_0.05": true,
+    "by_decile": {
+     "[0.0,0.1)": 0.69,
+     "[0.1,0.2)": 0.7176,
+     "[0.2,0.3)": 0.7272,
+     "[0.3,0.4)": 0.7375,
+     "[0.4,0.5)": 0.733,
+     "[0.5,0.6)": 0.7428,
+     "[0.6,0.7)": 0.7103,
+     "[0.7,0.8)": 0.7045,
+     "[0.8,0.9)": 0.7039,
+     "[0.9,1.0)": 0.6759
+    }
+   },
+   "2026-06": {
+    "deciles_used": 10,
+    "p_same_min": 0.6688,
+    "p_same_max": 0.7434,
+    "range": 0.0746,
+    "within_plus_minus_0.05": true,
+    "by_decile": {
+     "[0.0,0.1)": 0.7065,
+     "[0.1,0.2)": 0.7434,
+     "[0.2,0.3)": 0.7226,
+     "[0.3,0.4)": 0.7288,
+     "[0.4,0.5)": 0.7208,
+     "[0.5,0.6)": 0.7292,
+     "[0.6,0.7)": 0.7144,
+     "[0.7,0.8)": 0.7236,
+     "[0.8,0.9)": 0.7244,
+     "[0.9,1.0)": 0.6688
+    }
+   },
+   "2026-07": {
+    "deciles_used": 10,
+    "p_same_min": 0.6854,
+    "p_same_max": 0.7512,
+    "range": 0.0658,
+    "within_plus_minus_0.05": true,
+    "by_decile": {
+     "[0.0,0.1)": 0.7217,
+     "[0.1,0.2)": 0.7512,
+     "[0.2,0.3)": 0.7312,
+     "[0.3,0.4)": 0.7268,
+     "[0.4,0.5)": 0.7236,
+     "[0.5,0.6)": 0.7179,
+     "[0.6,0.7)": 0.7104,
+     "[0.7,0.8)": 0.7254,
+     "[0.8,0.9)": 0.7339,
+     "[0.9,1.0)": 0.6854
+    }
+   },
+   "2026-08": {
+    "deciles_used": 10,
+    "p_same_min": 0.6961,
+    "p_same_max": 0.76,
+    "range": 0.0639,
+    "within_plus_minus_0.05": true,
+    "by_decile": {
+     "[0.0,0.1)": 0.7243,
+     "[0.1,0.2)": 0.76,
+     "[0.2,0.3)": 0.7483,
+     "[0.3,0.4)": 0.7306,
+     "[0.4,0.5)": 0.7175,
+     "[0.5,0.6)": 0.7203,
+     "[0.6,0.7)": 0.7207,
+     "[0.7,0.8)": 0.727,
+     "[0.8,0.9)": 0.7161,
+     "[0.9,1.0)": 0.6961
+    }
+   }
+  }
+ },
+ "R2-P2": {
+  "grok_statement": "Mean maximal same-leg run length is >=1.5x longer in August than in March-May",
+  "INDEPENDENT_TEST": false,
+  "why_not": "Mean run length is approximately 1/p_switch, and the switch-rate decline (0.978 -> 0.730) was measured in round 1 and shown to Grok. This is largely a restatement of a result already in hand, so passing it is weak evidence for the revised account.",
+  "march_may": {
+   "n_runs": 37952,
+   "mean": 3.3002,
+   "ci95": [
+    3.2535,
+    3.3455
+   ]
+  },
+  "august": {
+   "n_runs": 123218,
+   "mean": 3.4449,
+   "ci95": [
+    3.3893,
+    3.5016
+   ]
+  },
+  "ratio_august_over_march_may": 1.0439,
+  "VERDICT_ratio_ge_1.5": "NOT_SUPPORTED"
+ },
+ "R2-P3": {
+  "grok_statement": "Fraction of windows whose longest same-leg run >=10 fills rises from early to late regime (non-overlapping CIs)",
+  "INDEPENDENT_TEST": false,
+  "why_not": "Same objection as R2-P2 -- entailed by the already-known switch-rate decline.",
+  "march_may": {
+   "n": 1555,
+   "value": 0.5698,
+   "ci95": [
+    0.5441,
+    0.5949
+   ]
+  },
+  "august": {
+   "n": 10794,
+   "value": 0.1947,
+   "ci95": [
+    0.1872,
+    0.202
+   ]
+  },
+  "VERDICT_late_higher": "NOT_SUPPORTED (a < b, CIs disjoint)"
+ },
+ "R2-P4": {
+  "grok_statement": "P(switch | just-filled size < median) > P(switch | just-filled size >= median)",
+  "median_size_used": 15.0,
+  "prev_size_below_median": {
+   "n": 365979,
+   "p_switch": 0.2116,
+   "ci95": [
+    0.2059,
+    0.2176
+   ]
+  },
+  "prev_size_at_or_above_median": {
+   "n": 377792,
+   "p_switch": 0.3414,
+   "ci95": [
+    0.3347,
+    0.3478
+   ]
+  },
+  "VERDICT_small_higher": "NOT_SUPPORTED (a < b, CIs disjoint)"
+ },
+ "R2-P5": {
+  "grok_statement": "Mean residual_qty in the final 60s is NOT smaller than in the middle third of the same window (i.e. no late closing)",
+  "n_windows_with_both": 5738,
+  "mean_paired_difference_last60s_minus_middlethird": 54.6267,
+  "ci95": [
+   51.5825,
+   57.8523
+  ],
+  "VERDICT_not_smaller": "SUPPORTED"
+ },
+ "R2-P6": {
+  "grok_statement": "Delta(effective_pair_cost) on a switch fill is statistically indistinguishable from Delta on a same-leg fill (switching is not opportunity-driven)",
+  "INDEPENDENT_TEST": true,
+  "_note": "negative = pair cost improved on that fill",
+  "switch_fills": {
+   "n": 193447,
+   "mean_delta": -0.000105,
+   "ci95": [
+    -0.000463,
+    0.000244
+   ]
+  },
+  "same_leg_fills": {
+   "n": 503293,
+   "mean_delta": -4.8e-05,
+   "ci95": [
+    -0.0002,
+    0.000113
+   ]
+  },
+  "VERDICT_indistinguishable": "SUPPORTED (CIs overlap)"
+ },
+ "R2-P7": {
+  "grok_statement": "Mass on the larger discrete modes {30,50,80} is higher in August than March-May, while the mode set itself stays the same",
+  "share_on_30_50_80": {
+   "march_may": {
+    "n": 125249,
+    "value": 0.0372,
+    "ci95": [
+     0.0346,
+     0.0397
+    ]
+   },
+   "august": {
+    "n": 424475,
+    "value": 0.1353,
+    "ci95": [
+     0.1307,
+     0.1401
+    ]
+   }
+  },
+  "VERDICT_august_higher": "SUPPORTED (a > b, CIs disjoint)",
+  "top6_march_may": [
+   {
+    "size": 20.0,
+    "share": 0.2937
+   },
+   {
+    "size": 10.0,
+    "share": 0.0539
+   },
+   {
+    "size": 5.0,
+    "share": 0.0467
+   },
+   {
+    "size": 15.0,
+    "share": 0.0363
+   },
+   {
+    "size": 25.0,
+    "share": 0.0308
+   },
+   {
+    "size": 50.0,
+    "share": 0.0285
+   }
+  ],
+  "top6_august": [
+   {
+    "size": 50.0,
+    "share": 0.0797
+   },
+   {
+    "size": 5.0,
+    "share": 0.0594
+   },
+   {
+    "size": 80.0,
+    "share": 0.0391
+   },
+   {
+    "size": 10.0,
+    "share": 0.0349
+   },
+   {
+    "size": 0.02,
+    "share": 0.0246
+   },
+   {
+    "size": 2.0,
+    "share": 0.0222
+   }
+  ],
+  "mode_set_identical": false,
+  "mode_set_overlap_of_6": 3,
+  "VERDICT_mode_set_unchanged": "NOT_SUPPORTED (only 3 of 6 modes shared)"
+ },
+ "_meta": {
+  "round": 2,
+  "bootstrap": {
+   "resamples": 2000,
+   "resample_size_cap": 20000,
+   "seed": 20261009,
+   "ci": "95% percentile"
+  },
+  "independence_caveat": "R2-P2 and R2-P3 are not independent tests of the revised account: both restate the switch-rate decline measured in round 1 and shown to Grok before it wrote them. R2-P1, R2-P4, R2-P5, R2-P6 and R2-P7 can fail independently.",
+  "post_hoc_caveat": "Round 2 was written after Grok saw round-1 results on this same corpus, so it is no longer a blind prediction exercise. Cumulative threshold tests across both rounds now exceed 20; a Bonferroni-adjusted 0.05 is below 0.0025. Verdicts remain CI-based."
+ }
+}
