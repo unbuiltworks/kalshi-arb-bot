@@ -1317,7 +1317,7 @@ def configured_clip(env=None) -> D:
 
 
 def build(*, market: str, transport, feed=None, venue=None, journal=None,
-          clip: Optional[D] = None) -> "NativeMoneyPath":
+          clip: Optional[D] = None, guardian=None) -> "NativeMoneyPath":
     """The only constructor. The lock gate is always installed live.
 
     `clip` unset reads L5_NATIVE_CLIP, which unset is the frozen 50.
@@ -1336,7 +1336,7 @@ def build(*, market: str, transport, feed=None, venue=None, journal=None,
     eng = E.NativeEngine(clip=clip, lock_gate=OV.lock_gate_for(venue,
                                                                journal=journal))
     mp = NativeMoneyPath(market=market, engine=eng, transport=transport,
-                         feed=feed, venue=venue, journal=journal)
+                         feed=feed, venue=venue, journal=journal, guardian=guardian)
     mp.lifecycle_seam = lifecycle_seam
     if journal is not None and not lifecycle_seam:
         try:

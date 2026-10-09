@@ -44,6 +44,8 @@ import time
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
+from src import pmus_guardian_gate as GATE
+from src import pmus_order_guardian as GUARD
 from src import l5_live_authorization as AUTH
 from src import l5_live_book_feed as FEED
 from src import l5_live_execution as EX
@@ -911,8 +913,47 @@ class Probe:
 _LAST_PROBE: Optional["Probe"] = None
 
 
+GUARDIAN_STATE_ENV = "L5_GUARDIAN_STATE"
+
+
+def _build_guardian(probe, journal):
+    """The ownership store, or None when no path is configured.
+
+    Returning None keeps every existing caller and test working unchanged;
+    a configured path makes reconciliation mandatory. The default lives
+    beside the journal on the same volume, so it survives the process.
+    """
+    path = os.getenv(GUARDIAN_STATE_ENV, "").strip()
+    if not path:
+        base = os.getenv("PMUS_Q1_STATE_DIR", "").strip() or "/state/pmus-ws"
+        path = os.path.join(base, "guardian_ownership.json")
+    try:
+        return GUARD.OwnershipStore(path)
+    except BaseException as exc:                               # noqa: BLE001
+        # a store we cannot open is not a reason to trade unprotected
+        raise GATE.SubmissionBlocked(
+            "guardian store unusable at %s: %s" % (path, exc))
+
+
+def _venue_open_orders(probe):
+    return probe.tp.request("GET", "/v1/orders/open", None) or []
+
+
+def _venue_read_order(probe, oid):
+    return probe.tp.request("GET", "/v1/order/%s" % oid, None) or {}
+
+
+def _venue_recent_orders(probe):
+    return probe.tp.request("GET", "/v1/orders/history", None) or []
+
+
+def _venue_cancel(probe, oid):
+    return probe.tp.cancel(oid)
+
+
 def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
-                       sleep=time.sleep, venue=None, money_path=None):
+                       sleep=time.sleep, venue=None, money_path=None,
+                       _guardian=None):
     """Work one window with the FROZEN q50 policy, driven by the book feed.
 
     This is the money lane. It never calls `new_l5_actions` and never reaches
@@ -926,8 +967,35 @@ def native_work_window(probe, feed, deadline, *, journal, clock=time.time,
 
     venue = venue or NV.AuthenticatedVenue(probe.tp, market=probe.market,
                                            journal=journal)
+    # ---- MANDATORY STARTUP RECONCILIATION, ahead of any order -----------
+    # R6 (2026-09-29 18:17:27) exited on probe_error leaving CSWG9ZB98YCA
+    # resting; it filled unsupervised and a separate recovery found it 26
+    # minutes later. Ownership is now durable across the process boundary and
+    # the venue is read BEFORE anything may be submitted. A store that cannot
+    # be cleared raises SubmissionBlocked, which is deliberately NOT caught
+    # here: refusing to trade is the safe outcome.
+    guardian = _guardian or _build_guardian(probe, journal)
+    if guardian is not None:
+        rep = GATE.open_for_business(
+            guardian,
+            list_open=lambda: _venue_open_orders(probe),
+            read_order=lambda oid: _venue_read_order(probe, oid),
+            list_recent=lambda: _venue_recent_orders(probe))
+        if journal is not None:
+            try:
+                journal.write("startup_reconciliation", rep)
+            except BaseException:                              # noqa: BLE001
+                pass
+        GATE.require_open_for_business(rep)
+        GATE.arm_shutdown(
+            guardian,
+            cancel=lambda oid: _venue_cancel(probe, oid),
+            read_order=lambda oid: _venue_read_order(probe, oid),
+            on_report=(lambda r: journal.write("shutdown_sweep", r))
+            if journal is not None else None)
     mp = money_path or NMP.build(market=probe.market, transport=probe.tp,
-                                 feed=feed, venue=venue, journal=journal)
+                                 feed=feed, venue=venue, journal=journal,
+                                 guardian=guardian)
     # BEFORE the loop, not after it: R4's crash-free window still reported
     # zero, and a window that dies mid-flight must not lose its orders too.
     probe.native = mp

@@ -128,14 +128,15 @@ def main() -> int:
             raise
         pf = {"preflight": "RAISED",
               "error": "%s: %s" % (type(exc).__name__, str(exc)[:200])}
-    if str(pf.get("preflight")) == "PASSED":
-        try:
-            armed = tp.arm()
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            armed = {"armed": False,
-                     "error": "%s: %s" % (type(exc).__name__, str(exc)[:200])}
+    # NOT ARMED, AND NO LONGER ASKED TO BE. This probe calls only the preview
+    # endpoint through `_request`; submit() and cancel() are never reached and
+    # the arm gate sits on those, so arming bought nothing while breaking the
+    # single-arming-surface invariant that tests/test_l5_live_oneshot.py
+    # asserts by walking the AST: only l5_pmus_live_oneshot may arm. The
+    # module docstring above always said "the transport is never armed"; the
+    # code disagreed with it, and the code was wrong.
+    armed = {"armed": False, "attempted": False,
+             "why": "preview-only probe; the arm gate guards submit/cancel, neither of which is called here"}
 
     before = _bal(tp)
     bp = D(str(before.get("buyingPower") or 0))
@@ -153,13 +154,9 @@ def main() -> int:
     a = preview(tp, slug=slug, side="up", price=px, qty=qty_for(target_a))
     b = preview(tp, slug=slug, side="up", price=px, qty=qty_for(target_b))
     after = _bal(tp)
-    # DISARM IMMEDIATELY. This removes the POST-capable object from the
-    # process; it can only ever take capability away, so it cannot fail open.
-    try:
-        disarmed = tp.disarm("balance admission probe complete")
-    except BaseException as exc:                               # noqa: BLE001
-        disarmed = {"disarmed": False,
-                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200])}
+    # Nothing to disarm: this process never armed. Reported explicitly so a
+    # reader cannot mistake it for a disarm that silently failed.
+    disarmed = {"disarmed": True, "attempted": False, "why": "never armed"}
 
     reached_wire = (a.get("error_type") != "PermissionError"
                     and b.get("error_type") != "PermissionError")
