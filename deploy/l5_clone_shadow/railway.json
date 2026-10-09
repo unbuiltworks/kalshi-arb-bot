@@ -1,0 +1,20 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_volume": "Mount a dedicated volume at /data/l5_clone_shadow (L5_CLONE_STATE). Do NOT reuse /state/pmus-ws, /state/pmus-sports, /state/pmus-spring, /data/pmus_shadow or /state/l5-pmus-obs -- those belong to the recorder, the sports collector, the spring probe, the breadth shadow and the window collector respectively, all of which must keep running untouched. Both arms' virtual inventories, open candidates and the append-only decision/observation/virtual-fill tapes live here ONLY. Durability is the point: a shadow whose ledgers reset on each redeploy measures the last few minutes instead of the campaign.",
+  "_readonly": "No PMUS_API_KEY_ID / PMUS_API_SECRET_KEY on this service. It must stay unable to authenticate, not merely choose not to.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_clone_shadow/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_clone_shadow/**",
+      "src/pmus_l5_clone_shadow.py",
+      "src/pmus_market_clock.py",
+      "analysis/l5/clone/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.pmus_l5_clone_shadow",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 10
+  }
+}
