@@ -1,0 +1,2463 @@
+{
+ "VENUE": "PMUS",
+ "tape": "data/s3_cohort/pmus_btcupdown15m_20261006T232125Z.jsonl",
+ "collector": "src/pmus_book_tape.py, 2 s polling, full depth",
+ "windows_with_enough_depth": 20,
+ "windows_total": 21,
+ "per_window": {
+  "cpc-btc-updown-15m-2026-10-06-2315z": {
+   "book_snapshots": 246,
+   "bbo_rows": 246,
+   "errors": 0,
+   "quote_dynamics": {
+    "transitions": 219,
+    "classes": {
+     "PERSISTENT": 197,
+     "TOUCH_PRICE_MOVED": 13,
+     "REPLENISHED": 7,
+     "ADDED": 2
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0343,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 220,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 185.2,
+    "touch_bid_size_p50": 2731.17,
+    "touch_bid_size_p90": 5748.56
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 22,
+       "queue_at_placement_p50": 2731.17,
+       "queue_at_placement_p90": 5688.29,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 41788.83,
+       "share_queue_cleared_in_horizon": 0.7273
+      },
+      "1": {
+       "placements": 22,
+       "queue_at_placement_p50": 762.0,
+       "queue_at_placement_p90": 1266.42,
+       "share_level_empty_at_placement": 0.0455,
+       "volume_through_in_horizon_p50": 31066.74,
+       "share_queue_cleared_in_horizon": 0.6364
+      },
+      "2": {
+       "placements": 22,
+       "queue_at_placement_p50": 417.0,
+       "queue_at_placement_p90": 2388.0,
+       "share_level_empty_at_placement": 0.0455,
+       "volume_through_in_horizon_p50": 31066.74,
+       "share_queue_cleared_in_horizon": 0.5455
+      },
+      "3": {
+       "placements": 22,
+       "queue_at_placement_p50": 405.0,
+       "queue_at_placement_p90": 2301.0,
+       "share_level_empty_at_placement": 0.0909,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      },
+      "5": {
+       "placements": 22,
+       "queue_at_placement_p50": 10.0,
+       "queue_at_placement_p90": 610.0,
+       "share_level_empty_at_placement": 0.4091,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 22,
+       "queue_at_placement_p50": 1217.47,
+       "queue_at_placement_p90": 3099.45,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 36064.47,
+       "share_queue_cleared_in_horizon": 0.8636
+      },
+      "1": {
+       "placements": 22,
+       "queue_at_placement_p50": 946.0,
+       "queue_at_placement_p90": 2799.05,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 26117.38,
+       "share_queue_cleared_in_horizon": 0.7727
+      },
+      "2": {
+       "placements": 22,
+       "queue_at_placement_p50": 815.73,
+       "queue_at_placement_p90": 2383.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 26117.38,
+       "share_queue_cleared_in_horizon": 0.5909
+      },
+      "3": {
+       "placements": 22,
+       "queue_at_placement_p50": 2253.0,
+       "queue_at_placement_p90": 2520.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 26117.38,
+       "share_queue_cleared_in_horizon": 0.5909
+      },
+      "5": {
+       "placements": 22,
+       "queue_at_placement_p50": 510.0,
+       "queue_at_placement_p90": 2010.0,
+       "share_level_empty_at_placement": 0.0909,
+       "volume_through_in_horizon_p50": 9787.65,
+       "share_queue_cleared_in_horizon": 0.5455
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 18,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-06-2330z": {
+   "book_snapshots": 328,
+   "bbo_rows": 312,
+   "errors": 194,
+   "quote_dynamics": {
+    "transitions": 312,
+    "classes": {
+     "PERSISTENT": 280,
+     "TOUCH_PRICE_MOVED": 20,
+     "REPLENISHED": 10,
+     "CANCELLED": 1,
+     "ADDED": 1
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0345,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 285,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 355.22,
+    "touch_bid_size_p50": 1227.0,
+    "touch_bid_size_p90": 3676.21
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 29,
+       "queue_at_placement_p50": 1294.95,
+       "queue_at_placement_p90": 3676.21,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 7541.64,
+       "share_queue_cleared_in_horizon": 0.5172
+      },
+      "1": {
+       "placements": 29,
+       "queue_at_placement_p50": 908.48,
+       "queue_at_placement_p90": 2990.96,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.3448
+      },
+      "2": {
+       "placements": 29,
+       "queue_at_placement_p50": 750.0,
+       "queue_at_placement_p90": 2155.0,
+       "share_level_empty_at_placement": 0.0345,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1724
+      },
+      "3": {
+       "placements": 29,
+       "queue_at_placement_p50": 836.0,
+       "queue_at_placement_p90": 2535.0,
+       "share_level_empty_at_placement": 0.1379,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1724
+      },
+      "5": {
+       "placements": 29,
+       "queue_at_placement_p50": 276.0,
+       "queue_at_placement_p90": 900.0,
+       "share_level_empty_at_placement": 0.2414,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1724
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 29,
+       "queue_at_placement_p50": 1232.0,
+       "queue_at_placement_p90": 4974.19,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 102245.01,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "1": {
+       "placements": 29,
+       "queue_at_placement_p50": 814.0,
+       "queue_at_placement_p90": 2722.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 102245.01,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "2": {
+       "placements": 29,
+       "queue_at_placement_p50": 463.0,
+       "queue_at_placement_p90": 981.0,
+       "share_level_empty_at_placement": 0.0345,
+       "volume_through_in_horizon_p50": 102245.01,
+       "share_queue_cleared_in_horizon": 0.9655
+      },
+      "3": {
+       "placements": 29,
+       "queue_at_placement_p50": 526.06,
+       "queue_at_placement_p90": 2566.0,
+       "share_level_empty_at_placement": 0.1724,
+       "volume_through_in_horizon_p50": 95278.74,
+       "share_queue_cleared_in_horizon": 0.8966
+      },
+      "5": {
+       "placements": 29,
+       "queue_at_placement_p50": 10.0,
+       "queue_at_placement_p90": 520.0,
+       "share_level_empty_at_placement": 0.3448,
+       "volume_through_in_horizon_p50": 83596.71,
+       "share_queue_cleared_in_horizon": 0.8966
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 22,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-06-2345z": {
+   "book_snapshots": 280,
+   "bbo_rows": 330,
+   "errors": 186,
+   "quote_dynamics": {
+    "transitions": 273,
+    "classes": {
+     "PERSISTENT": 244,
+     "TOUCH_PRICE_MOVED": 19,
+     "REPLENISHED": 10
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0394,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 274,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 182.0,
+    "touch_bid_size_p50": 1656.87,
+    "touch_bid_size_p90": 5237.13
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 1656.87,
+       "queue_at_placement_p90": 5237.13,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 72336.19,
+       "share_queue_cleared_in_horizon": 0.9286
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 679.0,
+       "queue_at_placement_p90": 1434.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 67467.06,
+       "share_queue_cleared_in_horizon": 0.8929
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 448.0,
+       "queue_at_placement_p90": 2474.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 67467.06,
+       "share_queue_cleared_in_horizon": 0.8571
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 375.0,
+       "queue_at_placement_p90": 4318.77,
+       "share_level_empty_at_placement": 0.1786,
+       "volume_through_in_horizon_p50": 53013.35,
+       "share_queue_cleared_in_horizon": 0.7857
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 0.0,
+       "queue_at_placement_p90": 129.31,
+       "share_level_empty_at_placement": 0.75,
+       "volume_through_in_horizon_p50": 31902.04,
+       "share_queue_cleared_in_horizon": 0.6429
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 993.04,
+       "queue_at_placement_p90": 2899.55,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 22275.72,
+       "share_queue_cleared_in_horizon": 0.7143
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 888.0,
+       "queue_at_placement_p90": 1686.0,
+       "share_level_empty_at_placement": 0.0357,
+       "volume_through_in_horizon_p50": 22275.72,
+       "share_queue_cleared_in_horizon": 0.7143
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 851.0,
+       "queue_at_placement_p90": 2306.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 11839.84,
+       "share_queue_cleared_in_horizon": 0.6786
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 940.0,
+       "queue_at_placement_p90": 4000.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 7404.17,
+       "share_queue_cleared_in_horizon": 0.6071
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 13.0,
+       "queue_at_placement_p90": 701.0,
+       "share_level_empty_at_placement": 0.3571,
+       "volume_through_in_horizon_p50": 6138.1,
+       "share_queue_cleared_in_horizon": 0.5714
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 24,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0000z": {
+   "book_snapshots": 357,
+   "bbo_rows": 326,
+   "errors": 153,
+   "quote_dynamics": {
+    "transitions": 352,
+    "classes": {
+     "PERSISTENT": 317,
+     "TOUCH_PRICE_MOVED": 23,
+     "REPLENISHED": 10,
+     "CANCELLED": 2
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0306,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 338,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 1066.65,
+    "touch_bid_size_p50": 2623.61,
+    "touch_bid_size_p90": 4983.25
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 34,
+       "queue_at_placement_p50": 2623.61,
+       "queue_at_placement_p90": 4368.47,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      },
+      "1": {
+       "placements": 34,
+       "queue_at_placement_p50": 954.0,
+       "queue_at_placement_p90": 1718.5,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      },
+      "2": {
+       "placements": 34,
+       "queue_at_placement_p50": 708.32,
+       "queue_at_placement_p90": 2253.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4412
+      },
+      "3": {
+       "placements": 34,
+       "queue_at_placement_p50": 566.0,
+       "queue_at_placement_p90": 2498.0,
+       "share_level_empty_at_placement": 0.1176,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.3529
+      },
+      "5": {
+       "placements": 34,
+       "queue_at_placement_p50": 8.0,
+       "queue_at_placement_p90": 510.0,
+       "share_level_empty_at_placement": 0.1765,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.2353
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 34,
+       "queue_at_placement_p50": 1104.59,
+       "queue_at_placement_p90": 3036.89,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 77065.75,
+       "share_queue_cleared_in_horizon": 0.9412
+      },
+      "1": {
+       "placements": 34,
+       "queue_at_placement_p50": 792.15,
+       "queue_at_placement_p90": 1790.25,
+       "share_level_empty_at_placement": 0.0588,
+       "volume_through_in_horizon_p50": 77065.75,
+       "share_queue_cleared_in_horizon": 0.8824
+      },
+      "2": {
+       "placements": 34,
+       "queue_at_placement_p50": 1155.0,
+       "queue_at_placement_p90": 3282.0,
+       "share_level_empty_at_placement": 0.0882,
+       "volume_through_in_horizon_p50": 77065.75,
+       "share_queue_cleared_in_horizon": 0.8529
+      },
+      "3": {
+       "placements": 34,
+       "queue_at_placement_p50": 789.0,
+       "queue_at_placement_p90": 4047.0,
+       "share_level_empty_at_placement": 0.0588,
+       "volume_through_in_horizon_p50": 59990.69,
+       "share_queue_cleared_in_horizon": 0.7353
+      },
+      "5": {
+       "placements": 34,
+       "queue_at_placement_p50": 0.0,
+       "queue_at_placement_p90": 2000.0,
+       "share_level_empty_at_placement": 0.6176,
+       "volume_through_in_horizon_p50": 53332.12,
+       "share_queue_cleared_in_horizon": 0.6765
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 23,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0015z": {
+   "book_snapshots": 308,
+   "bbo_rows": 397,
+   "errors": 89,
+   "quote_dynamics": {
+    "transitions": 243,
+    "classes": {
+     "PERSISTENT": 213,
+     "REPLENISHED": 13,
+     "TOUCH_PRICE_MOVED": 16,
+     "CANCELLED": 1
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0575,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 244,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 272.0,
+    "touch_bid_size_p50": 991.12,
+    "touch_bid_size_p90": 5712.77
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 25,
+       "queue_at_placement_p50": 926.36,
+       "queue_at_placement_p90": 1515.66,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 74499.96,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "1": {
+       "placements": 25,
+       "queue_at_placement_p50": 549.0,
+       "queue_at_placement_p90": 1198.11,
+       "share_level_empty_at_placement": 0.16,
+       "volume_through_in_horizon_p50": 72444.88,
+       "share_queue_cleared_in_horizon": 0.92
+      },
+      "2": {
+       "placements": 25,
+       "queue_at_placement_p50": 494.0,
+       "queue_at_placement_p90": 3300.79,
+       "share_level_empty_at_placement": 0.08,
+       "volume_through_in_horizon_p50": 70662.68,
+       "share_queue_cleared_in_horizon": 0.92
+      },
+      "3": {
+       "placements": 25,
+       "queue_at_placement_p50": 2001.0,
+       "queue_at_placement_p90": 8807.97,
+       "share_level_empty_at_placement": 0.08,
+       "volume_through_in_horizon_p50": 61697.76,
+       "share_queue_cleared_in_horizon": 0.88
+      },
+      "5": {
+       "placements": 25,
+       "queue_at_placement_p50": 908.1,
+       "queue_at_placement_p90": 15012.27,
+       "share_level_empty_at_placement": 0.28,
+       "volume_through_in_horizon_p50": 31625.31,
+       "share_queue_cleared_in_horizon": 0.6
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 25,
+       "queue_at_placement_p50": 2880.47,
+       "queue_at_placement_p90": 4419.74,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.28
+      },
+      "1": {
+       "placements": 25,
+       "queue_at_placement_p50": 1320.29,
+       "queue_at_placement_p90": 4224.61,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.16
+      },
+      "2": {
+       "placements": 25,
+       "queue_at_placement_p50": 506.0,
+       "queue_at_placement_p90": 2698.0,
+       "share_level_empty_at_placement": 0.16,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.08
+      },
+      "3": {
+       "placements": 25,
+       "queue_at_placement_p50": 304.0,
+       "queue_at_placement_p90": 885.0,
+       "share_level_empty_at_placement": 0.32,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.04
+      },
+      "5": {
+       "placements": 25,
+       "queue_at_placement_p50": 0.0,
+       "queue_at_placement_p90": 222.0,
+       "share_level_empty_at_placement": 0.56,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 30,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0030z": {
+   "book_snapshots": 302,
+   "bbo_rows": 318,
+   "errors": 216,
+   "quote_dynamics": {
+    "transitions": 298,
+    "classes": {
+     "PERSISTENT": 269,
+     "TOUCH_PRICE_MOVED": 18,
+     "REPLENISHED": 8,
+     "ADDED": 2,
+     "CANCELLED": 1
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0289,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 258,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 194.14,
+    "touch_bid_size_p50": 3256.38,
+    "touch_bid_size_p90": 5879.27
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 26,
+       "queue_at_placement_p50": 3098.14,
+       "queue_at_placement_p90": 5482.82,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 21611.47,
+       "share_queue_cleared_in_horizon": 0.5385
+      },
+      "1": {
+       "placements": 26,
+       "queue_at_placement_p50": 1019.95,
+       "queue_at_placement_p90": 1825.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 21611.47,
+       "share_queue_cleared_in_horizon": 0.5385
+      },
+      "2": {
+       "placements": 26,
+       "queue_at_placement_p50": 786.0,
+       "queue_at_placement_p90": 2682.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4231
+      },
+      "3": {
+       "placements": 26,
+       "queue_at_placement_p50": 735.0,
+       "queue_at_placement_p90": 2977.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4231
+      },
+      "5": {
+       "placements": 26,
+       "queue_at_placement_p50": 1.0,
+       "queue_at_placement_p90": 70.0,
+       "share_level_empty_at_placement": 0.3846,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4231
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 26,
+       "queue_at_placement_p50": 721.55,
+       "queue_at_placement_p90": 3367.59,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 61583.99,
+       "share_queue_cleared_in_horizon": 0.9231
+      },
+      "1": {
+       "placements": 26,
+       "queue_at_placement_p50": 1065.0,
+       "queue_at_placement_p90": 2834.16,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 61583.99,
+       "share_queue_cleared_in_horizon": 0.8846
+      },
+      "2": {
+       "placements": 26,
+       "queue_at_placement_p50": 970.0,
+       "queue_at_placement_p90": 5844.61,
+       "share_level_empty_at_placement": 0.0385,
+       "volume_through_in_horizon_p50": 61583.99,
+       "share_queue_cleared_in_horizon": 0.8462
+      },
+      "3": {
+       "placements": 26,
+       "queue_at_placement_p50": 2385.0,
+       "queue_at_placement_p90": 4418.92,
+       "share_level_empty_at_placement": 0.1538,
+       "volume_through_in_horizon_p50": 45310.46,
+       "share_queue_cleared_in_horizon": 0.7308
+      },
+      "5": {
+       "placements": 26,
+       "queue_at_placement_p50": 311.0,
+       "queue_at_placement_p90": 12474.47,
+       "share_level_empty_at_placement": 0.3077,
+       "volume_through_in_horizon_p50": 27812.14,
+       "share_queue_cleared_in_horizon": 0.6538
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 23,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0045z": {
+   "book_snapshots": 306,
+   "bbo_rows": 369,
+   "errors": 117,
+   "quote_dynamics": {
+    "transitions": 305,
+    "classes": {
+     "PERSISTENT": 273,
+     "TOUCH_PRICE_MOVED": 19,
+     "REPLENISHED": 10,
+     "ADDED": 2,
+     "CANCELLED": 1
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0353,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 272,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 127.7,
+    "touch_bid_size_p50": 2169.21,
+    "touch_bid_size_p90": 3821.11
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 2160.62,
+       "queue_at_placement_p90": 4626.53,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 21581.01,
+       "share_queue_cleared_in_horizon": 0.5714
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 724.0,
+       "queue_at_placement_p90": 1789.0,
+       "share_level_empty_at_placement": 0.0357,
+       "volume_through_in_horizon_p50": 21581.01,
+       "share_queue_cleared_in_horizon": 0.5714
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 725.0,
+       "queue_at_placement_p90": 2814.0,
+       "share_level_empty_at_placement": 0.0714,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 2013.0,
+       "queue_at_placement_p90": 2857.0,
+       "share_level_empty_at_placement": 0.0714,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 311.0,
+       "queue_at_placement_p90": 2000.0,
+       "share_level_empty_at_placement": 0.2857,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.3214
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 959.44,
+       "queue_at_placement_p90": 3463.94,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 53120.28,
+       "share_queue_cleared_in_horizon": 0.8929
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 1086.0,
+       "queue_at_placement_p90": 3201.59,
+       "share_level_empty_at_placement": 0.0357,
+       "volume_through_in_horizon_p50": 48593.37,
+       "share_queue_cleared_in_horizon": 0.8929
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 733.0,
+       "queue_at_placement_p90": 2962.0,
+       "share_level_empty_at_placement": 0.0714,
+       "volume_through_in_horizon_p50": 43432.27,
+       "share_queue_cleared_in_horizon": 0.8214
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 2004.0,
+       "queue_at_placement_p90": 4278.6,
+       "share_level_empty_at_placement": 0.1071,
+       "volume_through_in_horizon_p50": 43432.27,
+       "share_queue_cleared_in_horizon": 0.8214
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 181.0,
+       "queue_at_placement_p90": 1110.0,
+       "share_level_empty_at_placement": 0.1786,
+       "volume_through_in_horizon_p50": 43432.27,
+       "share_queue_cleared_in_horizon": 0.7857
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 27,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0100z": {
+   "book_snapshots": 335,
+   "bbo_rows": 334,
+   "errors": 167,
+   "quote_dynamics": {
+    "transitions": 246,
+    "classes": {
+     "PERSISTENT": 223,
+     "TOUCH_PRICE_MOVED": 14,
+     "REPLENISHED": 6,
+     "ADDED": 3
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0262,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 247,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 114.3,
+    "touch_bid_size_p50": 699.25,
+    "touch_bid_size_p90": 3401.92
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 25,
+       "queue_at_placement_p50": 842.0,
+       "queue_at_placement_p90": 2944.85,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 39769.32,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "1": {
+       "placements": 25,
+       "queue_at_placement_p50": 875.0,
+       "queue_at_placement_p90": 1637.0,
+       "share_level_empty_at_placement": 0.04,
+       "volume_through_in_horizon_p50": 36748.03,
+       "share_queue_cleared_in_horizon": 0.96
+      },
+      "2": {
+       "placements": 25,
+       "queue_at_placement_p50": 507.0,
+       "queue_at_placement_p90": 2997.93,
+       "share_level_empty_at_placement": 0.16,
+       "volume_through_in_horizon_p50": 33363.89,
+       "share_queue_cleared_in_horizon": 0.88
+      },
+      "3": {
+       "placements": 25,
+       "queue_at_placement_p50": 683.0,
+       "queue_at_placement_p90": 4006.0,
+       "share_level_empty_at_placement": 0.16,
+       "volume_through_in_horizon_p50": 22735.2,
+       "share_queue_cleared_in_horizon": 0.8
+      },
+      "5": {
+       "placements": 25,
+       "queue_at_placement_p50": 8.0,
+       "queue_at_placement_p90": 2002.0,
+       "share_level_empty_at_placement": 0.28,
+       "volume_through_in_horizon_p50": 22735.2,
+       "share_queue_cleared_in_horizon": 0.76
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 25,
+       "queue_at_placement_p50": 2974.75,
+       "queue_at_placement_p90": 5011.7,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.32
+      },
+      "1": {
+       "placements": 25,
+       "queue_at_placement_p50": 1576.0,
+       "queue_at_placement_p90": 3562.41,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.28
+      },
+      "2": {
+       "placements": 25,
+       "queue_at_placement_p50": 566.57,
+       "queue_at_placement_p90": 2380.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.16
+      },
+      "3": {
+       "placements": 25,
+       "queue_at_placement_p50": 861.0,
+       "queue_at_placement_p90": 2637.0,
+       "share_level_empty_at_placement": 0.08,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.12
+      },
+      "5": {
+       "placements": 25,
+       "queue_at_placement_p50": 20.0,
+       "queue_at_placement_p90": 494.0,
+       "share_level_empty_at_placement": 0.36,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.04
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 24,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0115z": {
+   "book_snapshots": 339,
+   "bbo_rows": 274,
+   "errors": 177,
+   "quote_dynamics": {
+    "transitions": 256,
+    "classes": {
+     "PERSISTENT": 227,
+     "TOUCH_PRICE_MOVED": 18,
+     "REPLENISHED": 11
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0462,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 257,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 605.15,
+    "touch_bid_size_p50": 1085.72,
+    "touch_bid_size_p90": 4068.11
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 26,
+       "queue_at_placement_p50": 1085.72,
+       "queue_at_placement_p90": 3653.92,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 55791.38,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "1": {
+       "placements": 26,
+       "queue_at_placement_p50": 931.54,
+       "queue_at_placement_p90": 2515.43,
+       "share_level_empty_at_placement": 0.1154,
+       "volume_through_in_horizon_p50": 43871.39,
+       "share_queue_cleared_in_horizon": 0.9615
+      },
+      "2": {
+       "placements": 26,
+       "queue_at_placement_p50": 489.0,
+       "queue_at_placement_p90": 2714.78,
+       "share_level_empty_at_placement": 0.1923,
+       "volume_through_in_horizon_p50": 38233.47,
+       "share_queue_cleared_in_horizon": 0.8846
+      },
+      "3": {
+       "placements": 26,
+       "queue_at_placement_p50": 775.0,
+       "queue_at_placement_p90": 2696.0,
+       "share_level_empty_at_placement": 0.1923,
+       "volume_through_in_horizon_p50": 34986.37,
+       "share_queue_cleared_in_horizon": 0.8462
+      },
+      "5": {
+       "placements": 26,
+       "queue_at_placement_p50": 0.0,
+       "queue_at_placement_p90": 12516.01,
+       "share_level_empty_at_placement": 0.6154,
+       "volume_through_in_horizon_p50": 24797.66,
+       "share_queue_cleared_in_horizon": 0.7308
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 26,
+       "queue_at_placement_p50": 1815.08,
+       "queue_at_placement_p90": 3547.5,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1923
+      },
+      "1": {
+       "placements": 26,
+       "queue_at_placement_p50": 1430.0,
+       "queue_at_placement_p90": 3353.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1923
+      },
+      "2": {
+       "placements": 26,
+       "queue_at_placement_p50": 872.0,
+       "queue_at_placement_p90": 2863.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1538
+      },
+      "3": {
+       "placements": 26,
+       "queue_at_placement_p50": 866.0,
+       "queue_at_placement_p90": 2225.0,
+       "share_level_empty_at_placement": 0.1154,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1154
+      },
+      "5": {
+       "placements": 26,
+       "queue_at_placement_p50": 485.0,
+       "queue_at_placement_p90": 503.0,
+       "share_level_empty_at_placement": 0.2692,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1154
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 20,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0130z": {
+   "book_snapshots": 340,
+   "bbo_rows": 329,
+   "errors": 169,
+   "quote_dynamics": {
+    "transitions": 338,
+    "classes": {
+     "PERSISTENT": 303,
+     "TOUCH_PRICE_MOVED": 22,
+     "REPLENISHED": 11,
+     "CANCELLED": 2
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.035,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 313,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 242.0,
+    "touch_bid_size_p50": 850.26,
+    "touch_bid_size_p90": 4185.55
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 32,
+       "queue_at_placement_p50": 951.64,
+       "queue_at_placement_p90": 4185.55,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 29103.02,
+       "share_queue_cleared_in_horizon": 0.625
+      },
+      "1": {
+       "placements": 32,
+       "queue_at_placement_p50": 795.82,
+       "queue_at_placement_p90": 1338.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 8888.36,
+       "share_queue_cleared_in_horizon": 0.5625
+      },
+      "2": {
+       "placements": 32,
+       "queue_at_placement_p50": 678.0,
+       "queue_at_placement_p90": 1567.1,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 8888.36,
+       "share_queue_cleared_in_horizon": 0.5312
+      },
+      "3": {
+       "placements": 32,
+       "queue_at_placement_p50": 474.85,
+       "queue_at_placement_p90": 1381.0,
+       "share_level_empty_at_placement": 0.0625,
+       "volume_through_in_horizon_p50": 8888.36,
+       "share_queue_cleared_in_horizon": 0.5312
+      },
+      "5": {
+       "placements": 32,
+       "queue_at_placement_p50": 300.0,
+       "queue_at_placement_p90": 625.0,
+       "share_level_empty_at_placement": 0.0938,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4375
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 32,
+       "queue_at_placement_p50": 1127.95,
+       "queue_at_placement_p90": 2803.69,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 83671.65,
+       "share_queue_cleared_in_horizon": 0.875
+      },
+      "1": {
+       "placements": 32,
+       "queue_at_placement_p50": 925.0,
+       "queue_at_placement_p90": 2916.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 83671.65,
+       "share_queue_cleared_in_horizon": 0.8438
+      },
+      "2": {
+       "placements": 32,
+       "queue_at_placement_p50": 541.0,
+       "queue_at_placement_p90": 1310.0,
+       "share_level_empty_at_placement": 0.0625,
+       "volume_through_in_horizon_p50": 83671.65,
+       "share_queue_cleared_in_horizon": 0.8125
+      },
+      "3": {
+       "placements": 32,
+       "queue_at_placement_p50": 868.0,
+       "queue_at_placement_p90": 2100.0,
+       "share_level_empty_at_placement": 0.0938,
+       "volume_through_in_horizon_p50": 83671.65,
+       "share_queue_cleared_in_horizon": 0.75
+      },
+      "5": {
+       "placements": 32,
+       "queue_at_placement_p50": 670.0,
+       "queue_at_placement_p90": 2191.0,
+       "share_level_empty_at_placement": 0.0938,
+       "volume_through_in_horizon_p50": 77980.23,
+       "share_queue_cleared_in_horizon": 0.75
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 24,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0145z": {
+   "book_snapshots": 284,
+   "bbo_rows": 397,
+   "errors": 113,
+   "quote_dynamics": {
+    "transitions": 203,
+    "classes": {
+     "PERSISTENT": 176,
+     "TOUCH_PRICE_MOVED": 12,
+     "REPLENISHED": 13,
+     "ADDED": 1,
+     "CANCELLED": 1
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0688,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 204,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 232.0,
+    "touch_bid_size_p50": 1512.8,
+    "touch_bid_size_p90": 3763.95
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 21,
+       "queue_at_placement_p50": 1512.8,
+       "queue_at_placement_p90": 3763.95,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 106417.26,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "1": {
+       "placements": 21,
+       "queue_at_placement_p50": 569.0,
+       "queue_at_placement_p90": 1343.0,
+       "share_level_empty_at_placement": 0.2857,
+       "volume_through_in_horizon_p50": 95887.5,
+       "share_queue_cleared_in_horizon": 0.7619
+      },
+      "2": {
+       "placements": 21,
+       "queue_at_placement_p50": 501.0,
+       "queue_at_placement_p90": 2890.0,
+       "share_level_empty_at_placement": 0.2857,
+       "volume_through_in_horizon_p50": 95887.5,
+       "share_queue_cleared_in_horizon": 0.7143
+      },
+      "3": {
+       "placements": 21,
+       "queue_at_placement_p50": 790.94,
+       "queue_at_placement_p90": 41201.0,
+       "share_level_empty_at_placement": 0.2857,
+       "volume_through_in_horizon_p50": 95887.5,
+       "share_queue_cleared_in_horizon": 0.7143
+      },
+      "5": {
+       "placements": 21,
+       "queue_at_placement_p50": 50.0,
+       "queue_at_placement_p90": 1300.0,
+       "share_level_empty_at_placement": 0.4762,
+       "volume_through_in_horizon_p50": 60455.53,
+       "share_queue_cleared_in_horizon": 0.5238
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 21,
+       "queue_at_placement_p50": 2388.89,
+       "queue_at_placement_p90": 5306.06,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1905
+      },
+      "1": {
+       "placements": 21,
+       "queue_at_placement_p50": 1705.0,
+       "queue_at_placement_p90": 3550.85,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0952
+      },
+      "2": {
+       "placements": 21,
+       "queue_at_placement_p50": 896.0,
+       "queue_at_placement_p90": 2102.66,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0
+      },
+      "3": {
+       "placements": 21,
+       "queue_at_placement_p50": 890.0,
+       "queue_at_placement_p90": 2017.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0
+      },
+      "5": {
+       "placements": 21,
+       "queue_at_placement_p50": 490.0,
+       "queue_at_placement_p90": 701.0,
+       "share_level_empty_at_placement": 0.381,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 30,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0200z": {
+   "book_snapshots": 368,
+   "bbo_rows": 391,
+   "errors": 77,
+   "quote_dynamics": {
+    "transitions": 272,
+    "classes": {
+     "PERSISTENT": 243,
+     "TOUCH_PRICE_MOVED": 14,
+     "REPLENISHED": 10,
+     "ADDED": 1,
+     "CANCELLED": 4
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0395,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 273,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 613.96,
+    "touch_bid_size_p50": 1415.0,
+    "touch_bid_size_p90": 4550.78
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 1415.0,
+       "queue_at_placement_p90": 4550.78,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 57079.59,
+       "share_queue_cleared_in_horizon": 0.9643
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 800.52,
+       "queue_at_placement_p90": 4515.01,
+       "share_level_empty_at_placement": 0.1786,
+       "volume_through_in_horizon_p50": 41434.78,
+       "share_queue_cleared_in_horizon": 0.7143
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 1052.0,
+       "queue_at_placement_p90": 5059.72,
+       "share_level_empty_at_placement": 0.25,
+       "volume_through_in_horizon_p50": 30688.69,
+       "share_queue_cleared_in_horizon": 0.6786
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 711.0,
+       "queue_at_placement_p90": 5640.72,
+       "share_level_empty_at_placement": 0.3929,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 0.0,
+       "queue_at_placement_p90": 2677.67,
+       "share_level_empty_at_placement": 0.7143,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.2857
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 970.0,
+       "queue_at_placement_p90": 4685.59,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 9733.21,
+       "share_queue_cleared_in_horizon": 0.6429
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 1782.0,
+       "queue_at_placement_p90": 2817.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.3571
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 857.0,
+       "queue_at_placement_p90": 2491.0,
+       "share_level_empty_at_placement": 0.1429,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.25
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 786.0,
+       "queue_at_placement_p90": 1069.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1071
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 485.0,
+       "queue_at_placement_p90": 785.0,
+       "share_level_empty_at_placement": 0.1429,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0714
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 28,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0215z": {
+   "book_snapshots": 297,
+   "bbo_rows": 313,
+   "errors": 192,
+   "quote_dynamics": {
+    "transitions": 241,
+    "classes": {
+     "PERSISTENT": 214,
+     "CANCELLED": 1,
+     "TOUCH_PRICE_MOVED": 15,
+     "REPLENISHED": 11
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0489,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 243,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 336.59,
+    "touch_bid_size_p50": 1583.35,
+    "touch_bid_size_p90": 4416.0
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 24,
+       "queue_at_placement_p50": 1249.09,
+       "queue_at_placement_p90": 4021.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 137918.87,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "1": {
+       "placements": 24,
+       "queue_at_placement_p50": 1029.0,
+       "queue_at_placement_p90": 1698.54,
+       "share_level_empty_at_placement": 0.0417,
+       "volume_through_in_horizon_p50": 134845.28,
+       "share_queue_cleared_in_horizon": 0.9583
+      },
+      "2": {
+       "placements": 24,
+       "queue_at_placement_p50": 951.86,
+       "queue_at_placement_p90": 2817.0,
+       "share_level_empty_at_placement": 0.0833,
+       "volume_through_in_horizon_p50": 115841.51,
+       "share_queue_cleared_in_horizon": 0.7917
+      },
+      "3": {
+       "placements": 24,
+       "queue_at_placement_p50": 981.0,
+       "queue_at_placement_p90": 3490.0,
+       "share_level_empty_at_placement": 0.125,
+       "volume_through_in_horizon_p50": 115841.51,
+       "share_queue_cleared_in_horizon": 0.7917
+      },
+      "5": {
+       "placements": 24,
+       "queue_at_placement_p50": 488.0,
+       "queue_at_placement_p90": 1538.0,
+       "share_level_empty_at_placement": 0.2083,
+       "volume_through_in_horizon_p50": 114993.52,
+       "share_queue_cleared_in_horizon": 0.75
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 24,
+       "queue_at_placement_p50": 1228.22,
+       "queue_at_placement_p90": 3028.95,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 10390.65,
+       "share_queue_cleared_in_horizon": 0.5833
+      },
+      "1": {
+       "placements": 24,
+       "queue_at_placement_p50": 1519.0,
+       "queue_at_placement_p90": 3426.23,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 10390.65,
+       "share_queue_cleared_in_horizon": 0.5417
+      },
+      "2": {
+       "placements": 24,
+       "queue_at_placement_p50": 1065.46,
+       "queue_at_placement_p90": 3086.88,
+       "share_level_empty_at_placement": 0.0833,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4583
+      },
+      "3": {
+       "placements": 24,
+       "queue_at_placement_p50": 1377.0,
+       "queue_at_placement_p90": 3589.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4167
+      },
+      "5": {
+       "placements": 24,
+       "queue_at_placement_p50": 330.0,
+       "queue_at_placement_p90": 691.0,
+       "share_level_empty_at_placement": 0.1667,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.3333
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 23,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0230z": {
+   "book_snapshots": 289,
+   "bbo_rows": 406,
+   "errors": 141,
+   "quote_dynamics": {
+    "transitions": 270,
+    "classes": {
+     "PERSISTENT": 241,
+     "TOUCH_PRICE_MOVED": 17,
+     "REPLENISHED": 10,
+     "ADDED": 1,
+     "CANCELLED": 1
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0398,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 271,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 224.39,
+    "touch_bid_size_p50": 1552.99,
+    "touch_bid_size_p90": 3652.33
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 1552.99,
+       "queue_at_placement_p90": 3652.33,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 135946.73,
+       "share_queue_cleared_in_horizon": 0.9643
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 1038.75,
+       "queue_at_placement_p90": 1664.0,
+       "share_level_empty_at_placement": 0.1071,
+       "volume_through_in_horizon_p50": 135946.73,
+       "share_queue_cleared_in_horizon": 0.8214
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 1035.0,
+       "queue_at_placement_p90": 3092.0,
+       "share_level_empty_at_placement": 0.1071,
+       "volume_through_in_horizon_p50": 119412.54,
+       "share_queue_cleared_in_horizon": 0.8214
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 578.0,
+       "queue_at_placement_p90": 1960.0,
+       "share_level_empty_at_placement": 0.1071,
+       "volume_through_in_horizon_p50": 119412.54,
+       "share_queue_cleared_in_horizon": 0.7857
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 200.0,
+       "queue_at_placement_p90": 1005.0,
+       "share_level_empty_at_placement": 0.2143,
+       "volume_through_in_horizon_p50": 119412.54,
+       "share_queue_cleared_in_horizon": 0.75
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 981.3,
+       "queue_at_placement_p90": 2121.71,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.5
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 1660.78,
+       "queue_at_placement_p90": 2779.15,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4643
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 1257.0,
+       "queue_at_placement_p90": 2911.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.3214
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 725.0,
+       "queue_at_placement_p90": 3317.39,
+       "share_level_empty_at_placement": 0.1071,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.25
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 498.0,
+       "queue_at_placement_p90": 974.0,
+       "share_level_empty_at_placement": 0.1786,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.2143
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 29,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0245z": {
+   "book_snapshots": 359,
+   "bbo_rows": 393,
+   "errors": 44,
+   "quote_dynamics": {
+    "transitions": 358,
+    "classes": {
+     "PERSISTENT": 319,
+     "REPLENISHED": 13,
+     "TOUCH_PRICE_MOVED": 21,
+     "ADDED": 2,
+     "CANCELLED": 3
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0392,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 323,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 516.77,
+    "touch_bid_size_p50": 1958.86,
+    "touch_bid_size_p90": 4863.71
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 33,
+       "queue_at_placement_p50": 1958.86,
+       "queue_at_placement_p90": 4863.71,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 18327.73,
+       "share_queue_cleared_in_horizon": 0.6667
+      },
+      "1": {
+       "placements": 33,
+       "queue_at_placement_p50": 1344.0,
+       "queue_at_placement_p90": 3202.96,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 17007.87,
+       "share_queue_cleared_in_horizon": 0.6061
+      },
+      "2": {
+       "placements": 33,
+       "queue_at_placement_p50": 1140.0,
+       "queue_at_placement_p90": 3103.0,
+       "share_level_empty_at_placement": 0.0606,
+       "volume_through_in_horizon_p50": 9034.16,
+       "share_queue_cleared_in_horizon": 0.5455
+      },
+      "3": {
+       "placements": 33,
+       "queue_at_placement_p50": 798.81,
+       "queue_at_placement_p90": 2012.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4848
+      },
+      "5": {
+       "placements": 33,
+       "queue_at_placement_p50": 459.47,
+       "queue_at_placement_p90": 792.0,
+       "share_level_empty_at_placement": 0.2121,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4545
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 33,
+       "queue_at_placement_p50": 564.05,
+       "queue_at_placement_p90": 1875.11,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 68963.96,
+       "share_queue_cleared_in_horizon": 0.9697
+      },
+      "1": {
+       "placements": 33,
+       "queue_at_placement_p50": 1197.57,
+       "queue_at_placement_p90": 2278.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 63733.47,
+       "share_queue_cleared_in_horizon": 0.9394
+      },
+      "2": {
+       "placements": 33,
+       "queue_at_placement_p50": 1157.0,
+       "queue_at_placement_p90": 3031.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 49699.47,
+       "share_queue_cleared_in_horizon": 0.8485
+      },
+      "3": {
+       "placements": 33,
+       "queue_at_placement_p50": 1334.0,
+       "queue_at_placement_p90": 3101.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 48570.25,
+       "share_queue_cleared_in_horizon": 0.8485
+      },
+      "5": {
+       "placements": 33,
+       "queue_at_placement_p50": 520.0,
+       "queue_at_placement_p90": 2527.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 35307.33,
+       "share_queue_cleared_in_horizon": 0.8182
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 29,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0300z": {
+   "book_snapshots": 352,
+   "bbo_rows": 352,
+   "errors": 132,
+   "quote_dynamics": {
+    "transitions": 339,
+    "classes": {
+     "PERSISTENT": 312,
+     "TOUCH_PRICE_MOVED": 16,
+     "REPLENISHED": 3,
+     "ADDED": 6,
+     "CONSUMED": 2
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0095,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 272,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 643.49,
+    "touch_bid_size_p50": 1998.13,
+    "touch_bid_size_p90": 4885.43
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 2054.92,
+       "queue_at_placement_p90": 4885.43,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.3929
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 1461.0,
+       "queue_at_placement_p90": 1997.67,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.2857
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 1038.0,
+       "queue_at_placement_p90": 3012.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1786
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 769.69,
+       "queue_at_placement_p90": 1738.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1071
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 491.0,
+       "queue_at_placement_p90": 512.0,
+       "share_level_empty_at_placement": 0.2143,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0714
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 28,
+       "queue_at_placement_p50": 2053.38,
+       "queue_at_placement_p90": 9239.05,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 44480.18,
+       "share_queue_cleared_in_horizon": 0.9643
+      },
+      "1": {
+       "placements": 28,
+       "queue_at_placement_p50": 1206.04,
+       "queue_at_placement_p90": 3880.63,
+       "share_level_empty_at_placement": 0.25,
+       "volume_through_in_horizon_p50": 39311.73,
+       "share_queue_cleared_in_horizon": 0.75
+      },
+      "2": {
+       "placements": 28,
+       "queue_at_placement_p50": 253.75,
+       "queue_at_placement_p90": 5551.03,
+       "share_level_empty_at_placement": 0.3571,
+       "volume_through_in_horizon_p50": 8464.53,
+       "share_queue_cleared_in_horizon": 0.5357
+      },
+      "3": {
+       "placements": 28,
+       "queue_at_placement_p50": 230.0,
+       "queue_at_placement_p90": 3644.0,
+       "share_level_empty_at_placement": 0.4643,
+       "volume_through_in_horizon_p50": 6507.85,
+       "share_queue_cleared_in_horizon": 0.5357
+      },
+      "5": {
+       "placements": 28,
+       "queue_at_placement_p50": 0.0,
+       "queue_at_placement_p90": 10823.0,
+       "share_level_empty_at_placement": 0.5,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.4286
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 25,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0315z": {
+   "book_snapshots": 304,
+   "bbo_rows": 303,
+   "errors": 185,
+   "quote_dynamics": {
+    "transitions": 303,
+    "classes": {
+     "PERSISTENT": 268,
+     "TOUCH_PRICE_MOVED": 21,
+     "REPLENISHED": 13,
+     "ADDED": 1
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0463,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 285,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 495.0,
+    "touch_bid_size_p50": 2470.36,
+    "touch_bid_size_p90": 4412.73
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 29,
+       "queue_at_placement_p50": 2470.36,
+       "queue_at_placement_p90": 4412.73,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 66436.02,
+       "share_queue_cleared_in_horizon": 0.6552
+      },
+      "1": {
+       "placements": 29,
+       "queue_at_placement_p50": 1270.0,
+       "queue_at_placement_p90": 2221.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 63895.8,
+       "share_queue_cleared_in_horizon": 0.6552
+      },
+      "2": {
+       "placements": 29,
+       "queue_at_placement_p50": 918.0,
+       "queue_at_placement_p90": 3092.03,
+       "share_level_empty_at_placement": 0.1034,
+       "volume_through_in_horizon_p50": 63895.8,
+       "share_queue_cleared_in_horizon": 0.6207
+      },
+      "3": {
+       "placements": 29,
+       "queue_at_placement_p50": 1043.0,
+       "queue_at_placement_p90": 1405.0,
+       "share_level_empty_at_placement": 0.1379,
+       "volume_through_in_horizon_p50": 59277.47,
+       "share_queue_cleared_in_horizon": 0.6207
+      },
+      "5": {
+       "placements": 29,
+       "queue_at_placement_p50": 241.0,
+       "queue_at_placement_p90": 1002.0,
+       "share_level_empty_at_placement": 0.3103,
+       "volume_through_in_horizon_p50": 41691.55,
+       "share_queue_cleared_in_horizon": 0.6207
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 29,
+       "queue_at_placement_p50": 1584.75,
+       "queue_at_placement_p90": 5650.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 73406.32,
+       "share_queue_cleared_in_horizon": 0.8621
+      },
+      "1": {
+       "placements": 29,
+       "queue_at_placement_p50": 1165.0,
+       "queue_at_placement_p90": 2401.0,
+       "share_level_empty_at_placement": 0.1379,
+       "volume_through_in_horizon_p50": 55887.2,
+       "share_queue_cleared_in_horizon": 0.7586
+      },
+      "2": {
+       "placements": 29,
+       "queue_at_placement_p50": 1092.0,
+       "queue_at_placement_p90": 2655.0,
+       "share_level_empty_at_placement": 0.1724,
+       "volume_through_in_horizon_p50": 50615.46,
+       "share_queue_cleared_in_horizon": 0.6552
+      },
+      "3": {
+       "placements": 29,
+       "queue_at_placement_p50": 1304.0,
+       "queue_at_placement_p90": 3241.0,
+       "share_level_empty_at_placement": 0.2069,
+       "volume_through_in_horizon_p50": 50615.46,
+       "share_queue_cleared_in_horizon": 0.5862
+      },
+      "5": {
+       "placements": 29,
+       "queue_at_placement_p50": 198.0,
+       "queue_at_placement_p90": 6998.0,
+       "share_level_empty_at_placement": 0.3448,
+       "volume_through_in_horizon_p50": 28061.1,
+       "share_queue_cleared_in_horizon": 0.5172
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 22,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0330z": {
+   "book_snapshots": 386,
+   "bbo_rows": 417,
+   "errors": 31,
+   "quote_dynamics": {
+    "transitions": 382,
+    "classes": {
+     "PERSISTENT": 335,
+     "REPLENISHED": 20,
+     "TOUCH_PRICE_MOVED": 19,
+     "ADDED": 5,
+     "CANCELLED": 3
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0563,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 287,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 328.61,
+    "touch_bid_size_p50": 3035.5,
+    "touch_bid_size_p90": 4669.53
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 29,
+       "queue_at_placement_p50": 3101.54,
+       "queue_at_placement_p90": 4669.53,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 5324.91,
+       "share_queue_cleared_in_horizon": 0.5172
+      },
+      "1": {
+       "placements": 29,
+       "queue_at_placement_p50": 1139.63,
+       "queue_at_placement_p90": 2059.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.2414
+      },
+      "2": {
+       "placements": 29,
+       "queue_at_placement_p50": 1351.0,
+       "queue_at_placement_p90": 3161.0,
+       "share_level_empty_at_placement": 0.069,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1379
+      },
+      "3": {
+       "placements": 29,
+       "queue_at_placement_p50": 865.0,
+       "queue_at_placement_p90": 1872.0,
+       "share_level_empty_at_placement": 0.1034,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.1379
+      },
+      "5": {
+       "placements": 29,
+       "queue_at_placement_p50": 486.0,
+       "queue_at_placement_p90": 501.0,
+       "share_level_empty_at_placement": 0.1724,
+       "volume_through_in_horizon_p50": 0,
+       "share_queue_cleared_in_horizon": 0.0
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 29,
+       "queue_at_placement_p50": 1819.11,
+       "queue_at_placement_p90": 4768.93,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 53037.41,
+       "share_queue_cleared_in_horizon": 1.0
+      },
+      "1": {
+       "placements": 29,
+       "queue_at_placement_p50": 1007.0,
+       "queue_at_placement_p90": 3431.98,
+       "share_level_empty_at_placement": 0.1034,
+       "volume_through_in_horizon_p50": 49014.09,
+       "share_queue_cleared_in_horizon": 0.8966
+      },
+      "2": {
+       "placements": 29,
+       "queue_at_placement_p50": 617.0,
+       "queue_at_placement_p90": 3391.9,
+       "share_level_empty_at_placement": 0.2069,
+       "volume_through_in_horizon_p50": 46713.64,
+       "share_queue_cleared_in_horizon": 0.8621
+      },
+      "3": {
+       "placements": 29,
+       "queue_at_placement_p50": 504.0,
+       "queue_at_placement_p90": 2471.0,
+       "share_level_empty_at_placement": 0.1724,
+       "volume_through_in_horizon_p50": 41295.13,
+       "share_queue_cleared_in_horizon": 0.7931
+      },
+      "5": {
+       "placements": 29,
+       "queue_at_placement_p50": 280.0,
+       "queue_at_placement_p90": 11711.0,
+       "share_level_empty_at_placement": 0.3103,
+       "volume_through_in_horizon_p50": 32430.5,
+       "share_queue_cleared_in_horizon": 0.6207
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 30,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0345z": {
+   "book_snapshots": 334,
+   "bbo_rows": 394,
+   "errors": 70,
+   "quote_dynamics": {
+    "transitions": 324,
+    "classes": {
+     "PERSISTENT": 291,
+     "REPLENISHED": 10,
+     "TOUCH_PRICE_MOVED": 21,
+     "ADDED": 2
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0332,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 325,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 156.0,
+    "touch_bid_size_p50": 2443.0,
+    "touch_bid_size_p90": 4628.0
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 33,
+       "queue_at_placement_p50": 2341.47,
+       "queue_at_placement_p90": 4628.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 24740.54,
+       "share_queue_cleared_in_horizon": 0.8182
+      },
+      "1": {
+       "placements": 33,
+       "queue_at_placement_p50": 1126.87,
+       "queue_at_placement_p90": 2872.58,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 17819.92,
+       "share_queue_cleared_in_horizon": 0.7576
+      },
+      "2": {
+       "placements": 33,
+       "queue_at_placement_p50": 2139.0,
+       "queue_at_placement_p90": 3170.0,
+       "share_level_empty_at_placement": 0.0606,
+       "volume_through_in_horizon_p50": 7103.05,
+       "share_queue_cleared_in_horizon": 0.697
+      },
+      "3": {
+       "placements": 33,
+       "queue_at_placement_p50": 513.0,
+       "queue_at_placement_p90": 1834.0,
+       "share_level_empty_at_placement": 0.0606,
+       "volume_through_in_horizon_p50": 7103.05,
+       "share_queue_cleared_in_horizon": 0.697
+      },
+      "5": {
+       "placements": 33,
+       "queue_at_placement_p50": 201.0,
+       "queue_at_placement_p90": 500.0,
+       "share_level_empty_at_placement": 0.1818,
+       "volume_through_in_horizon_p50": 7103.05,
+       "share_queue_cleared_in_horizon": 0.6061
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 33,
+       "queue_at_placement_p50": 1494.7,
+       "queue_at_placement_p90": 3145.7,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 41327.44,
+       "share_queue_cleared_in_horizon": 0.7273
+      },
+      "1": {
+       "placements": 33,
+       "queue_at_placement_p50": 1093.0,
+       "queue_at_placement_p90": 3478.3,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 26935.59,
+       "share_queue_cleared_in_horizon": 0.7273
+      },
+      "2": {
+       "placements": 33,
+       "queue_at_placement_p50": 746.58,
+       "queue_at_placement_p90": 2980.14,
+       "share_level_empty_at_placement": 0.0606,
+       "volume_through_in_horizon_p50": 26116.17,
+       "share_queue_cleared_in_horizon": 0.697
+      },
+      "3": {
+       "placements": 33,
+       "queue_at_placement_p50": 1001.0,
+       "queue_at_placement_p90": 3177.93,
+       "share_level_empty_at_placement": 0.0303,
+       "volume_through_in_horizon_p50": 26116.17,
+       "share_queue_cleared_in_horizon": 0.6061
+      },
+      "5": {
+       "placements": 33,
+       "queue_at_placement_p50": 3.0,
+       "queue_at_placement_p90": 506.0,
+       "share_level_empty_at_placement": 0.3939,
+       "volume_through_in_horizon_p50": 18825.09,
+       "share_queue_cleared_in_horizon": 0.6061
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 29,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  },
+  "cpc-btc-updown-15m-2026-10-07-0400z": {
+   "book_snapshots": 386,
+   "bbo_rows": 417,
+   "errors": 33,
+   "quote_dynamics": {
+    "transitions": 382,
+    "classes": {
+     "PERSISTENT": 340,
+     "TOUCH_PRICE_MOVED": 24,
+     "REPLENISHED": 15,
+     "ADDED": 3
+    },
+    "replenished_share_of_same_price_unchanged_size": 0.0423,
+    "DETERMINABLE": "whether a size change coincided with printed volume at or below the touch",
+    "NOT_DETERMINABLE": "order identity, FIFO position, and whether a refill is the same participant; anything inside a 2 s gap is unordered"
+   },
+   "five_hundred": {
+    "book_snapshots": 383,
+    "touch_500x500": 0,
+    "share_500x500": 0.0,
+    "touch_bid_size_p10": 115.01,
+    "touch_bid_size_p50": 1211.0,
+    "touch_bid_size_p90": 3715.7
+   },
+   "levels": {
+    "UP": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 39,
+       "queue_at_placement_p50": 1211.0,
+       "queue_at_placement_p90": 3715.7,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 34374.78,
+       "share_queue_cleared_in_horizon": 0.8462
+      },
+      "1": {
+       "placements": 39,
+       "queue_at_placement_p50": 656.5,
+       "queue_at_placement_p90": 1176.0,
+       "share_level_empty_at_placement": 0.1026,
+       "volume_through_in_horizon_p50": 34374.78,
+       "share_queue_cleared_in_horizon": 0.8462
+      },
+      "2": {
+       "placements": 39,
+       "queue_at_placement_p50": 432.0,
+       "queue_at_placement_p90": 2399.0,
+       "share_level_empty_at_placement": 0.1282,
+       "volume_through_in_horizon_p50": 31893.78,
+       "share_queue_cleared_in_horizon": 0.7436
+      },
+      "3": {
+       "placements": 39,
+       "queue_at_placement_p50": 454.97,
+       "queue_at_placement_p90": 1300.0,
+       "share_level_empty_at_placement": 0.1282,
+       "volume_through_in_horizon_p50": 29671.26,
+       "share_queue_cleared_in_horizon": 0.7436
+      },
+      "5": {
+       "placements": 39,
+       "queue_at_placement_p50": 0.0,
+       "queue_at_placement_p90": 510.0,
+       "share_level_empty_at_placement": 0.6154,
+       "volume_through_in_horizon_p50": 27745.27,
+       "share_queue_cleared_in_horizon": 0.6923
+      }
+     }
+    },
+    "DOWN": {
+     "ticks_behind_touch": {
+      "0": {
+       "placements": 39,
+       "queue_at_placement_p50": 423.96,
+       "queue_at_placement_p90": 2340.0,
+       "share_level_empty_at_placement": 0.0,
+       "volume_through_in_horizon_p50": 69601.34,
+       "share_queue_cleared_in_horizon": 0.8205
+      },
+      "1": {
+       "placements": 39,
+       "queue_at_placement_p50": 890.0,
+       "queue_at_placement_p90": 2021.0,
+       "share_level_empty_at_placement": 0.0769,
+       "volume_through_in_horizon_p50": 54239.22,
+       "share_queue_cleared_in_horizon": 0.8205
+      },
+      "2": {
+       "placements": 39,
+       "queue_at_placement_p50": 810.0,
+       "queue_at_placement_p90": 2781.41,
+       "share_level_empty_at_placement": 0.0513,
+       "volume_through_in_horizon_p50": 43760.73,
+       "share_queue_cleared_in_horizon": 0.7436
+      },
+      "3": {
+       "placements": 39,
+       "queue_at_placement_p50": 1213.0,
+       "queue_at_placement_p90": 2972.53,
+       "share_level_empty_at_placement": 0.0769,
+       "volume_through_in_horizon_p50": 42117.1,
+       "share_queue_cleared_in_horizon": 0.6923
+      },
+      "5": {
+       "placements": 39,
+       "queue_at_placement_p50": 240.0,
+       "queue_at_placement_p90": 1000.0,
+       "share_level_empty_at_placement": 0.2564,
+       "volume_through_in_horizon_p50": 24383.95,
+       "share_queue_cleared_in_horizon": 0.6154
+      }
+     }
+    },
+    "horizon_s": 180.0,
+    "placement_stride_snapshots": 10,
+    "prints_intervals": 30,
+    "CLEARED_MEANING": "volume printing at or through the level in the horizon AFTER placement exceeded the queue standing there at placement. NECESSARY for a fill, NOT sufficient: FIFO position is unobservable"
+   }
+  }
+ },
+ "LABELS": "No fill is claimed. Queue sizes are public ladder levels. A cleared queue is necessary for a fill, never sufficient. Order identity and FIFO position are not observable from snapshots.",
+ "pooled_by_ticks_behind": {
+  "UP": {
+   "0": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 1552.99,
+    "opposing_volume_p50": 34374.78,
+    "share_queue_cleared_p50": 0.73
+   },
+   "1": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 908.48,
+    "opposing_volume_p50": 31066.74,
+    "share_queue_cleared_p50": 0.66
+   },
+   "2": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 725.0,
+    "opposing_volume_p50": 30688.69,
+    "share_queue_cleared_p50": 0.62
+   },
+   "3": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 735.0,
+    "opposing_volume_p50": 7103.05,
+    "share_queue_cleared_p50": 0.53
+   },
+   "5": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 200.0,
+    "opposing_volume_p50": 0,
+    "share_queue_cleared_p50": 0.5
+   }
+  },
+  "DOWN": {
+   "0": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 1217.47,
+    "opposing_volume_p50": 41327.44,
+    "share_queue_cleared_p50": 0.82
+   },
+   "1": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 1093.0,
+    "opposing_volume_p50": 26935.59,
+    "share_queue_cleared_p50": 0.75
+   },
+   "2": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 815.73,
+    "opposing_volume_p50": 26116.17,
+    "share_queue_cleared_p50": 0.66
+   },
+   "3": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 868.0,
+    "opposing_volume_p50": 26116.17,
+    "share_queue_cleared_p50": 0.59
+   },
+   "5": {
+    "windows": 20,
+    "queue_p50_of_window_medians": 240.0,
+    "opposing_volume_p50": 9787.65,
+    "share_queue_cleared_p50": 0.55
+   }
+  }
+ }
+}
