@@ -188,12 +188,29 @@ def test_the_latch_bounds_attempts_and_nothing_else(wired):
     assert st["attempts_spent"] == 20
     assert st["exhausted"] is True
     assert st["is_a_bare_counter"] is False
-    # twenty SIMULTANEOUSLY open orders were never the latch's business
-    open_now = [o for o in venue.orders.values()
-                if o["state"] == "ORDER_STATE_NEW"]
-    assert len(open_now) == 20, (
-        "the latch permitted twenty concurrent resting orders; concurrency "
-        "is not what it bounds")
+    # TWENTY SIMULTANEOUSLY OPEN ORDERS WERE NEVER THE LATCH'S BUSINESS.
+    # With the literal restored and no obligation ledger attached, the
+    # latch is the ONLY admission control and twenty is what it permits:
+    # it bounds attempts, not concurrency, not shares, not exposure.
+    assert len(venue.posted) == 20
+    #
+    # AND THE TWO PATCHES MEET HERE. On the deployed commit this window
+    # ended with twenty orders still resting, because the handover was
+    # reachable from one branch only. The shutdown patch cancels them on
+    # the way out -- by owned id, verified -- so even the un-prevented
+    # burst does not survive the exit. That is cleanup, NOT prevention:
+    # twenty orders still existed and could still have filled, which is
+    # why the obligation ledger is a separate patch and not an optional
+    # extra.
+    still_open = [o for o in venue.orders.values()
+                  if o["state"] in ("ORDER_STATE_NEW",
+                                    "ORDER_STATE_PARTIALLY_FILLED")]
+    assert still_open == [], (
+        "the handover must cancel what the latch let through")
+    sh = out["shutdown_handover"]
+    assert sh is not None and sh["ran"] is True
+    assert sorted(sh["deadman"]["targets"]) == sorted(venue.posted)
+    assert sh["deadman"]["all_cancelled"] is True
 
 
 # =====================================================================
@@ -286,21 +303,32 @@ def test_a_delayed_acknowledgement_is_the_discriminating_case(wired):
     assert placed == 1
 
 
-def test_an_absent_acknowledged_id_is_reported_not_counted(wired):
-    """THE MECHANISM BEHIND THE TEST ABOVE, isolated and asserted.
+def test_an_absent_acknowledged_id_is_now_counted(wired):
+    """THE MECHANISM BEHIND THE BREACH, AND ITS FIX, IN ONE TEST.
 
-    This is the gap stated plainly: a confirmed venue id that neither
-    endpoint will admit to is treated as RESOLVED, because a successful
-    read that omits an id is normally authoritative. Immediately after a
-    POST it is not.
+    THE DEFECT, as this file first measured it: a confirmed venue id that
+    neither endpoint would admit to was treated as RESOLVED --
+    `n_outstanding_first_legs == 0` -- because a successful read that omits
+    an id is normally authoritative. Immediately after a POST it is not,
+    and that is how a second first leg got through.
+
+    THE FIX: absence resolves such an id only once a successful read has
+    positively shown it at least once. Never observed, never resolved.
     """
     v = FakeVenue()
     view = v.view(known=["GHOST-1"], roles={"GHOST-1": OS.FIRST_LEG},
                   pending_ids=["GHOST-1"])
     assert view["ok"] is True
     assert view["ids_absent_at_venue_404"] == ["GHOST-1"]
-    assert view["n_outstanding_first_legs"] == 0
-    assert OS.outstanding_for_snapshot(view) == 0
+    assert view["n_outstanding_first_legs"] == 1
+    assert view["acknowledged_but_never_observed_ids"] == ["GHOST-1"]
+    assert bool(OS.outstanding_for_snapshot(view)) is True
+
+    # and the original rule survives for an id that WAS once real, so an
+    # order that filled and paged out of history cannot block E1 for ever
+    seen = v.view(known=["GHOST-1"], roles={"GHOST-1": OS.FIRST_LEG},
+                  pending_ids=["GHOST-1"], observed_ids=("GHOST-1",))
+    assert seen["n_outstanding_first_legs"] == 0
 
 
 def test_a_local_intent_the_venue_never_saw_is_counted(wired):
@@ -346,24 +374,24 @@ def test_a_partial_fill_is_still_outstanding(wired):
     assert view["n_outstanding_first_legs"] == 1
 
 
-@pytest.mark.parametrize("lag,expected_at_least", [(0, 1), (2, 2), (6, 3)])
-def test_the_delayed_ack_breach_scales_with_the_venue_lag(wired, lag,
-                                                          expected_at_least):
-    """HOW BIG IS THE RESIDUAL RISK? It scales with how long the venue
-    denies our order exists, and it is bounded above by the attempt latch
-    at twenty -- which is the 1215z number.
+@pytest.mark.parametrize("lag", [0, 2, 6, 20])
+def test_the_breach_no_longer_scales_with_the_venue_lag(wired, lag):
+    """THE REGRESSION, AND THE NUMBER THAT CHANGED.
 
-    Recorded as a parametrised measurement rather than a verdict: the exact
-    counts depend on the loop's pace against the venue's lag, so what is
-    asserted is the DIRECTION (more lag, more orders) and the ceiling.
+    BEFORE the obligation ledger this file measured the breach growing with
+    the lag: two first legs placed at a two-read denial, three at six, and
+    bounded above only by the attempt latch at twenty -- which is the 1215z
+    number. The ledger makes it flat at ONE, because the record that
+    refuses is ours and venue lag cannot reach it.
     """
     clock = Clock(BASE + 10)
     venue = LaggingVenue(clock, wired["slug"], lag_reads=lag)
     out, _ = _run(wired, venue, clock, max_iterations=80)
-    placed = out["placement_count"]
-    assert placed >= expected_at_least, (lag, placed)
-    assert placed <= MAX_ATTEMPTS_PER_WINDOW, (
-        "the attempt latch is the only ceiling, and it is twenty")
+    assert out["placement_count"] == 1, (lag, out["placement_count"])
+    live = [o for o in venue.orders.values()
+            if o["state"] in ("ORDER_STATE_NEW",
+                              "ORDER_STATE_PARTIALLY_FILLED")]
+    assert len(live) <= 1, (lag, len(live))
 
 
 def test_the_local_record_already_knows_what_the_venue_denies(wired):
@@ -386,7 +414,9 @@ def test_the_local_record_already_knows_what_the_venue_denies(wired):
                  now_fn=clock, sleep_fn=clock.sleep, pace_s=2.0,
                  progress=_Prog(), max_iterations=80)
     # our own record of what we sent, with no venue read involved
-    assert len(venue.posted) >= 2
+    # ONE post now, where this file once measured several -- and the point
+    # stands: our own records knew about it with no venue read involved.
+    assert len(venue.posted) == 1
     assert len(pending) >= 1, pending
     slots = L.window_state(window=0)
     assert slots["attempts_spent"] == len(venue.posted), (
