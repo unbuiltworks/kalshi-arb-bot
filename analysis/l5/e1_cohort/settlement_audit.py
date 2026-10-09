@@ -124,19 +124,36 @@ class ResumableScan:
 def scan_resolutions(reader: Callable[[str], Any], *,
                      state_path: Optional[str] = None,
                      max_pages: int = MAX_PAGES,
+                     refresh: bool = False,
                      sleep_fn: Callable[[float], None] = time.sleep
                      ) -> Dict[str, Any]:
-    """Walk the position resolutions, filtered, resumable and 429-aware."""
+    """Walk the position resolutions, filtered, resumable and 429-aware.
+
+    `refresh` RE-READS rather than serving a finished scan from durable
+    progress. A completed scan means "every page up to the moment it
+    finished", not "nothing will ever resolve again": the 22:00z and
+    00:00z pairs settled AFTER the first scan completed, and without this
+    the audit answered UNCONFIRMED for them forever while cheerfully
+    reporting complete: true and 154 rows. Durable progress is there to
+    survive a 429 mid-walk, not to make the audit blind to new
+    settlements.
+    """
     scan = ResumableScan(state_path)
+    if refresh:
+        # re-walk from the first page, keeping nothing stale behind.
+        scan.complete = False
+        scan.pages_read = 0
+        scan.rows = []
     out: Dict[str, Any] = {
         "filter": TYPES_PARAM,
+        "refresh": bool(refresh),
         "page_size": PAGE_SIZE,
         "resumed_from_page": scan.resumed_from_page,
         "filter_honoured": None,
         "rate_limit_hits": scan.rate_limit_hits,
         "errors": [],
     }
-    if scan.complete:
+    if scan.complete and not refresh:
         out.update({"rows": scan.rows, "pages_read": scan.pages_read,
                     "complete": True, "filter_honoured": True,
                     "served_entirely_from_durable_progress": True})

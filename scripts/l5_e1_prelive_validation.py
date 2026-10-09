@@ -225,8 +225,11 @@ def main() -> int:
     # durable volume -- so a 429 RESUMES rather than starting over, and
     # successive runs converge instead of repeating.
     scan_state = os.path.join(STATE_DIR, "e1.resolution_scan.json")
+    # REFRESH, always. A finished scan is a snapshot of the moment it
+    # finished; our own pairs settle after it. Durable progress still
+    # earns its keep by surviving a 429 mid-walk.
     scan = SA.scan_resolutions(reader, state_path=scan_state,
-                               sleep_fn=time.sleep)
+                               refresh=True, sleep_fn=time.sleep)
     res = {"rows": scan["rows"], "complete": scan["complete"],
            "pages_read": scan["pages_read"],
            "error": (scan["errors"][0]["error"] if scan["errors"]

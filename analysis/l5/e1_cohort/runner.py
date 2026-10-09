@@ -1883,6 +1883,38 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                         _c["complement_order_id"])
         _ws_by_id = {str(p["order_id"]): p.get("ws_state_at_decision")
                      for p in placements if p.get("order_id")}
+        # ============ THE OUTCOME COUNTERS THE SPRT READS ===============
+        #
+        # `record_first_leg_result` and `record_completion` were defined on
+        # the tracker, covered by tests, and called from NO production code
+        # -- the fourth instance of this defect class in this engine, after
+        # the hard-coded our_outstanding_orders, the uncalled
+        # submit_complement, and the unwritten attempt tape.
+        #
+        # It is not cosmetic. `verdict()` walks an SPRT over `fills` and
+        # `completions`; with both frozen at zero the walk is always 0.0
+        # and the stopping rule can only ever answer
+        # CONTINUE_INSUFFICIENT_EVIDENCE -- no matter how the probe
+        # actually went. The experiment's own stopping rule was inert.
+        #
+        # Counted ONCE per attempt, here, from venue-confirmed state, for
+        # the same reason the attempt tape is written here: this is where
+        # the outcome is finally known. A fill is a fill; a completion is
+        # a complement whose confirmed quantity covers the first leg's.
+        _by_id = {str(o.get("id")): o
+                  for o in ((_final or {}).get("orders") or [])
+                  if isinstance(o, Mapping) and o.get("id") is not None}
+        for _p in placements:
+            _fl = _by_id.get(str(_p.get("order_id"))) or {}
+            _fq = finite_decimal(_fl.get("cum_quantity")) or D("0")
+            tracker.record_first_leg_result(filled_qty=_fq)
+            if _fq <= 0:
+                continue
+            _cid = _comp.get(str(_p.get("order_id")))
+            _cq = finite_decimal(
+                (_by_id.get(str(_cid)) or {}).get("cum_quantity")) or D("0")
+            tracker.record_completion(complete=bool(_cq >= _fq))
+
         attempt_tape = AR.emit_attempt_rows(
             recorder, lifecycle=lifecycle, order_state=_final,
             market=placements[-1].get("slug"),

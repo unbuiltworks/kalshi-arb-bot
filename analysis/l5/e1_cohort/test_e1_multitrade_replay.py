@@ -412,3 +412,63 @@ def test_a_spent_gross_envelope_still_complements_a_filled_leg(wired):
     assert any(str(c).startswith("MT_GROSS_NOTIONAL_") for c in codes)
     # and it stopped for the envelope, not by running out of iterations
     assert out["iteration_cap_reached"] is False
+
+
+# ========== 7. THE COUNTERS THE STOPPING RULE READS ====================
+
+def test_the_tracker_counts_fills_and_completions_from_the_run(wired):
+    """THE FOURTH UNWIRED FUNCTION, and the one that mattered most.
+
+    `record_first_leg_result` and `record_completion` were defined on the
+    tracker, covered by tests, and called from no production code. The
+    SPRT in `verdict()` walks over `fills` and `completions`; with both
+    frozen at zero the walk is always 0.0 and the stopping rule can only
+    ever answer CONTINUE_INSUFFICIENT_EVIDENCE, whatever actually
+    happened. The experiment's own stopping rule was inert.
+    """
+    pin = wired
+    clock = Clock(BASE + 10)
+    venue = LoopVenue(clock, pin["slug"])
+    known, roles, pending = [], {}, []
+    prov = _provider(venue, clock, pin=pin, known=known, roles=roles,
+                     pending=pending, cutoff_at=BASE + 800)
+    venue.fill_plan = [{"at": BASE + 12 + 4 * i, "qty": None,
+                        "match": (lambda oid, o: True)}
+                       for i in range(12)]
+    tracker = SP.CohortTracker()
+    out = R.run_cohort(
+        snapshot_provider=prov, tracker=tracker, recorder=_Rec(),
+        transport_factory=FakeTransport, now_fn=clock,
+        sleep_fn=clock.sleep, pace_s=2.0, progress=_Prog(),
+        max_iterations=600, envelope=envelope())
+
+    snap = tracker.snapshot()
+    assert out["placement_count"] == 3
+    # every attempt was counted exactly once
+    assert snap["fills"] + tracker.consecutive_no_fill >= 0
+    assert snap["fills"] == 3, snap
+    assert snap["completions"] == 3, snap
+    assert snap["non_completions"] == 0, snap
+    # and the verdict now sees them
+    v = tracker.verdict()
+    assert v["fills"] == 3
+    assert v["completions"] == 3
+
+
+def test_an_unfilled_first_leg_counts_as_a_no_fill_not_a_completion(wired):
+    pin = wired
+    clock = Clock(BASE + 10)
+    venue = LoopVenue(clock, pin["slug"])
+    known, roles, pending = [], {}, []
+    prov = _provider(venue, clock, pin=pin, known=known, roles=roles,
+                     pending=pending)
+    venue.fill_plan = []                       # nothing ever fills
+    tracker = SP.CohortTracker()
+    R.run_cohort(snapshot_provider=prov, tracker=tracker, recorder=_Rec(),
+                 transport_factory=FakeTransport, now_fn=clock,
+                 sleep_fn=clock.sleep, pace_s=2.0, progress=_Prog(),
+                 max_iterations=60, envelope=envelope())
+    snap = tracker.snapshot()
+    assert snap["fills"] == 0
+    assert snap["completions"] == 0
+    assert snap["non_completions"] == 0, "no fill means nothing to complete"
