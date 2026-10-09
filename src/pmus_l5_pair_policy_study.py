@@ -536,18 +536,26 @@ def _mix(vals: Sequence[Any]) -> dict:
     return out
 
 
+TAPE_FILES = int(os.getenv("L5_STUDY_TAPE_FILES", "4"))
+
+
 def load_tape(state_dir: str, *, prefix: str = "cpc-",
-              max_files: int = 4) -> Dict[str, List[dict]]:
+              max_files: Optional[int] = None) -> Dict[str, List[dict]]:
     """Rebuild per-market observation sequences from the service's own tape.
 
     The observation files hold one row per watched market per cycle, so the
     sequences are reassembled by slug and sorted by poll time; duplicates
     from overlapping cycles are dropped on (slug, poll time).
+
+    HOW MANY FILES. The default of 4 pinned the study's sample at a fixed
+    size no matter how long the service ran, which silently capped the
+    evidence rather than growing it. `L5_STUDY_TAPE_FILES` raises it.
     """
+    n = TAPE_FILES if max_files is None else max_files
     out: Dict[str, Dict[float, dict]] = {}
     try:
         files = sorted(f for f in os.listdir(state_dir)
-                       if f.startswith("observations-"))[-max_files:]
+                       if f.startswith("observations-"))[-n:]
     except Exception:                                          # noqa: BLE001
         return {}
     for f in files:
@@ -782,6 +790,8 @@ def study(obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]],
         "observations": sum(len(v) for v in obs_by_slug.values()),
         "ceiling": str(CEILING),
         "max_wait_s": MAX_WAIT_S, "max_accumulate": MAX_ACCUM,
+        "requote_s": REQUOTE_S, "max_extend": str(MAX_EXTEND),
+        "tape_files": TAPE_FILES,
         "RULES": ["chronological", "no assumed fills",
                   "queue at placement must be cleared by printed volume",
                   "no retroactive pricing", "fees charged where we cross",
