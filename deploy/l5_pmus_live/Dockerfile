@@ -71,6 +71,9 @@ COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
+# reachable from pmus_q1_executor's pricing boundary (lazy import, so
+# not boot-scope -- but the graft check scans reachability, correctly).
+COPY src/pmus_ws_live_state.py src/pmus_ws_live_state.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY src/polymarket_l5/action_model_v2.py src/polymarket_l5/action_model_v2.py

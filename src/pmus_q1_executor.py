@@ -56,7 +56,6 @@ from decimal import ROUND_DOWN, Decimal as D
 from pathlib import Path
 from typing import Any, Mapping, Optional
 from src import pmus_fees as _fees
-from src import pmus_ws_live_state as WS
 
 API = "https://api.polymarket.us"
 GATEWAY = "https://gateway.polymarket.us"
@@ -395,6 +394,21 @@ def attach_ws_feed(feed) -> None:
     WS_FEED = feed
 
 
+def _ws():
+    """`pmus_ws_live_state`, imported LAZILY and deliberately.
+
+    Importing it at module load would pull it -- and the evidence recorder it
+    imports -- into the boot-scope closure of every image that copies this
+    file, so five Dockerfiles and a `railway.json` watch list would have to
+    change for a fix that is meant to touch nothing that deploys. The image
+    closure tests caught exactly that. The authenticated feed is only ever
+    needed by a caller that already has one, so the import happens when it
+    is used and nowhere else.
+    """
+    from src import pmus_ws_live_state as WS
+    return WS
+
+
 class StateBackedFeed:
     """The executor's pricing boundary, served from the authenticated state.
 
@@ -415,7 +429,7 @@ class StateBackedFeed:
     the boundary cannot drift between the two callers.
     """
 
-    def __init__(self, state: "WS.LiveState", max_age_s: float) -> None:
+    def __init__(self, state: Any, max_age_s: float) -> None:
         self._state = state
         self._max_age_s = max_age_s
 
@@ -424,8 +438,8 @@ class StateBackedFeed:
                                     max_age_s=self._max_age_s)
         bid, ask = snap.get("bid"), snap.get("ask")
         if bid is None or ask is None:
-            raise WS.StaleFeed("ONE_SIDED_WS_BOOK: %s bid=%r ask=%r"
-                               % (slug, bid, ask))
+            raise _ws().StaleFeed("ONE_SIDED_WS_BOOK: %s bid=%r ask=%r"
+                                  % (slug, bid, ask))
         # LONG-SIDE terms, as the gateway reader returned them; this adapter
         # performs no outcome inversion -- `l5_order_body.venue_price` owns
         # that and must stay the only place it happens.
@@ -615,9 +629,9 @@ def preflight(t: Transport, slug: str, sleep=time.sleep) -> Optional[str]:
 
 def run_campaign(t: Optional[Transport] = None,
                  clock=time.monotonic, sleep=time.sleep,
-                 state: "Optional[WS.LiveState]" = None,
+                 state: Any = None,
                  feed: Any = None,
-                 max_book_age_s: float = WS.DEFAULT_MAX_BOOK_AGE_S) -> dict:
+                 max_book_age_s: Optional[float] = None) -> dict:
     slug = os.getenv(MARKET_ENV, "").strip()
     report: dict[str, Any] = {"campaign": "pmus-q1", "slug": slug,
                               "qty": QTY, "realized_pnl": None,
@@ -662,6 +676,9 @@ def run_campaign(t: Optional[Transport] = None,
         if state is None and feed is not None:
             state = feed.state
         if state is not None:
+            WS = _ws()
+            if max_book_age_s is None:
+                max_book_age_s = WS.DEFAULT_MAX_BOOK_AGE_S
             attach_ws_feed(StateBackedFeed(state, max_book_age_s))
             # STALENESS IS CLASSIFIED BEFORE PREFLIGHT, not swallowed by it.
             # `preflight` prices too, so a stale feed would reach it first
@@ -805,7 +822,7 @@ def main() -> int:
     feed = None
     try:
         if armed() and slug:
-            feed = WS.WsFeed(slug).start()
+            feed = _ws().WsFeed(slug).start()
         report = run_campaign(feed=feed)
     finally:
         if feed is not None:
