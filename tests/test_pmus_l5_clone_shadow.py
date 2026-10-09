@@ -595,8 +595,14 @@ def test_settlement_recomputes_the_clock_instead_of_trusting_the_cache(
     slug = "cpc-btc-updown-15m-2026-09-23-1345z"
     resolved = {"market": {"slug": slug, "outcomes": ["Up", "Down"],
                            "outcomePrices": ["1", "0"], "closed": True}}
-    gw = Gateway([], {})
-    gw.books[slug] = [resolved]
+    def gw(path):
+        # resolutions live on the market LIST; the per-market endpoint 404s
+        if path.startswith("/v1/markets/"):
+            raise AssertionError("per-market endpoint must not be used")
+        if "closed=true" in path and "offset=0" in path:
+            return {"markets": [resolved["market"]]}
+        return {"markets": []}
+
     cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: 0.0,
                         policies={"early": None}, state_dir=str(tmp_path))
     inv = cs.inv["early"].setdefault(slug, CS.VirtualInventory())
@@ -607,3 +613,42 @@ def test_settlement_recomputes_the_clock_instead_of_trusting_the_cache(
     rows = cs.settle_expired([], 1790179000.0)
     assert len(rows) == 1 and rows[0]["settled"] is True
     assert D(rows[0]["residual_pnl_usd"]) == D("0.70")
+
+
+def test_resolution_comes_from_the_closed_market_sweep_not_a_404_endpoint():
+    """/v1/markets/{slug} returns 404 on this gateway; resolutions are only
+    available from the market list."""
+    slug = "cpc-btc-updown-15m-2026-10-09-0300z"
+    calls = []
+
+    def gw(path):
+        calls.append(path)
+        if path.startswith("/v1/markets/"):
+            raise AssertionError("per-market endpoint must not be used")
+        if "closed=true" in path and "offset=0" in path:
+            return {"markets": [{"slug": slug, "outcomes": ["Up", "Down"],
+                                 "outcomePrices": ["0", "1"]}]}
+        return {"markets": []}
+
+    out = CS.fetch_resolutions(gw, [slug], sleep=None)
+    assert out["n_found"] == 1
+    assert CS.resolved_outcome(out["found"][slug])["yes_won"] is False
+    assert out["tried"][0]["found"] == 1
+
+
+def test_settle_expired_uses_the_sweep_and_records_misses(tmp_path):
+    slug = "cpc-btc-updown-15m-2026-09-23-1345z"
+
+    def gw(path):
+        if path.startswith("/v1/markets/"):
+            raise AssertionError("per-market endpoint must not be used")
+        return {"markets": []}        # resolution not published yet
+
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: 0.0,
+                        policies={"early": None}, state_dir=str(tmp_path))
+    inv = cs.inv["early"].setdefault(slug, CS.VirtualInventory())
+    inv.add(side_yes=True, px=D("0.30"), qty=D("1"), t=0.0)
+    rows = cs.settle_expired([], 1790179000.0)
+    assert rows == []
+    assert cs.settle_attempts[slug]["stage"] == "NOT_IN_CLOSED_MARKET_SWEEP"
+    assert cs.resolution_sweep["n_wanted"] == 1

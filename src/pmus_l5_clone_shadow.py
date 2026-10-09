@@ -729,6 +729,64 @@ def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float
 
 
 # ----------------------------------------------------------- settlement ---
+# `/v1/markets/{slug}` DOES NOT EXIST on this gateway: every resolution
+# lookup returned HTTP 404, measured on 12 held markets. The surviving
+# public surface is the market LIST, which carries `outcomes` and
+# `outcomePrices` per row (seen in the discovery diagnostic), so a
+# resolution is found by sweeping the list for closed markets rather than
+# by asking about one market. Several query forms are tried because the
+# venue's parameter support is not documented for us, and the form that
+# actually returned resolutions is recorded on the row.
+RESOLUTION_QUERIES = (
+    "/v1/markets?closed=true&limit=500&offset=%d&categories=crypto",
+    "/v1/markets?active=false&closed=true&limit=500&offset=%d",
+    "/v1/markets?closed=true&limit=500&offset=%d",
+)
+
+
+def fetch_resolutions(get_json, wanted: Sequence[str], *, max_pages: int = 8,
+                      sleep=time.sleep, pause: float = 0.35) -> dict:
+    """{slug: market row} for the wanted slugs, from the closed-market list.
+
+    Bounded and paced, degrades to whatever it found, and reports which
+    query form produced the rows so a silent change of surface is visible
+    rather than looking like "nothing resolved yet".
+    """
+    want = {str(w) for w in wanted}
+    found: Dict[str, dict] = {}
+    tried: List[dict] = []
+    for form in RESOLUTION_QUERIES:
+        rows_seen = 0
+        for p in range(max_pages):
+            if sleep:
+                sleep(pause)
+            try:
+                resp = get_json(form % (p * 500))
+            except Exception as exc:                           # noqa: BLE001
+                tried.append({"form": form,
+                              "error": "%s:%s" % (type(exc).__name__,
+                                                  str(exc)[:80])})
+                break
+            ms = ((resp or {}).get("markets")
+                  if isinstance(resp, Mapping) else None)
+            if not isinstance(ms, list) or not ms:
+                break
+            rows_seen += len(ms)
+            for m in ms:
+                if not isinstance(m, Mapping):
+                    continue
+                slug = str(m.get("slug"))
+                if slug in want and slug not in found:
+                    found[slug] = dict(m)
+            if len(ms) < 500 or want <= set(found):
+                break
+        tried.append({"form": form, "rows_seen": rows_seen,
+                      "found": len(found)})
+        if want <= set(found):
+            break
+    return {"found": found, "tried": tried,
+            "n_wanted": len(want), "n_found": len(found)}
+
 def resolved_outcome(market: Mapping[str, Any]) -> dict:
     """Did the venue's LONG side win, per the venue's own resolution?
 
@@ -874,6 +932,7 @@ class CloneShadow:
         self.one_sided: Dict[str, dict] = {}
         self.settled: Dict[str, dict] = {}
         self.settle_attempts: Dict[str, dict] = {}
+        self.resolution_sweep: Dict[str, Any] = {}
         self._load()
 
     # ---- transport ------------------------------------------------------
@@ -1228,8 +1287,8 @@ class CloneShadow:
         market resolved, which is the only question that decides whether a
         live probe is justified.
 
-        Bounded: one resolution GET per market, once, and only for markets
-        that are past their window and carry inventory in some arm.
+        Bounded: ONE list sweep per cycle that has expired held markets,
+        and each market is settled once.
         """
         rows: List[dict] = []
         self.settle_attempts = {}
@@ -1238,6 +1297,7 @@ class CloneShadow:
             for slug, inv in self.inv[pol].items():
                 if inv.n_fills:
                     held.add(slug)
+        expired: List[str] = []
         for slug in sorted(held):
             if slug in self.settled:
                 continue
@@ -1246,36 +1306,36 @@ class CloneShadow:
             # market from the universe the moment it expires -- so an
             # expired held market was never polled again, its cached clock
             # still said "not expired", and settlement could never fire.
-            # 11 markets sat held and unsettled for exactly that reason.
             clock = MC.position(slug, None, now)
             if clock.get("resolved") and not clock.get("expired"):
                 self._note_settle(slug, {"stage": "NOT_EXPIRED_YET",
                                          "tte_s": clock.get("tte_s")})
                 continue
-            try:
-                md = self._get("/v1/markets/%s" % slug) or {}
-            except Exception as exc:                           # noqa: BLE001
+            expired.append(slug)
+        if not expired:
+            return rows
+        # ONE SWEEP FOR ALL OF THEM, because the per-market endpoint is
+        # gone: `/v1/markets/{slug}` answered HTTP 404 on all 12 held
+        # markets. Resolutions exist only on the market LIST.
+        res = fetch_resolutions(self._get, expired, sleep=self._sleep)
+        self.resolution_sweep = {"n_wanted": res["n_wanted"],
+                                 "n_found": res["n_found"],
+                                 "tried": res["tried"]}
+        for slug in expired:
+            market = res["found"].get(slug)
+            if market is None:
                 self._note_settle(slug, {
-                    "stage": "RESOLUTION_GET_FAILED",
-                    "error": "%s:%s" % (type(exc).__name__, str(exc)[:120])})
+                    "stage": "NOT_IN_CLOSED_MARKET_SWEEP"})
                 continue
-            market = md.get("market") if isinstance(md.get("market"),
-                                                    Mapping) else md
             outcome = resolved_outcome(market)
             if not outcome.get("resolved"):
-                # not yet resolved is not a settlement; try again later.
-                # WHY is recorded, bounded: a resolution that never arrives
-                # is indistinguishable from one we are reading wrongly, and
-                # the settled bottom line is the only economic output this
-                # service has.
                 self._note_settle(slug, {
                     "stage": "NOT_RESOLVED",
                     "why": outcome.get("why"),
                     "outcome_prices": outcome.get("outcome_prices"),
-                    "market_keys": sorted(str(k) for k in market)[:40],
                     "closed": market.get("closed"),
                     "status": market.get("status"),
-                    "response_keys": sorted(str(k) for k in md)[:20]})
+                    "market_keys": sorted(str(k) for k in market)[:40]})
                 continue
             for pol in self.policies:
                 inv = self.inv[pol].get(slug)
@@ -1613,6 +1673,7 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                    "newly_queue_cleared": len(judged["newly_queue_cleared"]),
                    "settled_this_cycle": len(settlements),
                    "settle_attempts": cs.settle_attempts,
+                   "resolution_sweep": cs.resolution_sweep,
                    "one_sided_books": len(cs.one_sided),
                    "markets_held_unsettled": len({
                        s for pol in cs.policies
