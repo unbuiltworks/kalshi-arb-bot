@@ -700,39 +700,10 @@ def finalize(t: X.Transport, slug: str, inv: "Inventory",
     return out
 
 
-class _StateBackedFeed:
-    """The executor's pricing boundary, served from the authenticated state.
-
-    `pmus_q1_executor.attach_ws_feed` existed and was called from NOWHERE in
-    the repository, so `fresh_bbo` always saw `WS_FEED is None` and every
-    ARMED run raised `WS_PRICING_REQUIRED` before placing anything. The
-    strategy loop read the authenticated `LiveState` correctly; the
-    executor's own pre-submit cross-check did not, because nothing connected
-    the two. This is that connection and nothing more.
-
-    It REUSES `LiveState.snapshot`, which already raises on an absent or
-    stale book, so the staleness rule has exactly one implementation. No
-    gateway fallback is possible here: a raise propagates.
-    """
-
-    def __init__(self, state: "WS.LiveState", max_age_s: float) -> None:
-        self._state = state
-        self._max_age_s = max_age_s
-
-    def bbo(self, slug: str, now: Optional[float] = None) -> dict:
-        snap = self._state.snapshot(slug, now=now,
-                                    max_age_s=self._max_age_s)
-        bid, ask = snap.get("bid"), snap.get("ask")
-        if bid is None or ask is None:
-            raise WS.StaleFeed("ONE_SIDED_WS_BOOK: %s bid=%r ask=%r"
-                               % (slug, bid, ask))
-        # LONG-SIDE terms, as the gateway reader returned them; this adapter
-        # performs no outcome inversion -- `l5_order_body.venue_price` owns
-        # that and must stay the only place it happens.
-        return {"bid": str(bid), "ask": str(ask),
-                "source": "authenticated_ws",
-                "age_s": round(float(snap.get("book_age_s") or 0.0), 4),
-                "book_updates": snap.get("book_updates")}
+#: The executor OWNS this boundary now. It used to be defined here, which
+#: meant two copies of the same staleness contract could drift apart; the
+#: alias keeps every existing reference working with one implementation.
+_StateBackedFeed = X.StateBackedFeed
 
 
 def _campaign(ctx: dict, t: Optional[X.Transport] = None,

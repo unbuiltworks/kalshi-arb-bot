@@ -56,6 +56,7 @@ from decimal import ROUND_DOWN, Decimal as D
 from pathlib import Path
 from typing import Any, Mapping, Optional
 from src import pmus_fees as _fees
+from src import pmus_ws_live_state as WS
 
 API = "https://api.polymarket.us"
 GATEWAY = "https://gateway.polymarket.us"
@@ -394,6 +395,46 @@ def attach_ws_feed(feed) -> None:
     WS_FEED = feed
 
 
+class StateBackedFeed:
+    """The executor's pricing boundary, served from the authenticated state.
+
+    `attach_ws_feed` has existed since the executor was written and was
+    called from NOWHERE in the repository, so `fresh_bbo` always saw
+    `WS_FEED is None`. That failed closed -- an armed run raised
+    `WS_PRICING_REQUIRED` -- but it also meant the authenticated pricing
+    path was UNREACHABLE: `run_campaign` could not place an order at all.
+    This class is the connection, and nothing more.
+
+    It REUSES `WS.LiveState.snapshot`, which already raises on an absent or
+    stale book, so the staleness rule keeps exactly one implementation. No
+    gateway fallback is reachable from here: a raise propagates to
+    `fresh_bbo`, which turns it into a halt.
+
+    Canonical here rather than in `pmus_q1_canary`, which imported this
+    module and had defined its own copy; the canary now aliases this one so
+    the boundary cannot drift between the two callers.
+    """
+
+    def __init__(self, state: "WS.LiveState", max_age_s: float) -> None:
+        self._state = state
+        self._max_age_s = max_age_s
+
+    def bbo(self, slug: str, now: Optional[float] = None) -> dict:
+        snap = self._state.snapshot(slug, now=now,
+                                    max_age_s=self._max_age_s)
+        bid, ask = snap.get("bid"), snap.get("ask")
+        if bid is None or ask is None:
+            raise WS.StaleFeed("ONE_SIDED_WS_BOOK: %s bid=%r ask=%r"
+                               % (slug, bid, ask))
+        # LONG-SIDE terms, as the gateway reader returned them; this adapter
+        # performs no outcome inversion -- `l5_order_body.venue_price` owns
+        # that and must stay the only place it happens.
+        return {"bid": str(bid), "ask": str(ask),
+                "source": "authenticated_ws",
+                "age_s": round(float(snap.get("book_age_s") or 0.0), 4),
+                "book_updates": snap.get("book_updates")}
+
+
 def fresh_bbo(t: Transport, slug: str, sleep=time.sleep) -> dict:
     """The executor's single market-state input.
 
@@ -573,7 +614,10 @@ def preflight(t: Transport, slug: str, sleep=time.sleep) -> Optional[str]:
 # ------------------------- the one campaign -------------------------
 
 def run_campaign(t: Optional[Transport] = None,
-                 clock=time.monotonic, sleep=time.sleep) -> dict:
+                 clock=time.monotonic, sleep=time.sleep,
+                 state: "Optional[WS.LiveState]" = None,
+                 feed: Any = None,
+                 max_book_age_s: float = WS.DEFAULT_MAX_BOOK_AGE_S) -> dict:
     slug = os.getenv(MARKET_ENV, "").strip()
     report: dict[str, Any] = {"campaign": "pmus-q1", "slug": slug,
                               "qty": QTY, "realized_pnl": None,
@@ -595,6 +639,49 @@ def run_campaign(t: Optional[Transport] = None,
     start = clock()
     stop_at = start + deadline_s
     try:
+        # THE PRICING BOUNDARY MUST EXIST BEFORE ANYTHING PRICES.
+        #
+        # `attach_ws_feed` was never called from this function, so `WS_FEED`
+        # was always None and `fresh_bbo` raised `WS_PRICING_REQUIRED` on
+        # every armed run. The refusal was correct -- the public gateway is
+        # not an acceptable pricing source for a money-moving run -- but it
+        # made the authenticated path UNREACHABLE rather than available.
+        # This is the connection, and nothing else changes:
+        #
+        #   * a supplied feed/state is attached HERE, ahead of the first
+        #     read, because `preflight` itself prices and attaching after
+        #     it would still halt;
+        #   * with NOTHING supplied, `WS_FEED` is left unset and the
+        #     existing contract decides, unchanged -- an armed run halts in
+        #     `fresh_bbo` with `WS_PRICING_REQUIRED`, an unarmed one never
+        #     gets here. No new early return is introduced, so preflight's
+        #     own refusals keep their order and their names.
+        #
+        # The feed is NEVER created implicitly: `main()` owns that, so an
+        # offline caller opens no socket.
+        if state is None and feed is not None:
+            state = feed.state
+        if state is not None:
+            attach_ws_feed(StateBackedFeed(state, max_book_age_s))
+            # STALENESS IS CLASSIFIED BEFORE PREFLIGHT, not swallowed by it.
+            # `preflight` prices too, so a stale feed would reach it first
+            # and come out as a generic `WS_BBO_UNAVAILABLE` halt, losing
+            # the distinct status that says WHY nothing was placed. This is
+            # a SEPARATE condition from `STALE_PRICE_REFUSED`, which is the
+            # post-only race guard and keeps its own meaning untouched.
+            # Only a real `LiveState` has a readiness wait to run.
+            if isinstance(state, WS.LiveState):
+                try:
+                    WS.wait_ready(state, slug, max_age_s=max_book_age_s,
+                                  sleep=sleep)
+                except WS.StaleFeed as stale:
+                    ledger_append({"kind": "ws_stale_refused",
+                                   "reason": str(stale)})
+                    return {**report, "status": "WS_STALE_REFUSED",
+                            "reason": str(stale),
+                            "note": "authenticated book absent, one-sided "
+                                    "or older than max_book_age_s; placed "
+                                    "nothing"}
         reason = preflight(t, slug, sleep=sleep)
         if reason:
             return {**report, "status": "PREFLIGHT_FAILED",
@@ -707,12 +794,33 @@ def run_campaign(t: Optional[Transport] = None,
 
 
 def main() -> int:
-    report = run_campaign()
+    """THE RUNNER OWNS THE FEED.
+
+    `run_campaign` never creates the feed implicitly, so the one place that
+    may is here -- and only for an armed run, so a
+    disarmed invocation still performs no network activity at all, which is
+    what `DISARMED`'s note claims.
+    """
+    slug = os.getenv(MARKET_ENV, "").strip()
+    feed = None
+    try:
+        if armed() and slug:
+            feed = WS.WsFeed(slug).start()
+        report = run_campaign(feed=feed)
+    finally:
+        if feed is not None:
+            try:
+                feed.close()
+            except Exception:                                 # noqa: BLE001
+                # a feed that will not close must not swallow the report
+                # or the cancellation the campaign's own `finally` ran.
+                pass
     print(json.dumps(report, indent=1, default=str))
     ledger_append({"kind": "campaign_report", **report})
     return 0 if report["status"] in ("MATCHED", "NO_FILL", "DISARMED",
                                      "REJECTED_NO_FILL",
-                                     "STALE_PRICE_REFUSED") else 1
+                                     "STALE_PRICE_REFUSED",
+                                     "WS_STALE_REFUSED") else 1
 
 
 if __name__ == "__main__":
