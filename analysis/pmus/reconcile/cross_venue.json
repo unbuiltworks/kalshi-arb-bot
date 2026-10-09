@@ -1,0 +1,99 @@
+{
+ "VENUES_ARE_DISTINCT": "L5 trades Polymarket International; we test PMUS. Separate books, counterparties and matching. Neither is a proxy for the other.",
+ "coverage": {
+  "pmus": [
+   "2026-08-30 23:18",
+   "2026-09-02 13:39"
+  ],
+  "polymarket": [
+   "2026-08-21 00:59",
+   "2026-08-24 06:44"
+  ],
+  "contemporaneous_overlap": null
+ },
+ "pmus": {
+  "venue": "PMUS",
+  "windows_kept": 68,
+  "observations": 18742,
+  "mean_interval_s": 12.31,
+  "queue_at_own_touch": {
+   "n": 37484,
+   "p10": 250.0,
+   "p50": 500.0,
+   "p90": 500.0,
+   "share_under_100": 0.0434,
+   "share_under_1000": 0.9866
+  },
+  "queue_up_side_p50": 500.0,
+  "queue_down_side_p50": 500.0,
+  "spread": {
+   "p50": 0.02,
+   "p90": 0.1
+  },
+  "best_bid_changes_per_window": {
+   "p10": 0.0,
+   "p50": 4.59,
+   "p90": 19.57
+  }
+ },
+ "polymarket": {
+  "venue": "POLYMARKET_INTL",
+  "windows_kept": 55,
+  "observations": 31611,
+  "mean_interval_s": 2.33,
+  "queue_at_own_touch": {
+   "n": 63222,
+   "p10": 9.96,
+   "p50": 62.0,
+   "p90": 288.3,
+   "share_under_100": 0.62,
+   "share_under_1000": 0.9582
+  },
+  "queue_up_side_p50": 62.1,
+  "queue_down_side_p50": 61.83,
+  "spread": {
+   "p50": 0.01,
+   "p90": 0.01
+  },
+  "best_bid_changes_per_window": {
+   "p10": 117.88,
+   "p50": 196.53,
+   "p90": 336.5
+  }
+ },
+ "direction_inference_vs_truth": {
+  "prints_scored": 94,
+  "correctly_directed": 51,
+  "unattributable_inside_spread": 24,
+  "accuracy_where_directed": 0.7286,
+  "unknown_share": 0.2553,
+  "confusion": {
+   "sell_as_sell": 26,
+   "buy_as_buy": 25,
+   "sell_as_buy": 12,
+   "buy_as_sell": 7,
+   "sell_as_unknown": 15,
+   "buy_as_unknown": 9
+  },
+  "TRUTH": "exchange-assigned trade type from the prints feed"
+ },
+ "pmus_sampling_loss": {
+  "at_native": {
+   "moves": 1782,
+   "decreases": 113,
+   "snapshots": 18742
+  },
+  "at_27s": {
+   "moves": 486,
+   "decreases": 57,
+   "snapshots": 3205
+  },
+  "visible_share": {
+   "moves": 0.2727,
+   "decreases": 0.5044,
+   "snapshots": 0.171
+  },
+  "VENUE": "PMUS, measured on PMUS rows"
+ },
+ "LABELS": "Queue sizes are public touch sizes, attributed to no trader. No fill is claimed anywhere. The two venues are seven days apart, so venue differences here are not contemporaneous."
+}
