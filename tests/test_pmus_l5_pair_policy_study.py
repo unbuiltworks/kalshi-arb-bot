@@ -284,3 +284,16 @@ def test_same_side_extension_is_bounded():
     spec.append((60 * 12, 0.40, 0.60, v, None))
     r = S.replay_placement("m", tape(spec), "P7_BEST_BID_RESTING")
     assert abs(r["residual_shares_signed"]) <= float(S.MAX_EXTEND), r
+
+
+def test_passing_trades_in_changes_no_result():
+    """The per-quote recomputation was made optional for speed. If the two
+    paths ever disagree, every placement number is suspect."""
+    from src import pmus_status_report as ST
+    obs = tape([(0, 0.40, 0.60, 0, None),
+                (20, 0.39, 0.41, 10.4, 0.39),
+                (40, 0.39, 0.41, 10.4, 0.39)])
+    a = S.resting_fill(obs, 0, True, D("0.40"), D("1"), None)
+    b = S.resting_fill(obs, 0, True, D("0.40"), D("1"), None,
+                       trades=ST.infer_trades(list(obs)))
+    assert a == b

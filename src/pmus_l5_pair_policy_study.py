@@ -128,7 +128,9 @@ def queue_ahead(row: Mapping[str, Any], side_yes: bool, px: D
 
 
 def resting_fill(obs: Sequence[Mapping[str, Any]], i0: int, side_yes: bool,
-                 px: D, qty: D, deadline: Optional[float]) -> dict:
+                 px: D, qty: D, deadline: Optional[float],
+                 trades: Optional[Sequence[Mapping[str, Any]]] = None
+                 ) -> dict:
     """When, if ever, a quote resting from obs[i0] would defensibly fill.
 
     Conservative on three axes at once: the queue standing at placement must
@@ -139,7 +141,12 @@ def resting_fill(obs: Sequence[Mapping[str, Any]], i0: int, side_yes: bool,
     ahead = queue_ahead(obs[i0], side_yes, px)
     if t0 is None or ahead is None:
         return {"filled": False, "why": "QUEUE_UNKNOWN_AT_PLACEMENT"}
-    trades = ST.infer_trades(list(obs))
+    # `trades` is the SAME inference, computed once by a caller that places
+    # many quotes against one tape instead of once per quote. Passing it in
+    # changes no result; recomputing it per requote made the continuous
+    # policies quadratic in tape length.
+    if trades is None:
+        trades = ST.infer_trades(list(obs))
     for j in range(i0 + 1, len(obs)):
         t = _f(obs[j].get("_poll_t"))
         if t is None:
@@ -683,6 +690,7 @@ def replay_placement(slug: str, obs: Sequence[Mapping[str, Any]],
     off, two_sided = PLACEMENT[policy]
     if len(obs) < 3:
         return {"policy": policy, "slug": slug, "skipped": "TAPE_TOO_SHORT"}
+    trades = ST.infer_trades(list(obs))
     legs: List[dict] = []
     requotes = 0
     unfilled = 0
@@ -736,7 +744,8 @@ def replay_placement(slug: str, obs: Sequence[Mapping[str, Any]],
                 if cap is not None and px > cap:
                     continue
             requotes += 1
-            f = resting_fill(obs, i, sy, px, UNIT, REQUOTE_S)
+            f = resting_fill(obs, i, sy, px, UNIT, REQUOTE_S,
+                             trades=trades)
             if not f.get("filled"):
                 unfilled += 1
                 continue
