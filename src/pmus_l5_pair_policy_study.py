@@ -515,6 +515,23 @@ def summarize(rows: Sequence[Mapping[str, Any]], policy: str) -> dict:
         "adverse_selection_t30": {"n": len(adv), "median": _pct(adv, 0.5),
                                   "mean": (round(sum(adv) / len(adv), 5)
                                            if adv else None)},
+        # acquisition shape: how many fills the policy actually got, how much
+        # of what it bought ended matched, and how long the complement took.
+        # These are what the L5 comparison turns on, so they are reported
+        # alongside the economics rather than left inside the rows.
+        "fills_per_entry": {"median": _pct([float(r.get("legs") or 0)
+                                            for r in mine], 0.5),
+                            "p90": _pct([float(r.get("legs") or 0)
+                                         for r in mine], 0.9)},
+        "matched_frac_of_purchased_median": _pct(
+            [float(r["matched_frac_of_purchased"]) for r in mine
+             if r.get("matched_frac_of_purchased") is not None], 0.5),
+        "time_to_complement_s_median": _pct(
+            [float(r["time_to_complement_s_median"]) for r in mine
+             if r.get("time_to_complement_s_median") is not None], 0.5),
+        "fill_rate_per_requote_median": _pct(
+            [float(r["fill_rate_per_requote"]) for r in mine
+             if r.get("fill_rate_per_requote") is not None], 0.5),
         "fees_usd_total": round(fees, 5),
         "matched_pair_pnl_usd": round(matched_pnl, 5),
         "net_per_entry_usd_matched_only": round((matched_pnl - fees) / n, 5),
