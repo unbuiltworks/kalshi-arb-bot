@@ -1,0 +1,157 @@
+{
+ "_what_this_tests": "Grok's round-3 claim that a memoryless constant-hazard clone would reproduce the statistical texture of the whole trace. Every window keeps its actual fills, sizes, timestamps and price level; only the LEG SEQUENCE is regenerated, from the measured per-month switch hazard. Prices are complemented (p -> 1-p) wherever the simulated side differs, so the simulated book stays coherent with the venue's real price level.",
+ "fills": 760817,
+ "windows": 17046,
+ "replicates_per_window": 20,
+ "hazard_used_per_month": {
+  "2026-03": 0.421,
+  "2026-04": 0.322,
+  "2026-05": 0.281,
+  "2026-06": 0.281,
+  "2026-07": 0.278,
+  "2026-08": 0.272
+ },
+ "REAL": {
+  "n_windows": 17046,
+  "n_with_pair": 12977,
+  "pair_cost_median": 0.98,
+  "pair_cost_p25": 0.90568,
+  "pair_cost_p75": 1.05399,
+  "share_pair_cost_below_1": 0.58596,
+  "mean_locked_profit_per_pair": 0.014336,
+  "matched_qty_mean": 399.8531,
+  "residual_qty_mean": 122.0556,
+  "pnl_mean": 4.1613,
+  "pnl_sum": 70917.15,
+  "share_pnl_positive": 0.58068
+ },
+ "SIMULATED_memoryless": {
+  "n_windows": 340920,
+  "n_with_pair": 245049,
+  "pair_cost_median": 0.99895,
+  "pair_cost_p25": 0.91437,
+  "pair_cost_p75": 1.07855,
+  "share_pair_cost_below_1": 0.50401,
+  "mean_locked_profit_per_pair": -0.000816,
+  "matched_qty_mean": 378.4916,
+  "residual_qty_mean": 164.7786,
+  "pnl_mean": 0.0052,
+  "pnl_sum": 1769.88,
+  "share_pnl_positive": 0.5295
+ },
+ "paired_within_window": {
+  "_note": "real minus mean-of-replicates, per window. Negative pair-cost difference means the REAL sequence achieved a CHEAPER matched book than a coin flip could.",
+  "pair_cost_real_minus_sim": -0.016053,
+  "pair_cost_ci95": [
+   -0.018317,
+   -0.013681
+  ],
+  "n_windows_pair_cost": 12977,
+  "pnl_real_minus_sim": 4.1561,
+  "pnl_ci95": [
+   3.1703,
+   5.0919
+  ],
+  "n_windows_pnl": 17042
+ },
+ "run_length": {
+  "real_mean": 3.4046,
+  "simulated_mean": 3.4041
+ },
+ "by_regime": {
+  "early": {
+   "REAL": {
+    "n_windows": 1555,
+    "n_with_pair": 1520,
+    "pair_cost_median": 0.97441,
+    "pair_cost_p25": 0.93029,
+    "pair_cost_p75": 1.02452,
+    "share_pair_cost_below_1": 0.64211,
+    "mean_locked_profit_per_pair": 0.021909,
+    "matched_qty_mean": 625.6556,
+    "residual_qty_mean": 147.5374,
+    "pnl_mean": 9.9959,
+    "pnl_sum": 15543.56,
+    "share_pnl_positive": 0.56592
+   },
+   "SIMULATED": {
+    "n_windows": 31100,
+    "n_with_pair": 30485,
+    "pair_cost_median": 0.99913,
+    "pair_cost_p25": 0.94148,
+    "pair_cost_p75": 1.05831,
+    "share_pair_cost_below_1": 0.50366,
+    "mean_locked_profit_per_pair": 0.000458,
+    "matched_qty_mean": 600.3933,
+    "residual_qty_mean": 198.0619,
+    "pnl_mean": -0.6911,
+    "pnl_sum": -21492.42,
+    "share_pnl_positive": 0.50412
+   }
+  },
+  "mid": {
+   "REAL": {
+    "n_windows": 4697,
+    "n_with_pair": 3580,
+    "pair_cost_median": 0.97682,
+    "pair_cost_p25": 0.91167,
+    "pair_cost_p75": 1.04,
+    "share_pair_cost_below_1": 0.61061,
+    "mean_locked_profit_per_pair": 0.020352,
+    "matched_qty_mean": 359.1762,
+    "residual_qty_mean": 125.1131,
+    "pnl_mean": 6.8371,
+    "pnl_sum": 32113.64,
+    "share_pnl_positive": 0.61167
+   },
+   "SIMULATED": {
+    "n_windows": 93940,
+    "n_with_pair": 74634,
+    "pair_cost_median": 1.0,
+    "pair_cost_p25": 0.92801,
+    "pair_cost_p75": 1.06,
+    "share_pair_cost_below_1": 0.49778,
+    "mean_locked_profit_per_pair": 0.003553,
+    "matched_qty_mean": 343.8245,
+    "residual_qty_mean": 155.8166,
+    "pnl_mean": -0.1373,
+    "pnl_sum": -12895.42,
+    "share_pnl_positive": 0.53269
+   }
+  },
+  "late": {
+   "REAL": {
+    "n_windows": 10794,
+    "n_with_pair": 7877,
+    "pair_cost_median": 0.98381,
+    "pair_cost_p25": 0.89,
+    "pair_cost_p75": 1.07646,
+    "share_pair_cost_below_1": 0.56392,
+    "mean_locked_profit_per_pair": 0.010141,
+    "matched_qty_mean": 385.0242,
+    "residual_qty_mean": 117.0542,
+    "pnl_mean": 2.1557,
+    "pnl_sum": 23259.95,
+    "share_pnl_positive": 0.56932
+   },
+   "SIMULATED": {
+    "n_windows": 215880,
+    "n_with_pair": 139930,
+    "pair_cost_median": 0.9975,
+    "pair_cost_p25": 0.89581,
+    "pair_cost_p75": 1.0992,
+    "share_pair_cost_below_1": 0.50742,
+    "mean_locked_profit_per_pair": -0.003425,
+    "matched_qty_mean": 361.6095,
+    "residual_qty_mean": 163.8835,
+    "pnl_mean": 0.1676,
+    "pnl_sum": 36157.72,
+    "share_pnl_positive": 0.53177
+   }
+  }
+ },
+ "VERDICT": [
+  "REJECTED: the real leg sequence achieves a significantly CHEAPER matched book than a memoryless sequence over the same fills. Leg selection carries information a coin flip does not.",
+  "REJECTED on P&L: the real sequence earns significantly more than a memoryless one."
+ ]
+}
