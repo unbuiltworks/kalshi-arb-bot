@@ -36,6 +36,23 @@ THE SIX POLICIES (one knob each, so the comparison attributes cause):
   P4 ACCUMULATE          up to K same-side fills, then complete the lot
   P5 SELECTIVE_ENTRY     enter only when pre-entry drift is not against us
   P6 INVENTORY_AWARE     complete whatever fits the budget, continuously
+
+THE FOUR PLACEMENT POLICIES (P7-P10). P1-P6 attempt entry ONCE per market, so
+they cannot answer how many fills PMUS flow can supply -- which is the gap
+between L5's ~80 fills per market and our 1-3. P7-P10 re-quote continuously
+across the whole window and differ only in WHERE the resting quote sits:
+
+  P7 BEST_BID_RESTING    rest at the prevailing own-side best bid
+  P8 DEEPER_RESTING      rest one tick behind the bid (cheaper, longer queue)
+  P9 ONE_TICK_IMPROVE    rest one tick in front of the bid (dearer, no queue)
+  P10 CONTINUOUS_TWO_SIDED  both sides quoted at the bid, every requote
+
+All four complete inventory-aware: whenever a residual exists, the complement
+is also rested, at the best price the pair ceiling still allows. All legs are
+maker, so none pays a taker fee and none is credited a rebate. The queue
+discipline is `resting_fill`'s and is unchanged: the queue standing at
+placement must be cleared by printed volume, only the excess is ours, and a
+missing ladder is never an empty queue.
 """
 from __future__ import annotations
 
@@ -60,6 +77,15 @@ MARKOUT_S = 30.0
 POLICIES = ("P1_IMMEDIATE_TAKER", "P2_DELAYED_MAKER", "P3_BOTH_SIDES_RESTING",
             "P4_ACCUMULATE_THEN_COMPLETE", "P5_SELECTIVE_ENTRY",
             "P6_INVENTORY_AWARE")
+
+# placement policies: {name: (tick offset from own-side bid, two-sided?)}
+PLACEMENT = {"P7_BEST_BID_RESTING": (0, False),
+             "P8_DEEPER_RESTING": (-1, False),
+             "P9_ONE_TICK_IMPROVE": (1, False),
+             "P10_CONTINUOUS_TWO_SIDED": (0, True)}
+ALL_POLICIES = POLICIES + tuple(PLACEMENT)
+REQUOTE_S = float(os.getenv("L5_STUDY_REQUOTE_S", "60"))
+MAX_EXTEND = D(os.getenv("L5_STUDY_MAX_EXTEND", "3"))
 
 
 def _f(x: Any) -> Optional[float]:
@@ -588,8 +614,158 @@ def settled_summary(rows: Sequence[Mapping[str, Any]],
     }
 
 
+# ------------------------------------------- continuous placement (P7-P10) ---
+def _at_or_after(obs: Sequence[Mapping[str, Any]], t: float,
+                 frm: int) -> Optional[int]:
+    for j in range(frm, len(obs)):
+        tj = _f(obs[j].get("_poll_t"))
+        if tj is not None and tj >= t:
+            return j
+    return None
+
+
+def _place_px(row: Mapping[str, Any], side_yes: bool, off: int) -> Optional[D]:
+    """Own-side resting price at `off` ticks from the own-side bid. A quote
+    that would cross its own ask is not a resting quote and is refused."""
+    q = own_side(row, side_yes)
+    if q is None:
+        return None
+    px = q["maker"] + D(off) * TICK
+    if px <= 0 or px >= (ONE - q["bid"] if not side_yes else q["ask"]):
+        return None
+    return px
+
+
+def _budget(legs: List[dict], side_yes: bool) -> Optional[D]:
+    """Highest price the complement may pay and still keep the PAIR at or
+    below the ceiling, given what the long side has actually cost so far."""
+    long_q = sum(D(str(l["qty"])) for l in legs if l["side_yes"] != side_yes)
+    if long_q <= 0:
+        return None
+    long_c = sum(D(str(l["qty"])) * D(str(l["px"])) for l in legs
+                 if l["side_yes"] != side_yes)
+    return CEILING - (long_c / long_q)
+
+
+def replay_placement(slug: str, obs: Sequence[Mapping[str, Any]],
+                     policy: str) -> dict:
+    """Re-quote across the whole window; one knob is WHERE the quote rests.
+
+    Entry is not one-shot. After each fill or each unfilled requote interval
+    the quote is replaced from the book as it then stands, so the number of
+    fills is an OUTPUT of PMUS flow rather than a cap imposed by the harness.
+    """
+    off, two_sided = PLACEMENT[policy]
+    if len(obs) < 3:
+        return {"policy": policy, "slug": slug, "skipped": "TAPE_TOO_SHORT"}
+    legs: List[dict] = []
+    requotes = 0
+    unfilled = 0
+    i = 0
+    while i < len(obs) - 2:
+        t0 = _f(obs[i].get("_poll_t"))
+        if t0 is None:
+            i += 1
+            continue
+        yes_q = sum(D(str(l["qty"])) for l in legs if l["side_yes"])
+        no_q = sum(D(str(l["qty"])) for l in legs if not l["side_yes"])
+        resid = yes_q - no_q
+
+        # which sides do we rest this round?
+        sides: List[bool] = []
+        if two_sided:
+            sides = [True, False]
+        elif resid != 0:
+            # inventory-aware: work the complement of what we are long, and
+            # EXTEND the long side too while the imbalance is within bounds.
+            # Refusing to extend would hard-code away 70.8% of L5's observed
+            # actions, so the bound is a risk limit, not a behavioural claim.
+            sides = [resid < 0]
+            if abs(resid) < MAX_EXTEND:
+                sides.append(resid > 0)
+        else:
+            s0 = _entry_side(obs[i])
+            if s0 is None:
+                i += 1
+                continue
+            sides = [s0]
+
+        best: Optional[dict] = None
+        for sy in sides:
+            px = _place_px(obs[i], sy, off)
+            if px is None or px > D("0.90"):
+                continue
+            # a side we are already long of may not be extended past the
+            # point where the pair can still close under the ceiling
+            if (sy and resid > 0) or ((not sy) and resid < 0):
+                # extending the long side: the new average must still leave
+                # at least one tick of room under the pair ceiling
+                lq = sum(D(str(l["qty"])) for l in legs if l["side_yes"] == sy)
+                lc = sum(D(str(l["qty"])) * D(str(l["px"])) for l in legs
+                         if l["side_yes"] == sy)
+                if lq + UNIT > 0 and (lc + px * UNIT) / (lq + UNIT) > \
+                        CEILING - TICK:
+                    continue
+            else:
+                cap = _budget(legs, sy)
+                if cap is not None and px > cap:
+                    continue
+            requotes += 1
+            f = resting_fill(obs, i, sy, px, UNIT, REQUOTE_S)
+            if not f.get("filled"):
+                unfilled += 1
+                continue
+            if best is None or f["i"] < best["f"]["i"]:
+                best = {"f": f, "sy": sy, "px": px,
+                        "mid": own_side(obs[i], sy)["mid"]}
+
+        if best is None:
+            nxt = _at_or_after(obs, t0 + REQUOTE_S, i + 1)
+            if nxt is None or nxt <= i:
+                break
+            i = nxt
+            continue
+
+        f, sy = best["f"], best["sy"]
+        legs.append({"side_yes": sy, "px": best["px"], "qty": f["qty"],
+                     "t": f["t"], "latency_s": f["latency_s"],
+                     "queue_ahead": f["queue_ahead"],
+                     "traded_through": f["traded_through"], "maker": True,
+                     "markout": markout(obs, f["t"], sy, best["mid"])})
+        i = max(f["i"], i + 1)
+
+    if not legs:
+        return {"policy": policy, "slug": slug, "skipped": "NO_FILL",
+                "requotes": requotes}
+    yes_q = sum(float(l["qty"]) for l in legs if l["side_yes"])
+    no_q = sum(float(l["qty"]) for l in legs if not l["side_yes"])
+    row = _pair_row(policy=policy, slug=slug, legs=legs, obs=obs,
+                    fees=D("0"), complete=(yes_q > 0 and no_q > 0),
+                    why=("BOTH_SIDES_FILLED" if yes_q > 0 and no_q > 0
+                         else "ONE_SIDED_ONLY"))
+    row["requotes"] = requotes
+    row["requotes_unfilled"] = unfilled
+    row["fill_rate_per_requote"] = (round(len(legs) / requotes, 4)
+                                    if requotes else None)
+    # time from each long-side fill to the first complement fill after it
+    waits = []
+    comp = sorted(l["t"] for l in legs if not l["side_yes"]) or []
+    for l in legs:
+        if not l["side_yes"]:
+            continue
+        nxt = next((t for t in comp if t > l["t"]), None)
+        if nxt is not None:
+            waits.append(nxt - l["t"])
+    row["time_to_complement_s_median"] = (round(sorted(waits)[len(waits) // 2],
+                                                1) if waits else None)
+    row["matched_frac_of_purchased"] = (
+        round(2 * min(yes_q, no_q) / (yes_q + no_q), 4)
+        if (yes_q + no_q) else None)
+    return row
+
+
 def study(obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]],
-          policies: Sequence[str] = POLICIES) -> dict:
+          policies: Sequence[str] = ALL_POLICIES) -> dict:
     """Ranked comparison, in-sample and out-of-sample by market TIME.
 
     The split is by the market's own first observation, so the
@@ -630,7 +806,9 @@ def study(obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]],
         rows: List[dict] = []
         for s in group:
             for p in policies:
-                rows.append(replay(s, obs_by_slug[s], p))
+                rows.append(replay_placement(s, obs_by_slug[s], p)
+                            if p in PLACEMENT
+                            else replay(s, obs_by_slug[s], p))
         sums = [summarize(rows, p) for p in policies]
         full = {p: settled_summary(rows, settled, p) for p in policies}
         ranked = sorted(

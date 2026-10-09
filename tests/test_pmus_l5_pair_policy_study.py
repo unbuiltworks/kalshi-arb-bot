@@ -213,3 +213,74 @@ def test_bootstrap_interval_reports_n_and_both_tails():
     ci = S._boot_ci([0.1, -0.2, 0.05, 0.0])
     assert ci["n"] == 4 and ci["p05"] <= ci["mean"] <= ci["p95"]
     assert S._boot_ci([]) is None
+
+
+# ------------------------------------------- placement policies (P7-P10) ---
+def test_placement_requotes_and_can_fill_more_than_once():
+    """The point of P7-P10 is that fill COUNT is an output, not a cap. Two
+    separate clearing events, 200 s apart, must produce two legs."""
+    obs = tape([(0, 0.40, 0.60, 0, None),
+                (30, 0.39, 0.41, 11.0, 0.39),     # clears the queue once
+                (90, 0.40, 0.60, 11.0, None),     # fresh quote, fresh queue
+                (120, 0.40, 0.60, 11.0, None),
+                (150, 0.39, 0.41, 22.0, 0.39),    # clears it again
+                (210, 0.40, 0.60, 22.0, None),
+                (240, 0.40, 0.60, 22.0, None)])
+    r = S.replay_placement("m", obs, "P7_BEST_BID_RESTING")
+    assert r["legs"] >= 2, r
+    assert r["requotes"] >= 2
+
+
+def test_deeper_resting_quotes_behind_the_bid_and_improve_in_front():
+    obs = tape([(0, 0.40, 0.60, 0, None)])
+    assert S._place_px(obs[0], True, -1) == D("0.39")
+    assert S._place_px(obs[0], True, 0) == D("0.40")
+    assert S._place_px(obs[0], True, 1) == D("0.41")
+
+
+def test_a_resting_quote_may_never_cross_its_own_ask():
+    obs = tape([(0, 0.40, 0.41, 0, None)])
+    assert S._place_px(obs[0], True, 1) is None
+
+
+def test_complement_is_not_rested_above_what_the_ceiling_allows():
+    legs = [{"side_yes": True, "px": D("0.60"), "qty": 1.0}]
+    # long YES at 0.60; ceiling 0.96 leaves at most 0.36 for the NO leg
+    assert S._budget(legs, False) == S.CEILING - D("0.60")
+
+
+def test_budget_is_none_with_no_long_side():
+    assert S._budget([], False) is None
+
+
+def test_placement_never_fills_on_a_touch_either():
+    obs = tape([(0, 0.40, 0.60, 0, None),
+                (30, 0.40, 0.40, 0, None),
+                (90, 0.40, 0.60, 0, None),
+                (150, 0.40, 0.60, 0, None)])
+    r = S.replay_placement("m", obs, "P7_BEST_BID_RESTING")
+    assert r.get("skipped") == "NO_FILL" and r["requotes"] >= 1
+
+
+def test_one_sided_placement_result_is_not_marked_complete():
+    obs = tape([(0, 0.40, 0.60, 0, None),
+                (30, 0.39, 0.41, 11.0, 0.39),
+                (90, 0.40, 0.60, 11.0, None),
+                (150, 0.40, 0.60, 11.0, None)])
+    r = S.replay_placement("m", obs, "P7_BEST_BID_RESTING")
+    assert r["complete"] is False and r["why"] == "ONE_SIDED_ONLY"
+    assert r["matched_shares"] == 0
+
+
+def test_same_side_extension_is_bounded():
+    """EXTEND is first-class, but not unbounded: once the imbalance reaches
+    MAX_EXTEND the long side is no longer quoted."""
+    spec = [(0, 0.40, 0.60, 0.0, None)]
+    v = 0.0
+    for k in range(1, 12):                 # repeated sell prints at the bid
+        v += 11.0
+        spec.append((60 * k, 0.39, 0.41, v, 0.39))
+        spec.append((60 * k + 30, 0.40, 0.60, v, None))
+    spec.append((60 * 12, 0.40, 0.60, v, None))
+    r = S.replay_placement("m", tape(spec), "P7_BEST_BID_RESTING")
+    assert abs(r["residual_shares_signed"]) <= float(S.MAX_EXTEND), r
