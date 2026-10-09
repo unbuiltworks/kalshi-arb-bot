@@ -1,0 +1,129 @@
+{
+ "dataset_boundary": {
+  "scope": "fills carrying an execution label inside the takerOnly dense window",
+  "windows_with_settlement": 2166,
+  "fills": 72550,
+  "quantity_by_class": {
+   "COVERAGE_UNKNOWN": 209866.06,
+   "TAKER_OBSERVED": 406320.45,
+   "MAKER_INFERRED": 966239.75
+  },
+  "_note": "COVERAGE_UNKNOWN fills are replayed as real inventory but are not a mode; their quantity is shown so the unattributed share is visible."
+ },
+ "fees": {
+  "venue_fees_included": false,
+  "why": "Polymarket per-fill fees are absent from the corpus (confirmed only where a position snapshot carries entryFeesUsdc, a minority), so every figure is GROSS and an upper bound on net.",
+  "incentives_included": false,
+  "incentive_reason": "MAKER_REBATE / TAKER_REBATE / REWARD carry an empty slug; account-level only, so they cannot enter a per-mode decomposition."
+ },
+ "matched_book_FIFO": {
+  "matched_pairs": 673753.23,
+  "matched_spend": 667690.38,
+  "locked_profit": 6062.85,
+  "_note": "settlement-independent; a pair needs one unit from each leg so it is not attributable to one mode."
+ },
+ "total_window_pnl_FIFO": 2581.69,
+ "residual_attribution_by_rule": {
+  "FIFO": {
+   "TAKER_OBSERVED": {
+    "resid_contracts": 143619.96,
+    "resid_spend": 69620.15,
+    "resid_won_contracts": 72046.56,
+    "win_rate": 0.5016,
+    "resid_settlement_pnl": 2426.42
+   },
+   "MAKER_INFERRED": {
+    "resid_contracts": 75655.8,
+    "resid_spend": 14974.02,
+    "resid_won_contracts": 9346.4,
+    "win_rate": 0.1235,
+    "resid_settlement_pnl": -5627.62
+   },
+   "COVERAGE_UNKNOWN": {
+    "resid_contracts": 15644.05,
+    "resid_spend": 1667.69,
+    "resid_won_contracts": 1387.73,
+    "win_rate": 0.0887,
+    "resid_settlement_pnl": -279.96
+   }
+  },
+  "LIFO": {
+   "TAKER_OBSERVED": {
+    "resid_contracts": 143426.17,
+    "resid_spend": 69714.35,
+    "resid_won_contracts": 71885.98,
+    "win_rate": 0.5012,
+    "resid_settlement_pnl": 2171.64
+   },
+   "MAKER_INFERRED": {
+    "resid_contracts": 75847.33,
+    "resid_spend": 18123.46,
+    "resid_won_contracts": 9439.21,
+    "win_rate": 0.1245,
+    "resid_settlement_pnl": -8684.25
+   },
+   "COVERAGE_UNKNOWN": {
+    "resid_contracts": 15646.3,
+    "resid_spend": 2313.25,
+    "resid_won_contracts": 1455.51,
+    "win_rate": 0.093,
+    "resid_settlement_pnl": -857.74
+   }
+  },
+  "PRO_RATA": {
+   "TAKER_OBSERVED": {
+    "resid_contracts": 137288.45,
+    "resid_spend": 69733.92,
+    "resid_won_contracts": 70254.41,
+    "win_rate": 0.5117,
+    "resid_settlement_pnl": 520.5
+   },
+   "MAKER_INFERRED": {
+    "resid_contracts": 80739.33,
+    "resid_spend": 27810.63,
+    "resid_won_contracts": 10847.61,
+    "win_rate": 0.1344,
+    "resid_settlement_pnl": -16963.02
+   },
+   "COVERAGE_UNKNOWN": {
+    "resid_contracts": 16892.02,
+    "resid_spend": 4734.51,
+    "resid_won_contracts": 1678.67,
+    "win_rate": 0.0994,
+    "resid_settlement_pnl": -3055.84
+   }
+  }
+ },
+ "reconciliation": {
+  "FIFO": {
+   "identity": "window_pnl == locked_matched + residual_pnl",
+   "max_abs_error": 0.0,
+   "mean_abs_error": 0.0
+  },
+  "LIFO": {
+   "identity": "window_pnl == locked_matched + residual_pnl",
+   "max_abs_error": 0.0,
+   "mean_abs_error": 0.0
+  },
+  "PRO_RATA": {
+   "identity": "window_pnl == locked_matched + residual_pnl",
+   "max_abs_error": 0.0,
+   "mean_abs_error": 0.0
+  }
+ },
+ "VERDICT": {
+  "taker_residual_pnl_by_rule": {
+   "FIFO": 2426.42,
+   "LIFO": 2171.64,
+   "PRO_RATA": 520.5
+  },
+  "maker_residual_pnl_by_rule": {
+   "FIFO": -5627.62,
+   "LIFO": -8684.25,
+   "PRO_RATA": -16963.02
+  },
+  "taker_sign_stable": true,
+  "maker_sign_stable": true,
+  "ruling": "ROBUST: the per-mode residual P&L keeps its sign under FIFO, LIFO and pro-rata, so the finding is not an artefact of the pairing convention."
+ }
+}

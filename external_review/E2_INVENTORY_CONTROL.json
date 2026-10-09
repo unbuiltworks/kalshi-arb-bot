@@ -1,0 +1,278 @@
+{
+ "fees": {
+  "gross": true,
+  "why": "Polymarket per-fill fees are absent from the corpus; a flat per-contract sensitivity is applied instead.",
+  "sensitivity_per_contract": [
+   0.0,
+   0.001,
+   0.002
+  ]
+ },
+ "exit_side_controls": {
+  "TESTABLE": false,
+  "why": "Selling the residual, or cancel-and-replace, needs a book to know whether the exit order fills, at what price, and whether it fills at all. The corpus has a book for 4 days and 65 of 17,046 markets. Simulating an exit policy on the remaining 99.6% would require inventing fills. Only ENTRY-side controls are evaluated below."
+ },
+ "item2_inventory_path": {
+  "median_fraction_of_window_at_matched_PEAK": 0.8233,
+  "median_fraction_of_window_when_residual_FIRST_EXCEEDS_matched": 0.2656,
+  "n_windows_matched": 12977,
+  "n_windows_resid_exceeds": 11435,
+  "immediately_after_residual_exceeds_matched": {
+   "ADDED_TO_RESIDUAL_SIDE": 0.3772,
+   "BOUGHT_THE_COMPLEMENT": 0.5251,
+   "STOPPED": 0.0977
+  },
+  "_reading": "fraction of the nominal window elapsed; >1.0 means after nominal expiry."
+ },
+ "item5_entry_side_controls": {
+  "design": "no lookahead; each policy sees only state up to the current fill and may only REFUSE a buy. Full inventory carried, every window settled.",
+  "train_months": [
+   "2026-03",
+   "2026-04",
+   "2026-05",
+   "2026-06"
+  ],
+  "test_months": [
+   "2026-07",
+   "2026-08"
+  ],
+  "by_policy": {
+   "BASELINE": {
+    "train_mean": 10.7772,
+    "train_total": 27869.94,
+    "OOS_test_mean": 2.9778,
+    "OOS_test_ci95": [
+     2.001,
+     3.9369
+    ],
+    "OOS_test_total": 43047.21,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 43047.21,
+     "0.001": 30924.92,
+     "0.002": 18802.64
+    }
+   },
+   "RESID_CAP_50": {
+    "train_mean": 9.033,
+    "train_total": 23359.32,
+    "OOS_test_mean": 2.9663,
+    "OOS_test_ci95": [
+     2.5973,
+     3.3512
+    ],
+    "OOS_test_total": 42881.42,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 42881.42,
+     "0.001": 34352.21,
+     "0.002": 25822.99
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": -0.0115,
+     "ci95": [
+      -0.803,
+      0.8451
+     ],
+     "verdict": "INDETERMINATE"
+    }
+   },
+   "RESID_CAP_200": {
+    "train_mean": 10.8325,
+    "train_total": 28012.82,
+    "OOS_test_mean": 3.3785,
+    "OOS_test_ci95": [
+     2.6794,
+     4.0986
+    ],
+    "OOS_test_total": 48839.78,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 48839.78,
+     "0.001": 37512.9,
+     "0.002": 26186.02
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": 0.4007,
+     "ci95": [
+      -0.1511,
+      0.8858
+     ],
+     "verdict": "INDETERMINATE"
+    }
+   },
+   "ONE_SIDED_STOP_50": {
+    "train_mean": 9.0179,
+    "train_total": 23320.25,
+    "OOS_test_mean": 3.0701,
+    "OOS_test_ci95": [
+     2.6856,
+     3.4916
+    ],
+    "OOS_test_total": 44381.92,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 44381.92,
+     "0.001": 35788.53,
+     "0.002": 27195.14
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": 0.0923,
+     "ci95": [
+      -0.7846,
+      0.9092
+     ],
+     "verdict": "INDETERMINATE"
+    }
+   },
+   "ONE_SIDED_STOP_200": {
+    "train_mean": 10.8355,
+    "train_total": 28020.53,
+    "OOS_test_mean": 3.386,
+    "OOS_test_ci95": [
+     2.6349,
+     4.083
+    ],
+    "OOS_test_total": 48947.82,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 48947.82,
+     "0.001": 37617.24,
+     "0.002": 26286.65
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": 0.4082,
+     "ci95": [
+      -0.1154,
+      0.9162
+     ],
+     "verdict": "INDETERMINATE"
+    }
+   },
+   "TIME_STOP_60": {
+    "train_mean": 9.5872,
+    "train_total": 24792.39,
+    "OOS_test_mean": 2.633,
+    "OOS_test_ci95": [
+     1.7328,
+     3.5135
+    ],
+    "OOS_test_total": 38063.26,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 38063.26,
+     "0.001": 26950.45,
+     "0.002": 15837.64
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": -0.3448,
+     "ci95": [
+      -0.7053,
+      0.0237
+     ],
+     "verdict": "INDETERMINATE"
+    }
+   },
+   "TIME_STOP_120": {
+    "train_mean": 8.589,
+    "train_total": 22211.19,
+    "OOS_test_mean": 2.2683,
+    "OOS_test_ci95": [
+     1.4361,
+     3.1138
+    ],
+    "OOS_test_total": 32790.43,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 32790.43,
+     "0.001": 23113.44,
+     "0.002": 13436.44
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": -0.7095,
+     "ci95": [
+      -1.3229,
+      -0.1573
+     ],
+     "verdict": "HURTS"
+    }
+   },
+   "ENTRY_BAND_25_75": {
+    "train_mean": 5.4479,
+    "train_total": 14088.22,
+    "OOS_test_mean": 1.8496,
+    "OOS_test_ci95": [
+     0.9889,
+     2.7762
+    ],
+    "OOS_test_total": 26737.95,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 26737.95,
+     "0.001": 21029.62,
+     "0.002": 15321.3
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": -1.1282,
+     "ci95": [
+      -1.8597,
+      -0.422
+     ],
+     "verdict": "HURTS"
+    }
+   },
+   "COMBINED_STOP50_T60": {
+    "train_mean": 7.8757,
+    "train_total": 20366.61,
+    "OOS_test_mean": 2.5229,
+    "OOS_test_ci95": [
+     2.1309,
+     2.9444
+    ],
+    "OOS_test_total": 36470.74,
+    "fee_sensitivity_OOS_total": {
+     "0.0": 36470.74,
+     "0.001": 28570.28,
+     "0.002": 20669.83
+    },
+    "OOS_delta_vs_baseline": {
+     "mean": -0.4549,
+     "ci95": [
+      -1.2641,
+      0.3745
+     ],
+     "verdict": "INDETERMINATE"
+    }
+   }
+  }
+ },
+ "item6_volume_matched_modes": {
+  "design": "each single-mode arm is grown by repeating its OWN fills in order until its contract volume equals the BOTH arm's, so a higher fill count cannot mechanically favour BOTH. Spend is reported so exposure is comparable.",
+  "mode_proxy": "size >= 15 AND seconds_to_settlement < 300",
+  "by_arm": {
+   "BOTH": {
+    "windows": 17042,
+    "mean_pnl": 4.1613,
+    "ci95": [
+     3.1945,
+     5.1509
+    ],
+    "total_pnl": 70917.15,
+    "mean_spend_exposure": 443.13
+   },
+   "EARLY_PASSIVE_matched": {
+    "windows": 17042,
+    "mean_pnl": 4.6765,
+    "ci95": [
+     3.0633,
+     6.2731
+    ],
+    "total_pnl": 79697.0,
+    "mean_spend_exposure": 429.81
+   },
+   "LATE_AGGRESSIVE_matched": {
+    "windows": 17042,
+    "mean_pnl": 2.8777,
+    "ci95": [
+     1.288,
+     4.3998
+    ],
+    "total_pnl": 49042.23,
+    "mean_spend_exposure": 409.23
+   }
+  },
+  "VERDICT": "BOTH does NOT beat both single modes once volume is matched -- the earlier result was the fill-count artefact"
+ }
+}
