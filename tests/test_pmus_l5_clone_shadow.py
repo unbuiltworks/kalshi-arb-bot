@@ -129,10 +129,18 @@ def test_entry_rule_refuses_a_first_leg_above_the_acquisition_ceiling():
     assert r2["propose"] is False or float(str(r2["px"])) <= 0.90
 
 
-def test_entry_rule_refuses_tight_spread_and_expiry():
+def test_entry_rule_quotes_into_a_one_tick_book():
+    """The two-tick minimum was our invention and refused live markets."""
     clock = {"resolved": True, "tte_s": 600, "expired": False}
-    assert CS.entry_rule({"bid": 0.50, "ask": 0.51}, clock)["why"] == \
-        "SPREAD_UNDER_TWO_TICKS"
+    r = CS.entry_rule({"bid": 0.50, "ask": 0.51}, clock)
+    # NO maker is 1-0.51 = 0.49, cheaper than the 0.50 YES bid
+    assert r["propose"] is True and r["px"] == D("0.49")
+
+
+def test_entry_rule_refuses_a_locked_book_and_expiry():
+    clock = {"resolved": True, "tte_s": 600, "expired": False}
+    assert CS.entry_rule({"bid": 0.50, "ask": 0.50}, clock)["why"] == \
+        "BOOK_CROSSED_OR_LOCKED"
     assert CS.entry_rule({"bid": 0.4, "ask": 0.6},
                          {"resolved": True, "tte_s": 5})["why"] == \
         "TOO_CLOSE_TO_EXPIRY"
@@ -344,3 +352,14 @@ def test_discovery_deduplicates_across_walks():
         return {"markets": []}
     rows = CS.discover(gw, sleep=None, categories=["crypto", "sports"])
     assert [r["slug"] for r in rows] == ["dup"]
+
+
+def test_watch_ranking_demotes_books_that_never_read(tmp_path):
+    gw = Gateway([], {})
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: 1.0,
+                        policies={}, state_dir=str(tmp_path))
+    universe = [{"slug": "soon", "clock": {"tte_s": 100.0}},
+                {"slug": "later", "clock": {"tte_s": 900.0}}]
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["soon", "later"]
+    cs._poll_fail["soon"] = 3
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["later", "soon"]

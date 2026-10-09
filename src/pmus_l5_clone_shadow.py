@@ -338,8 +338,9 @@ def entry_rule(obs: Mapping[str, Any], clock: Mapping[str, Any]) -> dict:
     if not y.get("two_sided"):
         return {"propose": False, "why": "BOOK_NOT_TWO_SIDED"}
     spread = y["yes_ask"] - y["yes_bid"]
-    if spread < 2 * TICK:
-        return {"propose": False, "why": "SPREAD_UNDER_TWO_TICKS"}
+    if spread < TICK:
+        return {"propose": False, "why": "BOOK_CROSSED_OR_LOCKED",
+                "spread": str(spread)}
     maker_pair = y["maker_px"] + n["maker_px"]          # = 1 - spread
     side_yes = y["maker_px"] <= n["maker_px"]
     q = y if side_yes else n
@@ -691,7 +692,11 @@ class CloneShadow:
         self._now = now
         self._slots = slots
         self.state_dir = state_dir or STATE_DIR
-        self.policies = dict(policies or load_policies())
+        # `or` would make an explicitly EMPTY policy map reload from
+        # disk, which is a silent surprise in any caller that means
+        # 'no policies'.
+        self.policies = dict(load_policies() if policies is None
+                             else policies)
         self.obs: Dict[str, deque] = {}
         self.clocks: Dict[str, dict] = {}
         self.inv: Dict[str, Dict[str, VirtualInventory]] = {
@@ -707,6 +712,12 @@ class CloneShadow:
         # makes any offline count of candidates wrong unless the reader
         # happens to de-duplicate.
         self._rows_seen: set = set()
+        # Most of the 332 clock-resolvable crypto windows are FUTURE windows
+        # whose book endpoint does not serve yet, and the slate is sorted by
+        # expiry, so the slots filled with markets that could not be read at
+        # all -- 5 of 48 polled on the first live run. Counting failures per
+        # slug lets the slots migrate to markets that actually quote.
+        self._poll_fail: Dict[str, int] = {}
         self._load()
 
     # ---- transport ------------------------------------------------------
@@ -821,9 +832,12 @@ class CloneShadow:
                 md = (self._get("/v1/markets/%s/book" % slug) or {}).get(
                     "marketData")
             except Exception:                                  # noqa: BLE001
+                self._poll_fail[slug] = self._poll_fail.get(slug, 0) + 1
                 continue
             if not isinstance(md, Mapping):
+                self._poll_fail[slug] = self._poll_fail.get(slug, 0) + 1
                 continue
+            self._poll_fail.pop(slug, None)
             self.obs.setdefault(slug, deque(maxlen=OBS_KEEP)).append(
                 SB.observation_row(slug, md, now))
             self.clocks[slug] = MC.position(slug, r.get("market"), now)
@@ -904,6 +918,16 @@ class CloneShadow:
                             "ONE_OPEN_CANDIDATE_PER_MARKET_PER_ARM"
                 out.append(row)
         return out
+
+    def rank_watch(self, universe: Sequence[Mapping[str, Any]]
+                   ) -> List[dict]:
+        """Slots go to markets that actually serve a book, nearest expiry
+        first. A market whose book has failed three times running sinks to
+        the back rather than holding a slot forever."""
+        def key(r):
+            return (min(3, self._poll_fail.get(r["slug"], 0)),
+                    r["clock"]["tte_s"])
+        return sorted(universe, key=key)
 
     def new_candidate_rows(self) -> List[dict]:
         """Candidates whose status changed since the last emission."""
@@ -1121,7 +1145,7 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                     disc["why_nothing_resolved"] = clock_diagnostic(
                         markets, now())
                 print(PREFIX + json.dumps(disc, default=str), flush=True)
-            watch = universe[:cs._slots]
+            watch = cs.rank_watch(universe)[:cs._slots]
             polled = cs.poll(watch)
             decisions = cs.decide([r["slug"] for r in watch])
             judged = cs.advance()
@@ -1137,6 +1161,8 @@ def run(cycles: Optional[int] = None, *, get_json=None,
             rep = {"kind": "cycle", "cycle": cs.cycles,
                    "t_utc": _utc(now()),
                    "watched": polled, "universe": len(universe),
+                   "poll_failed": len(watch) - polled,
+                   "slugs_with_failing_books": len(cs._poll_fail),
                    "decisions": len(decisions),
                    "in_domain": sum(1 for d in decisions
                                     if d["model_domain"]["in_domain"]),
