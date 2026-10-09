@@ -66,6 +66,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
 
+from src import pmus_event_progress as EP
 from src import pmus_execution_shadow as EX
 from src import pmus_fees as FEES
 from src import pmus_market_clock as MC
@@ -99,6 +100,9 @@ TICK = D("0.01")
 ONE = D("1")
 
 MARKOUT_HORIZONS = (10.0, 30.0, 60.0)
+# The median tte_s in the training corpus' own windows, used only to test
+# how much a sports tte_s assumption moves the policy's action.
+TTE_SENSITIVITY_S = float(os.getenv("L5_CLONE_TTE_SENSITIVITY_S", "450"))
 FOLLOW_S = float(os.getenv("L5_CLONE_FOLLOW_S", "300"))
 
 LABELS = ["EXTEND", "COMPLEMENT", "STOP"]
@@ -477,7 +481,10 @@ PENDING = "PENDING"
 def open_candidate(*, policy: str, slug: str, side_yes: bool, px: D, qty: D,
                    t_post: float, obs: Mapping[str, Any],
                    clock: Mapping[str, Any], inv: VirtualInventory,
-                   model: Optional[Mapping[str, Any]], origin: str) -> dict:
+                   model: Optional[Mapping[str, Any]], origin: str,
+                   cohort: Optional[Mapping[str, Any]] = None,
+                   obs_history: Optional[Sequence[Mapping[str, Any]]] = None
+                   ) -> dict:
     qa = queue_ahead(obs, side_yes, px)
     q = own_side_quote(obs, side_yes)
     return {
@@ -497,11 +504,21 @@ def open_candidate(*, policy: str, slug: str, side_yes: bool, px: D, qty: D,
             "spread": (str(q["yes_ask"] - q["yes_bid"])
                        if q.get("two_sided") else None),
             "bid_qty": obs.get("bid_qty"), "ask_qty": obs.get("ask_qty"),
+            "own_side_depth": (obs.get("bid_qty") if side_yes
+                               else obs.get("ask_qty")),
             "shares_traded_cum": obs.get("shares_traded_cum"),
+            # OBSERVED FLOW, from the trailing window rather than the last
+            # two polls: a market that printed nothing in the last 20
+            # seconds is usually just a quiet 20 seconds.
+            "flow_usd_per_min": (
+                SB._to_usd(SB.flow_over_window(list(obs_history or []),
+                                               t_post))
+                if obs_history else None),
             "t_frac": clock.get("t_frac"), "tte_s": clock.get("tte_s"),
             "clock_basis": clock.get("basis"),
         },
         "inventory_before": inv.snapshot(),
+        "cohort": dict(cohort or {}),
         "model": dict(model) if model else None,
         "markouts": {},
         "NEVER_A_FILL": True,
@@ -704,7 +721,8 @@ def clock_diagnostic(markets: Sequence[Mapping[str, Any]], now: float,
                            for m in markets])}
 
 
-def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float
+def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float,
+                     progress: Optional[Mapping[str, Any]] = None
                      ) -> List[dict]:
     """Markets whose clock we can actually resolve, nearest expiry first.
 
@@ -713,16 +731,21 @@ def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float
     give them. This is the fix for the duration assumption -- the engine
     stays market-agnostic, but it declines to pretend about time.
     """
+    prog = dict(progress or {})
     out = []
     for m in markets:
         slug = str(m.get("slug"))
-        pos = MC.position(slug, m, now)
+        pos = MC.position(slug, m, now, progress=prog.get(slug))
         if not pos.get("resolved") or pos.get("expired"):
             continue
         if (pos.get("tte_s") or 0) < 60:
             continue
         out.append({"slug": slug, "clock": pos,
                     "category": m.get("category"),
+                    "sport_type": pos.get("sport_type"),
+                    "league": pos.get("league"),
+                    "market_type": EX.market_type(slug),
+                    "sport_of_slug": EX.sport_of(slug),
                     "market": m})
     out.sort(key=lambda r: r["clock"]["tte_s"])
     return out
@@ -933,6 +956,8 @@ class CloneShadow:
         self.settled: Dict[str, dict] = {}
         self.settle_attempts: Dict[str, dict] = {}
         self.resolution_sweep: Dict[str, Any] = {}
+        self.progress: Dict[str, Any] = {}
+        self.cohort: Dict[str, dict] = {}
         self._load()
 
     # ---- transport ------------------------------------------------------
@@ -1076,7 +1101,20 @@ class CloneShadow:
             else:
                 self.one_sided.pop(slug, None)
             self.obs.setdefault(slug, deque(maxlen=OBS_KEEP)).append(row)
-            self.clocks[slug] = MC.position(slug, r.get("market"), now)
+            self.clocks[slug] = MC.position(slug, r.get("market"), now,
+                                            progress=self.progress.get(slug))
+            # Stamped AT SELECTION TIME, so a cohort comparison is decided
+            # by data gathered after the tag, never by re-reading the
+            # outcome into the tag.
+            self.cohort.setdefault(slug, {
+                "category": r.get("category"),
+                "sport_type": r.get("sport_type"),
+                "league": r.get("league"),
+                "market_type": r.get("market_type"),
+                "clock_basis": (r.get("clock") or {}).get("basis"),
+                "rebate_eligible": (r.get("clock") or {}).get(
+                    "rebate_eligible"),
+            })
             ok += 1
             if self._sleep:
                 self._sleep(POLL_PAUSE_S)
@@ -1136,6 +1174,27 @@ class CloneShadow:
                                     "artifact": os.path.basename(policy.path),
                                     "PREDICTS": "L5's next observed action, "
                                                 "not an order"}
+                    if clock.get("tte_s_basis") == "ASSUMED_NOMINAL_DURATION":
+                        # THE ASSUMPTION IS MEASURED, NOT TRUSTED. `tte_s`
+                        # for a sports market is derived from an assumed
+                        # nominal game length, so the same state is scored
+                        # again with tte_s at the crypto corpus median and
+                        # the two argmaxes are compared. Agreement means the
+                        # assumption did not decide the action; disagreement
+                        # is flagged on the row instead of being invisible.
+                        alt = list(feat["vector"])
+                        alt[FEATS.index("tte_s")] = TTE_SENSITIVITY_S
+                        pa = policy.proba(alt)
+                        row["model"]["tte_sensitivity"] = {
+                            "assumed_tte_s": clock.get("tte_s"),
+                            "alt_tte_s": TTE_SENSITIVITY_S,
+                            "action_at_assumed": max(
+                                proba, key=lambda k: proba[k]),
+                            "action_at_alt": max(pa, key=lambda k: pa[k]),
+                            "agree": (max(proba, key=lambda k: proba[k])
+                                      == max(pa, key=lambda k: pa[k])),
+                            "proba_at_alt": {k: round(float(v), 4)
+                                             for k, v in pa.items()}}
                     comp = completion_due(inv, obs)
                     row["completion_rule"] = comp
                     if comp.get("due"):
@@ -1175,7 +1234,9 @@ class CloneShadow:
                         side_yes=bool(intent["side_yes"]),
                         px=D(str(intent["px"])), qty=D(str(intent["qty"])),
                         t_post=now, obs=obs, clock=clock, inv=inv,
-                        model=row.get("model"), origin=origin)
+                        model=row.get("model"), origin=origin,
+                        cohort=self.cohort.get(slug),
+                        obs_history=list(dq))
                     # ONE OPEN CANDIDATE PER SIDE, not per market. The
                     # per-market version is why no pair was ever completed
                     # in 8.5 hours of shadow: a first leg stays PENDING for
@@ -1456,6 +1517,78 @@ class CloneShadow:
             }
         return out
 
+    # ---- cohort economics -----------------------------------------------
+    def by_cohort(self, key: str = "sport_type") -> dict:
+        """The executable environment, per cohort, stamped at selection.
+
+        WHAT THIS ANSWERS. "Wider spreads should be better" is a hypothesis,
+        not a result -- a wide quote nobody trades through is worse than a
+        tight one that fills, because the first produces no fills at all and
+        the second at least produces measurable economics. So every cohort
+        reports the whole funnel side by side: how wide, how deep, how much
+        flow, how often a quote would defensibly have filled, what happened
+        to the mid afterwards, and what pair cost was actually reachable
+        once inventory was held.
+
+        Cohorts are read off the candidate's `cohort` stamp, which was
+        written when the market was SELECTED, so no outcome can leak into
+        its own grouping.
+        """
+        out: Dict[str, Any] = {"key": key, "LABEL": "SHADOW_NOT_REALIZED",
+                               "arms": {}}
+        for pol in self.policies:
+            buckets: Dict[str, List[dict]] = {}
+            for c in self.candidates[pol].values():
+                tag = str((c.get("cohort") or {}).get(key)
+                          or (c.get("cohort") or {}).get("category")
+                          or "UNKNOWN")
+                buckets.setdefault(tag, []).append(c)
+            rows: Dict[str, Any] = {}
+            for tag, cs_ in sorted(buckets.items()):
+                st = [c.get("state_at_post") or {} for c in cs_]
+                spreads = [v for v in (_f(x.get("spread")) for x in st)
+                           if v is not None]
+                depth = [v for v in (_f(x.get("own_side_depth")) for x in st)
+                         if v is not None]
+                flow = [v for v in (_f(x.get("flow_usd_per_min")) for x in st)
+                        if v is not None]
+                cleared = [c for c in cs_ if c.get("status") == QUEUE_CLEARED]
+                decided = [c for c in cs_
+                           if c.get("status") in (QUEUE_CLEARED, NO_TOUCH,
+                                                  TOUCHED_NO_TRADE,
+                                                  QUEUE_UNPROVEN)]
+                adv, comp_ok, pair_edge = [], [], []
+                for c in cleared:
+                    mk = (c.get("markouts") or {}).get("t+30s") or {}
+                    v = mk.get("adverse_selection_per_share")
+                    if isinstance(v, (int, float)):
+                        adv.append(float(v))
+                    if mk:
+                        comp_ok.append(bool(mk.get(
+                            "completable_at_or_below_ceiling_maker")))
+                    pc = _f(mk.get("pair_cost_maker"))
+                    if pc is not None:
+                        pair_edge.append(1.0 - pc)
+                rows[tag] = {
+                    "candidates": len(cs_),
+                    "decided": len(decided),
+                    "queue_cleared": len(cleared),
+                    "queue_cleared_rate": (round(len(cleared) / len(decided), 4)
+                                           if decided else None),
+                    "spread": _dist(spreads),
+                    "own_side_depth_shares": _dist(depth),
+                    "observed_flow_usd_per_min": _dist(flow),
+                    "adverse_selection_t30_per_share": _dist(adv),
+                    "complement_completable_at_ceiling_t30": (
+                        round(float(np.mean(comp_ok)), 4) if comp_ok else None),
+                    "pair_edge_per_share_if_completed_maker": _dist(pair_edge),
+                    "HYPOTHETICAL": ("queue-cleared is a would-fill under a "
+                                     "pessimistic queue test; no order was "
+                                     "placed"),
+                }
+            out["arms"][pol] = rows
+        return out
+
     # ---- comparison -----------------------------------------------------
     def compare(self) -> dict:
         """Early vs late on the five dimensions the owner asked for.
@@ -1543,6 +1676,17 @@ class CloneShadow:
         return out
 
 
+def _dist(vals: Sequence[float]) -> dict:
+    """n/median/mean/min/max, or just n=0. Never a bare mean: one number
+    over a handful of observations reads as an estimate when it is not."""
+    xs = [float(v) for v in vals if v is not None]
+    if not xs:
+        return {"n": 0}
+    return {"n": len(xs), "median": round(float(np.median(xs)), 5),
+            "mean": round(float(np.mean(xs)), 5),
+            "min": round(min(xs), 5), "max": round(max(xs), 5)}
+
+
 def _mix(vals: Sequence[Any]) -> dict:
     out: Dict[str, int] = {}
     for v in vals:
@@ -1620,7 +1764,19 @@ def run(cycles: Optional[int] = None, *, get_json=None,
         try:
             if n == 1 or not universe or n % DISCOVERY_EVERY == 0:
                 markets = discover(cs._get, sleep=sleep)
-                universe = eligible_markets(markets, now())
+                # THE AUTHORITATIVE SPORTS CLOCK, reused rather than
+                # rebuilt: pmus_event_progress reads ONE bounded live-event
+                # endpoint and maps market slug -> venue-served game
+                # position, refusing to score a period token it does not
+                # recognise. Contract expiry is never consulted.
+                try:
+                    prog, prog_diag = EP.table(cs._get, now=now())
+                except Exception as exc:                       # noqa: BLE001
+                    prog, prog_diag = {}, {
+                        "error": "%s:%s" % (type(exc).__name__,
+                                            str(exc)[:120])}
+                cs.progress = prog
+                universe = eligible_markets(markets, now(), progress=prog)
                 disc = {"kind": "discovery", "cycle": cs.cycles,
                         "markets_served": len(markets),
                         "clock_resolvable_and_live": len(universe),
@@ -1691,6 +1847,8 @@ def run(cycles: Optional[int] = None, *, get_json=None,
             if cs.cycles % 5 == 0 or judged["newly_queue_cleared"]:
                 rep["comparison"] = cs.compare()
                 rep["settlement_totals"] = cs.settlement_totals()
+                rep["by_sport"] = cs.by_cohort("sport_type")
+                rep["by_market_type"] = cs.by_cohort("market_type")
                 # one example of a one-sided book, so the single biggest
                 # refusal reason stays diagnosable rather than just counted
                 if cs.one_sided:

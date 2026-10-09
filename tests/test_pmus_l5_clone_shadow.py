@@ -652,3 +652,37 @@ def test_settle_expired_uses_the_sweep_and_records_misses(tmp_path):
     assert rows == []
     assert cs.settle_attempts[slug]["stage"] == "NOT_IN_CLOSED_MARKET_SWEEP"
     assert cs.resolution_sweep["n_wanted"] == 1
+
+
+def test_by_cohort_groups_on_the_selection_time_stamp(tmp_path):
+    gw = Gateway([], {})
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: 0.0,
+                        policies={"early": None}, state_dir=str(tmp_path))
+    def cand(tag, status, spread, adv, pair):
+        return {"id": tag + status, "slug": tag, "status": status,
+                "cohort": {"sport_type": tag, "market_type": "MONEYLINE"},
+                "state_at_post": {"spread": spread, "own_side_depth": 100,
+                                  "flow_usd_per_min": 50.0},
+                "markouts": {"t+30s": {
+                    "adverse_selection_per_share": adv,
+                    "pair_cost_maker": pair,
+                    "completable_at_or_below_ceiling_maker": pair <= 0.96}}}
+    cs.candidates["early"] = {
+        "a": cand("football", CS.QUEUE_CLEARED, 0.04, -0.01, 0.93),
+        "b": cand("football", CS.NO_TOUCH, 0.05, 0.0, 0.99),
+        "c": cand("tennis", CS.QUEUE_CLEARED, 0.02, 0.02, 0.98)}
+    out = cs.by_cohort("sport_type")["arms"]["early"]
+    assert out["football"]["candidates"] == 2
+    assert out["football"]["queue_cleared_rate"] == 0.5
+    assert out["football"]["spread"]["median"] == 0.045
+    assert out["football"]["pair_edge_per_share_if_completed_maker"]["n"] == 1
+    assert out["tennis"]["complement_completable_at_ceiling_t30"] == 0.0
+    # and the same candidates regroup by market type without re-reading
+    bymt = cs.by_cohort("market_type")["arms"]["early"]
+    assert bymt["MONEYLINE"]["candidates"] == 3
+
+
+def test_dist_never_reports_a_bare_mean():
+    assert CS._dist([])["n"] == 0
+    d = CS._dist([1.0, 3.0])
+    assert d["median"] == 2.0 and d["min"] == 1.0 and d["max"] == 3.0

@@ -84,8 +84,78 @@ def resolve(slug: Any, market_data: Optional[Mapping[str, Any]] = None
     return None, None, UNRESOLVED
 
 
+# PER-SPORT NOMINAL DURATIONS, DECLARED AS ASSUMPTIONS, NOT VENUE DATA.
+#
+# The venue serves a game's POSITION (period tokens, the ended flag) and no
+# settlement time at all -- pmus_event_progress says so explicitly and
+# refuses to manufacture one. The clone's feature vector, however, was fit
+# with `tte_s` in seconds, so running the policy on sports requires SOME
+# seconds-to-end. These are nominal wall-clock lengths, used only to turn an
+# authoritative position into a seconds estimate, and every row that uses
+# one carries `tte_s_basis: ASSUMED_NOMINAL_DURATION` plus the number used.
+# Nothing here is presented as a venue fact, and the shadow separately
+# reports whether the action would change if `tte_s` were the corpus median
+# instead -- so the assumption's influence is measured, not trusted.
+NOMINAL_GAME_S = {
+    "football": 10800.0, "basketball": 8100.0, "baseball": 10800.0,
+    "soccer": 7200.0, "hockey": 8400.0, "tennis": 7200.0,
+    "esports": 5400.0, "cricket": 14400.0,
+}
+NOMINAL_DEFAULT_S = 7200.0
+
+
+def sports_position(slug: Any, progress: Optional[Mapping[str, Any]]) -> dict:
+    """Where a SPORTS market sits in its game, from the venue's own tokens.
+
+    `t_frac` is `game_proximity` -- the venue-served position that
+    pmus_event_progress derives from period tokens and refuses to invent.
+    A market with no recognised token is UNRESOLVED and is not watched,
+    exactly as an unparseable crypto slug is.
+
+    CONTRACT EXPIRY IS NEVER USED. `endDate` on these markets is
+    gameStartTime + 14 days, identical across markets and unrelated to when
+    the position resolves; feeding it in is the defect this whole module
+    exists to prevent.
+    """
+    if not isinstance(progress, Mapping):
+        return {"resolved": False, "basis": UNRESOLVED,
+                "why": "NO_EVENT_PROGRESS_ROW"}
+    if progress.get("ended"):
+        return {"resolved": False, "basis": UNRESOLVED,
+                "why": "GAME_ENDED", "ended": True}
+    prox = progress.get("game_proximity")
+    if prox is None:
+        return {"resolved": False, "basis": UNRESOLVED,
+                "why": "PROXIMITY_%s" % progress.get("proximity_basis")}
+    try:
+        t_frac = float(prox)
+    except (TypeError, ValueError):
+        return {"resolved": False, "basis": UNRESOLVED,
+                "why": "PROXIMITY_UNPARSEABLE"}
+    sport = str(progress.get("sport_type") or "").lower()
+    nominal = NOMINAL_GAME_S.get(sport, NOMINAL_DEFAULT_S)
+    return {
+        "resolved": True,
+        "basis": "venue_event_progress",
+        "duration_s": nominal,
+        "window_start": None,
+        "t_frac": min(1.0, max(0.0, t_frac)),
+        "tte_s": max(0.0, (1.0 - min(1.0, max(0.0, t_frac))) * nominal),
+        "tte_s_basis": "ASSUMED_NOMINAL_DURATION",
+        "nominal_duration_s": nominal,
+        "expired": False,
+        "sport_type": sport or None,
+        "league": progress.get("league"),
+        "period": progress.get("period"),
+        "proximity_basis": progress.get("proximity_basis"),
+        "rebate_eligible": progress.get("rebate_eligible"),
+        "fee_coefficient": progress.get("fee_coefficient"),
+        "CONTRACT_EXPIRY_NOT_USED": True,
+    }
+
+
 def position(slug: Any, market_data: Optional[Mapping[str, Any]],
-             now: float) -> dict:
+             now: float, progress: Optional[Mapping[str, Any]] = None) -> dict:
     """Where `now` sits in the market's own window.
 
     `t_frac` and `tte_s` are the two clock features the policy was fit on,
@@ -94,6 +164,12 @@ def position(slug: Any, market_data: Optional[Mapping[str, Any]],
     """
     dur, start, basis = resolve(slug, market_data)
     if dur is None or start is None:
+        # A sports market has no window in its slug and no usable
+        # start/end pair; its clock comes from the live event feed.
+        if progress is not None:
+            sp = sports_position(slug, progress)
+            if sp.get("resolved"):
+                return sp
         return {"resolved": False, "basis": basis, "duration_s": None,
                 "window_start": None, "t_frac": None, "tte_s": None,
                 "WHY": "no trustworthy duration; the caller must not guess"}
