@@ -122,6 +122,11 @@ def main() -> int:
         "scripts/83_price_acceptance.py",
         "external_review/PRICE_ACCEPTANCE_FINDINGS.md",
         "external_review/PRICE_ACCEPTANCE_RESULT.json",
+        "external_review/VENUE_GATE_AND_PASSIVITY.md",
+        "external_review/ACROSS_TIME_GATE_v2_polymarket.json",
+        "external_review/PASSIVE_VS_AGGRESSIVE_RESULT.json",
+        "scripts/91_across_time_gate_v2.py",
+        "scripts/92_passive_vs_aggressive.py",
     ]
     for r in required:
         if not os.path.exists(os.path.join(P, r)):
