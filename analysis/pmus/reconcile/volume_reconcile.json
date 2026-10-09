@@ -1,0 +1,130 @@
+{
+ "tape": "data/pmus_btc15m_tape/pmus_btc15m_tape.jsonl",
+ "native_interval_s": 2.0,
+ "shadow_interval_s": 27.0,
+ "windows": {
+  "cpc-btc-updown-15m-2026-09-27-1815z": {
+   "coverage": {
+    "polls": 88,
+    "errors": 0,
+    "error_share": 0.0,
+    "span_s": 184.5,
+    "mean_interval_s": 2.12,
+    "gaps_over_3x_interval": [],
+    "duplicate_snapshots": 81,
+    "cum_volume_first": 158051.65,
+    "cum_volume_last": 166614.94,
+    "cum_volume_rise": 8563.29,
+    "volume_observed_in_deltas": 8563.29,
+    "delta_sum_matches_rise": true,
+    "volume_before_tape_started": 158051.65,
+    "NOTE": "cumulative volume means the tape MISSES NO VOLUME, only the price and timing of the prints inside each interval"
+   },
+   "two_sidedness": {
+    "polls": 88,
+    "two_sided_polls": 0,
+    "two_sided_share": 0.0,
+    "WHY_IT_MATTERS": "the entry rule requires a two-sided book; a one-sided poll is not an opportunity our clone ever declines, it is one it never sees"
+   },
+   "queue": {
+    "book_snapshots": 72,
+    "queue_at_bid_p10": 9251.8,
+    "queue_at_bid_p50": 12720.1,
+    "queue_at_bid_p90": 13786.6,
+    "MEANING": "printed volume must EXCEED this before any of a resting 1-share quote is filled"
+   },
+   "price_attribution": {
+    "native": {
+     "volume": 8563.29,
+     "credited_to_a_resting_bid": 7961.42,
+     "attributed_to_buys": 0.0,
+     "unattributable": 601.87,
+     "credited_share": 0.9297,
+     "intervals": 87
+    },
+    "resampled_27s": {
+     "volume": 8563.29,
+     "credited_to_a_resting_bid": 7961.42,
+     "attributed_to_buys": 0.0,
+     "unattributable": 601.87,
+     "credited_share": 0.9297,
+     "intervals": 6
+    },
+    "RESAMPLING_IS_THE_POINT": "the market is identical in both rows; only the sampling changes, so any difference is measurement, not flow"
+   }
+  },
+  "cpc-btc-updown-15m-2026-09-27-1830z": {
+   "coverage": {
+    "polls": 44,
+    "errors": 120,
+    "error_share": 0.7317,
+    "span_s": 635.0,
+    "mean_interval_s": 14.77,
+    "gaps_over_3x_interval": [
+     29.1,
+     26.6,
+     29.2,
+     26.9,
+     28.7,
+     29.0,
+     26.9,
+     28.7,
+     29.0,
+     26.3,
+     28.6,
+     28.7,
+     28.6,
+     26.7,
+     28.3,
+     28.7,
+     28.1,
+     28.5,
+     26.6,
+     27.8,
+     28.3
+    ],
+    "duplicate_snapshots": 22,
+    "cum_volume_first": 64587.67,
+    "cum_volume_last": 188501.65,
+    "cum_volume_rise": 123913.98,
+    "volume_observed_in_deltas": 123913.98,
+    "delta_sum_matches_rise": true,
+    "volume_before_tape_started": 64587.67,
+    "NOTE": "cumulative volume means the tape MISSES NO VOLUME, only the price and timing of the prints inside each interval"
+   },
+   "two_sidedness": {
+    "polls": 44,
+    "two_sided_polls": 42,
+    "two_sided_share": 0.9545,
+    "WHY_IT_MATTERS": "the entry rule requires a two-sided book; a one-sided poll is not an opportunity our clone ever declines, it is one it never sees"
+   },
+   "queue": {
+    "book_snapshots": 20,
+    "queue_at_bid_p10": 40.0,
+    "queue_at_bid_p50": 109.4,
+    "queue_at_bid_p90": 1863.2,
+    "MEANING": "printed volume must EXCEED this before any of a resting 1-share quote is filled"
+   },
+   "price_attribution": {
+    "native": {
+     "volume": 123913.98,
+     "credited_to_a_resting_bid": 64131.74,
+     "attributed_to_buys": 59782.24,
+     "unattributable": 0.0,
+     "credited_share": 0.5176,
+     "intervals": 43
+    },
+    "resampled_27s": {
+     "volume": 123913.98,
+     "credited_to_a_resting_bid": 64131.74,
+     "attributed_to_buys": 59782.24,
+     "unattributable": 0.0,
+     "credited_share": 0.5176,
+     "intervals": 21
+    },
+    "RESAMPLING_IS_THE_POINT": "the market is identical in both rows; only the sampling changes, so any difference is measurement, not flow"
+   }
+  }
+ },
+ "LABEL": "BOOK_AND_VOLUME_OBSERVATION_NOT_A_FILL"
+}
