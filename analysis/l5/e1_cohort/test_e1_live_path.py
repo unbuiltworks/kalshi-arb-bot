@@ -55,6 +55,12 @@ class FakeTransport:
     accepts one submission per instance exactly as the real one does."""
 
     posts = []                      # class-level: every POST, every instance
+    #: EVERY CANCEL, so the fake venue can model the handover. Without
+    #: this the fake acknowledged a cancel and then kept reporting the
+    #: order as resting for ever, which under the obligation ledger reads
+    #: as "our order is still outstanding" and correctly refuses the next
+    #: window. The real venue cancels; the fake must too.
+    cancels = []
 
     def __init__(self, *, submit_raises=None):
         self.submit_raises = submit_raises
@@ -78,6 +84,10 @@ class FakeTransport:
                 "price": body["price"]["value"],
                 "post_only": body["participateDontInitiate"]})
             return {"id": "order-%d" % len(FakeTransport.posts)}
+        if path.startswith("/v1/order/") and path.endswith("/cancel"):
+            oid = path.split("/")[3]
+            FakeTransport.cancels.append(oid)
+            return {"canceledOrderIds": [oid]}
         return {}
 
 
@@ -192,6 +202,7 @@ def _isolate(monkeypatch, tmp_path):
     """Own state dir, own session, no real credential, clean POST log."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     for k in AR.LEGACY_XR2W_KEYS_NEVER_READ:
         monkeypatch.delenv(k, raising=False)
     yield
@@ -241,7 +252,8 @@ def throwaway_secret_b64() -> str:
     return base64.b64encode(raw).decode()
 
 
-def clean_order_state_reader(open_rows=(), hist_rows=None):
+def clean_order_state_reader(open_rows=(), hist_rows=None, *,
+                             mirror_posts=True):
     """A venue that answers "you have no orders", in the two GET shapes
     `order_state.read_order_state` reads.
 
@@ -250,9 +262,39 @@ def clean_order_state_reader(open_rows=(), hist_rows=None):
     `our_outstanding_orders: 0`, so a provider with no reader fails closed
     instead of pretending the slate is clean. These tests therefore have to
     say what the venue says -- which is the point of the repair.
+    A VENUE THAT ADMITS THE ORDERS IT ACCEPTED.
+    ==========================================
+    This helper used to answer "you have no orders" even for orders it had
+    just acknowledged through `FakeTransport`: a POST returned
+    `order-1` and the next read denied `order-1` existed. That is not a
+    clean venue, it is an inconsistent one -- and it is precisely the
+    delayed-visibility shape the obligation ledger exists to refuse, so
+    under the ledger these tests were asking E1 to keep placing first legs
+    while the venue disowned every one of them.
+
+    So the reader now MIRRORS WHAT WAS POSTED, which is what a real venue
+    does. Every assertion in this module is unchanged; what changed is that
+    the fake stopped lying about its own acknowledgements. Pass
+    `mirror_posts=False` to get the old literal behaviour where a test
+    needs to script absence deliberately.
     """
     from analysis.l5.e1_cohort import order_state as _OS
     hist = list(open_rows if hist_rows is None else hist_rows)
+    if mirror_posts:
+        have = {str(r.get("id")) for r in hist if r.get("id")}
+        for p in FakeTransport.posts:
+            oid = "order-%d" % p["n"]
+            if oid in have:
+                continue
+            hist.append({
+                "id": oid, "marketSlug": p["slug"],
+                "outcomeSide": p.get("outcomeSide") or "OUTCOME_SIDE_YES",
+                "state": ("ORDER_STATE_CANCELED"
+                          if oid in FakeTransport.cancels
+                          else "ORDER_STATE_NEW"),
+                "quantity": str(p["quantity"]), "cumQuantity": "0",
+                "leavesQuantity": str(p["quantity"]),
+                "price": {"value": str(p["price"]), "currency": "USD"}})
     by_id = {str(r.get("id")): r for r in hist if r.get("id")}
 
     class _NotFound(Exception):
@@ -262,7 +304,14 @@ def clean_order_state_reader(open_rows=(), hist_rows=None):
 
     def _read(path):
         if path == _OS.OPEN_PATH:
-            return {"orders": list(open_rows)}
+            live = [r for r in hist
+                    if str(r.get("state")) in ("ORDER_STATE_NEW",
+                                               "ORDER_STATE_PARTIALLY"
+                                               "_FILLED")]
+            return {"orders": list(open_rows) + [
+                r for r in live
+                if str(r.get("id")) not in
+                {str(o.get("id")) for o in open_rows}]}
         if path == _OS.POSITIONS_PATH:
             return {"positions": {}, "availablePositions": [], "eof": True}
         if path.startswith("/v1/portfolio/activities"):

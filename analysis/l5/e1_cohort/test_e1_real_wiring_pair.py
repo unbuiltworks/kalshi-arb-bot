@@ -51,6 +51,7 @@ def wired(monkeypatch, tmp_path):
                         raising=False)
     arm(monkeypatch)
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     sd = str(tmp_path / "e1_auth")
     os.makedirs(sd, exist_ok=True)
     auth = AUTH.SessionAuthorization(sd)

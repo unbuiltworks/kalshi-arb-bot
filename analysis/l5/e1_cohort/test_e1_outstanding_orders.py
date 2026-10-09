@@ -445,6 +445,7 @@ def _drive(monkeypatch, tmp_path, *, venue_accepts_and_rests,
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     arm(monkeypatch)
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     clock = _Clock(BASE + 10)
     resting = []
 
@@ -504,6 +505,7 @@ def test_twenty_would_have_happened_without_the_repair(monkeypatch,
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     arm(monkeypatch)
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     clock = _Clock(BASE + 10)
 
     def provider():
@@ -541,12 +543,36 @@ def test_a_venue_that_rejects_nothing_still_cannot_exceed_one_outstanding():
 def test_a_confirmed_id_absent_from_a_successful_read_is_resolved():
     """`/v1/orders/open` is the venue's statement of what rests. A
     confirmed id it does not list is not resting -- otherwise an order that
-    filled and paged out of the history window would block E1 forever."""
-    v = view([], [], pending_ids=["CZH22KCSPZ8H"], known=[])
+    filled and paged out of the history window would block E1 forever.
+
+    THE CONTRACT NARROWED, AND THIS TEST RECORDS BOTH HALVES.
+    ========================================================
+    Absence used to resolve a confirmed id unconditionally. That is true at
+    steady state and FALSE immediately after a POST: a venue that
+    acknowledges an order and has not yet published it omits it from
+    `/v1/orders/open` and 404s its own record, both endpoints agreeing, so
+    nothing looks inconsistent. `test_e1_burst_1215z.py` places a second
+    first leg straight through that gap.
+
+    So absence now resolves an id ONLY ONCE A SUCCESSFUL READ HAS SHOWN IT
+    at least once. The original concern is unchanged and is asserted below
+    as the second case: an order that was real and has since paged out is
+    still resolved, so nothing blocks for ever. What is no longer resolved
+    is an id the venue has NEVER admitted to, which is the dangerous one.
+    """
+    # an id that was once observed: resolved, exactly as before
+    v = view([], [], pending_ids=["CZH22KCSPZ8H"], known=[],
+             observed_ids=["CZH22KCSPZ8H"])
     assert v["ok"] and v["n_outstanding"] == 0
     assert v["pending_ids_resolved_by_this_read"] == ["CZH22KCSPZ8H"]
     # and the venue's 404 is recorded as the answer it is
     assert v["ids_absent_at_venue_404"] == ["CZH22KCSPZ8H"]
+
+    # THE NEW HALF: never observed, so never resolved by absence.
+    u = view([], [], pending_ids=["CZH22KCSPZ8H"], known=[])
+    assert u["ok"] and u["n_outstanding"] == 1
+    assert u["acknowledged_but_never_observed_ids"] == ["CZH22KCSPZ8H"]
+    assert bool(OS.outstanding_for_snapshot(u)) is True
 
 
 def test_an_unidentified_submission_blocks_INDEFINITELY():

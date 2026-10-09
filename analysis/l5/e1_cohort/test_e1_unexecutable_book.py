@@ -239,6 +239,7 @@ def test_no_unexecutable_book_reaches_preview_or_consumes_a_latch(
     zero latch slots, zero placements."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     calls = []
 
     class Spy:
@@ -267,6 +268,7 @@ def test_a_healthy_book_still_reaches_preview(monkeypatch, tmp_path):
     reaches the transport."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     ok, r = refusals(monkeypatch, tmp_path, snap())
     assert ok is True, r

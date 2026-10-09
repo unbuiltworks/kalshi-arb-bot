@@ -128,6 +128,7 @@ def test_a_broken_credential_contract_is_one_local_failure_not_a_storm(
     """
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     break_the_contract(monkeypatch, how=how)
 
