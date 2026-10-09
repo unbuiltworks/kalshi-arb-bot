@@ -1,0 +1,391 @@
+{
+ "lead_s": 1.0,
+ "atomic_pair_test_overlap": {
+  "distinct_tx": 2872,
+  "tx_with_l5_on_both_outcomes": 145,
+  "atomic_pair_price_histogram": {
+   "1.00": 145
+  },
+  "verdict": "ATOMIC_COMPLETE_SET_PURCHASE_CONFIRMED"
+ },
+ "purchased_shares_by_channel": {
+  "RESTING_BID": {
+   "shares": 45043,
+   "share_of_purchases": 0.5792,
+   "avg_price": "0.4829"
+  },
+  "MINT_FEASIBLE": {
+   "shares": 18776,
+   "share_of_purchases": 0.2414,
+   "avg_price": "0.4969"
+  },
+  "ATOMIC_PAR_PAIR": {
+   "shares": 12738,
+   "share_of_purchases": 0.1638,
+   "avg_price": "0.5027"
+  },
+  "UNCLASSIFIED": {
+   "shares": 757,
+   "share_of_purchases": 0.0097,
+   "avg_price": "0.0130"
+  },
+  "TAKER_SINGLE": {
+   "shares": 459,
+   "share_of_purchases": 0.0059,
+   "avg_price": "0.7311"
+  },
+  "AT_ASK_NO_MINT": {
+   "shares": 0,
+   "share_of_purchases": 0.0,
+   "avg_price": null
+  }
+ },
+ "matched_shares_by_channel": {
+  "RESTING_BID": {
+   "matched_shares": 20368.3,
+   "share_of_matched": 0.5441
+  },
+  "MINT_FEASIBLE": {
+   "matched_shares": 10397.5,
+   "share_of_matched": 0.2777
+  },
+  "ATOMIC_PAR_PAIR": {
+   "matched_shares": 6365.7,
+   "share_of_matched": 0.17
+  },
+  "TAKER_SINGLE": {
+   "matched_shares": 254.3,
+   "share_of_matched": 0.0068
+  },
+  "UNCLASSIFIED": {
+   "matched_shares": 50.7,
+   "share_of_matched": 0.0014
+  }
+ },
+ "markets": 33,
+ "per_market": {
+  "btc-updown-15m-1787274000": {
+   "shares_by_token": {
+    "88168024926615299762915745134404456008926950205482700560123893248136441143968": "2242.413707",
+    "96130134142585380589598164875912050078764872810076261184365024885646777572261": "1365.856581"
+   },
+   "matched_shares": "1365.856581",
+   "purchased_shares": "3608.270288",
+   "matched_frac": 0.7570699930891651,
+   "scarce_side_channels": {
+    "MINT_FEASIBLE": "395.357615",
+    "RESTING_BID": "860.498966",
+    "ATOMIC_PAR_PAIR": "110"
+   }
+  },
+  "btc-updown-15m-1787290200": {
+   "shares_by_token": {
+    "77468821864231965147674736663234589747070173571123419346521510279572623008571": "4804.103980",
+    "68053599192034332996506097228923479102527860498493114785335945798323495083552": "4430.861808"
+   },
+   "matched_shares": "4430.861808",
+   "purchased_shares": "9234.965788",
+   "matched_frac": 0.9595838056611975,
+   "scarce_side_channels": {
+    "RESTING_BID": "2170.808529",
+    "ATOMIC_PAR_PAIR": "811.65",
+    "MINT_FEASIBLE": "1433.403279",
+    "TAKER_SINGLE": "15"
+   }
+  },
+  "btc-updown-15m-1787296500": {
+   "shares_by_token": {
+    "83382632747033594820713281397104619098400094322040539972729369852260944440831": "3733.655857",
+    "111391172532666726255234677943994769989466496466524244292211629245520313007849": "3330.658578"
+   },
+   "matched_shares": "3330.658578",
+   "purchased_shares": "7064.314435",
+   "matched_frac": 0.9429530943578391,
+   "scarce_side_channels": {
+    "MINT_FEASIBLE": "655.438180",
+    "RESTING_BID": "1679.447066",
+    "ATOMIC_PAR_PAIR": "855.773332",
+    "TAKER_SINGLE": "140"
+   }
+  },
+  "btc-updown-15m-1787300100": {
+   "shares_by_token": {
+    "1850913401628293007994621867496115006695624924039532983681522971528992487442": "5041.892539",
+    "57006202117550541518521961689036825756655221835821437576802607839503907636078": "4813.438856"
+   },
+   "matched_shares": "4813.438856",
+   "purchased_shares": "9855.331395",
+   "matched_frac": 0.9768192794495065,
+   "scarce_side_channels": {
+    "RESTING_BID": "3052.171907",
+    "MINT_FEASIBLE": "1371.846949",
+    "ATOMIC_PAR_PAIR": "389.42"
+   }
+  },
+  "btc-updown-15m-1787305500": {
+   "shares_by_token": {
+    "52654791214784241373087337558451000589277208516309514032416274652398466639092": "2656.899509",
+    "12058521546134409639599734692337965366177254906196152500500691588607977849795": "2760.013733"
+   },
+   "matched_shares": "2656.899509",
+   "purchased_shares": "5416.913242",
+   "matched_frac": 0.9809643944081465,
+   "scarce_side_channels": {
+    "RESTING_BID": "1793.860921",
+    "MINT_FEASIBLE": "717.378588",
+    "ATOMIC_PAR_PAIR": "145.66"
+   }
+  },
+  "btc-updown-15m-1787306400": {
+   "shares_by_token": {
+    "14416592340950540945801608693393189139119239491754781295018014596076520942196": "3177.664775",
+    "50830420171160670624154433620588972779081471015448116738439344157061154820801": "2943.107989"
+   },
+   "matched_shares": "2943.107989",
+   "purchased_shares": "6120.772764",
+   "matched_frac": 0.9616785665725787,
+   "scarce_side_channels": {
+    "RESTING_BID": "1987.953405",
+    "MINT_FEASIBLE": "401.124584",
+    "ATOMIC_PAR_PAIR": "554.03"
+   }
+  },
+  "btc-updown-15m-1787307300": {
+   "shares_by_token": {
+    "72725167458857066535088887580151392707918501129306890140232660058418276225226": "2420.827682",
+    "95815248540219353140033614986271110424319486519533240272288918593877833451835": "2648.340469"
+   },
+   "matched_shares": "2420.827682",
+   "purchased_shares": "5069.168151",
+   "matched_frac": 0.9551183191752836,
+   "scarce_side_channels": {
+    "MINT_FEASIBLE": "814.389417",
+    "RESTING_BID": "1341.868265",
+    "ATOMIC_PAR_PAIR": "239.17",
+    "TAKER_SINGLE": "25.4"
+   }
+  },
+  "btc-updown-15m-1787311800": {
+   "shares_by_token": {
+    "41507143742792454373653280927870272713827782437572162399865647865584746441666": "3687.158196",
+    "109883474150629705400022168192615903490304320580514845817582910765392958324615": "4106.232758"
+   },
+   "matched_shares": "3687.158196",
+   "purchased_shares": "7793.390954",
+   "matched_frac": 0.9462269293977985,
+   "scarce_side_channels": {
+    "RESTING_BID": "2087.611847",
+    "MINT_FEASIBLE": "1069.546349",
+    "ATOMIC_PAR_PAIR": "530.0"
+   }
+  },
+  "btc-updown-15m-1787362200": {
+   "shares_by_token": {
+    "17746763795151727267079145295136524064764795102982981086288601338416705891841": "3668.362476",
+    "59053489467876473663117833937156827384125133966597880426907837418755083118605": "3548.756931"
+   },
+   "matched_shares": "3548.756931",
+   "purchased_shares": "7217.119407",
+   "matched_frac": 0.9834275230524809,
+   "scarce_side_channels": {
+    "RESTING_BID": "1641.008760",
+    "MINT_FEASIBLE": "865.059421",
+    "ATOMIC_PAR_PAIR": "1007.68875",
+    "TAKER_SINGLE": "35"
+   }
+  },
+  "btc-updown-15m-1787363100": {
+   "shares_by_token": {
+    "58306571321996642443082328026865114876781946299719081948677288788696652860269": "2472.364939",
+    "97885698076066508844285778783112795919487711812945544986608533083132069283171": "2482.608944"
+   },
+   "matched_shares": "2472.364939",
+   "purchased_shares": "4954.973883",
+   "matched_frac": 0.9979325814339515,
+   "scarce_side_channels": {
+    "TAKER_SINGLE": "18.91",
+    "ATOMIC_PAR_PAIR": "634.20",
+    "RESTING_BID": "1092.674212",
+    "MINT_FEASIBLE": "726.580727"
+   }
+  },
+  "btc-updown-15m-1787365800": {
+   "shares_by_token": {
+    "72266249524686852361660408215949777627474075494275628649972582568231543523912": "3226.394688",
+    "30759864932560425919287214608833322211597767159071052497377749806186627746233": "2949.861252"
+   },
+   "matched_shares": "2949.861252",
+   "purchased_shares": "6176.255940",
+   "matched_frac": 0.9552263638867271,
+   "scarce_side_channels": {
+    "RESTING_BID": "1510.341899",
+    "MINT_FEASIBLE": "929.820893",
+    "ATOMIC_PAR_PAIR": "509.69846"
+   }
+  },
+  "btc-updown-15m-1787369400": {
+   "shares_by_token": {
+    "71881000607989322244571190852705184623007523731075259717556038672733236182123": "3140.432843",
+    "82043716617473588632854672808816246807298402218334971927981070244663300404685": "2816.785658"
+   },
+   "matched_shares": "2816.785658",
+   "purchased_shares": "5957.218501",
+   "matched_frac": 0.9456714261956866,
+   "scarce_side_channels": {
+    "RESTING_BID": "1150.089431",
+    "ATOMIC_PAR_PAIR": "578.42",
+    "MINT_FEASIBLE": "1017.586227",
+    "UNCLASSIFIED": "50.69",
+    "TAKER_SINGLE": "20"
+   }
+  },
+  "btc-updown-15m-1787381100": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787400900": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787417100": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787427900": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787435100": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787438700": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787445000": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787450400": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787454000": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787462100": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787479200": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787483700": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787484600": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787496300": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787503500": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787516100": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787517900": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787520600": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787543100": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787546700": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  },
+  "btc-updown-15m-1787553000": {
+   "shares_by_token": {},
+   "matched_shares": "0",
+   "purchased_shares": "0",
+   "matched_frac": null,
+   "scarce_side_channels": {}
+  }
+ },
+ "labels": "No mint is confirmed: the stored backfill keeps only L5's own logs, so the complementary buyer and the $1 mint of a candidate transaction are not observable here. MINT_FEASIBLE means a mint COULD have paid for the fill at the complement's posted bid. Matched-share attribution is proportional on the scarcer side; fill-to-fill pairing is not recorded by the venue. ATOMIC_PAR_PAIR is confirmed from both of L5's own legs in one transaction; its pair price is read off the chain. The activity API reports only one leg of such a transaction and cannot be used for this test."
+}
