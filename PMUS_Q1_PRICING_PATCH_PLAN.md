@@ -94,3 +94,68 @@ not authorized.
 Deployment closure for B1/B2 is already satisfied — `deploy/l5_e1_cohort/
 Dockerfile` copies `analysis/l5/e1_cohort/` and `analysis/l5/live_exec2/`
 as whole directories and `scripts/l5_e1_cohort_run.py` by name.
+
+## Item 5 — full-suite result, stable tree vs patched tree
+
+Both runs captured **whole**, not piped through `tail`, and the pristine run
+executed in an isolated `git worktree` at `3dc9f135c` so nothing in the
+working tree could contaminate it. (An earlier attempt used `git stash`,
+which leaves untracked files in place — the new test file would have been
+collected against the pristine source. That run was abandoned before it
+produced a number.)
+
+| | pristine `3dc9f135c` (worktree) | patched `c5b03c2ac` |
+|---|---|---|
+| failed | **50** | **50** |
+| passed | 10,753 | 10,763 |
+| skipped / xfailed | 28 / 1 | 28 / 1 |
+| wall clock | 9m 12s | 8m 30s |
+
+- **Regressions: 0.** `comm -13` over the sorted, de-parametrised FAILED
+  sets is empty.
+- **Cleared: 0.** This patch is not expected to clear anything; the 12
+  `test_pmus_q1_executor` failures are armed-run tests that price from the
+  keyless gateway, which an armed run must never do. They are outdated
+  relative to the WS requirement, not broken by it, and fixing them means
+  rewriting their expectations — out of scope here and deliberately left
+  visible.
+- **+10 passed** is exactly `tests/test_q1_executor_pricing_boundary.py`.
+
+### The regressions that did happen, and were fixed before this number
+
+The first patched run was **55 failed**, i.e. **5 real regressions**, every
+one an image-closure test:
+
+```
+tests/test_probe_image_completeness.py::test_every_boot_scope_import_is_in_the_image
+tests/test_probe_image_completeness.py::test_G_the_production_command_passes_only_with_the_full_closure
+tests/test_probe_image_completeness.py::test_this_check_would_have_failed_at_565b4cde
+tests/test_l5_live_runner_graft.py::test_the_image_copies_every_module_the_entrypoint_can_reach
+tests/test_pmus_spring_evidence_transfer.py::test_spring_image_copies_every_module_it_imports_at_load_time
+```
+
+They were correct. A module-level `import pmus_ws_live_state` put that
+module and the evidence recorder into the boot-scope closure of every image
+copying `pmus_q1_executor.py`; those images would have failed to import and
+never started. The import was made lazy rather than satisfied by widening
+five Dockerfiles and a `railway.json` watch list. No safety assertion was
+weakened and no test expectation was edited to clear them.
+
+### The 50 remaining failures, by module
+
+```
+ 12 test_pmus_q1_executor.py          9 test_spread_scanner.py
+  5 test_orderbook.py                 4 test_case1_entrypoint.py
+  3 test_gemini_q1_runner_wiring.py   2 test_r1_source_lineage.py
+  2 test_lane_a_probe_v0.py           2 test_l5_live_probe_image_closure.py
+  1 each: test_ws_durability_entry, test_window_forensics_stream,
+          test_preflight_gate_isolation, test_l5_chain_validation,
+          test_gemini_write_path_isolation, test_gemini_decision_observer,
+          test_gemini_bundle_and_prelatch, test_deploy_fallthrough_guard,
+          test_continuous_variants, test_chain_ca_fallback,
+          test_case1_authorization
+```
+
+These are the pre-existing baseline, unchanged by this patch and kept
+visible. The nine safety-relevant ones identified in the earlier triage
+remain open and are **not** addressed here.
