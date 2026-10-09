@@ -1,0 +1,45 @@
+{
+ "markets": 33,
+ "markets_with_any_fill": 12,
+ "fills_per_market_p50_all_windows": 0.0,
+ "fills_per_market_p50_where_he_traded": 245.0,
+ "matched_shares_total": 37436.6,
+ "by_mechanism": {
+  "REACHED_RESTING": {
+   "matched_shares": 21348.7,
+   "share_of_matched": 0.5703,
+   "time_to_complement_s_p50": 27.0,
+   "time_to_complement_s_p90": 78.0
+  },
+  "REACHED_MINT": {
+   "matched_shares": 9249.2,
+   "share_of_matched": 0.2471,
+   "time_to_complement_s_p50": 24.0,
+   "time_to_complement_s_p90": 65.0
+  },
+  "CROSSED_PAR_PAIR": {
+   "matched_shares": 6366.9,
+   "share_of_matched": 0.1701,
+   "time_to_complement_s_p50": 20.0,
+   "time_to_complement_s_p90": 101.0
+  },
+  "CROSSED_SINGLE": {
+   "matched_shares": 316.4,
+   "share_of_matched": 0.0085,
+   "time_to_complement_s_p50": 35.0,
+   "time_to_complement_s_p90": 60.0
+  },
+  "UNKNOWN_BOOK": {
+   "matched_shares": 155.4,
+   "share_of_matched": 0.0042,
+   "time_to_complement_s_p50": 9.0,
+   "time_to_complement_s_p90": 26.0
+  }
+ },
+ "headline": {
+  "reached_share_of_matched": 0.8173,
+  "crossed_share_of_matched": 0.1785
+ },
+ "LABEL": "OBSERVED_FILLS_NOT_L5_ORDERS",
+ "labels": "Matching is FIFO against the unmatched complement lots he actually held; only the matching increment of a fill is attributed, so an extend is not counted as matching. REACHED_MINT is mint-FEASIBLE, never confirmed. CROSSED_PAR_PAIR is confirmed from both of his own legs in one transaction. Resolution is bounded below by the block gap, median about 3 s."
+}
