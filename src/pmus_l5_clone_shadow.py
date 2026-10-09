@@ -873,6 +873,7 @@ class CloneShadow:
         self._poll_fail: Dict[str, int] = {}
         self.one_sided: Dict[str, dict] = {}
         self.settled: Dict[str, dict] = {}
+        self.settle_attempts: Dict[str, dict] = {}
         self._load()
 
     # ---- transport ------------------------------------------------------
@@ -1231,6 +1232,7 @@ class CloneShadow:
         that are past their window and carry inventory in some arm.
         """
         rows: List[dict] = []
+        self.settle_attempts = {}
         held = set()
         for pol in self.policies:
             for slug, inv in self.inv[pol].items():
@@ -1247,16 +1249,33 @@ class CloneShadow:
             # 11 markets sat held and unsettled for exactly that reason.
             clock = MC.position(slug, None, now)
             if clock.get("resolved") and not clock.get("expired"):
+                self._note_settle(slug, {"stage": "NOT_EXPIRED_YET",
+                                         "tte_s": clock.get("tte_s")})
                 continue
             try:
                 md = self._get("/v1/markets/%s" % slug) or {}
             except Exception as exc:                           # noqa: BLE001
+                self._note_settle(slug, {
+                    "stage": "RESOLUTION_GET_FAILED",
+                    "error": "%s:%s" % (type(exc).__name__, str(exc)[:120])})
                 continue
             market = md.get("market") if isinstance(md.get("market"),
                                                     Mapping) else md
             outcome = resolved_outcome(market)
             if not outcome.get("resolved"):
-                # not yet resolved is not a settlement; try again later
+                # not yet resolved is not a settlement; try again later.
+                # WHY is recorded, bounded: a resolution that never arrives
+                # is indistinguishable from one we are reading wrongly, and
+                # the settled bottom line is the only economic output this
+                # service has.
+                self._note_settle(slug, {
+                    "stage": "NOT_RESOLVED",
+                    "why": outcome.get("why"),
+                    "outcome_prices": outcome.get("outcome_prices"),
+                    "market_keys": sorted(str(k) for k in market)[:40],
+                    "closed": market.get("closed"),
+                    "status": market.get("status"),
+                    "response_keys": sorted(str(k) for k in md)[:20]})
                 continue
             for pol in self.policies:
                 inv = self.inv[pol].get(slug)
@@ -1312,6 +1331,11 @@ class CloneShadow:
                 "ceiling": str(PAIR_CEILING),
                 "MEANING": ("residual cost basis + complement own-side maker "
                             "price at the moment we held inventory")}
+
+    def _note_settle(self, slug: str, detail: Mapping[str, Any]) -> None:
+        """Bounded: at most three settlement diagnostics per cycle."""
+        if len(self.settle_attempts) < 3:
+            self.settle_attempts[str(slug)] = dict(detail)
 
     def settlement_totals(self) -> dict:
         """Cumulative shadow settlement economics per arm, from the tape.
@@ -1588,6 +1612,7 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                    "judged": judged["by_status"],
                    "newly_queue_cleared": len(judged["newly_queue_cleared"]),
                    "settled_this_cycle": len(settlements),
+                   "settle_attempts": cs.settle_attempts,
                    "one_sided_books": len(cs.one_sided),
                    "markets_held_unsettled": len({
                        s for pol in cs.policies
