@@ -258,6 +258,7 @@ def wired(monkeypatch, tmp_path):
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     arm(monkeypatch)
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     return fake_pin(BASE)
 
 

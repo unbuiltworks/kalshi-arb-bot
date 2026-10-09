@@ -94,6 +94,7 @@ def run(monkeypatch, tmp_path, *, recorder=None, transport=RejectingTransport):
     RejectingTransport.n = 0
     RejectingTransport.instances = 0
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     tracker = SP.CohortTracker()
     out = R.run_cohort(

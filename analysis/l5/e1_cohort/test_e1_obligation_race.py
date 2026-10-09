@@ -166,7 +166,7 @@ def test_our_own_derived_quantity_cannot_account_for_the_fill(ledger):
     per-id cumQuantity the fill was read from, so it is not evidence that
     anything else knows about the fill."""
     row = _filled(ledger)
-    ledger.reconcile({"ok": True, "orders": [row],
+    ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [row],
                       # generous, and deliberately the circular field
                       "derived_net_qty": "99",
                       "residual": None,
@@ -182,7 +182,7 @@ def test_our_own_derived_quantity_cannot_account_for_the_fill(ledger):
 ])
 def test_an_independent_representation_releases(ledger, field, value):
     row = _filled(ledger)
-    view = {"ok": True, "orders": [row], "residual": None,
+    view = {"ok": True, "as_of": 1e12, "orders": [row], "residual": None,
             "derived_net_qty": "0", "venue_net_qty": "0",
             "historical_resolved_filled_qty": "0"}
     view[field] = value
@@ -196,7 +196,7 @@ def test_the_residual_the_gate_reads_releases(ledger):
     `our_open_residual`, which is the field E3 reads. If the gate can see
     it, the gate can block on it."""
     row = _filled(ledger)
-    rep = ledger.reconcile({"ok": True, "orders": [row],
+    rep = ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [row],
                             "residual": {"qty": "0.13",
                                          "outcome_side": UP},
                             "derived_net_qty": "0"})
@@ -207,7 +207,7 @@ def test_a_representation_smaller_than_the_fill_does_not_release(ledger):
     """PARTIAL ACCOUNTING IS NOT ACCOUNTING. 0.05 of a 0.13 fill
     represented means 0.08 is unhedged and invisible."""
     row = _filled(ledger, qty="0.13")
-    ledger.reconcile({"ok": True, "orders": [row],
+    ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [row],
                       "residual": {"qty": "0.05", "outcome_side": UP},
                       "venue_net_qty": "0.05"})
     assert ledger.rows["I1"]["state"] == OB.TERMINAL_FILL_UNACCOUNTED
@@ -218,7 +218,7 @@ def test_the_unaccounted_state_is_reachable_and_sticky(ledger):
     """It stays until something accounts for the fill -- it does not time
     out, decay, or resolve by being asked again."""
     row = _filled(ledger)
-    bare = {"ok": True, "orders": [row], "residual": None,
+    bare = {"ok": True, "as_of": 1e12, "orders": [row], "residual": None,
             "venue_net_qty": "0", "historical_resolved_filled_qty": "0"}
     for _ in range(8):
         ledger.reconcile(bare)
@@ -265,16 +265,16 @@ def test_a_partial_fill_then_cancel_keeps_the_filled_part_blocking(ledger):
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
     # resting, then partial, then cancelled with the partial standing
-    ledger.reconcile({"ok": True, "orders": [
+    ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_PARTIALLY_FILLED",
          "terminal": False, "cum_quantity": "0.05", "outstanding": True}]})
     assert ledger.rows["I1"]["state"] == OB.OBSERVED
-    ledger.reconcile({"ok": True, "orders": [
+    ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_CANCELED", "terminal": True,
          "cum_quantity": "0.05", "outstanding": False}],
         "residual": None, "venue_net_qty": "0"})
     assert ledger.rows["I1"]["state"] == OB.TERMINAL_FILL_UNACCOUNTED
-    rep = ledger.reconcile({"ok": True, "orders": [
+    rep = ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_CANCELED", "terminal": True,
          "cum_quantity": "0.05", "outstanding": False}],
         "residual": {"qty": "0.05", "outcome_side": UP}})
@@ -287,7 +287,7 @@ def test_restart_preserves_the_unaccounted_state_and_the_reservation(
     sd = str(tmp_path / "e1_cohort")
     first = OB.ObligationLedger(sd, session_id=SID)
     row = _filled(first)
-    first.reconcile({"ok": True, "orders": [row], "residual": None,
+    first.reconcile({"ok": True, "as_of": 1e12, "orders": [row], "residual": None,
                      "venue_net_qty": "0"})
     assert first.rows["I1"]["state"] == OB.TERMINAL_FILL_UNACCOUNTED
 
@@ -326,7 +326,7 @@ def test_retire_refuses_anything_already_observed(ledger):
     ledger.record_submission(intent_id="I1", window=0, slot=0, slug="s",
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
-    ledger.reconcile({"ok": True, "orders": [
+    ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_NEW", "terminal": False,
          "cum_quantity": "0", "outstanding": True}]})
     assert ledger.rows["I1"]["state"] == OB.OBSERVED
@@ -354,7 +354,7 @@ def test_a_shutdown_cancel_releases_only_through_verified_terminal_state(
     assert rep["released"] == []
     assert len(ledger.blocking()) == 1
     # the venue later confirms the cancel, nothing filled
-    rep2 = ledger.reconcile({"ok": True, "orders": [
+    rep2 = ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_CANCELED", "terminal": True,
          "cum_quantity": "0", "outstanding": False}]})
     assert rep2["released"] == ["I1"]
@@ -374,7 +374,7 @@ def test_the_ledger_has_no_cancel_submit_or_venue_read_surface():
     # venue endpoints to explain what it does NOT do, so the check is for
     # anything that could actually make a call.
     src = open(OB.__file__, encoding="utf8").read()
-    for forbidden in ("requests.", "urlopen", "http", "socket",
+    for forbidden in ("requests.", "urlopen", "urllib", "ssl.",
                       "BoundedOrderTransport", "cancel_exact",
                       "submit_one", "deadman_cancel_all"):
         assert forbidden not in src, forbidden

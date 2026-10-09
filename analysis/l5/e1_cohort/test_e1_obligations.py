@@ -50,6 +50,7 @@ def wired(monkeypatch, tmp_path):
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     arm(monkeypatch, SID)
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     if hasattr(R, "_set_emergency_handover"):
         R._set_emergency_handover(None)
     return fake_pin(BASE)
@@ -190,7 +191,7 @@ def test_1b_absence_never_releases_an_obligation(ledger):
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
     for _ in range(5):
-        rep = ledger.reconcile({"ok": True, "orders": []})
+        rep = ledger.reconcile({"ok": True, "as_of": 1e12, "orders": []})
         assert rep["unobserved"] == ["I1"]
         assert rep["released"] == []
     assert len(ledger.blocking()) == 1
@@ -214,7 +215,7 @@ def test_2_observed_and_resting_is_not_release(ledger):
     ledger.record_submission(intent_id="I1", window=0, slot=0, slug="s",
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
-    view = {"ok": True, "orders": [
+    view = {"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_NEW", "terminal": False,
          "cum_quantity": "0", "outstanding": True}]}
     rep = ledger.reconcile(view)
@@ -240,7 +241,7 @@ def test_3_partial_fill_with_remainder_still_blocks(ledger):
     ledger.record_submission(intent_id="I1", window=0, slot=0, slug="s",
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
-    view = {"ok": True, "orders": [
+    view = {"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_PARTIALLY_FILLED",
          "terminal": False, "cum_quantity": "0.05", "outstanding": True}]}
     ledger.reconcile(view)
@@ -272,7 +273,7 @@ def test_4_a_full_fill_releases_only_once_accounted(ledger):
                   "outstanding": False}
 
     # the venue says FILLED, and nothing accounts for the 0.13 yet
-    unaccounted = {"ok": True, "orders": [filled_row], "residual": None,
+    unaccounted = {"ok": True, "as_of": 1e12, "orders": [filled_row], "residual": None,
                    "derived_net_qty": "0",
                    "historical_resolved_filled_qty": "0"}
     ledger.reconcile(unaccounted)
@@ -296,7 +297,7 @@ def test_4b_after_release_the_residual_gate_is_what_blocks(ledger):
     ledger.record_submission(intent_id="I1", window=0, slot=0, slug="s",
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
-    view = {"ok": True,
+    view = {"ok": True, "as_of": 1e12,
             "orders": [{"id": "OID-1", "state": "ORDER_STATE_FILLED",
                         "terminal": True, "cum_quantity": "0.13",
                         "outstanding": False}],
@@ -321,7 +322,7 @@ def test_5_a_claimed_cancel_that_did_not_happen_still_blocks(ledger):
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
     # the cancel returned 200; the order is still ORDER_STATE_NEW
-    view = {"ok": True, "orders": [
+    view = {"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_NEW", "terminal": False,
          "cum_quantity": "0", "outstanding": True}]}
     ledger.reconcile(view)
@@ -340,12 +341,12 @@ def test_6_a_verified_cancel_with_a_partial_fill(ledger):
     row = {"id": "OID-1", "state": "ORDER_STATE_CANCELED", "terminal": True,
            "cum_quantity": "0.05", "outstanding": False}
     # cancelled, but 0.05 filled before it went -- and nothing accounts
-    ledger.reconcile({"ok": True, "orders": [row], "residual": None,
+    ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [row], "residual": None,
                       "derived_net_qty": "0",
                       "historical_resolved_filled_qty": "0"})
     assert ledger.rows["I1"]["state"] == OB.TERMINAL_FILL_UNACCOUNTED
     # with the 0.05 in inventory it releases, and the residual gate holds
-    rep = ledger.reconcile({"ok": True, "orders": [row],
+    rep = ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [row],
                             "residual": {"qty": "0.05",
                                          "outcome_side": UP},
                             "derived_net_qty": "0.05"})
@@ -358,7 +359,7 @@ def test_6b_a_verified_cancel_with_no_fill_releases_immediately(ledger):
     ledger.record_submission(intent_id="I1", window=0, slot=0, slug="s",
                              side=UP, price="0.49", qty="0.13")
     ledger.bind_venue_id("I1", "OID-1")
-    rep = ledger.reconcile({"ok": True, "orders": [
+    rep = ledger.reconcile({"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-1", "state": "ORDER_STATE_CANCELED", "terminal": True,
          "cum_quantity": "0", "outstanding": False}]})
     assert rep["released"] == ["I1"]
@@ -380,7 +381,7 @@ def test_7_an_ambiguous_post_is_never_retired(ledger):
     assert ledger.rows["I1"]["state"] == OB.SUBMITTED
     assert len(ledger.blocking()) == 1
     for _ in range(10):
-        ledger.reconcile({"ok": True, "orders": []})
+        ledger.reconcile({"ok": True, "as_of": 1e12, "orders": []})
     assert len(ledger.blocking()) == 1
 
 
@@ -440,7 +441,7 @@ def test_9_a_restart_reloads_the_obligation_and_stays_blocked(tmp_path):
     first.record_submission(intent_id="R1", window=0, slot=0, slug="s",
                             side=UP, price="0.49", qty="0.13")
     first.bind_venue_id("R1", "OID-R1")
-    first.reconcile({"ok": True, "orders": [
+    first.reconcile({"ok": True, "as_of": 1e12, "orders": [
         {"id": "OID-R1", "state": "ORDER_STATE_NEW", "terminal": False,
          "cum_quantity": "0", "outstanding": True}]})
     assert first.rows["R1"]["state"] == OB.OBSERVED

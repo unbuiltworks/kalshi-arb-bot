@@ -215,6 +215,7 @@ def test_a_down_first_leg_is_eligible_and_places(monkeypatch, tmp_path):
     """THE WHOLE POINT. The 2026-10-08 state, opened on DOWN, places."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     # YES 0.62/0.64 -> DOWN own-side 0.36/0.38, complement YES 0.62/0.64
     snap = _snap_sided("DOWN", "0.36", "0.38", "0.62", "0.64")
@@ -253,6 +254,7 @@ def test_boundary_2_accepts_a_down_first_leg(monkeypatch, tmp_path):
     MARKET's two outcome sides, not which leg happens to be opening."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     from analysis.l5.e1_cohort import authorization as AUTH
     pin = fake_pin(int(BASE))

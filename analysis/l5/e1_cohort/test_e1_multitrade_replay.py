@@ -61,6 +61,7 @@ def wired(monkeypatch, tmp_path):
     """Armed environment, own state dir, own latch, clean POST log."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     return fake_pin(BASE)
 

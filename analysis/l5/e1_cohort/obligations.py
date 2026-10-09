@@ -66,6 +66,7 @@ import hashlib
 import json
 import os
 import time
+import uuid
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
@@ -268,9 +269,21 @@ class ObligationLedger:
         # content is complete and fsynced in a temp file, and the link
         # either creates the final name or fails with `FileExistsError`,
         # which is still one operation exactly one caller can win.
-        tmp = path + ".new.%d" % os.getpid()
+        # THE TEMP NAME IS UNIQUE PER ATTEMPT, AND CREATED O_EXCL.
+        #
+        # A CRASH TEST FOUND WHY. `os.link` makes the temp name a SECOND
+        # NAME FOR THE SAME INODE, so a temp file left behind by a killed
+        # process is a hard link to the live reservation. A later attempt
+        # that reused that name and opened it with "w" TRUNCATED THE
+        # RESERVATION THROUGH THE LINK, rewrote it with its own intent id,
+        # and was then told by `reservation_holder` that it already owned
+        # the token -- two workers, one reservation, no error. A unique
+        # name plus `O_EXCL` makes a stale temp file inert garbage instead
+        # of a back door.
+        tmp = "%s.new.%d.%s" % (path, os.getpid(), uuid.uuid4().hex[:12])
         try:
-            with open(tmp, "w", encoding="utf8") as fh:
+            fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w", encoding="utf8") as fh:
                 json.dump(rec, fh, sort_keys=True)
                 fh.flush()
                 os.fsync(fh.fileno())
@@ -401,6 +414,41 @@ class ObligationLedger:
         for r in (view.get("orders") or []):
             if isinstance(r, Mapping) and r.get("id") is not None:
                 rows_by_id[str(r["id"])] = r
+
+        # PASS ONE: record each obligation's OWN cumulative fill from its
+        # OWN per-id row. Order-specific, and idempotent -- the quantity is
+        # SET from the row, never incremented, so replaying the same view
+        # (or a duplicated event) cannot inflate it.
+        for key, row in list(self.rows.items()):
+            if row["state"] in RELEASED_STATES:
+                continue
+            oid = row.get("order_id")
+            seen = rows_by_id.get(str(oid)) if oid else None
+            if seen is None:
+                continue
+            filled = _fin(seen.get("cum_quantity")) or D("0")
+            prior = _fin(row.get("filled_qty")) or D("0")
+            row["filled_qty"] = str(filled)
+            if filled > 0 and (prior <= 0
+                               or row.get("fill_observed_unix") is None):
+                # WHEN WE FIRST SAW IT, which is the instant an inventory
+                # snapshot has to postdate to be evidence of it.
+                row["fill_observed_unix"] = float(self.now_fn())
+
+        # THE TOTAL WE BELIEVE WE HOLD AND HAVE NOT MATCHED. An independent
+        # snapshot must cover ALL of this, which is what stops one order's
+        # inventory releasing another order's obligation.
+        total_unmatched = D("0")
+        for row in self.rows.values():
+            if row["state"] in RELEASED_STATES and not row.get(
+                    "fills_incorporated"):
+                continue
+            if row["state"] == RECONCILED:
+                continue
+            total_unmatched += _fin(row.get("filled_qty")) or D("0")
+        out["total_unmatched_filled_qty"] = str(total_unmatched)
+
+        # PASS TWO: advance and release.
         for key, row in list(self.rows.items()):
             if row["state"] in RELEASED_STATES:
                 continue
@@ -411,8 +459,7 @@ class ObligationLedger:
                 out["unobserved"].append(key)
                 continue
             row["observed_unix"] = float(self.now_fn())
-            filled = _fin(seen.get("cum_quantity")) or D("0")
-            row["filled_qty"] = str(filled)
+            filled = _fin(row.get("filled_qty")) or D("0")
             if not seen.get("terminal"):
                 if row["state"] != OBSERVED:
                     row["state"] = OBSERVED
@@ -420,23 +467,20 @@ class ObligationLedger:
                 self._write(row)
                 continue
             row["terminal_state"] = str(seen.get("state"))
-            if filled == 0:
+            decision = _fills_accounted(
+                view, filled, total_unmatched=total_unmatched,
+                fill_observed_unix=row.get("fill_observed_unix"))
+            row["accounting"] = decision
+            if decision["accounted"]:
                 row["state"] = RECONCILED
                 row["released_unix"] = float(self.now_fn())
-                self._release_reservation_if(key)
-                out["released"].append(key)
-            elif _fills_accounted(view, filled):
-                # TERMINAL AND ACCOUNTED. From here the residual gate owns
-                # the block, which is correct: a filled first leg is
-                # inventory and belongs to complement management.
-                row["state"] = RECONCILED
-                row["released_unix"] = float(self.now_fn())
-                row["fills_incorporated"] = True
+                row["fills_incorporated"] = filled > 0
                 self._release_reservation_if(key)
                 out["released"].append(key)
             else:
+                if row["state"] != TERMINAL_FILL_UNACCOUNTED:
+                    out["advanced"].append(key)
                 row["state"] = TERMINAL_FILL_UNACCOUNTED
-                out["advanced"].append(key)
             self._write(row)
         out["blocking"] = [r["key"] for r in self.blocking()]
         return out
@@ -493,40 +537,88 @@ class ObligationLedger:
         }
 
 
-def _fills_accounted(view: Mapping[str, Any], filled: D) -> bool:
-    """Is this fill represented in the inventory ELIGIBILITY actually reads?
+def _fills_accounted(view: Mapping[str, Any], filled: D, *,
+                     total_unmatched: D,
+                     fill_observed_unix: Optional[float] = None
+                     ) -> Dict[str, Any]:
+    """Is THIS ORDER'S fill accounted for -- not merely a matching total?
 
-    THE CIRCULARITY THIS AVOIDS, because the first version had it.
-    `derived_net_qty` is computed by `read_order_state` from the per-id
-    `cumQuantity` of our own orders -- the very field the fill was read
-    from. Accepting it would mean "the fill is accounted because the fill
-    exists", so `TERMINAL_FILL_UNACCOUNTED` could never be reached and the
-    state would be decoration. It is deliberately NOT accepted.
+    TWO THINGS THE FIRST VERSION GOT WRONG, IN ORDER.
 
-    What is accepted is an INDEPENDENT representation, any one of:
+    1. IT WAS CIRCULAR. It accepted `derived_net_qty`, which
+       `read_order_state` computes from the same per-id `cumQuantity` the
+       fill was read from. "The fill is accounted because the fill exists"
+       made `TERMINAL_FILL_UNACCOUNTED` unreachable, so the state was
+       decoration. `derived_net_qty` is not consulted here at all.
 
-      * `residual` -- what `residual_for_snapshot` publishes as
-        `our_open_residual`, which is the field E3 reads. If the gate can
-        see it, the gate can block on it.
-      * `venue_net_qty` -- the venue's own `/v1/portfolio/positions`
-        statement, a second opinion from outside our arithmetic.
-      * `historical_resolved_filled_qty` -- the fill settled and the
-        position closed, so there is nothing left to hedge.
+    2. IT COMPARED AGAINST THE WRONG QUANTITY. Even using an independent
+       source, `independent >= filled` can be satisfied BY COINCIDENCE: a
+       different order's 0.13 fill makes the net position 0.13 and would
+       have released an obligation whose own 0.13 nobody had accounted for.
+       Aggregate inventory cannot attribute, so it is never asked to.
 
-    A view that carries none of these has not represented the fill, so the
-    obligation keeps blocking. That is the whole point: an unhedged fill
-    that the eligibility snapshot cannot see must not permit another first
-    leg.
+    SO THE RULE IS, in this order:
+
+      * ORDER-SPECIFIC AUTHORITY FIRST. The obligation's own per-id venue
+        row must be terminal and its own `cumQuantity` is the fill. That
+        is order-specific by construction -- it is a statement about this
+        id and no other.
+
+      * A ZERO FILL NEEDS NOTHING MORE. There is no inventory to account
+        for.
+
+      * OTHERWISE AN INDEPENDENT SNAPSHOT MUST COVER THE WHOLE OF WHAT WE
+        BELIEVE WE HOLD, not just this order: `independent >=
+        total_unmatched`, summed across every obligation whose fill is not
+        yet matched. One order's fill can no longer be released by another
+        order's inventory, because the comparison is against the sum.
+
+      * AND THE SNAPSHOT MUST BE FRESH ENOUGH TO CONTAIN THE FILL. A
+        positions read taken BEFORE we saw the fill cannot evidence it,
+        however large the number is. `view["as_of"]` is when the read's
+        first GET went out, and it must not predate the fill observation.
+
+    Returns the decision and its reasons, so the ledger can record WHY an
+    obligation did or did not release rather than only that it did.
     """
+    out: Dict[str, Any] = {
+        "accounted": False,
+        "filled": str(filled),
+        "total_unmatched": str(total_unmatched),
+        "AGGREGATE_ALONE_IS_NEVER_PROOF": True,
+        "derived_net_qty_is_never_consulted": True,
+    }
     if filled <= 0:
-        return True
-    resid = view.get("residual") or {}
-    for candidate in (_fin(resid.get("qty")),
-                      _fin(view.get("venue_net_qty")),
-                      _fin(view.get("historical_resolved_filled_qty"))):
-        if candidate is not None and candidate >= filled:
-            return True
-    return False
+        out.update({"accounted": True, "because": "NO_FILL_TO_ACCOUNT_FOR"})
+        return out
+    # FRESHNESS BOUNDARY. The snapshot must not predate the fill.
+    as_of = _fin(view.get("as_of"))
+    if fill_observed_unix is not None:
+        if as_of is None:
+            out["because"] = "INVENTORY_SNAPSHOT_HAS_NO_AS_OF"
+            return out
+        if float(as_of) < float(fill_observed_unix):
+            out.update({
+                "because": "INVENTORY_SNAPSHOT_PREDATES_THE_FILL",
+                "as_of": str(as_of),
+                "fill_observed_unix": str(fill_observed_unix)})
+            return out
+    # INDEPENDENT SOURCES ONLY, each compared against the TOTAL.
+    candidates = {
+        "residual": _fin((view.get("residual") or {}).get("qty")),
+        "venue_net_qty": _fin(view.get("venue_net_qty")),
+        "historical_resolved_filled_qty": _fin(
+            view.get("historical_resolved_filled_qty")),
+    }
+    out["independent_sources"] = {k: (None if v is None else str(v))
+                                  for k, v in candidates.items()}
+    for name, value in candidates.items():
+        if value is not None and value >= total_unmatched:
+            out.update({"accounted": True, "because": "COVERED_BY_%s" % name,
+                        "covering_value": str(value)})
+            return out
+    out["because"] = "NO_INDEPENDENT_SOURCE_COVERS_THE_TOTAL_UNMATCHED_FILLS"
+    return out
 
 
 def merge_into_snapshot(snap: Dict[str, Any], *,

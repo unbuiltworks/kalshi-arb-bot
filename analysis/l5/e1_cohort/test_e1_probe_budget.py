@@ -89,6 +89,7 @@ def wired(monkeypatch, tmp_path):
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     arm(monkeypatch)
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     CountingTransport.previews = []
     return fake_pin(BASE)
 
@@ -524,6 +525,7 @@ def test_a_RESTART_after_an_ambiguous_submission_places_nothing(wired):
 
     # process 2: a fresh everything. Nothing in memory carries over.
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     CountingTransport.previews = []
     run = drive(wired, cutoff_at=BASE + 200, max_iterations=200)
     assert first_leg_posts(run) == [], run["posts"]
@@ -858,6 +860,7 @@ def test_main_places_exactly_ONE_first_leg_and_binds_its_window(
     clock = Clock(BASE + 10)
     venue = LoopVenue(clock, fake_pin(BASE)["slug"])
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     cap = _run_main(monkeypatch, state, venue=venue, clock=clock,
                     sid=probe_sid, starts=[BASE, BASE + W, BASE + 2 * W])
     assert cap["rc"] == 0
@@ -886,6 +889,7 @@ def test_main_RESTART_after_an_AMBIGUOUS_submission_places_nothing(
     clock = Clock(BASE + 10)
     venue = LoopVenue(clock, fake_pin(BASE)["slug"])
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     cap1 = _run_main(monkeypatch, state, venue=venue, clock=clock,
                      sid=probe_sid, starts=starts,
                      submit_raises=O.SubmissionAmbiguous(
@@ -906,6 +910,7 @@ def test_main_RESTART_after_an_AMBIGUOUS_submission_places_nothing(
     clock2 = Clock(BASE + 40)
     venue2 = LoopVenue(clock2, fake_pin(BASE)["slug"])
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     cap2 = _run_main(monkeypatch, state, venue=venue2, clock=clock2,
                      sid=probe_sid, starts=starts)
     assert FakeTransport.posts == [], "a restart placed a second first leg"
@@ -964,6 +969,7 @@ def test_main_RESTART_after_a_CONFIRMED_FILL_adds_no_leg_and_keeps_the_fill(
     venue.fill_plan = [{"at": BASE + 10.05, "qty": None, "repeat": True,
                         "match": lambda oid, o: o["outcomeSide"] == UP}]
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     _run_main(monkeypatch, state, venue=venue, clock=clock, sid=probe_sid,
               starts=starts)
     assert len(FakeTransport.posts) >= 1

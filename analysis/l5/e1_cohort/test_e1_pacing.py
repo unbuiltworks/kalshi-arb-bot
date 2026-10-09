@@ -81,6 +81,7 @@ def test_062_is_refused_then_059_becomes_eligible(monkeypatch, tmp_path):
     """
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     clock = Clock(BASE + 10)
     seen = []
@@ -136,6 +137,7 @@ def test_persistent_refusal_paces_to_the_cutoff_and_places_nothing(
     no iteration-cap termination."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     clock = Clock(BASE + 10)
     cutoff = float(BASE + W) - PROV.HANDOVER_TTE_S
@@ -242,6 +244,7 @@ def test_a_terminal_refusal_stops_the_cohort_rather_than_pacing(
         monkeypatch, tmp_path):
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     clock = Clock(BASE + 10)
 
@@ -331,6 +334,7 @@ def test_pacing_consumes_no_attempt_no_latch_and_no_risk_budget(
     """The owner's item 6, measured on the tracker itself."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     clock = Clock(BASE + 10)
     tracker = SP.CohortTracker()
@@ -383,6 +387,7 @@ def test_a_transient_empty_snapshot_is_paced_not_fatal(monkeypatch,
     """A momentary book gap must not end a live cohort."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     clock = Clock(BASE + 10)
     n = {"i": 0}
@@ -518,6 +523,7 @@ def test_pacing_waits_out_our_own_resting_order_and_never_doubles_up(
     """
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     clock = Clock(BASE + 10)
 
@@ -562,6 +568,7 @@ def test_pacing_places_nothing_after_the_trading_cutoff(monkeypatch,
     """Past the handover TTE the loop keeps observing but cannot place."""
     monkeypatch.setattr(L, "LATCH_DIR", str(tmp_path / "e1_cohort"))
     FakeTransport.posts = []
+    FakeTransport.cancels = []
     arm(monkeypatch)
     # start AFTER the cutoff: window_end - 30 s, cutoff is window_end - 60 s
     clock = Clock(float(BASE + W) - 30.0)
