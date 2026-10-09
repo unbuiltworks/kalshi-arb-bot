@@ -61,6 +61,7 @@ import time
 import urllib.request
 from collections import deque
 from decimal import Decimal as D
+from decimal import InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
@@ -674,6 +675,105 @@ def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float
     return out
 
 
+# ----------------------------------------------------------- settlement ---
+def resolved_outcome(market: Mapping[str, Any]) -> dict:
+    """Did the venue's LONG side win, per the venue's own resolution?
+
+    The engine keeps one frame: `price.value` is always the long (YES) side,
+    and `outcomes[0]`/`outcomePrices[0]` is that same side. A resolution is
+    only read when the prices are an unambiguous 0/1 pair; anything else --
+    still trading, a mid-price, a malformed array -- returns
+    `resolved: False`. A settlement is the one number in this whole service
+    that is not a model output, so it is never inferred.
+    """
+    prices = market.get("outcomePrices")
+    if isinstance(prices, str):
+        try:
+            prices = json.loads(prices)
+        except (TypeError, ValueError):
+            prices = None
+    if not isinstance(prices, (list, tuple)) or len(prices) != 2:
+        return {"resolved": False, "why": "NO_TWO_OUTCOME_PRICES"}
+    try:
+        a, b = D(str(prices[0])), D(str(prices[1]))
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return {"resolved": False, "why": "OUTCOME_PRICES_UNPARSEABLE"}
+    if {a, b} != {D("0"), D("1")}:
+        return {"resolved": False, "why": "OUTCOME_PRICES_NOT_ZERO_ONE",
+                "outcome_prices": [str(a), str(b)]}
+    return {"resolved": True, "yes_won": a == D("1"),
+            "outcomes": market.get("outcomes"),
+            "outcome_prices": [str(a), str(b)],
+            "closed": market.get("closed"), "status": market.get("status"),
+            "SOURCE": "venue resolution; not modelled"}
+
+
+def settle_inventory(inv: "VirtualInventory", outcome: Mapping[str, Any]
+                     ) -> dict:
+    """Shadow settlement economics for one market, decomposed.
+
+    THREE COMPONENTS, NEVER SUMMED INTO ONE HEADLINE WITHOUT THE PARTS,
+    because the whole question is which one carries the result:
+
+      * matched pairs    -- a matched share pays exactly 1.00 at
+                            resolution whichever way it resolves, so its
+                            economics are 1 - (yes_avg + no_avg) per pair
+                            and carry no directional risk;
+      * directional residual -- the unmatched shares, which pay 1.00 or 0.00
+                            depending on the outcome;
+      * fees             -- zero here, and that is a FACT about what was
+                            simulated, not an assumption: every shadow fill
+                            is a maker fill at the own-side bid, and the
+                            published PMUS schedule charges takers only.
+                            Maker rebates are NOT netted in.
+
+    Labelled SHADOW_SETTLED. It is arithmetic over virtual fills that a
+    pessimistic queue test admitted; no order was ever placed.
+    """
+    matched = inv.matched
+    ya, na = inv.avg(True), inv.avg(False)
+    out: Dict[str, Any] = {
+        "matched_shares": str(matched),
+        "yes_shares": str(inv.yes), "no_shares": str(inv.no),
+        "yes_avg": (str(ya) if ya is not None else None),
+        "no_avg": (str(na) if na is not None else None),
+        "fees_usd": "0",
+        "fees_note": ("every shadow fill is a maker fill at the own-side "
+                      "bid; the published schedule charges takers only. "
+                      "Maker rebates are excluded, not netted."),
+        "maker_rebate_netted": False,
+        "LABEL": "SHADOW_SETTLED_NOT_REALIZED",
+    }
+    if not outcome.get("resolved"):
+        out["settled"] = False
+        out["why"] = outcome.get("why")
+        return out
+    yes_won = bool(outcome["yes_won"])
+    pair_pnl = D("0")
+    if matched > 0 and ya is not None and na is not None:
+        pair_pnl = matched * (ONE - (ya + na))
+    resid = inv.residual                      # + means long YES
+    resid_pnl = D("0")
+    if resid != 0:
+        side_yes = resid > 0
+        qty = abs(resid)
+        avg = inv.avg(side_yes) or D("0")
+        payout = ONE if (side_yes == yes_won) else D("0")
+        resid_pnl = qty * (payout - avg)
+    out.update({
+        "settled": True,
+        "yes_won": yes_won,
+        "outcome_prices": outcome.get("outcome_prices"),
+        "matched_pair_cost": (str(ya + na) if (ya is not None
+                                               and na is not None) else None),
+        "matched_pair_pnl_usd": str(pair_pnl),
+        "residual_shares_signed": str(resid),
+        "residual_pnl_usd": str(resid_pnl),
+        "net_usd": str(pair_pnl + resid_pnl),
+    })
+    return out
+
+
 # ----------------------------------------------------------- the service ---
 class CloneShadow:
     """One cycle: discover -> poll books -> both policies decide -> judge.
@@ -718,6 +818,8 @@ class CloneShadow:
         # all -- 5 of 48 polled on the first live run. Counting failures per
         # slug lets the slots migrate to markets that actually quote.
         self._poll_fail: Dict[str, int] = {}
+        self.one_sided: Dict[str, dict] = {}
+        self.settled: Dict[str, dict] = {}
         self._load()
 
     # ---- transport ------------------------------------------------------
@@ -769,6 +871,7 @@ class CloneShadow:
             os.makedirs(self.state_dir, exist_ok=True)
             out = {"cycles": self.cycles,
                    "saved_utc": _utc(self._now()),
+                   "settled": self.settled,
                    "arms": {}}
             for pol in self.policies:
                 out["arms"][pol] = {
@@ -801,6 +904,7 @@ class CloneShadow:
         except Exception:                                      # noqa: BLE001
             return
         self.cycles = int(blob.get("cycles") or 0)
+        self.settled = dict(blob.get("settled") or {})
         for pol, arm in (blob.get("arms") or {}).items():
             if pol not in self.policies:
                 continue
@@ -838,8 +942,27 @@ class CloneShadow:
                 self._poll_fail[slug] = self._poll_fail.get(slug, 0) + 1
                 continue
             self._poll_fail.pop(slug, None)
-            self.obs.setdefault(slug, deque(maxlen=OBS_KEEP)).append(
-                SB.observation_row(slug, md, now))
+            row = SB.observation_row(slug, md, now)
+            if row.get("bid") is None or row.get("ask") is None:
+                # A ONE-SIDED BOOK IS THE SINGLE BIGGEST REASON NOTHING IS
+                # PROPOSED (9 of 14 decisions a cycle), and "not two-sided"
+                # is indistinguishable from a field we are reading under the
+                # wrong name -- which has happened on this venue before
+                # (`asks` vs `offers`, pmus_sports_offers_hotfix). So the
+                # payload's own shape is recorded, bounded to the keys and
+                # the level counts.
+                self.one_sided[slug] = {
+                    "t_utc": _utc(now),
+                    "bid": row.get("bid"), "ask": row.get("ask"),
+                    "n_bid_levels": len(md.get("bids") or []),
+                    "n_offer_levels": len(md.get("offers") or []),
+                    "n_asks_key_levels": len(md.get("asks") or []),
+                    "state": md.get("state"),
+                    "payload_keys": sorted(str(k) for k in md),
+                }
+            else:
+                self.one_sided.pop(slug, None)
+            self.obs.setdefault(slug, deque(maxlen=OBS_KEEP)).append(row)
             self.clocks[slug] = MC.position(slug, r.get("market"), now)
             ok += 1
             if self._sleep:
@@ -904,18 +1027,26 @@ class CloneShadow:
                         px=D(str(intent["px"])), qty=D(str(intent["qty"])),
                         t_post=now, obs=obs, clock=clock, inv=inv,
                         model=row.get("model"), origin=origin)
-                    # one open candidate per (arm, market): the shadow is
-                    # measuring one decision at a time, as the live
-                    # discipline requires, so a second quote in the same
-                    # market would not be a state the policy could reach.
+                    # ONE OPEN CANDIDATE PER SIDE, not per market. The
+                    # per-market version is why no pair was ever completed
+                    # in 8.5 hours of shadow: a first leg stays PENDING for
+                    # FOLLOW_S (300 s), which is a third of a 15-minute
+                    # window, and the COMPLEMENT is a quote in the SAME
+                    # market -- so it was suppressed every time, and the
+                    # pair economics the whole thesis rests on could never
+                    # be measured. The live one-outstanding-order discipline
+                    # is a money constraint on the executor, not a
+                    # constraint on observing the other side of a pair.
                     if not any(c.get("slug") == slug
+                               and bool(c.get("side_yes")) == bool(
+                                   intent["side_yes"])
                                and c.get("status") == PENDING
                                for c in self.candidates[pol].values()):
                         self.candidates[pol][cand["id"]] = cand
                         row["candidate_id"] = cand["id"]
                     else:
                         row["candidate_suppressed"] = \
-                            "ONE_OPEN_CANDIDATE_PER_MARKET_PER_ARM"
+                            "ONE_OPEN_CANDIDATE_PER_SIDE_PER_MARKET_PER_ARM"
                 out.append(row)
         return out
 
@@ -970,6 +1101,116 @@ class CloneShadow:
                     cand.get("status") or "?", 0) + 1
             tally[pol] = t
         return {"by_status": tally, "newly_queue_cleared": newly_cleared}
+
+    # ---- settlement -----------------------------------------------------
+    def settle_expired(self, watched: Sequence[Mapping[str, Any]],
+                       now: float) -> List[dict]:
+        """Resolve markets we hold virtual inventory in, once expired.
+
+        This is the stage that makes the shadow END TO END. Without it the
+        service could only ever report opportunities -- pair costs that
+        were available -- and never what the sequence was worth once the
+        market resolved, which is the only question that decides whether a
+        live probe is justified.
+
+        Bounded: one resolution GET per market, once, and only for markets
+        that are past their window and carry inventory in some arm.
+        """
+        rows: List[dict] = []
+        held = set()
+        for pol in self.policies:
+            for slug, inv in self.inv[pol].items():
+                if inv.n_fills:
+                    held.add(slug)
+        for slug in sorted(held):
+            if slug in self.settled:
+                continue
+            clock = self.clocks.get(slug) or {}
+            if clock.get("resolved") and not clock.get("expired"):
+                continue
+            try:
+                md = self._get("/v1/markets/%s" % slug) or {}
+            except Exception as exc:                           # noqa: BLE001
+                continue
+            market = md.get("market") if isinstance(md.get("market"),
+                                                    Mapping) else md
+            outcome = resolved_outcome(market)
+            if not outcome.get("resolved"):
+                # not yet resolved is not a settlement; try again later
+                continue
+            for pol in self.policies:
+                inv = self.inv[pol].get(slug)
+                if inv is None or not inv.n_fills:
+                    continue
+                row = {"t_utc": _utc(now), "policy": pol, "slug": slug,
+                       "cycle": self.cycles,
+                       "inventory_at_settlement": inv.snapshot(),
+                       **settle_inventory(inv, outcome)}
+                rows.append(row)
+            self.settled[slug] = {"t_utc": _utc(now),
+                                  "yes_won": outcome.get("yes_won"),
+                                  "outcome_prices":
+                                      outcome.get("outcome_prices")}
+        return rows
+
+    def settlement_totals(self) -> dict:
+        """Cumulative shadow settlement economics per arm, from the tape.
+
+        Read back from the durable settlement rows rather than kept as a
+        counter, so a restart cannot silently reset the only economic
+        bottom line this service produces.
+        """
+        out: Dict[str, Any] = {"LABEL": "SHADOW_SETTLED_NOT_REALIZED",
+                               "arms": {}}
+        try:
+            files = [f for f in os.listdir(self.state_dir)
+                     if f.startswith("settlements-")]
+        except Exception:                                      # noqa: BLE001
+            files = []
+        rows: List[dict] = []
+        for f in sorted(files):
+            try:
+                with open(self._path(f)) as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line:
+                            rows.append(json.loads(line))
+            except Exception:                                  # noqa: BLE001
+                continue
+        for pol in self.policies:
+            mine = [r for r in rows if r.get("policy") == pol
+                    and r.get("settled")]
+            def _sum(k):
+                t = D("0")
+                for r in mine:
+                    try:
+                        t += D(str(r.get(k) or 0))
+                    except (InvalidOperation, ValueError, ArithmeticError):
+                        continue
+                return t
+            pair = _sum("matched_pair_pnl_usd")
+            resid = _sum("residual_pnl_usd")
+            pair_costs = [float(r["matched_pair_cost"]) for r in mine
+                          if r.get("matched_pair_cost") is not None]
+            out["arms"][pol] = {
+                "markets_settled": len(mine),
+                "matched_pair_pnl_usd": str(pair),
+                "residual_pnl_usd": str(resid),
+                "net_usd": str(pair + resid),
+                "fees_usd": "0",
+                "matched_pair_cost": {
+                    "n": len(pair_costs),
+                    "mean": (round(float(np.mean(pair_costs)), 4)
+                             if pair_costs else None),
+                    "frac_at_or_below_ceiling": (
+                        round(float(np.mean([c <= float(PAIR_CEILING)
+                                             for c in pair_costs])), 4)
+                        if pair_costs else None)},
+                "EXCLUDES": ["maker rebates", "liquidity rewards",
+                             "taker fees (no taker fill was simulated)"],
+                "NOT_REALIZED": True,
+            }
+        return out
 
     # ---- comparison -----------------------------------------------------
     def compare(self) -> dict:
@@ -1156,6 +1397,9 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                           for r in watch if cs.obs.get(r["slug"])]}])
             if judged["newly_queue_cleared"]:
                 cs.append_rows("virtual_fills", judged["newly_queue_cleared"])
+            settlements = cs.settle_expired(watch, now())
+            if settlements:
+                cs.append_rows("settlements", settlements)
             cs.append_rows("candidates", cs.new_candidate_rows())
             saved = cs.save()
             rep = {"kind": "cycle", "cycle": cs.cycles,
@@ -1183,10 +1427,18 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                        if not (d.get("model_domain") or {}).get("in_domain")]),
                    "judged": judged["by_status"],
                    "newly_queue_cleared": len(judged["newly_queue_cleared"]),
+                   "settled_this_cycle": len(settlements),
+                   "one_sided_books": len(cs.one_sided),
                    "rows_emitted_total": cs.rows_emitted,
                    "state_saved": saved}
             if cs.cycles % 5 == 0 or judged["newly_queue_cleared"]:
                 rep["comparison"] = cs.compare()
+                rep["settlement_totals"] = cs.settlement_totals()
+                # one example of a one-sided book, so the single biggest
+                # refusal reason stays diagnosable rather than just counted
+                if cs.one_sided:
+                    k = sorted(cs.one_sided)[0]
+                    rep["one_sided_example"] = {k: cs.one_sided[k]}
             print(PREFIX + json.dumps(rep, separators=(",", ":"),
                                       default=str), flush=True)
         except Exception as exc:                               # noqa: BLE001

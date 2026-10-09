@@ -363,3 +363,96 @@ def test_watch_ranking_demotes_books_that_never_read(tmp_path):
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["soon", "later"]
     cs._poll_fail["soon"] = 3
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["later", "soon"]
+
+
+# ------------------------------------------------------- settlement -------
+def test_resolved_outcome_refuses_anything_but_a_clean_zero_one():
+    assert CS.resolved_outcome({"outcomePrices": ["0.62", "0.38"]})[
+        "why"] == "OUTCOME_PRICES_NOT_ZERO_ONE"
+    assert CS.resolved_outcome({})["why"] == "NO_TWO_OUTCOME_PRICES"
+    assert CS.resolved_outcome({"outcomePrices": "oops"})["resolved"] is False
+    # the venue serves it as a JSON string on some payloads
+    r = CS.resolved_outcome({"outcomePrices": "[\"1\", \"0\"]"})
+    assert r["resolved"] is True and r["yes_won"] is True
+
+
+def test_matched_pair_settles_for_one_dollar_either_way():
+    inv = CS.VirtualInventory()
+    inv.add(side_yes=True, px=D("0.40"), qty=D("2"), t=1.0)
+    inv.add(side_yes=False, px=D("0.55"), qty=D("2"), t=2.0)
+    for yes_won in (True, False):
+        out = CS.settle_inventory(inv, {"resolved": True, "yes_won": yes_won})
+        assert out["settled"] is True
+        assert out["matched_shares"] == "2"
+        # 2 pairs at a 0.95 pair cost -> 2 * 0.05
+        assert D(out["matched_pair_pnl_usd"]) == D("0.10")
+        assert D(out["residual_pnl_usd"]) == 0
+        assert D(out["net_usd"]) == D("0.10")
+        assert out["fees_usd"] == "0"
+        assert out["maker_rebate_netted"] is False
+        assert out["LABEL"] == "SHADOW_SETTLED_NOT_REALIZED"
+
+
+def test_residual_settles_directionally():
+    inv = CS.VirtualInventory()
+    inv.add(side_yes=True, px=D("0.30"), qty=D("1"), t=1.0)
+    won = CS.settle_inventory(inv, {"resolved": True, "yes_won": True})
+    lost = CS.settle_inventory(inv, {"resolved": True, "yes_won": False})
+    assert D(won["residual_pnl_usd"]) == D("0.70")
+    assert D(lost["residual_pnl_usd"]) == D("-0.30")
+    assert D(won["matched_pair_pnl_usd"]) == 0
+
+
+def test_an_unresolved_market_is_not_settled_as_zero():
+    inv = CS.VirtualInventory()
+    inv.add(side_yes=True, px=D("0.30"), qty=D("1"), t=1.0)
+    out = CS.settle_inventory(inv, {"resolved": False, "why": "STILL_OPEN"})
+    assert out["settled"] is False and "net_usd" not in out
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(MODELS,
+                                                    "l5_policy_early.pkl")),
+                    reason="models not built in this checkout")
+def test_complement_is_no_longer_blocked_by_a_pending_first_leg(tmp_path):
+    """8.5 h of shadow completed zero pairs because a PENDING first leg
+    suppressed every quote in the same market for 300 s, the complement
+    included."""
+    slug = "cpc-btc-updown-15m-2026-09-23-1345z"
+    t0 = 1790171100.0 + 60.0
+    gw = Gateway([market(slug)], {slug: [book(0.30, 0.60)]})
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: t0,
+                        policies=CS.load_policies(MODELS),
+                        state_dir=str(tmp_path))
+    cs.poll([{"slug": slug, "market": market(slug)}])
+    # a pending YES first leg
+    cs.candidates["early"]["x"] = {
+        "id": "x", "slug": slug, "side_yes": True, "status": CS.PENDING}
+    inv = cs.inv["early"].setdefault(slug, CS.VirtualInventory())
+    inv.add(side_yes=True, px=D("0.30"), qty=D("1"), t=t0)
+    rows = [r for r in cs.decide([slug]) if r["policy"] == "early"]
+    intent = rows[0]["intended_order"]
+    if intent.get("propose") and intent["side_yes"] is False:
+        assert "candidate_suppressed" not in rows[0]
+    # a SECOND yes quote is still suppressed
+    cs.candidates["early"]["y"] = {
+        "id": "y", "slug": slug, "side_yes": False, "status": CS.PENDING}
+    rows2 = [r for r in cs.decide([slug]) if r["policy"] == "early"]
+    i2 = rows2[0]["intended_order"]
+    if i2.get("propose"):
+        assert rows2[0].get("candidate_suppressed") == \
+            "ONE_OPEN_CANDIDATE_PER_SIDE_PER_MARKET_PER_ARM"
+
+
+def test_one_sided_book_records_the_payload_shape(tmp_path):
+    slug = "cpc-btc-updown-15m-2026-09-23-1345z"
+    t0 = 1790171100.0 + 60.0
+    one_sided = {"marketData": {"bids": [{"px": {"value": 0.3}, "qty": 5}],
+                                "offers": [], "stats": {},
+                                "state": "OPEN", "transactTime": None}}
+    gw = Gateway([market(slug)], {slug: [one_sided]})
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: t0,
+                        policies={}, state_dir=str(tmp_path))
+    cs.poll([{"slug": slug, "market": market(slug)}])
+    d = cs.one_sided[slug]
+    assert d["n_bid_levels"] == 1 and d["n_offer_levels"] == 0
+    assert d["ask"] is None and "payload_keys" in d
