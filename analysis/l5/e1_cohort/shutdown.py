@@ -72,6 +72,14 @@ _REQUESTED: Optional[Dict[str, Any]] = None
 
 _INSTALLED: List[str] = []
 
+#: the dispositions we replaced, so they can be put back. A module that
+#: rebinds SIGINT and never restores it silently changes the behaviour of
+#: everything that runs afterwards in the same process -- which is not a
+#: theoretical worry: it hung a full pytest session for forty minutes,
+#: because `KeyboardInterrupt` no longer arrived where later tests
+#: expected it.
+_PREVIOUS: Dict[int, Any] = {}
+
 
 class ShutdownRequested(BaseException):
     """A covered signal arrived. Unwind, run the handover, then exit.
@@ -89,11 +97,31 @@ def requested() -> Optional[Dict[str, Any]]:
     return None if _REQUESTED is None else dict(_REQUESTED)
 
 
+def restore() -> None:
+    """Put back every disposition we replaced.
+
+    Idempotent, and it never raises: failing to restore a handler must not
+    become a second failure on top of whatever is already unwinding.
+    """
+    for signum, previous in list(_PREVIOUS.items()):
+        try:
+            signal.signal(signum, previous)
+        except (ValueError, OSError, RuntimeError, TypeError):
+            pass
+    _PREVIOUS.clear()
+    del _INSTALLED[:]
+
+
 def reset_for_test() -> None:
-    """Clear module state between tests. Installs nothing, restores nothing."""
+    """Clear module state AND restore the original handlers.
+
+    The restore is the part that matters. Without it these handlers
+    outlive the test that installed them and stay bound for the whole
+    process.
+    """
     global _REQUESTED
     _REQUESTED = None
-    del _INSTALLED[:]
+    restore()
 
 
 def _handler(signum: int, _frame: Any) -> None:
@@ -136,7 +164,9 @@ def install(*, signals: Any = SIGNALS_COVERED) -> Dict[str, Any]:
             refused[name] = "NOT_ON_THIS_PLATFORM"
             continue
         try:
+            previous = signal.getsignal(sig)
             signal.signal(sig, _handler)
+            _PREVIOUS.setdefault(int(sig), previous)
         except (ValueError, OSError, RuntimeError) as exc:
             # ValueError: not the main thread.
             refused[name] = type(exc).__name__
