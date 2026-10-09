@@ -116,3 +116,32 @@ def test_a_locked_or_crossed_arrival_book_is_unknowable_not_a_rejection():
                             decision_ask=0.60, arrival_bid=0.40,
                             arrival_ask=0.40)
     assert v["verdict"] == "UNKNOWN"
+
+
+# ------------------------------------- the two R6 figures are both correct ---
+def _lines(case):
+    from decimal import Decimal
+    return sum(Decimal(v) for _k, v, _src in case["cashflow_lines"]
+               if _k != "total_usd")
+
+
+def test_r6_cashflow_lines_sum_to_the_authoritative_cash_anchor():
+    c = M.LIVE_CASES["R6"]
+    assert str(_lines(c)) == "3.55040" == c["cash_delta_usd"].lstrip("+")
+
+
+def test_r5_cashflow_lines_sum_to_the_authoritative_cash_anchor():
+    c = M.LIVE_CASES["R5"]
+    assert str(_lines(c)) == "-8.06000" == c["cash_delta_usd"]
+
+
+def test_the_3_50_and_3_55040_figures_differ_only_by_commissions():
+    from decimal import Decimal
+    c = M.LIVE_CASES["R6"]
+    settle = Decimal(c["trading_pnl_usd_settlement_only"])
+    comm = Decimal(c["net_commissions_usd"])
+    assert settle + comm == Decimal(c["cash_delta_usd"])
+    # and the settlement-only figure is what residual_settlement_pnl returns
+    r = M.residual_settlement_pnl(c["up_qty"], c["down_qty"], c["cost_usd"],
+                                  c["settlement_px_long"])
+    assert Decimal(r["trading_pnl_usd"]) == settle

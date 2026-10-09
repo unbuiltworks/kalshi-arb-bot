@@ -231,3 +231,94 @@ def test_available_protections_never_claims_hard_crash_coverage():
     assert p["SIGKILL_OOM_POWER_LOSS"] == "NOTHING IN-PROCESS RUNS"
     assert p["atexit_used"] is False
     assert len(p["out_of_process_protections"]) >= 4
+
+
+# ------------------- crash between intent and acknowledgement (no coid) ---
+def _intent_with_no_ack(tmp_path):
+    s = store(tmp_path)
+    s.intend("local-1", market="M", side="DOWN", price="0.69", qty="10",
+             submitted_t=1000.0)
+    return s
+
+
+def test_an_id_less_intent_is_visible_as_unbound(tmp_path):
+    s = _intent_with_no_ack(tmp_path)
+    assert [o["coid"] for o in G.unbound_intents(s)] == ["local-1"]
+
+
+def test_a_single_attribute_match_binds_and_says_it_was_inferred(tmp_path):
+    s = _intent_with_no_ack(tmp_path)
+    rep = G.reconcile_unbound(s, lambda: [
+        {"id": "V9", "market": "M", "side": "DOWN", "price": "0.69",
+         "quantity": "10", "created_t": 1001.0}])
+    assert rep["bound"] == [{"coid": "local-1", "venue_order_id": "V9",
+                             "binding": "INFERRED"}]
+    assert s.orders["local-1"]["venue_order_id"] == "V9"
+    assert s.orders["local-1"]["binding"] == "INFERRED_FROM_ATTRIBUTES"
+
+
+def test_two_candidates_are_ambiguous_and_fail_closed(tmp_path):
+    s = _intent_with_no_ack(tmp_path)
+    twin = {"market": "M", "side": "DOWN", "price": "0.69",
+            "quantity": "10", "created_t": 1001.0}
+    rep = G.reconcile_unbound(s, lambda: [{**twin, "id": "V1"},
+                                          {**twin, "id": "V2"}])
+    assert rep["ambiguous"] == ["local-1"]
+    assert rep["may_submit"]["may_submit"] is False
+
+
+def test_no_candidate_is_unmatched_and_fails_closed(tmp_path):
+    """An order that may or may not have reached the venue is the worst
+    case, and it must never read as 'nothing happened'."""
+    s = _intent_with_no_ack(tmp_path)
+    rep = G.reconcile_unbound(s, lambda: [])
+    assert rep["unmatched"] == ["local-1"]
+    assert any("UNMATCHED_INTENT" in u for u in s.uncertain)
+    assert rep["may_submit"]["may_submit"] is False
+
+
+def test_a_candidate_outside_the_time_window_does_not_match(tmp_path):
+    s = _intent_with_no_ack(tmp_path)
+    rep = G.reconcile_unbound(s, lambda: [
+        {"id": "V9", "market": "M", "side": "DOWN", "price": "0.69",
+         "quantity": "10", "created_t": 9999.0}], window_s=120.0)
+    assert rep["unmatched"] == ["local-1"]
+
+
+def test_unreadable_recent_orders_fails_closed(tmp_path):
+    s = _intent_with_no_ack(tmp_path)
+
+    def boom():
+        raise OSError("503")
+
+    rep = G.reconcile_unbound(s, boom)
+    assert rep["may_submit"]["may_submit"] is False
+    assert any("RECENT_ORDERS_UNREADABLE" in u for u in s.uncertain)
+
+
+def test_repeated_reconciliation_is_stable(tmp_path):
+    s = _intent_with_no_ack(tmp_path)
+    rows = [{"id": "V9", "market": "M", "side": "DOWN", "price": "0.69",
+             "quantity": "10", "created_t": 1001.0}]
+    G.reconcile_unbound(s, lambda: rows)
+    again = G.reconcile_unbound(s, lambda: rows)
+    assert again["bound"] == [] and again["LABEL"] == "no id-less intents"
+
+
+def test_protections_state_the_missing_client_order_id():
+    assert "client order id" in G.available_protections()["no_client_order_id"]
+
+
+def test_startup_reconcile_does_not_invent_a_venue_call_for_an_id_less_intent(
+        tmp_path):
+    """Asking the venue about our own local key returns nothing, which then
+    reads as 'neither open nor terminal' -- a fabricated second problem."""
+    s = store(tmp_path)
+    s.intend("local-1", market="M", side="UP", price="0.50", qty="10")
+    asked = []
+    rep = G.startup_reconcile(
+        s, list_open=lambda: [],
+        read_order=lambda oid: asked.append(oid) or {})
+    assert asked == []
+    assert rep["unbound_intents"] == ["local-1"]
+    assert not any("NEITHER_OPEN_NOR_TERMINAL" in u for u in s.uncertain)

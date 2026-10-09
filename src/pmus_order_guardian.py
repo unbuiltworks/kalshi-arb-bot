@@ -291,7 +291,7 @@ def startup_reconcile(store: OwnershipStore,
     """
     report: Dict[str, Any] = {"adopted": [], "late_terminal": [],
                               "late_fills_booked": [], "venue_only": [],
-                              "errors": []}
+                              "unbound_intents": [], "errors": []}
     try:
         open_rows = list(list_open() or [])
     except Exception as exc:                                   # noqa: BLE001
@@ -313,6 +313,14 @@ def startup_reconcile(store: OwnershipStore,
     # our own records first
     for coid, o in list(store.orders.items()):
         if str(o.get("state")) in TERMINAL and o.get("booked"):
+            continue
+        # AN ID-LESS INTENT IS NOT ASKABLE. Using our local key as an order id
+        # produces a nonsense venue call whose empty answer then looks like
+        # "neither open nor terminal". Binding it is reconcile_unbound's job;
+        # it marks its own uncertainty, so submission is still blocked.
+        if str(o.get("state")) == "INTENT" and not o.get("venue_order_id"):
+            report["unbound_intents"] = report.get("unbound_intents", [])
+            report["unbound_intents"].append(coid)
             continue
         oid = str(o.get("venue_order_id") or coid)
         if oid in live_ids:
@@ -351,6 +359,94 @@ def startup_reconcile(store: OwnershipStore,
     return report
 
 
+def unbound_intents(store: "OwnershipStore") -> List[dict]:
+    """INTENT rows that never received a venue order id.
+
+    THE VENUE GIVES US NO CLIENT ORDER ID. `OrderRequest` in the captured
+    spec carries symbol, orderType, side, quantity, price, outcome,
+    stopPrice, timeInForce and makerOrCancel -- and nothing of ours. The id
+    is assigned by PMUS (R4's `CSDKAWYZCYBQ`). So a process that dies between
+    submitting and reading the acknowledgement holds an intent it cannot look
+    up by key, and identity has to be inferred from attributes instead.
+    """
+    return [o for o in store.orders.values()
+            if str(o.get("state")) == "INTENT"
+            and not o.get("venue_order_id")]
+
+
+def reconcile_unbound(store: "OwnershipStore",
+                      list_recent: Callable[[], Sequence[Mapping[str, Any]]],
+                      *, window_s: float = 120.0) -> dict:
+    """Match id-less intents against venue orders by attribute, or fail.
+
+    Matching is on (market, side, price, qty) inside `window_s` of the
+    intent. This is a HEURISTIC and is labelled as one: it cannot be an
+    identity claim when the venue never accepted an id from us.
+
+      exactly one candidate   -> bind it, and say the binding was inferred
+      several candidates      -> AMBIGUOUS, fail closed
+      none                    -> UNMATCHED_INTENT, fail closed. An intent
+                                 with no candidate may mean the order never
+                                 reached the venue, or that it did and has
+                                 since gone terminal. Those are not the same
+                                 and the difference is not observable here.
+    """
+    report: Dict[str, Any] = {"bound": [], "ambiguous": [], "unmatched": [],
+                              "errors": []}
+    pend = unbound_intents(store)
+    if not pend:
+        return {**report, "may_submit": store.may_submit(),
+                "LABEL": "no id-less intents"}
+    try:
+        rows = list(list_recent() or [])
+    except Exception as exc:                                   # noqa: BLE001
+        store.mark_uncertain("RECENT_ORDERS_UNREADABLE:%s"
+                             % type(exc).__name__)
+        return {**report, "errors": ["RECENT_ORDERS_UNREADABLE"],
+                "may_submit": store.may_submit()}
+
+    for o in pend:
+        coid = str(o.get("coid"))
+        cands = []
+        for r in rows:
+            if str(r.get("market") or r.get("symbol") or "") != \
+                    str(o.get("market") or ""):
+                continue
+            if str(r.get("side") or "") != str(o.get("side") or ""):
+                continue
+            if _d(r.get("price")) != _d(o.get("price")):
+                continue
+            if _d(r.get("quantity", r.get("qty"))) != _d(o.get("qty")):
+                continue
+            t_o, t_r = o.get("submitted_t"), r.get("created_t")
+            if t_o is not None and t_r is not None:
+                try:
+                    if abs(float(t_r) - float(t_o)) > window_s:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            cands.append(r)
+        if len(cands) == 1:
+            oid = str(cands[0].get("id") or cands[0].get("order_id") or "")
+            if oid:
+                store.acknowledged(coid, oid)
+                o["binding"] = "INFERRED_FROM_ATTRIBUTES"
+                store._flush()
+                report["bound"].append({"coid": coid, "venue_order_id": oid,
+                                        "binding": "INFERRED"})
+                continue
+        if len(cands) > 1:
+            report["ambiguous"].append(coid)
+            store.mark_uncertain("AMBIGUOUS_INTENT_BINDING:%s" % coid)
+        else:
+            report["unmatched"].append(coid)
+            store.mark_uncertain("UNMATCHED_INTENT:%s" % coid)
+    report["may_submit"] = store.may_submit()
+    report["LABEL"] = ("attribute matching is a heuristic, never an identity "
+                       "claim: this venue accepts no client order id")
+    return report
+
+
 def available_protections() -> dict:
     """What actually protects us, by failure mode. No false comfort."""
     return {
@@ -366,4 +462,8 @@ def available_protections() -> dict:
         ],
         "atexit_used": False,
         "atexit_why_not": "does not run on SIGKILL; invites false confidence",
+        "no_client_order_id": (
+            "PMUS OrderRequest accepts no client order id, so an intent whose "
+            "ack was lost can only be matched by attribute. See "
+            "reconcile_unbound; ambiguity fails closed."),
     }

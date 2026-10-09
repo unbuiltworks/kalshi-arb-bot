@@ -157,7 +157,18 @@ LIVE_CASES: Dict[str, dict] = {
         "orders_submitted": 13, "filled": 8, "rejected": 4, "expired": 1,
         "up_qty": "30", "down_qty": "50", "cost_usd": "38.30",
         "settlement_px_long": "1.0000",
+        "trading_pnl_usd_settlement_only": "-8.30000",
+        "net_commissions_usd": "+0.24000",
         "cash_delta_usd": "-8.06000",
+        "cashflow_lines": [
+            ["fills_cost_usd", "-38.30000", "VENUE mandate_consumption"],
+            ["settlement_proceeds_usd", "+30.00000",
+             "RECON 30 UP x 1.00; settlement_px 1.0000 is VENUE"],
+            ["net_commissions_usd", "+0.24000",
+             "RECON residual against the VENUE cash anchor"],
+            ["total_usd", "-8.06000",
+             "VENUE 54.58385 -> 46.52385"],
+        ],
         "note": "4 post-only rejections, all predicted by the arrival book",
     },
     "R6": {
@@ -165,7 +176,23 @@ LIVE_CASES: Dict[str, dict] = {
         "orders_submitted": 16, "filled": 8, "rejected": 0, "expired": 0,
         "up_qty": "40", "down_qty": "40", "cost_usd": "36.50",
         "settlement_px_long": "1.0000",
+        # THE TWO FIGURES ARE BOTH RIGHT AND MEASURE DIFFERENT THINGS.
+        # trading_pnl_usd is settlement only: 40 x $1.00 less the $36.50 of
+        # fills. cash_delta_usd is the authoritative balance change. The
+        # difference is net commission CREDITS, which this venue returns as a
+        # negative commissionNotionalTotalCollected on maker fills.
+        "trading_pnl_usd_settlement_only": "+3.50000",
+        "net_commissions_usd": "+0.05040",
         "cash_delta_usd": "+3.55040",
+        "cashflow_lines": [
+            ["fills_cost_usd", "-36.50000", "VENUE mandate_consumption"],
+            ["settlement_proceeds_usd", "+40.00000",
+             "RECON 40 UP x 1.00; settlement_px 1.0000 is VENUE"],
+            ["net_commissions_usd", "+0.05040",
+             "RECON residual against the VENUE cash anchor"],
+            ["total_usd", "+3.55040",
+             "VENUE 46.52385 -> 50.07425 displayedCash"],
+        ],
         "note": "40 matched pairs at 0.9125; one order outlived the process "
                 "and filled unsupervised (CSWG9ZB98YCA)",
     },
