@@ -16,6 +16,27 @@ subject's address is public and is the subject of the research.
 
 ---
 
+## If the AI is reading this from the Git repository instead
+
+The package is also published as an **orphan branch**, `l5-blind-package`,
+with no history and no ancestry to any other branch: its whole contents
+are this package. Point the model at that branch and have it read
+`BRANCH_SCOPE.md` first, which tells it to stay there.
+
+**This only works if the model actually stays on that branch.** Every
+other branch in this repository carries our prior analysis of this same
+dataset, so a model free to browse will find our conclusions and hand
+them back as its own. Uploading the files remains the only way to
+*enforce* the blindness; the branch relies on the model complying.
+If you use the branch, add this to your message:
+
+> Read only the `l5-blind-package` branch of this repository. Do not read
+> any other branch, the commit history, the issues or the pull requests —
+> they contain a prior analysis of this same data and reading it would
+> defeat the purpose of asking you. Start with `BRANCH_SCOPE.md`.
+
+---
+
 ## Round 1 — GROK: infer the decision process
 
 Upload in this order. Stop whenever you hit the platform's file or
@@ -95,8 +116,17 @@ python3 scripts/50_test_hypothesis.py \
 ```
 
 Start from `hypothesis_tests/HYPOTHESIS_TEMPLATE.json`. Two worked
-examples are included with their results, one of which comes back
-`NOT_SUPPORTED` — that is the harness working, not a bug.
+examples are included with their results. **Both come back
+`INDETERMINATE`** — their confidence intervals span zero, so the harness
+declines to call either one, regardless of the p-value. That is the
+harness working, not a bug: the examples exist to show the format and the
+refusal, not to assert anything.
+
+Note the `bootstrap_resample_size` reported per group. Fill-level groups
+run to hundreds of thousands of rows, so each resample is drawn at a cap
+of 20,000 rather than at n. That makes the interval **wider** than a
+full-size bootstrap would — conservative, not optimistic — and every
+result states the size actually used.
 
 The `--ledger` flag matters. It counts how many hypotheses have been run
 against this one corpus and reports the Bonferroni-adjusted threshold,
@@ -145,6 +175,7 @@ It exits non-zero on any failure. Verify before uploading.
 ## Contents
 
 ```
+BRANCH_SCOPE.md                 scope note for repo-based access
 PROMPT_GROK.md                  the Grok brief
 PROMPT_PERPLEXITY.md            the Perplexity brief
 DATA_DICTIONARY.md              every field, how produced, where it misleads

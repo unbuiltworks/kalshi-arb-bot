@@ -73,7 +73,8 @@ def main() -> int:
 
     print("1. required files")
     required = [
-        "README_UPLOAD.md", "DATA_DICTIONARY.md", "LIMITS_OF_PUBLIC_FILLS.md",
+        "README_UPLOAD.md", "BRANCH_SCOPE.md", "DATA_DICTIONARY.md",
+        "LIMITS_OF_PUBLIC_FILLS.md",
         "PROMPT_GROK.md", "PROMPT_PERPLEXITY.md", "CORPUS_PROFILE.json",
         "NORMALIZE_REPORT.json", "cashflow.csv.gz", "settlement.csv",
         "dataset/l5_window_summary.csv.gz",
@@ -82,6 +83,8 @@ def main() -> int:
         "case_studies/CASE_STUDY_INDEX.md",
         "case_studies/CASE_STUDIES_ALL.md",
         "hypothesis_tests/HYPOTHESIS_TEMPLATE.json",
+        "hypothesis_tests/EXAMPLE_H001_pnl_by_duration.json",
+        "hypothesis_tests/EXAMPLE_H002_fill_size_by_asset.json",
         "scripts/10_normalize_corpus.py",
         "scripts/20_reconstruct_inventory.py",
         "scripts/25_reshard.py", "scripts/30_case_studies.py",

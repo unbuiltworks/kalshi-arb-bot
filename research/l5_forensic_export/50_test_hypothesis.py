@@ -62,6 +62,12 @@ import sys
 
 BOOT = 5000
 SEED = 20261009
+# Bootstrap cost is O(BOOT x group_size), so a fill-level group of ~380,000
+# rows would mean ~2e9 operations per group and the harness would appear to
+# hang. Each resample is therefore drawn at size min(n, BOOT_CAP). This
+# widens the interval honestly rather than silently giving up on large
+# groups, and the cap actually applied is reported in every result.
+BOOT_CAP = 20000
 
 
 def fnum(x):
@@ -151,16 +157,18 @@ def stat_of(vals, name, n_total):
 
 
 def boot_ci(vals, name, n_total, rng, reps=BOOT):
+    """Percentile bootstrap CI. Returns (lo, hi, resample_size)."""
     v = [x for x in vals if x is not None]
     if len(v) < 2:
-        return None, None
-    out = []
+        return None, None, 0
     k = len(v)
+    m = min(k, BOOT_CAP)
+    out = []
     for _ in range(reps):
-        out.append(stat_of([v[rng.randrange(k)] for _ in range(k)],
+        out.append(stat_of([v[rng.randrange(k)] for _ in range(m)],
                            name, n_total))
     out.sort()
-    return out[int(reps * 0.025)], out[int(reps * 0.975)]
+    return out[int(reps * 0.025)], out[int(reps * 0.975)], m
 
 
 def main() -> int:
@@ -214,10 +222,11 @@ def main() -> int:
     res = {}
     for g, vals in sorted(groups.items()):
         pt = stat_of(vals, stat, n_kept)
-        lo, hi = boot_ci(vals, stat, n_kept, rng)
+        lo, hi, m = boot_ci(vals, stat, n_kept, rng)
         res[g] = {"n": len(vals), "value": None if pt != pt else round(pt, 6),
                   "ci95": [None if lo is None else round(lo, 6),
-                           None if hi is None else round(hi, 6)]}
+                           None if hi is None else round(hi, 6)],
+                  "bootstrap_resample_size": m}
 
     out = {
         "hypothesis_id": h.get("id"),
@@ -226,7 +235,15 @@ def main() -> int:
         "metric": {"column": col, "stat": stat},
         "rows_scanned": n_seen, "rows_after_filter": n_kept,
         "groups": res,
-        "bootstrap": {"resamples": BOOT, "seed": SEED, "ci": "95% percentile"},
+        "bootstrap": {
+            "resamples": BOOT, "seed": SEED, "ci": "95% percentile",
+            "resample_size_cap": BOOT_CAP,
+            "_note": "Where a group exceeds the cap, each resample is drawn "
+                     "at the cap rather than at n. The interval is then "
+                     "wider than a full-size bootstrap would give -- "
+                     "conservative, not optimistic. Each group reports the "
+                     "size actually used.",
+        },
     }
 
     pred = h.get("predicts") or {}
@@ -236,15 +253,24 @@ def main() -> int:
         a_v = stat_of(A, stat, n_kept)
         b_v = stat_of(B, stat, n_kept)
         diff = a_v - b_v
+        ma = min(len([x for x in A if x is not None]), BOOT_CAP)
+        mb = min(len([x for x in B if x is not None]), BOOT_CAP)
         dl = []
         for _ in range(BOOT):
-            sa = [A[rng.randrange(len(A))] for _ in range(len(A))]
-            sb = [B[rng.randrange(len(B))] for _ in range(len(B))]
+            sa = [A[rng.randrange(len(A))] for _ in range(ma)]
+            sb = [B[rng.randrange(len(B))] for _ in range(mb)]
             dl.append(stat_of(sa, stat, n_kept) - stat_of(sb, stat, n_kept))
         dl.sort()
         dlo, dhi = dl[int(BOOT * 0.025)], dl[int(BOOT * 0.975)]
+        # Permutation test, also capped: shuffle a bounded pool and split it
+        # in the same proportion as the real groups.
         pool = [x for x in A + B if x is not None]
-        na = len([x for x in A if x is not None])
+        na_full = len([x for x in A if x is not None])
+        frac_a = na_full / len(pool) if pool else 0.5
+        if len(pool) > 2 * BOOT_CAP:
+            pool = [pool[rng.randrange(len(pool))]
+                    for _ in range(2 * BOOT_CAP)]
+        na = max(1, min(len(pool) - 1, round(frac_a * len(pool))))
         hits = 0
         for _ in range(BOOT):
             rng.shuffle(pool)
@@ -266,6 +292,8 @@ def main() -> int:
             "between": pair, "a_minus_b": round(diff, 6),
             "a_minus_b_ci95": [round(dlo, 6), round(dhi, 6)],
             "permutation_p_two_sided": round(pval, 6),
+            "bootstrap_resample_sizes": {pair[0]: ma, pair[1]: mb},
+            "permutation_pool_size": len(pool),
             "predicted_direction": want,
             "ci_spans_zero": spans_zero,
             "VERDICT": verdict,
