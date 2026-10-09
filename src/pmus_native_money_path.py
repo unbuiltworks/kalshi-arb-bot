@@ -16,6 +16,8 @@ structurally.
 from __future__ import annotations
 
 import time
+
+from src import pmus_order_guardian as GUARD
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -215,7 +217,13 @@ class NativeMoneyPath:
     """Engine -> intents -> certified transport. No other route to the wire."""
 
     def __init__(self, *, market: str, engine: "E.NativeEngine", transport,
-                 feed=None, venue=None, journal=None) -> None:
+                 feed=None, venue=None, journal=None,
+                 guardian=None) -> None:
+        # DURABLE ORDER OWNERSHIP, optional so every existing caller and test
+        # constructs unchanged. When present, an INTENT is persisted BEFORE
+        # the POST and bound to the venue id after -- the R6 hole, where
+        # CSWG9ZB98YCA outlived the process and filled unsupervised.
+        self.guardian = guardian
         self.market = market
         self.eng = engine
         #: the PairedLockTransport wrapping MANDATE.guard(...). Every POST goes
@@ -1134,11 +1142,38 @@ class NativeMoneyPath:
         # guard's own admission timestamp is journalled separately.
         T["mandate_start_ms"] = T["preview_start_ms"] = _now_ms()
         T["post_start_ms"] = _now_ms()
-        ack = self.tp.submit_body(body)
+        # PERSIST THE INTENT FIRST. If this process dies between here and the
+        # acknowledgement, the next one finds an id-less INTENT and must
+        # reconcile it by attribute: this venue accepts no client order id,
+        # so there is no key to look it up by. An unreconcilable intent fails
+        # closed rather than reading as "nothing happened".
+        _gkey = None
+        if self.guardian is not None:
+            _gkey = "intent-%d-%s-%s" % (_now_ms(), intent.kind,
+                                         str(intent["side"]))
+            # a store that cannot record an intent must not let the order out:
+            # that is exactly the unprotected state, so this is NOT wrapped
+            self.guardian.intend(
+                _gkey, market=self.market, side=str(intent["side"]),
+                price=str(_px), qty=str(_qty), kind=str(intent.kind),
+                submitted_t=time.time())
+        try:
+            ack = self.tp.submit_body(body)
+        except BaseException:                                  # noqa: BLE001
+            if self.guardian is not None and _gkey is not None:
+                self.guardian.mark_uncertain(
+                    "SUBMIT_OUTCOME_UNKNOWN:%s" % _gkey)
+            raise
         T["post_end_ms"] = T["preview_end_ms"] = T["mandate_end_ms"] = _now_ms()
         T["_post_wall_ms"] = time.time() * 1000.0
         T["ack_ms"] = T["post_end_ms"]
         oid = self._order_id(ack)
+        if self.guardian is not None and _gkey is not None:
+            if oid:
+                self.guardian.acknowledged(_gkey, str(oid))
+            else:
+                # an ack carrying no id is neither an acceptance nor a refusal
+                self.guardian.mark_uncertain("ACK_WITHOUT_ORDER_ID:%s" % _gkey)
         if self.journal is not None:
             try:
                 self.journal.write("balance_admission_evidence", {
