@@ -126,3 +126,8 @@ data/btc_ref/*.jsonl
 # scripts/l5_market_tape_fetch.py (resumable, one atomic file per window).
 # The derived pre-action state table is tracked instead.
 data/l5/market_tape/
+
+# L5 CLONE SHADOW: the per-decision array is a 43MB regenerated artifact of
+# the realtime shadow, reproducible from the recorded tape. Not evidence on
+# its own and not worth a binary in history.
+analysis/l5/clone/
