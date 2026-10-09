@@ -1781,7 +1781,29 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                         "markets_served": len(markets),
                         "clock_resolvable_and_live": len(universe),
                         "categories": _mix([r.get("category")
-                                            for r in universe])}
+                                            for r in universe]),
+                        "clock_bases": _mix([r["clock"].get("basis")
+                                             for r in universe]),
+                        "sports": _mix([r.get("sport_type")
+                                        for r in universe
+                                        if r.get("sport_type")]),
+                        "leagues": _mix([r.get("league")
+                                         for r in universe
+                                         if r.get("league")]),
+                        "market_types": _mix([r.get("market_type")
+                                              for r in universe]),
+                        # WITHOUT THIS the sports arm is invisible: an empty
+                        # progress table and a table full of unrecognised
+                        # period tokens produce the same "crypto only"
+                        # universe, and they need different fixes.
+                        "event_progress": prog_diag,
+                        "progress_rows": len(prog),
+                        "sports_markets_served": sum(
+                            1 for m in markets
+                            if str(m.get("category")) == "sports"),
+                        "sports_with_progress_row": sum(
+                            1 for m in markets
+                            if str(m.get("slug")) in prog)}
                 if not universe and markets:
                     disc["why_nothing_resolved"] = clock_diagnostic(
                         markets, now())
