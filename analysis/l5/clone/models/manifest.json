@@ -1,0 +1,46 @@
+{
+  "evaluation_lives_in": "analysis/l5/clone/clone_eval_gbm.json",
+  "features": [
+    "imbalance",
+    "matched_frac",
+    "residual_shares",
+    "pair_cost_sofar",
+    "price",
+    "price_is_favourite",
+    "n_fills",
+    "log_size",
+    "t_frac",
+    "tte_s",
+    "gap_prev_s",
+    "dur_5m",
+    "same_side_run",
+    "opp_has_any"
+  ],
+  "fit_on": "ALL decision points in the regime (no holdout)",
+  "labels": [
+    "EXTEND",
+    "COMPLEMENT",
+    "STOP"
+  ],
+  "regime_break_utc": "2026-06-23T00:00:00Z",
+  "regimes": {
+    "early": {
+      "label_base_rates": {
+        "COMPLEMENT": 0.2824,
+        "EXTEND": 0.706,
+        "STOP": 0.0116
+      },
+      "n_fit": 177845,
+      "path": "analysis/l5/clone/models/l5_policy_early.pkl"
+    },
+    "late": {
+      "label_base_rates": {
+        "COMPLEMENT": 0.2662,
+        "EXTEND": 0.7081,
+        "STOP": 0.0257
+      },
+      "n_fit": 582972,
+      "path": "analysis/l5/clone/models/l5_policy_late.pkl"
+    }
+  }
+}
