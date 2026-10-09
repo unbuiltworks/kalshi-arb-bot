@@ -1,0 +1,13 @@
+{
+ "l5_window_summary.csv": {
+  "rows": 17046,
+  "bytes": 5081076
+ },
+ "l5_fills_sample.csv": {
+  "rows": 16964,
+  "bytes": 8259950,
+  "every_nth_window": 46,
+  "windows": 370,
+  "budget_mb": 8.0
+ }
+}

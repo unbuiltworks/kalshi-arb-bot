@@ -83,13 +83,15 @@ def main() -> int:
         "case_studies/CASE_STUDY_INDEX.md",
         "case_studies/CASE_STUDIES_ALL.md",
         "hypothesis_tests/HYPOTHESIS_TEMPLATE.json",
+        "plain/README.md", "plain/l5_window_summary.csv",
+        "plain/l5_fills_sample.csv",
         "hypothesis_tests/EXAMPLE_H001_pnl_by_duration.json",
         "hypothesis_tests/EXAMPLE_H002_fill_size_by_asset.json",
         "scripts/10_normalize_corpus.py",
         "scripts/20_reconstruct_inventory.py",
         "scripts/25_reshard.py", "scripts/30_case_studies.py",
         "scripts/40_corpus_profile.py", "scripts/50_test_hypothesis.py",
-        "scripts/60_verify_package.py",
+        "scripts/60_verify_package.py", "scripts/70_plain_text_views.py",
     ]
     for r in required:
         if not os.path.exists(os.path.join(P, r)):
@@ -154,6 +156,26 @@ def main() -> int:
         fail(bad, f"window summary has {nw} rows / "
                   f"{len(wslugs ^ windows)} slug mismatches")
     print(f"  window summary rows {nw}, slug sets match: {wslugs == windows}")
+
+    print("5b. plain views agree with their gzipped sources")
+    import io
+    pw = os.path.join(P, "plain", "l5_window_summary.csv")
+    with open(pw, newline="", encoding="utf-8") as fh:
+        pr = list(csv.DictReader(fh))
+    if len(pr) != EXPECT_WINDOWS or {r["event_slug"] for r in pr} != windows:
+        fail(bad, f"plain window summary has {len(pr)} rows / slug mismatch")
+    ps = os.path.join(P, "plain", "l5_fills_sample.csv")
+    with open(ps, newline="", encoding="utf-8") as fh:
+        sr = list(csv.DictReader(fh))
+    stray = {r["event_slug"] for r in sr} - windows
+    if stray:
+        fail(bad, f"plain fill sample has {len(stray)} unknown windows")
+    sbad = sum(1 for r in sr
+               if (r["event_slug"], r["trade_seq"]) not in seen_pairs)
+    if sbad:
+        fail(bad, f"{sbad} plain-sample rows are not in the full table")
+    print(f"  plain window summary {len(pr)} rows, "
+          f"plain sample {len(sr)} rows, all present in the full table")
 
     print("6. case studies")
     cs = sorted(glob.glob(os.path.join(P, "case_studies",

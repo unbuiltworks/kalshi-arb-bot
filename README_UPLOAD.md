@@ -18,6 +18,24 @@ subject's address is public and is the subject of the research.
 
 ## If the AI is reading this from the Git repository instead
 
+**Gzip is the catch.** Most AI repository readers cannot decompress a
+`.csv.gz`, so a repo-based reader sees the prose and the case studies but
+none of the tables — which is most of the package. `plain/` exists for
+that reader:
+
+| file | rows | size |
+|---|---|---|
+| `plain/l5_window_summary.csv` | 17,046 — **every** window, complete | 5.1 MB |
+| `plain/l5_fills_sample.csv` | 16,964 fills across 370 whole windows | 8.3 MB |
+
+Everything else a repo reader needs is already plain text:
+`CORPUS_PROFILE.json`, `case_studies/CASE_STUDIES_ALL.md` (1.1 MB),
+`settlement.csv` (0.9 MB) and the four prose documents.
+
+The complete 760,817-fill table stays gzipped in `dataset/fills/` — about
+240 MB uncompressed, which no repo reader will ingest. If a conclusion
+needs the full table, upload the parts directly.
+
 The package is also published as an **orphan branch**, `l5-blind-package`,
 with no history and no ancestry to any other branch: its whole contents
 are this package. Point the model at that branch and have it read
