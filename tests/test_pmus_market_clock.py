@@ -38,3 +38,18 @@ def test_fourteen_day_contract_expiry_is_not_a_clock():
 def test_position_matches_training_definition():
     pos = MC.position("btc-up-or-down-5m-1000000", None, 1000150.0)
     assert pos["t_frac"] == 0.5 and pos["tte_s"] == 150.0
+
+
+def test_start_date_alias_is_accepted_but_a_seven_month_span_is_not():
+    # measured on the live slate 2026-10-09: sports futures serve startDate
+    # months before a contract endDate. That is not a window.
+    dur, st, basis = MC.resolve("tec-mlb-nlchamp-2026-09-27-lad",
+                                {"startDate": "2026-03-19T14:32:23Z",
+                                 "endDate": "2026-11-06T21:20:09Z",
+                                 "gameStartTime": "2026-09-07T00:00:00Z"})
+    assert basis == "UNRESOLVED"
+    # but a real 15-minute window served as startDate resolves
+    dur, st, basis = MC.resolve("cpc-btc-updown-15m-2026-10-09-0215z",
+                                {"startDate": "2026-10-09T02:15:00Z",
+                                 "endDate": "2026-10-09T02:30:00Z"})
+    assert (dur, basis) == (900.0, "venue_window")

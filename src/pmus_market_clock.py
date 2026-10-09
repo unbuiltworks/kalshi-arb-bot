@@ -57,7 +57,12 @@ def resolve(slug: Any, market_data: Optional[Mapping[str, Any]] = None
             ) -> Tuple[Optional[float], Optional[float], str]:
     """(duration_s, window_start_epoch, basis). Never guesses."""
     md = market_data or {}
-    start = _epoch(md.get("startTime"))
+    # The /v1/markets list payload serves `startDate`; the per-market and
+    # BTC15m payloads serve `startTime`. Both are accepted, and the span
+    # guard below is what keeps the wrong one from becoming a clock: the
+    # sports futures measured 2026-10-09 serve startDate 2026-03-19 against
+    # endDate 2026-11-06, a 7-month span, which is refused.
+    start = _epoch(md.get("startTime") or md.get("startDate"))
     end = _epoch(md.get("endDate"))
     if start is not None and end is not None:
         span = end - start
