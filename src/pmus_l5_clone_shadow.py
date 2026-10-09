@@ -90,6 +90,10 @@ UNIT_SHARES = D(os.getenv("L5_CLONE_UNIT_SHARES", "1"))
 # Spring discipline: materially cheaper pair completion, not near-$1.
 PAIR_CEILING = D(os.getenv("L5_CLONE_PAIR_CEILING", "0.96"))
 MAX_UNITS_PER_SIDE = int(os.getenv("L5_CLONE_MAX_UNITS_PER_SIDE", "4"))
+# A first leg is not opened at any price. L5's own acquisition ceiling in the
+# frozen execution notes is 0.90, and a leg above it leaves no room for a
+# complement that could ever reach the pair ceiling.
+MAX_FIRST_LEG_PX = D(os.getenv("L5_CLONE_MAX_FIRST_LEG_PX", "0.90"))
 TICK = D("0.01")
 ONE = D("1")
 
@@ -337,14 +341,18 @@ def entry_rule(obs: Mapping[str, Any], clock: Mapping[str, Any]) -> dict:
     if spread < 2 * TICK:
         return {"propose": False, "why": "SPREAD_UNDER_TWO_TICKS"}
     maker_pair = y["maker_px"] + n["maker_px"]          # = 1 - spread
-    if maker_pair > PAIR_CEILING:
-        return {"propose": False, "why": "MAKER_PAIR_COST_ABOVE_CEILING",
-                "maker_pair_cost": str(maker_pair)}
     side_yes = y["maker_px"] <= n["maker_px"]
     q = y if side_yes else n
+    if q["maker_px"] > MAX_FIRST_LEG_PX:
+        return {"propose": False, "why": "FIRST_LEG_ABOVE_ACQUISITION_CEILING",
+                "own_side_maker_px": str(q["maker_px"]),
+                "acquisition_ceiling": str(MAX_FIRST_LEG_PX)}
+    if q["maker_px"] <= 0:
+        return {"propose": False, "why": "NO_OWN_SIDE_BID"}
     return {"propose": True, "side_yes": side_yes,
             "px": q["maker_px"], "qty": UNIT_SHARES,
-            "maker_pair_cost": str(maker_pair),
+            "maker_pair_cost_now": str(maker_pair),
+            "pair_ceiling_applies_to_the_complement": str(PAIR_CEILING),
             "RULE": "hand-written entry rule, not the trained model"}
 
 
@@ -1135,6 +1143,18 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                    "proposed": sum(1 for d in decisions
                                    if (d.get("intended_order")
                                        or {}).get("propose")),
+                   # WHY NOTHING WAS PROPOSED. The first live run reported
+                   # `proposed: 0` with no way to tell whether the gate, the
+                   # book or the clock was responsible, and the answer was a
+                   # gate that could not fire on this venue's spreads.
+                   "refusal_reasons": _mix([
+                       (d.get("intended_order") or {}).get("why")
+                       for d in decisions
+                       if not (d.get("intended_order") or {}).get("propose")]),
+                   "out_of_domain_reasons": _mix([
+                       (d.get("model_domain") or {}).get("why")
+                       for d in decisions
+                       if not (d.get("model_domain") or {}).get("in_domain")]),
                    "judged": judged["by_status"],
                    "newly_queue_cleared": len(judged["newly_queue_cleared"]),
                    "rows_emitted_total": cs.rows_emitted,

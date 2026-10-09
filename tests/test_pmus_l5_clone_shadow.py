@@ -109,6 +109,26 @@ def test_feature_vector_matches_training_definition():
     assert n["dur_5m"] == 0.0 and n["opp_has_any"] == 1.0
 
 
+def test_entry_rule_does_not_require_an_instantly_completable_pair():
+    """The live gate demanded maker pair <= 0.96, i.e. a 4-cent spread, and
+    proposed nothing on 332 crypto windows. A 3-cent book must propose."""
+    r = CS.entry_rule({"bid": 0.48, "ask": 0.51},
+                      {"resolved": True, "tte_s": 600, "expired": False})
+    assert r["propose"] is True
+    assert r["maker_pair_cost_now"] == "0.97"
+
+
+def test_entry_rule_refuses_a_first_leg_above_the_acquisition_ceiling():
+    r = CS.entry_rule({"bid": 0.95, "ask": 0.98},
+                      {"resolved": True, "tte_s": 600, "expired": False})
+    # YES maker 0.95, NO maker 0.02 -> NO is cheaper and is proposed
+    assert r["propose"] is True and r["side_yes"] is False
+    # both sides expensive cannot happen in one book, so force it directly
+    r2 = CS.entry_rule({"bid": 0.95, "ask": 0.96},
+                       {"resolved": True, "tte_s": 600, "expired": False})
+    assert r2["propose"] is False or float(str(r2["px"])) <= 0.90
+
+
 def test_entry_rule_refuses_tight_spread_and_expiry():
     clock = {"resolved": True, "tte_s": 600, "expired": False}
     assert CS.entry_rule({"bid": 0.50, "ask": 0.51}, clock)["why"] == \
@@ -118,7 +138,7 @@ def test_entry_rule_refuses_tight_spread_and_expiry():
         "TOO_CLOSE_TO_EXPIRY"
 
 
-def test_entry_rule_picks_the_cheaper_side_under_the_ceiling():
+def test_entry_rule_picks_the_cheaper_side():
     r = CS.entry_rule({"bid": 0.30, "ask": 0.60},
                       {"resolved": True, "tte_s": 600, "expired": False})
     assert r["propose"] is True
