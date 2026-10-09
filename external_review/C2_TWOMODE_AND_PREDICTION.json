@@ -1,0 +1,75 @@
+{
+ "item3_two_mode": {
+  "residual_effect_per_fill": {
+   "_what": "change in residual quantity caused by the fill. Negative = compressing, positive = accumulating directional risk.",
+   "COVERAGE_UNKNOWN": {
+    "n": 10811,
+    "mean_delta_residual": 1.5563,
+    "share_reducing_residual": 0.4803
+   },
+   "MAKER_INFERRED": {
+    "n": 49929,
+    "mean_delta_residual": 1.573,
+    "share_reducing_residual": 0.4651
+   },
+   "TAKER_OBSERVED": {
+    "n": 11810,
+    "mean_delta_residual": 11.7999,
+    "share_reducing_residual": 0.3384
+   }
+  },
+  "counterfactual_remove_taker_fills": {
+   "_what": "each window replayed twice with FIFO pairing -- as it happened, and with TAKER_OBSERVED fills removed. Positive means the aggressive fills ADDED P&L.",
+   "_assumption": "that the maker fills would still have arrived had L5 not aggressed. Stated, not demonstrated.",
+   "windows": 2157,
+   "taker_fills_removed": 11810,
+   "mean_pnl_effect_per_window": 2.2243,
+   "ci95": [
+    0.6143,
+    3.7454
+   ],
+   "share_of_windows_improved": 0.5943,
+   "mean_residual_effect": 61.8801,
+   "residual_ci95": [
+    58.5216,
+    65.2508
+   ],
+   "VERDICT_pnl": "AGGRESSIVE FILLS ADD P&L",
+   "VERDICT_residual": "they INCREASE the directional residual"
+  }
+ },
+ "item4_prediction": {
+  "_design": "chronological 70/30 split by window; no window spans the boundary; the test set is strictly later in time.",
+  "models": {
+   "M0": "constant hazard (intercept only)",
+   "M1": "+ log residual qty, residual VWAP, fraction of window remaining, current leg",
+   "M2": "+ is_taker, log size, price"
+  },
+  "results": {
+   "M0": {
+    "n_train": 576034,
+    "n_test": 167737,
+    "oos_logloss": 0.598215,
+    "oos_auc": 0.52092
+   },
+   "M1": {
+    "n_train": 576034,
+    "n_test": 167737,
+    "oos_logloss": 0.597855,
+    "oos_auc": 0.5214
+   },
+   "M2": {
+    "n_train": 576034,
+    "n_test": 167737,
+    "oos_logloss": 0.578741,
+    "oos_auc": 0.62751
+   }
+  },
+  "logloss_improvement_vs_M0": {
+   "M1": 0.00036,
+   "M2": 0.019474
+  },
+  "VERDICT": "execution-mode features DO improve out-of-sample prediction",
+  "_reconciliation": "A flat hazard and a real two-mode structure are compatible. Mode governs the PRICE, SIZE and TIMING of a fill. The flat hazard governs WHICH LEG comes next. These are different questions, and this item tests only the second."
+ }
+}

@@ -1,0 +1,77 @@
+{
+ "FULL_CORPUS": {
+  "M0_constant": {
+   "model": "M0",
+   "n_train": 520639,
+   "n_test": 223132,
+   "oos_logloss": 0.595532,
+   "oos_auc": 0.51609
+  },
+  "M1_inventory_clock": {
+   "model": "M1",
+   "n_train": 520639,
+   "n_test": 223132,
+   "oos_logloss": 0.595239,
+   "oos_auc": 0.51906
+  },
+  "M2a_plus_size_price_NO_istk": {
+   "model": "M2a",
+   "n_train": 520639,
+   "n_test": 223132,
+   "oos_logloss": 0.57719,
+   "oos_auc": 0.62359
+  },
+  "M2b_plus_istk_only": {
+   "model": "M2b",
+   "n_train": 520639,
+   "n_test": 223132,
+   "oos_logloss": 0.595239,
+   "oos_auc": 0.51906
+  },
+  "M2_full": {
+   "model": "M2",
+   "n_train": 520639,
+   "n_test": 223132,
+   "oos_logloss": 0.57719,
+   "oos_auc": 0.62359
+  }
+ },
+ "LABELLED_WINDOW_ONLY": {
+  "_note": "only fills with a real TAKER_OBSERVED/MAKER_INFERRED label, so is_taker is never a proxy for \"outside the label window\"",
+  "M0_constant": {
+   "model": "M0",
+   "n_train": 41742,
+   "n_test": 17890,
+   "oos_logloss": 0.612374,
+   "oos_auc": 0.50608
+  },
+  "M1_inventory_clock": {
+   "model": "M1",
+   "n_train": 41742,
+   "n_test": 17890,
+   "oos_logloss": 0.61185,
+   "oos_auc": 0.51873
+  },
+  "M2a_plus_size_price_NO_istk": {
+   "model": "M2a",
+   "n_train": 41742,
+   "n_test": 17890,
+   "oos_logloss": 0.592019,
+   "oos_auc": 0.62597
+  },
+  "M2b_plus_istk_only": {
+   "model": "M2b",
+   "n_train": 41742,
+   "n_test": 17890,
+   "oos_logloss": 0.609471,
+   "oos_auc": 0.54823
+  },
+  "M2_full": {
+   "model": "M2",
+   "n_train": 41742,
+   "n_test": 17890,
+   "oos_logloss": 0.591974,
+   "oos_auc": 0.62617
+  }
+ }
+}

@@ -1,0 +1,188 @@
+{
+ "item1_settlement_validation": {
+  "AUTHORITATIVE_RECORD_AVAILABLE": false,
+  "why": "The tapes carry no settlement field and the container's egress proxy refuses CONNECT to Kalshi hosts, so the authoritative resolution endpoint cannot be reached from here. No authoritative validation was performed, and none is claimed.",
+  "two_independent_proxies": {
+   "proxy_A": "last print in the window (yes_price > 0.5 -> YES)",
+   "proxy_B": "final BBO mid before close (mid > 0.5 -> YES)",
+   "markets_with_both": 184,
+   "agree": 182,
+   "disagree": 2,
+   "agreement_rate": 0.98913,
+   "only_proxy_A": 8,
+   "only_proxy_B": 0,
+   "neither": 0
+  },
+  "decisiveness_of_final_print": {
+   "_what": "|last yes_price - 0.50|. Near 0.50 means the proxy is a coin flip on that market.",
+   "median": 0.473,
+   "share_within_0.05_of_0.50": 0.0469,
+   "share_beyond_0.40_of_0.50": 0.6354
+  }
+ },
+ "item1_sensitivity_to_proxy_error": {
+  "_what": "AGG(theta=0.25) -- Track B's best configuration -- re-settled with a random fraction of outcomes flipped. Fills do not depend on the outcome, so only settlement changes.",
+  "by_flip_fraction": {
+   "0.00": {
+    "markets": 184,
+    "mean_pnl_per_market": -0.0794,
+    "ci95": [
+     -0.11699,
+     -0.03935
+    ],
+    "verdict": "NEGATIVE"
+   },
+   "0.02": {
+    "markets": 184,
+    "mean_pnl_per_market": -0.06853,
+    "ci95": [
+     -0.10788,
+     -0.02709
+    ],
+    "verdict": "NEGATIVE"
+   },
+   "0.05": {
+    "markets": 184,
+    "mean_pnl_per_market": -0.05766,
+    "ci95": [
+     -0.09602,
+     -0.01581
+    ],
+    "verdict": "NEGATIVE"
+   },
+   "0.10": {
+    "markets": 184,
+    "mean_pnl_per_market": -0.02505,
+    "ci95": [
+     -0.06958,
+     0.02208
+    ],
+    "verdict": "INDETERMINATE"
+   },
+   "0.20": {
+    "markets": 184,
+    "mean_pnl_per_market": 0.05647,
+    "ci95": [
+     -0.00063,
+     0.11266
+    ],
+    "verdict": "INDETERMINATE"
+   },
+   "0.30": {
+    "markets": 184,
+    "mean_pnl_per_market": 0.14886,
+    "ci95": [
+     0.08798,
+     0.21277
+    ],
+    "verdict": "POSITIVE"
+   },
+   "0.50": {
+    "markets": 184,
+    "mean_pnl_per_market": 0.28473,
+    "ci95": [
+     0.21665,
+     0.34982
+    ],
+    "verdict": "POSITIVE"
+   }
+  },
+  "interpretation_rule": "The negative verdict is robust up to the largest flip fraction whose CI is still entirely below zero. A 0.50 flip fraction is pure noise -- a coin flip for every market -- so if the verdict survives to there, proxy error cannot be what is producing it."
+ },
+ "item2_markout_kalshi_maker_actual_prints": {
+  "_definition": "(mid at fill+h) - maker fill price, signed so positive is good for the maker. Maker side inferred from taker_side, which is carried on every print.",
+  "prints_used": 733088,
+  "by_horizon_s": {
+   "5": {
+    "n": 710460,
+    "mean_markout": 0.001407,
+    "ci95": [
+     0.000723,
+     0.002064
+    ],
+    "median": 0.002,
+    "share_positive": 0.5342
+   },
+   "30": {
+    "n": 662107,
+    "mean_markout": 0.001033,
+    "ci95": [
+     -0.000324,
+     0.002344
+    ],
+    "median": 0.0015,
+    "share_positive": 0.5113
+   },
+   "60": {
+    "n": 607225,
+    "mean_markout": 0.000631,
+    "ci95": [
+     -0.001226,
+     0.002421
+    ],
+    "median": 0.0035,
+    "share_positive": 0.5097
+   }
+  }
+ },
+ "item2_markout_polymarket_L5_actual_fills": {
+  "_definition": "same formula; L5 is always a BUYER, so positive markout means the leg it bought richened.",
+  "fills_matched": 3097,
+  "by_horizon_s": {
+   "5": {
+    "n": 3030,
+    "mean_markout": -0.001011,
+    "ci95": [
+     -0.003885,
+     0.001643
+    ],
+    "median": 0.005,
+    "share_positive": 0.5099,
+    "by_execution_class": {
+     "UNLABELLED": {
+      "n": 3030,
+      "mean": -0.001011
+     }
+    }
+   },
+   "30": {
+    "n": 2884,
+    "mean_markout": 0.010103,
+    "ci95": [
+     0.005571,
+     0.014437
+    ],
+    "median": 0.005,
+    "share_positive": 0.5246,
+    "by_execution_class": {
+     "UNLABELLED": {
+      "n": 2884,
+      "mean": 0.010103
+     }
+    }
+   },
+   "60": {
+    "n": 2727,
+    "mean_markout": 0.007238,
+    "ci95": [
+     0.001472,
+     0.012729
+    ],
+    "median": -0.005,
+    "share_positive": 0.4925,
+    "by_execution_class": {
+     "UNLABELLED": {
+      "n": 2727,
+      "mean": 0.007238
+     }
+    }
+   }
+  }
+ },
+ "item2_fee_treatment": {
+  "_note": "Fees are NOT folded into the markouts above, because the two venues' schedules differ and mixing them would make the comparison meaningless. Applied separately:",
+  "kalshi_maker_fee_at_p_0.25_1_contract": 0.01,
+  "kalshi_maker_fee_at_p_0.50_1_contract": 0.01,
+  "polymarket_fee": "no explicit per-fill fee field in the corpus; confirmed only where a position snapshot carries entryFeesUsdc (a minority), so the Polymarket side is a fee LOWER bound."
+ }
+}
