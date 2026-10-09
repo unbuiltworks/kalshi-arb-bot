@@ -686,3 +686,34 @@ def test_dist_never_reports_a_bare_mean():
     assert CS._dist([])["n"] == 0
     d = CS._dist([1.0, 3.0])
     assert d["median"] == 2.0 and d["min"] == 1.0 and d["max"] == 3.0
+
+
+def test_sports_universe_comes_from_the_event_feed_not_the_market_list():
+    """Measured live: 208 markets carried a recognised game position while
+    ZERO of the 15,000 sports rows in the paged list did -- the list fills
+    with futures and the page cap is hit before the live games."""
+    prog = {"aec-nfl-sf-lar-2026-10-09": {
+        "game_proximity": 0.5, "sport_type": "football", "league": "nfl",
+        "proximity_basis": "period_token/quarters/football",
+        "period": "Q3", "ended": False, "rebate_eligible": True}}
+    # the market list contains only an unrelated future
+    markets = [{"slug": "tec-mlb-champ-2026-09-27-cws", "category": "sports",
+                "startDate": "2026-03-19T14:32:24Z",
+                "endDate": "2026-11-06T21:20:09Z"}]
+    out = CS.eligible_markets(markets, 1.0, progress=prog)
+    slugs = {r["slug"] for r in out}
+    assert "aec-nfl-sf-lar-2026-10-09" in slugs
+    assert "tec-mlb-champ-2026-09-27-cws" not in slugs   # futures: no clock
+    row = [r for r in out if r["slug"].startswith("aec-")][0]
+    assert row["source"] == "live_event_feed"
+    assert row["sport_type"] == "football" and row["league"] == "nfl"
+    assert row["clock"]["basis"] == "venue_event_progress"
+
+
+def test_a_market_in_both_sources_is_not_duplicated():
+    prog = {"aec-nfl-a-b-2026-10-09": {
+        "game_proximity": 0.5, "sport_type": "football", "ended": False,
+        "proximity_basis": "period_token/quarters/football"}}
+    markets = [{"slug": "aec-nfl-a-b-2026-10-09", "category": "sports"}]
+    out = CS.eligible_markets(markets, 1.0, progress=prog)
+    assert len(out) == 1 and out[0]["source"] == "live_event_feed"

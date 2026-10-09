@@ -733,8 +733,31 @@ def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float,
     """
     prog = dict(progress or {})
     out = []
+    seen_slugs = set()
+    # THE SPORTS UNIVERSE COMES FROM THE LIVE-EVENT FEED, NOT THE LIST.
+    # Measured: the feed served 53 live events and 208 markets with a
+    # recognised game position, while ZERO of the 15,000 sports rows the
+    # paged market list returned carried a progress row -- the list fills
+    # with championship futures and the 30-page cap is reached long before
+    # the live game markets. The feed already names exactly the markets
+    # whose clock we can resolve, so they are taken from there directly;
+    # the book still comes from /v1/markets/{slug}/book as always.
+    for slug, row in prog.items():
+        pos = MC.sports_position(slug, row)
+        if not pos.get("resolved") or (pos.get("tte_s") or 0) < 60:
+            continue
+        seen_slugs.add(str(slug))
+        out.append({"slug": str(slug), "clock": pos, "category": "sports",
+                    "sport_type": pos.get("sport_type"),
+                    "league": pos.get("league"),
+                    "market_type": EX.market_type(slug),
+                    "sport_of_slug": EX.sport_of(slug),
+                    "market": None,
+                    "source": "live_event_feed"})
     for m in markets:
         slug = str(m.get("slug"))
+        if slug in seen_slugs:
+            continue
         pos = MC.position(slug, m, now, progress=prog.get(slug))
         if not pos.get("resolved") or pos.get("expired"):
             continue
@@ -746,7 +769,7 @@ def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float,
                     "league": pos.get("league"),
                     "market_type": EX.market_type(slug),
                     "sport_of_slug": EX.sport_of(slug),
-                    "market": m})
+                    "market": m, "source": "market_list"})
     out.sort(key=lambda r: r["clock"]["tte_s"])
     return out
 
@@ -1803,7 +1826,9 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                             if str(m.get("category")) == "sports"),
                         "sports_with_progress_row": sum(
                             1 for m in markets
-                            if str(m.get("slug")) in prog)}
+                            if str(m.get("slug")) in prog),
+                        "universe_source": _mix([r.get("source")
+                                                 for r in universe])}
                 if not universe and markets:
                     disc["why_nothing_resolved"] = clock_diagnostic(
                         markets, now())
