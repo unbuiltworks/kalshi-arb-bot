@@ -1,0 +1,271 @@
+{
+ "P1": {
+  "grok_statement": "Given residual>0 on side A, next fill is on B with p>0.55 when price_B + residual_vwap_A < 1.02",
+  "TESTABLE_AS_WRITTEN": false,
+  "why_not": "The condition uses price_B, which exists in this data only for fills that happened. Evaluating 'did it switch to B' on rows selected by B's own fill price conditions on the outcome. The literal number is reported for completeness and is NOT evidence.",
+  "literal_biased_value": 0.2751,
+  "literal_biased_n": 473809,
+  "non_circular_unconditional": {
+   "statement": "P(next fill switches leg | residual>0 now)",
+   "n": 742580,
+   "value": 0.2774,
+   "ci95": [
+    0.2711,
+    0.2835
+   ],
+   "VERDICT_vs_0.55": "NOT_SUPPORTED"
+  },
+  "non_circular_monotonicity": {
+   "statement": "P(switch) by residual VWAP decile -- if switching is driven by the pair-cost opportunity, P(switch) should RISE with residual VWAP, because a dearer residual needs a cheaper complement to stay under 1.0.",
+   "by_residual_vwap": {
+    "[0.0,0.1)": {
+     "n": 73891,
+     "p_switch": 0.2849
+    },
+    "[0.1,0.2)": {
+     "n": 81824,
+     "p_switch": 0.2505
+    },
+    "[0.2,0.3)": {
+     "n": 64998,
+     "p_switch": 0.2626
+    },
+    "[0.3,0.4)": {
+     "n": 59985,
+     "p_switch": 0.272
+    },
+    "[0.4,0.5)": {
+     "n": 73313,
+     "p_switch": 0.2812
+    },
+    "[0.5,0.6)": {
+     "n": 95885,
+     "p_switch": 0.2788
+    },
+    "[0.6,0.7)": {
+     "n": 99183,
+     "p_switch": 0.2851
+    },
+    "[0.7,0.8)": {
+     "n": 85354,
+     "p_switch": 0.2775
+    },
+    "[0.8,0.9)": {
+     "n": 70488,
+     "p_switch": 0.2817
+    },
+    "[0.9,1.0)": {
+     "n": 37659,
+     "p_switch": 0.315
+    }
+   }
+  }
+ },
+ "P2": {
+  "grok_statement": "Median final effective_pair_cost <= 1.00 and p75 <= 1.06, over windows forming >=1 pair, excluding zero-residual windows",
+  "n_windows": 12839,
+  "median": 0.98,
+  "median_ci95": [
+   0.9786,
+   0.98177
+  ],
+  "VERDICT_median_le_1.00": "SUPPORTED",
+  "p75": 1.05347,
+  "p75_ci95": [
+   1.05,
+   1.0585
+  ],
+  "VERDICT_p75_le_1.06": "SUPPORTED"
+ },
+ "P3": {
+  "grok_statement": "Fraction of windows with >=1 leg switch is >0.70 overall, and higher in August than March-May",
+  "overall": {
+   "n": 17046,
+   "value": 0.7613,
+   "ci95": [
+    0.755,
+    0.7676
+   ],
+   "VERDICT_gt_0.70": "SUPPORTED"
+  },
+  "march_may": {
+   "n": 1555,
+   "value": 0.9775,
+   "ci95": [
+    0.9698,
+    0.9846
+   ]
+  },
+  "august": {
+   "n": 10794,
+   "value": 0.7298,
+   "ci95": [
+    0.7213,
+    0.7379
+   ]
+  },
+  "VERDICT_august_higher": "NOT_SUPPORTED",
+  "direction_observed": "march_may_higher"
+ },
+ "P4": {
+  "grok_statement": "Size distribution remains peaked on the same discrete set {5,10,20,30,50,80} in both regimes",
+  "TESTABLE_AS_WRITTEN": false,
+  "why_not": "No threshold was stated, so there is nothing to pass or fail. Reported as mode sets plus the share of fills landing exactly on Grok's set.",
+  "early_top_sizes": [
+   {
+    "size": 20.0,
+    "share": 0.2937
+   },
+   {
+    "size": 10.0,
+    "share": 0.0539
+   },
+   {
+    "size": 5.0,
+    "share": 0.0467
+   },
+   {
+    "size": 15.0,
+    "share": 0.0363
+   },
+   {
+    "size": 25.0,
+    "share": 0.0308
+   },
+   {
+    "size": 50.0,
+    "share": 0.0285
+   },
+   {
+    "size": 40.0,
+    "share": 0.0209
+   },
+   {
+    "size": 60.0,
+    "share": 0.0179
+   }
+  ],
+  "late_top_sizes": [
+   {
+    "size": 50.0,
+    "share": 0.0797
+   },
+   {
+    "size": 5.0,
+    "share": 0.0594
+   },
+   {
+    "size": 80.0,
+    "share": 0.0391
+   },
+   {
+    "size": 10.0,
+    "share": 0.0349
+   },
+   {
+    "size": 0.02,
+    "share": 0.0246
+   },
+   {
+    "size": 2.0,
+    "share": 0.0222
+   },
+   {
+    "size": 20.0,
+    "share": 0.0192
+   },
+   {
+    "size": 30.0,
+    "share": 0.0165
+   }
+  ],
+  "share_on_grok_set": {
+   "march_may": {
+    "n": 125249,
+    "value": 0.4315,
+    "ci95": [
+     0.4249,
+     0.4384
+    ]
+   },
+   "august": {
+    "n": 424475,
+    "value": 0.2489,
+    "ci95": [
+     0.2429,
+     0.255
+    ]
+   }
+  },
+  "mode_set_overlap": 3
+ },
+ "P5": {
+  "grok_statement": "Median seconds_since_prev_fill <=3s, and the mass at 0s is >30% of successive same-window fills",
+  "n_gaps": 743771,
+  "median_gap_s": 2.0,
+  "median_ci95": [
+   2.0,
+   2.0
+  ],
+  "VERDICT_median_le_3s": "SUPPORTED",
+  "share_zero_second": 0.3734,
+  "share_zero_ci95": [
+   0.3668,
+   0.3799
+  ],
+  "VERDICT_zero_share_gt_0.30": "SUPPORTED"
+ },
+ "P6": {
+  "grok_statement": "In windows ending with residual>200, the fraction of fills on the residual side is >0.85 (one-sided accumulation is intentional)",
+  "n_windows": 2932,
+  "mean_fraction_on_residual_side": 0.6745,
+  "ci95": [
+   0.6691,
+   0.6797
+  ],
+  "VERDICT_gt_0.85": "NOT_SUPPORTED",
+  "share_of_such_windows_above_0.85": 0.1453
+ },
+ "P7": {
+  "grok_statement": "Post-expiry fills are <5% of all fills and do not improve pair cost more than pre-expiry fills",
+  "n_fills": 760817,
+  "share_post_expiry": 0.0007,
+  "ci95": [
+   0.00035,
+   0.0011
+  ],
+  "VERDICT_lt_0.05": "SUPPORTED",
+  "mean_change_in_pair_cost": {
+   "_note": "negative = pair cost improved on that fill",
+   "pre_expiry": {
+    "n": 696207,
+    "value": -6.3e-05,
+    "ci95": [
+     -0.000282,
+     0.000167
+    ]
+   },
+   "post_expiry": {
+    "n": 533,
+    "value": -0.001381,
+    "ci95": [
+     -0.003011,
+     -0.00038
+    ]
+   }
+  },
+  "VERDICT_post_not_better": "NOT_SUPPORTED"
+ },
+ "_meta": {
+  "fills_tested": 760817,
+  "windows_tested": 17046,
+  "bootstrap": {
+   "resamples": 2000,
+   "resample_size_cap": 20000,
+   "seed": 20261009,
+   "ci": "95% percentile"
+  },
+  "multiple_comparisons": "7 predictions, several with two sub-tests (11 threshold tests in total). A naive 0.05 threshold expects ~0.55 false positives at this count; Bonferroni-adjusted is 0.0045. Verdicts here are CI-based, not p-value-based, and any CI spanning the stated threshold is reported INDETERMINATE.",
+  "verdict_rule": "SUPPORTED only when the whole 95% CI clears the threshold Grok stated. NOT_SUPPORTED only when the whole CI is on the wrong side. Otherwise INDETERMINATE."
+ }
+}

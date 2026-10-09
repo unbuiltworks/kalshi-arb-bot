@@ -58,6 +58,23 @@ FORBIDDEN = [
 ]
 TEXT_EXT = {".md", ".json", ".txt", ".py"}
 
+# Phrases that would reveal the package authors' own prior analysis to a
+# model this package exists to keep blind. Checked separately from the
+# credential scan because the failure mode is different: not a security
+# leak, a contamination leak.
+CONTAMINATION = [
+    (r"MIN_GAP_S|L5_BAND|L5_COMPRESS_TRIGGER|L5_EXTEND_BUDGET",
+     "prior-analysis constant"),
+    (r"CANONICAL_L5_MODEL|CANON_REGIMES|CANON_ECONOMICS",
+     "prior-analysis document name"),
+]
+# Saying a prior analysis EXISTS is required by the blind-branch design
+# (BRANCH_SCOPE.md and README_UPLOAD.md both must say so). Only its
+# CONTENT may not leak, so there is deliberately no pattern for the mere
+# mention. This file is itself exempt: it has to contain the patterns it
+# searches for.
+CONTAMINATION_EXEMPT = {"60_verify_package.py"}
+
 
 def fail(msgs, m):
     msgs.append(m)
@@ -92,6 +109,10 @@ def main() -> int:
         "scripts/25_reshard.py", "scripts/30_case_studies.py",
         "scripts/40_corpus_profile.py", "scripts/50_test_hypothesis.py",
         "scripts/60_verify_package.py", "scripts/70_plain_text_views.py",
+        "scripts/80_grok_predictions.py",
+        "external_review/README.md",
+        "external_review/GROK_ROUND1_RESULTS.md",
+        "external_review/GROK_PREDICTIONS_RESULT.json",
     ]
     for r in required:
         if not os.path.exists(os.path.join(P, r)):
@@ -206,6 +227,24 @@ def main() -> int:
                     fail(bad, f"{label} in {os.path.relpath(fp, P)}: "
                               f"{m.group(0)[:40]!r}")
     print(f"  scanned {scanned} text files")
+
+    print("7b. no contamination from our own prior analysis")
+    hits = 0
+    for root, _, files in os.walk(P):
+        for fn in files:
+            if os.path.splitext(fn)[1] not in TEXT_EXT:
+                continue
+            if fn in CONTAMINATION_EXEMPT:
+                continue
+            fp = os.path.join(root, fn)
+            txt = open(fp, encoding="utf-8", errors="ignore").read()
+            for pat, label in CONTAMINATION:
+                m = re.search(pat, txt)
+                if m:
+                    hits += 1
+                    fail(bad, f"{label} in {os.path.relpath(fp, P)}: "
+                              f"{m.group(0)[:50]!r}")
+    print(f"  contamination hits: {hits}")
 
     print("8. checksums")
     lines = []
