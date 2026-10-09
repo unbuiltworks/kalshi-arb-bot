@@ -297,3 +297,28 @@ def test_passing_trades_in_changes_no_result():
     b = S.resting_fill(obs, 0, True, D("0.40"), D("1"), None,
                        trades=ST.infer_trades(list(obs)))
     assert a == b
+
+
+def test_a_post_only_order_that_would_cross_on_arrival_is_rejected_not_rested():
+    """The replay used to convert a rejection into a resting quote that could
+    later fill. R5 proved the venue rejects it outright."""
+    obs = tape([(0, 0.40, 0.60, 0, None),
+                # our UP bid of 0.40 was chosen here; by arrival the ask has
+                # fallen THROUGH it, so a post-only order would take
+                (3, 0.38, 0.39, 0, None),
+                (30, 0.39, 0.41, 11.0, 0.39),
+                (90, 0.40, 0.60, 11.0, None),
+                (150, 0.40, 0.60, 11.0, None)])
+    r = S.replay_placement("m", obs, "P7_BEST_BID_RESTING")
+    assert r.get("post_only_rejected", 0) >= 1, r
+
+
+def test_an_accepted_quote_still_has_to_clear_its_queue():
+    """Acceptance is not a fill: the queue question still decides."""
+    obs = tape([(0, 0.40, 0.60, 0, None),
+                (3, 0.40, 0.60, 0, None),
+                (30, 0.40, 0.40, 0, None),     # touched, no volume
+                (90, 0.40, 0.60, 0, None)])
+    r = S.replay_placement("m", obs, "P7_BEST_BID_RESTING")
+    assert r.get("skipped") == "NO_FILL"
+    assert r.get("post_only_rejected", 0) == 0

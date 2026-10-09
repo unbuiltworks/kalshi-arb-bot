@@ -61,6 +61,7 @@ import os
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src import pmus_execution_model as XM
 from src import pmus_execution_shadow as EX
 from src import pmus_fees as FEES
 from src import pmus_status_report as ST
@@ -86,6 +87,10 @@ PLACEMENT = {"P7_BEST_BID_RESTING": (0, False),
 ALL_POLICIES = POLICIES + tuple(PLACEMENT)
 REQUOTE_S = float(os.getenv("L5_STUDY_REQUOTE_S", "60"))
 MAX_EXTEND = D(os.getenv("L5_STUDY_MAX_EXTEND", "3"))
+#: decision-to-arrival lag. R5 measured ~2 s and the market moved 2-4 ticks
+#: inside it; this is an observation, not a tuned parameter.
+ARRIVAL_LAG_S = float(os.getenv("L5_STUDY_ARRIVAL_LAG_S",
+                                str(XM.R5_MEDIAN_ARRIVAL_LAG_S)))
 
 
 def _f(x: Any) -> Optional[float]:
@@ -694,6 +699,7 @@ def replay_placement(slug: str, obs: Sequence[Mapping[str, Any]],
     legs: List[dict] = []
     requotes = 0
     unfilled = 0
+    rejected = 0
     i = 0
     while i < len(obs) - 2:
         t0 = _f(obs[i].get("_poll_t"))
@@ -744,6 +750,22 @@ def replay_placement(slug: str, obs: Sequence[Mapping[str, Any]],
                 if cap is not None and px > cap:
                     continue
             requotes += 1
+            # POST-ONLY REJECTION, before the queue question. Our price was
+            # chosen against obs[i] but meets the book ARRIVAL_LAG_S later;
+            # if it would cross there, the venue REJECTS it outright -- it
+            # does not rest and it cannot later fill. The replay used to
+            # convert every such order into a resting quote. Validated on 13
+            # live R5 orders (arrival book 13/13, decision book 0/4).
+            j = _at_or_after(obs, t0 + ARRIVAL_LAG_S, i)
+            arr = obs[j] if j is not None else obs[i]
+            v = XM.post_only_verdict(
+                sy, px if sy else (ONE - px),
+                decision_bid=obs[i].get("bid"),
+                decision_ask=obs[i].get("ask"),
+                arrival_bid=arr.get("bid"), arrival_ask=arr.get("ask"))
+            if v["verdict"] == "REJECT":
+                rejected += 1
+                continue
             f = resting_fill(obs, i, sy, px, UNIT, REQUOTE_S,
                              trades=trades)
             if not f.get("filled"):
@@ -769,8 +791,10 @@ def replay_placement(slug: str, obs: Sequence[Mapping[str, Any]],
         i = max(f["i"], i + 1)
 
     if not legs:
-        return {"policy": policy, "slug": slug, "skipped": "NO_FILL",
-                "requotes": requotes}
+        return {"policy": policy, "slug": slug,
+                "skipped": "ALL_REJECTED" if rejected and not requotes - rejected
+                           else "NO_FILL",
+                "requotes": requotes, "post_only_rejected": rejected}
     yes_q = sum(float(l["qty"]) for l in legs if l["side_yes"])
     no_q = sum(float(l["qty"]) for l in legs if not l["side_yes"])
     row = _pair_row(policy=policy, slug=slug, legs=legs, obs=obs,
@@ -779,6 +803,9 @@ def replay_placement(slug: str, obs: Sequence[Mapping[str, Any]],
                          else "ONE_SIDED_ONLY"))
     row["requotes"] = requotes
     row["requotes_unfilled"] = unfilled
+    row["post_only_rejected"] = rejected
+    row["post_only_reject_rate"] = (round(rejected / requotes, 4)
+                                    if requotes else None)
     row["fill_rate_per_requote"] = (round(len(legs) / requotes, 4)
                                     if requotes else None)
     # time from each long-side fill to the first complement fill after it
