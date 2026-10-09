@@ -361,7 +361,8 @@ def test_watch_ranking_demotes_books_that_never_read(tmp_path):
     universe = [{"slug": "soon", "clock": {"tte_s": 100.0}},
                 {"slug": "later", "clock": {"tte_s": 900.0}}]
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["soon", "later"]
-    cs._poll_fail["soon"] = 3
+    cs.obs["later"] = [{}]
+    cs._poll_fail["soon"] = 1
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["later", "soon"]
 
 
@@ -557,11 +558,17 @@ def test_held_markets_are_pinned_into_the_watch_set(tmp_path):
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["fresh", "held"]
     inv = cs.inv["early"].setdefault("held", CS.VirtualInventory())
     inv.add(side_yes=True, px=D("0.4"), qty=D("1"), t=1.0)
-    # even one-sided and later-expiring, a held market comes first
+    cs.clocks["held"] = {"resolved": True, "expired": False}
+    # even one-sided and later-expiring, a held LIVE market comes first
     cs.one_sided["held"] = {"bid": None}
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["held", "fresh"]
     # once settled it stops being pinned
     cs.settled["held"] = {"yes_won": True}
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["fresh", "held"]
+    # and an EXPIRED held market is not pinned either: it waits on
+    # settlement, not on a quote, and must not hold a polling slot
+    del cs.settled["held"]
+    cs.clocks["held"] = {"resolved": True, "expired": True}
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["fresh", "held"]
 
 

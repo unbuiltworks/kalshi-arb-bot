@@ -1298,9 +1298,20 @@ class CloneShadow:
         nearest expiry. A market whose book has failed three times running
         or that is currently one-sided sinks rather than holding a slot.
         """
-        held = {s for pol in self.policies
-                for s, inv in self.inv[pol].items()
-                if inv.n_fills and s not in self.settled}
+        # Pinned only while the market is still TRADABLE. An expired held
+        # market cannot be completed -- it is waiting on settlement, not on
+        # a quote -- and 16 of them were holding 16 of the 48 slots and
+        # failing their book GET every cycle, which is why `watched` stayed
+        # at 5 while 205 sports markets went unpolled.
+        held = set()
+        for pol in self.policies:
+            for sl, inv in self.inv[pol].items():
+                if not inv.n_fills or sl in self.settled:
+                    continue
+                c = self.clocks.get(sl) or {}
+                if c.get("expired"):
+                    continue
+                held.add(sl)
 
         def key(r):
             slug = r["slug"]
@@ -1311,11 +1322,15 @@ class CloneShadow:
             # directionally, which is the opposite of the strategy.
             if slug in held:
                 return (-1, 0, 0, r["clock"]["tte_s"])
-            fails = min(3, self._poll_fail.get(slug, 0))
+            # ANY failure sorts below a market we have never tried. The
+            # capped-count version let a market that had failed once or
+            # twice keep a slot ahead of an untried tradable one, so a
+            # freshly discovered sports slate could not get polled at all.
+            fails = 1 if self._poll_fail.get(slug, 0) else 0
             one_sided = 1 if slug in self.one_sided else 0
             dq = self.obs.get(slug)
             never_seen = 0 if dq else 1
-            return (fails, one_sided, never_seen, r["clock"]["tte_s"])
+            return (fails, never_seen, one_sided, r["clock"]["tte_s"])
         return sorted(universe, key=key)
 
     def new_candidate_rows(self) -> List[dict]:
