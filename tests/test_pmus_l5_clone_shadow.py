@@ -563,3 +563,47 @@ def test_held_markets_are_pinned_into_the_watch_set(tmp_path):
     # once settled it stops being pinned
     cs.settled["held"] = {"yes_won": True}
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["fresh", "held"]
+
+
+def test_refused_completion_reports_how_far_above_the_ceiling():
+    inv = CS.VirtualInventory()
+    inv.add(side_yes=True, px=D("0.80"), qty=D("1"), t=1.0)
+    out = CS.completion_due(inv, {"bid": 0.70, "ask": 0.75})
+    # budget 0.96-0.80 = 0.16; NO maker = 1-0.75 = 0.25
+    assert out["shortfall"] == "0.09"
+    assert out["pair_cost_available"] == "1.05"
+
+
+def test_pair_cost_reachability_aggregates_the_refusals(tmp_path):
+    rows = [{"completion_rule": {"pair_cost_available": "1.05",
+                                 "shortfall": "0.09"}},
+            {"completion_rule": {"pair_cost_available": "0.94",
+                                 "due": True}},
+            {"completion_rule": {"why": "NO_RESIDUAL"}}]
+    out = CS.CloneShadow.pair_cost_reachability(rows)
+    assert out["n"] == 2
+    assert out["pair_cost_available"]["min"] == 0.94
+    assert out["pair_cost_available"]["frac_at_or_below_ceiling"] == 0.5
+    assert out["shortfall_when_refused"]["n"] == 1
+
+
+def test_settlement_recomputes_the_clock_instead_of_trusting_the_cache(
+        tmp_path):
+    """Discovery drops a market the moment it expires, so a held market was
+    never polled again and its cached clock still said 'not expired' --
+    settlement could never fire. 11 markets sat unsettled."""
+    slug = "cpc-btc-updown-15m-2026-09-23-1345z"
+    resolved = {"market": {"slug": slug, "outcomes": ["Up", "Down"],
+                           "outcomePrices": ["1", "0"], "closed": True}}
+    gw = Gateway([], {})
+    gw.books[slug] = [resolved]
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: 0.0,
+                        policies={"early": None}, state_dir=str(tmp_path))
+    inv = cs.inv["early"].setdefault(slug, CS.VirtualInventory())
+    inv.add(side_yes=True, px=D("0.30"), qty=D("1"), t=0.0)
+    # a STALE cached clock claiming the window is still open
+    cs.clocks[slug] = {"resolved": True, "expired": False, "tte_s": 900.0}
+    # well past the real 2026-09-23 14:00Z close
+    rows = cs.settle_expired([], 1790179000.0)
+    assert len(rows) == 1 and rows[0]["settled"] is True
+    assert D(rows[0]["residual_pnl_usd"]) == D("0.70")

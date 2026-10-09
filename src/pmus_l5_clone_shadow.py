@@ -395,8 +395,14 @@ def completion_due(inv: VirtualInventory, obs: Mapping[str, Any]) -> dict:
     if px > budget:
         return {"due": False, "why": "COMPLEMENT_ABOVE_PAIR_CEILING",
                 "own_side_maker_px": str(px), "pair_budget": str(budget),
-                "residual_avg": str(avg)}
+                "residual_avg": str(avg),
+                # HOW FAR ABOVE, because "the ceiling refused it" does not
+                # say whether 0.96 is unreachable by a tick or by a dime --
+                # and that difference is the whole GO/NO-GO question.
+                "shortfall": str(px - budget),
+                "pair_cost_available": str(avg + px)}
     return {"due": True, "side_yes": side_yes, "px": px,
+            "pair_cost_available": str(avg + px),
             "qty": min(UNIT_SHARES, abs(resid)),
             "pair_cost_if_filled": str(avg + px),
             "pair_ceiling": str(PAIR_CEILING),
@@ -1233,7 +1239,13 @@ class CloneShadow:
         for slug in sorted(held):
             if slug in self.settled:
                 continue
-            clock = self.clocks.get(slug) or {}
+            # THE CLOCK IS RECOMPUTED HERE, NOT READ FROM self.clocks.
+            # self.clocks is only written by poll(), and discovery drops a
+            # market from the universe the moment it expires -- so an
+            # expired held market was never polled again, its cached clock
+            # still said "not expired", and settlement could never fire.
+            # 11 markets sat held and unsettled for exactly that reason.
+            clock = MC.position(slug, None, now)
             if clock.get("resolved") and not clock.get("expired"):
                 continue
             try:
@@ -1260,6 +1272,46 @@ class CloneShadow:
                                   "outcome_prices":
                                       outcome.get("outcome_prices")}
         return rows
+
+    @staticmethod
+    def pair_cost_reachability(decisions: Sequence[Mapping[str, Any]]
+                               ) -> dict:
+        """What pair cost the venue ACTUALLY offered when we held a residual.
+
+        The completion rule's refusals carry `pair_cost_available` -- the
+        residual's own cost basis plus the complement's own-side maker price
+        at that instant. Aggregated, this is the distribution of pair costs
+        reachable by a patient maker on PMUS, which is the number the pair
+        thesis lives or dies on, and it is observable whether or not a
+        completion is ever proposed.
+        """
+        vals: List[float] = []
+        shortfalls: List[float] = []
+        for d in decisions:
+            c = d.get("completion_rule") or {}
+            v = _f(c.get("pair_cost_available"))
+            if v is not None:
+                vals.append(v)
+            sf = _f(c.get("shortfall"))
+            if sf is not None:
+                shortfalls.append(sf)
+        if not vals:
+            return {"n": 0}
+        return {"n": len(vals),
+                "pair_cost_available": {
+                    "min": round(min(vals), 4),
+                    "median": round(float(np.median(vals)), 4),
+                    "max": round(max(vals), 4),
+                    "frac_at_or_below_ceiling": round(float(np.mean(
+                        [v <= float(PAIR_CEILING) for v in vals])), 4)},
+                "shortfall_when_refused": (
+                    {"n": len(shortfalls),
+                     "min": round(min(shortfalls), 4),
+                     "median": round(float(np.median(shortfalls)), 4)}
+                    if shortfalls else {"n": 0}),
+                "ceiling": str(PAIR_CEILING),
+                "MEANING": ("residual cost basis + complement own-side maker "
+                            "price at the moment we held inventory")}
 
     def settlement_totals(self) -> dict:
         """Cumulative shadow settlement economics per arm, from the tape.
@@ -1541,6 +1593,8 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                        s for pol in cs.policies
                        for s, inv in cs.inv[pol].items()
                        if inv.n_fills and s not in cs.settled}),
+                   "pair_cost_reachability": cs.pair_cost_reachability(
+                       decisions),
                    "completion_rule": _mix([
                        (d.get("completion_rule") or {}).get("why")
                        or ("DUE" if (d.get("completion_rule") or {}).get("due")
