@@ -70,6 +70,7 @@ from src import pmus_event_progress as EP
 from src import pmus_execution_shadow as EX
 from src import pmus_fees as FEES
 from src import pmus_l5_pair_policy_study as PS
+from src import pmus_sports_placement_study as SPS
 from src import pmus_market_clock as MC
 from src import pmus_sports_shadow_breadth as SB
 from src import pmus_status_report as ST
@@ -1928,6 +1929,22 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                 except Exception as exc:                       # noqa: BLE001
                     print(PREFIX + json.dumps(
                         {"kind": "policy_study_error",
+                         "error": "%s:%s" % (type(exc).__name__,
+                                             str(exc)[:200])}), flush=True)
+                # DOES CONTINUOUS QUOTING WORK BETTER IN SPORTS THAN IN BTC?
+                # Same policies, same fill discipline, same accounting -- the
+                # whole tape instead of the cpc- slice, cut by category and
+                # sport. Printed separately because it is a REPLAY. No new
+                # service: this runs in the study cycle that already exists.
+                try:
+                    whole = PS.load_tape(cs.state_dir, prefix="")
+                    print(PREFIX + json.dumps(
+                        {"kind": "sports_placement_study",
+                         "cycle": cs.cycles, **SPS.study(whole)},
+                        separators=(",", ":"), default=str), flush=True)
+                except Exception as exc:                       # noqa: BLE001
+                    print(PREFIX + json.dumps(
+                        {"kind": "sports_placement_study_error",
                          "error": "%s:%s" % (type(exc).__name__,
                                              str(exc)[:200])}), flush=True)
             if cs.cycles % 5 == 0 or judged["newly_queue_cleared"]:
