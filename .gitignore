@@ -133,3 +133,8 @@ data/l5/shadow/shadow_*.jsonl
 # braces.
 analysis/l5/august_replay/__pycache__/
 analysis/l5/microstructure/__pycache__/
+
+# L5 CLONE SHADOW: the per-decision array is a 43MB regenerated artifact of
+# the realtime shadow, reproducible from the recorded tape. Not evidence on
+# its own and not worth a binary in history.
+analysis/l5/clone/
