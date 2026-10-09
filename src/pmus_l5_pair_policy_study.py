@@ -545,6 +545,49 @@ def load_tape(state_dir: str, *, prefix: str = "cpc-",
     return {s: [v for _k, v in sorted(d.items())] for s, d in out.items()}
 
 
+def settled_summary(rows: Sequence[Mapping[str, Any]],
+                    settled: Mapping[str, Mapping[str, Any]],
+                    policy: str) -> dict:
+    """FULL-INVENTORY expectancy per entry, every residual included.
+
+    Reported over the settlement-DECIDABLE subset, with the undecidable
+    count beside it: dropping undecidable windows silently would bias the
+    result toward whichever outcomes happen to converge inside our tape.
+    """
+    mine = [r for r in rows if r.get("policy") == policy
+            and "skipped" not in r]
+    decided, undec = [], 0
+    for r in mine:
+        o = settled.get(str(r.get("slug"))) or {}
+        sr = settle_row(r, o)
+        if sr.get("settled"):
+            decided.append(sr)
+        else:
+            undec += 1
+    nets = [d["net_usd"] for d in decided]
+    pair = [d["matched_pair_pnl_usd"] for d in decided]
+    res = [d["residual_pnl_usd"] for d in decided]
+    losers = [x for x in res if x < 0]
+    return {
+        "policy": policy,
+        "entries": len(mine),
+        "settlement_decidable": len(decided),
+        "settlement_undecidable": undec,
+        "net_per_entry_usd_FULL_INVENTORY": _boot_ci(nets),
+        "matched_pair_pnl_per_entry": _boot_ci(pair),
+        "residual_pnl_per_entry": _boot_ci(res),
+        "losing_residuals": {"n": len(losers),
+                             "frac_of_decided": (round(len(losers)
+                                                       / len(decided), 4)
+                                                 if decided else None),
+                             "total_usd": round(sum(losers), 5)},
+        "fees_usd_total": round(sum(d["fees_usd"] for d in decided), 5),
+        "total_net_usd": round(sum(nets), 5) if nets else None,
+        "SETTLEMENT": "INFERRED_FROM_TERMINAL_BOOK, never venue-confirmed",
+        "LABEL": "REPLAY_SETTLED_INFERRED_NOT_REALIZED",
+    }
+
+
 def study(obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]],
           policies: Sequence[str] = POLICIES) -> dict:
     """Ranked comparison, in-sample and out-of-sample by market TIME.
@@ -569,12 +612,27 @@ def study(obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]],
                   "residual P&L excluded for want of a settlement feed"],
         "splits": {},
     }
+    # settlement is inferred ONCE per market and shared by every policy, so
+    # no policy can be scored against a different outcome than its rivals
+    settled = {s: infer_settlement(obs_by_slug[s]) for s in slugs}
+    out["settlement_coverage"] = {
+        "markets": len(settled),
+        "decidable": sum(1 for v in settled.values() if v.get("resolved")),
+        "undecidable": sum(1 for v in settled.values()
+                           if not v.get("resolved")),
+        "bases": _mix([v.get("basis") for v in settled.values()]),
+        "why_undecidable": _mix([v.get("why") for v in settled.values()]),
+        "SOURCE": ("the market's own terminal prices; PMUS settles on CF "
+                   "BRTI and no BRTI history exists in this repository"),
+        "LABEL": "SETTLEMENT_INFERRED_FROM_TERMINAL_BOOK",
+    }
     for name, group in halves.items():
         rows: List[dict] = []
         for s in group:
             for p in policies:
                 rows.append(replay(s, obs_by_slug[s], p))
         sums = [summarize(rows, p) for p in policies]
+        full = {p: settled_summary(rows, settled, p) for p in policies}
         ranked = sorted(
             [s for s in sums if s.get("entries")],
             key=lambda d: (-(d["matched_pair_cost"]["frac_under_one"] or 0),
@@ -583,6 +641,7 @@ def study(obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]],
                            else 9))
         out["splits"][name] = {
             "markets": len(group),
+            "full_inventory_after_settlement": full,
             "by_policy": {s["policy"]: s for s in sums},
             "ranking": [{"policy": s["policy"],
                          "entries": s["entries"],
@@ -593,7 +652,149 @@ def study(obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]],
                          "frac_at_or_below_ceiling":
                              s["matched_pair_cost"]["frac_at_or_below_ceiling"],
                          "net_per_entry_usd_matched_only":
-                             s["net_per_entry_usd_matched_only"]}
+                             s["net_per_entry_usd_matched_only"],
+                         "net_per_entry_usd_FULL_INVENTORY":
+                             (full.get(s["policy"]) or {}).get(
+                                 "net_per_entry_usd_FULL_INVENTORY")}
                         for s in ranked],
         }
     return out
+
+
+# ------------------------------------------- settlement, from our own tape --
+# WHY NOT A REFERENCE PRICE. PMUS settles BTC15m on CF Benchmarks BRTI --
+# "Up iff BRTI(T_end) >= BRTI(T_start)", a 60-price average to 2 dp -- which
+# `analysis/pmus/P24_PMUS_BTC15M.md` documents and `src/l5_venue_adapter.py`
+# carries as contract metadata. The repository holds NO BRTI history: what
+# exists is a Coinbase 1-minute series explicitly labelled
+# PROXY_NOT_SETTLEMENT_INDEX covering 2026-08-20..25, and Gemini's
+# Kaiko-RFR strike recordings from 2026-08-31 whose own status file reads
+# Z_STATUS: NOT_IDENTIFIED. Neither is BRTI and neither covers the replay
+# windows. No external price host is reachable from the analysis container.
+#
+# WHAT IS AVAILABLE INSTEAD. A binary market converges at expiry: the
+# winning side's own-side price goes to 1.00 and the loser's to 0.00. Our
+# own tape polls each window to its end, so the market's TERMINAL state
+# names the outcome without any external index. That is an inference from
+# prices, not a venue resolution, so it is labelled
+# SETTLEMENT_INFERRED_FROM_TERMINAL_BOOK everywhere it is used, and a
+# window whose terminal state is not decisive is UNDECIDABLE rather than
+# guessed.
+SETTLE_TAIL_S = float(os.getenv("L5_STUDY_SETTLE_TAIL_S", "120"))
+SETTLE_HI = D(os.getenv("L5_STUDY_SETTLE_HI", "0.95"))
+SETTLE_LO = D(os.getenv("L5_STUDY_SETTLE_LO", "0.05"))
+
+
+def infer_settlement(obs: Sequence[Mapping[str, Any]],
+                     window_end: Optional[float] = None) -> dict:
+    """Outcome from the market's own terminal prices, or UNDECIDABLE.
+
+    Evidence, in order: the last two-sided mid inside the tail window, then
+    the last trade price. Both must be decisive (>= 0.95 or <= 0.05); a mid
+    of 0.62 at expiry means our tape stopped before convergence and the
+    honest answer is that we do not know.
+    """
+    if not obs:
+        return {"resolved": False, "why": "NO_TAPE"}
+    t_last = _f(obs[-1].get("_poll_t")) or 0.0
+    cutoff = (window_end if window_end is not None else t_last) - SETTLE_TAIL_S
+    tail = [r for r in obs if (_f(r.get("_poll_t")) or 0) >= cutoff]
+    if not tail:
+        tail = obs[-1:]
+    for r in reversed(tail):
+        q = own_side(r, True)
+        if q is None:
+            continue
+        mid = q["mid"]
+        if mid >= SETTLE_HI:
+            return {"resolved": True, "yes_won": True, "basis": "terminal_mid",
+                    "terminal_mid": str(mid),
+                    "LABEL": "SETTLEMENT_INFERRED_FROM_TERMINAL_BOOK"}
+        if mid <= SETTLE_LO:
+            return {"resolved": True, "yes_won": False,
+                    "basis": "terminal_mid", "terminal_mid": str(mid),
+                    "LABEL": "SETTLEMENT_INFERRED_FROM_TERMINAL_BOOK"}
+        break
+    for r in reversed(tail):
+        lp = _f(r.get("last_trade_px"))
+        if lp is None:
+            continue
+        if lp >= float(SETTLE_HI):
+            return {"resolved": True, "yes_won": True,
+                    "basis": "terminal_last_trade", "last_trade_px": lp,
+                    "LABEL": "SETTLEMENT_INFERRED_FROM_TERMINAL_BOOK"}
+        if lp <= float(SETTLE_LO):
+            return {"resolved": True, "yes_won": False,
+                    "basis": "terminal_last_trade", "last_trade_px": lp,
+                    "LABEL": "SETTLEMENT_INFERRED_FROM_TERMINAL_BOOK"}
+        break
+    return {"resolved": False,
+            "why": "TERMINAL_STATE_NOT_DECISIVE",
+            "LABEL": "SETTLEMENT_UNDECIDABLE"}
+
+
+def settle_row(row: Mapping[str, Any], outcome: Mapping[str, Any]) -> dict:
+    """FULL-INVENTORY P&L for one replayed sequence: pairs AND residual.
+
+    Matched shares pay exactly 1.00 whichever way the market resolves. The
+    residual pays 1.00 or 0.00 on the inferred outcome, at its own cost
+    basis -- so every losing residual is counted, which is the whole point
+    of this stage. Fees are whatever the policy actually incurred.
+    """
+    out: Dict[str, Any] = {
+        "policy": row.get("policy"), "slug": row.get("slug"),
+        "fees_usd": float(row.get("fees_usd") or 0),
+        "LABEL": "REPLAY_SETTLED_INFERRED_NOT_REALIZED",
+    }
+    legs = row.get("fill_evidence") or []
+    yes_q = sum(float(l["qty"]) for l in legs if l["side"] == "YES")
+    no_q = sum(float(l["qty"]) for l in legs if l["side"] == "NO")
+    yes_c = sum(float(l["qty"]) * float(l["px"]) for l in legs
+                if l["side"] == "YES")
+    no_c = sum(float(l["qty"]) * float(l["px"]) for l in legs
+               if l["side"] == "NO")
+    matched = min(yes_q, no_q)
+    pair_pnl = 0.0
+    if matched > 0 and yes_q > 0 and no_q > 0:
+        pair_pnl = matched * (1.0 - (yes_c / yes_q + no_c / no_q))
+    out["matched_shares"] = round(matched, 4)
+    out["matched_pair_pnl_usd"] = round(pair_pnl, 5)
+    resid = yes_q - no_q
+    out["residual_shares_signed"] = round(resid, 4)
+    if not outcome.get("resolved"):
+        out["settled"] = False
+        out["why"] = outcome.get("why")
+        return out
+    yes_won = bool(outcome["yes_won"])
+    resid_pnl = 0.0
+    if abs(resid) > 1e-9:
+        long_yes = resid > 0
+        qty = abs(resid)
+        avg = (yes_c / yes_q) if long_yes else (no_c / no_q)
+        payout = 1.0 if (long_yes == yes_won) else 0.0
+        resid_pnl = qty * (payout - avg)
+    out.update({
+        "settled": True, "yes_won": yes_won,
+        "settlement_basis": outcome.get("basis"),
+        "residual_pnl_usd": round(resid_pnl, 5),
+        "net_usd": round(pair_pnl + resid_pnl - out["fees_usd"], 5),
+    })
+    return out
+
+
+def _boot_ci(xs: Sequence[float], iters: int = 2000,
+             seed: int = 11) -> Optional[dict]:
+    """Bootstrap 90% interval on the mean. Small n is the reason this is
+    here: a point estimate over 6 entries reads as knowledge."""
+    if not xs:
+        return None
+    import random
+    rng = random.Random(seed)
+    n = len(xs)
+    means = []
+    for _ in range(iters):
+        means.append(sum(xs[rng.randrange(n)] for _ in range(n)) / n)
+    means.sort()
+    return {"n": n, "mean": round(sum(xs) / n, 5),
+            "p05": round(means[int(0.05 * iters)], 5),
+            "p95": round(means[int(0.95 * iters)], 5)}

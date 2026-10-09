@@ -164,3 +164,52 @@ def test_a_print_between_the_touches_is_not_attributed_to_us():
                 (20, 0.39, 0.41, 999, 0.40)])
     f = S.resting_fill(obs, 0, True, D("0.40"), D("1"), None)
     assert f["filled"] is False
+
+
+# ---------------------------------------------- inferred settlement -------
+def test_settlement_is_inferred_only_from_a_decisive_terminal_book():
+    up = tape([(0, 0.40, 0.60, 0, None), (60, 0.98, 1.00, 5, 0.99)])
+    dn = tape([(0, 0.40, 0.60, 0, None), (60, 0.00, 0.02, 5, 0.01)])
+    mid = tape([(0, 0.40, 0.60, 0, None), (60, 0.55, 0.65, 5, 0.60)])
+    assert S.infer_settlement(up)["yes_won"] is True
+    assert S.infer_settlement(dn)["yes_won"] is False
+    u = S.infer_settlement(mid)
+    assert u["resolved"] is False and u["why"] == "TERMINAL_STATE_NOT_DECISIVE"
+    assert u["LABEL"] == "SETTLEMENT_UNDECIDABLE"
+    assert S.infer_settlement(up)["LABEL"] == \
+        "SETTLEMENT_INFERRED_FROM_TERMINAL_BOOK"
+
+
+def test_full_inventory_counts_every_losing_residual():
+    # one YES share at 0.30, no complement, market resolves DOWN
+    row = {"policy": "P", "slug": "s", "fees_usd": "0",
+           "fill_evidence": [{"side": "YES", "px": "0.30", "qty": 1.0}]}
+    lost = S.settle_row(row, {"resolved": True, "yes_won": False})
+    won = S.settle_row(row, {"resolved": True, "yes_won": True})
+    assert lost["residual_pnl_usd"] == pytest.approx(-0.30)
+    assert lost["net_usd"] == pytest.approx(-0.30)
+    assert won["residual_pnl_usd"] == pytest.approx(0.70)
+
+
+def test_full_inventory_pairs_pay_one_either_way_minus_fees():
+    row = {"policy": "P", "slug": "s", "fees_usd": "0.01",
+           "fill_evidence": [{"side": "YES", "px": "0.40", "qty": 1.0},
+                             {"side": "NO", "px": "0.55", "qty": 1.0}]}
+    for yw in (True, False):
+        out = S.settle_row(row, {"resolved": True, "yes_won": yw})
+        assert out["matched_pair_pnl_usd"] == pytest.approx(0.05)
+        assert out["residual_pnl_usd"] == pytest.approx(0.0)
+        assert out["net_usd"] == pytest.approx(0.04)      # fee charged
+
+
+def test_an_undecidable_market_is_not_scored_as_zero():
+    row = {"policy": "P", "slug": "s", "fees_usd": "0",
+           "fill_evidence": [{"side": "YES", "px": "0.30", "qty": 1.0}]}
+    out = S.settle_row(row, {"resolved": False, "why": "X"})
+    assert out["settled"] is False and "net_usd" not in out
+
+
+def test_bootstrap_interval_reports_n_and_both_tails():
+    ci = S._boot_ci([0.1, -0.2, 0.05, 0.0])
+    assert ci["n"] == 4 and ci["p05"] <= ci["mean"] <= ci["p95"]
+    assert S._boot_ci([]) is None
