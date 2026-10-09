@@ -1,0 +1,325 @@
+{
+ "C1_static_cap_near_0.48_0.50": {
+  "grok_claim": "a static rule refusing to buy either leg above roughly 0.48-0.50",
+  "n_fills": 760817,
+  "mean": 0.46142,
+  "quantiles": {
+   "p1": 0.02,
+   "p5": 0.04,
+   "p10": 0.07,
+   "p25": 0.19,
+   "p50": 0.46,
+   "p75": 0.71,
+   "p90": 0.87,
+   "p95": 0.93,
+   "p99": 0.97
+  },
+  "share_above_0.40": 0.55,
+  "share_above_0.48": 0.4782,
+  "share_above_0.50": 0.4575,
+  "share_above_0.60": 0.3548,
+  "share_above_0.70": 0.2554,
+  "share_above_0.80": 0.1616,
+  "share_above_0.90": 0.0714,
+  "VERDICT": "REFUTED",
+  "why": "45.8% of fills are above 0.50 and 16.2% are above 0.80, with p99 at 0.97. A cap at 0.48-0.50 would have to reject nearly half the corpus. The sub-0.50 MEAN is real; a CAP is not what produces it.",
+  "pair_cost_cross_check": {
+   "share_of_windows_with_final_pair_cost_ge_1.00": 0.4141,
+   "share_above_0.96": 0.5854,
+   "note": "A static per-leg cap at 0.48 forces every pair to cost <=0.96. In fact 58.5% of windows end above 0.96 and 41.4% at or above 1.00, so no static per-leg cap can generate the observed pair-cost distribution."
+  }
+ },
+ "C2_symmetric_across_legs": {
+  "grok_claim": "threshold roughly symmetric across legs",
+  "UP": {
+   "n": 376506,
+   "mean": 0.45993,
+   "ci95": [
+    0.45583,
+    0.46408
+   ]
+  },
+  "DOWN": {
+   "n": 384311,
+   "mean": 0.46287,
+   "ci95": [
+    0.45889,
+    0.4669
+   ]
+  },
+  "VERDICT": "SUPPORTED (CIs overlap)"
+ },
+ "C3_no_time_in_window_dependence": {
+  "grok_claim": "mean fill price does not vary materially with position in the window",
+  "by_decile": {
+   "decile_0": {
+    "n": 62898,
+    "mean": 0.50869,
+    "ci95": [
+     0.5067,
+     0.51071
+    ]
+   },
+   "decile_1": {
+    "n": 61436,
+    "mean": 0.49552,
+    "ci95": [
+     0.49298,
+     0.49819
+    ]
+   },
+   "decile_2": {
+    "n": 66422,
+    "mean": 0.48329,
+    "ci95": [
+     0.48004,
+     0.48657
+    ]
+   },
+   "decile_3": {
+    "n": 76108,
+    "mean": 0.46284,
+    "ci95": [
+     0.45924,
+     0.46644
+    ]
+   },
+   "decile_4": {
+    "n": 75503,
+    "mean": 0.45587,
+    "ci95": [
+     0.45186,
+     0.45995
+    ]
+   },
+   "decile_5": {
+    "n": 74257,
+    "mean": 0.45722,
+    "ci95": [
+     0.45295,
+     0.46129
+    ]
+   },
+   "decile_6": {
+    "n": 88201,
+    "mean": 0.44621,
+    "ci95": [
+     0.4418,
+     0.45071
+    ]
+   },
+   "decile_7": {
+    "n": 88787,
+    "mean": 0.4604,
+    "ci95": [
+     0.45577,
+     0.46505
+    ]
+   },
+   "decile_8": {
+    "n": 90146,
+    "mean": 0.44382,
+    "ci95": [
+     0.43911,
+     0.44887
+    ]
+   },
+   "decile_9": {
+    "n": 77059,
+    "mean": 0.42403,
+    "ci95": [
+     0.41921,
+     0.42877
+    ]
+   }
+  },
+  "range_across_deciles": 0.08466,
+  "VERDICT": "REFUTED (spread 0.0847 across deciles)"
+ },
+ "C4_inventory_blind": {
+  "grok_claim": "the price filter is unconditional on current inventory state",
+  "by_residual_qty": {
+   "resid_0": {
+    "n": 1191,
+    "mean": 0.52068,
+    "ci95": [
+     0.50673,
+     0.53439
+    ]
+   },
+   "resid_1_50": {
+    "n": 198403,
+    "mean": 0.47147,
+    "ci95": [
+     0.46771,
+     0.47538
+    ]
+   },
+   "resid_200_1000": {
+    "n": 171137,
+    "mean": 0.43956,
+    "ci95": [
+     0.43531,
+     0.44381
+    ]
+   },
+   "resid_50_200": {
+    "n": 372161,
+    "mean": 0.4628,
+    "ci95": [
+     0.45887,
+     0.46697
+    ]
+   },
+   "resid_gt_1000": {
+    "n": 879,
+    "mean": 0.37061,
+    "ci95": [
+     0.34547,
+     0.39681
+    ]
+   }
+  },
+  "by_residual_vwap": {
+   "vwap_[0.0,0.2)": {
+    "n": 155715,
+    "mean": 0.41694,
+    "ci95": [
+     0.41172,
+     0.42213
+    ]
+   },
+   "vwap_[0.2,0.4)": {
+    "n": 124983,
+    "mean": 0.44561,
+    "ci95": [
+     0.44229,
+     0.44902
+    ]
+   },
+   "vwap_[0.4,0.6)": {
+    "n": 169198,
+    "mean": 0.48671,
+    "ci95": [
+     0.48477,
+     0.4887
+    ]
+   },
+   "vwap_[0.6,0.8)": {
+    "n": 184537,
+    "mean": 0.47406,
+    "ci95": [
+     0.47056,
+     0.47751
+    ]
+   },
+   "vwap_[0.8,1.0)": {
+    "n": 108147,
+    "mean": 0.47049,
+    "ci95": [
+     0.46472,
+     0.47604
+    ]
+   }
+  }
+ },
+ "C5_stable_across_corpus": {
+  "grok_claim": "the 0.4614 mean holds in every calendar month",
+  "by_month": {
+   "2026-03": {
+    "n": 1931,
+    "mean": 0.48572,
+    "ci95": [
+     0.47685,
+     0.4942
+    ]
+   },
+   "2026-04": {
+    "n": 34223,
+    "mean": 0.45808,
+    "ci95": [
+     0.45467,
+     0.46155
+    ]
+   },
+   "2026-05": {
+    "n": 89095,
+    "mean": 0.47101,
+    "ci95": [
+     0.46716,
+     0.47479
+    ]
+   },
+   "2026-06": {
+    "n": 77097,
+    "mean": 0.45987,
+    "ci95": [
+     0.45563,
+     0.46445
+    ]
+   },
+   "2026-07": {
+    "n": 133996,
+    "mean": 0.47111,
+    "ci95": [
+     0.46688,
+     0.4756
+    ]
+   },
+   "2026-08": {
+    "n": 424475,
+    "mean": 0.45678,
+    "ci95": [
+     0.45277,
+     0.46074
+    ]
+   }
+  },
+  "range_across_months": 0.02894,
+  "VERDICT": "SUPPORTED"
+ },
+ "DECISIVE_extend_vs_complete": {
+  "question": "Does the price paid differ between fills that merely EXTEND the one-sided residual and fills that COMPLETE a pair? A static, inventory-blind cap requires these to be equal.",
+  "EXTEND_no_new_pair": {
+   "n": 387755,
+   "mean": 0.45619,
+   "ci95": [
+    0.45232,
+    0.46022
+   ]
+  },
+  "COMPLETE_increases_matched": {
+   "n": 356016,
+   "mean": 0.46363,
+   "ci95": [
+    0.45963,
+    0.46763
+   ]
+  },
+  "difference_complete_minus_extend": 0.00744,
+  "counts": {
+   "EXTEND_no_new_pair": 387755,
+   "COMPLETE_increases_matched": 356016
+  },
+  "VERDICT": "C4 not refuted on this split (CIs overlap)",
+  "interpretation_if_complete_is_dearer": "Then the mechanism is: accumulate the first leg cheaply while it stays cheap, then PAY UP to close the pair. That is a two-state conditional policy -- cheap accumulation plus willingness-to-complete -- and it is exactly the component a static-cap clone would omit."
+ },
+ "first_vs_later_fills": {
+  "first_fill": {
+   "n": 17046,
+   "mean": 0.53407,
+   "ci95": [
+    0.53108,
+    0.5372
+   ]
+  },
+  "later_fills": {
+   "n": 743771,
+   "mean": 0.45975,
+   "ci95": [
+    0.45592,
+    0.46368
+   ]
+  }
+ }
+}

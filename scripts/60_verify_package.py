@@ -119,6 +119,9 @@ def main() -> int:
         "scripts/82_null_model_test.py",
         "external_review/NULL_MODEL_DECISIVE_TEST.md",
         "external_review/NULL_MODEL_TEST_RESULT.json",
+        "scripts/83_price_acceptance.py",
+        "external_review/PRICE_ACCEPTANCE_FINDINGS.md",
+        "external_review/PRICE_ACCEPTANCE_RESULT.json",
     ]
     for r in required:
         if not os.path.exists(os.path.join(P, r)):
