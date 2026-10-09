@@ -63,6 +63,7 @@ from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import local_faults as LF
 from analysis.l5.e1_cohort import multitrade as MT
 from analysis.l5.e1_cohort import attempt_rows as AR
+from analysis.l5.e1_cohort import shutdown as SD
 from analysis.l5.e1_cohort.spec import (E1_FINGERPRINT, FIRST_LEG_QTY,
                                         MAX_COHORT_REALIZED_LOSS_USD,
                                         MAX_ATTEMPTS_PER_WINDOW,
@@ -1208,6 +1209,61 @@ def preview_rejection_record(snapshot: Mapping[str, Any],
 
 # ------------------------------------------------------------- the cohort
 
+#: THE EMERGENCY HANDOVER HOOK.
+#:
+#: `run_cohort` installs a closure here while it owns orders, and `main`
+#: calls it from a `finally`. That indirection is deliberate and it is the
+#: SMALLEST change that makes the handover reachable: the alternative --
+#: wrapping the 450-line iteration loop in `try`/`finally` -- would reindent
+#: the whole body and bury a four-line safety fix inside a whitespace diff
+#: nobody can review.
+#:
+#: The closure holds the only things the handover needs: the lifecycle that
+#: knows which ids are ours, the provider that can re-read venue state, and
+#: the transport factory. It is CLEARED on a normal return, so a set hook
+#: means "a cohort stopped without completing its handover".
+_EMERGENCY_HANDOVER: Any = None
+
+
+def _set_emergency_handover(fn: Any) -> None:
+    global _EMERGENCY_HANDOVER
+    _EMERGENCY_HANDOVER = fn
+
+
+def emergency_handover_pending() -> bool:
+    """Read-only: does a cohort still owe a handover?"""
+    return _EMERGENCY_HANDOVER is not None
+
+
+def run_emergency_handover(*, cause: str) -> Optional[Dict[str, Any]]:
+    """Run the installed handover, once, and never raise.
+
+    Called from `main`'s `finally`, so it executes on an uncaught exception
+    and on `shutdown.ShutdownRequested` -- which is a `BaseException`
+    precisely so the loop's `except Exception` classifiers cannot swallow a
+    shutdown and keep placing orders.
+
+    IT NEVER RAISES. This runs during an unwind that may already be
+    carrying the real failure, and losing that failure to a secondary error
+    in the cancel path would make the incident unreadable. A failure here is
+    returned, recorded and reported; it is not propagated.
+    """
+    fn = _EMERGENCY_HANDOVER
+    if fn is None:
+        return None
+    _set_emergency_handover(None)
+    try:
+        return fn(cause)
+    except BaseException as exc:                               # noqa: BLE001
+        return {"ran": False, "cause": cause,
+                "because": "EMERGENCY_HANDOVER_RAISED:%s"
+                           % type(exc).__name__,
+                "FAILS_CLOSED": True,
+                "MEANING": ("the handover itself failed. Owned orders may "
+                            "still be resting and must be cancelled by id "
+                            "with scripts/l5_e1_cancel_by_id.py.")}
+
+
 def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                = None, recorder: Any = None,
                transport_factory: Any = O.BoundedOrderTransport,
@@ -1409,6 +1465,109 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                                   window_len_s=WINDOW_LEN_S,
                                   max_placements=MAX_PLACEMENTS)
              if max_iterations is None else max_iterations)
+    # ============ THE HANDOVER, MADE REACHABLE ON EVERY EXIT ============
+    #
+    # Until now `run_cohort` reached the handover from ONE place: the
+    # `past_cutoff` branch below. SIGTERM (how Railway stops a container),
+    # SIGINT, an exception escaping this loop, and a normal exit before the
+    # cutoff all left owned orders resting -- which is exactly what happened
+    # on 2026-10-08, when twenty 0.13-share orders were left on the 1230z
+    # window and an operator had to cancel them.
+    #
+    # THE CANCEL MECHANISM IS UNCHANGED. This closure calls the SAME
+    # `lifecycle.deadman` the cutoff branch calls, with the same owned-id
+    # registry, the same per-id `cancel_exact`, the same refusal to touch an
+    # order we cannot attribute to ourselves, and the same verification
+    # against the venue. Only its reachability changes.
+    #
+    # IT RE-READS VENUE STATE rather than reusing the last snapshot. A
+    # shutdown can arrive seconds or minutes after the last iteration, and a
+    # cancel sweep decided from a stale view could not tell our orders from
+    # anyone else's. If the state cannot be re-established the deadman fails
+    # closed on its own `ORDER_STATE_NOT_ESTABLISHED` branch, which is the
+    # correct answer: refuse, and say so loudly enough for an operator to
+    # cancel by id.
+    _last_snap: Dict[str, Any] = {}
+
+    def _emergency_handover(cause: str) -> Dict[str, Any]:
+        rec = {"cause": cause, "probe": PROBE,
+               "spec_fingerprint": E1_FINGERPRINT,
+               "shutdown_signal": SD.requested(),
+               "CANCELS_BY_OWNED_ORDER_ID_NOT_BY_MARKET": True}
+        owned = list(_last_snap.get("known_order_ids")
+                     or getattr(snapshot_provider, "known_order_ids", None)
+                     or [])
+        if lifecycle.deadman_result:
+            rec.update({"ran": False,
+                        "because": "HANDOVER_ALREADY_RAN",
+                        "owned_ids": owned})
+            return rec
+        if not owned:
+            # NOTHING OF OURS CAN BE RESTING. The registry is the ownership
+            # test and it is empty, so there is nothing to cancel and
+            # nothing to claim.
+            rec.update({"ran": False, "because": "NO_OWNED_ORDERS",
+                        "owned_ids": []})
+            return rec
+        market = _last_snap.get("market")
+        window = int(_last_snap.get("window", -1) or -1)
+        # RE-READ, as explained above.
+        # A FAILED RE-READ FALLS BACK TO THE LAST ESTABLISHED VIEW, and
+        # that is deliberate rather than lax. Ownership comes from OUR
+        # REGISTRY, never from the view, so a stale view cannot make us
+        # touch a stranger's order; the worst it can do is name an id that
+        # has since gone terminal, where `cancel_exact` is a no-op. And the
+        # handover re-reads every id individually afterwards, so a wrong
+        # view is caught by the verification rather than believed.
+        #
+        # With NO view at all -- neither a fresh read nor a prior one --
+        # the deadman refuses on its own `ORDER_STATE_NOT_ESTABLISHED`
+        # branch. Refusing is the right answer there: we would be guessing.
+        ostate = _last_snap.get("order_state")
+        probe = getattr(snapshot_provider, "order_state", None)
+        if callable(probe):
+            try:
+                fresh = probe(getattr(snapshot_provider, "current_pin",
+                                      None) or {})
+            except Exception as exc:                           # noqa: BLE001
+                rec["order_state_reread_failed"] = type(exc).__name__
+                rec["fell_back_to_last_established_view"] = bool(ostate)
+            else:
+                ostate = fresh
+        snap_for_handover = {"market": market, "window": window,
+                             "order_state": ostate,
+                             "known_order_ids": owned}
+        dm = lifecycle.deadman(
+            snapshot=snap_for_handover, now=now_fn(),
+            transport_factory=transport_factory, orders_module=O,
+            owned_ids=owned, recorder=recorder,
+            read_open=getattr(snapshot_provider, "read_open_orders", None),
+            read_order=getattr(snapshot_provider, "read_order", None))
+        rec["deadman"] = dm
+        rec["ran"] = bool(dm.get("ran"))
+        lifecycle.events.append({"iteration": -1, "cause": cause,
+                                 "deadman": dm})
+        if dm.get("all_cancelled") is False:
+            tracker.violate(
+                "SHUTDOWN_HANDOVER_DID_NOT_CLEAR_OUR_OPEN_ORDERS:%s"
+                % (dm.get("owned_still_open")
+                   or dm.get("per_id_states_after"),))
+        if dm.get("foreign_untouched") is False:
+            tracker.violate(
+                "SHUTDOWN_CANCEL_TOUCHED_ORDERS_WE_DO_NOT_OWN:%s"
+                % (dm.get("foreign_open_ids_left_untouched"),))
+        if not dm.get("ran"):
+            # A REFUSAL IS NOT A CLEAN SHUTDOWN. The orders are still there.
+            tracker.violate("SHUTDOWN_HANDOVER_REFUSED:%s"
+                            % (dm.get("because"),))
+        if recorder is not None:
+            recorder.record_event(
+                window=window, slot=-1, event="SHUTDOWN_HANDOVER",
+                detail={k: v for k, v in rec.items() if k != "deadman"})
+        return rec
+
+    _set_emergency_handover(_emergency_handover)
+
     while it < limit:
         it += 1
         v = tracker.verdict()
@@ -1418,6 +1577,9 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 ":" + str(v.get("truncation_cause") or ""))
             break
         snap = snapshot_provider()
+        # the handover re-reads venue state, but it still needs the market,
+        # the window and the owned-id registry this iteration saw.
+        _last_snap = dict(snap) if isinstance(snap, dict) else {}
         if isinstance(snap, Mapping) and snap.get("order_state") is not None:
             #: the venue-confirmed state THIS LOOP SAW, kept for the
             #: attempt tape. Read from the snapshot rather than from a
@@ -1860,6 +2022,25 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 extra={"iteration": it, "order_id": out["order_id"],
                        "multitrade": (out.get("e1_checks") or {}).get(
                            "multitrade")})
+    # ============ THE NORMAL-EXIT HANDOVER ==========================
+    #
+    # The loop can end without reaching the cutoff: a verdict stops it, the
+    # attempt budget is spent, the iteration cap is hit, the trading
+    # deadline passes. Every one of those used to return with owned orders
+    # still resting, because the handover lived only on the `past_cutoff`
+    # branch. It is run HERE for the ordinary exits, and `main`'s `finally`
+    # covers the exceptional ones.
+    shutdown_handover = None
+    if not lifecycle.deadman_result:
+        shutdown_handover = run_emergency_handover(
+            cause="NORMAL_EXIT_WITHOUT_CUTOFF_HANDOVER:%s"
+                  % (stopped_because or "LOOP_ENDED"))
+    # THE HOOK IS CLEARED EITHER WAY, so a hook still set when `main`
+    # unwinds means precisely "a cohort stopped without completing its
+    # handover" and nothing weaker.
+    _set_emergency_handover(None)
+
+
     # ===================== THE ATTEMPT TAPE =========================
     #
     # ONE ROW PER ATTEMPT THIS RUN MADE, written here because here is
@@ -1903,6 +2084,8 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             "budget_events": budget_events,
             "attempt_tape": attempt_tape,
             "envelope": envelope.report(),
+            "shutdown_handover": shutdown_handover,
+            "shutdown_coverage": SD.coverage(),
             "lifecycle": {
                 "first_legs_tracked": lifecycle.legs,
                 "residuals_opened": lifecycle.residuals_opened,
@@ -2164,10 +2347,54 @@ def main(argv: Optional[List[str]] = None, *,
                       "envelope": (envelope.report() if envelope
                                    else "FROZEN_COHORT_CEILINGS"),
                       "entering": "run_cohort"})
-    out = run_cohort(snapshot_provider=provider, tracker=tracker,
-                     recorder=rec, transport_factory=transport_factory,
-                     session_auth=auth, progress=prog,
-                     budget=probe_budget, envelope=envelope)
+    # ======== THE GRACEFUL-SHUTDOWN SIGNAL, INSTALLED BEFORE THE RUN =====
+    #
+    # SIGTERM is how Railway stops a container, and its default disposition
+    # terminates the process WITHOUT unwinding -- so before this, no
+    # `finally` anywhere in the program would have run and the handover was
+    # unreachable on a stop. `shutdown.install` turns SIGTERM and SIGINT
+    # into a `BaseException` raised in the main thread, which the `finally`
+    # below converts into a real cancellation.
+    #
+    # IT IS NOT CRASH PROTECTION and is not described as any. SIGKILL, the
+    # OOM killer and a container hard stop are covered only by the durable
+    # latch and the startup reconciliation, which refuse to submit after a
+    # restart until venue state has been established.
+    shutdown_coverage = SD.install()
+    _emit("E1_SHUTDOWN_HANDLERS", shutdown_coverage)
+    try:
+        out = run_cohort(snapshot_provider=provider, tracker=tracker,
+                         recorder=rec, transport_factory=transport_factory,
+                         session_auth=auth, progress=prog,
+                         budget=probe_budget, envelope=envelope)
+    except SD.ShutdownRequested as stop:
+        # THE ORDERLY STOP. Cancel what we own, report it, and exit
+        # non-zero so the deployment does not read as a clean run.
+        handover = run_emergency_handover(
+            cause="SHUTDOWN_SIGNAL:%s" % (stop.detail.get("signal"),))
+        _emit("E1_SHUTDOWN", {"signal": stop.detail,
+                              "handover": handover,
+                              "coverage": shutdown_coverage,
+                              "LANGUAGE": ("cancellation is claimed only "
+                                           "where the handover verified "
+                                           "it against the venue")})
+        return 4
+    except BaseException:
+        # ANY OTHER WAY OUT. The handover runs and then the original
+        # failure is re-raised untouched -- it is the incident, and this
+        # must not replace it.
+        handover = run_emergency_handover(cause="UNCAUGHT_EXCEPTION")
+        _emit("E1_ABNORMAL_EXIT", {"handover": handover,
+                                   "coverage": shutdown_coverage})
+        raise
+    finally:
+        # BELT AND BRACES. `run_cohort` clears the hook on every normal
+        # return, so this is a no-op then; if any path above missed, a
+        # pending hook is still honoured here rather than dropped.
+        late = run_emergency_handover(cause="LATE_FINALLY")
+        if late is not None:
+            _emit("E1_LATE_HANDOVER", late)
+    out["shutdown_coverage"] = shutdown_coverage
     out["provider"] = provider.report()
     out["progress"] = prog.report()
     _emit("E1_RESULT", out)
