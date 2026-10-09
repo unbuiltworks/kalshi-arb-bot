@@ -358,6 +358,53 @@ def entry_rule(obs: Mapping[str, Any], clock: Mapping[str, Any]) -> dict:
             "RULE": "hand-written entry rule, not the trained model"}
 
 
+def completion_due(inv: VirtualInventory, obs: Mapping[str, Any]) -> dict:
+    """The patient fee-safe COMPLETE leg of the sequence. A RISK RULE.
+
+    WHY THIS IS NOT THE MODEL. The clone predicts L5's next observed FILL,
+    and at the per-fill level that is EXTEND about 70% of the time in both
+    regimes -- so an argmax policy extends, extends again, and never
+    completes. Live, that is not a strategy, it is unbounded one-sided
+    inventory: 9 markets carried residual for hours in shadow and
+    `matched_pair_cost` had a sample of ZERO, which is the one number that
+    decides whether the pair thesis survives contact with this venue.
+
+    The existing E1 discipline already says what to do -- maker OPEN,
+    optional same-side EXTEND, then a PATIENT FEE-SAFE COMPLETE when price
+    improves -- and completion there is a property of the inventory and the
+    pair budget, never of a prediction. So this rule fires on the state: if
+    we hold a residual and the opposite side's own maker price fits inside
+    the pair ceiling minus what the residual already cost, post the
+    complement. The model's own distribution is recorded beside it, so
+    agreement and disagreement with L5's predicted action stay measurable
+    rather than being blurred into one number.
+    """
+    resid = inv.residual
+    if resid == 0:
+        return {"due": False, "why": "NO_RESIDUAL"}
+    long_yes = resid > 0
+    side_yes = not long_yes                     # the complement side
+    q = own_side_quote(obs, side_yes)
+    if not q.get("two_sided"):
+        return {"due": False, "why": "BOOK_NOT_TWO_SIDED"}
+    avg = inv.avg(long_yes)
+    if avg is None:
+        return {"due": False, "why": "NO_RESIDUAL_COST_BASIS"}
+    budget = PAIR_CEILING - avg
+    px = q["maker_px"]
+    if px > budget:
+        return {"due": False, "why": "COMPLEMENT_ABOVE_PAIR_CEILING",
+                "own_side_maker_px": str(px), "pair_budget": str(budget),
+                "residual_avg": str(avg)}
+    return {"due": True, "side_yes": side_yes, "px": px,
+            "qty": min(UNIT_SHARES, abs(resid)),
+            "pair_cost_if_filled": str(avg + px),
+            "pair_ceiling": str(PAIR_CEILING),
+            "residual_shares": str(resid),
+            "RULE": ("patient fee-safe completion; a risk rule over "
+                     "inventory, not a model prediction")}
+
+
 def intended_order(pol_name: str, proba: Mapping[str, float],
                    inv: VirtualInventory, obs: Mapping[str, Any],
                    clock: Mapping[str, Any]) -> dict:
@@ -1009,9 +1056,31 @@ class CloneShadow:
                                     "artifact": os.path.basename(policy.path),
                                     "PREDICTS": "L5's next observed action, "
                                                 "not an order"}
-                    intent = intended_order(pol, proba, inv, obs, clock)
-                    row["intended_order"] = intent
-                    origin = "CLONE_%s" % intent.get("model_action")
+                    comp = completion_due(inv, obs)
+                    row["completion_rule"] = comp
+                    if comp.get("due"):
+                        # the pair leg is a risk obligation and takes
+                        # precedence over the predicted next fill; what the
+                        # model wanted is kept on the row so fidelity stays
+                        # measurable
+                        intent = dict(comp)
+                        intent.update({
+                            "propose": True, "policy": pol,
+                            "side": "YES" if comp["side_yes"] else "NO",
+                            "timing": "POST_NOW",
+                            "model_action": max(proba, key=lambda k: proba[k]),
+                            "model_proba": {k: round(float(v), 4)
+                                            for k, v in proba.items()},
+                            "model_confidence": round(
+                                float(max(proba.values())), 4),
+                            "ACTION_SOURCE": "COMPLETION_RULE_NOT_MODEL",
+                            "TRANSLATION_IS_OURS": True})
+                        row["intended_order"] = intent
+                        origin = "COMPLETION_RULE"
+                    else:
+                        intent = intended_order(pol, proba, inv, obs, clock)
+                        row["intended_order"] = intent
+                        origin = "CLONE_%s" % intent.get("model_action")
                 else:
                     intent = entry_rule(obs, clock)
                     intent["policy"] = pol
@@ -1052,12 +1121,26 @@ class CloneShadow:
 
     def rank_watch(self, universe: Sequence[Mapping[str, Any]]
                    ) -> List[dict]:
-        """Slots go to markets that actually serve a book, nearest expiry
-        first. A market whose book has failed three times running sinks to
-        the back rather than holding a slot forever."""
+        """Slots go to TRADABLE markets, nearest expiry breaking ties.
+
+        Expiry alone was the wrong ordering. The watched set filled with
+        far-out-of-the-money hourly strikes -- measured live:
+        `cpc-btc-above-hr-...-90800` served zero bid levels and a single
+        1-cent offer -- so 8 or 9 of every 10 decisions refused with
+        BOOK_NOT_TWO_SIDED and nothing could be proposed at all. A market
+        nobody bids in is not an opportunity whatever its expiry.
+
+        Order: markets whose book reads, then markets seen two-sided, then
+        nearest expiry. A market whose book has failed three times running
+        or that is currently one-sided sinks rather than holding a slot.
+        """
         def key(r):
-            return (min(3, self._poll_fail.get(r["slug"], 0)),
-                    r["clock"]["tte_s"])
+            slug = r["slug"]
+            fails = min(3, self._poll_fail.get(slug, 0))
+            one_sided = 1 if slug in self.one_sided else 0
+            dq = self.obs.get(slug)
+            never_seen = 0 if dq else 1
+            return (fails, one_sided, never_seen, r["clock"]["tte_s"])
         return sorted(universe, key=key)
 
     def new_candidate_rows(self) -> List[dict]:
@@ -1429,6 +1512,11 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                    "newly_queue_cleared": len(judged["newly_queue_cleared"]),
                    "settled_this_cycle": len(settlements),
                    "one_sided_books": len(cs.one_sided),
+                   "completion_rule": _mix([
+                       (d.get("completion_rule") or {}).get("why")
+                       or ("DUE" if (d.get("completion_rule") or {}).get("due")
+                           else None)
+                       for d in decisions if d.get("completion_rule")]),
                    "rows_emitted_total": cs.rows_emitted,
                    "state_saved": saved}
             if cs.cycles % 5 == 0 or judged["newly_queue_cleared"]:

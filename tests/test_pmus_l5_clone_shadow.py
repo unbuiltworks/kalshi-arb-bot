@@ -456,3 +456,74 @@ def test_one_sided_book_records_the_payload_shape(tmp_path):
     d = cs.one_sided[slug]
     assert d["n_bid_levels"] == 1 and d["n_offer_levels"] == 0
     assert d["ask"] is None and "payload_keys" in d
+
+
+# ------------------------------------------------- completion discipline --
+def test_completion_is_due_when_the_pair_budget_allows_it():
+    inv = CS.VirtualInventory()
+    inv.add(side_yes=True, px=D("0.40"), qty=D("2"), t=1.0)
+    # NO maker price = 1 - 0.52 = 0.48; budget = 0.96 - 0.40 = 0.56
+    out = CS.completion_due(inv, {"bid": 0.45, "ask": 0.52})
+    assert out["due"] is True and out["side_yes"] is False
+    assert out["px"] == D("0.48")
+    assert out["pair_cost_if_filled"] == "0.88"
+    # never more than the residual
+    assert out["qty"] <= abs(inv.residual)
+
+
+def test_completion_refuses_above_the_pair_ceiling():
+    inv = CS.VirtualInventory()
+    inv.add(side_yes=True, px=D("0.80"), qty=D("1"), t=1.0)
+    out = CS.completion_due(inv, {"bid": 0.70, "ask": 0.75})
+    assert out["due"] is False
+    assert out["why"] == "COMPLEMENT_ABOVE_PAIR_CEILING"
+
+
+def test_no_residual_means_no_completion():
+    inv = CS.VirtualInventory()
+    inv.add(side_yes=True, px=D("0.4"), qty=D("1"), t=1.0)
+    inv.add(side_yes=False, px=D("0.5"), qty=D("1"), t=2.0)
+    assert CS.completion_due(inv, {"bid": 0.4, "ask": 0.6})["why"] == \
+        "NO_RESIDUAL"
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(MODELS,
+                                                    "l5_policy_early.pkl")),
+                    reason="models not built in this checkout")
+def test_completion_takes_precedence_over_the_predicted_next_fill(tmp_path):
+    """The model's argmax is EXTEND ~70% of the time, so an argmax policy
+    never completes: 9 markets carried residual for hours with a matched
+    pair-cost sample of zero."""
+    slug = "cpc-btc-updown-15m-2026-09-23-1345z"
+    t0 = 1790171100.0 + 60.0
+    gw = Gateway([market(slug)], {slug: [book(0.45, 0.52)]})
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: t0,
+                        policies=CS.load_policies(MODELS),
+                        state_dir=str(tmp_path))
+    cs.poll([{"slug": slug, "market": market(slug)}])
+    cs.inv["early"].setdefault(slug, CS.VirtualInventory()).add(
+        side_yes=True, px=D("0.40"), qty=D("2"), t=t0)
+    row = [r for r in cs.decide([slug]) if r["policy"] == "early"][0]
+    i = row["intended_order"]
+    assert i["propose"] is True
+    assert i["ACTION_SOURCE"] == "COMPLETION_RULE_NOT_MODEL"
+    assert i["side_yes"] is False              # the complement side
+    # what the model wanted is still on the row, so fidelity is measurable
+    assert i["model_action"] in ("EXTEND", "COMPLEMENT", "STOP")
+    assert set(i["model_proba"]) == {"EXTEND", "COMPLEMENT", "STOP"}
+    assert row["model"] is not None
+
+
+def test_ranking_sinks_one_sided_markets_below_tradable_ones(tmp_path):
+    gw = Gateway([], {})
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: 1.0,
+                        policies={}, state_dir=str(tmp_path))
+    universe = [{"slug": "otm", "clock": {"tte_s": 60.0}},
+                {"slug": "updown", "clock": {"tte_s": 800.0}}]
+    # both unseen -> expiry decides
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["otm", "updown"]
+    # once the near one is known to be one-sided it sinks, even though it
+    # expires first
+    cs.one_sided["otm"] = {"bid": None}
+    cs.obs["updown"] = [{}]
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["updown", "otm"]
