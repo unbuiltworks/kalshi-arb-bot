@@ -1,0 +1,9 @@
+{
+ "id": "EXAMPLE-H001",
+ "statement": "Among windows with at least 40 fills, the mean effective pair cost reached by window end is lower in the late regime (August) than in the early regime (April).",
+ "unit": "window",
+ "filter": [["n_fills", ">=", 40], ["final_pair_cost", "notnull", null]],
+ "group_by": "month",
+ "metric": {"column": "final_pair_cost", "stat": "mean"},
+ "predicts": {"direction": "less", "between": ["2026-08", "2026-04"]}
+}

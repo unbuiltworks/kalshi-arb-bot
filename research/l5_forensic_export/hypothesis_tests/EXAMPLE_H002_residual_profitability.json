@@ -1,0 +1,9 @@
+{
+ "id": "EXAMPLE-H002",
+ "statement": "Windows that ended holding a large unpaired residual are more often profitable than windows that ended close to fully matched.",
+ "unit": "window",
+ "filter": [["n_fills", ">=", 10]],
+ "group_by": "bucket:final_residual_qty:0.000001,50,200,1000",
+ "metric": {"column": "window_pnl", "stat": "rate_positive"},
+ "predicts": {}
+}
