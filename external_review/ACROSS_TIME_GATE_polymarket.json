@@ -1,0 +1,196 @@
+{
+ "label": "Polymarket up-down (Zenodo 22084977), 8 coins, 2026-08-21..24",
+ "sources": [
+  "updown_15m.parquet",
+  "updown_5m.parquet"
+ ],
+ "fee_per_contract_applied": 0.0,
+ "coverage": {
+  "rows_after_dropping_null_ask": 381987,
+  "rows_dropped_null_ask": 25264,
+  "rows_flagged_crossed": 12823,
+  "markets_with_both_outcomes": 733,
+  "coins": [
+   "bnb",
+   "btc",
+   "doge",
+   "eth",
+   "hype",
+   "sol",
+   "xrp",
+   "zec"
+  ]
+ },
+ "THE_OLD_TEST_simultaneous_pair": {
+  "_what": "min over t of ask_Up(t)+ask_Down(t), per market",
+  "n_markets": 733,
+  "median": 0.91,
+  "min": 0.04,
+  "p05": 0.62,
+  "p25": 0.84,
+  "markets_below_1.00_gross": 0.8663,
+  "markets_below_1.00_net_of_fees": 0.8663
+ },
+ "THE_RIGHT_TEST_across_time_perfect_foresight": {
+  "_what": "min ask on leg A at any time + min ask on leg B at any time, same market. Upper bound on any across-time policy, so a necessary-condition gate.",
+  "n_markets": 733,
+  "median": 0.43,
+  "min": 0.011,
+  "p05": 0.07,
+  "p25": 0.28,
+  "p75": 0.51,
+  "markets_below_1.00_gross": 0.925,
+  "markets_below_1.00_net_of_fees": 0.925,
+  "markets_below_0.98_net": 0.9236
+ },
+ "value_of_assembling_across_time": {
+  "_what": "simultaneous minus across-time, per market",
+  "median_improvement_cents": 47.0
+ },
+ "per_leg_min_ask": {
+  "_what": "the cheapest each leg ever got. Compare with L5's MEAN ACCEPTED price of 0.4614.",
+  "median": 0.12,
+  "p25": 0.01,
+  "share_below_0.50": 0.8247,
+  "share_below_0.4614": 0.7844
+ },
+ "CAUSAL_policy_first_touch_at_or_below_theta": {
+  "_what": "implementable: buy each leg the first time its ask is at or below theta, forward in time, both legs required inside the window. No foresight.",
+  "by_theta": {
+   "0.30": {
+    "markets_both_legs_filled": 212,
+    "fill_rate": 0.2892,
+    "median_pair_cost_gross": 0.55,
+    "share_pair_below_1.00_net": 1.0,
+    "expected_markets_per_100_with_profitable_pair": 28.92
+   },
+   "0.35": {
+    "markets_both_legs_filled": 277,
+    "fill_rate": 0.3779,
+    "median_pair_cost_gross": 0.65,
+    "share_pair_below_1.00_net": 1.0,
+    "expected_markets_per_100_with_profitable_pair": 37.79
+   },
+   "0.40": {
+    "markets_both_legs_filled": 337,
+    "fill_rate": 0.4598,
+    "median_pair_cost_gross": 0.75,
+    "share_pair_below_1.00_net": 1.0,
+    "expected_markets_per_100_with_profitable_pair": 45.98
+   },
+   "0.42": {
+    "markets_both_legs_filled": 378,
+    "fill_rate": 0.5157,
+    "median_pair_cost_gross": 0.8,
+    "share_pair_below_1.00_net": 1.0,
+    "expected_markets_per_100_with_profitable_pair": 51.57
+   },
+   "0.44": {
+    "markets_both_legs_filled": 414,
+    "fill_rate": 0.5648,
+    "median_pair_cost_gross": 0.84,
+    "share_pair_below_1.00_net": 1.0,
+    "expected_markets_per_100_with_profitable_pair": 56.48
+   },
+   "0.46": {
+    "markets_both_legs_filled": 457,
+    "fill_rate": 0.6235,
+    "median_pair_cost_gross": 0.88,
+    "share_pair_below_1.00_net": 1.0,
+    "expected_markets_per_100_with_profitable_pair": 62.35
+   },
+   "0.48": {
+    "markets_both_legs_filled": 492,
+    "fill_rate": 0.6712,
+    "median_pair_cost_gross": 0.92,
+    "share_pair_below_1.00_net": 1.0,
+    "expected_markets_per_100_with_profitable_pair": 67.12
+   },
+   "0.50": {
+    "markets_both_legs_filled": 566,
+    "fill_rate": 0.7722,
+    "median_pair_cost_gross": 0.97,
+    "share_pair_below_1.00_net": 0.7527,
+    "expected_markets_per_100_with_profitable_pair": 58.12
+   },
+   "0.55": {
+    "markets_both_legs_filled": 659,
+    "fill_rate": 0.899,
+    "median_pair_cost_gross": 1.02,
+    "share_pair_below_1.00_net": 0.0212,
+    "expected_markets_per_100_with_profitable_pair": 1.91
+   },
+   "0.60": {
+    "markets_both_legs_filled": 663,
+    "fill_rate": 0.9045,
+    "median_pair_cost_gross": 1.02,
+    "share_pair_below_1.00_net": 0.0075,
+    "expected_markets_per_100_with_profitable_pair": 0.68
+   }
+  }
+ },
+ "by_coin": {
+  "bnb": {
+   "markets": 93,
+   "across_time_median": 0.451,
+   "across_time_below_1.00_net": 1.0,
+   "simultaneous_median": 0.93,
+   "simultaneous_below_1.00_net": 0.9677
+  },
+  "btc": {
+   "markets": 95,
+   "across_time_median": 0.39,
+   "across_time_below_1.00_net": 1.0,
+   "simultaneous_median": 0.87,
+   "simultaneous_below_1.00_net": 1.0
+  },
+  "doge": {
+   "markets": 93,
+   "across_time_median": 0.4,
+   "across_time_below_1.00_net": 0.9892,
+   "simultaneous_median": 0.92,
+   "simultaneous_below_1.00_net": 0.9785
+  },
+  "eth": {
+   "markets": 89,
+   "across_time_median": 0.38,
+   "across_time_below_1.00_net": 1.0,
+   "simultaneous_median": 0.87,
+   "simultaneous_below_1.00_net": 1.0
+  },
+  "hype": {
+   "markets": 85,
+   "across_time_median": 0.421,
+   "across_time_below_1.00_net": 1.0,
+   "simultaneous_median": 0.92,
+   "simultaneous_below_1.00_net": 0.9294
+  },
+  "sol": {
+   "markets": 101,
+   "across_time_median": 0.39,
+   "across_time_below_1.00_net": 0.9901,
+   "simultaneous_median": 0.88,
+   "simultaneous_below_1.00_net": 0.9901
+  },
+  "xrp": {
+   "markets": 93,
+   "across_time_median": 0.391,
+   "across_time_below_1.00_net": 0.9785,
+   "simultaneous_median": 0.91,
+   "simultaneous_below_1.00_net": 0.9677
+  },
+  "zec": {
+   "markets": 84,
+   "across_time_median": 1.1,
+   "across_time_below_1.00_net": 0.3929,
+   "simultaneous_median": 1.32,
+   "simultaneous_below_1.00_net": 0.0119
+  }
+ },
+ "VERDICT": {
+  "simultaneous_pair_viable_share": 0.8663,
+  "across_time_pair_viable_share": 0.925,
+  "gate": "MECHANISM POSSIBLE, and the simultaneous test UNDERSTATED it: across-time clears $1.00 net on 92.5% of markets versus 86.6% simultaneously.",
+  "_caveat": "Perfect foresight is an upper bound, not an achievable result. Use the CAUSAL block for what an implementable rule gets. Depth is NOT modelled: these are touch prices, so a real order may not fill the intended size at them."
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "matched_fills": 3097,
+ "mean_L5_fill_price": 0.4711,
+ "mean_prevailing_best_bid": 0.4774,
+ "mean_prevailing_best_ask": 0.4884,
+ "mean_prevailing_mid": 0.4829,
+ "at_or_below_bid_PASSIVE": 0.6503,
+ "inside_spread": 0.0097,
+ "at_or_above_ask_AGGRESSIVE": 0.3407,
+ "mean_fill_minus_ask": -0.0174,
+ "mean_fill_minus_bid": -0.0064,
+ "mean_fill_minus_mid": -0.0119,
+ "mean_fill_minus_mid_ci95": [
+  -0.0137,
+  -0.0102
+ ]
+}

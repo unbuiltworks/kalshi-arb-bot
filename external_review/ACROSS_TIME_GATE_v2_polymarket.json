@@ -1,0 +1,241 @@
+{
+ "label": "Polymarket up-down (Zenodo 22084977), 8 coins, 2026-08-21..24",
+ "sources": [
+  "updown_15m.parquet",
+  "updown_5m.parquet"
+ ],
+ "fee_per_contract_applied": 0.0,
+ "corrections_vs_v1": [
+  "crossed/stale snapshots excluded (a minimum over a window is exactly what a bad quote captures)",
+  "every market settled, including those where only ONE leg filled -- v1 reported the both-legs-filled subset only, which is survivorship"
+ ],
+ "coverage": {
+  "rows_raw": 407251,
+  "rows_dropped_null_ask": 25264,
+  "rows_dropped_crossed": 12823,
+  "rows_used": 369164,
+  "markets_settled": 733,
+  "coins": [
+   "bnb",
+   "btc",
+   "doge",
+   "eth",
+   "hype",
+   "sol",
+   "xrp",
+   "zec"
+  ]
+ },
+ "simultaneous_pair_at_the_touch": {
+  "_what": "ask_A + ask_B at the same snapshot, crossed rows excluded. NOT a minimum over the window.",
+  "snapshots": 169254,
+  "median": 1.02,
+  "share_below_1.00_net": 0.000106
+ },
+ "causal_policy_every_market_settled": {
+  "0.30": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.02419,
+   "ci95": [
+    -0.04821,
+    0.00153
+   ],
+   "median_pnl": -0.24,
+   "share_markets_profitable": 0.2906,
+   "markets_engaged": 678,
+   "total_pnl": -17.732
+  },
+  "0.35": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.02161,
+   "ci95": [
+    -0.047,
+    0.00258
+   ],
+   "median_pnl": -0.23,
+   "share_markets_profitable": 0.3806,
+   "markets_engaged": 685,
+   "total_pnl": -15.842
+  },
+  "0.40": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.03692,
+   "ci95": [
+    -0.0599,
+    -0.0134
+   ],
+   "median_pnl": 0.0,
+   "share_markets_profitable": 0.4598,
+   "markets_engaged": 690,
+   "total_pnl": -27.061
+  },
+  "0.42": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.03087,
+   "ci95": [
+    -0.05356,
+    -0.00936
+   ],
+   "median_pnl": 0.16,
+   "share_markets_profitable": 0.5171,
+   "markets_engaged": 691,
+   "total_pnl": -22.631
+  },
+  "0.44": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.03527,
+   "ci95": [
+    -0.05675,
+    -0.01387
+   ],
+   "median_pnl": 0.13,
+   "share_markets_profitable": 0.5607,
+   "markets_engaged": 692,
+   "total_pnl": -25.85
+  },
+  "0.46": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.03192,
+   "ci95": [
+    -0.05266,
+    -0.01181
+   ],
+   "median_pnl": 0.09,
+   "share_markets_profitable": 0.6235,
+   "markets_engaged": 693,
+   "total_pnl": -23.4
+  },
+  "0.48": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.043,
+   "ci95": [
+    -0.06143,
+    -0.02404
+   ],
+   "median_pnl": 0.06,
+   "share_markets_profitable": 0.6658,
+   "markets_engaged": 693,
+   "total_pnl": -31.52
+  },
+  "0.50": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.03486,
+   "ci95": [
+    -0.0501,
+    -0.01933
+   ],
+   "median_pnl": 0.01,
+   "share_markets_profitable": 0.5798,
+   "markets_engaged": 557,
+   "total_pnl": -25.55
+  },
+  "0.52": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.02794,
+   "ci95": [
+    -0.03666,
+    -0.01877
+   ],
+   "median_pnl": -0.01,
+   "share_markets_profitable": 0.0846,
+   "markets_engaged": 675,
+   "total_pnl": -20.48
+  },
+  "0.55": {
+   "markets": 733,
+   "mean_pnl_per_market": -0.0318,
+   "ci95": [
+    -0.03982,
+    -0.02389
+   ],
+   "median_pnl": -0.02,
+   "share_markets_profitable": 0.0232,
+   "markets_engaged": 695,
+   "total_pnl": -23.31
+  }
+ },
+ "by_coin_at_best_theta": {
+  "bnb": {
+   "theta": 0.35,
+   "markets": 93,
+   "mean_pnl": -0.09645,
+   "ci95": [
+    -0.16323,
+    -0.02925
+   ]
+  },
+  "btc": {
+   "theta": 0.35,
+   "markets": 95,
+   "mean_pnl": -0.01139,
+   "ci95": [
+    -0.08277,
+    0.0582
+   ]
+  },
+  "doge": {
+   "theta": 0.35,
+   "markets": 93,
+   "mean_pnl": -0.03914,
+   "ci95": [
+    -0.10548,
+    0.03376
+   ]
+  },
+  "eth": {
+   "theta": 0.35,
+   "markets": 89,
+   "mean_pnl": -0.01011,
+   "ci95": [
+    -0.08124,
+    0.06124
+   ]
+  },
+  "hype": {
+   "theta": 0.35,
+   "markets": 85,
+   "mean_pnl": -0.02306,
+   "ci95": [
+    -0.09624,
+    0.052
+   ]
+  },
+  "sol": {
+   "theta": 0.35,
+   "markets": 101,
+   "mean_pnl": 0.02901,
+   "ci95": [
+    -0.04178,
+    0.10505
+   ]
+  },
+  "xrp": {
+   "theta": 0.35,
+   "markets": 93,
+   "mean_pnl": -0.00989,
+   "ci95": [
+    -0.07624,
+    0.06258
+   ]
+  },
+  "zec": {
+   "theta": 0.35,
+   "markets": 84,
+   "mean_pnl": -0.01548,
+   "ci95": [
+    -0.07357,
+    0.0456
+   ]
+  }
+ },
+ "VERDICT": {
+  "best_theta": 0.35,
+  "mean_pnl_per_market": -0.02161,
+  "ci95": [
+   -0.047,
+   0.00258
+  ],
+  "gate": "INDETERMINATE: the best threshold's CI spans zero.",
+  "_caveat": "Depth is not modelled -- touch prices only -- so this remains an UPPER bound on an implementable strategy."
+ }
+}
