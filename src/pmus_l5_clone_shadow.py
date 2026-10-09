@@ -69,6 +69,7 @@ import numpy as np
 from src import pmus_event_progress as EP
 from src import pmus_execution_shadow as EX
 from src import pmus_fees as FEES
+from src import pmus_l5_pair_policy_study as PS
 from src import pmus_market_clock as MC
 from src import pmus_sports_shadow_breadth as SB
 from src import pmus_status_report as ST
@@ -100,6 +101,11 @@ TICK = D("0.01")
 ONE = D("1")
 
 MARKOUT_HORIZONS = (10.0, 30.0, 60.0)
+# How often the execution-policy sensitivity study is recomputed over this
+# service's OWN observation tape. It is a pure replay -- no requests, no
+# orders -- so the only cost is CPU, but it is bounded anyway.
+STUDY_EVERY = int(os.getenv("L5_CLONE_STUDY_EVERY", "90"))
+STUDY_PREFIX = os.getenv("L5_CLONE_STUDY_PREFIX", "cpc-")
 # The median tte_s in the training corpus' own windows, used only to test
 # how much a sports tte_s assumption moves the policy's action.
 TTE_SENSITIVITY_S = float(os.getenv("L5_CLONE_TTE_SENSITIVITY_S", "450"))
@@ -1906,6 +1912,24 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                        for d in decisions if d.get("completion_rule")]),
                    "rows_emitted_total": cs.rows_emitted,
                    "state_saved": saved}
+            if cs.cycles % STUDY_EVERY == 0:
+                # IS 1.08-1.12 THE VENUE OR OUR RULES? Replay the tape this
+                # service already wrote under six execution policies, with
+                # the same pessimistic queue test, chronologically, and no
+                # retroactive pricing. Printed separately from the live
+                # comparison because it is a REPLAY, not an observation.
+                try:
+                    tape = PS.load_tape(cs.state_dir, prefix=STUDY_PREFIX)
+                    print(PREFIX + json.dumps(
+                        {"kind": "policy_study", "cycle": cs.cycles,
+                         "prefix": STUDY_PREFIX,
+                         **PS.study(tape)},
+                        separators=(",", ":"), default=str), flush=True)
+                except Exception as exc:                       # noqa: BLE001
+                    print(PREFIX + json.dumps(
+                        {"kind": "policy_study_error",
+                         "error": "%s:%s" % (type(exc).__name__,
+                                             str(exc)[:200])}), flush=True)
             if cs.cycles % 5 == 0 or judged["newly_queue_cleared"]:
                 rep["comparison"] = cs.compare()
                 rep["settlement_totals"] = cs.settlement_totals()
