@@ -192,3 +192,64 @@ def test_run_campaign_never_opens_a_socket_itself(env, monkeypatch):
 
     monkeypatch.setattr(WS, "WsFeed", _boom)
     ex.run_campaign(_T(), clock=lambda: 0.0, sleep=lambda s: None)
+
+
+# ---------- authorization precedes the socket ----------
+
+def test_main_opens_no_socket_when_the_gate_is_not_cleared(env,
+                                                           monkeypatch):
+    """An armed-but-ungated run must not connect. `run_campaign` still
+    owns the refusal; this only stops the socket preceding it."""
+    arm(env)
+    env.setenv(ex.GATE_ENV, "some-other-market")
+
+    def _boom(*a, **k):                                        # pragma: no cover
+        raise AssertionError("no socket may be opened before the gate")
+
+    monkeypatch.setattr(WS, "WsFeed", _boom)
+    monkeypatch.setattr(ex, "Transport", lambda *a, **k: _T())
+    printed = {}
+    monkeypatch.setattr(ex, "ledger_append", lambda row: printed.setdefault(
+        "rows", []).append(row))
+    rc = ex.main()
+    assert rc == 1
+    assert any(r.get("status") == "GATE_NOT_CLEARED"
+               for r in printed.get("rows", []))
+
+
+def test_main_opens_no_socket_without_credentials(env, monkeypatch):
+    arm(env)
+    env.delenv(ex.KEY_ENV, raising=False)
+
+    def _boom(*a, **k):                                        # pragma: no cover
+        raise AssertionError("no socket may be opened without credentials")
+
+    monkeypatch.setattr(WS, "WsFeed", _boom)
+    monkeypatch.setattr(ex, "Transport", lambda *a, **k: _T())
+    monkeypatch.setattr(ex, "ledger_append", lambda row: None)
+    assert ex.main() == 1
+
+
+def test_main_still_opens_the_socket_for_a_fully_authorized_run(env,
+                                                                monkeypatch):
+    """The capability must remain reachable: the point of the patch."""
+    arm(env)
+    opened = []
+
+    class _Feed:
+        state = _FakeState("0.4500", "0.4550")
+
+        def __init__(self, slug):
+            opened.append(slug)
+
+        def start(self):
+            return self
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(WS, "WsFeed", _Feed)
+    monkeypatch.setattr(ex, "Transport", lambda *a, **k: _T())
+    monkeypatch.setattr(ex, "ledger_append", lambda row: None)
+    ex.main()
+    assert opened == [SLUG]

@@ -821,7 +821,20 @@ def main() -> int:
     slug = os.getenv(MARKET_ENV, "").strip()
     feed = None
     try:
-        if armed() and slug:
+        # EVERY AUTHORIZATION CHECK RUNS BEFORE THE SOCKET.
+        #
+        # The first version opened the websocket as soon as `armed()` was
+        # true, so an armed-but-ungated or uncredentialed invocation
+        # connected and only then returned `GATE_NOT_CLEARED` -- a network
+        # call that did not happen before this patch existed. These are the
+        # SAME predicates `run_campaign` checks, in the same order, read
+        # here only to decide whether a feed is needed; `run_campaign`
+        # still performs its own checks and still owns every refusal
+        # status, so no gate moves, weakens or is duplicated as authority.
+        may_need_a_feed = (armed() and bool(slug) and has_credentials()
+                           and gate_asserted(slug)
+                           and realized_today() > DAILY_LOSS_STOP)
+        if may_need_a_feed:
             feed = _ws().WsFeed(slug).start()
         report = run_campaign(feed=feed)
     finally:
