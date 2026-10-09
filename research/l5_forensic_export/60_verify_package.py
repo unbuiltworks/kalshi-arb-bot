@@ -116,6 +116,9 @@ def main() -> int:
         "external_review/GROK_ROUND2_RESULTS.md",
         "external_review/GROK_ROUND2_PREDICTIONS_RESULT.json",
         "scripts/81_grok_round2_predictions.py",
+        "scripts/82_null_model_test.py",
+        "external_review/NULL_MODEL_DECISIVE_TEST.md",
+        "external_review/NULL_MODEL_TEST_RESULT.json",
     ]
     for r in required:
         if not os.path.exists(os.path.join(P, r)):
