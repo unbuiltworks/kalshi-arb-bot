@@ -1,0 +1,12 @@
+{
+  "fills": 760817,
+  "markets": 17046,
+  "regime_break_utc": "2026-06-23T00:00:00Z",
+  "span_utc": [
+    1773914977,
+    1788217879
+  ],
+  "early_fills": 177845,
+  "late_fills": 582972,
+  "representative_sequences": 6
+}
