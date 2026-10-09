@@ -587,6 +587,33 @@ def discover(get_json, *, max_pages: int = 30, page: int = 500,
     return rows
 
 
+TIME_KEY_HINTS = ("time", "date", "expir", "close", "start", "end", "resolve")
+
+
+def clock_diagnostic(markets: Sequence[Mapping[str, Any]], now: float,
+                     n: int = 3) -> dict:
+    """Why nothing resolved, from the venue's own payload.
+
+    Emitted when discovery yields zero watchable markets. Without this the
+    service reports `clock_resolvable_and_live: 0` forever and the reason
+    lives only on a host this session cannot reach.
+    """
+    samples = []
+    for m in list(markets)[:n]:
+        slug = str(m.get("slug"))
+        dur, start, basis = MC.resolve(slug, m)
+        samples.append({
+            "slug": slug, "basis": basis, "duration_s": dur,
+            "category": m.get("category"),
+            "time_like_keys": {k: m.get(k) for k in m
+                               if any(h in str(k).lower()
+                                      for h in TIME_KEY_HINTS)},
+            "all_keys": sorted(str(k) for k in m)})
+    return {"samples": samples,
+            "bases": _mix([MC.resolve(str(m.get("slug")), m)[2]
+                           for m in markets])}
+
+
 def eligible_markets(markets: Sequence[Mapping[str, Any]], now: float
                      ) -> List[dict]:
     """Markets whose clock we can actually resolve, nearest expiry first.
@@ -1050,13 +1077,15 @@ def run(cycles: Optional[int] = None, *, get_json=None,
             if n == 1 or not universe or n % DISCOVERY_EVERY == 0:
                 markets = discover(cs._get, sleep=sleep)
                 universe = eligible_markets(markets, now())
-                print(PREFIX + json.dumps({
-                    "kind": "discovery", "cycle": cs.cycles,
-                    "markets_served": len(markets),
-                    "clock_resolvable_and_live": len(universe),
-                    "categories": _mix([r.get("category")
-                                        for r in universe])},
-                    default=str), flush=True)
+                disc = {"kind": "discovery", "cycle": cs.cycles,
+                        "markets_served": len(markets),
+                        "clock_resolvable_and_live": len(universe),
+                        "categories": _mix([r.get("category")
+                                            for r in universe])}
+                if not universe and markets:
+                    disc["why_nothing_resolved"] = clock_diagnostic(
+                        markets, now())
+                print(PREFIX + json.dumps(disc, default=str), flush=True)
             watch = universe[:cs._slots]
             polled = cs.poll(watch)
             decisions = cs.decide([r["slug"] for r in watch])
