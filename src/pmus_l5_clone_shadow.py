@@ -1017,8 +1017,19 @@ class CloneShadow:
         return ok
 
     # ---- decisions ------------------------------------------------------
+    FRESH_S = float(os.getenv("L5_CLONE_FRESH_S", "90"))
+
     def decide(self, slugs: Sequence[str]) -> List[dict]:
-        """One decision row per (policy, market) with a fresh observation."""
+        """One decision row per (policy, market) with a FRESH observation.
+
+        STALENESS WAS SILENTLY ADMITTED. `self.obs` keeps the last 400
+        observations per slug forever, so a market polled an hour ago and
+        unreadable ever since still had a `dq[-1]` -- and the live run
+        duly produced 44 decisions a cycle off 5 successful polls, 42 of
+        them refused on a book that was read long ago. A decision priced
+        against a stale book is not an observation of anything, and in an
+        economic measurement it is worse than no decision at all.
+        """
         now = self._now()
         out: List[dict] = []
         for slug in slugs:
@@ -1026,6 +1037,9 @@ class CloneShadow:
             if not dq:
                 continue
             obs = dq[-1]
+            age = now - float(obs.get("_poll_t") or 0)
+            if age > self.FRESH_S:
+                continue
             clock = self.clocks.get(slug) or {}
             for pol, policy in self.policies.items():
                 inv = self.inv[pol].setdefault(slug, VirtualInventory())
@@ -1134,8 +1148,19 @@ class CloneShadow:
         nearest expiry. A market whose book has failed three times running
         or that is currently one-sided sinks rather than holding a slot.
         """
+        held = {s for pol in self.policies
+                for s, inv in self.inv[pol].items()
+                if inv.n_fills and s not in self.settled}
+
         def key(r):
             slug = r["slug"]
+            # A MARKET WE HOLD INVENTORY IN IS NOT NEGOTIABLE. It can only
+            # be completed before it expires, and tradability ranking had
+            # begun rotating held markets OUT of the watch set -- so the
+            # residual sat there until the window closed and settled
+            # directionally, which is the opposite of the strategy.
+            if slug in held:
+                return (-1, 0, 0, r["clock"]["tte_s"])
             fails = min(3, self._poll_fail.get(slug, 0))
             one_sided = 1 if slug in self.one_sided else 0
             dq = self.obs.get(slug)
@@ -1512,6 +1537,10 @@ def run(cycles: Optional[int] = None, *, get_json=None,
                    "newly_queue_cleared": len(judged["newly_queue_cleared"]),
                    "settled_this_cycle": len(settlements),
                    "one_sided_books": len(cs.one_sided),
+                   "markets_held_unsettled": len({
+                       s for pol in cs.policies
+                       for s, inv in cs.inv[pol].items()
+                       if inv.n_fills and s not in cs.settled}),
                    "completion_rule": _mix([
                        (d.get("completion_rule") or {}).get("why")
                        or ("DUE" if (d.get("completion_rule") or {}).get("due")

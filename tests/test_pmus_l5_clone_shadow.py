@@ -527,3 +527,39 @@ def test_ranking_sinks_one_sided_markets_below_tradable_ones(tmp_path):
     cs.one_sided["otm"] = {"bid": None}
     cs.obs["updown"] = [{}]
     assert [r["slug"] for r in cs.rank_watch(universe)] == ["updown", "otm"]
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(MODELS,
+                                                    "l5_policy_early.pkl")),
+                    reason="models not built in this checkout")
+def test_a_stale_book_produces_no_decision(tmp_path):
+    """The live run emitted 44 decisions a cycle off 5 successful polls:
+    every market ever polled still had a last observation."""
+    slug = "cpc-btc-updown-15m-2026-09-23-1345z"
+    t0 = 1790171100.0 + 60.0
+    gw = Gateway([market(slug)], {slug: [book(0.30, 0.60)]})
+    clock = {"t": t0}
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: clock["t"],
+                        policies=CS.load_policies(MODELS),
+                        state_dir=str(tmp_path))
+    cs.poll([{"slug": slug, "market": market(slug)}])
+    assert len(cs.decide([slug])) == 2            # fresh
+    clock["t"] = t0 + cs.FRESH_S + 1
+    assert cs.decide([slug]) == []                # stale, not refused-on
+
+
+def test_held_markets_are_pinned_into_the_watch_set(tmp_path):
+    gw = Gateway([], {})
+    cs = CS.CloneShadow(get_json=gw, sleep=None, now=lambda: 1.0,
+                        policies={"early": None}, state_dir=str(tmp_path))
+    universe = [{"slug": "fresh", "clock": {"tte_s": 60.0}},
+                {"slug": "held", "clock": {"tte_s": 800.0}}]
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["fresh", "held"]
+    inv = cs.inv["early"].setdefault("held", CS.VirtualInventory())
+    inv.add(side_yes=True, px=D("0.4"), qty=D("1"), t=1.0)
+    # even one-sided and later-expiring, a held market comes first
+    cs.one_sided["held"] = {"bid": None}
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["held", "fresh"]
+    # once settled it stops being pinned
+    cs.settled["held"] = {"yes_won": True}
+    assert [r["slug"] for r in cs.rank_watch(universe)] == ["fresh", "held"]
