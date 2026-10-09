@@ -1,0 +1,285 @@
+{
+ "maker_fills_measured": 2795,
+ "trajectory": {
+  "T-30": {
+   "n": 2792,
+   "dist_ticks_p10": -13.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 17.0,
+   "share_fill_price_at_or_below_bid": 0.644,
+   "spread_ticks_p50": 1.0
+  },
+  "T-29": {
+   "n": 2792,
+   "dist_ticks_p10": -12.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 17.0,
+   "share_fill_price_at_or_below_bid": 0.6429,
+   "spread_ticks_p50": 1.0
+  },
+  "T-28": {
+   "n": 2793,
+   "dist_ticks_p10": -12.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 16.0,
+   "share_fill_price_at_or_below_bid": 0.6491,
+   "spread_ticks_p50": 1.0
+  },
+  "T-27": {
+   "n": 2793,
+   "dist_ticks_p10": -11.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 17.0,
+   "share_fill_price_at_or_below_bid": 0.648,
+   "spread_ticks_p50": 1.0
+  },
+  "T-26": {
+   "n": 2793,
+   "dist_ticks_p10": -11.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 17.0,
+   "share_fill_price_at_or_below_bid": 0.6549,
+   "spread_ticks_p50": 1.0
+  },
+  "T-25": {
+   "n": 2795,
+   "dist_ticks_p10": -11.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 16.0,
+   "share_fill_price_at_or_below_bid": 0.6555,
+   "spread_ticks_p50": 1.0
+  },
+  "T-24": {
+   "n": 2795,
+   "dist_ticks_p10": -10.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 16.0,
+   "share_fill_price_at_or_below_bid": 0.6623,
+   "spread_ticks_p50": 1.0
+  },
+  "T-23": {
+   "n": 2795,
+   "dist_ticks_p10": -9.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 16.0,
+   "share_fill_price_at_or_below_bid": 0.6626,
+   "spread_ticks_p50": 1.0
+  },
+  "T-22": {
+   "n": 2795,
+   "dist_ticks_p10": -9.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 15.0,
+   "share_fill_price_at_or_below_bid": 0.6623,
+   "spread_ticks_p50": 1.0
+  },
+  "T-21": {
+   "n": 2794,
+   "dist_ticks_p10": -9.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 15.0,
+   "share_fill_price_at_or_below_bid": 0.6639,
+   "spread_ticks_p50": 1.0
+  },
+  "T-20": {
+   "n": 2792,
+   "dist_ticks_p10": -9.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 15.0,
+   "share_fill_price_at_or_below_bid": 0.6648,
+   "spread_ticks_p50": 1.0
+  },
+  "T-19": {
+   "n": 2790,
+   "dist_ticks_p10": -8.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 14.0,
+   "share_fill_price_at_or_below_bid": 0.671,
+   "spread_ticks_p50": 1.0
+  },
+  "T-18": {
+   "n": 2788,
+   "dist_ticks_p10": -8.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 13.0,
+   "share_fill_price_at_or_below_bid": 0.6793,
+   "spread_ticks_p50": 1.0
+  },
+  "T-17": {
+   "n": 2787,
+   "dist_ticks_p10": -8.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 13.0,
+   "share_fill_price_at_or_below_bid": 0.6835,
+   "spread_ticks_p50": 1.0
+  },
+  "T-16": {
+   "n": 2787,
+   "dist_ticks_p10": -7.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 13.0,
+   "share_fill_price_at_or_below_bid": 0.6875,
+   "spread_ticks_p50": 1.0
+  },
+  "T-15": {
+   "n": 2787,
+   "dist_ticks_p10": -7.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 12.0,
+   "share_fill_price_at_or_below_bid": 0.6853,
+   "spread_ticks_p50": 1.0
+  },
+  "T-14": {
+   "n": 2787,
+   "dist_ticks_p10": -6.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 12.0,
+   "share_fill_price_at_or_below_bid": 0.6907,
+   "spread_ticks_p50": 1.0
+  },
+  "T-13": {
+   "n": 2787,
+   "dist_ticks_p10": -6.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 11.0,
+   "share_fill_price_at_or_below_bid": 0.6972,
+   "spread_ticks_p50": 1.0
+  },
+  "T-12": {
+   "n": 2788,
+   "dist_ticks_p10": -5.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 11.0,
+   "share_fill_price_at_or_below_bid": 0.7098,
+   "spread_ticks_p50": 1.0
+  },
+  "T-11": {
+   "n": 2788,
+   "dist_ticks_p10": -5.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 10.0,
+   "share_fill_price_at_or_below_bid": 0.7159,
+   "spread_ticks_p50": 1.0
+  },
+  "T-10": {
+   "n": 2788,
+   "dist_ticks_p10": -5.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 10.0,
+   "share_fill_price_at_or_below_bid": 0.7256,
+   "spread_ticks_p50": 1.0
+  },
+  "T-9": {
+   "n": 2790,
+   "dist_ticks_p10": -5.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 9.0,
+   "share_fill_price_at_or_below_bid": 0.7333,
+   "spread_ticks_p50": 1.0
+  },
+  "T-8": {
+   "n": 2790,
+   "dist_ticks_p10": -4.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 9.0,
+   "share_fill_price_at_or_below_bid": 0.7412,
+   "spread_ticks_p50": 1.0
+  },
+  "T-7": {
+   "n": 2790,
+   "dist_ticks_p10": -4.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 9.0,
+   "share_fill_price_at_or_below_bid": 0.7498,
+   "spread_ticks_p50": 1.0
+  },
+  "T-6": {
+   "n": 2790,
+   "dist_ticks_p10": -3.0,
+   "dist_ticks_p50": 2.0,
+   "dist_ticks_p90": 8.0,
+   "share_fill_price_at_or_below_bid": 0.7627,
+   "spread_ticks_p50": 1.0
+  },
+  "T-5": {
+   "n": 2790,
+   "dist_ticks_p10": -3.0,
+   "dist_ticks_p50": 1.0,
+   "dist_ticks_p90": 7.0,
+   "share_fill_price_at_or_below_bid": 0.7738,
+   "spread_ticks_p50": 1.0
+  },
+  "T-4": {
+   "n": 2790,
+   "dist_ticks_p10": -2.0,
+   "dist_ticks_p50": 1.0,
+   "dist_ticks_p90": 6.0,
+   "share_fill_price_at_or_below_bid": 0.7828,
+   "spread_ticks_p50": 1.0
+  },
+  "T-3": {
+   "n": 2789,
+   "dist_ticks_p10": -2.0,
+   "dist_ticks_p50": 1.0,
+   "dist_ticks_p90": 6.0,
+   "share_fill_price_at_or_below_bid": 0.7928,
+   "spread_ticks_p50": 1.0
+  },
+  "T-2": {
+   "n": 2785,
+   "dist_ticks_p10": -2.0,
+   "dist_ticks_p50": 0.0,
+   "dist_ticks_p90": 5.0,
+   "share_fill_price_at_or_below_bid": 0.7569,
+   "spread_ticks_p50": 1.0
+  },
+  "T-1": {
+   "n": 2783,
+   "dist_ticks_p10": -2.0,
+   "dist_ticks_p50": 0.0,
+   "dist_ticks_p90": 4.0,
+   "share_fill_price_at_or_below_bid": 0.7266,
+   "spread_ticks_p50": 1.0
+  },
+  "T-0": {
+   "n": 2777,
+   "dist_ticks_p10": -3.0,
+   "dist_ticks_p50": 0.0,
+   "dist_ticks_p90": 4.0,
+   "share_fill_price_at_or_below_bid": 0.6719,
+   "spread_ticks_p50": 1.0
+  }
+ },
+ "post_fill_mid_move": {
+  "T+5": {
+   "n": 2751,
+   "p10": -0.06,
+   "p50": 0.0,
+   "p90": 0.03,
+   "mean": -0.00821
+  },
+  "T+15": {
+   "n": 2697,
+   "p10": -0.1,
+   "p50": -0.005,
+   "p90": 0.07,
+   "mean": -0.00971
+  },
+  "T+30": {
+   "n": 2622,
+   "p10": -0.12,
+   "p50": -0.01,
+   "p90": 0.11,
+   "mean": -0.00525
+  }
+ },
+ "timestamp_uncertainty": {
+  "basis": "real block timestamps, never interpolated",
+  "n_block_gaps": 2793,
+  "block_gap_s_p50": 3.0,
+  "block_gap_s_p90": 12.0,
+  "note": "the fill's true moment lies inside its block's interval, so each lead carries about this much slack"
+ },
+ "LABEL": "OBSERVED_BOOK_AND_FILLS_NOT_L5_ORDERS",
+ "labels": "dist_ticks is (own best bid - fill price); it is a distance between two public numbers and is not asserted to be where any order rested. A positive post-fill mid move is in the buyer's favour."
+}
