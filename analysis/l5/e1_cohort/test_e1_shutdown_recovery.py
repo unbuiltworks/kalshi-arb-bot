@@ -47,11 +47,26 @@ from analysis.l5.e1_cohort.test_e1_run_cohort_lifecycle import (
 
 @pytest.fixture(autouse=True)
 def _clean_shutdown_state():
+    """RESTORE THE SIGNAL DISPOSITIONS, not just the module's own state.
+
+    This fixture used to clear `_REQUESTED` and leave the handlers bound.
+    They then outlived the test that installed them and stayed bound for
+    the whole pytest process, so `KeyboardInterrupt` stopped arriving
+    where later tests expected it -- which hung a full-suite run at 64%
+    for forty minutes before the cause was found. `reset_for_test` now
+    restores what it replaced, and this asserts it did.
+    """
     SD.reset_for_test()
     R._set_emergency_handover(None)
+    before = {name: signal.getsignal(getattr(signal, name))
+              for name in SD.SIGNALS_COVERED}
     yield
     SD.reset_for_test()
     R._set_emergency_handover(None)
+    after = {name: signal.getsignal(getattr(signal, name))
+             for name in SD.SIGNALS_COVERED}
+    assert after == before, (
+        "a test left a signal handler installed: %r -> %r" % (before, after))
 
 
 @pytest.fixture()
@@ -117,6 +132,20 @@ def test_a_second_signal_does_not_abandon_the_handover():
     assert SD.requested()["repeats"], SD.requested()
 
 
+def test_restore_puts_back_the_original_dispositions():
+    """THE LEAK, CLOSED. `install` records what it replaced and `restore`
+    puts it back, so nothing downstream inherits our handlers."""
+    before = {n: signal.getsignal(getattr(signal, n))
+              for n in SD.SIGNALS_COVERED}
+    SD.install()
+    assert any(signal.getsignal(getattr(signal, n)) is not before[n]
+               for n in SD.SIGNALS_COVERED)
+    SD.restore()
+    for n in SD.SIGNALS_COVERED:
+        assert signal.getsignal(getattr(signal, n)) is before[n], n
+    SD.restore()                                   # idempotent
+
+
 def test_install_is_idempotent_and_reports_refusals(monkeypatch):
     SD.install()
     again = SD.install()
@@ -130,6 +159,13 @@ def test_install_is_idempotent_and_reports_refusals(monkeypatch):
     assert out["installed"] == []
     assert out["refused"] == {"SIGTERM": "ValueError",
                              "SIGINT": "ValueError"}
+    # UNDO BEFORE THE TEARDOWN RUNS. `restore` goes through
+    # `signal.signal`, so while it is patched to raise, restoration is
+    # silently impossible and the handlers installed at the top of this
+    # test would leak into the rest of the session. The autouse fixture
+    # asserts that they do not, which is how this was caught.
+    monkeypatch.undo()
+    SD.restore()
 
 
 # =====================================================================
