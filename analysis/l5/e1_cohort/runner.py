@@ -59,6 +59,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from analysis.l5.e1_cohort import arming as A
 from analysis.l5.e1_cohort import authorization as AUTH
 from analysis.l5.e1_cohort import budget as BUD
+from analysis.l5.e1_cohort import first_leg_only as FLO
 from analysis.l5.e1_cohort import latch as L
 from analysis.l5.e1_cohort import obligations as OB
 from analysis.l5.e1_cohort import local_faults as LF
@@ -723,6 +724,17 @@ def _submit_once(t: Any, *, slug: str, outcome_side: str, price: Any,
     # released -- so a crash from this point on leaves the slot spent,
     # which is the only safe direction.
     record = consume_latch()
+    # SUPERVISED-PROBE BOUND. Default OFF. When on, exactly one POST
+    # /v1/orders may ever leave this epoch, and the permission is a durable
+    # O_EXCL file so a crash after a POST cannot grant a second one. It is
+    # claimed HERE -- after the preview, the echo and the latch, and
+    # immediately before the POST -- so a preview rejection does not spend
+    # it and an ambiguous submission does.
+    flo_claim = None
+    if FLO.enabled():
+        flo_claim = FLO.claim_the_single_post(
+            {"slug": slug, "outcome_side": outcome_side,
+             "price": str(price), "qty": str(qty)})
     try:
         resp = t.request("POST", O.SUBMIT_PATH, body)
     except O.VenueHTTPError as exc:
@@ -744,6 +756,7 @@ def _submit_once(t: Any, *, slug: str, outcome_side: str, price: Any,
             "submitted_post_only": True,
             "submitted_post_only_implies_maker": False,
             "serializer": "src.l5_order_body",
+            "first_leg_only_claim": flo_claim,
             "LANGUAGE": "SUBMITTED is not a fill"}
 
 
@@ -1028,6 +1041,10 @@ def submit_complement(*, window: int, slot: int, snapshot: Mapping[str, Any],
     unexplained position later.
     """
     assert_frozen()
+    # SUPERVISED-PROBE BOUND, refused before preview and therefore before
+    # anything the venue can see. A filled first leg is carried as RESIDUAL
+    # and reconciled by the operator, never complemented.
+    FLO.refuse_complement()
     spent = L.complement_tranches_spent(window=window, slot=slot)
     plan = complement_tranche(
         cumulative_first_leg_filled_qty=first_leg_filled_qty,
@@ -1896,6 +1913,33 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                                    session_auth=session_auth,
                                    progress=progress, recorder=recorder,
                                    budget=budget, envelope=envelope)
+        except FLO.OnePostSpent as exc:
+            # SUPERVISED-PROBE BOUND REACHED. The one permitted POST is
+            # spent, so the run is OVER: this is a terminal stop, recorded
+            # and then broken out of, never a fault to be classified,
+            # paced and retried. It is deliberately caught BEFORE the
+            # latch and fault handlers below so no classifier can reach it.
+            if recorder is not None:
+                recorder.record_event(
+                    window=snap.get("window", -1), slot=-1,
+                    event="FIRST_LEG_ONLY_BOUND_REACHED",
+                    detail={"slug": snap.get("market"),
+                            "detail": str(exc)[:400],
+                            "one_post_claim": FLO.report(),
+                            "NO_REPLACEMENT_NO_COMPLEMENT": True})
+            refusals.append({"iteration": it,
+                             "refusals": ["FIRST_LEG_ONLY_BOUND_REACHED"],
+                             "detail": str(exc)[:400]})
+            stopped_because = "FIRST_LEG_ONLY_BOUND_REACHED"
+            break
+        except FLO.GuardUnusable as exc:
+            # The guard could not record its decision, so it permits
+            # nothing and the run stops. Fail closed.
+            refusals.append({"iteration": it,
+                             "refusals": ["FIRST_LEG_ONLY_GUARD_UNUSABLE"],
+                             "detail": str(exc)[:400]})
+            stopped_because = "FIRST_LEG_ONLY_GUARD_UNUSABLE"
+            break
         except (L.WindowExhausted, L.LatchSpent) as exc:
             # DEFENCE IN DEPTH. `submit_first_leg` converts both of these
             # into `AttemptBudgetExhausted` after retiring its intent, so
