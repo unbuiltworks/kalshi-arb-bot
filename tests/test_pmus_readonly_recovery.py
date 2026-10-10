@@ -152,3 +152,92 @@ def test_a_failed_read_never_stops_the_others(monkeypatch):
     out = R.get("/v1/orders/open")
     assert out["ok"] is False and out["error"] == "RuntimeError"
     assert calls == ["/v1/orders/open"]
+
+
+# ---------------------------------------------------------------------------
+# The entrypoint correction: a stamped account-wide answer, and the two venue
+# numbers that are currently code constants asked of the venue instead.
+# ---------------------------------------------------------------------------
+
+def test_every_read_carries_a_utc_stamp(monkeypatch):
+    """An unstamped account read is indistinguishable from a stale one."""
+    class T:
+        def request(self, method, path, body, base):
+            assert method == "GET"
+            return {"orders": []}
+    monkeypatch.setattr(Q1, "ReadOnlyTransport", T)
+    r = R.get("/v1/orders/open")
+    assert r["ok"] and r["as_of_utc"].endswith("Z")
+
+
+def test_a_failed_read_is_also_stamped(monkeypatch):
+    class T:
+        def request(self, method, path, body, base):
+            raise RuntimeError("boom")
+    monkeypatch.setattr(Q1, "ReadOnlyTransport", T)
+    r = R.get("/v1/orders/open")
+    assert r["ok"] is False and r["as_of_utc"].endswith("Z")
+    assert r["error"] == "RuntimeError"
+
+
+def test_venue_meta_reads_the_two_numbers_from_the_venue(monkeypatch, capsys):
+    seen = []
+    listing = {"markets": [
+        {"slug": "cpc-btc-updown-15m-2026-10-10-1200z"},
+        {"slug": "cpc-nfl-something-2026-10-10"},
+    ]}
+    detail = {"market": {"slug": "cpc-btc-updown-15m-2026-10-10-1200z",
+                         "minimumTradeQty": "0.01",
+                         "orderPriceMinTickSize": "0.01",
+                         "feeCoefficient": "0.0695",
+                         "status": "open", "active": True, "closed": False}}
+
+    class T:
+        def request(self, method, path, body, base):
+            assert method == "GET"
+            seen.append(path)
+            return detail if "/market/slug/" in path else listing
+    monkeypatch.setattr(Q1, "ReadOnlyTransport", T)
+    R.venue_meta()
+    out = capsys.readouterr().out
+    rows = [json.loads(l.split(" ", 1)[1]) for l in out.splitlines()
+            if l.startswith("PMUS_VENUE_META ")]
+    assert len(rows) == 1, "the non-BTC15m market must not be reported"
+    assert rows[0]["minimumTradeQty"] == "0.01"
+    assert rows[0]["orderPriceMinTickSize"] == "0.01"
+    assert rows[0]["slug"].startswith("cpc-btc-updown-15m")
+    assert rows[0]["ABSENT_MEANS_UNKNOWN_NOT_ZERO"] is True
+
+
+def test_a_market_missing_the_fields_reports_absent_not_zero(monkeypatch,
+                                                            capsys):
+    listing = {"markets": [{"slug": "cpc-btc-updown-15m-2026-10-10-1215z"}]}
+
+    class T:
+        def request(self, method, path, body, base):
+            assert method == "GET"
+            if "/market/slug/" in path:
+                return {"market": {"slug": "cpc-btc-updown-15m-2026-10-10-1215z"}}
+            return listing
+    monkeypatch.setattr(Q1, "ReadOnlyTransport", T)
+    R.venue_meta()
+    row = [json.loads(l.split(" ", 1)[1])
+           for l in capsys.readouterr().out.splitlines()
+           if l.startswith("PMUS_VENUE_META ")][0]
+    assert row["minimumTradeQty"] is None
+    assert row["orderPriceMinTickSize"] is None
+
+
+def test_an_unreadable_listing_is_reported_and_never_invented(monkeypatch,
+                                                              capsys):
+    class T:
+        def request(self, method, path, body, base):
+            raise RuntimeError("gateway down")
+    monkeypatch.setattr(Q1, "ReadOnlyTransport", T)
+    R.venue_meta()
+    out = capsys.readouterr().out
+    scan = [json.loads(l.split(" ", 1)[1]) for l in out.splitlines()
+            if l.startswith("PMUS_VENUE_META_SCAN ")][0]
+    assert scan["listing_ok"] is False
+    assert scan["btc15m_rows"] == 0
+    assert "PMUS_VENUE_META " not in out, "no metadata may be printed"
