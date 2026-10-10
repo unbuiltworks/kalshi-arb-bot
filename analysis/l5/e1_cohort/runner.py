@@ -1692,7 +1692,11 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
         # market-scoped deadman and verifies it against /v1/orders/open.
         # A FILLED residual is deliberately NOT unwound: there is no taker
         # rescue at any price or TTE, so inventory rides to settlement.
-        if past_cutoff and not lifecycle.deadman_result:
+        # PER WINDOW, not per run. See `PairLifecycle.deadman_by_window`:
+        # guarding on `deadman_result` meant the handover fired once and
+        # every later window's resting order was left to the operator.
+        _w_now = int(snap.get("window", -1) or -1)
+        if past_cutoff and _w_now not in lifecycle.deadman_by_window:
             # OWNERSHIP, NOT MARKET. `owned_ids` is E1's own registry --
             # the ids it submitted, restored from the durable tape -- so
             # the handover cancels exactly our orders and leaves another
@@ -1770,6 +1774,13 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
             if past_cutoff and lifecycle.deadman_result is not None:
                 # the handover has run: our resting orders are cancelled and
                 # verified, and there is nothing further this process can do.
+                #
+                # DELIBERATELY NOT PER-WINDOW. The per-window map governs
+                # whether a handover still has to RUN; this governs whether
+                # the RUN is over, and "any handover has completed" is the
+                # right question for that. Making this per-window regressed
+                # `test_attempt_exhaustion_while_a_residual_is_open_does_
+                # not_stop_early`, which is the correct behaviour to keep.
                 stopped_because = "ATTEMPT_BUDGET_EXHAUSTED_AT_HANDOVER"
                 break
             if not unresolved:
@@ -2132,6 +2143,9 @@ def run_cohort(*, snapshot_provider: Any, tracker: Optional[CohortTracker]
                 "residuals_opened": lifecycle.residuals_opened,
                 "events": lifecycle.events,
                 "deadman": lifecycle.deadman_result,
+                "deadman_by_window": {str(k): v for k, v in
+                                      lifecycle.deadman_by_window.items()},
+                "handover_is_per_window": True,
                 "complement_is_reached_from_run_cohort": True,
             },
             "iterations": it, "placements": placements,

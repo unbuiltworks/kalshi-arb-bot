@@ -279,23 +279,37 @@ def clean_order_state_reader(open_rows=(), hist_rows=None, *,
     needs to script absence deliberately.
     """
     from analysis.l5.e1_cohort import order_state as _OS
-    hist = list(open_rows if hist_rows is None else hist_rows)
-    if mirror_posts:
+    base_rows = list(open_rows if hist_rows is None else hist_rows)
+
+    def _rows():
+        """EVALUATED PER READ, not once at construction.
+
+        My first attempt mirrored the posts in the body of this factory --
+        which runs ONCE, before any order exists -- so it mirrored nothing
+        and the fake went on denying every order it had acknowledged. The
+        three `drive_main` tests kept failing and I briefly reported them
+        as fixed. A venue's answer depends on when you ask it, so this is
+        a function.
+        """
+        hist = list(base_rows)
+        if not mirror_posts:
+            return hist
         have = {str(r.get("id")) for r in hist if r.get("id")}
         for p in FakeTransport.posts:
             oid = "order-%d" % p["n"]
             if oid in have:
                 continue
+            cancelled = oid in FakeTransport.cancels
             hist.append({
                 "id": oid, "marketSlug": p["slug"],
                 "outcomeSide": p.get("outcomeSide") or "OUTCOME_SIDE_YES",
-                "state": ("ORDER_STATE_CANCELED"
-                          if oid in FakeTransport.cancels
+                "state": ("ORDER_STATE_CANCELED" if cancelled
                           else "ORDER_STATE_NEW"),
                 "quantity": str(p["quantity"]), "cumQuantity": "0",
-                "leavesQuantity": str(p["quantity"]),
+                "leavesQuantity": ("0" if cancelled
+                                   else str(p["quantity"])),
                 "price": {"value": str(p["price"]), "currency": "USD"}})
-    by_id = {str(r.get("id")): r for r in hist if r.get("id")}
+        return hist
 
     class _NotFound(Exception):
         def __init__(self):
@@ -304,20 +318,21 @@ def clean_order_state_reader(open_rows=(), hist_rows=None, *,
 
     def _read(path):
         if path == _OS.OPEN_PATH:
-            live = [r for r in hist
+            rows = _rows()
+            seen = {str(o.get("id")) for o in open_rows}
+            live = [r for r in rows
                     if str(r.get("state")) in ("ORDER_STATE_NEW",
                                                "ORDER_STATE_PARTIALLY"
-                                               "_FILLED")]
-            return {"orders": list(open_rows) + [
-                r for r in live
-                if str(r.get("id")) not in
-                {str(o.get("id")) for o in open_rows}]}
+                                               "_FILLED")
+                    and str(r.get("id")) not in seen]
+            return {"orders": list(open_rows) + live}
         if path == _OS.POSITIONS_PATH:
             return {"positions": {}, "availablePositions": [], "eof": True}
         if path.startswith("/v1/portfolio/activities"):
             return {"activities": [], "eof": True}
         if path.startswith("/v1/order/"):
             oid = path.rsplit("/", 1)[-1]
+            by_id = {str(r.get("id")): r for r in _rows() if r.get("id")}
             if oid in by_id:
                 return {"order": by_id[oid]}
             raise _NotFound()

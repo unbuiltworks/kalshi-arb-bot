@@ -74,6 +74,19 @@ class PairLifecycle:
         self.events: List[Dict[str, Any]] = []
         self.residuals_opened: Dict[str, Dict[str, Any]] = {}
         self.deadman_result: Optional[Dict[str, Any]] = None
+        #: ONE HANDOVER PER WINDOW, keyed by window index.
+        #:
+        #: `deadman_result` is set once and never cleared, and `run_cohort`
+        #: guarded on it with `if past_cutoff and not
+        #: lifecycle.deadman_result`. So the handover ran ONCE PER RUN. In a
+        #: twelve-window probe that cancels window 0 and then never runs
+        #: again: any order resting at the end of windows 1..11 is never
+        #: cancelled by the engine at all. The single-window probes that
+        #: have run so far could not expose it.
+        #:
+        #: `deadman_result` is kept as "the most recent handover" so every
+        #: existing reader and report field is unchanged.
+        self.deadman_by_window: Dict[int, Dict[str, Any]] = {}
 
     # ------------------------------------------------------------ tracking
     def record_first_leg(self, *, order_id: str, window: int, slot: int,
@@ -327,6 +340,7 @@ class PairLifecycle:
             out["because"] = "ORDER_STATE_NOT_ESTABLISHED"
             out["FAILS_CLOSED"] = True
             self.deadman_result = out
+            self.deadman_by_window[int(snapshot.get("window", -1))] = out
             if recorder is not None:
                 recorder.record_event(
                     window=int(snapshot.get("window", -1)), slot=-1,
@@ -393,6 +407,7 @@ class PairLifecycle:
                 out["verify_error"] = type(exc).__name__
                 out.setdefault("all_cancelled", None)
         self.deadman_result = out
+        self.deadman_by_window[int(snapshot.get("window", -1))] = out
         if recorder is not None:
             recorder.record_event(
                 window=int(snapshot.get("window", -1)), slot=-1,
