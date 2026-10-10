@@ -241,3 +241,15 @@ def test_an_unreadable_listing_is_reported_and_never_invented(monkeypatch,
     assert scan["listing_ok"] is False
     assert scan["btc15m_rows"] == 0
     assert "PMUS_VENUE_META " not in out, "no metadata may be printed"
+
+
+def test_the_balances_list_is_unwrapped_so_reservations_are_not_absent():
+    """The venue returns balances as a LIST of currency rows.
+
+    The first version of the unwrap handled only a mapping, so every
+    reservation field printed ABSENT while the raw body carried the numbers.
+    """
+    src = RUNNER.read_text()
+    assert 'isinstance(inner, list)' in src
+    i = src.index('inner = bbody.get("balances")')
+    assert '"USD"' in src[i:i + 900]

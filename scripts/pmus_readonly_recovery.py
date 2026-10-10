@@ -291,7 +291,17 @@ def main() -> int:
     bbody = (bal or {}).get("body")
     if isinstance(bbody, Mapping):
         inner = bbody.get("balances")
-        if isinstance(inner, Mapping):
+        # the venue returns a LIST of currency rows, not a mapping. The first
+        # version of this unwrap handled only the mapping case, so every
+        # reservation printed ABSENT while the raw body carried the numbers.
+        # Failing to ABSENT rather than to 0 is why that was readable as a
+        # defect instead of as a venue answer.
+        if isinstance(inner, list):
+            usd = [r for r in inner if isinstance(r, Mapping)
+                   and str(r.get("currency", "USD")).upper() == "USD"]
+            if usd:
+                bbody = usd[0]
+        elif isinstance(inner, Mapping):
             bbody = inner
     orders_open = next((r for r in reads
                         if r["path"] == "/v1/orders/open"), None)
