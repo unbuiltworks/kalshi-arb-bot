@@ -1,1 +1,1 @@
-btc15m two-sided recorder: re-requested 2026-10-06T00:49:19Z after fixing a validator crash -- read-only public market data, no credential, no order path
+btc15m two-sided recorder: re-requested 2026-10-11T14:34:26Z after correcting the inherited 420s subscription lead to 960s (SUBSCRIBE_LEAD_S, window 900s + 60s margin) and adding the two fail-closed coverage checks subscribe_lead_verified / early_window_streamed. Read-only public market data, no credential, no order path, no live order.
