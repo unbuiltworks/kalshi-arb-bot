@@ -101,3 +101,84 @@ def test_nothing_in_the_replay_decides_a_fill():
     g = load_gates()
     r = judge(REAL_FILLED, g)
     assert r["venue_cumQuantity"] == "0.9"
+
+
+def test_a_manual_order_does_not_consume_the_engines_own_cap():
+    """`spring_cumulative_notional` sums the CAMPAIGN LEDGER's rows for a
+    market. An order the owner placed in the venue UI is not in that ledger,
+    so it can never have blocked an engine submission."""
+    r = replay({"orders": [
+        {"id": "MANUAL", "slug": "same", "limit_price": "0.29",
+         "quantity": "67.01",
+         "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL"},
+        {"id": "ENGINE", "slug": "same", "limit_price": "0.45",
+         "quantity": "0.02",
+         "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"},
+    ]})
+    by_id = {o["order_id"]: o for o in r["orders"]}
+    assert by_id["MANUAL"]["ORIGIN"] == "MANUAL"
+    assert by_id["ENGINE"]["ORIGIN"] == "AUTOMATED"
+    # the engine's own $0.009 order is well inside the $0.05 cap and must
+    # be admitted, regardless of the 67-unit manual order beside it
+    assert by_id["ENGINE"]["ENGINE_VERDICT"] == "SUBMITTED", \
+        by_id["ENGINE"]["refusals"]
+    assert r["origin_counts"] == {"MANUAL": 1, "AUTOMATED": 1}
+
+
+def test_resize_quantity_is_never_negative():
+    g = load_gates()
+    r = judge({"id": "X", "slug": "s", "limit_price": "0.30",
+               "quantity": "1"}, g, cumulative_notional=D("9.99"))
+    assert D(r["engine_quantity_if_resized"]) == 0
+    assert r["ENGINE_VERDICT"] == "BLOCKED"
+    assert r["size_ratio_owner_over_engine"] is None
+
+
+def test_the_largest_difference_is_judged_on_manual_orders_only():
+    r = replay({"orders": [
+        {"id": "M", "slug": "a", "limit_price": "0.29", "quantity": "67.01",
+         "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL"},
+        {"id": "E", "slug": "b", "limit_price": "0.90", "quantity": "9",
+         "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC"},
+    ]})
+    assert r["largest_difference_scope"] == "manual orders only"
+    assert r["manual_orders"] == 1
+    assert set(r["manual_refusing_gate_counts"]) == {
+        "per_market_notional_cap", "max_residual_units"}
+    assert r["largest_behavioural_difference"] == "per_market_notional_cap"
+
+
+def test_a_sell_order_is_structurally_unreachable_not_merely_resized():
+    """`pmus_sports_l5_decision.decide` returns no_action/l5_sell_is_noop for
+    a sell relation, and the spring session records the same stop_reason. The
+    engine's whole vocabulary -- OPEN, EXTEND, COMPLETE -- is buys."""
+    g = load_gates()
+    r = judge({"id": "S", "slug": "s", "side": "ORDER_SIDE_SELL",
+               "outcomeSide": "OUTCOME_SIDE_NO", "limit_price": "0.29",
+               "quantity": "0.1",              # small enough for every cap
+               "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_MANUAL"}, g)
+    gates = {x["gate"] for x in r["refusals"]}
+    assert gates == {"no_sell_path"}, gates
+    assert r["ENGINE_VERDICT"] == "BLOCKED", "structural, never RESIZED"
+    hit = [x for x in r["refusals"] if x["gate"] == "no_sell_path"][0]
+    assert hit["engine_reason"] == "l5_sell_is_noop"
+    assert hit["structural"] is True
+
+
+def test_the_engine_really_does_treat_sell_as_a_noop():
+    """Read it from the engine, so this test fails if the engine ever gains
+    a sell path and the replay is left claiming it has none."""
+    import inspect
+
+    from src import pmus_sports_l5_decision as dec
+
+    assert "l5_sell_is_noop" in inspect.getsource(dec)
+
+
+def test_a_structural_refusal_can_never_be_resized():
+    g = load_gates()
+    r = judge({"id": "S", "slug": "s", "side": "ORDER_SIDE_SELL",
+               "limit_price": "0.30", "quantity": "67"}, g)
+    assert r["ENGINE_VERDICT"] == "BLOCKED"
+    assert {"no_sell_path", "per_market_notional_cap",
+            "max_residual_units"} <= {x["gate"] for x in r["refusals"]}

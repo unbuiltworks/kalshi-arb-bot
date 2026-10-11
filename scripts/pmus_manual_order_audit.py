@@ -257,7 +257,18 @@ def slim_order(o: Dict[str, Any]) -> Dict[str, Any]:
         "commission": (com.get("value") if isinstance(com, dict) else com),
         #: THE VENUE'S OWN maker/taker record, not an inference from price.
         "participateDontInitiate": o.get("participateDontInitiate"),
-        "timeInForce": o.get("timeInForce"),
+        "timeInForce": o.get("tif") or o.get("timeInForce"),
+        #: THE VENUE'S OWN manual-vs-automated record. This is authoritative
+        #: attribution and it outranks the size heuristic below, which was
+        #: only ever a stand-in for a field we had not noticed the venue
+        #: already carries (observed MANUAL_ORDER_INDICATOR_MANUAL /
+        #: _AUTOMATIC on real rows, 2026-09-05).
+        "manualOrderIndicator": o.get("manualOrderIndicator"),
+        "action": o.get("action"),
+        "intent": o.get("intent"),
+        "insertTime": o.get("insertTime"),
+        "commissionsBasisPoints": o.get("commissionsBasisPoints"),
+        "makerCommissionsBasisPoints": o.get("makerCommissionsBasisPoints"),
         "ATTRIBUTED_TO_BY_SIZE": attribute(o),
     }
 

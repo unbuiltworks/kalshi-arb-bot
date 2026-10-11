@@ -137,6 +137,22 @@ def judge(order: Dict[str, Any], g: Gates,
                 "gate": "max_residual_units",
                 "detail": "qty %s > %s" % (qty, g.max_residual_units)})
 
+    # THE ENGINE HAS NO SELL PATH AT ALL. This is not a cap that could be
+    # raised: `pmus_sports_l5_decision.decide` returns
+    # {"decision": "no_action", "reason": "l5_sell_is_noop"} for a sell
+    # relation, and `pmus_spring_l5_session` records the same stop_reason.
+    # OPEN, EXTEND and COMPLETE are all BUYS. A sell order is therefore not
+    # resized or blocked by a threshold -- it cannot be expressed.
+    side = str(order.get("side") or "")
+    if side.endswith("SELL"):
+        refusals.append({
+            "gate": "no_sell_path",
+            "detail": ("the engine's action vocabulary is OPEN/EXTEND/"
+                       "COMPLETE, all buys; a sell relation returns "
+                       "no_action with reason l5_sell_is_noop"),
+            "engine_reason": "l5_sell_is_noop",
+            "structural": True})
+
     # maker-only: the venue's own record of whether the order was passive
     pdi = order.get("participateDontInitiate")
     if g.maker_only and pdi is False:
@@ -159,12 +175,18 @@ def judge(order: Dict[str, Any], g: Gates,
                                        g.effective_pair_cap))})
 
     # size the engine WOULD have used, if the only problem is size
+    # Headroom can be zero but never negative: a cap already spent leaves
+    # nothing, and a negative quantity would be nonsense dressed as
+    # arithmetic.
+    headroom = max(D("0"), g.notional_cap - cumulative_notional)
     engine_qty = None
     if px is not None and px > 0:
-        engine_qty = ((g.notional_cap - cumulative_notional) / px)
+        engine_qty = headroom / px
 
-    only_size = (refusals and all(r["gate"] == "per_market_notional_cap"
-                                 for r in refusals))
+    structural = any(r.get("structural") for r in refusals)
+    only_size = (refusals and not structural
+                 and all(r["gate"] == "per_market_notional_cap"
+                         for r in refusals))
     if not refusals:
         verdict = "SUBMITTED"
     elif only_size and engine_qty is not None and engine_qty > 0:
@@ -172,9 +194,18 @@ def judge(order: Dict[str, Any], g: Gates,
     else:
         verdict = "BLOCKED"
 
+    mi = str(order.get("manualOrderIndicator") or "")
+    origin = ("MANUAL" if mi.endswith("_MANUAL") else
+              ("AUTOMATED" if mi.endswith("_AUTOMATIC") else "UNKNOWN"))
     return {
         "order_id": order.get("id"),
         "slug": order.get("slug"),
+        #: the VENUE's own manual-vs-automated field. Authoritative, and it
+        #: outranks the size heuristic: an engine order and a manual order
+        #: can share a size, but they cannot share this.
+        "ORIGIN": origin,
+        "intent": order.get("intent"),
+        "manualOrderIndicator": order.get("manualOrderIndicator") or None,
         "side": order.get("side"),
         "limit_price": None if px is None else str(px),
         "owner_quantity": None if qty is None else str(qty),
@@ -188,13 +219,11 @@ def judge(order: Dict[str, Any], g: Gates,
         "engine_quantity_if_resized": (None if engine_qty is None
                                        else str(engine_qty)),
         "engine_notional_if_resized": (
-            None if engine_qty is None
-            else str(min(g.notional_cap - cumulative_notional,
-                         g.notional_cap))),
+            None if engine_qty is None else str(headroom)),
         "complement_price_ceiling": (None if complement_max is None
                                      else str(complement_max)),
         "size_ratio_owner_over_engine": (
-            None if (engine_qty is None or qty is None or engine_qty == 0)
+            None if (engine_qty is None or qty is None or engine_qty <= 0)
             else str((qty / engine_qty).quantize(D("0.01")))),
     }
 
@@ -208,12 +237,33 @@ def replay(audit: Dict[str, Any]) -> Dict[str, Any]:
         slug = str(o.get("slug"))
         r = judge(o, g, spent.get(slug, D("0")))
         rows.append(r)
+        #: THE ENGINE'S CAP COUNTS ONLY THE ENGINE'S OWN SUBMISSIONS.
+        #: `spring_cumulative_notional` sums this market's rows from the
+        #: campaign ledger, and a manual order placed in the venue's UI is
+        #: not in that ledger -- it never reaches the counter. Feeding manual
+        #: notional into it would make the engine look blocked by the owner's
+        #: own activity, which is not what would have happened.
+        if r["ORIGIN"] == "MANUAL":
+            continue
         n = _d(r["owner_notional"])
         if n is not None:
             spent[slug] = spent.get(slug, D("0")) + n
     counts: Dict[str, int] = {}
     for r in rows:
         counts[r["ENGINE_VERDICT"]] = counts.get(r["ENGINE_VERDICT"], 0) + 1
+    origin_counts: Dict[str, int] = {}
+    for r in rows:
+        origin_counts[r["ORIGIN"]] = origin_counts.get(r["ORIGIN"], 0) + 1
+    manual = [r for r in rows if r["ORIGIN"] == "MANUAL"]
+    manual_counts: Dict[str, int] = {}
+    for r in manual:
+        manual_counts[r["ENGINE_VERDICT"]] = \
+            manual_counts.get(r["ENGINE_VERDICT"], 0) + 1
+    manual_gate_hits: Dict[str, int] = {}
+    for r in manual:
+        for ref in r["refusals"]:
+            manual_gate_hits[ref["gate"]] = \
+                manual_gate_hits.get(ref["gate"], 0) + 1
     gate_hits: Dict[str, int] = {}
     for r in rows:
         for ref in r["refusals"]:
@@ -239,9 +289,17 @@ def replay(audit: Dict[str, Any]) -> Dict[str, Any]:
         }.items()},
         "gate_sources": g.source,
         "verdict_counts": counts,
+        "origin_counts": origin_counts,
+        "manual_orders": len(manual),
+        "manual_verdict_counts": manual_counts,
+        "manual_refusing_gate_counts": manual_gate_hits,
         "refusing_gate_counts": gate_hits,
+        #: judged on the MANUAL orders only -- the engine's treatment of its
+        #: own orders is not a behavioural difference.
         "largest_behavioural_difference": (
-            max(gate_hits, key=lambda k: gate_hits[k]) if gate_hits else None),
+            max(manual_gate_hits, key=lambda k: manual_gate_hits[k])
+            if manual_gate_hits else None),
+        "largest_difference_scope": "manual orders only",
         "orders": rows,
     }
 
