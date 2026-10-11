@@ -34,19 +34,38 @@ def test_a_completed_pair_locks_its_edge_before_resolution():
     assert r["paired_cost_per_pair"] == "0.96"
     assert r["matched_pair_pnl"] == "0.08"
     assert r["residual_shares"] == "0"
-    assert r["settlement"] == "UNSETTLED"
+    assert r["settlement"] == "SETTLEMENT_NOT_READ"
     assert r["realized_net"] is None, (
         "a locked pair's P&L is known, but realized_net is reserved for a "
         "venue resolution and must not be invented from it")
 
 
 def test_an_unsettled_residual_is_never_reported_as_zero():
-    r = market_economics({"slug": "m", "fills": [YES_FILL]})
+    r = market_economics({"slug": "m", "fills": [YES_FILL]},
+                         state_read=True)
     assert r["residual_side"] == "YES"
     assert r["residual_shares"] == "2"
     assert r["realized_net"] is None
+    assert r["settlement"] == "UNSETTLED_VENUE_SAYS_OPEN"
     assert "NOT reported as 0" in r["labels"]
     assert D(r["unsettled_exposure_worst_case"]) == D("-0.90")
+
+
+def test_settlement_not_read_is_not_the_same_as_unsettled():
+    """The failure this guards against is the one that made the BTC15m
+    engine print 0 for 24 traded windows: a missing read presented as a
+    result. A market whose state was never fetched is in NEITHER total."""
+    audit = {"sequences": [{"slug": "open", "fills": [YES_FILL]},
+                           {"slug": "unread", "fills": [YES_FILL]}],
+             "market_state": {"open": {"state": "MARKET_STATE_OPEN"}}}
+    r = run(audit)
+    assert r["markets_unsettled_venue_says_open"] == 1
+    assert r["markets_settlement_not_read"] == 1
+    assert r["markets_settled"] == 0
+    assert "not zero" in r["not_read_note"]
+    unread = [m for m in r["per_market"] if m["slug"] == "unread"][0]
+    assert unread["settlement"] == "SETTLEMENT_NOT_READ"
+    assert "NOT evidence that it is open" in unread["labels"]
 
 
 def test_settlement_pays_the_right_leg():
@@ -87,6 +106,6 @@ def test_the_roll_up_separates_settled_from_unsettled():
     r = run(audit)
     assert r["markets"] == 2
     assert r["markets_settled"] == 1
-    assert r["markets_unsettled"] == 1
-    assert D(r["unsettled_residual_shares"]) == D("2")
+    assert r["markets_settlement_not_read"] == 1
+    assert r["markets_with_owned_fills"] == 2
     assert r["rebates_credited_total"] == "0"

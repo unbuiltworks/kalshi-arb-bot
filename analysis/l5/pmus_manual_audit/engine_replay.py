@@ -24,9 +24,17 @@ something filled.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, field
 from decimal import Decimal as D
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+#: the engine's constants are imported from `src`, so the repo root must be
+#: importable however this module is invoked. Same insert as its sibling.
+_ROOT = Path(__file__).resolve().parents[3]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 ONE = D("1")
 
@@ -96,6 +104,20 @@ def _direction(order: Dict[str, Any]) -> str:
     reader. `l5_venue_accounting.direction` raises rather than guessing LONG,
     because guessing understates a short's settlement liability."""
     from src import l5_venue_accounting as va
+    #: LIQUIDATION INTENTS, which the shared module does not know.
+    #: `l5_venue_accounting.LONG_INTENTS/SHORT_INTENTS` cover only
+    #: ORDER_INTENT_BUY_LONG and _BUY_SHORT. The venue also sends
+    #: ORDER_INTENT_SELL_LONG and _SELL_SHORT (6 of 106 owned orders on this
+    #: account), and for those the module falls through to its side-based
+    #: guess and returns SHORT -- reading a SALE OF A LONG as OPENING A
+    #: SHORT. `settlement_cash` then debits qty*settlement for a position
+    #: that was closed and owes nothing. That is conservative for a risk
+    #: bound and WRONG for cash, and it is reported rather than patched
+    #: here: that module is consulted by live code and this audit is
+    #: read-only.
+    intent = str(order.get("intent") or "").upper()
+    if intent in ("ORDER_INTENT_SELL_LONG", "ORDER_INTENT_SELL_SHORT"):
+        return "LIQUIDATION"
     try:
         return va.direction({"intent": order.get("intent"),
                              "side": order.get("side"),
@@ -220,6 +242,18 @@ def judge(order: Dict[str, Any], g: Gates,
             "wire_price_value": None if px is None else str(px),
             "serializer": "src.l5_order_body.build(side='UP', ...)",
         }
+    elif direction == "LIQUIDATION":
+        #: THIS is what l5_sell_is_noop is actually about: closing inventory
+        #: already held. The engine's vocabulary is OPEN / EXTEND / COMPLETE,
+        #: all acquisitions, so it has no way to express an exit.
+        refusals.append({
+            "gate": "no_liquidation_path",
+            "detail": ("intent %s closes inventory; the engine's actions are "
+                       "OPEN/EXTEND/COMPLETE, all acquisitions, and a sell "
+                       "relation returns no_action with reason "
+                       "l5_sell_is_noop" % order.get("intent")),
+            "engine_reason": "l5_sell_is_noop",
+            "structural": True})
     else:
         refusals.append({
             "gate": "direction_unreadable",

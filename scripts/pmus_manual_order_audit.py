@@ -451,10 +451,23 @@ def main() -> int:
         out[label] = r if not r["ok"] else scrub(r["body"])
 
     # 6. settlement state for every slug the history touched
-    slugs = sorted({s2 for s2 in seqs if s2})
+    #: SETTLEMENT IS READ FOR THE MARKETS THAT HAVE OUR FILLS FIRST.
+    #: An alphabetical slice took 60 of 166 slugs and reached only 2 of the
+    #: 32 markets with owned fills, so 30 filled markets had no settlement
+    #: evidence at all -- which the analyser then could not tell apart from
+    #: "still open". Filled markets are read first, and the cap is reported.
+    with_fills = sorted((s2 for s2, S in seqs.items()
+                         if s2 and S.get("fills")),
+                        key=lambda k: -len(seqs[k]["fills"]))
+    without = sorted(s2 for s2 in seqs if s2 and not seqs[s2].get("fills"))
+    slugs = with_fills + without
     out["slugs"] = slugs
+    out["slugs_with_owned_fills"] = len(with_fills)
     bbo: Dict[str, Any] = {}
-    for s in slugs[:60]:
+    cap = int(os.getenv("AUDIT_MAX_BBO_READS", "120"))
+    out["market_state_read_cap"] = cap
+    out["market_state_capped"] = len(slugs) > cap
+    for s in slugs[:cap]:
         if not s or s == "None":
             continue
         time.sleep(ORDER_PAUSE_S)

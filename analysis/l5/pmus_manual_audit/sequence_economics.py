@@ -56,6 +56,20 @@ def _d(v: Any) -> Optional[D]:
 
 def _direction(fill: Dict[str, Any]) -> str:
     from src import l5_venue_accounting as va
+    #: LIQUIDATION INTENTS, which the shared module does not know.
+    #: `l5_venue_accounting.LONG_INTENTS/SHORT_INTENTS` cover only
+    #: ORDER_INTENT_BUY_LONG and _BUY_SHORT. The venue also sends
+    #: ORDER_INTENT_SELL_LONG and _SELL_SHORT (6 of 106 owned orders on this
+    #: account), and for those the module falls through to its side-based
+    #: guess and returns SHORT -- reading a SALE OF A LONG as OPENING A
+    #: SHORT. `settlement_cash` then debits qty*settlement for a position
+    #: that was closed and owes nothing. That is conservative for a risk
+    #: bound and WRONG for cash, and it is reported rather than patched
+    #: here: that module is consulted by live code and this audit is
+    #: read-only.
+    intent = str(fill.get("intent") or "").upper()
+    if intent in ("ORDER_INTENT_SELL_LONG", "ORDER_INTENT_SELL_SHORT"):
+        return "LIQUIDATION"
     try:
         return va.direction({"intent": fill.get("intent"),
                              "side": fill.get("side"),
@@ -76,11 +90,13 @@ def _own(fill: Dict[str, Any]) -> Optional[D]:
 
 
 def market_economics(seq: Dict[str, Any],
-                     settlement_px: Optional[D] = None) -> Dict[str, Any]:
+                     settlement_px: Optional[D] = None,
+                     state_read: bool = False) -> Dict[str, Any]:
     qty = {"YES": D("0"), "NO": D("0")}
     cost = {"YES": D("0"), "NO": D("0")}
     fees = D("0")
     unreadable: List[Dict[str, Any]] = []
+    liquidations: List[Dict[str, Any]] = []
     roles = {"AGGRESSOR": 0, "PASSIVE": 0}
     origins: Dict[str, int] = {}
 
@@ -88,6 +104,18 @@ def market_economics(seq: Dict[str, Any],
         dirn = _direction(f)
         own = _own(f)
         shares = _d(f.get("shares"))
+        if dirn == "LIQUIDATION":
+            #: a sale of inventory already held. Netting it needs the
+            #: position it closed, which the activity row does not state, so
+            #: it is counted apart rather than signed into a leg.
+            liquidations.append({"trade_id": f.get("trade_id"),
+                                 "intent": f.get("intent"),
+                                 "shares": f.get("shares"),
+                                 "wire_px": f.get("wire_px")})
+            c = _d(f.get("commission"))
+            if c is not None:
+                fees += c
+            continue
         if dirn == "UNKNOWN" or own is None or shares is None:
             unreadable.append({"trade_id": f.get("trade_id"),
                                "why": "direction or price unreadable"})
@@ -117,6 +145,11 @@ def market_economics(seq: Dict[str, Any],
         "slug": seq.get("slug"),
         "n_fills": len(seq.get("fills") or []),
         "fills_unreadable": unreadable,
+        "liquidation_fills": liquidations,
+        "liquidation_note": ("ORDER_INTENT_SELL_* closes inventory; netting "
+                             "it needs the position it closed, which the "
+                             "activity row does not state. Counted apart, "
+                             "fees included, never signed into a leg."),
         "execution_roles": roles,
         "fill_origins": origins,
         "YES_shares": str(qty["YES"]), "NO_shares": str(qty["NO"]),
@@ -136,12 +169,21 @@ def market_economics(seq: Dict[str, Any],
     }
 
     if settlement_px is None:
-        out["settlement"] = "UNSETTLED"
+        #: THREE STATES, NOT TWO. "no settlement evidence was read" is not
+        #: "the market is still open", and rolling the first into the second
+        #: is the same fail-open that made the BTC15m engine print 0 for 24
+        #: traded windows. `state_read` says which this is.
+        out["settlement"] = ("UNSETTLED_VENUE_SAYS_OPEN" if state_read
+                             else "SETTLEMENT_NOT_READ")
         out["unsettled_exposure_worst_case"] = str(
             -(res_cost) if res_leg else D("0"))
         out["realized_net"] = None
-        out["labels"] = ("UNSETTLED. matched_pair_pnl is known; the residual "
-                         "is not, and is NOT reported as 0.")
+        out["labels"] = (
+            ("UNSETTLED. matched_pair_pnl is known; the residual is not, and "
+             "is NOT reported as 0.") if state_read else
+            ("SETTLEMENT NOT READ for this market -- no venue state was "
+             "fetched for it. This is NOT evidence that it is open, and it "
+             "is excluded from the settled AND the unsettled totals."))
     else:
         # a YES share pays settlement_px; a NO share pays 1 - settlement_px
         pay = (settlement_px if res_leg == "YES"
@@ -160,14 +202,15 @@ def run(audit: Dict[str, Any]) -> Dict[str, Any]:
     rows: List[Dict[str, Any]] = []
     for seq in audit.get("sequences") or []:
         slug = str(seq.get("slug"))
-        st = state.get(slug) or {}
-        spx = _d(st.get("settlementPx"))
-        terminal = bool(spx is not None and str(st.get("state", "")).upper()
-                        .find("EXPIRED") >= 0) or spx is not None
-        rows.append(market_economics(seq, spx if terminal else None))
+        st = state.get(slug)
+        state_read = st is not None and "unreadable" not in (st or {})
+        spx = _d((st or {}).get("settlementPx"))
+        rows.append(market_economics(seq, spx, state_read=state_read))
 
     settled = [r for r in rows if r.get("realized_net") is not None]
-    unsettled = [r for r in rows if r.get("realized_net") is None]
+    unsettled = [r for r in rows
+                 if r.get("settlement") == "UNSETTLED_VENUE_SAYS_OPEN"]
+    not_read = [r for r in rows if r.get("settlement") == "SETTLEMENT_NOT_READ"]
     return {
         "label": "PMUS_SEQUENCE_ECONOMICS_V1",
         "accounting": ("venue records only. Settled realized net is stated "
@@ -176,7 +219,12 @@ def run(audit: Dict[str, Any]) -> Dict[str, Any]:
                        "never as 0."),
         "markets": len(rows),
         "markets_settled": len(settled),
-        "markets_unsettled": len(unsettled),
+        "markets_unsettled_venue_says_open": len(unsettled),
+        "markets_settlement_not_read": len(not_read),
+        "markets_with_owned_fills": sum(1 for r in rows if r["n_fills"]),
+        "not_read_note": ("a market whose venue state was never fetched is "
+                          "in NEITHER total. It is not evidence of being "
+                          "open and its economics are unknown, not zero."),
         "settled_realized_net": str(sum((D(r["realized_net"])
                                          for r in settled), D("0"))),
         "settled_fees": str(sum((D(r["fees_venue_confirmed"])

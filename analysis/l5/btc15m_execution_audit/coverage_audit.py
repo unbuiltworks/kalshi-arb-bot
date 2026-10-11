@@ -88,10 +88,22 @@ def audit(tape_dir: str, ticker_prefix: str = "BTC15M") -> Dict[str, Any]:
         "unobserved_band_tte": [round(observed_hi, 1), OPEN_TTE_HI],
         "verdict": ("PASS" if covered / band >= 0.95 else
                     "FAIL_EARLY_WINDOW_ABSENT"),
-        "reading": ("Streams open at btc5m SUBSCRIBE_LEAD_S=420 s, inherited "
-                    "unchanged by the 15m recorder. A 900 s window's early "
-                    "TTE 840->420 is never recorded, so no fill, print or "
-                    "pair-completion statistic from this tape describes it."),
+        #: the reading must describe THIS tape, not the historical defect.
+        #: Leaving the failure text on a passing gate is how a fixed system
+        #: goes on being reported as broken.
+        "reading": (
+            ("The whole quoting band was observed: streams opened at TTE "
+             "%.1f s, above the %.0f s top of the band, so fill and "
+             "pair-completion statistics from this tape describe the whole "
+             "window." % (max(tte_book), OPEN_TTE_HI))
+            if covered / band >= 0.95 else
+            ("Streams opened at TTE %.1f s, below the %.0f s top of the "
+             "band, so the early window is ABSENT and no fill, print or "
+             "pair-completion statistic from this tape describes it. "
+             "btc5m_recorder.SUBSCRIBE_LEAD_S is %.0f s and a 15m window is "
+             "%.0f s: a 15m caller must pass its own lead."
+             % (max(tte_book) if tte_book else 0.0, OPEN_TTE_HI,
+                RECORDER_SUBSCRIBE_LEAD_S, WINDOW_S))),
     }
 
     # ---- G2 print capture
