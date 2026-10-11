@@ -1,135 +1,168 @@
 {
   "accounting": "public market-data recording; no order was sent; nothing here is realized profit",
   "book_states": {
-    "EMPTY": 188,
-    "ONE_SIDED": 169,
-    "TWO_SIDED": 480
+    "EMPTY": 216,
+    "ONE_SIDED": 431,
+    "TWO_SIDED": 824
   },
   "checks": {
     "btc15m_window_seen": true,
     "down_instrument_probed": true,
     "down_leg_derived_present": true,
+    "early_window_streamed": true,
     "pair_cost_present": true,
     "single_leg_spread_present": true,
+    "subscribe_lead_verified": true,
     "trade_prints_present": true,
     "up_book_two_sided": true,
     "up_ladder_has_sizes": true,
     "venue_timestamps": true,
     "window_poll_strike_resolved": true
   },
+  "coverage": {
+    "coverage_min_tte_s": 840.0,
+    "markets_streamed": 3,
+    "markets_streamed_from_above_min_tte": 2,
+    "max_streamed_tte_s": 958.5,
+    "max_subscribe_tte_s": 959.5,
+    "per_market_max_streamed_tte_s": {
+      "GEMI-BTC15M2610111700-UP": 262.6,
+      "GEMI-BTC15M2610111715-UP": 958.4,
+      "GEMI-BTC15M2610111730-UP": 958.5
+    },
+    "policy_band_fraction_observed": 1.0,
+    "policy_band_tte": [
+      120.0,
+      840.0
+    ],
+    "reading": "A segment that starts mid-window legitimately shows a low max TTE for the market already in progress, so the gate asks for AT LEAST ONE market streamed from above coverage_min_tte_s. per_market_max_streamed_tte_s is published so a partially covered window can be excluded downstream instead of silently averaged in.",
+    "subscribe_lead_s_configured": 960.0,
+    "subscribe_lead_s_observed_on_tape": [
+      960.0
+    ],
+    "window_s": 900.0
+  },
   "down_probe_replies": 3,
   "examples": {
     "down_probe_reply": {
       "down_markets": [
-        "GEMI-BTC15M2610060315-DOWN",
-        "GEMI-BTC15M2610060330-DOWN",
-        "GEMI-BTC15M2610060345-DOWN",
-        "GEMI-BTC15M2610060400-DOWN"
+        "GEMI-BTC15M2610111700-DOWN",
+        "GEMI-BTC15M2610111715-DOWN",
+        "GEMI-BTC15M2610111730-DOWN",
+        "GEMI-BTC15M2610111745-DOWN"
       ],
       "kind": "down_probe",
       "phase": "reply",
       "raw": {
         "error": {
           "code": -1013,
-          "msg": "Invalid stream name: gemi-btc15m2610060315-down@depth20"
+          "msg": "Invalid stream name: gemi-btc15m2610111700-down@depth20"
         },
         "id": "dn",
         "status": 400
       },
-      "t_ns": 1791256366345947150
+      "t_ns": 1791737855911383602
     },
     "p_trade": {
-      "E_ns": 1791256376275739181,
+      "E_ns": 1791738368129748057,
       "buyer_is_maker": false,
       "kind": "p_trade",
-      "market": "GEMI-BTC15M2610060315-UP",
-      "price": "0.7500",
-      "qty": "2.81",
-      "t_ns": 1791256376293469013,
-      "trade_id": 1893456012242566
+      "market": "GEMI-BTC15M2610111715-UP",
+      "price": "0.1600",
+      "qty": "29.50",
+      "t_ns": 1791738368168985329,
+      "trade_id": 1893456012380950
     },
     "strike_resolved": {
-      "availableAt": "2026-10-06T03:00:00.000Z",
+      "availableAt": "2026-10-11T16:45:00.000Z",
       "kind": "strike_resolved",
-      "market": "GEMI-BTC15M2610060315-UP",
+      "market": "GEMI-BTC15M2610111700-UP",
       "note": "window rows carry strike:null before availableAt; this is the re-read value",
-      "resolved_lag_s": 646.4693715572357,
-      "strike": "85516.12",
+      "resolved_lag_s": 636.2708864212036,
+      "strike": "83837.62",
       "strike_type": "reference",
-      "t_ns": 1791256246469370712,
-      "ticker": "BTC15M2610060315"
+      "t_ns": 1791737736270885166,
+      "ticker": "BTC15M2610111700"
+    },
+    "subscribe_tte": {
+      "market": "GEMI-BTC15M2610111700-UP",
+      "subscribe_lead_s": 960.0,
+      "tte_s": 263.207
     },
     "two_sided_pair": {
       "derived": true,
       "down_ask": [
-        "0.38",
+        "0.2",
         "400.00"
       ],
       "down_bid": [
-        "0.27",
+        "0.09",
         "400.00"
       ],
-      "market": "GEMI-BTC15M2610060315-UP",
+      "market": "GEMI-BTC15M2610111700-UP",
       "pair_cost": 1.1099999999999999,
       "single_leg_spread": 0.10999999999999999,
       "up_ask": [
-        "0.73",
+        "0.91",
         "400.00"
       ],
       "up_bid": [
-        "0.62",
+        "0.8",
         "400.00"
       ]
     },
     "window_poll_strike": {
-      "availableAt": "2026-10-06T03:00:00.000Z",
-      "market": "GEMI-BTC15M2610060315-UP",
-      "strike": "85516.12"
+      "availableAt": "2026-10-11T16:45:00.000Z",
+      "market": "GEMI-BTC15M2610111700-UP",
+      "strike": "83837.62"
     }
   },
   "kinds": {
-    "book_ctrl": 3,
+    "book_ctrl": 4,
     "book_open": 1,
     "down_probe": 6,
     "index_ctrl": 3,
     "index_open": 1,
-    "index_price": 1202,
+    "index_price": 1200,
     "index_subscribe": 3,
-    "p_depth": 353,
-    "p_snapshot": 899,
-    "p_trade": 10,
-    "pair_snapshot": 837,
+    "p_depth": 652,
+    "p_snapshot": 1532,
+    "p_trade": 1,
+    "pair_snapshot": 1471,
     "recorder_start": 1,
     "recorder_stop": 1,
-    "settlement": 12,
-    "strike_resolved": 2,
-    "subscribe": 2,
+    "settlement": 13,
+    "strike_resolved": 4,
+    "subscribe": 3,
     "unsubscribe": 1,
     "window": 7,
-    "window_poll": 606
+    "window_poll": 576
   },
   "missing": [],
-  "pair_market_count": 2,
+  "pair_market_count": 3,
   "pair_markets": [
-    "GEMI-BTC15M2610060315-UP",
-    "GEMI-BTC15M2610060330-UP"
+    "GEMI-BTC15M2610111700-UP",
+    "GEMI-BTC15M2610111715-UP",
+    "GEMI-BTC15M2610111730-UP"
   ],
   "pass": true,
-  "path": "data/gemini_btc15m_research/btc15m_rec_20261006T031046Z.jsonl",
+  "path": "data/gemini_btc15m_research/btc15m_rec_20261011T165535Z.jsonl",
   "reading": "down_leg_derived_present is the point of this recorder: the disqualifying BTC15M file had 23,318 UP rows and 0 DOWN rows, so no complement leg existed at all. A DOWN leg here is DERIVED from the raw UP ladder and labelled as such; down_probe records what the venue says about a separate DOWN instrument.",
   "requirements": {
     "btc15m_window_seen": "at least one BTC15M window listed",
     "down_instrument_probed": "a down_probe row: the venue was asked whether a separate -DOWN instrument exists",
     "down_leg_derived_present": "a pair_snapshot carrying a derived DOWN bid and ask -- the complement leg the disqualifying file never had",
+    "early_window_streamed": "a STREAMED row (p_snapshot / p_depth / p_trade) at or above COVERAGE_MIN_TTE_S -- proof the opening portion of a window was received, not merely subscribed to",
     "pair_cost_present": "a pair_snapshot with a numeric two-leg pair cost",
     "single_leg_spread_present": "a pair_snapshot with a numeric single-leg spread, recorded separately from pair cost",
+    "subscribe_lead_verified": "a SUBSCRIBE row whose recorded per-market tte_s reaches COVERAGE_MIN_TTE_S -- the lead actually in force, read off the tape, not assumed from a constant",
     "trade_prints_present": "at least one p_trade row (venue print tape)",
     "up_book_two_sided": "a pair_snapshot whose book_state is TWO_SIDED",
     "up_ladder_has_sizes": "a pair_snapshot with a priced level AND a size on both UP sides",
     "venue_timestamps": "a p_depth row carrying a venue E timestamp",
     "window_poll_strike_resolved": "a window_poll (or strike_resolved) row with a NON-NULL strike -- the authoritative strike that arrives after availableAt, not the null first listing"
   },
-  "rows": 3950,
-  "single_leg_spread_median": 0.10999999999999999,
-  "single_leg_spread_n": 480
+  "rows": 5480,
+  "single_leg_spread_median": 0.11,
+  "single_leg_spread_n": 824
 }
