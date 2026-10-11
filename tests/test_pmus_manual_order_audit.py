@@ -138,3 +138,37 @@ def test_order_ids_are_collected_from_nested_rows():
         {"orderId": "AAA111BBB222"},
     ])
     assert ids == ["AAA111BBB222", "CCC333DDD444"]
+
+
+def test_output_is_chunked_so_the_log_line_cap_cannot_eat_the_history():
+    """Railway truncates one log line at 81,920 chars and returns only the
+    most recent entries, so a single big blob loses its own beginning. That
+    is not hypothetical: the first run came back starting mid-object."""
+    import contextlib
+    import io
+    import json as _json
+
+    from scripts import pmus_manual_order_audit as m
+
+    out = {"audit": "X",
+           "activities": [{"a": i, "pad": "x" * 200} for i in range(400)],
+           "orders": [{"id": "O%d" % i, "slug": "s"} for i in range(300)],
+           "balances": {"b": 1}}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        m.emit(out)
+    lines = buf.getvalue().strip().split("\n")
+    assert lines[0].startswith("MA_HEAD ")
+    assert lines[-1].startswith("MA_DONE ")
+    assert all(len(l) < 81920 for l in lines), max(len(l) for l in lines)
+
+    rows = [_json.loads(l[len("MA_ROW "):]) for l in lines
+            if l.startswith("MA_ROW ")]
+    # every row is independently parseable and self-locating
+    assert all(("i" in r and "n" in r and "section" in r) for r in rows)
+    for sect, n in (("activities", 400), ("orders", 300)):
+        got = sum(len(r.get("items", [])) for r in rows if r["section"] == sect)
+        assert got == n, (sect, got, n)
+    head = _json.loads(lines[0][len("MA_HEAD "):])
+    assert head["sections"]["activities"] == 400
+    assert head["row_count"] == len(rows)

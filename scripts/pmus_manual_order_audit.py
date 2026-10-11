@@ -262,6 +262,49 @@ def slim_order(o: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+#: Railway truncates a single log line at 81,920 characters and the API
+#: returns only the most recent entries, so ONE BIG JSON LINE loses its own
+#: beginning -- which is exactly what happened on the first run: the blob came
+#: back starting mid-object with no MANUAL_AUDIT_BEGIN to anchor it. Output is
+#: therefore emitted as many SMALL, INDIVIDUALLY PARSEABLE lines, each tagged
+#: with its section and index, so a dropped line costs one row rather than the
+#: whole history and reassembly needs no concatenation.
+CHUNK_CHARS = int(os.getenv("AUDIT_CHUNK_CHARS", "6000"))
+
+
+def emit(out: Dict[str, Any]) -> None:
+    """One line per row, each small enough to survive the log line cap."""
+    big = ("activities", "orders", "orders_unreadable", "market_state",
+           "positions", "open_orders", "balances", "slugs")
+    head = {k: v for k, v in out.items() if k not in big}
+    rows: List[Dict[str, Any]] = []
+    for sect in big:
+        v = out.get(sect)
+        if isinstance(v, list):
+            batch: List[Any] = []
+            size = 0
+            for item in v:
+                enc = json.dumps(item, default=str)
+                if batch and size + len(enc) > CHUNK_CHARS:
+                    rows.append({"section": sect, "items": batch})
+                    batch, size = [], 0
+                batch.append(item)
+                size += len(enc)
+            if batch:
+                rows.append({"section": sect, "items": batch})
+        elif v is not None:
+            rows.append({"section": sect, "value": v})
+    head["sections"] = {k: (len(out[k]) if isinstance(out.get(k), list)
+                            else 1) for k in big if out.get(k) is not None}
+    head["row_count"] = len(rows)
+    print("MA_HEAD " + json.dumps(head, default=str)[:CHUNK_CHARS * 2])
+    for i, r in enumerate(rows):
+        r["i"] = i
+        r["n"] = len(rows)
+        print("MA_ROW " + json.dumps(r, default=str))
+    print("MA_DONE %d" % len(rows))
+
+
 def main() -> int:
     t = A.ReadOnlyTransport()
     out: Dict[str, Any] = {
@@ -342,9 +385,7 @@ def main() -> int:
             bbo[s] = {"unreadable": r.get("err")}
     out["market_state"] = bbo
 
-    print("MANUAL_AUDIT_BEGIN")
-    print(json.dumps(out, default=str))
-    print("MANUAL_AUDIT_END")
+    emit(out)
     return 0
 
 
