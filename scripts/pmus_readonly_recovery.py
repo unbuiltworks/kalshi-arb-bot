@@ -24,6 +24,7 @@ declines to.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import re
@@ -86,12 +87,22 @@ def shape_of(v: Any, depth: int = 0) -> Any:
     return {"type": type(v).__name__}
 
 
+def _utc() -> str:
+    """One UTC timestamp format for every line this process prints.
+
+    An account-wide read without a timestamp cannot be told apart from a
+    two-day-old one, and that ambiguity is exactly what made the previous
+    recovery evidence unusable.
+    """
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def get(path: str, base: str = Q1.API) -> Dict[str, Any]:
     """One signed GET, and whatever came back, never raising."""
     http = Q1.ReadOnlyTransport()
     try:
         body = http.request("GET", path, None, base)
-        return {"path": path, "ok": True, "status": 200,
+        return {"path": path, "ok": True, "status": 200, "as_of_utc": _utc(),
                 "shape": shape_of(body), "body": body}
     except urllib.error.HTTPError as exc:
         detail = ""
@@ -100,9 +111,11 @@ def get(path: str, base: str = Q1.API) -> Dict[str, Any]:
         except Exception:                                      # noqa: BLE001
             pass
         return {"path": path, "ok": False, "status": exc.code,
+                "as_of_utc": _utc(),
                 "error": "HTTPError", "detail": redact(detail)}
     except Exception as exc:                                   # noqa: BLE001
         return {"path": path, "ok": False, "status": None,
+                "as_of_utc": _utc(),
                 "error": type(exc).__name__, "detail": redact(exc)[:300]}
 
 
@@ -127,6 +140,71 @@ def find_order(payloads: List[Dict[str, Any]]) -> List[dict]:
         if p.get("ok"):
             walk(p.get("body"))
     return found
+
+
+#: substring that identifies the intended BTC 15-minute up/down series on
+#: PMUS slugs. Used only to FILTER an active-market listing -- the live
+#: slug is never guessed or constructed, because a constructed slug that
+#: 404s is indistinguishable from a market that does not exist.
+BTC15M_MATCH = os.getenv("RECOVERY_BTC15M_MATCH", "btc-updown-15m").strip()
+
+#: how many matching markets to report metadata for
+BTC15M_MAX = int(os.getenv("RECOVERY_BTC15M_MAX", "6"))
+
+
+def _market_rows(body: Any) -> List[Mapping[str, Any]]:
+    """Market rows out of whatever envelope the listing came back in."""
+    if isinstance(body, Mapping):
+        for key in ("markets", "data", "results", "items"):
+            v = body.get(key)
+            if isinstance(v, list):
+                return [r for r in v if isinstance(r, Mapping)]
+        return []
+    if isinstance(body, list):
+        return [r for r in body if isinstance(r, Mapping)]
+    return []
+
+
+def venue_meta() -> None:
+    """minimumTradeQty and orderPriceMinTickSize, READ from the venue.
+
+    These two numbers are currently code constants (VENUE_MIN_QTY 0.01,
+    VENUE_TICK 0.01) whose only live corroboration is an HTTP 400 at
+    quantity 0.005 -- i.e. the minimum is known to lie in (0.005, 0.05]
+    and nothing narrower. The venue publishes both per market, so they are
+    asked for rather than asserted. Still GET: a listing and one metadata
+    read per candidate, no order of any kind.
+    """
+    listing = get("/v1/markets?active=true&closed=false&limit=200")
+    rows = _market_rows(listing.get("body")) if listing.get("ok") else []
+    hits = [r for r in rows
+            if BTC15M_MATCH in str(r.get("slug") or "").lower()]
+    print("PMUS_VENUE_META_SCAN " + redact(json.dumps(
+        {"as_of_utc": _utc(), "listing_ok": listing.get("ok"),
+         "listing_status": listing.get("status"),
+         "listing_error": listing.get("error"),
+         "rows_seen": len(rows), "btc15m_match": BTC15M_MATCH,
+         "btc15m_rows": len(hits)}, default=str)), flush=True)
+
+    for row in sorted(hits, key=lambda r: str(r.get("slug")))[:BTC15M_MAX]:
+        slug = str(row.get("slug") or "")
+        detail = get("/v1/market/slug/%s" % slug) if slug else {"ok": False}
+        full = detail.get("body") if detail.get("ok") else None
+        if isinstance(full, Mapping):
+            inner = full.get("market")
+            if isinstance(inner, Mapping):
+                full = inner
+        src = full if isinstance(full, Mapping) else row
+        print("PMUS_VENUE_META " + redact(json.dumps(
+            {"as_of_utc": _utc(), "slug": slug,
+             "from": "market/slug" if isinstance(full, Mapping) else "listing",
+             "minimumTradeQty": src.get("minimumTradeQty"),
+             "orderPriceMinTickSize": src.get("orderPriceMinTickSize"),
+             "feeCoefficient": src.get("feeCoefficient"),
+             "status": src.get("status"), "active": src.get("active"),
+             "closed": src.get("closed"),
+             "ABSENT_MEANS_UNKNOWN_NOT_ZERO": True}, default=str)),
+            flush=True)
 
 
 def main() -> int:
@@ -162,6 +240,7 @@ def main() -> int:
 
     out = {
         "LABEL": "READONLY_RECOVERY",
+        "as_of_utc": _utc(),
         "order_id": ORDER_ID,
         "market": MARKET,
         "post_capable": can_mutate,
@@ -203,6 +282,52 @@ def main() -> int:
                  "status": r.get("status")}, default=str)), flush=True)
     if ORDER_IDS:
         print("PMUS_ORDERS %d" % len(ORDER_IDS), flush=True)
+
+    # the account-wide answer on ONE line, stamped, so it cannot be confused
+    # with an older run. Reservations are named explicitly: a missing field
+    # is reported as absent, never as zero.
+    bal = next((r for r in reads
+                if r["path"] == "/v1/account/balances" and r.get("ok")), None)
+    bbody = (bal or {}).get("body")
+    if isinstance(bbody, Mapping):
+        inner = bbody.get("balances")
+        # the venue returns a LIST of currency rows, not a mapping. The first
+        # version of this unwrap handled only the mapping case, so every
+        # reservation printed ABSENT while the raw body carried the numbers.
+        # Failing to ABSENT rather than to 0 is why that was readable as a
+        # defect instead of as a venue answer.
+        if isinstance(inner, list):
+            usd = [r for r in inner if isinstance(r, Mapping)
+                   and str(r.get("currency", "USD")).upper() == "USD"]
+            if usd:
+                bbody = usd[0]
+        elif isinstance(inner, Mapping):
+            bbody = inner
+    orders_open = next((r for r in reads
+                        if r["path"] == "/v1/orders/open"), None)
+    positions = next((r for r in reads
+                      if r["path"] == "/v1/portfolio/positions"), None)
+    _ABSENT = "ABSENT"
+    print("PMUS_ACCOUNT_STATE " + redact(json.dumps({
+        "as_of_utc": _utc(),
+        "open_orders_read": {k: v for k, v in (orders_open or {}).items()
+                             if k != "body"},
+        "open_orders_body": (orders_open or {}).get("body"),
+        "positions_read": {k: v for k, v in (positions or {}).items()
+                           if k != "body"},
+        "positions_body": (positions or {}).get("body"),
+        "balances": bbody if isinstance(bbody, Mapping) else _ABSENT,
+        "reservations": {
+            k: (bbody.get(k, _ABSENT) if isinstance(bbody, Mapping)
+                else _ABSENT)
+            for k in ("balanceReservation", "depositReservation",
+                      "bonusHold", "marginRequirement", "unsettledFunds",
+                      "openOrders")},
+        "api_errors": [{k: v for k, v in r.items() if k != "body"}
+                       for r in reads if not r.get("ok")],
+    }, default=str))[:12000], flush=True)
+
+    venue_meta()
 
     # the bodies that decide the question, separately so one huge catalogue
     # response cannot push the verdict out of a truncated log line
