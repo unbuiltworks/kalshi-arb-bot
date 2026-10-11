@@ -2873,6 +2873,44 @@ def _run_session_body(t: Optional[Transport] = None,
                 if px_ >= D(str(opp_ask)):
                     return f"would_cross:{opp_ask}"
                 if relation_ in requote_relations() and touch != px_:
+                    # A RE-QUOTE THAT REPOSTS THE SAME PRICE IS PURE LOSS.
+                    #
+                    # This fires when the TOUCH moves away from our resting
+                    # price. For OPEN and EXTEND that implies a different
+                    # price, because they join the touch. A COMPLETE does
+                    # NOT: its price comes from the pair bound, so the
+                    # repost recomputes the identical number and we have
+                    # cancelled only to re-queue behind everyone.
+                    #
+                    # Measured on the 2026-09-13/14 cohort (472 real orders,
+                    # venue order_ids): of 301 re-quote transitions, 283 --
+                    # 94.0% -- reposted the SAME price, with runs of 115, 96
+                    # and 52 consecutive identical reposts in one market.
+                    # Queue priority was thrown away 283 times for no price
+                    # change at all, which is the opposite of the resting
+                    # behaviour this engine is meant to reproduce.
+                    #
+                    # So: ask what the repost would actually price, with the
+                    # same call the repost itself makes, and if it is the
+                    # price already resting, KEEP RESTING. This changes no
+                    # price, no bound and no size -- it only declines to
+                    # surrender queue position for nothing.
+                    if relation_ == "complete":
+                        nxt = None
+                        try:
+                            surplus = (inv.avg_dn() if side_up_
+                                       else inv.avg_up())
+                            nxt, _econ = spring_complement_price(
+                                surplus, opp_ask, spec["tick"],
+                                touch=(touch
+                                       if complement_pricing() == "l5_touch"
+                                       else None))
+                        except Exception:              # noqa: BLE001
+                            nxt = None                 # fail to the old path
+                        if nxt is not None and D(str(nxt)) == px_:
+                            track["requotes_suppressed"] = int(
+                                track.get("requotes_suppressed") or 0) + 1
+                            return None
                     return f"touch_moved:{touch}"
                 if inv.up + inv.dn > 0:
                     k = spring_state_key(inv, b["bid"], settlement_t, wall(),
