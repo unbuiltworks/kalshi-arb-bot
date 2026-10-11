@@ -248,6 +248,18 @@ def summarize(root: Optional[Path] = None,
                      "direction inferred from lastTradePx vs BBO; maker "
                      "identity unobservable; nothing realized"),
         "markets_tracked": len(by_slug),
+        # WHY THIS CENSUS EXISTS. On 2026-10-11, with a live NFL game in
+        # progress, no NFL market appeared in any `top_candidates` list and
+        # it was impossible to tell from the logs whether NFL was (a) never
+        # discovered, (b) truncated by the live-events page cap, (c) filtered
+        # out because the venue had not marked the event live, or (d) tracked
+        # but out-ranked by busier tennis. `top_candidates` is a top-5 cut of
+        # 3,200+ tracked markets, so its silence distinguishes none of those.
+        # These two censuses cover the whole tracked set, so (d) separates
+        # from (a)-(c) immediately: a league present here but absent from
+        # top_candidates is a RANKING exclusion, not a discovery failure.
+        "tracked_by_league": _census(by_slug, meta, "league"),
+        "tracked_by_why": _census(by_slug, meta, "why"),
         "since_restart_s": round(now - restart_t, 0) if restart_t else None,
         "windows": {},
     }
@@ -280,6 +292,21 @@ def summarize(root: Optional[Path] = None,
             "detail": per if wname == "1h" else None,
         }
     return report
+
+
+def _census(by_slug, meta, field):
+    """How many tracked markets carry each value of `field`, descending.
+
+    Pure aggregation of rows already in hand -- no extra request, no extra
+    state. `None` is reported as "unknown" rather than dropped, because a
+    missing league is itself a discovery-path fact.
+    """
+    counts: dict[str, int] = {}
+    for slug in by_slug:
+        v = (meta.get(slug) or {}).get(field)
+        k = str(v) if v not in (None, "") else "unknown"
+        counts[k] = counts.get(k, 0) + 1
+    return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
 def emit(root: Optional[Path] = None) -> dict:
