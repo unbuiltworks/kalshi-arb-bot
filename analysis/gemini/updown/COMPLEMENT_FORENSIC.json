@@ -1,0 +1,1326 @@
+{
+  "classification_counts": {
+    "A_NEVER_REACHED": 9,
+    "E_REACHED_EXECUTABLE_MISSED": 8
+  },
+  "ever_pct": 47.06,
+  "first_leg_rule": "the FROZEN underdog rule, causal: first instant at or after T+15 with both sides filling q1 and the cheaper side at or below 0.60. Never moved to make a pair reachable.",
+  "first_lock_time_distribution_s": {
+    "max": 249.019,
+    "median": 174.55700000000002,
+    "min": 71.023,
+    "n": 8
+  },
+  "label": "GEMINI_COMPLEMENT_REACH_FORENSIC_V1",
+  "latency_basis": "this programme's own observed ack latency, 134-197ms across the underdog cohort's five live fills",
+  "per_window": [
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.3500",
+        "side": "DOWN",
+        "t_plus_s": 15.803
+      },
+      "market": "GEMI-BTC05M2610051755-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.3700"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.5900",
+        "side": "DOWN",
+        "t_plus_s": 15.832
+      },
+      "market": "GEMI-BTC05M2610051800-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.6100"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 UP",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "0",
+          "UP": "1"
+        },
+        "price": "0.5600",
+        "side": "UP",
+        "t_plus_s": 15.863
+      },
+      "market": "GEMI-BTC05M2610051805-UP",
+      "max_residual_while_waiting": "1 UP",
+      "q1_opportunities_surviving_latency": 1,
+      "settlement_up_side": "no",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.7700",
+          "episodes": [
+            {
+              "best_lock": "0.7700",
+              "complement": "0.1800",
+              "duration_s": 103.0,
+              "end_t": 1791223392.8736372,
+              "levels": 6,
+              "start_after_fill_s": 74.011,
+              "start_t": 1791223289.8737326
+            }
+          ],
+          "first_after_fill_s": 74.011,
+          "n": 1,
+          "windows_total_seconds": 103.0
+        },
+        "q10": {
+          "best_lock": "0.7700",
+          "episodes": [
+            {
+              "best_lock": "0.7700",
+              "complement": "0.1800",
+              "duration_s": 103.0,
+              "end_t": 1791223392.8736372,
+              "levels": 6,
+              "start_after_fill_s": 74.011,
+              "start_t": 1791223289.8737326
+            }
+          ],
+          "first_after_fill_s": 74.011,
+          "n": 1,
+          "windows_total_seconds": 103.0
+        },
+        "q25": {
+          "best_lock": "0.7700",
+          "episodes": [
+            {
+              "best_lock": "0.7700",
+              "complement": "0.1800",
+              "duration_s": 103.0,
+              "end_t": 1791223392.8736372,
+              "levels": 6,
+              "start_after_fill_s": 74.011,
+              "start_t": 1791223289.8737326
+            }
+          ],
+          "first_after_fill_s": 74.011,
+          "n": 1,
+          "windows_total_seconds": 103.0
+        },
+        "q5": {
+          "best_lock": "0.7700",
+          "episodes": [
+            {
+              "best_lock": "0.7700",
+              "complement": "0.1800",
+              "duration_s": 103.0,
+              "end_t": 1791223392.8736372,
+              "levels": 6,
+              "start_after_fill_s": 74.011,
+              "start_t": 1791223289.8737326
+            }
+          ],
+          "first_after_fill_s": 74.011,
+          "n": 1,
+          "windows_total_seconds": 103.0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.5800"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 UP",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "0",
+          "UP": "1"
+        },
+        "price": "0.3400",
+        "side": "UP",
+        "t_plus_s": 15.885
+      },
+      "market": "GEMI-BTC05M2610051810-UP",
+      "max_residual_while_waiting": "1 UP",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "no",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.3600"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.5100",
+        "side": "DOWN",
+        "t_plus_s": 15.914
+      },
+      "market": "GEMI-BTC05M2610051815-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.5300"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.5400",
+        "side": "DOWN",
+        "t_plus_s": 15.923
+      },
+      "market": "GEMI-BTC05M2610051820-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.5600"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.5700",
+        "side": "DOWN",
+        "t_plus_s": 24.985
+      },
+      "market": "GEMI-BTC05M2610051825-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.5900"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 UP",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "0",
+          "UP": "1"
+        },
+        "price": "0.5200",
+        "side": "UP",
+        "t_plus_s": 15.994
+      },
+      "market": "GEMI-BTC05M2610051830-UP",
+      "max_residual_while_waiting": "1 UP",
+      "q1_opportunities_surviving_latency": 1,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.6100",
+          "episodes": [
+            {
+              "best_lock": "0.6100",
+              "complement": "0.0700",
+              "duration_s": 119.033,
+              "end_t": 1791225000.140223,
+              "levels": 5,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 165.113,
+              "start_t": 1791224881.1074152
+            }
+          ],
+          "first_after_fill_s": 165.113,
+          "n": 1,
+          "windows_total_seconds": 119.0
+        },
+        "q10": {
+          "best_lock": "0.6100",
+          "episodes": [
+            {
+              "best_lock": "0.6100",
+              "complement": "0.0700",
+              "duration_s": 119.033,
+              "end_t": 1791225000.140223,
+              "levels": 5,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 165.113,
+              "start_t": 1791224881.1074152
+            }
+          ],
+          "first_after_fill_s": 165.113,
+          "n": 1,
+          "windows_total_seconds": 119.0
+        },
+        "q25": {
+          "best_lock": "0.6100",
+          "episodes": [
+            {
+              "best_lock": "0.6100",
+              "complement": "0.0700",
+              "duration_s": 119.033,
+              "end_t": 1791225000.140223,
+              "levels": 5,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 165.113,
+              "start_t": 1791224881.1074152
+            }
+          ],
+          "first_after_fill_s": 165.113,
+          "n": 1,
+          "windows_total_seconds": 119.0
+        },
+        "q5": {
+          "best_lock": "0.6100",
+          "episodes": [
+            {
+              "best_lock": "0.6100",
+              "complement": "0.0700",
+              "duration_s": 119.033,
+              "end_t": 1791225000.140223,
+              "levels": 5,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 165.113,
+              "start_t": 1791224881.1074152
+            }
+          ],
+          "first_after_fill_s": 165.113,
+          "n": 1,
+          "windows_total_seconds": 119.0
+        }
+      },
+      "uncompleted_settlement_pnl": "0.4600"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 UP",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "0",
+          "UP": "1"
+        },
+        "price": "0.3900",
+        "side": "UP",
+        "t_plus_s": 15.138
+      },
+      "market": "GEMI-BTC05M2610051835-UP",
+      "max_residual_while_waiting": "1 UP",
+      "q1_opportunities_surviving_latency": 1,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.9600",
+          "episodes": [
+            {
+              "best_lock": "0.9600",
+              "complement": "0.5300",
+              "duration_s": 7.002,
+              "end_t": 1791225271.1584747,
+              "levels": 3,
+              "start_after_fill_s": 249.019,
+              "start_t": 1791225264.156513
+            }
+          ],
+          "first_after_fill_s": 249.019,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        },
+        "q10": {
+          "best_lock": "0.9600",
+          "episodes": [
+            {
+              "best_lock": "0.9600",
+              "complement": "0.5300",
+              "duration_s": 7.002,
+              "end_t": 1791225271.1584747,
+              "levels": 3,
+              "start_after_fill_s": 249.019,
+              "start_t": 1791225264.156513
+            }
+          ],
+          "first_after_fill_s": 249.019,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        },
+        "q25": {
+          "best_lock": "0.9600",
+          "episodes": [
+            {
+              "best_lock": "0.9600",
+              "complement": "0.5300",
+              "duration_s": 7.002,
+              "end_t": 1791225271.1584747,
+              "levels": 3,
+              "start_after_fill_s": 249.019,
+              "start_t": 1791225264.156513
+            }
+          ],
+          "first_after_fill_s": 249.019,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        },
+        "q5": {
+          "best_lock": "0.9600",
+          "episodes": [
+            {
+              "best_lock": "0.9600",
+              "complement": "0.5300",
+              "duration_s": 7.002,
+              "end_t": 1791225271.1584747,
+              "levels": 3,
+              "start_after_fill_s": 249.019,
+              "start_t": 1791225264.156513
+            }
+          ],
+          "first_after_fill_s": 249.019,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        }
+      },
+      "uncompleted_settlement_pnl": "0.5900"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.4200",
+        "side": "DOWN",
+        "t_plus_s": 15.157
+      },
+      "market": "GEMI-BTC05M2610051840-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 1,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.7100",
+              "complement": "0.2600",
+              "duration_s": 66.0,
+              "end_t": 1791225544.1791794,
+              "levels": 6,
+              "start_after_fill_s": 163.023,
+              "start_t": 1791225478.1795347
+            }
+          ],
+          "first_after_fill_s": 163.023,
+          "n": 1,
+          "windows_total_seconds": 66.0
+        },
+        "q10": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.7100",
+              "complement": "0.2600",
+              "duration_s": 66.0,
+              "end_t": 1791225544.1791794,
+              "levels": 6,
+              "start_after_fill_s": 163.023,
+              "start_t": 1791225478.1795347
+            }
+          ],
+          "first_after_fill_s": 163.023,
+          "n": 1,
+          "windows_total_seconds": 66.0
+        },
+        "q25": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.7100",
+              "complement": "0.2600",
+              "duration_s": 66.0,
+              "end_t": 1791225544.1791794,
+              "levels": 6,
+              "start_after_fill_s": 163.023,
+              "start_t": 1791225478.1795347
+            }
+          ],
+          "first_after_fill_s": 163.023,
+          "n": 1,
+          "windows_total_seconds": 66.0
+        },
+        "q5": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.7100",
+              "complement": "0.2600",
+              "duration_s": 66.0,
+              "end_t": 1791225544.1791794,
+              "levels": 6,
+              "start_after_fill_s": 163.023,
+              "start_t": 1791225478.1795347
+            }
+          ],
+          "first_after_fill_s": 163.023,
+          "n": 1,
+          "windows_total_seconds": 66.0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.4400"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 UP",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "0",
+          "UP": "1"
+        },
+        "price": "0.5300",
+        "side": "UP",
+        "t_plus_s": 15.177
+      },
+      "market": "GEMI-BTC05M2610051845-UP",
+      "max_residual_while_waiting": "1 UP",
+      "q1_opportunities_surviving_latency": 1,
+      "settlement_up_side": "no",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.9700",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.4000",
+              "duration_s": 6.999,
+              "end_t": 1791225806.177762,
+              "levels": 5,
+              "start_after_fill_s": 184.001,
+              "start_t": 1791225799.1785765
+            }
+          ],
+          "first_after_fill_s": 184.001,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        },
+        "q10": {
+          "best_lock": "0.9700",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.4000",
+              "duration_s": 6.999,
+              "end_t": 1791225806.177762,
+              "levels": 5,
+              "start_after_fill_s": 184.001,
+              "start_t": 1791225799.1785765
+            }
+          ],
+          "first_after_fill_s": 184.001,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        },
+        "q25": {
+          "best_lock": "0.9700",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.4000",
+              "duration_s": 6.999,
+              "end_t": 1791225806.177762,
+              "levels": 5,
+              "start_after_fill_s": 184.001,
+              "start_t": 1791225799.1785765
+            }
+          ],
+          "first_after_fill_s": 184.001,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        },
+        "q5": {
+          "best_lock": "0.9700",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.4000",
+              "duration_s": 6.999,
+              "end_t": 1791225806.177762,
+              "levels": 5,
+              "start_after_fill_s": 184.001,
+              "start_t": 1791225799.1785765
+            }
+          ],
+          "first_after_fill_s": 184.001,
+          "n": 1,
+          "windows_total_seconds": 7.0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.5500"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 UP",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "0",
+          "UP": "1"
+        },
+        "price": "0.5800",
+        "side": "UP",
+        "t_plus_s": 15.179
+      },
+      "market": "GEMI-BTC05M2610051850-UP",
+      "max_residual_while_waiting": "1 UP",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "no",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.6000"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.5900",
+        "side": "DOWN",
+        "t_plus_s": 15.209
+      },
+      "market": "GEMI-BTC05M2610051855-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 3,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.7900",
+          "episodes": [
+            {
+              "best_lock": "0.8400",
+              "complement": "0.2200",
+              "duration_s": 3.0,
+              "end_t": 1791226435.277205,
+              "levels": 6,
+              "start_after_fill_s": 217.069,
+              "start_t": 1791226432.2776213
+            },
+            {
+              "best_lock": "0.9800",
+              "complement": "0.3500",
+              "duration_s": 2.997,
+              "end_t": 1791226444.2770064,
+              "levels": 4,
+              "start_after_fill_s": 226.071,
+              "start_t": 1791226441.280105
+            },
+            {
+              "best_lock": "0.7900",
+              "complement": "0.1700",
+              "duration_s": 9.007,
+              "end_t": 1791226471.316258,
+              "levels": 3,
+              "start_after_fill_s": 247.1,
+              "start_t": 1791226462.308882
+            }
+          ],
+          "first_after_fill_s": 217.069,
+          "n": 3,
+          "windows_total_seconds": 15.0
+        },
+        "q10": {
+          "best_lock": "0.7900",
+          "episodes": [
+            {
+              "best_lock": "0.8400",
+              "complement": "0.2200",
+              "duration_s": 3.0,
+              "end_t": 1791226435.277205,
+              "levels": 6,
+              "start_after_fill_s": 217.069,
+              "start_t": 1791226432.2776213
+            },
+            {
+              "best_lock": "0.9800",
+              "complement": "0.3500",
+              "duration_s": 2.997,
+              "end_t": 1791226444.2770064,
+              "levels": 4,
+              "start_after_fill_s": 226.071,
+              "start_t": 1791226441.280105
+            },
+            {
+              "best_lock": "0.7900",
+              "complement": "0.1700",
+              "duration_s": 9.007,
+              "end_t": 1791226471.316258,
+              "levels": 3,
+              "start_after_fill_s": 247.1,
+              "start_t": 1791226462.308882
+            }
+          ],
+          "first_after_fill_s": 217.069,
+          "n": 3,
+          "windows_total_seconds": 15.0
+        },
+        "q25": {
+          "best_lock": "0.7900",
+          "episodes": [
+            {
+              "best_lock": "0.8400",
+              "complement": "0.2200",
+              "duration_s": 3.0,
+              "end_t": 1791226435.277205,
+              "levels": 6,
+              "start_after_fill_s": 217.069,
+              "start_t": 1791226432.2776213
+            },
+            {
+              "best_lock": "0.9800",
+              "complement": "0.3500",
+              "duration_s": 2.997,
+              "end_t": 1791226444.2770064,
+              "levels": 4,
+              "start_after_fill_s": 226.071,
+              "start_t": 1791226441.280105
+            },
+            {
+              "best_lock": "0.7900",
+              "complement": "0.1700",
+              "duration_s": 9.007,
+              "end_t": 1791226471.316258,
+              "levels": 3,
+              "start_after_fill_s": 247.1,
+              "start_t": 1791226462.308882
+            }
+          ],
+          "first_after_fill_s": 217.069,
+          "n": 3,
+          "windows_total_seconds": 15.0
+        },
+        "q5": {
+          "best_lock": "0.7900",
+          "episodes": [
+            {
+              "best_lock": "0.8400",
+              "complement": "0.2200",
+              "duration_s": 3.0,
+              "end_t": 1791226435.277205,
+              "levels": 6,
+              "start_after_fill_s": 217.069,
+              "start_t": 1791226432.2776213
+            },
+            {
+              "best_lock": "0.9800",
+              "complement": "0.3500",
+              "duration_s": 2.997,
+              "end_t": 1791226444.2770064,
+              "levels": 4,
+              "start_after_fill_s": 226.071,
+              "start_t": 1791226441.280105
+            },
+            {
+              "best_lock": "0.7900",
+              "complement": "0.1700",
+              "duration_s": 9.007,
+              "end_t": 1791226471.316258,
+              "levels": 3,
+              "start_after_fill_s": 247.1,
+              "start_t": 1791226462.308882
+            }
+          ],
+          "first_after_fill_s": 217.069,
+          "n": 3,
+          "windows_total_seconds": 15.0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.6100"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.3800",
+        "side": "DOWN",
+        "t_plus_s": 15.336
+      },
+      "market": "GEMI-BTC05M2610051900-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.4000"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.6000",
+        "side": "DOWN",
+        "t_plus_s": 15.63
+      },
+      "market": "GEMI-BTC05M2610051905-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 2,
+      "settlement_up_side": "no",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.3300",
+              "duration_s": 11.999,
+              "end_t": 1791226898.6518219,
+              "levels": 6,
+              "start_after_fill_s": 71.023,
+              "start_t": 1791226886.653262
+            },
+            {
+              "best_lock": "0.7100",
+              "complement": "0.0800",
+              "duration_s": 179.086,
+              "end_t": 1791227099.7472768,
+              "levels": 6,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 105.031,
+              "start_t": 1791226920.6609588
+            }
+          ],
+          "first_after_fill_s": 71.023,
+          "n": 2,
+          "windows_total_seconds": 191.1
+        },
+        "q10": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.3300",
+              "duration_s": 11.999,
+              "end_t": 1791226898.6518219,
+              "levels": 6,
+              "start_after_fill_s": 71.023,
+              "start_t": 1791226886.653262
+            },
+            {
+              "best_lock": "0.7100",
+              "complement": "0.0800",
+              "duration_s": 179.086,
+              "end_t": 1791227099.7472768,
+              "levels": 6,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 105.031,
+              "start_t": 1791226920.6609588
+            }
+          ],
+          "first_after_fill_s": 71.023,
+          "n": 2,
+          "windows_total_seconds": 191.1
+        },
+        "q25": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.3300",
+              "duration_s": 11.999,
+              "end_t": 1791226898.6518219,
+              "levels": 6,
+              "start_after_fill_s": 71.023,
+              "start_t": 1791226886.653262
+            },
+            {
+              "best_lock": "0.7100",
+              "complement": "0.0800",
+              "duration_s": 179.086,
+              "end_t": 1791227099.7472768,
+              "levels": 6,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 105.031,
+              "start_t": 1791226920.6609588
+            }
+          ],
+          "first_after_fill_s": 71.023,
+          "n": 2,
+          "windows_total_seconds": 191.1
+        },
+        "q5": {
+          "best_lock": "0.7100",
+          "episodes": [
+            {
+              "best_lock": "0.9700",
+              "complement": "0.3300",
+              "duration_s": 11.999,
+              "end_t": 1791226898.6518219,
+              "levels": 6,
+              "start_after_fill_s": 71.023,
+              "start_t": 1791226886.653262
+            },
+            {
+              "best_lock": "0.7100",
+              "complement": "0.0800",
+              "duration_s": 179.086,
+              "end_t": 1791227099.7472768,
+              "levels": 6,
+              "ran_to_end_of_series": true,
+              "start_after_fill_s": 105.031,
+              "start_t": 1791226920.6609588
+            }
+          ],
+          "first_after_fill_s": 71.023,
+          "n": 2,
+          "windows_total_seconds": 191.1
+        }
+      },
+      "uncompleted_settlement_pnl": "0.3800"
+    },
+    {
+      "classification": "E_REACHED_EXECUTABLE_MISSED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.5500",
+        "side": "DOWN",
+        "t_plus_s": 19.741
+      },
+      "market": "GEMI-BTC05M2610051910-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 1,
+      "settlement_up_side": "yes",
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": "0.8500",
+          "episodes": [
+            {
+              "best_lock": "0.8500",
+              "complement": "0.2700",
+              "duration_s": 24.009,
+              "end_t": 1791227347.7725186,
+              "levels": 4,
+              "start_after_fill_s": 204.023,
+              "start_t": 1791227323.7635963
+            }
+          ],
+          "first_after_fill_s": 204.023,
+          "n": 1,
+          "windows_total_seconds": 24.0
+        },
+        "q10": {
+          "best_lock": "0.8500",
+          "episodes": [
+            {
+              "best_lock": "0.8500",
+              "complement": "0.2700",
+              "duration_s": 24.009,
+              "end_t": 1791227347.7725186,
+              "levels": 4,
+              "start_after_fill_s": 204.023,
+              "start_t": 1791227323.7635963
+            }
+          ],
+          "first_after_fill_s": 204.023,
+          "n": 1,
+          "windows_total_seconds": 24.0
+        },
+        "q25": {
+          "best_lock": "0.8500",
+          "episodes": [
+            {
+              "best_lock": "0.8500",
+              "complement": "0.2700",
+              "duration_s": 24.009,
+              "end_t": 1791227347.7725186,
+              "levels": 4,
+              "start_after_fill_s": 204.023,
+              "start_t": 1791227323.7635963
+            }
+          ],
+          "first_after_fill_s": 204.023,
+          "n": 1,
+          "windows_total_seconds": 24.0
+        },
+        "q5": {
+          "best_lock": "0.8500",
+          "episodes": [
+            {
+              "best_lock": "0.8500",
+              "complement": "0.2700",
+              "duration_s": 24.009,
+              "end_t": 1791227347.7725186,
+              "levels": 4,
+              "start_after_fill_s": 204.023,
+              "start_t": 1791227323.7635963
+            }
+          ],
+          "first_after_fill_s": 204.023,
+          "n": 1,
+          "windows_total_seconds": 24.0
+        }
+      },
+      "uncompleted_settlement_pnl": "-0.5700"
+    },
+    {
+      "classification": "A_NEVER_REACHED",
+      "first_leg": {
+        "directional_residual": "1 DOWN",
+        "fee": "0.02",
+        "inventory_after": {
+          "DOWN": "1",
+          "UP": "0"
+        },
+        "price": "0.5500",
+        "side": "DOWN",
+        "t_plus_s": 15.772
+      },
+      "market": "GEMI-BTC05M2610051915-UP",
+      "max_residual_while_waiting": "1 DOWN",
+      "q1_opportunities_surviving_latency": 0,
+      "settlement_up_side": null,
+      "sub_dollar_opportunities": {
+        "q1": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q10": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q25": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        },
+        "q5": {
+          "best_lock": null,
+          "episodes": [],
+          "first_after_fill_s": null,
+          "n": 0,
+          "windows_total_seconds": 0
+        }
+      }
+    }
+  ],
+  "reaction_latency_s": 0.197,
+  "series": "1 Hz p_snapshot book, ~300 obs/window",
+  "status": "FORENSIC. No orders, no new policy, no threshold fitting, no per-window path chosen.",
+  "survival_curve_P_first_sub_dollar_lock_within_X_s": {
+    "within_10s": {
+      "of": 17,
+      "pct": 0.0,
+      "windows": 0
+    },
+    "within_120s": {
+      "of": 17,
+      "pct": 11.76,
+      "windows": 2
+    },
+    "within_1s": {
+      "of": 17,
+      "pct": 0.0,
+      "windows": 0
+    },
+    "within_30s": {
+      "of": 17,
+      "pct": 0.0,
+      "windows": 0
+    },
+    "within_5s": {
+      "of": 17,
+      "pct": 0.0,
+      "windows": 0
+    },
+    "within_60s": {
+      "of": 17,
+      "pct": 0.0,
+      "windows": 0
+    }
+  },
+  "why_the_two_numbers_disagree": "the hindsight 11/17 counts MARKETABLE availability; the 2.04% complement_reach_rate counts THEORETICAL PASSIVE QUOTE fills -- that artifact's own labels say the arms change only a COMPLETE price or how long a quote rests and that every fill is theoretical. A maker-fill rate and an availability rate are not the same quantity, and most of the apparent gap is that.",
+  "windows_examined": 17,
+  "windows_where_a_sub_dollar_complement_EVER_became_marketable": 8,
+  "windows_with_a_causal_first_leg": 17,
+  "windows_with_no_causal_first_leg": 0
+}

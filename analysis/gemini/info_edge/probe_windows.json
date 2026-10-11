@@ -1,0 +1,5 @@
+{
+  "label": "R2_LIVE_PROBE_WINDOWS_V1",
+  "why": "Windows touched by a live execution-validation probe. EXCLUDED from the sealed statistical cohort and from the blind gate count, so a q=1 taker order can never be assumed harmless to the book it is measuring.",
+  "tickers": []
+}

@@ -1,0 +1,23 @@
+{
+  "workstream": "OWNER 5556751941 item 1 -- persisted classification of every executed-vs-L5 timing/price difference the frozen fidelity evaluator reports",
+  "classified_utc": "2026-09-06T08:20:00+00:00",
+  "constraints": {
+    "maker_rest_30s": {
+      "where": "src/pmus_spring_l5_session.py SPORTS_MAKER_REST_MAX_S = 30.0 (OWNER 5552475548 item 1)",
+      "measured": "median 25-32 s between live decisions vs the frozen v2 cadence of ~2 s in the same states (ratio 12.8-16, gate FAIL)",
+      "class": "(b) execution policy set by the owner for sports books, NOT a venue requirement: Polymarket US accepts immediate cancel/replace (post-only orders cancelled after 1-2 s of rest all day without rejection); L5's own cadence on BTC/ETH 5m books is ~2 s",
+      "evidence_path": "counterfactual_2s records in every session_report (read-only, seeded draw at the CURRENT state every 2 s while an order rests); scored separately, never counted as live evidence",
+      "gate_treatment": "reported as FAIL under the frozen spec; not relabeled as an override without a new spec freeze"
+    },
+    "complete_fee_safe_bound": {
+      "where": "spring_complement_price(): min(pair <= 0.98 target, >= 1c after known fees, opposite ask - tick)",
+      "measured": "touch_join_rate 0.0 on COMPLETE orders (L5 joins the deficit-side touch)",
+      "class": "(a) owner risk/fee rule (OWNER DECISION 5533476555): safety_override, kept explicit",
+      "evidence_path": "counterfactual_l5_price on every COMPLETE decision (L5 touch price, executed price, delta ticks, pair at touch, fee-safe at touch) and rest_book / l5_touch_reached_by_opposite_ask on the order"
+    },
+    "taker_disabled": {"class": "(a) owner rule", "gate_treatment": "declared override, reported"},
+    "residual_cap_3_units": {"class": "(a) owner rule", "gate_treatment": "declared override, reported; cap_fallback_complete is the L5-consistent fallback"},
+    "size_cap_0_05_usd_and_venue_minimum": {"class": "(a) owner rule (rung R1)", "gate_treatment": "declared override, reported"}
+  },
+  "rule": "these classifications never change thresholds, policy or caps; they say WHY a dimension fails"
+}

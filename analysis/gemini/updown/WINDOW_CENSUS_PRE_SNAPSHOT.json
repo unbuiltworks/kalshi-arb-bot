@@ -1,0 +1,20 @@
+{
+  "GENUINELY_COMPLETE_WINDOWS": 0,
+  "btc5m_tickers_seen": 44,
+  "complete": [],
+  "incomplete_by_missing_requirement": {
+    "fewer_than_6_early_checkpoints": 41,
+    "fewer_than_6_executable_books": 41,
+    "fewer_than_6_fresh_reference_observations": 42,
+    "no_authoritative_strike": 39,
+    "no_settlement": 2
+  },
+  "label": "GEMINI_BTC5M_WINDOW_CENSUS",
+  "max_reference_age_s": 10.0,
+  "min_early_checkpoints_required": 6,
+  "read_only": "opens no venue surface and changes nothing",
+  "reference_observations": 958,
+  "requirements": "early checkpoints, authoritative strike, contemporaneous fresh reference, settlement, executable books -- all five, per window",
+  "tape_rows": 9649,
+  "tapes_glob": "analysis/gemini/btc5m_rec/btc5m_rec_*.jsonl.gz"
+}

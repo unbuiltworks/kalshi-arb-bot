@@ -1,0 +1,156 @@
+{
+  "LABEL": "BOOK_ACQUISITION_V1",
+  "generated_utc": "2026-10-06",
+  "target_period": {"start": "2026-03-19", "end": "2026-08-31", "span_days": 166},
+  "question": "resting book state around each actual L5 fill at -5s/-1s/fill/+1s/+5s/+10s/+30s/+60s",
+  "verdict": {
+    "book_data_on_disk_covering_period": true,
+    "covered_days": 4,
+    "covered_days_note": "2026-08-21..2026-08-24, i.e. 3.5 calendar days of capture",
+    "coverage_fraction_of_span_pct": 2.1,
+    "free_route_for_remainder": false,
+    "requires_vendor_for_full_span": true,
+    "official_clob_historical_book_usable": false,
+    "official_clob_reason": "clob.polymarket.com/orderbook-history stopped producing snapshots 2026-02-20 ~20:00 UTC; L5 period begins 2026-03-19, entirely after cutoff",
+    "onchain_gives_resting_book": false,
+    "onchain_reason": "order placement and cancellation are off-chain on Polymarket; logs yield fills only"
+  },
+  "on_disk_book_holdings": [
+    {
+      "source": "Zenodo record 22084977 (polyorderbooks), DOI 10.5281/zenodo.22084114, CC BY 4.0",
+      "grade": "VERIFIED-ON-DISK",
+      "kind": "BOOK",
+      "path": "/tmp/claude-0/-home-user-kalshi-arb-bot/f2f630e2-70fa-534f-9e92-d1857b7df8ca/scratchpad/l2/",
+      "downloaded_utc": "2026-10-04",
+      "files": [
+        {"file": "updown_5m.parquet", "rows": 167941, "markets": 471, "captured_at_min": "2026-08-21T00:15:48Z", "captured_at_max": "2026-08-24T11:44:59Z", "median_bid_levels": 39},
+        {"file": "updown_15m.parquet", "rows": 239310, "markets": 265, "captured_at_min": "2026-08-21T00:14:09Z", "captured_at_max": "2026-08-24T12:29:59Z", "median_bid_levels": 46},
+        {"file": "updown_4h.parquet", "rows": 489941, "markets": 69, "captured_at_min": "2026-08-21T03:56:08Z", "captured_at_max": "2026-08-24T11:59:59Z", "median_bid_levels": 9}
+      ],
+      "full_ladders": true,
+      "coins": ["btc", "eth", "sol", "xrp", "bnb", "doge", "hype", "zec"],
+      "accuracy_bounds": {
+        "row_written_on_book_change_only": true,
+        "sequence_numbers": false,
+        "rest_resync_interval_s": 60,
+        "drift_bound_s": 60,
+        "feed_event_rate_per_s": 24000
+      }
+    }
+  ],
+  "l5_fills_on_disk": {
+    "grade": "VERIFIED-ON-DISK",
+    "total_trade_rows": 778825,
+    "by_contract_length": {"15m": 714043, "5m": 64782, "4h": 0},
+    "coins": {"btc": 85224, "eth": 3266},
+    "fill_days_within_span": 128,
+    "sources": ["data/l5/raw/trades.jsonl", "data/l5/raw/activity.jsonl", "data/l5/raw/activity_gap.jsonl.gz"],
+    "activity_gap_detail": {
+      "rows": 706500, "days": 130, "range": ["2026-04-02", "2026-08-28"],
+      "fields": ["conditionId", "eventSlug", "outcome", "outcomeIndex", "price", "side", "size", "slug", "timestamp", "transactionHash", "type", "usdcSize"],
+      "no_wallet_field": true
+    }
+  },
+  "joinable_overlap_by_market_slug": {
+    "15m": {"l5_fills": 3074, "distinct_markets": 27, "status": "ALREADY_ANALYSED"},
+    "5m": {"l5_fills": 184, "distinct_markets": 38, "status": "UNEXPLOITED"},
+    "4h": {"l5_fills": 0, "distinct_markets": 0, "status": "L5_NEVER_TRADES_4H"}
+  },
+  "correction_to_prior_finding": {
+    "file": "analysis/l5/historical_l2/ZENODO_OVERLAP_FINDINGS.md",
+    "file_modified": false,
+    "prior_claim": "on our own file the overlap with this dataset is zero",
+    "measured": "activity_gap.jsonl.gz already holds L5 fills on the Zenodo days",
+    "l5_fills_per_zenodo_day": {"2026-08-21": 24705, "2026-08-22": 6745, "2026-08-23": 0, "2026-08-24": 16069},
+    "impeaches_prior_conclusions": false,
+    "note": "chain backfill (3166 fills / 12 windows) agrees in magnitude; it was not required, and it never covered the 5m slice"
+  },
+  "reachability_tested_2026-10-06": {
+    "method": "curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://<host>/ via HTTPS_PROXY=http://127.0.0.1:36553, TLS verification ON, no circumvention",
+    "proxy_status": {"enabled": true, "bundleCoversEveryHost": true, "healthy": true},
+    "results": [
+      {"host": "clob.polymarket.com", "status": "403 to CONNECT", "curl": "(56) CONNECT tunnel failed, response 403"},
+      {"host": "data-api.polymarket.com", "status": "403 to CONNECT"},
+      {"host": "gamma-api.polymarket.com", "status": "403 to CONNECT"},
+      {"host": "zenodo.org", "status": "403 to CONNECT", "note": "WORKED 2026-10-02..04 from this container"},
+      {"host": "polygon.drpc.org", "status": "403 to CONNECT", "note": "WORKED 2026-10-02..04 from this container"},
+      {"host": "polygon-rpc.com", "status": "403 to CONNECT"},
+      {"host": "huggingface.co", "status": "403 to CONNECT"},
+      {"host": "datasets-server.huggingface.co", "status": "403 to CONNECT"},
+      {"host": "www.kaggle.com", "status": "403 to CONNECT"},
+      {"host": "api.dune.com", "status": "403 to CONNECT"},
+      {"host": "api.goldsky.com", "status": "403 to CONNECT"},
+      {"host": "api.tardis.dev", "status": "403 to CONNECT"},
+      {"host": "api.amberdata.com", "status": "403 to CONNECT"},
+      {"host": "cryptostruct.com", "status": "EGRESS_BLOCKED", "method": "fetch tool"}
+    ],
+    "conclusion": "policy denial, not misconfiguration; no bulk download possible from this container right now"
+  },
+  "ranked_plan": [
+    {
+      "rank": 1, "name": "Finish 5m slice of Zenodo data already on disk",
+      "data_kind": "BOOK", "grade": "VERIFIED-ON-DISK", "cost": "free", "egress_needed": false,
+      "coverage_days": 4, "granularity": "full L2 ladders, 1s, change-triggered",
+      "gives": "offset grid at -30/-5/-1s and +1..+60s legs for 5m; first 5m-vs-15m contract-length comparison",
+      "does_not_give": "order ownership; n=184 is a shape check, not a decision input",
+      "reuses": "analysis/l5/historical_l2/bbo_offset.py"
+    },
+    {
+      "rank": 2, "name": "Marketlens free archive 2026-06-15",
+      "data_kind": "BOOK", "grade": "DOCUMENTED-ONLY", "cost": "free, CC BY 4.0 (attribution: Marketlens, https://marketlens.trade)",
+      "egress_needed": true, "egress_status": "github.com blocked today",
+      "url": "https://github.com/marketlenstrade/polymarket-historical-data",
+      "claimed_coverage": "Bitcoin 5m/15m/hourly dated 2026-06-15; 111.2 MB; 2278 markets / 7 events / 17.3M rows total",
+      "granularity": "tick-by-tick snapshots + deltas + trades; ladders as {price,size} lists best-first",
+      "l5_fills_already_on_disk_that_day": 2936,
+      "gives": "independent mid-period day; out-of-sample replication of the Zenodo BBO-offset result; deltas may beat 1s resolution",
+      "does_not_give": "ownership; single day (raises coverage to ~3.0%)",
+      "verify_on_download": "confirm the 2026-06-15 date and 15m contract set from the files, not the repo page"
+    },
+    {
+      "rank": 3, "name": "Commercial full-span vendors",
+      "data_kind": "BOOK", "grade": "DOCUMENTED-ONLY", "cost": "paid", "egress_needed": true,
+      "only_route_covering_remaining_days": 162,
+      "all_claims_unverified": true,
+      "vendors": [
+        {"name": "Resolved Markets", "claimed_start": "2026-03", "brackets_span": true, "granularity": "1s full L2 ladders on resolved markets; condition_id, token_id, event_timestamp, capture_timestamp, sequence_number, best_bid/ask, mid, spread, full bids/asks arrays", "access": "REST, OpenAPI, CLI export, MCP", "advantage": "sequence_number fixes the undetectable-dropped-delta weakness of the Zenodo data"},
+        {"name": "CryptoStruct", "claimed_start": "2025-07", "brackets_span": true, "granularity": "every trade + full-depth L2", "access": "per-instrument-day, ~EUR 1/day, instant download", "advantage": "cheap targeted buy scoped to btc/eth, 5m/15m, 128 L5 fill-days"},
+        {"name": "PMData", "claimed_start": "2026-02", "granularity": "tick-by-tick snapshots + updates + trades, Up/Down markets"},
+        {"name": "Marketlens (paid)", "granularity": "tick L2 snapshots and deltas, ms resolution", "access": "Python SDK, REST, bulk Parquet"},
+        {"name": "Telonex", "granularity": "trades, book changes, quotes, onchain fills", "access": "daily Parquet via API"},
+        {"name": "DepthFeed", "granularity": "event-driven CLOB updates, normalised full-book observations", "access": "REST + WebSocket"}
+      ],
+      "does_not_give": "order ownership - no public archive attributes orders to L5"
+    },
+    {
+      "rank": 4, "name": "Polygon on-chain backfill",
+      "data_kind": "FILLS-ONLY", "grade": "REACHABLE-BUT-UNTESTED", "cost": "free",
+      "egress_status": "polygon.drpc.org worked 2026-10-02..04, 403 today",
+      "existing_code": "analysis/l5/historical_l2/backfill.py",
+      "gives": "maker/taker-attributed fill reconstruction for any span day, including the 38 days with no L5 activity on disk",
+      "does_not_give": "ANY resting book - placement and cancellation are off-chain; cannot answer the brief"
+    },
+    {
+      "rank": 5, "name": "Official Polymarket CLOB /orderbook-history",
+      "data_kind": "BOOK", "grade": "UNAVAILABLE",
+      "endpoint": "clob.polymarket.com/orderbook-history?asset_id=&startTs=&endTs=&limit=500&offset=",
+      "cutoff_utc": "2026-02-20T20:00Z",
+      "reason": "returns {count:0,data:[]} after cutoff; whole L5 period is after it. GET /book is current-book only; docs list no past bids/asks endpoint",
+      "action": "one confirming probe when egress returns, since the cutoff report is third-party"
+    },
+    {"rank": 6, "name": "Dune / Goldsky / subgraphs", "data_kind": "FILLS-ONLY", "grade": "DOCUMENTED-ONLY", "note": "same off-chain limitation as rank 4 plus an indexing layer"},
+    {"rank": 7, "name": "Tardis.dev / Kaiko / Amberdata / CryptoTick", "data_kind": "UNKNOWN", "grade": "UNVERIFIED", "note": "centralised-crypto venues; no evidence any carries Polymarket CLOB books; de-prioritised"},
+    {"rank": 8, "name": "Hugging Face / Kaggle / academic / zenhodl.net", "data_kind": "UNKNOWN", "grade": "UNVERIFIED", "note": "only open book sets found are the Zenodo one already held and the Marketlens GitHub set; cheap to re-check, do not plan around it"}
+  ],
+  "not_a_route": {
+    "name": "prospective native-feed capture",
+    "reference": "analysis/l5/sync_l2/FIRST_WINDOWS_READING.md (git commit 617e8f5d)",
+    "why": "best book instrument held and the only one that can establish order ownership, but 2026-10-01 onward; cannot retroactively cover 2026-03-19..08-31"
+  },
+  "standing_limits": {
+    "anonymous_depth_cannot_attribute_orders": true,
+    "complement_books_mechanically_sum_to_one": "best_ask(X) + best_bid(complement) = 1.0000 exactly, so mint-feasibility sums built on it are tautological",
+    "no_synthetic_book": true,
+    "no_touch_equals_fill": true
+  }
+}

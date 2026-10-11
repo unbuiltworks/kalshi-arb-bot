@@ -1,0 +1,132 @@
+{
+ "empirical": {
+  "arm": "empirical",
+  "stall_window": {
+   "from": "2026-09-10T14:59:56Z",
+   "to": "2026-09-10T20:20:06Z",
+   "minutes": 320.0
+  },
+  "actual": {
+   "markets_admitted_during_stall": 0,
+   "reason": "the single acquisition slot was held by a dormant residual in a market outside the band"
+  },
+  "quarantined_market": {
+   "slug": "aec-county-not-ham-2026-09-08",
+   "guaranteed_floor_usd": "-0.8015",
+   "still_in_held": true,
+   "still_settlement_monitored": true,
+   "still_in_combined_loss": true
+  },
+  "cadence_markets_per_hour": 12.9,
+  "opportunity_slots_in_window": 68,
+  "additional_markets_admitted": 9,
+  "admitted": [
+   {
+    "n": 1,
+    "slug": "aec-setkamecz-mulpat-holtom-2026-09-10",
+    "worst_case_usd": "0",
+    "combined_after_usd": "-0.8015"
+   },
+   {
+    "n": 2,
+    "slug": "aec-itfwo-aragarmergar-lucllojoeste-2026-09-10",
+    "worst_case_usd": "0",
+    "combined_after_usd": "-0.8015"
+   },
+   {
+    "n": 3,
+    "slug": "aec-atp-enrval-stetra-2026-09-10",
+    "worst_case_usd": "0",
+    "combined_after_usd": "-0.8015"
+   },
+   {
+    "n": 4,
+    "slug": "aec-setkamecz-krajan-svoluk-2026-09-10",
+    "worst_case_usd": "-3.6028",
+    "combined_after_usd": "-4.4043"
+   },
+   {
+    "n": 5,
+    "slug": "aec-cs2-ica-ff-2026-09-10",
+    "worst_case_usd": "-3.9028",
+    "combined_after_usd": "-8.3071"
+   },
+   {
+    "n": 6,
+    "slug": "aec-setkamecz-mulpat-holtom-2026-09-10",
+    "worst_case_usd": "0",
+    "combined_after_usd": "-8.3071"
+   },
+   {
+    "n": 7,
+    "slug": "aec-itfwo-aragarmergar-lucllojoeste-2026-09-10",
+    "worst_case_usd": "0",
+    "combined_after_usd": "-8.3071"
+   },
+   {
+    "n": 8,
+    "slug": "aec-atp-enrval-stetra-2026-09-10",
+    "worst_case_usd": "0",
+    "combined_after_usd": "-8.3071"
+   },
+   {
+    "n": 9,
+    "slug": "aec-setkamecz-krajan-svoluk-2026-09-10",
+    "worst_case_usd": "-3.6028",
+    "combined_after_usd": "-11.9099"
+   }
+  ],
+  "gate_refused_at": {
+   "attempt": 10,
+   "slug": "aec-cs2-ica-ff-2026-09-10",
+   "worst_case_usd": "-3.9028",
+   "combined_before_usd": "-11.9099",
+   "combined_would_be_usd": "-15.8127",
+   "stop_usd": "-15.00"
+  },
+  "final_combined_loss_usd": "-11.9099",
+  "hypothetical_residual_exposure_usd": "-11.1084",
+  "labels": "empirical: real end-state inventories, completions and strandings in the proportion they actually occurred -- a completed pair below par has a non-negative floor and consumes NO budget. pessimistic: nothing ever completes, every market strands one-sided at the full session notional cap; that arm is the true LOWER bound."
+ },
+ "pessimistic": {
+  "arm": "pessimistic",
+  "stall_window": {
+   "from": "2026-09-10T14:59:56Z",
+   "to": "2026-09-10T20:20:06Z",
+   "minutes": 320.0
+  },
+  "actual": {
+   "markets_admitted_during_stall": 0,
+   "reason": "the single acquisition slot was held by a dormant residual in a market outside the band"
+  },
+  "quarantined_market": {
+   "slug": "aec-county-not-ham-2026-09-08",
+   "guaranteed_floor_usd": "-0.8015",
+   "still_in_held": true,
+   "still_settlement_monitored": true,
+   "still_in_combined_loss": true
+  },
+  "cadence_markets_per_hour": 12.9,
+  "opportunity_slots_in_window": 68,
+  "additional_markets_admitted": 1,
+  "admitted": [
+   {
+    "n": 1,
+    "slug": "stranded_at_cap",
+    "worst_case_usd": "-7.50",
+    "combined_after_usd": "-8.3015"
+   }
+  ],
+  "gate_refused_at": {
+   "attempt": 2,
+   "slug": "stranded_at_cap",
+   "worst_case_usd": "-7.50",
+   "combined_before_usd": "-8.3015",
+   "combined_would_be_usd": "-15.8015",
+   "stop_usd": "-15.00"
+  },
+  "final_combined_loss_usd": "-8.3015",
+  "hypothetical_residual_exposure_usd": "-7.5000",
+  "labels": "empirical: real end-state inventories, completions and strandings in the proportion they actually occurred -- a completed pair below par has a non-negative floor and consumes NO budget. pessimistic: nothing ever completes, every market strands one-sided at the full session notional cap; that arm is the true LOWER bound."
+ }
+}

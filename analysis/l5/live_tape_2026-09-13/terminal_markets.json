@@ -1,0 +1,48 @@
+{
+  "captured_at": "2026-09-13T16:05Z",
+  "source": "pmus-spring-l5-probe deployment 718ca492-cd77-4095-a13a-b16c1533925c, commit 8606c87fafb3, PMUS_L5_CAMPAIGN kind=settlement rows",
+  "labels": {
+    "realized_usd": "the venue's own number from a POSITION_RESOLUTION activity row. null means the venue published none.",
+    "matched_contribution_usd": "DERIVED arithmetic from ledger fills. NEVER realized.",
+    "incentives_usd": "venue commissionNotionalCollected, our side only, credited."
+  },
+  "venue_confirmed_realized": [
+    {"t": "2026-09-13T02:12:38Z", "slug": "aec-setkameua-pohole-chaboh-2026-09-13", "realized_usd": "1.4395", "settled_by": "position_resolution_activity", "resolution_side": "POSITION_RESOLUTION_SIDE_SHORT", "before_net": "2.0500"},
+    {"t": "2026-09-13T12:39:34Z", "slug": "aec-itfwo-matjor-anagas-2026-09-13", "realized_usd": "-2.3438", "settled_by": "position_resolution_activity", "matched_pairs": "2.22", "matched_pair_cost": "0.9159", "matched_contribution_usd": "0.186509", "directional_residual": "-5.43"},
+    {"t": "2026-09-13T12:57:00Z", "slug": "aec-setkameua-mytole-stemak-2026-09-13", "realized_usd": "-0.8793", "settled_by": "position_resolution_activity", "matched_pairs": "1.89", "matched_pair_cost": "0.7528", "matched_contribution_usd": "0.467050", "directional_residual": "-2.48"},
+    {"t": "2026-09-13T14:01:57Z", "slug": "aec-atp-jayfri-maxbas-2026-09-13", "realized_usd": "-3.9506", "settled_by": "position_resolution_activity", "matched_pairs": "0", "matched_contribution_usd": "0", "directional_residual": "8.58", "cost_basis_usd": "3.9506", "note": "total loss of the first-leg basis; 0 of 10 COMPLETEs filled"},
+    {"t": "2026-09-13T14:59:26Z", "slug": "aec-setkamecz-snimic-kruluk-2026-09-13", "realized_usd": "1.0340", "settled_by": "position_resolution_activity", "matched_pairs": "0", "directional_residual": "-1.88"},
+    {"t": "2026-09-13T15:21:02Z", "slug": "aec-itfme-jercon-robeld-2026-09-13", "realized_usd": "1.0200", "settled_by": "position_resolution_activity", "matched_pairs": "0", "directional_residual": "-2"}
+  ],
+  "settled_realized_unconfirmed": [
+    {"t": "2026-09-13T12:41:26Z", "slug": "aec-setkameua-tymole-solser-2026-09-13", "realized_usd": null, "settled_by": "venue_market_resolved_account_flat", "matched_pairs": "2.04", "matched_pair_cost": "0.97", "matched_contribution_usd": "0.0612", "directional_residual": "0.00", "cost_basis_usd": "1.9788", "incentives_usd": "0.0200", "maker_fills": 2, "taker_fills": 0},
+    {"t": "2026-09-13T14:59:19Z", "slug": "atc-epl-cov-bha-2026-09-13-bha", "realized_usd": null, "settled_by": "venue_market_resolved_account_flat", "matched_pairs": "5.67", "matched_pair_cost": "0.7635978835978835978835978835", "matched_contribution_usd": "1.340400000000000000000000001", "directional_residual": "0.00", "cost_basis_usd": "4.3296", "incentives_usd": "0.0200", "maker_fills": 7, "taker_fills": 0},
+    {"t": "2026-09-13T15:53:28Z", "slug": "aec-setkameua-tuzole-cherom-2026-09-13", "realized_usd": null, "settled_by": "venue_market_resolved_account_flat", "matched_pairs": "1.72", "matched_pair_cost": "0.99", "matched_contribution_usd": "0.0172", "directional_residual": "0.00", "cost_basis_usd": "1.7028", "incentives_usd": "0.0200", "maker_fills": 2, "taker_fills": 0},
+    {"t": "2026-09-13T15:57:35Z", "slug": "aec-atpcq-kensch-albcam-2026-09-13", "realized_usd": null, "settled_by": "venue_market_resolved_account_flat", "matched_pairs": "1.92", "matched_pair_cost": "0.99", "matched_contribution_usd": "0.0192", "directional_residual": "0.00", "cost_basis_usd": "1.9008", "incentives_usd": "0.0200", "maker_fills": 2, "taker_fills": 0}
+  ],
+  "budget_reconciliation": {
+    "method": "combined_loss = realized_today + sum(min(0, guaranteed_settlement_floor)). When risk_bearing is empty the floor term is 0 and the risk_set row prints realized_today directly.",
+    "anchors": [
+      {"t": "2026-09-13T12:08:05Z", "risk_bearing": 0, "combined_loss_usd": "8.7551", "implies_realized_today_usd": "8.7551"},
+      {"t": "2026-09-13T12:41:54Z", "risk_bearing": 0, "combined_loss_usd": "6.4113", "check": "8.7551 - 2.3438 = 6.4113"},
+      {"t": "2026-09-13T12:58:06Z", "risk_bearing": 0, "combined_loss_usd": "5.5320", "check": "6.4113 - 0.8793 = 5.5320"},
+      {"t": "2026-09-13T14:02:30Z", "risk_bearing": 1, "combined_loss_usd": "1.5814", "check": "5.5320 - 3.9506 = 1.5814, floor 0"},
+      {"t": "2026-09-13T15:21:17Z", "risk_bearing": 1, "combined_loss_usd": "3.4734", "check": "1.5814 + 1.0340 + 1.0200 - 0.1620 = 3.4734"}
+    ],
+    "realized_today_usd": "3.6354",
+    "unsettled_floor_usd": "-0.1620",
+    "combined_loss_usd": "3.4734",
+    "daily_loss_stop_usd": "-30.00",
+    "result": "exact to the cent at every anchor; no discrepancy"
+  },
+  "position_resolution_asymmetry": {
+    "claim": "the venue emits POSITION_RESOLUTION, and therefore a realizedPnl, iff the account carried a non-zero net position into resolution",
+    "n_markets": 9,
+    "residual_nonzero_confirmed": 5,
+    "residual_zero_unconfirmed": 4,
+    "exceptions": 0,
+    "venue_words": "the venue emitted no POSITION_RESOLUTION because it carried no position",
+    "consequence": "fully-matched completions - the outcomes that represent the policy working - can never be venue-confirmed; stranded residuals are confirmed exactly. Under venue-confirmed-only labelling a successful engine is understated and an unsuccessful one is tracked perfectly.",
+    "action": "OPEN. Needs an OWNER decision on a named third status. No label changed."
+  }
+}

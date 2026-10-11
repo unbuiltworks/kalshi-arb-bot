@@ -1,0 +1,5179 @@
+{
+  "BTC15M": {
+    "by_bucket_all_checkpoints": {
+      "50-55c": {
+        "avg_executable_ask": 0.5387,
+        "both_sides_ge_50c_observations": 10,
+        "breakeven_pct_taker_fees": 55.61,
+        "breakeven_pct_zero_fees": 53.87,
+        "ci_low_minus_breakeven_pp": -15.61,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 5,
+        "established_positive": false,
+        "ev_per_share_usd": 0.1773,
+        "favorite_win_pct": 73.33,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 15,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 93.33,
+        "p_opposite_settles_GIVEN_a_flip": 21.43,
+        "p_opposite_settles_after_a_flip": 20.0,
+        "subsequent_flips_mean": 7.533,
+        "subsequent_flips_median": 9,
+        "win_minus_breakeven_pp": 17.73,
+        "win_pct_ci95_window_bootstrap": [
+          40.0,
+          100.0
+        ]
+      },
+      "55-60c": {
+        "avg_executable_ask": 0.5729,
+        "both_sides_ge_50c_observations": 60,
+        "breakeven_pct_taker_fees": 59.0,
+        "breakeven_pct_zero_fees": 57.29,
+        "ci_low_minus_breakeven_pp": -4.61,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 11,
+        "established_positive": false,
+        "ev_per_share_usd": 0.1062,
+        "favorite_win_pct": 69.62,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 79,
+        "opportunities_per_day": 689.5,
+        "p_leadership_flips_at_least_once": 82.28,
+        "p_opposite_settles_GIVEN_a_flip": 30.77,
+        "p_opposite_settles_after_a_flip": 25.32,
+        "subsequent_flips_mean": 3.62,
+        "subsequent_flips_median": 2,
+        "win_minus_breakeven_pp": 10.62,
+        "win_pct_ci95_window_bootstrap": [
+          54.39,
+          86.27
+        ]
+      },
+      "60-70c": {
+        "avg_executable_ask": 0.6391,
+        "both_sides_ge_50c_observations": 5,
+        "breakeven_pct_taker_fees": 65.52,
+        "breakeven_pct_zero_fees": 63.91,
+        "ci_low_minus_breakeven_pp": -26.6,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 15,
+        "established_positive": false,
+        "ev_per_share_usd": -0.1484,
+        "favorite_win_pct": 50.68,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 148,
+        "opportunities_per_day": 947.2,
+        "p_leadership_flips_at_least_once": 60.14,
+        "p_opposite_settles_GIVEN_a_flip": 52.81,
+        "p_opposite_settles_after_a_flip": 31.76,
+        "subsequent_flips_mean": 2.128,
+        "subsequent_flips_median": 1.0,
+        "win_minus_breakeven_pp": -14.84,
+        "win_pct_ci95_window_bootstrap": [
+          38.92,
+          71.13
+        ]
+      },
+      "70-80c": {
+        "avg_executable_ask": 0.7432,
+        "both_sides_ge_50c_observations": 3,
+        "breakeven_pct_taker_fees": 75.66,
+        "breakeven_pct_zero_fees": 74.32,
+        "ci_low_minus_breakeven_pp": -55.45,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 10,
+        "established_positive": false,
+        "ev_per_share_usd": -0.2282,
+        "favorite_win_pct": 52.83,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 106,
+        "opportunities_per_day": 1017.6,
+        "p_leadership_flips_at_least_once": 42.45,
+        "p_opposite_settles_GIVEN_a_flip": 51.11,
+        "p_opposite_settles_after_a_flip": 21.7,
+        "subsequent_flips_mean": 1.792,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -22.83,
+        "win_pct_ci95_window_bootstrap": [
+          20.21,
+          82.3
+        ]
+      },
+      "80-90c": {
+        "avg_executable_ask": 0.8403,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 84.97,
+        "breakeven_pct_zero_fees": 84.03,
+        "ci_low_minus_breakeven_pp": -54.86,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 12,
+        "established_positive": false,
+        "ev_per_share_usd": -0.229,
+        "favorite_win_pct": 62.07,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 87,
+        "opportunities_per_day": 696.0,
+        "p_leadership_flips_at_least_once": 14.94,
+        "p_opposite_settles_GIVEN_a_flip": 46.15,
+        "p_opposite_settles_after_a_flip": 6.9,
+        "subsequent_flips_mean": 0.563,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -22.9,
+        "win_pct_ci95_window_bootstrap": [
+          30.11,
+          93.0
+        ]
+      },
+      "90-95c": {
+        "avg_executable_ask": 0.9297,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 93.43,
+        "breakeven_pct_zero_fees": 92.97,
+        "ci_low_minus_breakeven_pp": -93.43,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 6,
+        "established_positive": false,
+        "ev_per_share_usd": -0.5914,
+        "favorite_win_pct": 34.29,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 35,
+        "opportunities_per_day": 560.0,
+        "p_leadership_flips_at_least_once": 2.86,
+        "p_opposite_settles_GIVEN_a_flip": 100.0,
+        "p_opposite_settles_after_a_flip": 2.86,
+        "subsequent_flips_mean": 0.2,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -59.14,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          83.72
+        ]
+      },
+      "95-99c": {
+        "avg_executable_ask": 0.9745,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 97.62,
+        "breakeven_pct_zero_fees": 97.45,
+        "ci_low_minus_breakeven_pp": -97.62,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 5,
+        "established_positive": false,
+        "ev_per_share_usd": -0.2747,
+        "favorite_win_pct": 70.15,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 67,
+        "opportunities_per_day": 1286.4,
+        "p_leadership_flips_at_least_once": 0.0,
+        "p_opposite_settles_GIVEN_a_flip": null,
+        "p_opposite_settles_after_a_flip": 0.0,
+        "subsequent_flips_mean": 0.0,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -27.47,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          96.32
+        ]
+      }
+    },
+    "by_checkpoint_all_buckets": {
+      "120s": {
+        "avg_executable_ask": 0.8261,
+        "both_sides_ge_50c_observations": 3,
+        "breakeven_pct_taker_fees": 83.61,
+        "breakeven_pct_zero_fees": 82.61,
+        "ci_low_minus_breakeven_pp": -83.61,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 4,
+        "established_positive": false,
+        "ev_per_share_usd": -0.5301,
+        "favorite_win_pct": 30.43,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 23,
+        "opportunities_per_day": 552.0,
+        "p_leadership_flips_at_least_once": 0.0,
+        "p_opposite_settles_GIVEN_a_flip": null,
+        "p_opposite_settles_after_a_flip": 0.0,
+        "subsequent_flips_mean": 0.0,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -53.18,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          77.78
+        ]
+      },
+      "180s": {
+        "avg_executable_ask": 0.7691,
+        "both_sides_ge_50c_observations": 8,
+        "breakeven_pct_taker_fees": 78.16,
+        "breakeven_pct_zero_fees": 76.91,
+        "ci_low_minus_breakeven_pp": -58.16,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 5,
+        "established_positive": false,
+        "ev_per_share_usd": -0.1513,
+        "favorite_win_pct": 62.86,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 35,
+        "opportunities_per_day": 672.0,
+        "p_leadership_flips_at_least_once": 45.71,
+        "p_opposite_settles_GIVEN_a_flip": 6.25,
+        "p_opposite_settles_after_a_flip": 2.86,
+        "subsequent_flips_mean": 0.829,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -15.3,
+        "win_pct_ci95_window_bootstrap": [
+          20.0,
+          97.3
+        ]
+      },
+      "240s": {
+        "avg_executable_ask": 0.7711,
+        "both_sides_ge_50c_observations": 6,
+        "breakeven_pct_taker_fees": 78.34,
+        "breakeven_pct_zero_fees": 77.11,
+        "ci_low_minus_breakeven_pp": -65.84,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 7,
+        "established_positive": false,
+        "ev_per_share_usd": -0.3498,
+        "favorite_win_pct": 43.24,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 37,
+        "opportunities_per_day": 507.4,
+        "p_leadership_flips_at_least_once": 37.84,
+        "p_opposite_settles_GIVEN_a_flip": 50.0,
+        "p_opposite_settles_after_a_flip": 18.92,
+        "subsequent_flips_mean": 0.919,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -35.1,
+        "win_pct_ci95_window_bootstrap": [
+          12.5,
+          80.0
+        ]
+      },
+      "300s": {
+        "avg_executable_ask": 0.7704,
+        "both_sides_ge_50c_observations": 6,
+        "breakeven_pct_taker_fees": 78.27,
+        "breakeven_pct_zero_fees": 77.04,
+        "ci_low_minus_breakeven_pp": -49.7,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 9,
+        "established_positive": false,
+        "ev_per_share_usd": -0.163,
+        "favorite_win_pct": 61.82,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 55,
+        "opportunities_per_day": 586.7,
+        "p_leadership_flips_at_least_once": 34.55,
+        "p_opposite_settles_GIVEN_a_flip": 21.05,
+        "p_opposite_settles_after_a_flip": 7.27,
+        "subsequent_flips_mean": 0.964,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -16.46,
+        "win_pct_ci95_window_bootstrap": [
+          28.57,
+          89.47
+        ]
+      },
+      "360s": {
+        "avg_executable_ask": 0.7822,
+        "both_sides_ge_50c_observations": 8,
+        "breakeven_pct_taker_fees": 79.41,
+        "breakeven_pct_zero_fees": 78.22,
+        "ci_low_minus_breakeven_pp": -54.79,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 9,
+        "established_positive": false,
+        "ev_per_share_usd": -0.2299,
+        "favorite_win_pct": 56.25,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 64,
+        "opportunities_per_day": 682.7,
+        "p_leadership_flips_at_least_once": 34.38,
+        "p_opposite_settles_GIVEN_a_flip": 40.91,
+        "p_opposite_settles_after_a_flip": 14.06,
+        "subsequent_flips_mean": 1.391,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -23.16,
+        "win_pct_ci95_window_bootstrap": [
+          24.62,
+          85.94
+        ]
+      },
+      "480s": {
+        "avg_executable_ask": 0.7647,
+        "both_sides_ge_50c_observations": 14,
+        "breakeven_pct_taker_fees": 77.73,
+        "breakeven_pct_zero_fees": 76.47,
+        "ci_low_minus_breakeven_pp": -46.58,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 11,
+        "established_positive": false,
+        "ev_per_share_usd": -0.2444,
+        "favorite_win_pct": 53.12,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 64,
+        "opportunities_per_day": 558.5,
+        "p_leadership_flips_at_least_once": 37.5,
+        "p_opposite_settles_GIVEN_a_flip": 58.33,
+        "p_opposite_settles_after_a_flip": 21.88,
+        "subsequent_flips_mean": 1.766,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -24.6,
+        "win_pct_ci95_window_bootstrap": [
+          31.15,
+          76.56
+        ]
+      },
+      "600s": {
+        "avg_executable_ask": 0.7268,
+        "both_sides_ge_50c_observations": 9,
+        "breakeven_pct_taker_fees": 74.07,
+        "breakeven_pct_zero_fees": 72.68,
+        "ci_low_minus_breakeven_pp": -31.96,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 12,
+        "established_positive": false,
+        "ev_per_share_usd": -0.0904,
+        "favorite_win_pct": 64.94,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 77,
+        "opportunities_per_day": 616.0,
+        "p_leadership_flips_at_least_once": 50.65,
+        "p_opposite_settles_GIVEN_a_flip": 48.72,
+        "p_opposite_settles_after_a_flip": 24.68,
+        "subsequent_flips_mean": 2.377,
+        "subsequent_flips_median": 1,
+        "win_minus_breakeven_pp": -9.13,
+        "win_pct_ci95_window_bootstrap": [
+          42.11,
+          85.0
+        ]
+      },
+      "60s": {
+        "avg_executable_ask": 0.95,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 95.33,
+        "breakeven_pct_zero_fees": 95.0,
+        "ci_low_minus_breakeven_pp": -95.33,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 3,
+        "established_positive": false,
+        "ev_per_share_usd": -0.5088,
+        "favorite_win_pct": 44.44,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 9,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 0.0,
+        "p_opposite_settles_GIVEN_a_flip": null,
+        "p_opposite_settles_after_a_flip": 0.0,
+        "subsequent_flips_mean": 0.0,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -50.89,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          100.0
+        ]
+      },
+      "720s": {
+        "avg_executable_ask": 0.7179,
+        "both_sides_ge_50c_observations": 10,
+        "breakeven_pct_taker_fees": 73.2,
+        "breakeven_pct_zero_fees": 71.79,
+        "ci_low_minus_breakeven_pp": -30.5,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 13,
+        "established_positive": false,
+        "ev_per_share_usd": -0.0527,
+        "favorite_win_pct": 67.86,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 84,
+        "opportunities_per_day": 620.3,
+        "p_leadership_flips_at_least_once": 52.38,
+        "p_opposite_settles_GIVEN_a_flip": 45.45,
+        "p_opposite_settles_after_a_flip": 23.81,
+        "subsequent_flips_mean": 2.5,
+        "subsequent_flips_median": 1.0,
+        "win_minus_breakeven_pp": -5.35,
+        "win_pct_ci95_window_bootstrap": [
+          42.7,
+          88.76
+        ]
+      },
+      "840s": {
+        "avg_executable_ask": 0.6406,
+        "both_sides_ge_50c_observations": 14,
+        "breakeven_pct_taker_fees": 65.67,
+        "breakeven_pct_zero_fees": 64.06,
+        "ci_low_minus_breakeven_pp": -33.49,
+        "depth_contracts": {
+          "recorded": false,
+          "why": "this duration's recorder preserved touch prices only"
+        },
+        "distinct_windows": 15,
+        "established_positive": false,
+        "ev_per_share_usd": -0.0945,
+        "favorite_win_pct": 56.18,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 89,
+        "opportunities_per_day": 569.6,
+        "p_leadership_flips_at_least_once": 55.06,
+        "p_opposite_settles_GIVEN_a_flip": 53.06,
+        "p_opposite_settles_after_a_flip": 29.21,
+        "subsequent_flips_mean": 2.798,
+        "subsequent_flips_median": 1,
+        "win_minus_breakeven_pp": -9.49,
+        "win_pct_ci95_window_bootstrap": [
+          32.18,
+          80.22
+        ]
+      }
+    },
+    "matrix": {
+      "120s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.575,
+          "both_sides_ge_50c_observations": 2,
+          "breakeven_pct_taker_fees": 59.21,
+          "breakeven_pct_zero_fees": 57.5,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5921,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 192.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -59.21,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.68,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 69.52,
+          "breakeven_pct_zero_fees": 68.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.6952,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 7,
+          "opportunities_per_day": 672.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -69.52,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.71,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 72.44,
+          "breakeven_pct_zero_fees": 71.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7244,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 192.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -72.44,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "80-90c": {
+          "observations": 0
+        },
+        "90-95c": {
+          "observations": 0
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9725,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.44,
+          "breakeven_pct_zero_fees": 97.25,
+          "ci_low_minus_breakeven_pp": -97.44,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.391,
+          "favorite_win_pct": 58.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 12,
+          "opportunities_per_day": 384.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -39.1,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        }
+      },
+      "180s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.575,
+          "both_sides_ge_50c_observations": 6,
+          "breakeven_pct_taker_fees": 59.21,
+          "breakeven_pct_zero_fees": 57.5,
+          "ci_low_minus_breakeven_pp": -9.21,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": 0.2412,
+          "favorite_win_pct": 83.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 16.67,
+          "p_opposite_settles_after_a_flip": 16.67,
+          "subsequent_flips_mean": 1.167,
+          "subsequent_flips_median": 1.0,
+          "win_minus_breakeven_pp": 24.12,
+          "win_pct_ci95_window_bootstrap": [
+            50.0,
+            100.0
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6422,
+          "both_sides_ge_50c_observations": 2,
+          "breakeven_pct_taker_fees": 65.83,
+          "breakeven_pct_zero_fees": 64.22,
+          "ci_low_minus_breakeven_pp": -65.83,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": 0.1195,
+          "favorite_win_pct": 77.78,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 9,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 77.78,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 1.444,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": 11.95,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.728,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 74.19,
+          "breakeven_pct_zero_fees": 72.8,
+          "ci_low_minus_breakeven_pp": -74.19,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1418,
+          "favorite_win_pct": 60.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 5,
+          "opportunities_per_day": 240.0,
+          "p_leadership_flips_at_least_once": 60.0,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 1.8,
+          "subsequent_flips_median": 3,
+          "win_minus_breakeven_pp": -14.19,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.84,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 84.94,
+          "breakeven_pct_zero_fees": 84.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.8494,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 4,
+          "opportunities_per_day": 384.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -84.94,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.93,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 93.46,
+          "breakeven_pct_zero_fees": 93.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9346,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 1,
+          "opportunities_per_day": 96.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -93.46,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.976,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.76,
+          "breakeven_pct_zero_fees": 97.6,
+          "ci_low_minus_breakeven_pp": -97.76,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.2776,
+          "favorite_win_pct": 70.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 10,
+          "opportunities_per_day": 480.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -27.76,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        }
+      },
+      "240s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.5767,
+          "both_sides_ge_50c_observations": 3,
+          "breakeven_pct_taker_fees": 59.38,
+          "breakeven_pct_zero_fees": 57.67,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": 0.4063,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 3.0,
+          "subsequent_flips_median": 3,
+          "win_minus_breakeven_pp": 40.62,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.661,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 67.67,
+          "breakeven_pct_zero_fees": 66.1,
+          "ci_low_minus_breakeven_pp": -53.38,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3766,
+          "favorite_win_pct": 30.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 10,
+          "opportunities_per_day": 320.0,
+          "p_leadership_flips_at_least_once": 90.0,
+          "p_opposite_settles_GIVEN_a_flip": 77.78,
+          "p_opposite_settles_after_a_flip": 70.0,
+          "subsequent_flips_mean": 1.9,
+          "subsequent_flips_median": 2.0,
+          "win_minus_breakeven_pp": -37.67,
+          "win_pct_ci95_window_bootstrap": [
+            14.29,
+            100.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7267,
+          "both_sides_ge_50c_observations": 2,
+          "breakeven_pct_taker_fees": 74.06,
+          "breakeven_pct_zero_fees": 72.67,
+          "ci_low_minus_breakeven_pp": -74.06,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5183,
+          "favorite_win_pct": 22.22,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 9,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 22.22,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.667,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -51.83,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.8429,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 85.21,
+          "breakeven_pct_zero_fees": 84.29,
+          "ci_low_minus_breakeven_pp": -85.21,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5663,
+          "favorite_win_pct": 28.57,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 7,
+          "opportunities_per_day": 224.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -56.64,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.935,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 93.93,
+          "breakeven_pct_zero_fees": 93.5,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9393,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 192.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -93.93,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.98,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 98.14,
+          "breakeven_pct_zero_fees": 98.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": 0.0186,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 576.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": 1.86,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        }
+      },
+      "300s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.57,
+          "both_sides_ge_50c_observations": 6,
+          "breakeven_pct_taker_fees": 58.72,
+          "breakeven_pct_zero_fees": 57.0,
+          "ci_low_minus_breakeven_pp": -25.39,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.0871,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 50.0,
+          "subsequent_flips_mean": 2.333,
+          "subsequent_flips_median": 2.0,
+          "win_minus_breakeven_pp": -8.72,
+          "win_pct_ci95_window_bootstrap": [
+            33.33,
+            66.67
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6338,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.0,
+          "breakeven_pct_zero_fees": 63.38,
+          "ci_low_minus_breakeven_pp": -49.21,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.025,
+          "favorite_win_pct": 62.5,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 16,
+          "opportunities_per_day": 384.0,
+          "p_leadership_flips_at_least_once": 43.75,
+          "p_opposite_settles_GIVEN_a_flip": 14.29,
+          "p_opposite_settles_after_a_flip": 6.25,
+          "subsequent_flips_mean": 1.312,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -2.5,
+          "win_pct_ci95_window_bootstrap": [
+            15.79,
+            100.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7577,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 77.05,
+          "breakeven_pct_zero_fees": 75.77,
+          "ci_low_minus_breakeven_pp": -77.05,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": 0.0756,
+          "favorite_win_pct": 84.62,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 13,
+          "opportunities_per_day": 416.0,
+          "p_leadership_flips_at_least_once": 46.15,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 1.385,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": 7.56,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.81,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 82.08,
+          "breakeven_pct_zero_fees": 81.0,
+          "ci_low_minus_breakeven_pp": -82.08,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3208,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 96.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -32.08,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.9386,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 94.26,
+          "breakeven_pct_zero_fees": 93.86,
+          "ci_low_minus_breakeven_pp": -94.26,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7997,
+          "favorite_win_pct": 14.29,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 7,
+          "opportunities_per_day": 336.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -79.98,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9791,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 98.05,
+          "breakeven_pct_zero_fees": 97.91,
+          "ci_low_minus_breakeven_pp": -98.05,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.2533,
+          "favorite_win_pct": 72.73,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 11,
+          "opportunities_per_day": 528.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -25.33,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        }
+      },
+      "360s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.5737,
+          "both_sides_ge_50c_observations": 8,
+          "breakeven_pct_taker_fees": 59.09,
+          "breakeven_pct_zero_fees": 57.38,
+          "ci_low_minus_breakeven_pp": -59.09,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": 0.0341,
+          "favorite_win_pct": 62.5,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 8,
+          "opportunities_per_day": 256.0,
+          "p_leadership_flips_at_least_once": 87.5,
+          "p_opposite_settles_GIVEN_a_flip": 28.57,
+          "p_opposite_settles_after_a_flip": 25.0,
+          "subsequent_flips_mean": 3.75,
+          "subsequent_flips_median": 4.5,
+          "win_minus_breakeven_pp": 3.41,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6422,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.83,
+          "breakeven_pct_zero_fees": 64.22,
+          "ci_low_minus_breakeven_pp": -65.83,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.2694,
+          "favorite_win_pct": 38.89,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 18,
+          "opportunities_per_day": 432.0,
+          "p_leadership_flips_at_least_once": 50.0,
+          "p_opposite_settles_GIVEN_a_flip": 77.78,
+          "p_opposite_settles_after_a_flip": 38.89,
+          "subsequent_flips_mean": 2.278,
+          "subsequent_flips_median": 1.5,
+          "win_minus_breakeven_pp": -26.94,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            78.95
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7311,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 74.49,
+          "breakeven_pct_zero_fees": 73.11,
+          "ci_low_minus_breakeven_pp": -74.49,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": 0.033,
+          "favorite_win_pct": 77.78,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 9,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 66.67,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 2.0,
+          "subsequent_flips_median": 3,
+          "win_minus_breakeven_pp": 3.29,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.8467,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 85.58,
+          "breakeven_pct_zero_fees": 84.67,
+          "ci_low_minus_breakeven_pp": -85.58,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5224,
+          "favorite_win_pct": 33.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 3,
+          "opportunities_per_day": 144.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -52.24,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.93,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 93.46,
+          "breakeven_pct_zero_fees": 93.0,
+          "ci_low_minus_breakeven_pp": -93.46,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3192,
+          "favorite_win_pct": 61.54,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 13,
+          "opportunities_per_day": 624.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -31.92,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9769,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.85,
+          "breakeven_pct_zero_fees": 97.69,
+          "ci_low_minus_breakeven_pp": -97.85,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3631,
+          "favorite_win_pct": 61.54,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 13,
+          "opportunities_per_day": 624.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -36.31,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        }
+      },
+      "480s": {
+        "50-55c": {
+          "avg_executable_ask": 0.54,
+          "both_sides_ge_50c_observations": 2,
+          "breakeven_pct_taker_fees": 55.74,
+          "breakeven_pct_zero_fees": 54.0,
+          "ci_low_minus_breakeven_pp": 44.26,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": true,
+          "ev_per_share_usd": 0.4426,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 96.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 3.0,
+          "subsequent_flips_median": 3.0,
+          "win_minus_breakeven_pp": 44.26,
+          "win_pct_ci95_window_bootstrap": [
+            100.0,
+            100.0
+          ]
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.5767,
+          "both_sides_ge_50c_observations": 11,
+          "breakeven_pct_taker_fees": 59.38,
+          "breakeven_pct_zero_fees": 57.67,
+          "ci_low_minus_breakeven_pp": -29.38,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.0104,
+          "favorite_win_pct": 58.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 12,
+          "opportunities_per_day": 230.4,
+          "p_leadership_flips_at_least_once": 75.0,
+          "p_opposite_settles_GIVEN_a_flip": 44.44,
+          "p_opposite_settles_after_a_flip": 33.33,
+          "subsequent_flips_mean": 4.167,
+          "subsequent_flips_median": 5.5,
+          "win_minus_breakeven_pp": -1.04,
+          "win_pct_ci95_window_bootstrap": [
+            30.0,
+            81.25
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6264,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 64.27,
+          "breakeven_pct_zero_fees": 62.64,
+          "ci_low_minus_breakeven_pp": -55.94,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.37,
+          "favorite_win_pct": 27.27,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 11,
+          "opportunities_per_day": 264.0,
+          "p_leadership_flips_at_least_once": 81.82,
+          "p_opposite_settles_GIVEN_a_flip": 66.67,
+          "p_opposite_settles_after_a_flip": 54.55,
+          "subsequent_flips_mean": 4.273,
+          "subsequent_flips_median": 6,
+          "win_minus_breakeven_pp": -37.0,
+          "win_pct_ci95_window_bootstrap": [
+            8.33,
+            44.44
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7314,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 74.52,
+          "breakeven_pct_zero_fees": 73.14,
+          "ci_low_minus_breakeven_pp": -74.52,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3166,
+          "favorite_win_pct": 42.86,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 7,
+          "opportunities_per_day": 168.0,
+          "p_leadership_flips_at_least_once": 57.14,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 57.14,
+          "subsequent_flips_mean": 1.429,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": -31.66,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.8593,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 86.78,
+          "breakeven_pct_zero_fees": 85.93,
+          "ci_low_minus_breakeven_pp": -79.09,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.2677,
+          "favorite_win_pct": 60.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 15,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -26.78,
+          "win_pct_ci95_window_bootstrap": [
+            7.69,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.9188,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 92.4,
+          "breakeven_pct_zero_fees": 91.88,
+          "ci_low_minus_breakeven_pp": -92.4,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.549,
+          "favorite_win_pct": 37.5,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 8,
+          "opportunities_per_day": 256.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -54.9,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9656,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 96.79,
+          "breakeven_pct_zero_fees": 96.56,
+          "ci_low_minus_breakeven_pp": -96.79,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1901,
+          "favorite_win_pct": 77.78,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 9,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -19.01,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        }
+      },
+      "600s": {
+        "50-55c": {
+          "avg_executable_ask": 0.54,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 55.74,
+          "breakeven_pct_zero_fees": 54.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5574,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 1,
+          "opportunities_per_day": 96.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -55.74,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.5792,
+          "both_sides_ge_50c_observations": 7,
+          "breakeven_pct_taker_fees": 59.63,
+          "breakeven_pct_zero_fees": 57.92,
+          "ci_low_minus_breakeven_pp": -39.63,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": 0.096,
+          "favorite_win_pct": 69.23,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 13,
+          "opportunities_per_day": 312.0,
+          "p_leadership_flips_at_least_once": 76.92,
+          "p_opposite_settles_GIVEN_a_flip": 40.0,
+          "p_opposite_settles_after_a_flip": 30.77,
+          "subsequent_flips_mean": 4.231,
+          "subsequent_flips_median": 7,
+          "win_minus_breakeven_pp": 9.6,
+          "win_pct_ci95_window_bootstrap": [
+            20.0,
+            100.0
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6229,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 63.94,
+          "breakeven_pct_zero_fees": 62.29,
+          "ci_low_minus_breakeven_pp": -33.17,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": 0.0077,
+          "favorite_win_pct": 64.71,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 17,
+          "opportunities_per_day": 272.0,
+          "p_leadership_flips_at_least_once": 88.24,
+          "p_opposite_settles_GIVEN_a_flip": 40.0,
+          "p_opposite_settles_after_a_flip": 35.29,
+          "subsequent_flips_mean": 3.353,
+          "subsequent_flips_median": 3,
+          "win_minus_breakeven_pp": 0.77,
+          "win_pct_ci95_window_bootstrap": [
+            30.77,
+            86.67
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.745,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 75.83,
+          "breakeven_pct_zero_fees": 74.5,
+          "ci_low_minus_breakeven_pp": -64.72,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.0082,
+          "favorite_win_pct": 75.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 16,
+          "opportunities_per_day": 307.2,
+          "p_leadership_flips_at_least_once": 25.0,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 25.0,
+          "subsequent_flips_mean": 1.938,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -0.83,
+          "win_pct_ci95_window_bootstrap": [
+            11.11,
+            100.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.8404,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 84.97,
+          "breakeven_pct_zero_fees": 84.04,
+          "ci_low_minus_breakeven_pp": -59.04,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.2069,
+          "favorite_win_pct": 64.29,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 28,
+          "opportunities_per_day": 384.0,
+          "p_leadership_flips_at_least_once": 32.14,
+          "p_opposite_settles_GIVEN_a_flip": 44.44,
+          "p_opposite_settles_after_a_flip": 14.29,
+          "subsequent_flips_mean": 1.179,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -20.69,
+          "win_pct_ci95_window_bootstrap": [
+            25.93,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.925,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 92.99,
+          "breakeven_pct_zero_fees": 92.5,
+          "ci_low_minus_breakeven_pp": -92.99,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9299,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 96.0,
+          "p_leadership_flips_at_least_once": 50.0,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 50.0,
+          "subsequent_flips_mean": 3.5,
+          "subsequent_flips_median": 3.5,
+          "win_minus_breakeven_pp": -92.99,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "95-99c": {
+          "observations": 0
+        }
+      },
+      "60s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "observations": 0
+        },
+        "70-80c": {
+          "observations": 0
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.85,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 85.89,
+          "breakeven_pct_zero_fees": 85.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.8589,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 1,
+          "opportunities_per_day": 96.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -85.89,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.94,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 94.39,
+          "breakeven_pct_zero_fees": 94.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9439,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 192.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -94.39,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.97,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.2,
+          "breakeven_pct_zero_fees": 97.0,
+          "ci_low_minus_breakeven_pp": -97.2,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3054,
+          "favorite_win_pct": 66.67,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -30.54,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        }
+      },
+      "720s": {
+        "50-55c": {
+          "avg_executable_ask": 0.54,
+          "both_sides_ge_50c_observations": 4,
+          "breakeven_pct_taker_fees": 55.74,
+          "breakeven_pct_zero_fees": 54.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": 0.3176,
+          "favorite_win_pct": 87.5,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 8,
+          "opportunities_per_day": 768.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 12.5,
+          "p_opposite_settles_after_a_flip": 12.5,
+          "subsequent_flips_mean": 9.0,
+          "subsequent_flips_median": 9.0,
+          "win_minus_breakeven_pp": 31.76,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.57,
+          "both_sides_ge_50c_observations": 6,
+          "breakeven_pct_taker_fees": 58.72,
+          "breakeven_pct_zero_fees": 57.0,
+          "ci_low_minus_breakeven_pp": -58.72,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": 0.2462,
+          "favorite_win_pct": 83.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 192.0,
+          "p_leadership_flips_at_least_once": 83.33,
+          "p_opposite_settles_GIVEN_a_flip": 20.0,
+          "p_opposite_settles_after_a_flip": 16.67,
+          "subsequent_flips_mean": 6.167,
+          "subsequent_flips_median": 9.0,
+          "win_minus_breakeven_pp": 24.62,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6425,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.86,
+          "breakeven_pct_zero_fees": 64.25,
+          "ci_low_minus_breakeven_pp": -45.86,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1085,
+          "favorite_win_pct": 55.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 20,
+          "opportunities_per_day": 384.0,
+          "p_leadership_flips_at_least_once": 75.0,
+          "p_opposite_settles_GIVEN_a_flip": 60.0,
+          "p_opposite_settles_after_a_flip": 45.0,
+          "subsequent_flips_mean": 2.0,
+          "subsequent_flips_median": 1.5,
+          "win_minus_breakeven_pp": -10.86,
+          "win_pct_ci95_window_bootstrap": [
+            20.0,
+            86.96
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7517,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 76.48,
+          "breakeven_pct_zero_fees": 75.17,
+          "ci_low_minus_breakeven_pp": -71.93,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.2865,
+          "favorite_win_pct": 47.83,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 23,
+          "opportunities_per_day": 368.0,
+          "p_leadership_flips_at_least_once": 52.17,
+          "p_opposite_settles_GIVEN_a_flip": 58.33,
+          "p_opposite_settles_after_a_flip": 30.43,
+          "subsequent_flips_mean": 1.957,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": -28.65,
+          "win_pct_ci95_window_bootstrap": [
+            4.55,
+            87.5
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.8304,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 84.02,
+          "breakeven_pct_zero_fees": 83.04,
+          "ci_low_minus_breakeven_pp": -34.02,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": 0.0117,
+          "favorite_win_pct": 85.19,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 27,
+          "opportunities_per_day": 370.3,
+          "p_leadership_flips_at_least_once": 14.81,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 7.41,
+          "subsequent_flips_mean": 0.593,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": 1.16,
+          "win_pct_ci95_window_bootstrap": [
+            50.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "observations": 0
+        },
+        "95-99c": {
+          "observations": 0
+        }
+      },
+      "840s": {
+        "50-55c": {
+          "avg_executable_ask": 0.535,
+          "both_sides_ge_50c_observations": 3,
+          "breakeven_pct_taker_fees": 55.24,
+          "breakeven_pct_zero_fees": 53.5,
+          "ci_low_minus_breakeven_pp": -21.91,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.0524,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 4,
+          "opportunities_per_day": 192.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 50.0,
+          "subsequent_flips_mean": 8.75,
+          "subsequent_flips_median": 10.0,
+          "win_minus_breakeven_pp": -5.24,
+          "win_pct_ci95_window_bootstrap": [
+            33.33,
+            100.0
+          ]
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.5674,
+          "both_sides_ge_50c_observations": 11,
+          "breakeven_pct_taker_fees": 58.46,
+          "breakeven_pct_zero_fees": 56.74,
+          "ci_low_minus_breakeven_pp": -15.6,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 9,
+          "established_positive": false,
+          "ev_per_share_usd": 0.198,
+          "favorite_win_pct": 78.26,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 23,
+          "opportunities_per_day": 245.3,
+          "p_leadership_flips_at_least_once": 82.61,
+          "p_opposite_settles_GIVEN_a_flip": 26.32,
+          "p_opposite_settles_after_a_flip": 21.74,
+          "subsequent_flips_mean": 3.652,
+          "subsequent_flips_median": 2,
+          "win_minus_breakeven_pp": 19.8,
+          "win_pct_ci95_window_bootstrap": [
+            42.86,
+            100.0
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.635,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.12,
+          "breakeven_pct_zero_fees": 63.5,
+          "ci_low_minus_breakeven_pp": -39.54,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 10,
+          "established_positive": false,
+          "ev_per_share_usd": -0.0762,
+          "favorite_win_pct": 57.5,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 40,
+          "opportunities_per_day": 384.0,
+          "p_leadership_flips_at_least_once": 45.0,
+          "p_opposite_settles_GIVEN_a_flip": 61.11,
+          "p_opposite_settles_after_a_flip": 27.5,
+          "subsequent_flips_mean": 1.925,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -7.62,
+          "win_pct_ci95_window_bootstrap": [
+            25.58,
+            88.89
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7464,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 75.96,
+          "breakeven_pct_zero_fees": 74.64,
+          "ci_low_minus_breakeven_pp": -75.96,
+          "depth_contracts": {
+            "recorded": false,
+            "why": "this duration's recorder preserved touch prices only"
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.4414,
+          "favorite_win_pct": 31.82,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 22,
+          "opportunities_per_day": 422.4,
+          "p_leadership_flips_at_least_once": 36.36,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 36.36,
+          "subsequent_flips_mean": 2.409,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -44.14,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            93.33
+          ]
+        },
+        "80-90c": {
+          "observations": 0
+        },
+        "90-95c": {
+          "observations": 0
+        },
+        "95-99c": {
+          "observations": 0
+        }
+      }
+    },
+    "observations": 537,
+    "pooled_favorite": {
+      "avg_executable_ask": 0.7405,
+      "both_sides_ge_50c_observations": 78,
+      "breakeven_pct_taker_fees": 75.39,
+      "breakeven_pct_zero_fees": 74.05,
+      "ci_low_minus_breakeven_pp": -37.68,
+      "depth_contracts": {
+        "recorded": false,
+        "why": "this duration's recorder preserved touch prices only"
+      },
+      "distinct_windows": 15,
+      "established_positive": false,
+      "ev_per_share_usd": -0.1753,
+      "favorite_win_pct": 57.73,
+      "leadership_gaps_after_mean": 0.0,
+      "observations": 537,
+      "opportunities_per_day": 3436.8,
+      "p_leadership_flips_at_least_once": 42.27,
+      "p_opposite_settles_GIVEN_a_flip": 44.05,
+      "p_opposite_settles_after_a_flip": 18.62,
+      "subsequent_flips_mean": 1.788,
+      "subsequent_flips_median": 0,
+      "win_minus_breakeven_pp": -17.67,
+      "win_pct_ci95_window_bootstrap": [
+        37.71,
+        77.59
+      ]
+    },
+    "pooled_unconditional": {
+      "ci95_window_bootstrap": [
+        37.9,
+        78.41
+      ],
+      "current_leader_wins_pct": 58.29,
+      "distinct_windows": 15,
+      "favorite_executable_observations": 537,
+      "leader_basis": {
+        "MID": 537
+      },
+      "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+      "observations": 537,
+      "p_leadership_flips_at_least_once": 42.27,
+      "subsequent_flips_mean": 1.788
+    },
+    "recorded_checkpoints": [
+      840.0,
+      720.0,
+      600.0,
+      480.0,
+      360.0,
+      300.0,
+      240.0,
+      180.0,
+      120.0,
+      60.0
+    ],
+    "requested_checkpoints_not_collected": [],
+    "unconditional_by_checkpoint": {
+      "120s": {
+        "ci95_window_bootstrap": [
+          0.0,
+          77.78
+        ],
+        "current_leader_wins_pct": 30.43,
+        "distinct_windows": 4,
+        "favorite_executable_observations": 23,
+        "leader_basis": {
+          "MID": 23
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 23,
+        "p_leadership_flips_at_least_once": 0.0,
+        "subsequent_flips_mean": 0.0
+      },
+      "180s": {
+        "ci95_window_bootstrap": [
+          20.0,
+          97.3
+        ],
+        "current_leader_wins_pct": 62.86,
+        "distinct_windows": 5,
+        "favorite_executable_observations": 35,
+        "leader_basis": {
+          "MID": 35
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 35,
+        "p_leadership_flips_at_least_once": 45.71,
+        "subsequent_flips_mean": 0.829
+      },
+      "240s": {
+        "ci95_window_bootstrap": [
+          12.5,
+          84.62
+        ],
+        "current_leader_wins_pct": 45.95,
+        "distinct_windows": 7,
+        "favorite_executable_observations": 37,
+        "leader_basis": {
+          "MID": 37
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 37,
+        "p_leadership_flips_at_least_once": 37.84,
+        "subsequent_flips_mean": 0.919
+      },
+      "300s": {
+        "ci95_window_bootstrap": [
+          28.57,
+          89.47
+        ],
+        "current_leader_wins_pct": 61.82,
+        "distinct_windows": 9,
+        "favorite_executable_observations": 55,
+        "leader_basis": {
+          "MID": 55
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 55,
+        "p_leadership_flips_at_least_once": 34.55,
+        "subsequent_flips_mean": 0.964
+      },
+      "360s": {
+        "ci95_window_bootstrap": [
+          24.62,
+          85.94
+        ],
+        "current_leader_wins_pct": 56.25,
+        "distinct_windows": 9,
+        "favorite_executable_observations": 64,
+        "leader_basis": {
+          "MID": 64
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 64,
+        "p_leadership_flips_at_least_once": 34.38,
+        "subsequent_flips_mean": 1.391
+      },
+      "480s": {
+        "ci95_window_bootstrap": [
+          28.79,
+          75.76
+        ],
+        "current_leader_wins_pct": 51.56,
+        "distinct_windows": 11,
+        "favorite_executable_observations": 64,
+        "leader_basis": {
+          "MID": 64
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 64,
+        "p_leadership_flips_at_least_once": 37.5,
+        "subsequent_flips_mean": 1.766
+      },
+      "600s": {
+        "ci95_window_bootstrap": [
+          43.66,
+          86.25
+        ],
+        "current_leader_wins_pct": 66.23,
+        "distinct_windows": 12,
+        "favorite_executable_observations": 77,
+        "leader_basis": {
+          "MID": 77
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 77,
+        "p_leadership_flips_at_least_once": 50.65,
+        "subsequent_flips_mean": 2.377
+      },
+      "60s": {
+        "ci95_window_bootstrap": [
+          0.0,
+          100.0
+        ],
+        "current_leader_wins_pct": 44.44,
+        "distinct_windows": 3,
+        "favorite_executable_observations": 9,
+        "leader_basis": {
+          "MID": 9
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 9,
+        "p_leadership_flips_at_least_once": 0.0,
+        "subsequent_flips_mean": 0.0
+      },
+      "720s": {
+        "ci95_window_bootstrap": [
+          43.68,
+          90.0
+        ],
+        "current_leader_wins_pct": 69.05,
+        "distinct_windows": 13,
+        "favorite_executable_observations": 84,
+        "leader_basis": {
+          "MID": 84
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 84,
+        "p_leadership_flips_at_least_once": 52.38,
+        "subsequent_flips_mean": 2.5
+      },
+      "840s": {
+        "ci95_window_bootstrap": [
+          34.09,
+          80.0
+        ],
+        "current_leader_wins_pct": 57.3,
+        "distinct_windows": 15,
+        "favorite_executable_observations": 89,
+        "leader_basis": {
+          "MID": 89
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 89,
+        "p_leadership_flips_at_least_once": 55.06,
+        "subsequent_flips_mean": 2.798
+      }
+    },
+    "windows": 15
+  },
+  "BTC5M": {
+    "by_bucket_all_checkpoints": {
+      "50-55c": {
+        "avg_executable_ask": 0.5079,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 52.54,
+        "breakeven_pct_zero_fees": 50.79,
+        "ci_low_minus_breakeven_pp": -52.54,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 8.95,
+          "max": 4004.4,
+          "median": 17.6,
+          "p10": 2.0,
+          "recorded": true
+        },
+        "distinct_windows": 13,
+        "established_positive": false,
+        "ev_per_share_usd": -0.41,
+        "favorite_win_pct": 11.54,
+        "leadership_gaps_after_mean": 0.52,
+        "observations": 52,
+        "opportunities_per_day": 1152.0,
+        "p_leadership_flips_at_least_once": 7.69,
+        "p_opposite_settles_GIVEN_a_flip": 100.0,
+        "p_opposite_settles_after_a_flip": 7.69,
+        "subsequent_flips_mean": 0.096,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -41.0,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          34.04
+        ]
+      },
+      "55-60c": {
+        "avg_executable_ask": 0.565,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 58.22,
+        "breakeven_pct_zero_fees": 56.5,
+        "ci_low_minus_breakeven_pp": -58.22,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 6.21,
+          "max": 11.0,
+          "median": 11.0,
+          "p10": 11.0,
+          "recorded": true
+        },
+        "distinct_windows": 2,
+        "established_positive": false,
+        "ev_per_share_usd": -0.0822,
+        "favorite_win_pct": 50.0,
+        "leadership_gaps_after_mean": 3.5,
+        "observations": 2,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 0.0,
+        "p_opposite_settles_GIVEN_a_flip": null,
+        "p_opposite_settles_after_a_flip": 0.0,
+        "subsequent_flips_mean": 0.0,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -8.22,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          100.0
+        ]
+      },
+      "60-70c": {
+        "avg_executable_ask": 0.648,
+        "both_sides_ge_50c_observations": 8,
+        "breakeven_pct_taker_fees": 66.4,
+        "breakeven_pct_zero_fees": 64.8,
+        "ci_low_minus_breakeven_pp": -62.7,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 10.37,
+          "max": 5579.5,
+          "median": 16.0,
+          "p10": 12.0,
+          "recorded": true
+        },
+        "distinct_windows": 14,
+        "established_positive": false,
+        "ev_per_share_usd": -0.5306,
+        "favorite_win_pct": 13.33,
+        "leadership_gaps_after_mean": 1.2,
+        "observations": 45,
+        "opportunities_per_day": 925.7,
+        "p_leadership_flips_at_least_once": 20.0,
+        "p_opposite_settles_GIVEN_a_flip": 66.67,
+        "p_opposite_settles_after_a_flip": 13.33,
+        "subsequent_flips_mean": 0.378,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -53.06,
+        "win_pct_ci95_window_bootstrap": [
+          3.7,
+          32.26
+        ]
+      },
+      "70-80c": {
+        "avg_executable_ask": 0.771,
+        "both_sides_ge_50c_observations": 13,
+        "breakeven_pct_taker_fees": 78.33,
+        "breakeven_pct_zero_fees": 77.1,
+        "ci_low_minus_breakeven_pp": -73.33,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 16.96,
+          "max": 714.0,
+          "median": 22.0,
+          "p10": 21.0,
+          "recorded": true
+        },
+        "distinct_windows": 13,
+        "established_positive": false,
+        "ev_per_share_usd": -0.5898,
+        "favorite_win_pct": 19.35,
+        "leadership_gaps_after_mean": 3.26,
+        "observations": 31,
+        "opportunities_per_day": 686.8,
+        "p_leadership_flips_at_least_once": 32.26,
+        "p_opposite_settles_GIVEN_a_flip": 50.0,
+        "p_opposite_settles_after_a_flip": 16.13,
+        "subsequent_flips_mean": 0.452,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -58.98,
+        "win_pct_ci95_window_bootstrap": [
+          5.0,
+          50.0
+        ]
+      },
+      "80-90c": {
+        "avg_executable_ask": 0.846,
+        "both_sides_ge_50c_observations": 15,
+        "breakeven_pct_taker_fees": 85.51,
+        "breakeven_pct_zero_fees": 84.6,
+        "ci_low_minus_breakeven_pp": -48.22,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 21.15,
+          "max": 1363.0,
+          "median": 25.0,
+          "p10": 25.0,
+          "recorded": true
+        },
+        "distinct_windows": 31,
+        "established_positive": false,
+        "ev_per_share_usd": -0.2805,
+        "favorite_win_pct": 57.45,
+        "leadership_gaps_after_mean": 3.72,
+        "observations": 47,
+        "opportunities_per_day": 436.6,
+        "p_leadership_flips_at_least_once": 34.04,
+        "p_opposite_settles_GIVEN_a_flip": 43.75,
+        "p_opposite_settles_after_a_flip": 14.89,
+        "subsequent_flips_mean": 0.383,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -28.06,
+        "win_pct_ci95_window_bootstrap": [
+          37.29,
+          78.18
+        ]
+      },
+      "90-95c": {
+        "avg_executable_ask": 0.9224,
+        "both_sides_ge_50c_observations": 4,
+        "breakeven_pct_taker_fees": 92.74,
+        "breakeven_pct_zero_fees": 92.24,
+        "ci_low_minus_breakeven_pp": -64.44,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 53.5,
+          "max": 2500.0,
+          "median": 58.0,
+          "p10": 0.6,
+          "recorded": true
+        },
+        "distinct_windows": 26,
+        "established_positive": false,
+        "ev_per_share_usd": -0.4274,
+        "favorite_win_pct": 50.0,
+        "leadership_gaps_after_mean": 2.66,
+        "observations": 50,
+        "opportunities_per_day": 553.8,
+        "p_leadership_flips_at_least_once": 20.0,
+        "p_opposite_settles_GIVEN_a_flip": 20.0,
+        "p_opposite_settles_after_a_flip": 4.0,
+        "subsequent_flips_mean": 0.28,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -42.74,
+        "win_pct_ci95_window_bootstrap": [
+          28.3,
+          78.57
+        ]
+      },
+      "95-99c": {
+        "avg_executable_ask": 0.9713,
+        "both_sides_ge_50c_observations": 3,
+        "breakeven_pct_taker_fees": 97.33,
+        "breakeven_pct_zero_fees": 97.13,
+        "ci_low_minus_breakeven_pp": -80.95,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 191.35,
+          "max": 7500.0,
+          "median": 197.0,
+          "p10": 143.0,
+          "recorded": true
+        },
+        "distinct_windows": 35,
+        "established_positive": false,
+        "ev_per_share_usd": -0.7066,
+        "favorite_win_pct": 26.67,
+        "leadership_gaps_after_mean": 2.03,
+        "observations": 75,
+        "opportunities_per_day": 617.1,
+        "p_leadership_flips_at_least_once": 18.67,
+        "p_opposite_settles_GIVEN_a_flip": 50.0,
+        "p_opposite_settles_after_a_flip": 9.33,
+        "subsequent_flips_mean": 0.267,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -70.66,
+        "win_pct_ci95_window_bootstrap": [
+          16.38,
+          42.62
+        ]
+      }
+    },
+    "by_checkpoint_all_buckets": {
+      "10s": {
+        "avg_executable_ask": 0.7582,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 77.1,
+        "breakeven_pct_zero_fees": 75.82,
+        "ci_low_minus_breakeven_pp": -77.1,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 40.94,
+          "max": 5579.5,
+          "median": 54.0,
+          "p10": 6.0,
+          "recorded": true
+        },
+        "distinct_windows": 28,
+        "established_positive": false,
+        "ev_per_share_usd": -0.6972,
+        "favorite_win_pct": 7.14,
+        "leadership_gaps_after_mean": 0.54,
+        "observations": 28,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 3.57,
+        "p_opposite_settles_GIVEN_a_flip": 100.0,
+        "p_opposite_settles_after_a_flip": 3.57,
+        "subsequent_flips_mean": 0.036,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -69.96,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          17.86
+        ]
+      },
+      "120s": {
+        "avg_executable_ask": 0.8617,
+        "both_sides_ge_50c_observations": 21,
+        "breakeven_pct_taker_fees": 87.01,
+        "breakeven_pct_zero_fees": 86.17,
+        "ci_low_minus_breakeven_pp": -28.39,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 37.48,
+          "max": 14999.0,
+          "median": 43.5,
+          "p10": 25.0,
+          "recorded": true
+        },
+        "distinct_windows": 58,
+        "established_positive": false,
+        "ev_per_share_usd": -0.1624,
+        "favorite_win_pct": 70.69,
+        "leadership_gaps_after_mean": 4.57,
+        "observations": 58,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 48.28,
+        "p_opposite_settles_GIVEN_a_flip": 46.43,
+        "p_opposite_settles_after_a_flip": 22.41,
+        "subsequent_flips_mean": 0.741,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -16.32,
+        "win_pct_ci95_window_bootstrap": [
+          58.62,
+          82.76
+        ]
+      },
+      "15s": {
+        "avg_executable_ask": 0.769,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 78.14,
+        "breakeven_pct_zero_fees": 76.9,
+        "ci_low_minus_breakeven_pp": -78.14,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 56.89,
+          "max": 5579.2,
+          "median": 74.0,
+          "p10": 6.0,
+          "recorded": true
+        },
+        "distinct_windows": 29,
+        "established_positive": false,
+        "ev_per_share_usd": -0.7099,
+        "favorite_win_pct": 6.9,
+        "leadership_gaps_after_mean": 0.59,
+        "observations": 29,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 6.9,
+        "p_opposite_settles_GIVEN_a_flip": 100.0,
+        "p_opposite_settles_after_a_flip": 6.9,
+        "subsequent_flips_mean": 0.103,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -71.24,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          17.24
+        ]
+      },
+      "1s": {
+        "avg_executable_ask": 0.7425,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 75.59,
+        "breakeven_pct_zero_fees": 74.25,
+        "ci_low_minus_breakeven_pp": -75.59,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 32.67,
+          "max": 5579.5,
+          "median": 44.0,
+          "p10": 7.2,
+          "recorded": true
+        },
+        "distinct_windows": 24,
+        "established_positive": false,
+        "ev_per_share_usd": -0.67,
+        "favorite_win_pct": 8.33,
+        "leadership_gaps_after_mean": 0.0,
+        "observations": 24,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 0.0,
+        "p_opposite_settles_GIVEN_a_flip": null,
+        "p_opposite_settles_after_a_flip": 0.0,
+        "subsequent_flips_mean": 0.0,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -67.26,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          20.83
+        ]
+      },
+      "20s": {
+        "avg_executable_ask": 0.7581,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 77.1,
+        "breakeven_pct_zero_fees": 75.81,
+        "ci_low_minus_breakeven_pp": -77.1,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 20.85,
+          "max": 363.0,
+          "median": 27.5,
+          "p10": 2.0,
+          "recorded": true
+        },
+        "distinct_windows": 32,
+        "established_positive": false,
+        "ev_per_share_usd": -0.6748,
+        "favorite_win_pct": 9.38,
+        "leadership_gaps_after_mean": 0.84,
+        "observations": 32,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 6.25,
+        "p_opposite_settles_GIVEN_a_flip": 100.0,
+        "p_opposite_settles_after_a_flip": 6.25,
+        "subsequent_flips_mean": 0.062,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -67.72,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          18.75
+        ]
+      },
+      "2s": {
+        "avg_executable_ask": 0.7259,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 73.99,
+        "breakeven_pct_zero_fees": 72.59,
+        "ci_low_minus_breakeven_pp": -73.99,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 42.1,
+          "max": 5579.5,
+          "median": 58.0,
+          "p10": 7.2,
+          "recorded": true
+        },
+        "distinct_windows": 27,
+        "established_positive": false,
+        "ev_per_share_usd": -0.6632,
+        "favorite_win_pct": 7.41,
+        "leadership_gaps_after_mean": 0.15,
+        "observations": 27,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 0.0,
+        "p_opposite_settles_GIVEN_a_flip": null,
+        "p_opposite_settles_after_a_flip": 0.0,
+        "subsequent_flips_mean": 0.0,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -66.58,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          18.52
+        ]
+      },
+      "30s": {
+        "avg_executable_ask": 0.7804,
+        "both_sides_ge_50c_observations": 2,
+        "breakeven_pct_taker_fees": 79.24,
+        "breakeven_pct_zero_fees": 78.04,
+        "ci_low_minus_breakeven_pp": -79.24,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 30.44,
+          "max": 7500.0,
+          "median": 39.0,
+          "p10": 4.0,
+          "recorded": true
+        },
+        "distinct_windows": 24,
+        "established_positive": false,
+        "ev_per_share_usd": -0.7066,
+        "favorite_win_pct": 8.33,
+        "leadership_gaps_after_mean": 2.25,
+        "observations": 24,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 12.5,
+        "p_opposite_settles_GIVEN_a_flip": 100.0,
+        "p_opposite_settles_after_a_flip": 12.5,
+        "subsequent_flips_mean": 0.125,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -70.91,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          20.83
+        ]
+      },
+      "45s": {
+        "avg_executable_ask": 0.8956,
+        "both_sides_ge_50c_observations": 5,
+        "breakeven_pct_taker_fees": 90.22,
+        "breakeven_pct_zero_fees": 89.56,
+        "ci_low_minus_breakeven_pp": -65.22,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 1057.73,
+          "max": 15000.0,
+          "median": 1181.0,
+          "p10": 124.0,
+          "recorded": true
+        },
+        "distinct_windows": 16,
+        "established_positive": false,
+        "ev_per_share_usd": -0.4014,
+        "favorite_win_pct": 50.0,
+        "leadership_gaps_after_mean": 4.75,
+        "observations": 16,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 31.25,
+        "p_opposite_settles_GIVEN_a_flip": 20.0,
+        "p_opposite_settles_after_a_flip": 6.25,
+        "subsequent_flips_mean": 0.375,
+        "subsequent_flips_median": 0.0,
+        "win_minus_breakeven_pp": -40.22,
+        "win_pct_ci95_window_bootstrap": [
+          25.0,
+          75.0
+        ]
+      },
+      "5s": {
+        "avg_executable_ask": 0.7422,
+        "both_sides_ge_50c_observations": 0,
+        "breakeven_pct_taker_fees": 75.56,
+        "breakeven_pct_zero_fees": 74.22,
+        "ci_low_minus_breakeven_pp": -75.56,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 43.05,
+          "max": 5579.5,
+          "median": 58.0,
+          "p10": 6.0,
+          "recorded": true
+        },
+        "distinct_windows": 27,
+        "established_positive": false,
+        "ev_per_share_usd": -0.642,
+        "favorite_win_pct": 11.11,
+        "leadership_gaps_after_mean": 0.22,
+        "observations": 27,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 0.0,
+        "p_opposite_settles_GIVEN_a_flip": null,
+        "p_opposite_settles_after_a_flip": 0.0,
+        "subsequent_flips_mean": 0.0,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -64.45,
+        "win_pct_ci95_window_bootstrap": [
+          0.0,
+          22.22
+        ]
+      },
+      "60s": {
+        "avg_executable_ask": 0.8446,
+        "both_sides_ge_50c_observations": 7,
+        "breakeven_pct_taker_fees": 85.38,
+        "breakeven_pct_zero_fees": 84.46,
+        "ci_low_minus_breakeven_pp": -54.61,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 1055.77,
+          "max": 5000.0,
+          "median": 1250.0,
+          "p10": 258.1,
+          "recorded": true
+        },
+        "distinct_windows": 13,
+        "established_positive": false,
+        "ev_per_share_usd": -0.2377,
+        "favorite_win_pct": 61.54,
+        "leadership_gaps_after_mean": 5.54,
+        "observations": 13,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 30.77,
+        "p_opposite_settles_GIVEN_a_flip": 25.0,
+        "p_opposite_settles_after_a_flip": 7.69,
+        "subsequent_flips_mean": 0.308,
+        "subsequent_flips_median": 0,
+        "win_minus_breakeven_pp": -23.84,
+        "win_pct_ci95_window_bootstrap": [
+          30.77,
+          84.62
+        ]
+      },
+      "90s": {
+        "avg_executable_ask": 0.8872,
+        "both_sides_ge_50c_observations": 9,
+        "breakeven_pct_taker_fees": 89.42,
+        "breakeven_pct_zero_fees": 88.72,
+        "ci_low_minus_breakeven_pp": -39.42,
+        "depth_contracts": {
+          "capacity_usd_at_median_depth": 23.07,
+          "max": 7500.0,
+          "median": 26.0,
+          "p10": 25.0,
+          "recorded": true
+        },
+        "distinct_windows": 36,
+        "established_positive": false,
+        "ev_per_share_usd": -0.2546,
+        "favorite_win_pct": 63.89,
+        "leadership_gaps_after_mean": 4.72,
+        "observations": 36,
+        "opportunities_per_day": 288.0,
+        "p_leadership_flips_at_least_once": 52.78,
+        "p_opposite_settles_GIVEN_a_flip": 42.11,
+        "p_opposite_settles_after_a_flip": 22.22,
+        "subsequent_flips_mean": 0.75,
+        "subsequent_flips_median": 1.0,
+        "win_minus_breakeven_pp": -25.53,
+        "win_pct_ci95_window_bootstrap": [
+          50.0,
+          77.78
+        ]
+      }
+    },
+    "matrix": {
+      "10s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5071,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 52.46,
+          "breakeven_pct_zero_fees": 50.71,
+          "ci_low_minus_breakeven_pp": -52.46,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 15.21,
+            "max": 4004.4,
+            "median": 30.0,
+            "p10": 2.0,
+            "recorded": true
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3818,
+          "favorite_win_pct": 14.29,
+          "leadership_gaps_after_mean": 0.43,
+          "observations": 7,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 14.29,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 14.29,
+          "subsequent_flips_mean": 0.143,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -38.18,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            42.86
+          ]
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.642,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.81,
+          "breakeven_pct_zero_fees": 64.2,
+          "ci_low_minus_breakeven_pp": -65.81,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 9.63,
+            "max": 5579.5,
+            "median": 15.0,
+            "p10": 12.0,
+            "recorded": true
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.658,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.2,
+          "observations": 5,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -65.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 78.56,
+          "breakeven_pct_zero_fees": 77.33,
+          "ci_low_minus_breakeven_pp": -78.56,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 17.01,
+            "max": 22.0,
+            "median": 22.0,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7856,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 1.33,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -78.56,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.82,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 83.03,
+          "breakeven_pct_zero_fees": 82.0,
+          "ci_low_minus_breakeven_pp": -83.03,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 22.55,
+            "max": 30.0,
+            "median": 27.5,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.8303,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 1.5,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -83.03,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.92,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 92.52,
+          "breakeven_pct_zero_fees": 92.0,
+          "ci_low_minus_breakeven_pp": -92.52,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 49.68,
+            "max": 79.0,
+            "median": 54.0,
+            "p10": 0.6,
+            "recorded": true
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.6751,
+          "favorite_win_pct": 25.0,
+          "leadership_gaps_after_mean": 0.25,
+          "observations": 4,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -67.52,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            75.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.52,
+          "breakeven_pct_zero_fees": 97.33,
+          "ci_low_minus_breakeven_pp": -97.52,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 170.33,
+            "max": 209.0,
+            "median": 175.0,
+            "p10": 143.0,
+            "recorded": true
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9751,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -97.52,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "120s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.55,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 56.73,
+          "breakeven_pct_zero_fees": 55.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 6.05,
+            "max": 11.0,
+            "median": 11.0,
+            "p10": 11.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": 0.4327,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 7.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": 43.27,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6817,
+          "both_sides_ge_50c_observations": 4,
+          "breakeven_pct_taker_fees": 69.69,
+          "breakeven_pct_zero_fees": 68.17,
+          "ci_low_minus_breakeven_pp": -69.69,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 17.04,
+            "max": 5579.5,
+            "median": 25.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3635,
+          "favorite_win_pct": 33.33,
+          "leadership_gaps_after_mean": 4.33,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 66.67,
+          "p_opposite_settles_after_a_flip": 66.67,
+          "subsequent_flips_mean": 1.667,
+          "subsequent_flips_median": 1.0,
+          "win_minus_breakeven_pp": -36.35,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            66.67
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7622,
+          "both_sides_ge_50c_observations": 8,
+          "breakeven_pct_taker_fees": 77.49,
+          "breakeven_pct_zero_fees": 76.22,
+          "ci_low_minus_breakeven_pp": -66.38,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 19.06,
+            "max": 714.0,
+            "median": 25.0,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 9,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3304,
+          "favorite_win_pct": 44.44,
+          "leadership_gaps_after_mean": 5.56,
+          "observations": 9,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 88.89,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 44.44,
+          "subsequent_flips_mean": 1.333,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": -33.05,
+          "win_pct_ci95_window_bootstrap": [
+            11.11,
+            77.78
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.8447,
+          "both_sides_ge_50c_observations": 6,
+          "breakeven_pct_taker_fees": 85.39,
+          "breakeven_pct_zero_fees": 84.47,
+          "ci_low_minus_breakeven_pp": -25.39,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 21.12,
+            "max": 1363.0,
+            "median": 25.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 15,
+          "established_positive": false,
+          "ev_per_share_usd": -0.0538,
+          "favorite_win_pct": 80.0,
+          "leadership_gaps_after_mean": 4.6,
+          "observations": 15,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 40.0,
+          "p_opposite_settles_GIVEN_a_flip": 33.33,
+          "p_opposite_settles_after_a_flip": 13.33,
+          "subsequent_flips_mean": 0.467,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -5.39,
+          "win_pct_ci95_window_bootstrap": [
+            60.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.924,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 92.89,
+          "breakeven_pct_zero_fees": 92.4,
+          "ci_low_minus_breakeven_pp": -42.89,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 34.65,
+            "max": 2500.0,
+            "median": 37.5,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 10,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1289,
+          "favorite_win_pct": 80.0,
+          "leadership_gaps_after_mean": 4.5,
+          "observations": 10,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 20.0,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 10.0,
+          "subsequent_flips_mean": 0.4,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -12.89,
+          "win_pct_ci95_window_bootstrap": [
+            50.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.97,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 97.2,
+          "breakeven_pct_zero_fees": 97.0,
+          "ci_low_minus_breakeven_pp": -35.66,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 4849.03,
+            "max": 7500.0,
+            "median": 4999.0,
+            "p10": 250.0,
+            "recorded": true
+          },
+          "distinct_windows": 13,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1259,
+          "favorite_win_pct": 84.62,
+          "leadership_gaps_after_mean": 3.62,
+          "observations": 13,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 38.46,
+          "p_opposite_settles_GIVEN_a_flip": 40.0,
+          "p_opposite_settles_after_a_flip": 15.38,
+          "subsequent_flips_mean": 0.692,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -12.59,
+          "win_pct_ci95_window_bootstrap": [
+            61.54,
+            100.0
+          ]
+        }
+      },
+      "15s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5071,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 52.46,
+          "breakeven_pct_zero_fees": 50.71,
+          "ci_low_minus_breakeven_pp": -52.46,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 15.21,
+            "max": 204.0,
+            "median": 30.0,
+            "p10": 2.0,
+            "recorded": true
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3818,
+          "favorite_win_pct": 14.29,
+          "leadership_gaps_after_mean": 0.57,
+          "observations": 7,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 14.29,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 14.29,
+          "subsequent_flips_mean": 0.286,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -38.18,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            42.86
+          ]
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.642,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.81,
+          "breakeven_pct_zero_fees": 64.2,
+          "ci_low_minus_breakeven_pp": -65.81,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 9.63,
+            "max": 5579.2,
+            "median": 15.0,
+            "p10": 12.0,
+            "recorded": true
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.658,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.2,
+          "observations": 5,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -65.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 78.56,
+          "breakeven_pct_zero_fees": 77.33,
+          "ci_low_minus_breakeven_pp": -78.56,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 17.01,
+            "max": 22.0,
+            "median": 22.0,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7856,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 1.33,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -78.56,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.825,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 83.51,
+          "breakeven_pct_zero_fees": 82.5,
+          "ci_low_minus_breakeven_pp": -83.51,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 23.1,
+            "max": 31.0,
+            "median": 28.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.8351,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.5,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -83.51,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.9267,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 93.14,
+          "breakeven_pct_zero_fees": 92.67,
+          "ci_low_minus_breakeven_pp": -93.14,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 53.75,
+            "max": 79.0,
+            "median": 58.0,
+            "p10": 0.6,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5981,
+          "favorite_win_pct": 33.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -59.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9729,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.47,
+          "breakeven_pct_zero_fees": 97.29,
+          "ci_low_minus_breakeven_pp": -97.47,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 172.2,
+            "max": 209.0,
+            "median": 177.0,
+            "p10": 143.0,
+            "recorded": true
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9747,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 7,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 14.29,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 14.29,
+          "subsequent_flips_mean": 0.143,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -97.47,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "1s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5114,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 52.89,
+          "breakeven_pct_zero_fees": 51.14,
+          "ci_low_minus_breakeven_pp": -52.89,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 10.86,
+            "max": 336.2,
+            "median": 21.2,
+            "p10": 6.0,
+            "recorded": true
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5289,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 7,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -52.89,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.642,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.81,
+          "breakeven_pct_zero_fees": 64.2,
+          "ci_low_minus_breakeven_pp": -65.81,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 9.63,
+            "max": 5579.5,
+            "median": 15.0,
+            "p10": 12.8,
+            "recorded": true
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.658,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 5,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -65.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.77,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 78.24,
+          "breakeven_pct_zero_fees": 77.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 16.17,
+            "max": 21.0,
+            "median": 21.0,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7824,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -78.24,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.82,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 83.03,
+          "breakeven_pct_zero_fees": 82.0,
+          "ci_low_minus_breakeven_pp": -83.03,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 13.94,
+            "max": 25.0,
+            "median": 17.0,
+            "p10": 9.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3303,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -33.03,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.9267,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 93.14,
+          "breakeven_pct_zero_fees": 92.67,
+          "ci_low_minus_breakeven_pp": -93.14,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 53.75,
+            "max": 79.0,
+            "median": 58.0,
+            "p10": 0.6,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5981,
+          "favorite_win_pct": 33.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -59.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.52,
+          "breakeven_pct_zero_fees": 97.33,
+          "ci_low_minus_breakeven_pp": -97.52,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 170.33,
+            "max": 209.0,
+            "median": 175.0,
+            "p10": 143.0,
+            "recorded": true
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9751,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -97.52,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "20s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5071,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 52.46,
+          "breakeven_pct_zero_fees": 50.71,
+          "ci_low_minus_breakeven_pp": -52.46,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 7.1,
+            "max": 104.7,
+            "median": 14.0,
+            "p10": 2.0,
+            "recorded": true
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3818,
+          "favorite_win_pct": 14.29,
+          "leadership_gaps_after_mean": 0.57,
+          "observations": 7,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 14.29,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 14.29,
+          "subsequent_flips_mean": 0.143,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -38.18,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            42.86
+          ]
+        },
+        "55-60c": {
+          "avg_executable_ask": 0.58,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 59.71,
+          "breakeven_pct_zero_fees": 58.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 6.38,
+            "max": 11.0,
+            "median": 11.0,
+            "p10": 11.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5971,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -59.71,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.6471,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 66.31,
+          "breakeven_pct_zero_fees": 64.71,
+          "ci_low_minus_breakeven_pp": -66.31,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 8.41,
+            "max": 74.0,
+            "median": 13.0,
+            "p10": 0.6,
+            "recorded": true
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5202,
+          "favorite_win_pct": 14.29,
+          "leadership_gaps_after_mean": 1.0,
+          "observations": 7,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -52.03,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            42.86
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 78.56,
+          "breakeven_pct_zero_fees": 77.33,
+          "ci_low_minus_breakeven_pp": -78.56,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 17.01,
+            "max": 22.0,
+            "median": 22.0,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7856,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 1.33,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -78.56,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.81,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 82.08,
+          "breakeven_pct_zero_fees": 81.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 20.25,
+            "max": 25.0,
+            "median": 25.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.8208,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -82.08,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.925,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 92.99,
+          "breakeven_pct_zero_fees": 92.5,
+          "ci_low_minus_breakeven_pp": -92.99,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 55.5,
+            "max": 79.0,
+            "median": 60.0,
+            "p10": 0.6,
+            "recorded": true
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.6799,
+          "favorite_win_pct": 25.0,
+          "leadership_gaps_after_mean": 1.0,
+          "observations": 4,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -67.99,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            75.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9725,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.44,
+          "breakeven_pct_zero_fees": 97.25,
+          "ci_low_minus_breakeven_pp": -97.44,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 180.4,
+            "max": 209.0,
+            "median": 185.5,
+            "p10": 143.0,
+            "recorded": true
+          },
+          "distinct_windows": 8,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9744,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.38,
+          "observations": 8,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 12.5,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 12.5,
+          "subsequent_flips_mean": 0.125,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -97.44,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "2s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5089,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 52.64,
+          "breakeven_pct_zero_fees": 50.89,
+          "ci_low_minus_breakeven_pp": -52.64,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 15.27,
+            "max": 336.2,
+            "median": 30.0,
+            "p10": 6.0,
+            "recorded": true
+          },
+          "distinct_windows": 9,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5264,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.22,
+          "observations": 9,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -52.64,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.642,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.81,
+          "breakeven_pct_zero_fees": 64.2,
+          "ci_low_minus_breakeven_pp": -65.81,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 9.63,
+            "max": 5579.5,
+            "median": 15.0,
+            "p10": 12.0,
+            "recorded": true
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.658,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.2,
+          "observations": 5,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -65.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.775,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 78.72,
+          "breakeven_pct_zero_fees": 77.5,
+          "ci_low_minus_breakeven_pp": -78.72,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 16.66,
+            "max": 22.0,
+            "median": 21.5,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7872,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.5,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -78.72,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.82,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 83.03,
+          "breakeven_pct_zero_fees": 82.0,
+          "ci_low_minus_breakeven_pp": -83.03,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 13.94,
+            "max": 25.0,
+            "median": 17.0,
+            "p10": 9.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3303,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -33.03,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.9267,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 93.14,
+          "breakeven_pct_zero_fees": 92.67,
+          "ci_low_minus_breakeven_pp": -93.14,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 53.75,
+            "max": 79.0,
+            "median": 58.0,
+            "p10": 0.6,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.5981,
+          "favorite_win_pct": 33.33,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -59.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.52,
+          "breakeven_pct_zero_fees": 97.33,
+          "ci_low_minus_breakeven_pp": -97.52,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 170.33,
+            "max": 209.0,
+            "median": 175.0,
+            "p10": 143.0,
+            "recorded": true
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9751,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -97.52,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "30s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5017,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 51.92,
+          "breakeven_pct_zero_fees": 50.17,
+          "ci_low_minus_breakeven_pp": -51.92,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 3.51,
+            "max": 100.0,
+            "median": 7.0,
+            "p10": 2.0,
+            "recorded": true
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3525,
+          "favorite_win_pct": 16.67,
+          "leadership_gaps_after_mean": 0.67,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 16.67,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 16.67,
+          "subsequent_flips_mean": 0.167,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -35.25,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            50.0
+          ]
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.615,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 63.16,
+          "breakeven_pct_zero_fees": 61.5,
+          "ci_low_minus_breakeven_pp": -63.16,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 7.69,
+            "max": 13.0,
+            "median": 12.5,
+            "p10": 12.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.6316,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 1.0,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -63.16,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 78.56,
+          "breakeven_pct_zero_fees": 77.33,
+          "ci_low_minus_breakeven_pp": -78.56,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 17.01,
+            "max": 22.0,
+            "median": 22.0,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7856,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 1.33,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -78.56,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.87,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 87.79,
+          "breakeven_pct_zero_fees": 87.0,
+          "ci_low_minus_breakeven_pp": -87.79,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 33.93,
+            "max": 39.0,
+            "median": 39.0,
+            "p10": 38.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.8779,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 2.67,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 66.67,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 66.67,
+          "subsequent_flips_mean": 0.667,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": -87.79,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.9225,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 92.75,
+          "breakeven_pct_zero_fees": 92.25,
+          "ci_low_minus_breakeven_pp": -92.75,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 63.65,
+            "max": 1666.0,
+            "median": 69.0,
+            "p10": 58.0,
+            "recorded": true
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9275,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 3.0,
+          "observations": 4,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -92.75,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9725,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 97.44,
+          "breakeven_pct_zero_fees": 97.25,
+          "ci_low_minus_breakeven_pp": -97.44,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 176.51,
+            "max": 7500.0,
+            "median": 181.5,
+            "p10": 143.0,
+            "recorded": true
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7244,
+          "favorite_win_pct": 25.0,
+          "leadership_gaps_after_mean": 3.0,
+          "observations": 4,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -72.44,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            75.0
+          ]
+        }
+      },
+      "45s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.665,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 68.06,
+          "breakeven_pct_zero_fees": 66.5,
+          "ci_low_minus_breakeven_pp": -68.06,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 1940.88,
+            "max": 5579.2,
+            "median": 2918.6,
+            "p10": 258.1,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1806,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 2.0,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 50.0,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 50.0,
+          "subsequent_flips_mean": 1.0,
+          "subsequent_flips_median": 1.0,
+          "win_minus_breakeven_pp": -18.06,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.77,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 78.24,
+          "breakeven_pct_zero_fees": 77.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 502.04,
+            "max": 652.0,
+            "median": 652.0,
+            "p10": 652.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7824,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 7.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -78.24,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.87,
+          "both_sides_ge_50c_observations": 2,
+          "breakeven_pct_taker_fees": 87.79,
+          "breakeven_pct_zero_fees": 87.0,
+          "ci_low_minus_breakeven_pp": 12.21,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 869.13,
+            "max": 1363.0,
+            "median": 999.0,
+            "p10": 38.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": true,
+          "ev_per_share_usd": 0.1221,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 6.0,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 66.67,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.667,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": 12.21,
+          "win_pct_ci95_window_bootstrap": [
+            100.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.92,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 92.52,
+          "breakeven_pct_zero_fees": 92.0,
+          "ci_low_minus_breakeven_pp": -92.52,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 1840.0,
+            "max": 2500.0,
+            "median": 2000.0,
+            "p10": 1500.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.4251,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 2.5,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 50.0,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.5,
+          "subsequent_flips_median": 0.5,
+          "win_minus_breakeven_pp": -42.52,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.97,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 97.2,
+          "breakeven_pct_zero_fees": 97.0,
+          "ci_low_minus_breakeven_pp": -97.2,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 305.55,
+            "max": 7500.0,
+            "median": 315.0,
+            "p10": 124.0,
+            "recorded": true
+          },
+          "distinct_windows": 7,
+          "established_positive": false,
+          "ev_per_share_usd": -0.6863,
+          "favorite_win_pct": 28.57,
+          "leadership_gaps_after_mean": 5.0,
+          "observations": 7,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 14.29,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.143,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -68.63,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            57.14
+          ]
+        }
+      },
+      "5s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5112,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 52.87,
+          "breakeven_pct_zero_fees": 51.12,
+          "ci_low_minus_breakeven_pp": -52.87,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 11.25,
+            "max": 336.2,
+            "median": 22.0,
+            "p10": 2.0,
+            "recorded": true
+          },
+          "distinct_windows": 8,
+          "established_positive": false,
+          "ev_per_share_usd": -0.4037,
+          "favorite_win_pct": 12.5,
+          "leadership_gaps_after_mean": 0.38,
+          "observations": 8,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -40.37,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            37.5
+          ]
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.642,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 65.81,
+          "breakeven_pct_zero_fees": 64.2,
+          "ci_low_minus_breakeven_pp": -65.81,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 9.63,
+            "max": 5579.5,
+            "median": 15.0,
+            "p10": 12.0,
+            "recorded": true
+          },
+          "distinct_windows": 5,
+          "established_positive": false,
+          "ev_per_share_usd": -0.658,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.2,
+          "observations": 5,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -65.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.775,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 78.72,
+          "breakeven_pct_zero_fees": 77.5,
+          "ci_low_minus_breakeven_pp": -78.72,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 16.66,
+            "max": 22.0,
+            "median": 21.5,
+            "p10": 21.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7872,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.5,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -78.72,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.82,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 83.03,
+          "breakeven_pct_zero_fees": 82.0,
+          "ci_low_minus_breakeven_pp": -83.03,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 13.94,
+            "max": 25.0,
+            "median": 17.0,
+            "p10": 9.0,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3303,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -33.03,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.9275,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 93.22,
+          "breakeven_pct_zero_fees": 92.75,
+          "ci_low_minus_breakeven_pp": -93.22,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 59.82,
+            "max": 79.0,
+            "median": 64.5,
+            "p10": 0.6,
+            "recorded": true
+          },
+          "distinct_windows": 4,
+          "established_positive": false,
+          "ev_per_share_usd": -0.6822,
+          "favorite_win_pct": 25.0,
+          "leadership_gaps_after_mean": 0.25,
+          "observations": 4,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -68.22,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            75.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9733,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.52,
+          "breakeven_pct_zero_fees": 97.33,
+          "ci_low_minus_breakeven_pp": -97.52,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 170.33,
+            "max": 209.0,
+            "median": 175.0,
+            "p10": 143.0,
+            "recorded": true
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.9751,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -97.52,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "60s": {
+        "50-55c": {
+          "observations": 0
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.645,
+          "both_sides_ge_50c_observations": 2,
+          "breakeven_pct_taker_fees": 66.1,
+          "breakeven_pct_zero_fees": 64.5,
+          "ci_low_minus_breakeven_pp": 33.9,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 204.16,
+            "max": 375.0,
+            "median": 316.5,
+            "p10": 258.1,
+            "recorded": true
+          },
+          "distinct_windows": 2,
+          "established_positive": true,
+          "ev_per_share_usd": 0.3391,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 5.5,
+          "observations": 2,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 50.0,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.5,
+          "subsequent_flips_median": 0.5,
+          "win_minus_breakeven_pp": 33.9,
+          "win_pct_ci95_window_bootstrap": [
+            100.0,
+            100.0
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.77,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 78.24,
+          "breakeven_pct_zero_fees": 77.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 502.04,
+            "max": 652.0,
+            "median": 652.0,
+            "p10": 652.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.7824,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 7.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -78.24,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.865,
+          "both_sides_ge_50c_observations": 4,
+          "breakeven_pct_taker_fees": 87.32,
+          "breakeven_pct_zero_fees": 86.5,
+          "ci_low_minus_breakeven_pp": -70.65,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 945.88,
+            "max": 1363.0,
+            "median": 1093.5,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 6,
+          "established_positive": false,
+          "ev_per_share_usd": -0.3731,
+          "favorite_win_pct": 50.0,
+          "leadership_gaps_after_mean": 4.67,
+          "observations": 6,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 33.33,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 16.67,
+          "subsequent_flips_mean": 0.333,
+          "subsequent_flips_median": 0.0,
+          "win_minus_breakeven_pp": -37.32,
+          "win_pct_ci95_window_bootstrap": [
+            16.67,
+            83.33
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.92,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 92.52,
+          "breakeven_pct_zero_fees": 92.0,
+          "ci_low_minus_breakeven_pp": 7.48,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 1725.0,
+            "max": 2142.0,
+            "median": 1875.0,
+            "p10": 1666.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": true,
+          "ev_per_share_usd": 0.0749,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 6.67,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 33.33,
+          "p_opposite_settles_GIVEN_a_flip": 0.0,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.333,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": 7.48,
+          "win_pct_ci95_window_bootstrap": [
+            100.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.97,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 97.2,
+          "breakeven_pct_zero_fees": 97.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 4850.0,
+            "max": 5000.0,
+            "median": 5000.0,
+            "p10": 5000.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.972,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 6.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -97.2,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        }
+      },
+      "90s": {
+        "50-55c": {
+          "avg_executable_ask": 0.5,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 51.75,
+          "breakeven_pct_zero_fees": 50.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 1.0,
+            "max": 2.0,
+            "median": 2.0,
+            "p10": 2.0,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": 0.4825,
+          "favorite_win_pct": 100.0,
+          "leadership_gaps_after_mean": 7.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 0.0,
+          "p_opposite_settles_GIVEN_a_flip": null,
+          "p_opposite_settles_after_a_flip": 0.0,
+          "subsequent_flips_mean": 0.0,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": 48.25,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "55-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "avg_executable_ask": 0.64,
+          "both_sides_ge_50c_observations": 1,
+          "breakeven_pct_taker_fees": 65.61,
+          "breakeven_pct_zero_fees": 64.0,
+          "ci_low_minus_breakeven_pp": null,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 3570.67,
+            "max": 5579.2,
+            "median": 5579.2,
+            "p10": 5579.2,
+            "recorded": true
+          },
+          "distinct_windows": 1,
+          "established_positive": false,
+          "ev_per_share_usd": -0.6561,
+          "favorite_win_pct": 0.0,
+          "leadership_gaps_after_mean": 0.0,
+          "observations": 1,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 100.0,
+          "p_opposite_settles_GIVEN_a_flip": 100.0,
+          "p_opposite_settles_after_a_flip": 100.0,
+          "subsequent_flips_mean": 4.0,
+          "subsequent_flips_median": 4,
+          "win_minus_breakeven_pp": -65.61,
+          "win_pct_ci95_window_bootstrap": [
+            null,
+            null
+          ]
+        },
+        "70-80c": {
+          "avg_executable_ask": 0.7833,
+          "both_sides_ge_50c_observations": 3,
+          "breakeven_pct_taker_fees": 79.52,
+          "breakeven_pct_zero_fees": 78.33,
+          "ci_low_minus_breakeven_pp": -79.52,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 19.58,
+            "max": 714.0,
+            "median": 25.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 3,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1285,
+          "favorite_win_pct": 66.67,
+          "leadership_gaps_after_mean": 6.33,
+          "observations": 3,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 66.67,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 33.33,
+          "subsequent_flips_mean": 0.667,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": -12.85,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "80-90c": {
+          "avg_executable_ask": 0.8511,
+          "both_sides_ge_50c_observations": 3,
+          "breakeven_pct_taker_fees": 86.0,
+          "breakeven_pct_zero_fees": 85.11,
+          "ci_low_minus_breakeven_pp": -52.67,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 21.28,
+            "max": 27.0,
+            "median": 25.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 9,
+          "established_positive": false,
+          "ev_per_share_usd": -0.1933,
+          "favorite_win_pct": 66.67,
+          "leadership_gaps_after_mean": 5.33,
+          "observations": 9,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 44.44,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 22.22,
+          "subsequent_flips_mean": 0.556,
+          "subsequent_flips_median": 0,
+          "win_minus_breakeven_pp": -19.33,
+          "win_pct_ci95_window_bootstrap": [
+            33.33,
+            100.0
+          ]
+        },
+        "90-95c": {
+          "avg_executable_ask": 0.916,
+          "both_sides_ge_50c_observations": 2,
+          "breakeven_pct_taker_fees": 92.14,
+          "breakeven_pct_zero_fees": 91.6,
+          "ci_low_minus_breakeven_pp": -52.14,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 36.64,
+            "max": 2142.0,
+            "median": 40.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 10,
+          "established_positive": false,
+          "ev_per_share_usd": -0.2214,
+          "favorite_win_pct": 70.0,
+          "leadership_gaps_after_mean": 4.5,
+          "observations": 10,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 60.0,
+          "p_opposite_settles_GIVEN_a_flip": 16.67,
+          "p_opposite_settles_after_a_flip": 10.0,
+          "subsequent_flips_mean": 0.8,
+          "subsequent_flips_median": 1.0,
+          "win_minus_breakeven_pp": -22.14,
+          "win_pct_ci95_window_bootstrap": [
+            40.0,
+            100.0
+          ]
+        },
+        "95-99c": {
+          "avg_executable_ask": 0.9673,
+          "both_sides_ge_50c_observations": 0,
+          "breakeven_pct_taker_fees": 96.95,
+          "breakeven_pct_zero_fees": 96.73,
+          "ci_low_minus_breakeven_pp": -69.68,
+          "depth_contracts": {
+            "capacity_usd_at_median_depth": 297.92,
+            "max": 7500.0,
+            "median": 308.0,
+            "p10": 25.0,
+            "recorded": true
+          },
+          "distinct_windows": 11,
+          "established_positive": false,
+          "ev_per_share_usd": -0.424,
+          "favorite_win_pct": 54.55,
+          "leadership_gaps_after_mean": 4.45,
+          "observations": 11,
+          "opportunities_per_day": 288.0,
+          "p_leadership_flips_at_least_once": 54.55,
+          "p_opposite_settles_GIVEN_a_flip": 50.0,
+          "p_opposite_settles_after_a_flip": 27.27,
+          "subsequent_flips_mean": 0.727,
+          "subsequent_flips_median": 1,
+          "win_minus_breakeven_pp": -42.4,
+          "win_pct_ci95_window_bootstrap": [
+            27.27,
+            81.82
+          ]
+        }
+      }
+    },
+    "observations": 1463,
+    "pooled_favorite": {
+      "avg_executable_ask": 0.8,
+      "both_sides_ge_50c_observations": 44,
+      "breakeven_pct_taker_fees": 81.12,
+      "breakeven_pct_zero_fees": 80.0,
+      "ci_low_minus_breakeven_pp": -58.49,
+      "depth_contracts": {
+        "capacity_usd_at_median_depth": 57.99,
+        "max": 15000.0,
+        "median": 72.5,
+        "p10": 12.0,
+        "recorded": true
+      },
+      "distinct_windows": 83,
+      "established_positive": false,
+      "ev_per_share_usd": -0.5034,
+      "favorite_win_pct": 30.57,
+      "leadership_gaps_after_mean": 2.25,
+      "observations": 314,
+      "opportunities_per_day": 1089.5,
+      "p_leadership_flips_at_least_once": 20.38,
+      "p_opposite_settles_GIVEN_a_flip": 48.44,
+      "p_opposite_settles_after_a_flip": 9.87,
+      "subsequent_flips_mean": 0.283,
+      "subsequent_flips_median": 0.0,
+      "win_minus_breakeven_pp": -50.55,
+      "win_pct_ci95_window_bootstrap": [
+        22.63,
+        39.58
+      ]
+    },
+    "pooled_unconditional": {
+      "ci95_window_bootstrap": [
+        74.08,
+        85.0
+      ],
+      "current_leader_wins_pct": 79.58,
+      "distinct_windows": 132,
+      "favorite_executable_observations": 314,
+      "leader_basis": {
+        "ASK_ONLY": 384,
+        "BID_ONLY": 551,
+        "MID": 118
+      },
+      "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+      "observations": 1053,
+      "p_leadership_flips_at_least_once": 16.71,
+      "subsequent_flips_mean": 0.225
+    },
+    "recorded_checkpoints": [
+      120.0,
+      90.0,
+      60.0,
+      45.0,
+      30.0,
+      20.0,
+      15.0,
+      10.0,
+      5.0,
+      2.0,
+      1.0
+    ],
+    "requested_checkpoints_not_collected": [
+      240,
+      180
+    ],
+    "unconditional_by_checkpoint": {
+      "10s": {
+        "ci95_window_bootstrap": [
+          59.21,
+          80.26
+        ],
+        "current_leader_wins_pct": 69.74,
+        "distinct_windows": 76,
+        "favorite_executable_observations": 28,
+        "leader_basis": {
+          "ASK_ONLY": 30,
+          "BID_ONLY": 45,
+          "MID": 1
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 76,
+        "p_leadership_flips_at_least_once": 2.63,
+        "subsequent_flips_mean": 0.026
+      },
+      "120s": {
+        "ci95_window_bootstrap": [
+          76.52,
+          89.39
+        ],
+        "current_leader_wins_pct": 83.33,
+        "distinct_windows": 132,
+        "favorite_executable_observations": 58,
+        "leader_basis": {
+          "ASK_ONLY": 29,
+          "BID_ONLY": 47,
+          "MID": 56
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 132,
+        "p_leadership_flips_at_least_once": 33.33,
+        "subsequent_flips_mean": 0.485
+      },
+      "15s": {
+        "ci95_window_bootstrap": [
+          58.97,
+          79.49
+        ],
+        "current_leader_wins_pct": 69.23,
+        "distinct_windows": 78,
+        "favorite_executable_observations": 29,
+        "leader_basis": {
+          "ASK_ONLY": 31,
+          "BID_ONLY": 45,
+          "MID": 2
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 78,
+        "p_leadership_flips_at_least_once": 3.85,
+        "subsequent_flips_mean": 0.064
+      },
+      "1s": {
+        "ci95_window_bootstrap": [
+          58.33,
+          81.67
+        ],
+        "current_leader_wins_pct": 70.0,
+        "distinct_windows": 60,
+        "favorite_executable_observations": 24,
+        "leader_basis": {
+          "ASK_ONLY": 23,
+          "BID_ONLY": 37
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 60,
+        "p_leadership_flips_at_least_once": 0.0,
+        "subsequent_flips_mean": 0.0
+      },
+      "20s": {
+        "ci95_window_bootstrap": [
+          57.5,
+          77.5
+        ],
+        "current_leader_wins_pct": 67.5,
+        "distinct_windows": 80,
+        "favorite_executable_observations": 32,
+        "leader_basis": {
+          "ASK_ONLY": 35,
+          "BID_ONLY": 45
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 80,
+        "p_leadership_flips_at_least_once": 5.0,
+        "subsequent_flips_mean": 0.087
+      },
+      "2s": {
+        "ci95_window_bootstrap": [
+          61.43,
+          81.43
+        ],
+        "current_leader_wins_pct": 71.43,
+        "distinct_windows": 70,
+        "favorite_executable_observations": 27,
+        "leader_basis": {
+          "ASK_ONLY": 26,
+          "BID_ONLY": 44
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 70,
+        "p_leadership_flips_at_least_once": 0.0,
+        "subsequent_flips_mean": 0.0
+      },
+      "30s": {
+        "ci95_window_bootstrap": [
+          70.87,
+          86.41
+        ],
+        "current_leader_wins_pct": 78.64,
+        "distinct_windows": 103,
+        "favorite_executable_observations": 24,
+        "leader_basis": {
+          "ASK_ONLY": 43,
+          "BID_ONLY": 58,
+          "MID": 2
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 103,
+        "p_leadership_flips_at_least_once": 15.53,
+        "subsequent_flips_mean": 0.194
+      },
+      "45s": {
+        "ci95_window_bootstrap": [
+          84.92,
+          95.24
+        ],
+        "current_leader_wins_pct": 90.48,
+        "distinct_windows": 126,
+        "favorite_executable_observations": 16,
+        "leader_basis": {
+          "ASK_ONLY": 49,
+          "BID_ONLY": 63,
+          "MID": 14
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 126,
+        "p_leadership_flips_at_least_once": 26.19,
+        "subsequent_flips_mean": 0.325
+      },
+      "5s": {
+        "ci95_window_bootstrap": [
+          62.67,
+          82.67
+        ],
+        "current_leader_wins_pct": 73.33,
+        "distinct_windows": 75,
+        "favorite_executable_observations": 27,
+        "leader_basis": {
+          "ASK_ONLY": 30,
+          "BID_ONLY": 45
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 75,
+        "p_leadership_flips_at_least_once": 1.33,
+        "subsequent_flips_mean": 0.013
+      },
+      "60s": {
+        "ci95_window_bootstrap": [
+          85.48,
+          95.97
+        ],
+        "current_leader_wins_pct": 91.13,
+        "distinct_windows": 124,
+        "favorite_executable_observations": 13,
+        "leader_basis": {
+          "ASK_ONLY": 49,
+          "BID_ONLY": 62,
+          "MID": 13
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 124,
+        "p_leadership_flips_at_least_once": 26.61,
+        "subsequent_flips_mean": 0.339
+      },
+      "90s": {
+        "ci95_window_bootstrap": [
+          80.62,
+          92.25
+        ],
+        "current_leader_wins_pct": 86.82,
+        "distinct_windows": 129,
+        "favorite_executable_observations": 36,
+        "leader_basis": {
+          "ASK_ONLY": 39,
+          "BID_ONLY": 60,
+          "MID": 30
+        },
+        "note": "the LEADER is identified from whatever price information exists (mid, bid-only or ask-only); it is NOT required to be executable, which is why n exceeds the favorite table",
+        "observations": 129,
+        "p_leadership_flips_at_least_once": 31.01,
+        "subsequent_flips_mean": 0.426
+      }
+    },
+    "windows": 133
+  },
+  "accounting_label": "historical replay on Gemini's own recorded books and settlements; no order was sent",
+  "descriptive_only": "no threshold is selected, no cell is promoted, and no strategy parameter is touched",
+  "durations_never_pooled": true,
+  "favorite_definition": "the dearer EXECUTABLE side, and only when its executable ask is >= 0.50; a side with no recorded ask is not a favorite at any price",
+  "fee_model": {
+    "breakeven": "p + 0.07*p*(1-p)",
+    "formula": "rate * q * p * (1 - p)",
+    "reconciliation": "published schedule; NOT reconciled against our own authenticated fills, so zero-fee breakeven is reported beside it",
+    "taker_rate": 0.07
+  },
+  "label": "GEMINI_FAVORITE_PERSISTENCE_V1",
+  "lane": "GEMINI -- no PMUS data, thresholds, fees or samples",
+  "leadership_definition": "fixed precedence MID -> BID_ONLY -> ASK_ONLY -> UNKNOWN; UNKNOWN contributes no leadership observation and gaps are counted, never interpolated",
+  "statistical_unit": "WINDOW"
+}

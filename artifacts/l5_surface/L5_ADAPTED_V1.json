@@ -1,0 +1,150 @@
+{
+  "label": "L5_ADAPTED_V1",
+  "kind": "ADAPTED",
+  "notes": "populated from L5_PASSIVE_SURFACE_PROSPECTIVE_V1 by the rules frozen in analysis/l5/window_forensics/spec.py",
+  "spec_sha256": "fe9d6557af80df02f40ac3a691650aa77da65f3b6505d818803ab54b8764d777",
+  "params": {
+    "rung_count": {
+      "name": "rung_count",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": 1,
+      "evidence": "the established offset set has 1 rungs",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "tick_offsets": {
+      "name": "tick_offsets",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": [
+        0
+      ],
+      "evidence": "73 of 108 parents (0.68) rested at offsets [0]",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "base_parent_qty": {
+      "name": "base_parent_qty",
+      "status": "OURS_ADAPTED",
+      "value": "100",
+      "evidence": null,
+      "prior_evidence": "OURS. Mirrors the 26.5% exact-100 mode observed over 238 chain-collapsed parents so the shadow is comparable to his parents. NOT a live probe size.",
+      "pending_source": null
+    },
+    "secondary_rung_qty": {
+      "name": "secondary_rung_qty",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": "33.121208",
+      "evidence": "median of 176 non-100 parents",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "both_sides_policy": {
+      "name": "both_sides_policy",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": {
+        "outcomes": [
+          "Up",
+          "Down"
+        ]
+      },
+      "evidence": "both-outcome share 0.7278 over 2788 readable snapshots",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "inventory_price_skew": {
+      "name": "inventory_price_skew",
+      "status": "OURS_ADAPTED",
+      "value": {
+        "widening_ticks": 0,
+        "reducing_ticks": 0
+      },
+      "evidence": null,
+      "prior_evidence": "NO skew, chosen because nothing established one. This is our default, not a finding about L5.",
+      "pending_source": null
+    },
+    "inventory_size_skew": {
+      "name": "inventory_size_skew",
+      "status": "OURS_ADAPTED",
+      "value": {
+        "widening_multiplier": 1,
+        "reducing_multiplier": 1
+      },
+      "evidence": null,
+      "prior_evidence": "OURS. No skew, chosen because nothing established one; measured as an axis rather than assumed.",
+      "pending_source": null
+    },
+    "refresh_policy": {
+      "name": "refresh_policy",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": {
+        "mode": "STANDING"
+      },
+      "evidence": "opposite-already-present share 0.9208 over 101 resolved reversals",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "replenishment_policy": {
+      "name": "replenishment_policy",
+      "status": "OURS_ADAPTED",
+      "value": {
+        "mode": "REPLACE_AFTER_FILL"
+      },
+      "evidence": null,
+      "prior_evidence": "OURS. Replace a filled rung, because a surface that does not replace is not a surface. The prospective +5s statistic did not resolve it.",
+      "pending_source": null
+    },
+    "minimum_rest_time": {
+      "name": "minimum_rest_time",
+      "status": "OURS_ADAPTED",
+      "value": 30.0,
+      "evidence": null,
+      "prior_evidence": "DEFAULT_VALID_FOR_S=30.0 in l5_intent: at 30s only 17.1% of L5's own intents were still authorized by his next action, so 30s is a CEILING on validity and not a comfortable one.",
+      "pending_source": null
+    },
+    "withdrawal_policy": {
+      "name": "withdrawal_policy",
+      "status": "OURS_ADAPTED",
+      "value": {
+        "mode": "WITHDRAW_ON_TTE_FLOOR",
+        "tte_floor_s": 0
+      },
+      "evidence": null,
+      "prior_evidence": "OURS. Cancellations appear in no public feed, so L5's withdrawal behaviour is unobservable and this field can never be evidence about him.",
+      "pending_source": null
+    },
+    "TTE_policy": {
+      "name": "TTE_policy",
+      "status": "OBSERVED_PROSPECTIVE",
+      "value": {
+        "quote_between_tte_s": [
+          0,
+          900
+        ]
+      },
+      "evidence": "parents observed in every TTE bucket: {'tte120-300': 57, 'tte300-600': 48, 'tte<=120': 94, 'tte>600': 39}",
+      "prior_evidence": null,
+      "pending_source": null
+    },
+    "max_residual": {
+      "name": "max_residual",
+      "status": "OURS_ADAPTED",
+      "value": "3.00",
+      "evidence": null,
+      "prior_evidence": "V2E matched-preservation was the leading ADAPTED hypothesis and is NOT promoted to live.",
+      "pending_source": null
+    }
+  },
+  "frozen_from": {
+    "study": "L5_PASSIVE_SURFACE_PROSPECTIVE_V1",
+    "eligible_windows": [
+      1789670700,
+      1789672500,
+      1789674300
+    ],
+    "chain_proven_parents": 208,
+    "units_scored": 238,
+    "mechanism_verdict": "UNRESOLVED",
+    "frozen_module_sha256": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "labels": "the mechanism verdict is UNRESOLVED; individual fields are frozen on their own preregistered rules and a global UNRESOLVED does not erase them"
+  }
+}

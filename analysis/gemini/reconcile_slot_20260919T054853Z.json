@@ -1,0 +1,398 @@
+{
+  "label": "GEMINI_SLOT_RECONCILE_V1",
+  "utc": "2026-09-19T05:48:54.940579+00:00",
+  "target": {
+    "slot": 2,
+    "auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+    "kind": "CANCEL",
+    "symbol": "GEMI-BTC05M2609181435-UP",
+    "client_order_id": "l5cp-owner-2026-yes-774c492b",
+    "order_id": "145828836242288478"
+  },
+  "ledger_state_before": {
+    "attempt": {
+      "kind": "CANCEL",
+      "slot": 2,
+      "t": 1789741869.5275366,
+      "auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+      "symbol": "GEMI-BTC05M2609181435-UP",
+      "outcome": "ATTEMPTED",
+      "client_order_id": "l5cp-owner-2026-yes-774c492b"
+    },
+    "resolves": [
+      {
+        "kind": "RESOLVE",
+        "slot": 2,
+        "t": 1789741869.5562732,
+        "outcome": "UNKNOWN",
+        "status": 400,
+        "ack": {
+          "id": "l5cp-81cf6a9a212542dc8db243198c4258c6",
+          "status": 400,
+          "error": {
+            "code": -1013,
+            "msg": "invalid orderId format"
+          }
+        }
+      },
+      {
+        "kind": "RESOLVE",
+        "slot": 2,
+        "t": 1789750291.765712,
+        "outcome": "REJECTED",
+        "reconciled": true,
+        "reconciled_utc": "2026-09-18T16:50:51.405118+00:00",
+        "reconciled_by": "GEMINI_SLOT_RECONCILE_V1",
+        "reconciles_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+        "reconciles_kind": "CANCEL",
+        "reconciles_client_order_id": "l5cp-owner-2026-yes-774c492b",
+        "reconciles_symbol": "GEMI-BTC05M2609181435-UP",
+        "venue_order_id": "145828836242288478",
+        "venue_status": 400,
+        "venue_error_code": -1013,
+        "venue_error_msg": "invalid orderId format",
+        "evidence_artifact": "analysis/gemini/reconcile_slot_20260918T165046Z.json",
+        "evidence_read_utc": "2026-09-18T16:50:46.578781+00:00",
+        "post_attempt_observation_utc": "2026-09-18T14:31:11Z",
+        "post_attempt_order_status": "open",
+        "why": "HISTORICAL RECONCILIATION, not a live outcome. The venue refused this request with 400 -1013 and reported the targeted order still OPEN afterwards, so the attempt changed nothing at the venue. Closes ONLY this slot.",
+        "labels": "UNKNOWN handling is unchanged for every other attempt; this row is positive evidence about one named slot.",
+        "applied_utc": "2026-09-18T16:51:31.765715+00:00"
+      }
+    ],
+    "effective_outcome": "REJECTED",
+    "still_unresolved": false
+  },
+  "originating_place_row": {
+    "kind": "PLACE",
+    "slot": 0,
+    "t": 1789741860.462346,
+    "auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+    "symbol": "GEMI-BTC05M2609181435-UP",
+    "outcome": "ATTEMPTED",
+    "client_order_id": "l5cp-owner-2026-yes-774c492b",
+    "leg": "YES",
+    "price": "0.03",
+    "qty": "0.01"
+  },
+  "definitive_rejection": {
+    "definitive": true,
+    "status": 400,
+    "code": -1013,
+    "msg": "invalid orderId format",
+    "why": "the venue validated the request and refused it; a -1013 rejection is a decision, not silence"
+  },
+  "post_attempt_observation": {
+    "readable": true,
+    "found": true,
+    "captured_utc": "2026-09-18T14:31:11Z",
+    "status": "open",
+    "filledQuantity": "0",
+    "still_open_after_attempt": true,
+    "attempt_epoch": 1789741869.5275366,
+    "why": "the venue reported this order still OPEN after the attempt was rejected, so the attempt did not cancel it"
+  },
+  "venue_evidence": {
+    "symbol": "GEMI-BTC05M2609181435-UP",
+    "read_utc": "2026-09-19T05:48:53.078367+00:00",
+    "active_ok": true,
+    "active_orders": [],
+    "by_client_order_id": {
+      "resolved": true,
+      "found": false,
+      "why": "no matching ACTIVE order. It may never have been accepted, or it may have already filled or cancelled -- the trade read decides which, and neither is a reason to submit again"
+    },
+    "by_order_id": {
+      "resolved": true,
+      "found": false,
+      "why": "no matching ACTIVE order. It may never have been accepted, or it may have already filled or cancelled -- the trade read decides which, and neither is a reason to submit again"
+    },
+    "history_readable": true,
+    "history_verdict": "ORDERS_FOUND",
+    "history_total_rows": 2,
+    "history_per_status_raw": [
+      {
+        "status_filter": "filled",
+        "http": 200,
+        "attempts": [
+          {
+            "limit": 100,
+            "http": 200
+          }
+        ],
+        "rows": 0,
+        "page_is_full": false,
+        "pagination": {
+          "limit": 100,
+          "offset": 0,
+          "count": 0
+        },
+        "body_keys": [
+          "orders",
+          "pagination"
+        ],
+        "timeInForce_counts": {},
+        "quantity_counts": {},
+        "btc_rows": 0,
+        "btc_samples": []
+      },
+      {
+        "status_filter": "cancelled",
+        "http": 200,
+        "attempts": [
+          {
+            "limit": 100,
+            "http": 200
+          }
+        ],
+        "rows": 2,
+        "page_is_full": false,
+        "pagination": {
+          "limit": 100,
+          "offset": 0,
+          "count": 2
+        },
+        "body_keys": [
+          "orders",
+          "pagination"
+        ],
+        "timeInForce_counts": {
+          "maker-or-cancel": 2
+        },
+        "quantity_counts": {
+          "0.01": 2
+        },
+        "btc_rows": 2,
+        "btc_samples": [
+          {
+            "symbol": "GEMI-BTC05M2609181435-UP",
+            "side": "buy",
+            "outcome": "no",
+            "orderType": "limit",
+            "timeInForce": "maker-or-cancel",
+            "price": "0.68",
+            "quantity": "0.01",
+            "filledQuantity": "0",
+            "status": "closed",
+            "createdAt": "2026-09-18T14:31:00.522Z"
+          },
+          {
+            "symbol": "GEMI-BTC05M2609181435-UP",
+            "side": "buy",
+            "outcome": "yes",
+            "orderType": "limit",
+            "timeInForce": "maker-or-cancel",
+            "price": "0.03",
+            "quantity": "0.01",
+            "filledQuantity": "0",
+            "status": "closed",
+            "createdAt": "2026-09-18T14:31:00.483Z"
+          }
+        ],
+        "sample": {
+          "orderId": 145828836242288483,
+          "globalOrderId": "145828836242288483",
+          "clientOrderId": "l5cp-owner-2026-no-4ac75a39",
+          "symbol": "GEMI-BTC05M2609181435-UP",
+          "side": "buy",
+          "outcome": "no",
+          "orderType": "limit",
+          "timeInForce": "maker-or-cancel",
+          "price": "0.68",
+          "quantity": "0.01",
+          "filledQuantity": "0",
+          "remainingQuantity": "0.01",
+          "status": "closed",
+          "createdAt": "2026-09-18T14:31:00.522Z",
+          "updatedAt": "2026-09-18T14:35:00.164Z",
+          "cancelledAt": "2026-09-18T14:35:00.164Z"
+        },
+        "row_keys": [
+          "cancelledAt",
+          "clientOrderId",
+          "contractMetadata",
+          "createdAt",
+          "filledQuantity",
+          "globalOrderId",
+          "hashOrderId",
+          "orderId",
+          "orderType",
+          "outcome",
+          "price",
+          "quantity",
+          "remainingQuantity",
+          "side",
+          "status",
+          "symbol",
+          "timeInForce",
+          "updatedAt"
+        ]
+      }
+    ],
+    "history_rows_symbol": [
+      {
+        "orderId": null,
+        "clientOrderId": null,
+        "globalOrderId": null,
+        "symbol": "GEMI-BTC05M2609181435-UP",
+        "status": "closed",
+        "side": "buy",
+        "outcome": "no",
+        "price": "0.68",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": null,
+        "createdAt": "2026-09-18T14:31:00.522Z",
+        "updatedAt": null
+      },
+      {
+        "orderId": null,
+        "clientOrderId": null,
+        "globalOrderId": null,
+        "symbol": "GEMI-BTC05M2609181435-UP",
+        "status": "closed",
+        "side": "buy",
+        "outcome": "yes",
+        "price": "0.03",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": null,
+        "createdAt": "2026-09-18T14:31:00.483Z",
+        "updatedAt": null
+      },
+      {
+        "orderId": 145828836242288483,
+        "clientOrderId": "l5cp-owner-2026-no-4ac75a39",
+        "globalOrderId": "145828836242288483",
+        "symbol": "GEMI-BTC05M2609181435-UP",
+        "status": "closed",
+        "side": "buy",
+        "outcome": "no",
+        "price": "0.68",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "createdAt": "2026-09-18T14:31:00.522Z",
+        "updatedAt": "2026-09-18T14:35:00.164Z"
+      }
+    ],
+    "history_row_keys_seen": [
+      "cancelledAt",
+      "clientOrderId",
+      "createdAt",
+      "filledQuantity",
+      "globalOrderId",
+      "orderId",
+      "orderType",
+      "outcome",
+      "price",
+      "quantity",
+      "remainingQuantity",
+      "side",
+      "status",
+      "symbol",
+      "timeInForce",
+      "updatedAt"
+    ],
+    "history_rows_for_target": [],
+    "history_match_diagnostic": {
+      "symbol_rows": 3,
+      "matched": 0,
+      "why": "every row returned for this symbol is recorded above, so an empty match is auditable rather than assumed"
+    },
+    "resolution": {
+      "readable": true,
+      "verdict": "SETTLED",
+      "instrumentSymbol": "GEMI-BTC05M2609181435-UP",
+      "ticker": "BTC05M2609181435",
+      "status": "settled",
+      "resolutionSide": "no",
+      "resolvedAt": "2026-09-18T14:35:07.131Z",
+      "settlementValue": "80608.9382881356",
+      "marketState": "closed",
+      "expiryDate": "2026-09-18T14:35:00.000Z",
+      "event_status": "settled",
+      "is_terminal": true,
+      "expired": true,
+      "reads": 3,
+      "reads_readable": 3,
+      "reads_settled": 3,
+      "distinct_readings": [
+        "settled/no"
+      ],
+      "flapped": false,
+      "observations": [
+        {
+          "readable": true,
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-18T14:35:07.131Z",
+          "settlementValue": "80608.9382881356",
+          "marketState": "closed",
+          "expiryDate": "2026-09-18T14:35:00.000Z",
+          "event_status": "settled"
+        },
+        {
+          "readable": true,
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-18T14:35:07.131Z",
+          "settlementValue": "80608.9382881356",
+          "marketState": "closed",
+          "expiryDate": "2026-09-18T14:35:00.000Z",
+          "event_status": "settled"
+        },
+        {
+          "readable": true,
+          "status": "settled",
+          "resolutionSide": "no",
+          "resolvedAt": "2026-09-18T14:35:07.131Z",
+          "settlementValue": "80608.9382881356",
+          "marketState": "closed",
+          "expiryDate": "2026-09-18T14:35:00.000Z",
+          "event_status": "settled"
+        }
+      ],
+      "missing_fields": [],
+      "strike_check": {
+        "available": true,
+        "agrees": true,
+        "published_resolutionSide": "no",
+        "implied_by_strike": "no",
+        "settlementValue": "80608.9382881356",
+        "strike": "80738.75",
+        "rule": "UP resolves yes when settlementValue >= strike.value"
+      },
+      "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+      "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred."
+    },
+    "target_order_id": "145828836242288478"
+  },
+  "verdict": "NO_VENUE_MUTATION",
+  "blocking": [],
+  "why": "the venue refused the request with -1013, and reported the targeted order still open afterwards; no fill and no resting order remain",
+  "labels": "READ-ONLY. No order path was opened. This artifact is evidence; applying it is a separate, reviewable step.",
+  "proposed_resolve_row": {
+    "kind": "RESOLVE",
+    "slot": 2,
+    "t": 1789796934.9405968,
+    "outcome": "REJECTED",
+    "reconciled": true,
+    "reconciled_utc": "2026-09-19T05:48:54.940597+00:00",
+    "reconciled_by": "GEMINI_SLOT_RECONCILE_V1",
+    "reconciles_auth_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+    "reconciles_kind": "CANCEL",
+    "reconciles_client_order_id": "l5cp-owner-2026-yes-774c492b",
+    "reconciles_symbol": "GEMI-BTC05M2609181435-UP",
+    "venue_order_id": "145828836242288478",
+    "venue_status": 400,
+    "venue_error_code": -1013,
+    "venue_error_msg": "invalid orderId format",
+    "evidence_artifact": "analysis/gemini/reconcile_slot_20260919T054853Z.json",
+    "evidence_read_utc": "2026-09-19T05:48:53.078367+00:00",
+    "post_attempt_observation_utc": "2026-09-18T14:31:11Z",
+    "post_attempt_order_status": "open",
+    "why": "HISTORICAL RECONCILIATION, not a live outcome. The venue refused this request with 400 -1013 and reported the targeted order still OPEN afterwards, so the attempt changed nothing at the venue. Closes ONLY this slot.",
+    "labels": "UNKNOWN handling is unchanged for every other attempt; this row is positive evidence about one named slot."
+  }
+}

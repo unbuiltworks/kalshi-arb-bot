@@ -1,0 +1,461 @@
+{
+  "base_rate_all_candidates": {
+    "ci95": [
+      19.81,
+      41.83
+    ],
+    "observations": 5090,
+    "rate": 30.28,
+    "windows": 10,
+    "windows_with_any": 10
+  },
+  "base_rate_favored_only": {
+    "ci95": [
+      24.97,
+      41.71
+    ],
+    "observations": 2523,
+    "rate": 32.7,
+    "windows": 10,
+    "windows_with_any": 10
+  },
+  "base_rate_underdog_only": {
+    "ci95": [
+      7.79,
+      50.2
+    ],
+    "observations": 2523,
+    "rate": 27.19,
+    "windows": 10,
+    "windows_with_any": 5
+  },
+  "candidate_population": {
+    "independent_windows": 10,
+    "observations": 5090,
+    "per_window_median": 510.0
+  },
+  "hurdle_all_candidates": {
+    "mean_gain_per_completed_lock": "0.1957",
+    "mean_loss_per_failed_leg": "-0.2672",
+    "n_completed": 1541,
+    "n_failed": 3549,
+    "required_completion_rate_pct": 57.72
+  },
+  "hurdle_favored_only": {
+    "mean_gain_per_completed_lock": "0.1013",
+    "mean_loss_per_failed_leg": "-0.2102",
+    "n_completed": 825,
+    "n_failed": 1698,
+    "required_completion_rate_pct": 67.49
+  },
+  "hurdle_underdog_only": {
+    "mean_gain_per_completed_lock": "0.3134",
+    "mean_loss_per_failed_leg": "-0.3186",
+    "n_completed": 686,
+    "n_failed": 1837,
+    "required_completion_rate_pct": 50.41
+  },
+  "label": "GEMINI_FIRSTLEG_COMPLETION_V1",
+  "reaction_latency_s": 0.197,
+  "relationships": [
+    {
+      "bins": {
+        "0.20-0.35": {
+          "ci95": [
+            9.19,
+            70.53
+          ],
+          "observations": 500,
+          "rate": 39.6,
+          "windows": 10,
+          "windows_with_any": 3
+        },
+        "0.35-0.50": {
+          "ci95": [
+            0.0,
+            67.37
+          ],
+          "observations": 474,
+          "rate": 35.23,
+          "windows": 10,
+          "windows_with_any": 3
+        },
+        "0.50-0.65": {
+          "ci95": [
+            5.14,
+            55.89
+          ],
+          "observations": 791,
+          "rate": 29.84,
+          "windows": 10,
+          "windows_with_any": 4
+        },
+        "0.65-0.80": {
+          "ci95": [
+            59.46,
+            97.84
+          ],
+          "observations": 695,
+          "rate": 81.01,
+          "windows": 9,
+          "windows_with_any": 9
+        },
+        "<0.20": {
+          "ci95": [
+            0.0,
+            33.8
+          ],
+          "observations": 715,
+          "rate": 9.79,
+          "windows": 10,
+          "windows_with_any": 2
+        },
+        ">=0.80": {
+          "ci95": [
+            7.9,
+            24.77
+          ],
+          "observations": 1915,
+          "rate": 16.03,
+          "windows": 10,
+          "windows_with_any": 10
+        }
+      },
+      "feature": "first_leg_price"
+    },
+    {
+      "bins": {
+        "120-180": {
+          "ci95": [
+            14.61,
+            44.17
+          ],
+          "observations": 1198,
+          "rate": 29.63,
+          "windows": 10,
+          "windows_with_any": 6
+        },
+        "180-240": {
+          "ci95": [
+            3.92,
+            28.58
+          ],
+          "observations": 1200,
+          "rate": 13.92,
+          "windows": 10,
+          "windows_with_any": 4
+        },
+        "60-120": {
+          "ci95": [
+            36.92,
+            64.27
+          ],
+          "observations": 1198,
+          "rate": 49.92,
+          "windows": 10,
+          "windows_with_any": 10
+        },
+        "<60": {
+          "ci95": [
+            30.78,
+            62.44
+          ],
+          "observations": 900,
+          "rate": 45.78,
+          "windows": 10,
+          "windows_with_any": 10
+        },
+        ">=240": {
+          "ci95": [
+            0.0,
+            3.69
+          ],
+          "observations": 594,
+          "rate": 1.52,
+          "windows": 10,
+          "windows_with_any": 2
+        }
+      },
+      "feature": "t_plus_s"
+    },
+    {
+      "bins": {
+        "1.00-1.10": {
+          "ci95": [
+            0.0,
+            9.3
+          ],
+          "observations": 516,
+          "rate": 1.55,
+          "windows": 5,
+          "windows_with_any": 1
+        },
+        "1.10-1.20": {
+          "ci95": [
+            0.0,
+            23.7
+          ],
+          "observations": 1170,
+          "rate": 10.0,
+          "windows": 10,
+          "windows_with_any": 3
+        },
+        "1.20-1.35": {
+          "ci95": [
+            30.42,
+            54.14
+          ],
+          "observations": 3186,
+          "rate": 42.37,
+          "windows": 10,
+          "windows_with_any": 10
+        },
+        ">=1.35": {
+          "ci95": [
+            10.29,
+            54.08
+          ],
+          "observations": 218,
+          "rate": 30.28,
+          "windows": 6,
+          "windows_with_any": 5
+        }
+      },
+      "feature": "pair_cost_q1"
+    },
+    {
+      "bins": {
+        "1-3": {
+          "ci95": [
+            17.15,
+            49.55
+          ],
+          "observations": 1698,
+          "rate": 32.92,
+          "windows": 10,
+          "windows_with_any": 8
+        },
+        "3-6": {
+          "ci95": [
+            4.59,
+            38.96
+          ],
+          "observations": 1540,
+          "rate": 21.43,
+          "windows": 10,
+          "windows_with_any": 5
+        },
+        "6-12": {
+          "ci95": [
+            0.0,
+            44.97
+          ],
+          "observations": 478,
+          "rate": 14.02,
+          "windows": 5,
+          "windows_with_any": 2
+        },
+        "<1": {
+          "ci95": [
+            37.72,
+            47.37
+          ],
+          "observations": 1346,
+          "rate": 43.46,
+          "windows": 9,
+          "windows_with_any": 8
+        },
+        ">=12": {
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "observations": 28,
+          "rate": 0.0,
+          "windows": 1,
+          "windows_with_any": 0
+        }
+      },
+      "feature": "abs_d_bps"
+    },
+    {
+      "bins": {
+        "+": {
+          "ci95": [
+            14.64,
+            39.38
+          ],
+          "observations": 3480,
+          "rate": 25.11,
+          "windows": 8,
+          "windows_with_any": 8
+        },
+        "-": {
+          "ci95": [
+            25.53,
+            59.13
+          ],
+          "observations": 1610,
+          "rate": 41.43,
+          "windows": 7,
+          "windows_with_any": 7
+        }
+      },
+      "feature": "d_sign"
+    },
+    {
+      "bins": {
+        "favored": {
+          "ci95": [
+            24.8,
+            41.32
+          ],
+          "observations": 2523,
+          "rate": 32.7,
+          "windows": 10,
+          "windows_with_any": 10
+        },
+        "underdog": {
+          "ci95": [
+            7.29,
+            49.76
+          ],
+          "observations": 2523,
+          "rate": 27.19,
+          "windows": 10,
+          "windows_with_any": 5
+        }
+      },
+      "feature": "underdog_vs_favored"
+    },
+    {
+      "bins": {
+        "away": {
+          "ci95": [
+            17.01,
+            47.31
+          ],
+          "observations": 2545,
+          "rate": 31.63,
+          "windows": 10,
+          "windows_with_any": 9
+        },
+        "toward": {
+          "ci95": [
+            19.54,
+            37.69
+          ],
+          "observations": 2545,
+          "rate": 28.92,
+          "windows": 10,
+          "windows_with_any": 10
+        }
+      },
+      "feature": "reference_moving_toward_side"
+    },
+    {
+      "bins": {
+        "1-2": {
+          "ci95": [
+            28.16,
+            63.98
+          ],
+          "observations": 666,
+          "rate": 48.8,
+          "windows": 8,
+          "windows_with_any": 7
+        },
+        "2-4": {
+          "ci95": [
+            3.33,
+            70.34
+          ],
+          "observations": 362,
+          "rate": 64.36,
+          "windows": 3,
+          "windows_with_any": 3
+        },
+        "<1": {
+          "ci95": [
+            14.33,
+            35.44
+          ],
+          "observations": 3860,
+          "rate": 23.78,
+          "windows": 10,
+          "windows_with_any": 9
+        },
+        ">=4": {
+          "ci95": [
+            0.0,
+            75.0
+          ],
+          "observations": 202,
+          "rate": 32.18,
+          "windows": 3,
+          "windows_with_any": 2
+        }
+      },
+      "feature": "side_switches_60s"
+    },
+    {
+      "bins": {
+        "flat": {
+          "ci95": [
+            12.46,
+            41.67
+          ],
+          "observations": 558,
+          "rate": 24.01,
+          "windows": 10,
+          "windows_with_any": 9
+        },
+        "tightening": {
+          "ci95": [
+            15.74,
+            38.05
+          ],
+          "observations": 2892,
+          "rate": 26.11,
+          "windows": 10,
+          "windows_with_any": 10
+        },
+        "widening": {
+          "ci95": [
+            28.7,
+            50.12
+          ],
+          "observations": 1640,
+          "rate": 39.76,
+          "windows": 10,
+          "windows_with_any": 10
+        }
+      },
+      "feature": "pair_delta_30s"
+    }
+  ],
+  "split": {
+    "complete_windows": 16,
+    "discovery_windows": [
+      "GEMI-BTC05M2610051755-UP",
+      "GEMI-BTC05M2610051800-UP",
+      "GEMI-BTC05M2610051805-UP",
+      "GEMI-BTC05M2610051810-UP",
+      "GEMI-BTC05M2610051815-UP",
+      "GEMI-BTC05M2610051820-UP",
+      "GEMI-BTC05M2610051825-UP",
+      "GEMI-BTC05M2610051830-UP",
+      "GEMI-BTC05M2610051835-UP",
+      "GEMI-BTC05M2610051840-UP"
+    ],
+    "oos_markets_not_read": [
+      "GEMI-BTC05M2610051845-UP",
+      "GEMI-BTC05M2610051850-UP",
+      "GEMI-BTC05M2610051855-UP",
+      "GEMI-BTC05M2610051900-UP",
+      "GEMI-BTC05M2610051905-UP",
+      "GEMI-BTC05M2610051910-UP"
+    ],
+    "oos_windows_sealed": 6
+  }
+}

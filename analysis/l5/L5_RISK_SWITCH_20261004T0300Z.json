@@ -1,0 +1,441 @@
+{
+  "P0_risk_fractions": {
+    "by_tte_band": {
+      "0-300s": {
+        "book_pair_cost": {
+          "max": 1.0986,
+          "mean": 0.978,
+          "median": 0.9847,
+          "min": 0.8025,
+          "n": 2195,
+          "p25": 0.9529,
+          "p75": 1.0095,
+          "p90": 1.0291
+        },
+        "n_decisions": 2195,
+        "residual_principal_over_book_cost": {
+          "max": 0.4637,
+          "mean": 0.0737,
+          "median": 0.0554,
+          "min": 0.0001,
+          "n": 2195,
+          "p25": 0.0253,
+          "p75": 0.1075,
+          "p90": 0.1572
+        },
+        "residual_principal_usd": {
+          "max": 344.0727,
+          "mean": 97.7767,
+          "median": 88.6864,
+          "min": 0.0882,
+          "n": 2195,
+          "p25": 39.5222,
+          "p75": 145.2534,
+          "p90": 194.6807
+        },
+        "residual_shares_over_total_shares": {
+          "max": 0.5853,
+          "mean": 0.0925,
+          "median": 0.063,
+          "min": 0.0,
+          "n": 2195,
+          "p25": 0.0283,
+          "p75": 0.1253,
+          "p90": 0.2072
+        },
+        "unhedged_fraction_abs": {
+          "max": 0.5853,
+          "mean": 0.0925,
+          "median": 0.063,
+          "min": 0.0,
+          "n": 2195,
+          "p25": 0.0283,
+          "p75": 0.1253,
+          "p90": 0.2072
+        }
+      },
+      "300-600s": {
+        "book_pair_cost": {
+          "max": 1.173,
+          "mean": 0.9954,
+          "median": 0.9944,
+          "min": 0.7359,
+          "n": 1609,
+          "p25": 0.9609,
+          "p75": 1.0261,
+          "p90": 1.0594
+        },
+        "n_decisions": 1610,
+        "residual_principal_over_book_cost": {
+          "max": 1.0,
+          "mean": 0.1401,
+          "median": 0.1128,
+          "min": 0.0001,
+          "n": 1610,
+          "p25": 0.0461,
+          "p75": 0.2011,
+          "p90": 0.305
+        },
+        "residual_principal_usd": {
+          "max": 272.2003,
+          "mean": 81.5902,
+          "median": 70.3707,
+          "min": 0.0484,
+          "n": 1610,
+          "p25": 27.6541,
+          "p75": 126.5627,
+          "p90": 170.519
+        },
+        "residual_shares_over_total_shares": {
+          "max": 1.0,
+          "mean": 0.1456,
+          "median": 0.1146,
+          "min": 0.0001,
+          "n": 1610,
+          "p25": 0.0515,
+          "p75": 0.2005,
+          "p90": 0.3211
+        },
+        "unhedged_fraction_abs": {
+          "max": 1.0,
+          "mean": 0.1456,
+          "median": 0.1146,
+          "min": 0.0001,
+          "n": 1610,
+          "p25": 0.0515,
+          "p75": 0.2005,
+          "p90": 0.3211
+        }
+      },
+      "600-900s": {
+        "book_pair_cost": {
+          "max": 1.2388,
+          "mean": 0.9858,
+          "median": 0.9793,
+          "min": 0.7662,
+          "n": 1145,
+          "p25": 0.9486,
+          "p75": 1.0164,
+          "p90": 1.0843
+        },
+        "n_decisions": 1426,
+        "residual_principal_over_book_cost": {
+          "max": 1.0,
+          "mean": 0.4052,
+          "median": 0.2979,
+          "min": 0.0,
+          "n": 1380,
+          "p25": 0.1311,
+          "p75": 0.612,
+          "p90": 1.0
+        },
+        "residual_principal_usd": {
+          "max": 282.745,
+          "mean": 69.3562,
+          "median": 55.2495,
+          "min": 0.0,
+          "n": 1426,
+          "p25": 20.0023,
+          "p75": 99.406,
+          "p90": 166.5697
+        },
+        "residual_shares_over_total_shares": {
+          "max": 1.0,
+          "mean": 0.394,
+          "median": 0.2627,
+          "min": 0.0,
+          "n": 1380,
+          "p25": 0.1158,
+          "p75": 0.6155,
+          "p90": 1.0
+        },
+        "unhedged_fraction_abs": {
+          "max": 1.0,
+          "mean": 0.3813,
+          "median": 0.2514,
+          "min": 0.0,
+          "n": 1426,
+          "p25": 0.1035,
+          "p75": 0.595,
+          "p90": 1.0
+        }
+      }
+    },
+    "dollars_deployed": {
+      "max": 4975.2631,
+      "mean": 1533.6821,
+      "median": 1229.2388,
+      "min": 79.9947,
+      "n": 46,
+      "p25": 898.823,
+      "p75": 1972.2057,
+      "p90": 2650.4852
+    },
+    "interpretation_guide": "a FRACTIONAL envelope shows up as a ratio that is stable across windows and TTE bands while the dollar level varies with window size. An ABSOLUTE envelope shows up as the opposite. Compare the spread of the ratios against the spread of dollars_deployed.",
+    "n_windows": 46,
+    "per_window_ratios": {
+      "final_residual_over_total_inventory": {
+        "max": 0.5585,
+        "mean": 0.133,
+        "median": 0.0953,
+        "min": 0.0001,
+        "n": 46,
+        "p25": 0.0405,
+        "p75": 0.169,
+        "p90": 0.3114
+      },
+      "peak_imbalance_over_final_matched": {
+        "max": 2.2472,
+        "mean": 0.4591,
+        "median": 0.3207,
+        "min": 0.0968,
+        "n": 46,
+        "p25": 0.2087,
+        "p75": 0.4341,
+        "p90": 0.9863
+      },
+      "peak_residual_principal_over_dollars_deployed": {
+        "max": 0.55,
+        "mean": 0.1596,
+        "median": 0.1494,
+        "min": 0.0557,
+        "n": 46,
+        "p25": 0.1091,
+        "p75": 0.1861,
+        "p90": 0.2531
+      },
+      "peak_residual_shares_over_total_shares": {
+        "max": 0.5,
+        "mean": 0.1731,
+        "median": 0.1378,
+        "min": 0.0469,
+        "n": 46,
+        "p25": 0.0985,
+        "p75": 0.1867,
+        "p90": 0.3352
+      }
+    },
+    "stability_check": {
+      "cv_dollars_deployed": 0.6085,
+      "cv_peak_residual_over_deployed": 0.5311,
+      "cv_peak_residual_principal_usd": 0.333,
+      "cv_peak_residual_shares_over_total": 0.6657,
+      "reading": "a LOWER coefficient of variation for the ratio than for the dollar level is evidence of a fractional envelope; the reverse is evidence of an absolute one"
+    }
+  },
+  "P2_switch_models": {
+    "A": {
+      "coefficients": {
+        "_bias": -0.8829,
+        "abs_imb_frac": -0.0232,
+        "book_pair": 0.0748,
+        "resid_frac": -0.0232,
+        "trades_since_switch": -0.3307
+      },
+      "description": "inventory only",
+      "out_of_sample": {
+        "accuracy_pct": 75.3,
+        "balanced_accuracy": 0.5,
+        "brier": 0.18491,
+        "confusion": {
+          "fn": 428,
+          "fp": 0,
+          "tn": 1303,
+          "tp": 0
+        },
+        "log_loss": 0.55664,
+        "n": 1731,
+        "same_side_precision": 0.7527,
+        "same_side_recall": 1.0,
+        "switch_base_rate_pct": 24.7,
+        "switch_f1": null,
+        "switch_precision": null,
+        "switch_recall": 0.0
+      }
+    },
+    "B": {
+      "coefficients": {
+        "_bias": -0.9297,
+        "abs_imb_frac": -0.078,
+        "book_pair": 0.0019,
+        "prev_price": 0.3511,
+        "price_change_prev": 0.17,
+        "price_change_same_side": 0.2773,
+        "print_pair": 0.1798,
+        "resid_frac": -0.078,
+        "secs_since_prev": 0.4606,
+        "trades_since_switch": -0.2258
+      },
+      "description": "A + L5-fill-derived price path",
+      "out_of_sample": {
+        "accuracy_pct": 73.8,
+        "balanced_accuracy": 0.5136,
+        "brier": 0.1847,
+        "confusion": {
+          "fn": 398,
+          "fp": 56,
+          "tn": 1247,
+          "tp": 30
+        },
+        "log_loss": 0.55176,
+        "n": 1731,
+        "same_side_precision": 0.7581,
+        "same_side_recall": 0.957,
+        "switch_base_rate_pct": 24.7,
+        "switch_f1": 0.1167,
+        "switch_precision": 0.3488,
+        "switch_recall": 0.0701
+      }
+    },
+    "BASELINE_persistence": {
+      "description": "always predict SAME_SIDE -- i.e. p(switch)=0, the 75.3% rule the inventory model failed to beat",
+      "out_of_sample": {
+        "accuracy_pct": 75.3,
+        "balanced_accuracy": 0.5,
+        "brier": 0.24726,
+        "confusion": {
+          "fn": 428,
+          "fp": 0,
+          "tn": 1303,
+          "tp": 0
+        },
+        "log_loss": 6.83193,
+        "n": 1731,
+        "same_side_precision": 0.7527,
+        "same_side_recall": 1.0,
+        "switch_base_rate_pct": 24.7,
+        "switch_f1": null,
+        "switch_precision": null,
+        "switch_recall": 0.0
+      }
+    },
+    "BASELINE_train_base_rate": {
+      "description": "always predict the TRAIN switch rate (0.298) as a probability -- the honest probabilistic null",
+      "out_of_sample": {
+        "accuracy_pct": 75.3,
+        "balanced_accuracy": 0.5,
+        "brier": 0.18872,
+        "confusion": {
+          "fn": 428,
+          "fp": 0,
+          "tn": 1303,
+          "tp": 0
+        },
+        "log_loss": 0.56573,
+        "n": 1731,
+        "same_side_precision": 0.7527,
+        "same_side_recall": 1.0,
+        "switch_base_rate_pct": 24.7,
+        "switch_f1": null,
+        "switch_precision": null,
+        "switch_recall": 0.0
+      }
+    },
+    "C_btc_path": {
+      "description": "A + B + BTC path / distance from strike",
+      "status": "BLOCKED -- NO DATA",
+      "why": "no BTC spot or index series covering 2026-09-14/15 exists in this repository; searched for price/spot/index/klines/ohlc artifacts and found none"
+    },
+    "E_book_and_flow": {
+      "description": "full order-book and flow features",
+      "status": "BLOCKED -- NO DATA FOR THESE WINDOWS",
+      "why": "the one historical 1-second Polymarket L2 dataset in this repository's provenance is Zenodo record 22084977 (updown_15m.parquet), which covers 2026-08-21..24 and has ZERO overlap with the 2026-09-14/15 behavioral corpus. It does cover 12 windows in which L5 traded, 3,166 fills, 88.3% as maker -- a usable book-complete sample, but a DIFFERENT one. The parquet itself is not on disk."
+    }
+  },
+  "accounting_label": "historical observation of a third party",
+  "control": "the frozen Gemini policy is untouched and not imported",
+  "family": "btc-updown-15m",
+  "label": "L5_RISK_AND_SWITCH_MODEL_V1",
+  "n_windows": 46,
+  "run_length": {
+    "at_the_boundary": {
+      "abs_imbalance_frac": {
+        "max": 1.0,
+        "mean": 0.1743,
+        "median": 0.1064,
+        "min": 0.0,
+        "n": 1458,
+        "p25": 0.0445,
+        "p75": 0.1985,
+        "p90": 0.3996
+      },
+      "book_pair_cost": {
+        "max": 1.2388,
+        "mean": 0.9898,
+        "median": 0.9903,
+        "min": 0.7359,
+        "n": 1412,
+        "p25": 0.9573,
+        "p75": 1.0167,
+        "p90": 1.051
+      },
+      "run_length_that_ended": {
+        "max": 38.0,
+        "mean": 3.4691,
+        "median": 2.0,
+        "min": 1.0,
+        "n": 1458,
+        "p25": 1.0,
+        "p75": 4.0,
+        "p90": 8.0
+      },
+      "seconds_since_prev": {
+        "max": 283.0,
+        "mean": 10.3971,
+        "median": 4.0,
+        "min": 0.0,
+        "n": 1458,
+        "p25": 1.0,
+        "p75": 12.0,
+        "p90": 26.0
+      }
+    },
+    "by_side": {
+      "DOWN": {
+        "max": 38.0,
+        "mean": 3.2069,
+        "median": 2.0,
+        "min": 1.0,
+        "n": 754,
+        "p25": 1.0,
+        "p75": 4.0,
+        "p90": 7.0
+      },
+      "UP": {
+        "max": 27.0,
+        "mean": 3.7507,
+        "median": 2.0,
+        "min": 1.0,
+        "n": 750,
+        "p25": 1.0,
+        "p75": 5.0,
+        "p90": 8.0
+      }
+    },
+    "dollars_per_run": {
+      "max": 499.1485,
+      "mean": 46.9078,
+      "median": 29.4997,
+      "min": 0.0053,
+      "n": 1504,
+      "p25": 9.96,
+      "p75": 65.0707,
+      "p90": 108.3225
+    },
+    "length": {
+      "max": 38.0,
+      "mean": 3.4781,
+      "median": 2.0,
+      "min": 1.0,
+      "n": 1504,
+      "p25": 1.0,
+      "p75": 4.0,
+      "p90": 8.0
+    },
+    "n_runs": 1504
+  },
+  "split": {
+    "test_windows": 14,
+    "train_windows": 32
+  }
+}

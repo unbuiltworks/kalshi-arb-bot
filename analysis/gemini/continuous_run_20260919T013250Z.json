@@ -1,0 +1,5400 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-19T01:32:50.452223+00:00",
+  "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+  "driver_executable_sha": "e32e31f2711c10d99a499717d654bee76468d55171b3f5f13d5bff8439cd369f",
+  "driver_envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+  "bundle_sha": "bfc4ec1e3a7efcff19778ae0f9f3c0f8dc7752c949d256c59eb7f5d0fb2d9fe6",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "entry_schedule": {
+    "in_band": true,
+    "band": [
+      240.0,
+      280.0
+    ],
+    "waited_s": 151.44,
+    "polls": 23,
+    "entered_tte_s": 278.3392996788025,
+    "selection": {
+      "eligible": true,
+      "chosen": {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "tte_s": 278.3392996788025,
+        "contract_status": "active",
+        "market_state": "open"
+      },
+      "band": [
+        240.0,
+        280.0
+      ],
+      "considered": [
+        {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "tte_s": 278.3392996788025,
+          "contract_status": "active",
+          "market_state": "open"
+        }
+      ]
+    },
+    "observed": [
+      {
+        "waited_s": 106.56,
+        "tte_s": [
+          23.67878031730652,
+          -276.3212196826935,
+          -576.3212196826935,
+          -876.3212196826935
+        ]
+      },
+      {
+        "waited_s": 112.86,
+        "tte_s": [
+          17.980948209762573,
+          -282.0190517902374,
+          -582.0190517902374,
+          -882.0190517902374
+        ]
+      },
+      {
+        "waited_s": 118.93,
+        "tte_s": [
+          11.682529211044312,
+          -288.3174707889557,
+          -588.3174707889557,
+          -888.3174707889557
+        ]
+      },
+      {
+        "waited_s": 124.75,
+        "tte_s": [
+          5.618398189544678,
+          -294.3816018104553,
+          -594.3816018104553,
+          -894.3816018104553
+        ]
+      },
+      {
+        "waited_s": 139.94,
+        "tte_s": [
+          -0.20926189422607422,
+          -300.2092618942261,
+          -600.2092618942261,
+          -900.2092618942261
+        ]
+      },
+      {
+        "waited_s": 146.2,
+        "tte_s": [
+          284.60827469825745,
+          -15.391725301742554,
+          -315.39172530174255,
+          -615.3917253017426
+        ]
+      }
+    ],
+    "labels": "EXPERIMENTAL SCHEDULING ONLY: this chose WHEN to begin. The controller, prices, sizing and every bound are unchanged and know nothing about it."
+  },
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609190140-UP",
+      "tte_s": 278.3392996788025,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "band": [
+      240.0,
+      280.0
+    ],
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "tte_s": 278.3392996788025,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "preflight": {
+    "agrees": true,
+    "discrepancies": [],
+    "checked_before_latch": true
+  },
+  "cohort": {
+    "label": "GEMINI_MUTATION_COHORT_V1",
+    "cohort_id": "COHORT-2026-09-18-C8B",
+    "created_utc": "2026-09-19T00:45:53.192937+00:00",
+    "budget": 12,
+    "consumed": 0,
+    "remaining": 12,
+    "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-18-C8B/ledger.jsonl",
+    "envelope_max_actions": 12,
+    "predecessor": {
+      "intact": true,
+      "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-18-C7/ledger.jsonl",
+      "recorded_sha256": "3e8399a3b1973f69ca806d1c07eb91899fa3ad774081ed5ec53eb1c956e0f0d8",
+      "current_sha256": "3e8399a3b1973f69ca806d1c07eb91899fa3ad774081ed5ec53eb1c956e0f0d8",
+      "recorded_consumed": 6,
+      "current_consumed": 6,
+      "why": null
+    },
+    "note": "CONTINUOUS-8: REAL FILL -> COHERENT AUTHORITATIVE REFRESH -> INVENTORY CHANGE -> CHANGED L5 ACTION, entered EARLY (240-280s TTE) by experimental scheduling rather than by dispatch accident. BUDGET 12 = CP.MAX_ACTIONS, the EXISTING frozen envelope ceiling: this is LIFECYCLE CAPACITY for a window that runs ~2x longer, not financial risk. Every absolute bound is unchanged -- $0.15 spend, 0.04 residual, 0.04 imbalance, 0.10 per leg, 0.01 size, MOC maker-only, no pair-cost ceiling. LINEAGE, EXPLICIT: chained to C7's ledger, NOT to C8's. verify_predecessor is SINGLE-HOP, so whichever ledger this names is the only one whose bytes this cohort enforces before the latch -- and C8's ledger is EMPTY, carrying no mutation history to protect. Chaining to it would have left C7's six spent slots unguarded by the live path. C5/C6/C7 chained to the last cohort that had actually consumed slots; those coincided with the immediate predecessor until now. C8 (0/6) is ABANDONED, kept byte-for-byte, never to be used, and pinned by test rather than by this chain.",
+    "labels": "the cohort budget is a TIGHTENING of the envelope, never an extension of it. No rollover, no automatic successor."
+  },
+  "authoritative_state": {
+    "fills": [],
+    "open_orders": [],
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    },
+    "terminal_seen": 0,
+    "trades": 0,
+    "coherence_readers": {
+      "terminal_history_readable": true,
+      "trades_readable": true,
+      "terminal_history_error": null,
+      "trades_error": null,
+      "why": "the gate explains a disappearance from these two reads plus filled history; if either is unreadable, an unexplained order stops the window instead of being assumed away"
+    }
+  },
+  "ledger_unresolved": [],
+  "ledger_consumed_slots": 0,
+  "pre_latch_recovery": {
+    "checked_before_latch": true,
+    "checked_before_authorization": true,
+    "recovered": true,
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "working": "venue authoritative: 0 resting (+none / -none)",
+    "budget_consumed": 0,
+    "budget_note": "max(ledger 0, venue 0): a disagreement is always read upward",
+    "budget_left": 12
+  },
+  "authorization": {
+    "authorized": true,
+    "required_auth_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+    "authorized_sha": "e32e31f2711c10d99a499717d654bee76468d55171b3f5f13d5bff8439cd369f",
+    "executable_sha": "e32e31f2711c10d99a499717d654bee76468d55171b3f5f13d5bff8439cd369f",
+    "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+    "arming": {
+      "armed": true,
+      "live_flag": true,
+      "auth_id_present": true,
+      "auth_id_matches": true,
+      "expiry_supplied": true,
+      "expired": false,
+      "expected_auth_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "why_not": null
+    },
+    "why_not": [],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "bundle": {
+    "authorized": true,
+    "bundle_sha": "bfc4ec1e3a7efcff19778ae0f9f3c0f8dc7752c949d256c59eb7f5d0fb2d9fe6",
+    "authorized_bundle": "bfc4ec1e3a7efcff19778ae0f9f3c0f8dc7752c949d256c59eb7f5d0fb2d9fe6",
+    "members": [
+      "ws_continuous.py",
+      "run_continuous.py",
+      "continuous_probe.py",
+      "cohort.py",
+      "continuous_preflight.py",
+      "metadata.py",
+      "arming.py",
+      "bundle.py"
+    ],
+    "member_shas": {
+      "ws_continuous.py": "12d0c7d7d52da959b786a4af508af1d76f597e6eaec432eb23fc45b114c5406c",
+      "run_continuous.py": "9364d3040de34c4a8cabb98ba140bad6247fccf10b11b1f9aeacea7893b0166e",
+      "continuous_probe.py": "ba7fae6a55e782ba2246c769678edef606641af8414cb352cee9007f0d9c60c2",
+      "cohort.py": "e4a5845a5a9c22dc49cd192a1a73fd61f30ecac485ac73a9d42aacecb34be0e8",
+      "continuous_preflight.py": "48f108eb96135fb5df36f4b43c0a94f26cbce1515fece2e58c1bf5ecc61647d5",
+      "metadata.py": "b7a33a182c79e80e34cd1d425cdb0e9f93881ce4d20ef9c33bc42964102cf939",
+      "arming.py": "686fcfd0c05c341d1cd8b194e090d9637765b77251b545359b5025dca51e9946",
+      "bundle.py": "60bda842c92471aaa5cd496b547e3327200e7ab1533896a3792443f60aa36531"
+    },
+    "why_not": [],
+    "labels": "executable_sha covers the driver's BOUNDS; bundle_sha covers the ORDERING too. Both are named by an authorization, because undoing either has cost a live authorization before."
+  },
+  "latch": {
+    "consumed": true,
+    "intent_id": "cont-20260919T013523Z",
+    "state": "INTENT_PERSISTED",
+    "when": "BEFORE the session connected"
+  },
+  "decisions": [
+    {
+      "cycle": 1,
+      "utc": "2026-09-19T01:35:28.748914+00:00",
+      "tte_s": 271.2510905265808,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [],
+      "budget_before_decision": {
+        "consumed": 0,
+        "remaining": 12,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781728.7915487,
+          "tte_s": 271.2510905265808,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781728",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.58",
+            "spread": "0.27",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.42",
+            "ask": "0.69",
+            "spread": "0.27",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.73",
+          "crossing_pair_cost": "1.27",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:35:28.749079+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.042,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "483.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.28",
+                "qty": "10.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.27",
+                "qty": "5.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.18",
+                "qty": "45.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.01",
+                "qty": "10.0",
+                "venue_ts": "1789781728"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.31",
+            "best_qty": "483.0",
+            "qty_shown": "553.0"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.58",
+                "qty": "10.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.63",
+                "qty": "405.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.64",
+                "qty": "5.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.75",
+                "qty": "45.0",
+                "venue_ts": "1789781728"
+              },
+              {
+                "price": "0.99",
+                "qty": "10.0",
+                "venue_ts": "1789781728"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.58",
+            "best_qty": "10.0",
+            "qty_shown": "475.0"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781728",
+          "snapshot_age_s": 0.749,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0425,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.58",
+          "presented_yes_ask": "0.58",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.42",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [],
+        "place": [
+          {
+            "outcome": "Up",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "OPEN",
+            "stage": "DECIDED"
+          },
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.42",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "OPEN",
+            "stage": "DECIDED"
+          }
+        ],
+        "cancel": [],
+        "mutations": 2
+      },
+      "turn": {
+        "actions_remaining": 12,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 0,
+        "remaining": 12,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 2,
+      "utc": "2026-09-19T01:35:42.835030+00:00",
+      "tte_s": 257.1649749279022,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-d246bcf3",
+          "leg": "NO",
+          "price": "0.42",
+          "qty": "0.01",
+          "resting_since": 1789781742.729374,
+          "venue_order_id": "145828836256673013"
+        },
+        {
+          "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "resting_since": 1789781742.729374,
+          "venue_order_id": "145828836256673007"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 2,
+        "remaining": 10,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781742.8993564,
+          "tte_s": 257.1649749279022,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781742",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.43",
+            "spread": "0.12",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.57",
+            "ask": "0.69",
+            "spread": "0.12",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.88",
+          "crossing_pair_cost": "1.12",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:35:42.835177+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.064,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "0.01",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.25",
+                "qty": "10.0",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.18",
+                "qty": "833.0",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.1",
+                "qty": "5.0",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.05",
+                "qty": "45.0",
+                "venue_ts": "1789781742"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.31",
+            "best_qty": "0.01",
+            "qty_shown": "893.01"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.43",
+                "qty": "5.0",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.5",
+                "qty": "300.0",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.51",
+                "qty": "10.0",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.54",
+                "qty": "45.0",
+                "venue_ts": "1789781742"
+              },
+              {
+                "price": "0.58",
+                "qty": "0.01",
+                "venue_ts": "1789781742"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.43",
+            "best_qty": "5.0",
+            "qty_shown": "360.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781742",
+          "snapshot_age_s": 0.835,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0642,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.43",
+          "presented_yes_ask": "0.43",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.57",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [
+          {
+            "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "resting_since": 1789781742.729374,
+            "venue_order_id": "145828836256673007"
+          }
+        ],
+        "place": [
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.57",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "OPEN",
+            "stage": "DECIDED"
+          }
+        ],
+        "cancel": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-d246bcf3",
+            "leg": "NO",
+            "price": "0.42",
+            "qty": "0.01",
+            "resting_since": 1789781742.729374,
+            "venue_order_id": "145828836256673013"
+          }
+        ],
+        "mutations": 2
+      },
+      "turn": {
+        "actions_remaining": 10,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 2,
+        "remaining": 10,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 3,
+      "utc": "2026-09-19T01:35:50.357209+00:00",
+      "tte_s": 249.64279556274414,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-6a6dd040",
+          "leg": "NO",
+          "price": "0.57",
+          "qty": "0.01",
+          "resting_since": 1789781750.2861297,
+          "venue_order_id": "145828836256679011"
+        },
+        {
+          "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "resting_since": 1789781750.2861297,
+          "venue_order_id": "145828836256673007"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 4,
+        "remaining": 8,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781750.4322534,
+          "tte_s": 249.64279556274414,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781750",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.38",
+            "spread": "0.07",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.62",
+            "ask": "0.69",
+            "spread": "0.07",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.93",
+          "crossing_pair_cost": "1.07",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:35:50.357344+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.075,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "0.01",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.21",
+                "qty": "10.0",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.18",
+                "qty": "833.0",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.08",
+                "qty": "5.0",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.03",
+                "qty": "45.0",
+                "venue_ts": "1789781750"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.31",
+            "best_qty": "0.01",
+            "qty_shown": "893.01"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.38",
+                "qty": "5.0",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.43",
+                "qty": "0.01",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.44",
+                "qty": "10.0",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.48",
+                "qty": "45.0",
+                "venue_ts": "1789781750"
+              },
+              {
+                "price": "0.49",
+                "qty": "294.0",
+                "venue_ts": "1789781750"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.38",
+            "best_qty": "5.0",
+            "qty_shown": "354.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781750",
+          "snapshot_age_s": 0.357,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0749,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.38",
+          "presented_yes_ask": "0.38",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.62",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [
+          {
+            "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "resting_since": 1789781750.2861297,
+            "venue_order_id": "145828836256673007"
+          }
+        ],
+        "place": [
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.62",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "OPEN",
+            "stage": "DECIDED"
+          }
+        ],
+        "cancel": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-6a6dd040",
+            "leg": "NO",
+            "price": "0.57",
+            "qty": "0.01",
+            "resting_since": 1789781750.2861297,
+            "venue_order_id": "145828836256679011"
+          }
+        ],
+        "mutations": 2
+      },
+      "turn": {
+        "actions_remaining": 8,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 4,
+        "remaining": 8,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 4,
+      "utc": "2026-09-19T01:35:59.550539+00:00",
+      "tte_s": 240.44946479797363,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+          "leg": "NO",
+          "price": "0.62",
+          "qty": "0.01",
+          "resting_since": 1789781759.4184058,
+          "venue_order_id": "145828836256682805"
+        },
+        {
+          "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "resting_since": 1789781759.4184058,
+          "venue_order_id": "145828836256673007"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781759.6040049,
+          "tte_s": 240.44946479797363,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781759",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.38",
+            "spread": "0.07",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.62",
+            "ask": "0.69",
+            "spread": "0.07",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.93",
+          "crossing_pair_cost": "1.07",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:35:59.550684+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.053,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "0.01",
+                "venue_ts": "1789781759"
+              },
+              {
+                "price": "0.15",
+                "qty": "10.0",
+                "venue_ts": "1789781759"
+              },
+              {
+                "price": "0.12",
+                "qty": "1250.0",
+                "venue_ts": "1789781759"
+              },
+              {
+                "price": "0.01",
+                "qty": "10.0",
+                "venue_ts": "1789781759"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.31",
+            "best_qty": "0.01",
+            "qty_shown": "1270.01"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.38",
+                "qty": "0.01",
+                "venue_ts": "1789781759"
+              },
+              {
+                "price": "0.43",
+                "qty": "263.0",
+                "venue_ts": "1789781759"
+              },
+              {
+                "price": "0.5",
+                "qty": "10.0",
+                "venue_ts": "1789781759"
+              },
+              {
+                "price": "0.99",
+                "qty": "10.0",
+                "venue_ts": "1789781759"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.38",
+            "best_qty": "0.01",
+            "qty_shown": "283.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781759",
+          "snapshot_age_s": 0.551,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0533,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.38",
+          "presented_yes_ask": "0.38",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.62",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+            "leg": "NO",
+            "price": "0.62",
+            "qty": "0.01",
+            "resting_since": 1789781759.4184058,
+            "venue_order_id": "145828836256682805"
+          },
+          {
+            "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "resting_since": 1789781759.4184058,
+            "venue_order_id": "145828836256673007"
+          }
+        ],
+        "place": [],
+        "cancel": [],
+        "mutations": 0
+      },
+      "turn": {
+        "actions_remaining": 6,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 5,
+      "utc": "2026-09-19T01:36:06.113345+00:00",
+      "tte_s": 233.8866581916809,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+          "leg": "NO",
+          "price": "0.62",
+          "qty": "0.01",
+          "resting_since": 1789781766.053605,
+          "venue_order_id": "145828836256682805"
+        },
+        {
+          "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "resting_since": 1789781766.053605,
+          "venue_order_id": "145828836256673007"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781766.1557395,
+          "tte_s": 233.8866581916809,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781766",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.38",
+            "spread": "0.07",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.62",
+            "ask": "0.69",
+            "spread": "0.07",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.93",
+          "crossing_pair_cost": "1.07",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:36:06.113507+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.042,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "0.01",
+                "venue_ts": "1789781766"
+              },
+              {
+                "price": "0.17",
+                "qty": "10.0",
+                "venue_ts": "1789781766"
+              },
+              {
+                "price": "0.12",
+                "qty": "1250.0",
+                "venue_ts": "1789781766"
+              },
+              {
+                "price": "0.01",
+                "qty": "10.0",
+                "venue_ts": "1789781766"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.31",
+            "best_qty": "0.01",
+            "qty_shown": "1270.01"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.38",
+                "qty": "0.01",
+                "venue_ts": "1789781766"
+              },
+              {
+                "price": "0.43",
+                "qty": "273.0",
+                "venue_ts": "1789781766"
+              },
+              {
+                "price": "0.99",
+                "qty": "10.0",
+                "venue_ts": "1789781766"
+              }
+            ],
+            "n_levels": 3,
+            "best": "0.38",
+            "best_qty": "0.01",
+            "qty_shown": "283.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781766",
+          "snapshot_age_s": 0.114,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0422,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.38",
+          "presented_yes_ask": "0.38",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.62",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+            "leg": "NO",
+            "price": "0.62",
+            "qty": "0.01",
+            "resting_since": 1789781766.053605,
+            "venue_order_id": "145828836256682805"
+          },
+          {
+            "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "resting_since": 1789781766.053605,
+            "venue_order_id": "145828836256673007"
+          }
+        ],
+        "place": [],
+        "cancel": [],
+        "mutations": 0
+      },
+      "turn": {
+        "actions_remaining": 6,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 6,
+      "utc": "2026-09-19T01:36:13.497054+00:00",
+      "tte_s": 226.50295162200928,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+          "leg": "NO",
+          "price": "0.62",
+          "qty": "0.01",
+          "resting_since": 1789781773.2666366,
+          "venue_order_id": "145828836256682805"
+        },
+        {
+          "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "resting_since": 1789781773.2666366,
+          "venue_order_id": "145828836256673007"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781773.5625072,
+          "tte_s": 226.50295162200928,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781773",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.35",
+            "spread": "0.04",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.65",
+            "ask": "0.69",
+            "spread": "0.04",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.96",
+          "crossing_pair_cost": "1.04",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:36:13.497217+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.065,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "0.01",
+                "venue_ts": "1789781773"
+              },
+              {
+                "price": "0.17",
+                "qty": "10.0",
+                "venue_ts": "1789781773"
+              },
+              {
+                "price": "0.12",
+                "qty": "1250.0",
+                "venue_ts": "1789781773"
+              },
+              {
+                "price": "0.01",
+                "qty": "10.0",
+                "venue_ts": "1789781773"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.31",
+            "best_qty": "0.01",
+            "qty_shown": "1270.01"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.35",
+                "qty": "10.0",
+                "venue_ts": "1789781773"
+              },
+              {
+                "price": "0.38",
+                "qty": "0.01",
+                "venue_ts": "1789781773"
+              },
+              {
+                "price": "0.43",
+                "qty": "263.0",
+                "venue_ts": "1789781773"
+              },
+              {
+                "price": "0.99",
+                "qty": "10.0",
+                "venue_ts": "1789781773"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.35",
+            "best_qty": "10.0",
+            "qty_shown": "283.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781773",
+          "snapshot_age_s": 0.497,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0653,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.35",
+          "presented_yes_ask": "0.35",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.65",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [
+          {
+            "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "resting_since": 1789781773.2666366,
+            "venue_order_id": "145828836256673007"
+          }
+        ],
+        "place": [
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.65",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "OPEN",
+            "stage": "DECIDED"
+          }
+        ],
+        "cancel": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+            "leg": "NO",
+            "price": "0.62",
+            "qty": "0.01",
+            "resting_since": 1789781773.2666366,
+            "venue_order_id": "145828836256682805"
+          }
+        ],
+        "mutations": 2
+      },
+      "turn": {
+        "actions_remaining": 6,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 7,
+      "utc": "2026-09-19T01:36:20.948583+00:00",
+      "tte_s": 219.05142092704773,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+          "leg": "NO",
+          "price": "0.65",
+          "qty": "0.01",
+          "resting_since": 1789781780.780352,
+          "venue_order_id": "145828836256695957"
+        },
+        {
+          "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "resting_since": 1789781780.780352,
+          "venue_order_id": "145828836256673007"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 8,
+        "remaining": 4,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781781.076267,
+          "tte_s": 219.05142092704773,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781781",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.35",
+            "spread": "0.04",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.65",
+            "ask": "0.69",
+            "spread": "0.04",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.96",
+          "crossing_pair_cost": "1.04",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:36:20.948744+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.127,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "0.01",
+                "venue_ts": "1789781781"
+              },
+              {
+                "price": "0.12",
+                "qty": "1260.0",
+                "venue_ts": "1789781781"
+              },
+              {
+                "price": "0.01",
+                "qty": "10.0",
+                "venue_ts": "1789781781"
+              }
+            ],
+            "n_levels": 3,
+            "best": "0.31",
+            "best_qty": "0.01",
+            "qty_shown": "1270.01"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.35",
+                "qty": "0.01",
+                "venue_ts": "1789781781"
+              },
+              {
+                "price": "0.41",
+                "qty": "10.0",
+                "venue_ts": "1789781781"
+              },
+              {
+                "price": "0.42",
+                "qty": "258.0",
+                "venue_ts": "1789781781"
+              },
+              {
+                "price": "0.99",
+                "qty": "10.0",
+                "venue_ts": "1789781781"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.35",
+            "best_qty": "0.01",
+            "qty_shown": "278.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781781",
+          "snapshot_age_s": -0.051,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.1275,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.35",
+          "presented_yes_ask": "0.35",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.65",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+            "leg": "NO",
+            "price": "0.65",
+            "qty": "0.01",
+            "resting_since": 1789781780.780352,
+            "venue_order_id": "145828836256695957"
+          },
+          {
+            "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "resting_since": 1789781780.780352,
+            "venue_order_id": "145828836256673007"
+          }
+        ],
+        "place": [],
+        "cancel": [],
+        "mutations": 0
+      },
+      "turn": {
+        "actions_remaining": 4,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 8,
+        "remaining": 4,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 8,
+      "utc": "2026-09-19T01:36:27.391924+00:00",
+      "tte_s": 212.60808086395264,
+      "inventory_before_decision": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+          "leg": "NO",
+          "price": "0.65",
+          "qty": "0.01",
+          "resting_since": 1789781787.140511,
+          "venue_order_id": "145828836256695957"
+        },
+        {
+          "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "resting_since": 1789781787.140511,
+          "venue_order_id": "145828836256673007"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 8,
+        "remaining": 4,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781787.432572,
+          "tte_s": 212.60808086395264,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781787",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.31",
+            "ask": "0.33",
+            "spread": "0.02",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.67",
+            "ask": "0.69",
+            "spread": "0.02",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.98",
+          "crossing_pair_cost": "1.02",
+          "last_trade_price": "0.48",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:36:27.392141+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.04,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "0.01",
+                "venue_ts": "1789781787"
+              },
+              {
+                "price": "0.12",
+                "qty": "1260.0",
+                "venue_ts": "1789781787"
+              },
+              {
+                "price": "0.05",
+                "qty": "5.0",
+                "venue_ts": "1789781787"
+              },
+              {
+                "price": "0.01",
+                "qty": "10.0",
+                "venue_ts": "1789781787"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.31",
+            "best_qty": "0.01",
+            "qty_shown": "1275.01"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.33",
+                "qty": "15.0",
+                "venue_ts": "1789781787"
+              },
+              {
+                "price": "0.35",
+                "qty": "0.01",
+                "venue_ts": "1789781787"
+              },
+              {
+                "price": "0.41",
+                "qty": "254.0",
+                "venue_ts": "1789781787"
+              },
+              {
+                "price": "0.43",
+                "qty": "45.0",
+                "venue_ts": "1789781787"
+              },
+              {
+                "price": "0.99",
+                "qty": "10.0",
+                "venue_ts": "1789781787"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.33",
+            "best_qty": "15.0",
+            "qty_shown": "324.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781787",
+          "snapshot_age_s": 0.392,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0404,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.31",
+          "presented_yes_bid": "0.31",
+          "ladder_best_ask": "0.33",
+          "presented_yes_ask": "0.33",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "RUNNING",
+      "window_phase": "WINDOW_OPEN",
+      "why": null,
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.31",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.67",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "OPEN",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "OPEN",
+        "OPEN"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [
+          {
+            "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+            "leg": "YES",
+            "price": "0.31",
+            "qty": "0.01",
+            "resting_since": 1789781787.140511,
+            "venue_order_id": "145828836256673007"
+          }
+        ],
+        "place": [
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.67",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "OPEN",
+            "stage": "DECIDED"
+          }
+        ],
+        "cancel": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+            "leg": "NO",
+            "price": "0.65",
+            "qty": "0.01",
+            "resting_since": 1789781787.140511,
+            "venue_order_id": "145828836256695957"
+          }
+        ],
+        "mutations": 2
+      },
+      "turn": {
+        "actions_remaining": 4,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 8,
+        "remaining": 4,
+        "cohort_budget": 12
+      }
+    },
+    {
+      "cycle": 9,
+      "utc": "2026-09-19T01:36:37.170616+00:00",
+      "tte_s": 202.82938647270203,
+      "inventory_before_decision": {
+        "yes_qty": "0.01",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0.01",
+        "inventory_imbalance": "0.01",
+        "avg_yes_cost": "0.31",
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0.0031",
+        "same_side_run": {
+          "leg": "YES",
+          "len": 1
+        },
+        "n_fills": 1,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working_orders_before": [
+        {
+          "client_order_id": "l5cp-owner-2026-no-20763d1b",
+          "leg": "NO",
+          "price": "0.67",
+          "qty": "0.01",
+          "resting_since": 1789781797.08806,
+          "venue_order_id": "145828836256704088"
+        }
+      ],
+      "budget_before_decision": {
+        "consumed": 10,
+        "remaining": 2,
+        "cohort_budget": 12
+      },
+      "book_state": {
+        "presented": {
+          "present": true,
+          "t_utc": 1789781797.2092636,
+          "tte_s": 202.82938647270203,
+          "state_id": "GEMI-BTC05M2609190140-UP@1789781797",
+          "inventory_known": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "readable": true,
+          "identity_consistent": true,
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "yes": {
+            "bid": "0.12",
+            "ask": "0.31",
+            "spread": "0.19",
+            "qty": null
+          },
+          "no": {
+            "bid": "0.69",
+            "ask": "0.88",
+            "spread": "0.19",
+            "qty": null
+          },
+          "qty_why": "this source publishes PRICES ONLY -- the contract object carries no depth. Size is reported under `depth`, from a separate read, and is NOT inferred here",
+          "passive_pair_cost": "0.81",
+          "crossing_pair_cost": "1.19",
+          "last_trade_price": "0.31",
+          "tick": "0.01"
+        },
+        "depth": {
+          "source": "GET https://api.gemini.com/v1/book/{symbol} (PUBLIC, unauthenticated)",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "read_utc": "2026-09-19T01:36:37.170735+00:00",
+          "labels": "EVIDENCE ONLY. A separate read from the book the controller decided on, with its own clock; the two are reported side by side and never merged.",
+          "rtt_s": 0.038,
+          "readable": true,
+          "bids": {
+            "levels": [
+              {
+                "price": "0.12",
+                "qty": "10.0",
+                "venue_ts": "1789781797"
+              },
+              {
+                "price": "0.05",
+                "qty": "3000.0",
+                "venue_ts": "1789781797"
+              },
+              {
+                "price": "0.04",
+                "qty": "5.0",
+                "venue_ts": "1789781797"
+              },
+              {
+                "price": "0.01",
+                "qty": "10.0",
+                "venue_ts": "1789781797"
+              }
+            ],
+            "n_levels": 4,
+            "best": "0.12",
+            "best_qty": "10.0",
+            "qty_shown": "3025.0"
+          },
+          "asks": {
+            "levels": [
+              {
+                "price": "0.31",
+                "qty": "5.0",
+                "venue_ts": "1789781797"
+              },
+              {
+                "price": "0.33",
+                "qty": "0.01",
+                "venue_ts": "1789781797"
+              },
+              {
+                "price": "0.35",
+                "qty": "240.0",
+                "venue_ts": "1789781797"
+              },
+              {
+                "price": "0.4",
+                "qty": "45.0",
+                "venue_ts": "1789781797"
+              },
+              {
+                "price": "0.99",
+                "qty": "10.0",
+                "venue_ts": "1789781797"
+              }
+            ],
+            "n_levels": 5,
+            "best": "0.31",
+            "best_qty": "5.0",
+            "qty_shown": "300.01"
+          },
+          "levels_requested": 5,
+          "venue_ts": "1789781797",
+          "snapshot_age_s": 0.171,
+          "no_side_depth": null,
+          "no_side_depth_why": "the venue publishes one contract ladder and no separate NO ladder; a NO size is NOT derived from an ask size here",
+          "elapsed_s": 0.0385,
+          "captured": true
+        },
+        "agreement": {
+          "checked": true,
+          "bid_agrees": true,
+          "ask_agrees": true,
+          "agrees": true,
+          "ladder_best_bid": "0.12",
+          "presented_yes_bid": "0.12",
+          "ladder_best_ask": "0.31",
+          "presented_yes_ask": "0.31",
+          "labels": "agreement means the ladder's touch IS the presented YES touch, so the ladder's sizes describe the presented book. A disagreement means the two reads caught different instants and the sizes must not be read as the presented book's sizes."
+        },
+        "labels": "`presented` is the state the controller decided on. `depth` is a separate PUBLIC read taken next to it, for size only. Neither is derived from our own order prices or from ticks_behind_bid."
+      },
+      "state": "STOPPED",
+      "window_phase": "WINDOW_OPEN",
+      "why": "budget: 3 mutation(s) required, 2 slot(s) left of 12",
+      "actions": [
+        {
+          "outcome": "Up",
+          "leg": "YES",
+          "price": "0.12",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "EXTEND",
+          "stage": "DECIDED"
+        },
+        {
+          "outcome": "Down",
+          "leg": "NO",
+          "price": "0.69",
+          "qty": "0.01",
+          "rung_index": 0,
+          "ticks_behind_bid": 0,
+          "action": "COMPLETE",
+          "stage": "DECIDED"
+        }
+      ],
+      "classification": [
+        "EXTEND",
+        "COMPLETE"
+      ],
+      "holds": [],
+      "held_by": [],
+      "plan": {
+        "keep": [],
+        "place": [
+          {
+            "outcome": "Up",
+            "leg": "YES",
+            "price": "0.12",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "EXTEND",
+            "stage": "DECIDED"
+          },
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.69",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "COMPLETE",
+            "stage": "DECIDED"
+          }
+        ],
+        "cancel": [
+          {
+            "client_order_id": "l5cp-owner-2026-no-20763d1b",
+            "leg": "NO",
+            "price": "0.67",
+            "qty": "0.01",
+            "resting_since": 1789781797.08806,
+            "venue_order_id": "145828836256704088"
+          }
+        ],
+        "mutations": 3
+      },
+      "turn": {
+        "actions_remaining": 2,
+        "probe_state": "RUNNING",
+        "stop": null,
+        "why_no_surface": null,
+        "blocked_by": null
+      },
+      "budget_after_decision": {
+        "consumed": 10,
+        "remaining": 2,
+        "cohort_budget": 12
+      }
+    }
+  ],
+  "authoritative_reads": [
+    {
+      "read_seq": 1,
+      "utc": "2026-09-19T01:35:28.384760+00:00",
+      "decide_calls_so_far": 0,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 1
+    },
+    {
+      "read_seq": 2,
+      "utc": "2026-09-19T01:35:30.741237+00:00",
+      "decide_calls_so_far": 1,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "post_cancel",
+      "driver_cycle": 1
+    },
+    {
+      "read_seq": 3,
+      "utc": "2026-09-19T01:35:42.729309+00:00",
+      "decide_calls_so_far": 1,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-d246bcf3",
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 2
+    },
+    {
+      "read_seq": 4,
+      "utc": "2026-09-19T01:35:44.166294+00:00",
+      "decide_calls_so_far": 2,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "post_cancel",
+      "driver_cycle": 2
+    },
+    {
+      "read_seq": 5,
+      "utc": "2026-09-19T01:35:50.286058+00:00",
+      "decide_calls_so_far": 2,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-6a6dd040",
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 3
+    },
+    {
+      "read_seq": 6,
+      "utc": "2026-09-19T01:35:52.277028+00:00",
+      "decide_calls_so_far": 3,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "post_cancel",
+      "driver_cycle": 3
+    },
+    {
+      "read_seq": 7,
+      "utc": "2026-09-19T01:35:59.418346+00:00",
+      "decide_calls_so_far": 3,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-3e96ba93",
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 4
+    },
+    {
+      "read_seq": 8,
+      "utc": "2026-09-19T01:36:06.053541+00:00",
+      "decide_calls_so_far": 4,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-3e96ba93",
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 5
+    },
+    {
+      "read_seq": 9,
+      "utc": "2026-09-19T01:36:13.266574+00:00",
+      "decide_calls_so_far": 5,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-3e96ba93",
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 6
+    },
+    {
+      "read_seq": 10,
+      "utc": "2026-09-19T01:36:14.745330+00:00",
+      "decide_calls_so_far": 6,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "post_cancel",
+      "driver_cycle": 6
+    },
+    {
+      "read_seq": 11,
+      "utc": "2026-09-19T01:36:20.780287+00:00",
+      "decide_calls_so_far": 6,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-8a3143b1",
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 7
+    },
+    {
+      "read_seq": 12,
+      "utc": "2026-09-19T01:36:27.140444+00:00",
+      "decide_calls_so_far": 7,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-8a3143b1",
+        "l5cp-owner-2026-yes-1713dabf"
+      ],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "pre_decide",
+      "driver_cycle": 8
+    },
+    {
+      "read_seq": 13,
+      "utc": "2026-09-19T01:36:31.194540+00:00",
+      "decide_calls_so_far": 8,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [],
+      "n_fills": 0,
+      "open_order_ids": [],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "post_cancel",
+      "driver_cycle": 8
+    },
+    {
+      "read_seq": 14,
+      "utc": "2026-09-19T01:36:37.087902+00:00",
+      "decide_calls_so_far": 8,
+      "inventory_before_this_read": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [
+        {
+          "leg": "YES",
+          "qty": "0.01",
+          "price": "0.31"
+        }
+      ],
+      "n_fills": 1,
+      "open_order_ids": [
+        "l5cp-owner-2026-no-20763d1b"
+      ],
+      "new_fill_order_ids": [
+        "145828836256673007"
+      ],
+      "new_fills": [
+        {
+          "leg": "YES",
+          "qty": "0.01",
+          "price": "0.31"
+        }
+      ],
+      "when": "pre_decide",
+      "driver_cycle": 9
+    },
+    {
+      "read_seq": 15,
+      "utc": "2026-09-19T01:36:38.255086+00:00",
+      "decide_calls_so_far": 9,
+      "inventory_before_this_read": {
+        "yes_qty": "0.01",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0.01",
+        "inventory_imbalance": "0.01",
+        "avg_yes_cost": "0.31",
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0.0031",
+        "same_side_run": {
+          "leg": "YES",
+          "len": 1
+        },
+        "n_fills": 1,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "fills_readable": true,
+      "open_orders_readable": true,
+      "fills": [
+        {
+          "leg": "YES",
+          "qty": "0.01",
+          "price": "0.31"
+        }
+      ],
+      "n_fills": 1,
+      "open_order_ids": [],
+      "new_fill_order_ids": [],
+      "new_fills": [],
+      "when": "post_cancel",
+      "driver_cycle": 9
+    }
+  ],
+  "mutations_observed": [
+    {
+      "mutation_seq": 1,
+      "utc": "2026-09-19T01:35:30.757048+00:00",
+      "kind": "PLACE",
+      "cycle": 1,
+      "target": {
+        "outcome": "Up",
+        "leg": "YES",
+        "price": "0.31",
+        "qty": "0.01",
+        "rung_index": 0,
+        "ticks_behind_bid": 0,
+        "action": "OPEN",
+        "stage": "DECIDED"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 0,
+        "remaining": 12,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 1,
+        "remaining": 11,
+        "cohort_budget": 12
+      },
+      "result": {
+        "placed": true,
+        "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+        "slot": 0,
+        "status": 200,
+        "venue_order_id": "145828836256673007",
+        "ack": {
+          "id": "l5cp-c0c22ea8401a49c9bff9fef245fab9d0",
+          "status": 200,
+          "result": {
+            "symbol": "GEMI-BTC05M2609190140-UP",
+            "orderId": "145828836256673007",
+            "transactTime": 1789781730748942106,
+            "price": "0.3100",
+            "status": "OPEN",
+            "type": "LIMIT",
+            "side": "BUY"
+          }
+        }
+      }
+    },
+    {
+      "mutation_seq": 2,
+      "utc": "2026-09-19T01:35:30.771951+00:00",
+      "kind": "PLACE",
+      "cycle": 1,
+      "target": {
+        "outcome": "Down",
+        "leg": "NO",
+        "price": "0.42",
+        "qty": "0.01",
+        "rung_index": 0,
+        "ticks_behind_bid": 0,
+        "action": "OPEN",
+        "stage": "DECIDED"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 1,
+        "remaining": 11,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 2,
+        "remaining": 10,
+        "cohort_budget": 12
+      },
+      "result": {
+        "placed": true,
+        "client_order_id": "l5cp-owner-2026-no-d246bcf3",
+        "slot": 1,
+        "status": 200,
+        "venue_order_id": "145828836256673013",
+        "ack": {
+          "id": "l5cp-9b6bd8c7cf964aa4946c4935162b5b72",
+          "status": 200,
+          "result": {
+            "symbol": "GEMI-BTC05M2609190140-UP",
+            "orderId": "145828836256673013",
+            "transactTime": 1789781730764083885,
+            "price": "0.4200",
+            "status": "OPEN",
+            "type": "LIMIT",
+            "side": "BUY"
+          }
+        }
+      }
+    },
+    {
+      "mutation_seq": 3,
+      "utc": "2026-09-19T01:35:43.084606+00:00",
+      "kind": "CANCEL",
+      "cycle": 2,
+      "target": {
+        "client_order_id": "l5cp-owner-2026-no-d246bcf3",
+        "leg": "NO",
+        "price": "0.42",
+        "qty": "0.01",
+        "resting_since": 1789781742.729374,
+        "venue_order_id": "145828836256673013"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 2,
+        "remaining": 10,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 3,
+        "remaining": 9,
+        "cohort_budget": 12
+      },
+      "result": {
+        "cancelled": false,
+        "client_order_id": "l5cp-owner-2026-no-d246bcf3",
+        "slot": 2,
+        "cancel_confirmed": false,
+        "why": "ack 200 carried no orderId; this order may have FILLED rather than cancelled, so it stays in the working set for authoritative reconciliation"
+      }
+    },
+    {
+      "mutation_seq": 4,
+      "utc": "2026-09-19T01:35:44.181134+00:00",
+      "kind": "PLACE",
+      "cycle": 2,
+      "target": {
+        "outcome": "Down",
+        "leg": "NO",
+        "price": "0.57",
+        "qty": "0.01",
+        "rung_index": 0,
+        "ticks_behind_bid": 0,
+        "action": "OPEN",
+        "stage": "DECIDED"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 3,
+        "remaining": 9,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 4,
+        "remaining": 8,
+        "cohort_budget": 12
+      },
+      "result": {
+        "placed": true,
+        "client_order_id": "l5cp-owner-2026-no-6a6dd040",
+        "slot": 3,
+        "status": 200,
+        "venue_order_id": "145828836256679011",
+        "ack": {
+          "id": "l5cp-52b6ac0cbf2649b7aa041d7538e429e9",
+          "status": 200,
+          "result": {
+            "symbol": "GEMI-BTC05M2609190140-UP",
+            "orderId": "145828836256679011",
+            "transactTime": 1789781744173811518,
+            "price": "0.5700",
+            "status": "OPEN",
+            "type": "LIMIT",
+            "side": "BUY"
+          }
+        }
+      }
+    },
+    {
+      "mutation_seq": 5,
+      "utc": "2026-09-19T01:35:50.596069+00:00",
+      "kind": "CANCEL",
+      "cycle": 3,
+      "target": {
+        "client_order_id": "l5cp-owner-2026-no-6a6dd040",
+        "leg": "NO",
+        "price": "0.57",
+        "qty": "0.01",
+        "resting_since": 1789781750.2861297,
+        "venue_order_id": "145828836256679011"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 4,
+        "remaining": 8,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 5,
+        "remaining": 7,
+        "cohort_budget": 12
+      },
+      "result": {
+        "cancelled": false,
+        "client_order_id": "l5cp-owner-2026-no-6a6dd040",
+        "slot": 4,
+        "cancel_confirmed": false,
+        "why": "ack 200 carried no orderId; this order may have FILLED rather than cancelled, so it stays in the working set for authoritative reconciliation"
+      }
+    },
+    {
+      "mutation_seq": 6,
+      "utc": "2026-09-19T01:35:52.292266+00:00",
+      "kind": "PLACE",
+      "cycle": 3,
+      "target": {
+        "outcome": "Down",
+        "leg": "NO",
+        "price": "0.62",
+        "qty": "0.01",
+        "rung_index": 0,
+        "ticks_behind_bid": 0,
+        "action": "OPEN",
+        "stage": "DECIDED"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 5,
+        "remaining": 7,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      },
+      "result": {
+        "placed": true,
+        "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+        "slot": 5,
+        "status": 200,
+        "venue_order_id": "145828836256682805",
+        "ack": {
+          "id": "l5cp-8fbb65e825c34aa8a9b3516acf44a4e1",
+          "status": 200,
+          "result": {
+            "symbol": "GEMI-BTC05M2609190140-UP",
+            "orderId": "145828836256682805",
+            "transactTime": 1789781752284137314,
+            "price": "0.6200",
+            "status": "OPEN",
+            "type": "LIMIT",
+            "side": "BUY"
+          }
+        }
+      }
+    },
+    {
+      "mutation_seq": 7,
+      "utc": "2026-09-19T01:36:13.784726+00:00",
+      "kind": "CANCEL",
+      "cycle": 6,
+      "target": {
+        "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+        "leg": "NO",
+        "price": "0.62",
+        "qty": "0.01",
+        "resting_since": 1789781773.2666366,
+        "venue_order_id": "145828836256682805"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 6,
+        "remaining": 6,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 7,
+        "remaining": 5,
+        "cohort_budget": 12
+      },
+      "result": {
+        "cancelled": false,
+        "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+        "slot": 6,
+        "cancel_confirmed": false,
+        "why": "ack 200 carried no orderId; this order may have FILLED rather than cancelled, so it stays in the working set for authoritative reconciliation"
+      }
+    },
+    {
+      "mutation_seq": 8,
+      "utc": "2026-09-19T01:36:14.771840+00:00",
+      "kind": "PLACE",
+      "cycle": 6,
+      "target": {
+        "outcome": "Down",
+        "leg": "NO",
+        "price": "0.65",
+        "qty": "0.01",
+        "rung_index": 0,
+        "ticks_behind_bid": 0,
+        "action": "OPEN",
+        "stage": "DECIDED"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 7,
+        "remaining": 5,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 8,
+        "remaining": 4,
+        "cohort_budget": 12
+      },
+      "result": {
+        "placed": true,
+        "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+        "slot": 7,
+        "status": 200,
+        "venue_order_id": "145828836256695957",
+        "ack": {
+          "id": "l5cp-c722d5a77dec44a7b870ae9934d46745",
+          "status": 200,
+          "result": {
+            "symbol": "GEMI-BTC05M2609190140-UP",
+            "orderId": "145828836256695957",
+            "transactTime": 1789781774752618552,
+            "price": "0.6500",
+            "status": "OPEN",
+            "type": "LIMIT",
+            "side": "BUY"
+          }
+        }
+      }
+    },
+    {
+      "mutation_seq": 9,
+      "utc": "2026-09-19T01:36:27.578875+00:00",
+      "kind": "CANCEL",
+      "cycle": 8,
+      "target": {
+        "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+        "leg": "NO",
+        "price": "0.65",
+        "qty": "0.01",
+        "resting_since": 1789781787.140511,
+        "venue_order_id": "145828836256695957"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 8,
+        "remaining": 4,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 9,
+        "remaining": 3,
+        "cohort_budget": 12
+      },
+      "result": {
+        "cancelled": false,
+        "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+        "slot": 8,
+        "cancel_confirmed": false,
+        "why": "ack 200 carried no orderId; this order may have FILLED rather than cancelled, so it stays in the working set for authoritative reconciliation"
+      }
+    },
+    {
+      "mutation_seq": 10,
+      "utc": "2026-09-19T01:36:31.210750+00:00",
+      "kind": "PLACE",
+      "cycle": 8,
+      "target": {
+        "outcome": "Down",
+        "leg": "NO",
+        "price": "0.67",
+        "qty": "0.01",
+        "rung_index": 0,
+        "ticks_behind_bid": 0,
+        "action": "OPEN",
+        "stage": "DECIDED"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 9,
+        "remaining": 3,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 10,
+        "remaining": 2,
+        "cohort_budget": 12
+      },
+      "result": {
+        "placed": true,
+        "client_order_id": "l5cp-owner-2026-no-20763d1b",
+        "slot": 9,
+        "status": 200,
+        "venue_order_id": "145828836256704088",
+        "ack": {
+          "id": "l5cp-76859f5b96564f4cb24add278ec13059",
+          "status": 200,
+          "result": {
+            "symbol": "GEMI-BTC05M2609190140-UP",
+            "orderId": "145828836256704088",
+            "transactTime": 1789781791204269524,
+            "price": "0.6700",
+            "status": "OPEN",
+            "type": "LIMIT",
+            "side": "BUY"
+          }
+        }
+      }
+    },
+    {
+      "mutation_seq": 11,
+      "utc": "2026-09-19T01:36:37.370089+00:00",
+      "kind": "CANCEL",
+      "cycle": 9,
+      "target": {
+        "client_order_id": "l5cp-owner-2026-no-20763d1b",
+        "leg": "NO",
+        "price": "0.67",
+        "qty": "0.01",
+        "resting_since": 1789781797.08806,
+        "venue_order_id": "145828836256704088"
+      },
+      "inventory_at_call": {
+        "yes_qty": "0.01",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0.01",
+        "inventory_imbalance": "0.01",
+        "avg_yes_cost": "0.31",
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0.0031",
+        "same_side_run": {
+          "leg": "YES",
+          "len": 1
+        },
+        "n_fills": 1,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "budget_at_call": {
+        "consumed": 10,
+        "remaining": 2,
+        "cohort_budget": 12
+      },
+      "budget_after_call": {
+        "consumed": 11,
+        "remaining": 1,
+        "cohort_budget": 12
+      },
+      "result": {
+        "cancelled": false,
+        "client_order_id": "l5cp-owner-2026-no-20763d1b",
+        "slot": 10,
+        "cancel_confirmed": false,
+        "why": "ack 200 carried no orderId; this order may have FILLED rather than cancelled, so it stays in the working set for authoritative reconciliation"
+      }
+    }
+  ],
+  "session": "connected",
+  "window": {
+    "label": "GEMINI_L5_WS_CONTINUOUS_V1",
+    "symbol": "GEMI-BTC05M2609190140-UP",
+    "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+    "started": 1789781724.7039075,
+    "cycles": 9,
+    "turns": [
+      {
+        "cycle": 1,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 0,
+          "place": 2,
+          "cancel": 0,
+          "mutations": 2
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 12
+      },
+      {
+        "cycle": 2,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 1,
+          "place": 1,
+          "cancel": 1,
+          "mutations": 2
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 10
+      },
+      {
+        "cycle": 3,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 1,
+          "place": 1,
+          "cancel": 1,
+          "mutations": 2
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 8
+      },
+      {
+        "cycle": 4,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 2,
+          "place": 0,
+          "cancel": 0,
+          "mutations": 0
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 6
+      },
+      {
+        "cycle": 5,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 2,
+          "place": 0,
+          "cancel": 0,
+          "mutations": 0
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 6
+      },
+      {
+        "cycle": 6,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 1,
+          "place": 1,
+          "cancel": 1,
+          "mutations": 2
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 6
+      },
+      {
+        "cycle": 7,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 2,
+          "place": 0,
+          "cancel": 0,
+          "mutations": 0
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 4
+      },
+      {
+        "cycle": 8,
+        "state": "RUNNING",
+        "window_phase": "WINDOW_OPEN",
+        "plan": {
+          "keep": 1,
+          "place": 1,
+          "cancel": 1,
+          "mutations": 2
+        },
+        "inventory": {
+          "yes_qty": "0",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0",
+          "inventory_imbalance": "0",
+          "avg_yes_cost": null,
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0",
+          "same_side_run": {
+            "leg": null,
+            "len": 0
+          },
+          "n_fills": 0,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 4
+      },
+      {
+        "cycle": 9,
+        "state": "STOPPED",
+        "window_phase": null,
+        "plan": {
+          "keep": 0,
+          "place": 2,
+          "cancel": 1,
+          "mutations": 3
+        },
+        "inventory": {
+          "yes_qty": "0.01",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0.01",
+          "inventory_imbalance": "0.01",
+          "avg_yes_cost": "0.31",
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0.0031",
+          "same_side_run": {
+            "leg": "YES",
+            "len": 1
+          },
+          "n_fills": 1,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        },
+        "budget_left": 2
+      }
+    ],
+    "preflight": {
+      "preflight": {
+        "label": "GEMINI_L5_CONTINUOUS_PREFLIGHT_V1",
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "t": 1789781724.7039132,
+        "readable": true,
+        "quantityMinimum": "0.01",
+        "quantityIncrement": "0.01",
+        "priceMinimum": "0.01",
+        "priceIncrement": "0.01",
+        "contract_status": "active",
+        "market_state": "open",
+        "expiry": "2026-09-19T01:40:00.000Z",
+        "maker_tif": "MOC",
+        "terms_accepted": true,
+        "terms_version": 1,
+        "book": {
+          "readable": true,
+          "ticker": "BTC05M2609190140",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "yes": {
+            "bid": "0.28",
+            "ask": "0.51"
+          },
+          "no": {
+            "bid": "0.49",
+            "ask": "0.72"
+          },
+          "passive_pair_cost": "0.77",
+          "crossing_pair_cost": "1.23",
+          "last_trade_price": "0.48",
+          "complement_identity": {
+            "no_bid_vs_1_minus_yes_ask": "0.00",
+            "no_ask_vs_1_minus_yes_bid": "0.00"
+          },
+          "identity_consistent": true,
+          "source": "/v1/prediction-markets/events/{eventTicker} contract prices (PUBLIC)",
+          "labels": "a resting BUY joins the outcome's SELL side, so the passive pair cost is what a maker surface can reach. It is a cost basis, never a realized profit."
+        },
+        "frozen_comparison": {
+          "verdict": "AGREES",
+          "discrepancies": [],
+          "labels": "a preflight that merely SUCCEEDS is not the same claim as one that AGREES; only the second licenses the envelope"
+        }
+      },
+      "agrees": true,
+      "discrepancies": []
+    },
+    "authorization": {
+      "authorized": true,
+      "required_auth_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "authorized_sha": "e32e31f2711c10d99a499717d654bee76468d55171b3f5f13d5bff8439cd369f",
+      "executable_sha": "e32e31f2711c10d99a499717d654bee76468d55171b3f5f13d5bff8439cd369f",
+      "authorized_envelope": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+      "envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+      "arming": {
+        "armed": true,
+        "live_flag": true,
+        "auth_id_present": true,
+        "auth_id_matches": true,
+        "expiry_supplied": true,
+        "expired": false,
+        "expected_auth_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+        "why_not": null
+      },
+      "why_not": [],
+      "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+    },
+    "recovery": {
+      "recovered": true,
+      "inventory": {
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "avg_yes_cost": null,
+        "avg_no_cost": null,
+        "effective_matched_pair_cost": null,
+        "total_spend_usd": "0",
+        "same_side_run": {
+          "leg": null,
+          "len": 0
+        },
+        "n_fills": 0,
+        "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+      },
+      "working": "venue authoritative: 0 resting (+none / -none)",
+      "budget_consumed": 0,
+      "budget_note": "max(ledger 0, venue 0): a disagreement is always read upward",
+      "budget_left": 12
+    },
+    "binding": {
+      "bound": true,
+      "symbol": "GEMI-BTC05M2609190140-UP",
+      "actions_taken": 0
+    },
+    "order_events": [
+      {
+        "e": "orderUpdate",
+        "E": 1789781730748942106,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256673007,
+        "h": "dO8NZNvAn5qg",
+        "c": "l5cp-owner-2026-yes-1713dabf",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "NEW",
+        "p": "0.3100",
+        "P": "0",
+        "q": "0.01",
+        "z": "0.01",
+        "T": 1789781730748942106,
+        "O": "YES"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781730764083885,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256673013,
+        "h": "Kge0B0KLnPbp",
+        "c": "l5cp-owner-2026-no-d246bcf3",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "NEW",
+        "p": "0.4200",
+        "P": "0",
+        "q": "0.01",
+        "z": "0.01",
+        "T": 1789781730764083885,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781743078489410,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256673013,
+        "h": "Kge0B0KLnPbp",
+        "c": "l5cp-owner-2026-no-d246bcf3",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "CANCELED",
+        "z": "0.01",
+        "Z": "0.00",
+        "a": "0.0000",
+        "r": "Requested",
+        "T": 1789781743078489410,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781744173811518,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256679011,
+        "h": "RDzZYZyvnDLP",
+        "c": "l5cp-owner-2026-no-6a6dd040",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "NEW",
+        "p": "0.5700",
+        "P": "0",
+        "q": "0.01",
+        "z": "0.01",
+        "T": 1789781744173811518,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781750590113383,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256679011,
+        "h": "RDzZYZyvnDLP",
+        "c": "l5cp-owner-2026-no-6a6dd040",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "CANCELED",
+        "z": "0.01",
+        "Z": "0.00",
+        "a": "0.0000",
+        "r": "Requested",
+        "T": 1789781750590113383,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781752284137314,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256682805,
+        "h": "54rbBbjZVwwj",
+        "c": "l5cp-owner-2026-no-3e96ba93",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "NEW",
+        "p": "0.6200",
+        "P": "0",
+        "q": "0.01",
+        "z": "0.01",
+        "T": 1789781752284137314,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781773776981760,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256682805,
+        "h": "54rbBbjZVwwj",
+        "c": "l5cp-owner-2026-no-3e96ba93",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "CANCELED",
+        "z": "0.01",
+        "Z": "0.00",
+        "a": "0.0000",
+        "r": "Requested",
+        "T": 1789781773776981760,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781774752618552,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256695957,
+        "h": "Kge0B0KLnzWz",
+        "c": "l5cp-owner-2026-no-8a3143b1",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "NEW",
+        "p": "0.6500",
+        "P": "0",
+        "q": "0.01",
+        "z": "0.01",
+        "T": 1789781774752618552,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781787565271057,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256695957,
+        "h": "Kge0B0KLnzWz",
+        "c": "l5cp-owner-2026-no-8a3143b1",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "CANCELED",
+        "z": "0.01",
+        "Z": "0.00",
+        "a": "0.0000",
+        "r": "Requested",
+        "T": 1789781787565271057,
+        "O": "NO"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781788553280559,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256673007,
+        "h": "dO8NZNvAn5qg",
+        "c": "l5cp-owner-2026-yes-1713dabf",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "FILLED",
+        "p": "0.3100",
+        "z": "0.00",
+        "Z": "0.01",
+        "L": "0.3100",
+        "a": "0.3100",
+        "t": 1893456011790529,
+        "n": "0.0000",
+        "m": true,
+        "T": 1789781788553280559,
+        "O": "YES"
+      },
+      {
+        "e": "orderUpdate",
+        "E": 1789781791204269524,
+        "s": "GEMI-BTC05M2609190140-UP",
+        "i": 145828836256704088,
+        "h": "WKY9R9kjnVzm",
+        "c": "l5cp-owner-2026-no-20763d1b",
+        "S": "BUY",
+        "o": "LIMIT",
+        "X": "NEW",
+        "p": "0.6700",
+        "P": "0",
+        "q": "0.01",
+        "z": "0.01",
+        "T": 1789781791204269524,
+        "O": "NO"
+      }
+    ],
+    "refreshes": [
+      {
+        "cycle": 1,
+        "when": "pre_decide",
+        "working": "venue authoritative: 0 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 0
+      },
+      {
+        "cycle": 1,
+        "when": "post_cancel",
+        "working": "venue authoritative: 0 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 0
+      },
+      {
+        "cycle": 2,
+        "when": "pre_decide",
+        "working": "venue authoritative: 2 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 2
+      },
+      {
+        "cycle": 2,
+        "when": "post_cancel",
+        "working": "venue authoritative: 1 resting (+none / -['l5cp-owner-2026-no-d246bcf3'])",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 1
+      },
+      {
+        "cycle": 3,
+        "when": "pre_decide",
+        "working": "venue authoritative: 2 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 2
+      },
+      {
+        "cycle": 3,
+        "when": "post_cancel",
+        "working": "venue authoritative: 1 resting (+none / -['l5cp-owner-2026-no-6a6dd040'])",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 1
+      },
+      {
+        "cycle": 4,
+        "when": "pre_decide",
+        "working": "venue authoritative: 2 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 2
+      },
+      {
+        "cycle": 5,
+        "when": "pre_decide",
+        "working": "venue authoritative: 2 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 2
+      },
+      {
+        "cycle": 6,
+        "when": "pre_decide",
+        "working": "venue authoritative: 2 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 2
+      },
+      {
+        "cycle": 6,
+        "when": "post_cancel",
+        "working": "venue authoritative: 1 resting (+none / -['l5cp-owner-2026-no-3e96ba93'])",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 1
+      },
+      {
+        "cycle": 7,
+        "when": "pre_decide",
+        "working": "venue authoritative: 2 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 2
+      },
+      {
+        "cycle": 8,
+        "when": "pre_decide",
+        "working": "venue authoritative: 2 resting (+none / -none)",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 2
+      },
+      {
+        "cycle": 8,
+        "when": "post_cancel",
+        "working": "venue authoritative: 0 resting (+none / -['l5cp-owner-2026-no-8a3143b1', 'l5cp-owner-2026-yes-1713dabf'])",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 0,
+        "yes_qty": "0",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0",
+        "inventory_imbalance": "0",
+        "total_spend_usd": "0",
+        "resting": 0
+      },
+      {
+        "cycle": 9,
+        "when": "pre_decide",
+        "working": "venue authoritative: 1 resting (+none / -none)",
+        "changed": true,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 1,
+        "yes_qty": "0.01",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0.01",
+        "inventory_imbalance": "0.01",
+        "total_spend_usd": "0.0031",
+        "resting": 1
+      },
+      {
+        "cycle": 9,
+        "when": "post_cancel",
+        "working": "venue authoritative: 0 resting (+none / -['l5cp-owner-2026-no-20763d1b'])",
+        "changed": false,
+        "coherent": true,
+        "reconcile_attempts": 1,
+        "n_fills": 1,
+        "yes_qty": "0.01",
+        "no_qty": "0",
+        "matched_qty": "0",
+        "directional_residual": "0.01",
+        "inventory_imbalance": "0.01",
+        "total_spend_usd": "0.0031",
+        "resting": 0
+      }
+    ],
+    "stop_state": "STOPPED",
+    "stop_why": "budget: 3 mutation(s) required, 2 slot(s) left of 12",
+    "withdrawal": {
+      "label": "TERMINAL_WITHDRAWAL",
+      "started": 1789781798.2552345,
+      "cleanup_budget": 8,
+      "cancelled": [],
+      "failed": [],
+      "rounds": 1,
+      "labels": "cleanup mutations are SAFETY mutations, bounded separately from the strategy budget. This path can only cancel: no place, no SELL, no crossing, no forced flatten, no change to inventory or strategy.",
+      "remaining": [],
+      "cleanup_consumed": 0,
+      "elapsed_s": 0.0,
+      "verdict": "CLEANUP_CONFIRMED",
+      "state": "STOPPED_FLAT_ORDERS",
+      "note": "the venue's own open-order list is empty of this strategy's orders; FLAT ORDERS is not flat INVENTORY and says nothing about fills already taken"
+    },
+    "state": "STOPPED_FLAT_ORDERS",
+    "why": "the venue's own open-order list is empty of this strategy's orders; FLAT ORDERS is not flat INVENTORY and says nothing about fills already taken",
+    "budget_consumed": 11,
+    "budget_left": 1,
+    "max_actions": 12,
+    "envelope_max_actions": 12,
+    "working_orders": [],
+    "inventory": {
+      "yes_qty": "0.01",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0.01",
+      "inventory_imbalance": "0.01",
+      "avg_yes_cost": "0.31",
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0.0031",
+      "same_side_run": {
+        "leg": "YES",
+        "len": 1
+      },
+      "n_fills": 1,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "residual_note": "any residual is CARRIED directional exposure, reconciled through settlement. No taker cross was introduced to flatten it.",
+    "orders_live_after_stop": 0,
+    "inert": true,
+    "inert_note": "FLAT ORDERS is not flat INVENTORY. inert:false means at least one strategy-owned order may still be executable; inert:true means the venue showed none resting and says nothing about fills already taken.",
+    "realized": null,
+    "realized_note": "REALIZED stays null until a venue-confirmed cash movement is read back. settlement_report keeps matched-pair and directional-residual apart."
+  },
+  "refresh_link": {
+    "linked": true,
+    "reads": 15,
+    "refreshes": 15,
+    "cleanup_reads": 0,
+    "note": "reads are attributed by each refresh's own reconcile_attempts; any read after the last refresh belongs to terminal withdrawal"
+  },
+  "wire": [
+    {
+      "utc": "2026-09-19T01:35:30.756331+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0123,
+      "params": {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.31",
+        "quantity": "0.01",
+        "eventOutcome": "YES",
+        "clientOrderId": "l5cp-owner-2026-yes-1713dabf"
+      },
+      "ack": {
+        "id": "l5cp-c0c22ea8401a49c9bff9fef245fab9d0",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256673007",
+          "transactTime": 1789781730748942106,
+          "price": "0.3100",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:35:30.771114+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0122,
+      "params": {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.42",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-d246bcf3"
+      },
+      "ack": {
+        "id": "l5cp-9b6bd8c7cf964aa4946c4935162b5b72",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256673013",
+          "transactTime": 1789781730764083885,
+          "price": "0.4200",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:35:43.083681+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0102,
+      "params": {
+        "orderId": "145828836256673013"
+      },
+      "ack": {
+        "id": "l5cp-c3a953dba40e4f57b7b616409fe6b10a",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:35:44.180343+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0117,
+      "params": {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.57",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-6a6dd040"
+      },
+      "ack": {
+        "id": "l5cp-52b6ac0cbf2649b7aa041d7538e429e9",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256679011",
+          "transactTime": 1789781744173811518,
+          "price": "0.5700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:35:50.595316+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0102,
+      "params": {
+        "orderId": "145828836256679011"
+      },
+      "ack": {
+        "id": "l5cp-01ad8d50b10e4ca9853388864fcf96ad",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:35:52.291607+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0124,
+      "params": {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.62",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-3e96ba93"
+      },
+      "ack": {
+        "id": "l5cp-8fbb65e825c34aa8a9b3516acf44a4e1",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256682805",
+          "transactTime": 1789781752284137314,
+          "price": "0.6200",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:36:13.783928+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0253,
+      "params": {
+        "orderId": "145828836256682805"
+      },
+      "ack": {
+        "id": "l5cp-b18b3294e6ef4fed8b2585671e4d6ab6",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:36:14.771074+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0237,
+      "params": {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.65",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-8a3143b1"
+      },
+      "ack": {
+        "id": "l5cp-c722d5a77dec44a7b870ae9934d46745",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256695957",
+          "transactTime": 1789781774752618552,
+          "price": "0.6500",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:36:27.578152+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0178,
+      "params": {
+        "orderId": "145828836256695957"
+      },
+      "ack": {
+        "id": "l5cp-43ee057ddca24b8f80b5fb401699d48f",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:36:31.209968+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0132,
+      "params": {
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.67",
+        "quantity": "0.01",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-20763d1b"
+      },
+      "ack": {
+        "id": "l5cp-76859f5b96564f4cb24add278ec13059",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256704088",
+          "transactTime": 1789781791204269524,
+          "price": "0.6700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-19T01:36:37.369272+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0097,
+      "params": {
+        "orderId": "145828836256704088"
+      },
+      "ack": {
+        "id": "l5cp-db02af160dd448789a0d40933520dc05",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    }
+  ],
+  "decision_capture": {
+    "decide_calls": 9,
+    "cycles_recorded": 9,
+    "authoritative_reads": 15,
+    "mutations_observed": 11,
+    "action_labels": {
+      "OPEN": 16,
+      "EXTEND": 1,
+      "COMPLETE": 1
+    },
+    "book_capture": {
+      "cycles": 9,
+      "presented_book_readable": 9,
+      "depth_readable": 9,
+      "touch_agreements": 9,
+      "touch_disagreements": 0,
+      "depth_elapsed_s": {
+        "n": 9,
+        "total": 0.549,
+        "max": 0.128
+      },
+      "unreadable_reasons": [],
+      "labels": "a cycle with no readable presented book is a cycle the controller quoted nothing in; UNREADABLE is recorded, never replaced with an empty book."
+    },
+    "record_errors": [],
+    "note": "EVIDENCE ONLY. Each wrapper makes the same call with the same arguments, returns the same object and propagates every exception. It adds no decision, no mutation and no bound; every limit is still enforced inside ws_continuous.Driver. The driver now RETURNS the market state it decided on, which moved its executable_sha -- an additive key nothing reads back, not a change to what it decides."
+  },
+  "place_acks_observed": [
+    {
+      "utc": "2026-09-19T01:35:30.756331+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-yes-1713dabf",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836256673007",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-c0c22ea8401a49c9bff9fef245fab9d0",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256673007",
+          "transactTime": 1789781730748942106,
+          "price": "0.3100",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-19T01:35:30.771114+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-d246bcf3",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836256673013",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-9b6bd8c7cf964aa4946c4935162b5b72",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256673013",
+          "transactTime": 1789781730764083885,
+          "price": "0.4200",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-19T01:35:44.180343+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-6a6dd040",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836256679011",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-52b6ac0cbf2649b7aa041d7538e429e9",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256679011",
+          "transactTime": 1789781744173811518,
+          "price": "0.5700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-19T01:35:52.291607+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-3e96ba93",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836256682805",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-8fbb65e825c34aa8a9b3516acf44a4e1",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256682805",
+          "transactTime": 1789781752284137314,
+          "price": "0.6200",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-19T01:36:14.771074+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-8a3143b1",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836256695957",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-c722d5a77dec44a7b870ae9934d46745",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256695957",
+          "transactTime": 1789781774752618552,
+          "price": "0.6500",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-19T01:36:31.209968+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-20763d1b",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836256704088",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-76859f5b96564f4cb24add278ec13059",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC05M2609190140-UP",
+          "orderId": "145828836256704088",
+          "transactTime": 1789781791204269524,
+          "price": "0.6700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    }
+  ],
+  "place_ack_note": "OBSERVED, not inferred: each ack below is the venue's own reply recorded at the socket seam, with credential-shaped values redacted and key names and types preserved. An empty list means no order.place was ever sent.",
+  "after": {
+    "symbol": "GEMI-BTC05M2609190140-UP",
+    "fills": [
+      {
+        "leg": "YES",
+        "qty": "0.01",
+        "price": "0.31"
+      }
+    ],
+    "orders_seen": [
+      {
+        "orderId": 145828836256673007,
+        "hashOrderId": "1r9y7yJB45Lg",
+        "clientOrderId": "l5cp-owner-2026-yes-1713dabf",
+        "globalOrderId": "145828836256673007",
+        "status": "filled",
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "buy",
+        "outcome": "yes",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0.01",
+        "remainingQuantity": "0",
+        "price": "0.31",
+        "avgExecutionPrice": "0.31",
+        "createdAt": "2026-09-19T01:35:30.748Z",
+        "updatedAt": "2026-09-19T01:36:28.553Z",
+        "contractMetadata": {
+          "contractId": "645334",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609190140",
+          "eventName": "BTC price today at 9:40pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-19T01:40:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 9:40pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-19T01:35:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "81113.86",
+            "availableAt": "2026-09-19T01:35:00.000Z"
+          }
+        }
+      }
+    ],
+    "order_history_raw": {
+      "readable": true,
+      "verdict": "ORDERS_FOUND",
+      "total_rows": 1
+    },
+    "terminal_seen": [
+      {
+        "orderId": 145828836256704088,
+        "hashOrderId": "0kr575B0VOGW",
+        "clientOrderId": "l5cp-owner-2026-no-20763d1b",
+        "globalOrderId": "145828836256704088",
+        "status": "cancelled",
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.67",
+        "createdAt": "2026-09-19T01:36:31.204Z",
+        "updatedAt": "2026-09-19T01:36:37.364Z",
+        "cancelledAt": "2026-09-19T01:36:37.364Z",
+        "contractMetadata": {
+          "contractId": "645334",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609190140",
+          "eventName": "BTC price today at 9:40pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-19T01:40:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 9:40pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-19T01:35:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "81113.86",
+            "availableAt": "2026-09-19T01:35:00.000Z"
+          }
+        }
+      },
+      {
+        "orderId": 145828836256695957,
+        "hashOrderId": "XBE5p51kxA7A",
+        "clientOrderId": "l5cp-owner-2026-no-8a3143b1",
+        "globalOrderId": "145828836256695957",
+        "status": "cancelled",
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.65",
+        "createdAt": "2026-09-19T01:36:14.752Z",
+        "updatedAt": "2026-09-19T01:36:27.565Z",
+        "cancelledAt": "2026-09-19T01:36:27.565Z",
+        "contractMetadata": {
+          "contractId": "645334",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609190140",
+          "eventName": "BTC price today at 9:40pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-19T01:40:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 9:40pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-19T01:35:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "81113.86",
+            "availableAt": "2026-09-19T01:35:00.000Z"
+          }
+        }
+      },
+      {
+        "orderId": 145828836256682805,
+        "hashOrderId": "ELm6p6Yq1ZZY",
+        "clientOrderId": "l5cp-owner-2026-no-3e96ba93",
+        "globalOrderId": "145828836256682805",
+        "status": "cancelled",
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.62",
+        "createdAt": "2026-09-19T01:35:52.284Z",
+        "updatedAt": "2026-09-19T01:36:13.776Z",
+        "cancelledAt": "2026-09-19T01:36:13.776Z",
+        "contractMetadata": {
+          "contractId": "645334",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609190140",
+          "eventName": "BTC price today at 9:40pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-19T01:40:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 9:40pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-19T01:35:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "81113.86",
+            "availableAt": "2026-09-19T01:35:00.000Z"
+          }
+        }
+      },
+      {
+        "orderId": 145828836256679011,
+        "hashOrderId": "90om7mwqL0dv",
+        "clientOrderId": "l5cp-owner-2026-no-6a6dd040",
+        "globalOrderId": "145828836256679011",
+        "status": "cancelled",
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.57",
+        "createdAt": "2026-09-19T01:35:44.173Z",
+        "updatedAt": "2026-09-19T01:35:50.590Z",
+        "cancelledAt": "2026-09-19T01:35:50.590Z",
+        "contractMetadata": {
+          "contractId": "645334",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609190140",
+          "eventName": "BTC price today at 9:40pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-19T01:40:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 9:40pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-19T01:35:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "81113.86",
+            "availableAt": "2026-09-19T01:35:00.000Z"
+          }
+        }
+      },
+      {
+        "orderId": 145828836256673013,
+        "hashOrderId": "XBE5p51kxZVQ",
+        "clientOrderId": "l5cp-owner-2026-no-d246bcf3",
+        "globalOrderId": "145828836256673013",
+        "status": "cancelled",
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "side": "buy",
+        "outcome": "no",
+        "orderType": "limit",
+        "timeInForce": "maker-or-cancel",
+        "quantity": "0.01",
+        "filledQuantity": "0",
+        "remainingQuantity": "0.01",
+        "price": "0.42",
+        "createdAt": "2026-09-19T01:35:30.764Z",
+        "updatedAt": "2026-09-19T01:35:43.078Z",
+        "cancelledAt": "2026-09-19T01:35:43.078Z",
+        "contractMetadata": {
+          "contractId": "645334",
+          "contractName": "Up",
+          "contractTicker": "UP",
+          "eventTicker": "BTC05M2609190140",
+          "eventName": "BTC price today at 9:40pm EDT",
+          "category": "Bitcoin",
+          "contractStatus": "Active",
+          "eventType": "binary",
+          "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+          "parentCategory": "Crypto",
+          "expiryDate": "2026-09-19T01:40:00.000Z",
+          "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 9:40pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+          "sortOrder": 0,
+          "template": "crypto-up-down",
+          "color": "#4CAF50",
+          "startTime": "2026-09-19T01:35:00.000Z",
+          "strike": {
+            "type": "reference",
+            "value": "81113.86",
+            "availableAt": "2026-09-19T01:35:00.000Z"
+          }
+        }
+      }
+    ],
+    "trades": [
+      {
+        "price": "0.31",
+        "amount": "0.01",
+        "timestamp": 1789781788,
+        "timestampms": 1789781788553,
+        "type": "Buy",
+        "aggressor": false,
+        "fee_currency": "USD",
+        "fee_amount": "0",
+        "tid": 1893456011790529,
+        "order_id": "145828836256673007",
+        "exchange": "gemini",
+        "is_auction_fill": false,
+        "is_clearing_fill": false,
+        "symbol": "GEMI-BTC05M2609190140-UP",
+        "client_order_id": "l5cp-owner-2026-yes-1713dabf"
+      }
+    ],
+    "open_orders": [],
+    "active_raw": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    }
+  },
+  "resolution": {
+    "readable": true,
+    "verdict": "PENDING",
+    "instrumentSymbol": "GEMI-BTC05M2609190140-UP",
+    "ticker": "BTC05M2609190140",
+    "status": "active",
+    "resolutionSide": null,
+    "resolvedAt": null,
+    "settlementValue": null,
+    "marketState": "open",
+    "expiryDate": "2026-09-19T01:40:00.000Z",
+    "event_status": "active",
+    "is_terminal": false,
+    "expired": false,
+    "reads": 3,
+    "reads_readable": 3,
+    "reads_settled": 0,
+    "distinct_readings": [
+      "active/None"
+    ],
+    "flapped": false,
+    "observations": [
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-19T01:40:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-19T01:40:00.000Z",
+        "event_status": "active"
+      },
+      {
+        "readable": true,
+        "status": "active",
+        "resolutionSide": null,
+        "resolvedAt": null,
+        "settlementValue": null,
+        "marketState": "open",
+        "expiryDate": "2026-09-19T01:40:00.000Z",
+        "event_status": "active"
+      }
+    ],
+    "missing_fields": [
+      "resolutionSide",
+      "resolvedAt",
+      "settlementValue"
+    ],
+    "strike_check": {
+      "available": false,
+      "why": "not settled yet, or no strike published"
+    },
+    "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+    "labels": "the OUTCOME leg only. A settled contract says what it resolved to, never what our account received; realized P&L still requires authenticated cash reconciliation. UNCONFIRMED means no read showed a settlement, NOT that none occurred."
+  },
+  "finished_utc": "2026-09-19T01:36:39.447306+00:00"
+}

@@ -1,0 +1,140 @@
+{
+  "admissible_venues": [],
+  "label": "GEMINI_LEADLAG_FEED_PROBE_V1",
+  "layer_rule": "external spot/futures NEVER substitutes for the authoritative settlement reference. The three layers -- external consensus, published LRRR, Gemini prediction book -- stay separate artifacts.",
+  "probes": [
+    {
+      "admissible": false,
+      "ask": "85896.14",
+      "ask_size": null,
+      "bid": "85896.13",
+      "bid_size": null,
+      "book_note": "bid/ask present but SIZES missing -- a last trade or an unsized touch is not an executable book and is not admitted",
+      "clock": {
+        "epoch_s": 1791236490.285766,
+        "identified": true,
+        "offset_s": 1.0328,
+        "unit": "iso8601"
+      },
+      "failed_requirement": [
+        "4_book_with_sizes"
+      ],
+      "instrument": "BTC-USD",
+      "kind": "spot",
+      "local_receipt_epoch_s": 1791236491.3185174,
+      "reachable": true,
+      "requirements": {
+        "1_reachable": true,
+        "2_source_timestamp_present": true,
+        "3_timestamp_unit_identified": true,
+        "4_book_with_sizes": false
+      },
+      "rtt_s": 0.1135,
+      "sequence_id": 1102756342,
+      "sequence_id_published": true,
+      "source_timestamp_field": "time",
+      "source_timestamp_raw": "2026-10-05T21:41:30.285766262Z",
+      "status": 200,
+      "url": "https://api.exchange.coinbase.com/products/BTC-USD/ticker",
+      "venue": "coinbase"
+    },
+    {
+      "admissible": false,
+      "ask": "85893.40000",
+      "ask_size": "1.000",
+      "bid": "85893.30000",
+      "bid_size": "1.000",
+      "clock": {
+        "identified": false,
+        "why": "no source timestamp field"
+      },
+      "failed_requirement": [
+        "2_source_timestamp_present",
+        "3_timestamp_unit_identified"
+      ],
+      "instrument": "XBT/USD",
+      "kind": "spot",
+      "local_receipt_epoch_s": 1791236491.4287255,
+      "reachable": true,
+      "requirements": {
+        "1_reachable": true,
+        "2_source_timestamp_present": false,
+        "3_timestamp_unit_identified": false,
+        "4_book_with_sizes": true
+      },
+      "rtt_s": 0.11,
+      "sequence_id": null,
+      "sequence_id_published": false,
+      "source_timestamp_raw": null,
+      "status": 200,
+      "url": "https://api.kraken.com/0/public/Ticker?pair=XBTUSD",
+      "venue": "kraken"
+    },
+    {
+      "admissible": false,
+      "basis_warning": "USDT-quoted, NOT USD. Any comparison to a USD reference carries USDT/USD basis and is reported as a separate layer, never folded into a USD consensus without it.",
+      "failed_requirement": "1_reachable",
+      "instrument": "BTCUSDT",
+      "kind": "spot",
+      "reachable": false,
+      "url": "https://api.binance.com/api/v3/ticker/bookTicker?symbol=BTCUSDT",
+      "venue": "binance",
+      "why": "HTTPError: HTTP Error 451: "
+    },
+    {
+      "admissible": false,
+      "ask": "85906.10000",
+      "ask_size": null,
+      "bid": "85906.09000",
+      "bid_size": null,
+      "book_note": "bid/ask present but SIZES missing -- a last trade or an unsized touch is not an executable book and is not admitted",
+      "clock": {
+        "identified": false,
+        "why": "non-numeric timestamp"
+      },
+      "failed_requirement": [
+        "3_timestamp_unit_identified",
+        "4_book_with_sizes"
+      ],
+      "instrument": "btcusd",
+      "kind": "spot",
+      "local_receipt_epoch_s": 1791236491.9010148,
+      "reachable": true,
+      "requirements": {
+        "1_reachable": true,
+        "2_source_timestamp_present": true,
+        "3_timestamp_unit_identified": false,
+        "4_book_with_sizes": false
+      },
+      "rtt_s": 0.2675,
+      "sequence_id": null,
+      "sequence_id_published": false,
+      "source_timestamp_field": "volume",
+      "source_timestamp_raw": {
+        "BTC": "98.10038266",
+        "USD": "8427421.282828226",
+        "timestamp": 1791236460000
+      },
+      "status": 200,
+      "url": "https://api.gemini.com/v1/pubticker/btcusd",
+      "venue": "gemini_spot"
+    }
+  ],
+  "read_only": "no order path, no credential, no mutation",
+  "rejected": {
+    "binance": "1_reachable",
+    "coinbase": [
+      "4_book_with_sizes"
+    ],
+    "gemini_spot": [
+      "3_timestamp_unit_identified",
+      "4_book_with_sizes"
+    ],
+    "kraken": [
+      "2_source_timestamp_present",
+      "3_timestamp_unit_identified"
+    ]
+  },
+  "rule": "a feed is admissible only if reachable, carrying a SOURCE timestamp whose epoch unit is identifiable against our own clock, with bid AND ask AND both sizes. Anything else is REJECTED with the failed requirement named.",
+  "utc": "2026-10-05T21:41:31Z"
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/gemini_econ_shadow/Dockerfile",
+    "watchPatterns": [
+      "deploy/gemini_econ_shadow/**",
+      "src/gemini_execution/econ/*.py",
+      "src/gemini_execution/continuous_probe.py",
+      "src/gemini_execution/continuous_runner.py",
+      "src/gemini_execution/contract_cohort.py",
+      "src/gemini_execution/hypothetical.py",
+      "src/gemini_execution/metadata.py",
+      "src/gemini_execution/shadow_soak.py",
+      "src/l5_surface/*.py",
+      "artifacts/l5_surface/*.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.gemini_execution.shadow_soak --cohorts btc5m,btc15m --policy GEMINI_RECYCLE --windows 0 --cycles 110 --interval 8.0 --state-root /state/gemini-econ",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_status": "SHADOW / DISARMED. The SAME shadow_soak lifecycle the control runs, on the same two crypto cohorts, with GEMINI_ECON_V1 registered as one more arm. Frozen Model A is asked the same question and what it wanted is recorded verbatim; the econ layer then applies venue economics the frozen policy cannot know. No order path, no authorization id, no arming env, no session. mutations_sent is 0 on every window by construction.",
+  "_why_a_second_service": "gemini-maker-shadow has been serving a44de245 continuously and its watchPatterns are what kept it pinned there while the branch moved on. Redeploying it to pick up the challenger would restart the control's own inventory walk and end the comparison this work exists to make. The control is therefore left exactly as it is and the challenger runs beside it, reading the same public tape from its own process and its own state root.",
+  "_risk_overlay": "The completion veto inside this arm is a RISK OVERLAY, not strategy fidelity. L5_OPERATING_MODEL.md 2d (owner 2026-09-18) rules that the Gemini live path takes NO pair-cost ceiling -- 42.75% of L5's 33,765 historical COMPLETEs were above $1.00. The overlay is applied ONLY here, every divergence it causes is classified ADAPTATION_SUPPRESSED rather than an L5 discovery, and its cost is measured: the scoreboard reports how many completes it forbade, at what median basis, and how many would have been fee-positive.",
+  "_state_isolation": "A SEPARATE state root. The control owns /state/BTC5m and /state/BTC15m and has been writing them since 2026-09-19; sharing would let a restart of either read the other's window history as its own.",
+  "_restart": "ALWAYS is correct for a READ-ONLY collector and is NOT the money-moving policy: the bounded live probe uses restartPolicyType NEVER and that is unchanged. This service can place nothing, so relaunching it cannot repeat a trade."
+}

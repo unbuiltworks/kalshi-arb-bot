@@ -1,0 +1,188 @@
+{
+  "Z_STATUS": "NOT_IDENTIFIED",
+  "accounting_label": "documentation and historical replay on Gemini's own records; no order was sent",
+  "estimator_form_already_in_repo": {
+    "blocking_assumption": "both variances assume an EQUAL-WEIGHT time average over a fixed w; a partitioned volume-weighted median with recency weighting changes the weight function, hence the realized share AND the remaining variance",
+    "expected_settle_in_window": "(realized*(w-tau) + spot*tau)/w",
+    "in_window_variance": "sigma^2 * tau^3 / (3 w^2)",
+    "is_not": "spot distance over sigma*sqrt(T)",
+    "module": "src/gemini_maker/fair_value.py",
+    "pre_window_variance": "sigma^2 * ((tau - w) + w/3)",
+    "third_distinct_statistic_in_repo": "src/gemini_maker/ref_lag_recorder.py averages TRADES (sum(p)/len(dq)) rather than time, which is neither the equal-weight time average nor Kaiko's statistic"
+  },
+  "label": "GEMINI_SETTLEMENT_REFERENCE_V1",
+  "lane": "GEMINI -- no PMUS formula, data or assumption is reused",
+  "required_parameters": {
+    "calculation_window_length": {
+      "evidence": "the ticker name ends _60S and Gemini's market pages describe a one-minute average; our own fit to 133 resolved settlements prefers a 60s mean over an instantaneous print ($0.99 vs $3.09 median error)",
+      "status": "PARTIAL",
+      "unknown": "whether the window is the 60s ENDING at expiry or offset by a publication lag"
+    },
+    "current_era_index_LS_LRRR_XBTUSD": {
+      "evidence": "named in our own recorded contract objects from the 2026-10-02T17:50Z expiry onward",
+      "status": "UNKNOWN",
+      "unknown": "the provider, the statistic, and the window -- nothing about it is established, and it governs the only tape that carries a reference series"
+    },
+    "intra_partition_statistic": {
+      "evidence": "secondary description of the Kaiko FAMILY mentions a volume-weighted median; not confirmed for this ticker",
+      "status": "UNKNOWN",
+      "unknown": "whether it applies, and at what percentile definition"
+    },
+    "missing_data_behaviour": {
+      "evidence": "none obtainable here",
+      "status": "UNKNOWN",
+      "unknown": "fallback when a partition has no qualifying trades"
+    },
+    "partition_size_and_count": {
+      "evidence": "none obtainable from this environment",
+      "status": "UNKNOWN",
+      "unknown": "everything"
+    },
+    "publication_timing": {
+      "evidence": "none obtainable here",
+      "status": "UNKNOWN",
+      "unknown": "emit cadence and the lag between window close and print"
+    },
+    "source_venues_and_trade_filters": {
+      "evidence": "none; 'vetted centralized exchanges' is not a list",
+      "status": "UNKNOWN",
+      "unknown": "the venue set, so a single-venue reconstruction cannot be made faithful even in principle"
+    },
+    "weighting_across_partitions": {
+      "evidence": "secondary description mentions recency-favouring time weighting; the functional form is not stated",
+      "status": "UNKNOWN",
+      "unknown": "the weight function -- which is exactly what the Z variance depends on"
+    }
+  },
+  "resolvability": {
+    "abs_settlement_margin_usd": {
+      "median": 20.44,
+      "min": 0.0,
+      "p10": 2.65,
+      "p25": 9.17
+    },
+    "reading": "in this share of windows the reconstruction error alone is as large as the entire distance to the strike, so a Z built on such a proxy cannot resolve the outcome at the precision the question requires",
+    "windows": 133,
+    "windows_margin_below_median_proxy_error": {
+      "count": 30,
+      "pct": 22.6,
+      "threshold_usd": 8.39
+    },
+    "windows_margin_below_p90_proxy_error": {
+      "count": 58,
+      "pct": 43.6,
+      "threshold_usd": 16.91
+    }
+  },
+  "same_price_test_power": {
+    "cells": 65,
+    "feasibility": {
+      "marginal (5-10)": 1,
+      "underpowered (<5)": 64
+    },
+    "largest_cell_windows": 15,
+    "largest_cells": [
+      {
+        "bucket": "80-90c",
+        "checkpoint_s": 120.0,
+        "observations": 15,
+        "windows": 15,
+        "windows_per_Z_tercile": 5.0
+      },
+      {
+        "bucket": "95-99c",
+        "checkpoint_s": 120.0,
+        "observations": 13,
+        "windows": 13,
+        "windows_per_Z_tercile": 4.3
+      },
+      {
+        "bucket": "95-99c",
+        "checkpoint_s": 90.0,
+        "observations": 11,
+        "windows": 11,
+        "windows_per_Z_tercile": 3.7
+      },
+      {
+        "bucket": "90-95c",
+        "checkpoint_s": 120.0,
+        "observations": 10,
+        "windows": 10,
+        "windows_per_Z_tercile": 3.3
+      },
+      {
+        "bucket": "90-95c",
+        "checkpoint_s": 90.0,
+        "observations": 10,
+        "windows": 10,
+        "windows_per_Z_tercile": 3.3
+      },
+      {
+        "bucket": "70-80c",
+        "checkpoint_s": 120.0,
+        "observations": 9,
+        "windows": 9,
+        "windows_per_Z_tercile": 3.0
+      },
+      {
+        "bucket": "80-90c",
+        "checkpoint_s": 90.0,
+        "observations": 9,
+        "windows": 9,
+        "windows_per_Z_tercile": 3.0
+      },
+      {
+        "bucket": "50-55c",
+        "checkpoint_s": 2.0,
+        "observations": 9,
+        "windows": 9,
+        "windows_per_Z_tercile": 3.0
+      }
+    ],
+    "requirement": "detecting a 10pp win-rate separation between extreme Z strata at a ~70% base rate needs on the order of 300 windows per cell at 80% power; the largest cell here holds 15",
+    "total_windows": 133,
+    "verdict": "the same-price Z test is UNRUNNABLE on this corpus regardless of how Z is defined. Identifying the Kaiko construction is necessary but not sufficient: the window count is the binding constraint."
+  },
+  "secondary_not_authoritative": "a search-engine summary of Kaiko's general approach (equal-size time partitions, volume-weighted median per partition, recency-favouring time weighting, real-time windows from 15/20/30/60/120/300s). Family description, not this ticker's parameterization. Not used as if authoritative.",
+  "unconditional_calibration": "unaffected and already delivered: see analysis/gemini/updown/underdog_matrix.json and favorite_persistence.json. Those results stand without Z.",
+  "verification_attempt": {
+    "abs_err_bps": {
+      "max": 2.505,
+      "median": 1.075,
+      "p90": 2.152
+    },
+    "abs_err_usd": {
+      "max": 19.54,
+      "median": 8.39,
+      "p75": 14.84,
+      "p90": 16.91
+    },
+    "all_assets_note": "the artifact pools XRP/SOL/ETH/BTC, so its dollar statistics are meaningless pooled; only BTC rows are used here",
+    "btc_windows": 16,
+    "by_duration": {
+      "BTC05M": 10,
+      "BTC15M": 6
+    },
+    "proxy_definition": "equal-weight mean of SINGLE-VENUE Gemini spot trades over the final 60s",
+    "ran": true,
+    "reading": "the SIGN is reproduced in every window, so a crude proxy answers 'which side settles'. The LEVEL is not: a median $8.39 error is the same order as the quantity Z must measure.",
+    "scored_against": "Gemini's own published settlement value",
+    "sign_of_settlement_minus_strike_agreed": "16 of 16"
+  },
+  "what_is_authoritative": {
+    "indices_observed_in_our_own_records": {
+      "GRR-KAIKO_RFR_BTCUSD_60S": "through 2026-10-02T17:45Z expiry",
+      "LS-LRRR-XBTUSD": "from 2026-10-02T17:50Z expiry onward"
+    },
+    "openapi_sha256": "53caea563447398132afe9f9c45bfe45398526d03b8308c2603ebeb63069d165",
+    "resolved_reference_contracts": 1322,
+    "source_details": "agency/index per contract; index exampled GRR-KAIKO_BTCUSD_60S",
+    "strike": "StrikeType.reference, captured at availableAt, null until then"
+  },
+  "why_not_identified": [
+    "the partition size/count, intra-partition statistic, cross-partition weighting, venue set, publication timing and missing-data rules of GRR-KAIKO_RFR_BTCUSD_60S are all unknown here, and Kaiko's domains are denied by this environment's egress policy",
+    "the weighting function is precisely what the variance of the REMAINING settlement statistic depends on, so no normalization can be written down without it",
+    "the only Gemini tape with a reference series is the LS-LRRR era, whose index construction is entirely undocumented here -- so even a fully identified Kaiko spec would not license Z on it",
+    "verified reconstruction error is of the same order as the settlement margin it would have to resolve"
+  ]
+}

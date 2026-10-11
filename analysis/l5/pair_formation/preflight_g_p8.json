@@ -1,0 +1,79 @@
+{
+ "gate": "G-P8/accounting_survives_operating_state",
+ "verdict": "PASS",
+ "failed": [],
+ "checks": [
+  {
+   "assertion": "A1",
+   "ok": true,
+   "per_envelope": {
+    "top_level": {
+     "ok": true,
+     "realized_shadow": [
+      "2.600000"
+     ]
+    },
+    "nested_under_state": {
+     "ok": true,
+     "realized_shadow": [
+      "2.600000"
+     ]
+    },
+    "batched_under_state": {
+     "ok": true,
+     "realized_shadow": [
+      "2.600000"
+     ]
+    }
+   },
+   "why": "a settlement nested under an operating-state key is still a settlement and must produce identical economics"
+  },
+  {
+   "assertion": "A2",
+   "ok": true,
+   "cases": [
+    {
+     "case": "an operating state this file has never heard of",
+     "terminal_found": 0,
+     "tallied_unreadable": 1,
+     "ok": true
+    },
+    {
+     "case": "a state envelope carrying nothing",
+     "terminal_found": 0,
+     "tallied_unreadable": 1,
+     "ok": true
+    },
+    {
+     "case": "a line that is not a record at all",
+     "terminal_found": 0,
+     "tallied_unreadable": 1,
+     "ok": true
+    }
+   ],
+   "why": "the legacy failure was an unreadable-record tally of 0 while eight settlements were dropped; a drop must be loud or it is indistinguishable from an absence"
+  },
+  {
+   "assertion": "A3",
+   "ok": true,
+   "qty_in": "24",
+   "qty_out": "24",
+   "components_sum_to_realized": true,
+   "why": "quantity is conserved and realized is exactly its own three components; a float would not close this"
+  },
+  {
+   "assertion": "A4",
+   "ok": true,
+   "kinds_found": [
+    "boot",
+    "cycle_error",
+    "digest",
+    "intent"
+   ],
+   "unclassified": [],
+   "why": "a kind nobody classified is a kind the reader may drop; adding one must break this gate, not pass silently"
+  }
+ ],
+ "authorizes": "nothing on its own. This is a PRECONDITION on the accounting path, checked before a bounded BTC15m live probe. G-P1..G-P7 still decide whether a probe is proposed at all, and live authorization remains a separate human decision.",
+ "labels": "asserts only that a terminal record survives a change of operating state. It does not assert the numbers are right, and it never converts shadow economics into realized profit."
+}

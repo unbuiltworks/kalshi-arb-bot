@@ -1,0 +1,338 @@
+{
+  "GENUINELY_COMPLETE_WINDOWS": 16,
+  "btc5m_tickers_seen": 53,
+  "chaining_validation_check": {
+    "agree_to_the_cent": 17,
+    "pairs_checked": 17,
+    "role": "a SEPARATELY REPORTED validation check. It is NOT the study's strike source and no eligibility decision uses it; a window without an authoritative strike fails closed.",
+    "rows": [
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85245.52",
+        "previous_settlement_value": "85245.51933333333",
+        "window": "BTC05M2610051755"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85359.29",
+        "previous_settlement_value": "85359.2855",
+        "window": "BTC05M2610051800"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85426.51",
+        "previous_settlement_value": "85426.51416666666",
+        "window": "BTC05M2610051805"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85395.53",
+        "previous_settlement_value": "85395.5275",
+        "window": "BTC05M2610051810"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85376.05",
+        "previous_settlement_value": "85376.04866666667",
+        "window": "BTC05M2610051815"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85437.97",
+        "previous_settlement_value": "85437.972",
+        "window": "BTC05M2610051820"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85477.66",
+        "previous_settlement_value": "85477.657",
+        "window": "BTC05M2610051825"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85513.75",
+        "previous_settlement_value": "85513.748",
+        "window": "BTC05M2610051830"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85582.99",
+        "previous_settlement_value": "85582.989",
+        "window": "BTC05M2610051835"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85594.64",
+        "previous_settlement_value": "85594.64133333333",
+        "window": "BTC05M2610051840"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85619.66",
+        "previous_settlement_value": "85619.66083333333",
+        "window": "BTC05M2610051845"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85618.42",
+        "previous_settlement_value": "85618.42433333333",
+        "window": "BTC05M2610051850"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85611.53",
+        "previous_settlement_value": "85611.53416666666",
+        "window": "BTC05M2610051855"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85613.08",
+        "previous_settlement_value": "85613.07833333334",
+        "window": "BTC05M2610051900"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85657.14",
+        "previous_settlement_value": "85657.13966666667",
+        "window": "BTC05M2610051905"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85572.45",
+        "previous_settlement_value": "85572.449",
+        "window": "BTC05M2610051910"
+      },
+      {
+        "agrees_to_the_cent": true,
+        "authoritative_strike": "85588.23",
+        "previous_settlement_value": "85588.23233333333",
+        "window": "BTC05M2610051915"
+      }
+    ]
+  },
+  "complete": [
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85245.52",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791222622599108025,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051755",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85359.29",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791222918078177948,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051800",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85426.51",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791223214611733851,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051805",
+      "up_resolution_side": "no"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85395.53",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791223533431637778,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051810",
+      "up_resolution_side": "no"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85376.05",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791223818010405524,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051815",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85437.97",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791224133030384116,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051820",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85477.66",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791224448645185935,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051825",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85513.75",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791224733246360023,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051830",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85582.99",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791225007752485378,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051835",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85594.64",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791225324680137032,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051840",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85619.66",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791225639630957784,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051845",
+      "up_resolution_side": "no"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85618.42",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791225913152673317,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051850",
+      "up_resolution_side": "no"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85611.53",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791226220609740002,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051855",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85613.08",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791226556864751131,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051900",
+      "up_resolution_side": "yes"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85657.14",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791226820669037562,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051905",
+      "up_resolution_side": "no"
+    },
+    {
+      "books": 8,
+      "early_checkpoints": 8,
+      "reference_covered": 8,
+      "strike": "85572.45",
+      "strike_inferred": false,
+      "strike_observed_t_ns": 1791227117928814362,
+      "strike_source": "venue contract strike.value",
+      "strike_source_kind": "window_poll",
+      "strike_type": "reference",
+      "ticker": "BTC05M2610051910",
+      "up_resolution_side": "yes"
+    }
+  ],
+  "incomplete_by_missing_requirement": {
+    "fewer_than_6_early_checkpoints": 36,
+    "fewer_than_6_executable_books": 36,
+    "fewer_than_6_fresh_reference_observations": 36,
+    "no_authoritative_strike": 35,
+    "no_settlement": 1
+  },
+  "label": "GEMINI_BTC5M_WINDOW_CENSUS",
+  "max_reference_age_s": 10.0,
+  "min_early_checkpoints_required": 6,
+  "read_only": "opens no venue surface and changes nothing",
+  "reference_observations": 4983,
+  "requirements": "early checkpoints, authoritative strike, contemporaneous fresh reference, settlement, executable books -- all five, per window",
+  "tape_rows": 31570,
+  "tapes_glob": "analysis/gemini/btc5m_snap/btc5m_rec_*.jsonl.gz"
+}

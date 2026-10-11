@@ -1,0 +1,96 @@
+{
+ "label": "PMUS_BTC15M_COMPAT_AND_ECONOMICS_V1",
+ "compatibility": {
+  "windows_replayed": 4,
+  "windows_with_any_quote": 2,
+  "decision_points": 41,
+  "quotes": 12,
+  "does_it_OPEN": true,
+  "opens": 4,
+  "does_it_EXTEND_repeatedly": true,
+  "extends": 5,
+  "extend_run_lengths": [
+   4,
+   1
+  ],
+  "longest_extend_run": 4,
+  "opposite_inventory_obtainable": true,
+  "completes": 3,
+  "relations": {
+   "open": 4,
+   "complete": 3,
+   "extend": 5
+  },
+  "p_next_is_extend_observed": 0.417,
+  "residual_crossed_zero_in_n_windows": 0,
+  "max_abs_residual_per_window": [
+   5,
+   2
+  ],
+  "hold_reasons": {
+   "entry_band": 23,
+   "one_sided_book": 6
+  },
+  "entry_band_binding_decisions": 23,
+  "entry_band_binding_frac": 0.561,
+  "tick_forced_standdown": 0,
+  "tick_forced_standdown_frac": 0.0,
+  "desired_price_at_touch_frac": 1.0,
+  "l5_reference": {
+   "windows": 5546,
+   "fills": 693916,
+   "fills_per_window": 125.1,
+   "sells": 0,
+   "p_next_is_extend": 0.66,
+   "residual_episodes": 38180,
+   "episodes_per_window": 6.9,
+   "episodes_ending_FLIPPED_through_zero": 0.843,
+   "episodes_ending_COMPLETED_FLAT": 0.012,
+   "windows_ending_flat": "1 of 5546",
+   "median_residual_into_settlement_shares": 141.8,
+   "median_residual_pct_of_window_shares": 0.077,
+   "median_pair_cost_flip": "0.980-0.986",
+   "median_pair_cost_flat_completion": 0.995
+  }
+ },
+ "economics_q1": {
+  "basis": "q=1, one contract per action, TRACK B assumed fills only",
+  "assumed_fills": 12,
+  "1_matched_pair_economics": {
+   "pairs": 3,
+   "cost_usd": "2.9414",
+   "payout_usd": "3.0000",
+   "pnl_usd": "0.0586",
+   "avg_pair_cost": "0.9805",
+   "label": "SHADOW. These pairs were never bought."
+  },
+  "2_directional_residual": {
+   "units": 6,
+   "cost_basis_usd": "1.5086",
+   "marked_pnl_usd": null,
+   "label": "NOT marked. The residual's value is a settlement outcome, and L5's own corpus measures residual P&L as NEGATIVE (-$144,065 over 5,546 windows). Marking it at cost would flatter this line."
+  },
+  "3_maker_rebate": {
+   "accrual_usd": "0.0279",
+   "rule": "0.0125 * C * p * (1 - p), credited at the point of trade",
+   "status": "ACCRUAL ONLY -- excluded from pre-rebate P&L and from strategy selection; income only once credited"
+  },
+  "4_liquidity_reward": {
+   "usd": "0.00",
+   "why": "program crypto_up_down_20260922 posts a $30 pool per daily_event across ~120 markets, but neither our eligibility nor our share of score is established, so it is counted at zero"
+  },
+  "5_taker_fees": {
+   "usd": "0.00",
+   "why": "every action is a maker join at the touch; nothing crosses"
+  },
+  "6_modelled_net": {
+   "pre_rebate_usd": "0.0586",
+   "with_rebate_accrual_usd": "0.0865",
+   "label": "MODELLED. Not shadow-realized, not realized. The residual line is deliberately unmarked, so neither figure is a complete P&L."
+  },
+  "capacity": {
+   "derived": false,
+   "why": "capacity needs a fill assumption with evidence behind it. The only fill assumption available is Track B's volume-at-touch rule, which has none. No market-share figure is assumed."
+  }
+ }
+}

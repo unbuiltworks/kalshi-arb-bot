@@ -1,0 +1,213 @@
+# BTC15m TWO-SIDED RESEARCH RECORDER -- read-only, unauthenticated, CI-hosted.
+#
+# ITS OWN FILE, ITS OWN REQUEST FILE, ITS OWN CONCURRENCY GROUP, ITS OWN
+# OUTDIR, ITS OWN TAPE DIRECTORY AND ITS OWN COMMIT ALLOW-LIST. It therefore
+# cannot disturb gemini-btc5m-recorder.yml or gemini-btc5m-snapshot.yml, which
+# keep their own groups and run on unchanged.
+#
+# STARTED BY A REQUEST FILE, not workflow_dispatch: the API refuses to
+# dispatch a workflow that does not exist on the DEFAULT branch, and this
+# research does not belong on main. Touching .github/btc15m_recorder_request
+# starts it on this branch instead.
+#
+# NO CREDENTIAL IS IN SCOPE. The recorder reads public market data only. The
+# AST guard below proves it over BOTH modules before anything long runs, so
+# "read-only" is a checked property rather than a claim.
+#
+# FOUR LESSONS FROM THIS PROGRAMME'S OWN HISTORY ARE BUILT IN:
+#
+#  1. NO PERIODIC FLUSH. The 9-hour BTC5m run's tape was only gzipped and
+#     committed when the job ENDED, so a cancellation would have destroyed all
+#     of it. This job runs the recorder in SEGMENTS and gzips + COMMITS AFTER
+#     EVERY SEGMENT, so a cancellation costs at most one segment.
+#  2. A KeyError IN AN INFORMATIONAL ECHO once failed a PASSING gate, twice,
+#     in two different blocks. Every echo here uses .get() and is `|| true`;
+#     the real gate is a separate step that reads one boolean.
+#  3. A MISSING python-dotenv once silently refused 12 live windows. A
+#     PREFLIGHT step imports every module the job needs and fails closed.
+#  4. `kind == "window"` rows carry strike: null before availableAt. The
+#     validator REQUIRES a re-read row with a NON-NULL strike, so a tape that
+#     only saw the null first listing cannot pass.
+name: gemini-btc15m-recorder
+
+on:
+  push:
+    paths:
+      - '.github/btc15m_recorder_request'
+      - '.github/workflows/gemini-btc15m-recorder.yml'
+
+concurrency:
+  group: gemini-btc15m-two-sided-recorder
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 630
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the client libraries the recorder needs
+        run: python -m pip install --quiet httpx websockets
+
+      # ---- LESSON 3: fail closed on a missing module, before anything long
+      - name: Preflight -- import every module the job needs
+        run: python -m src.gemini_research.btc15m_recorder --preflight
+
+      # ---- structural guard: prove read-only over the AST of BOTH modules
+      - name: Prove the recorders have no order path
+        run: |
+          python - <<'PY'
+          import ast
+          mods = ["src/gemini_research/btc5m_recorder.py",
+                  "src/gemini_research/btc15m_recorder.py",
+                  "src/gemini_research/regime_monitor.py"]
+          banned_imports = ("gemini_execution", "arming", "transport",
+                            "payload", "sell_path")
+          for path in mods:
+              src = open(path).read()
+              for n in ast.walk(ast.parse(src)):
+                  if isinstance(n, (ast.Import, ast.ImportFrom)):
+                      names = [getattr(n, "module", None) or ""] + [
+                          a.name for a in n.names]
+                      for nm in names:
+                          for b in banned_imports:
+                              assert b not in (nm or ""), \
+                                  "%s imports %s" % (path, nm)
+              for needle in ("/order", "X-GEMINI-APIKEY", "hmac",
+                             "GEMINI_API", "signature", "nonce"):
+                  assert needle not in src, "%s mentions %r" % (path, needle)
+          print("READ-ONLY GUARD PASSED over %d modules: no order path, "
+                "no credential, no execution import" % len(mods))
+          PY
+
+      # ---- STAGE 1: one BTC15m window's worth. Must pass or the job stops.
+      - name: Stage 1 -- validation segment (20 minutes, >= one BTC15m window)
+        id: validate
+        timeout-minutes: 28
+        run: |
+          mkdir -p data/gemini_btc15m_research analysis/gemini/btc15m_rec
+          python -m src.gemini_research.btc15m_recorder \
+            --outdir data/gemini_btc15m_research \
+            --duration-s 1200 --segments 1 \
+            --validate-out analysis/gemini/btc15m_rec/validation.json \
+            || echo "recorder exited non-zero; the verdict step below decides"
+
+      - name: Stage 1 -- informational echo (can never fail the gate)
+        if: always()
+        run: |
+          python - <<'PY' || true
+          import json, pathlib
+          p = pathlib.Path("analysis/gemini/btc15m_rec/validation.json")
+          v = json.loads(p.read_text()) if p.exists() else {}
+          print(json.dumps({k: v.get(k) for k in
+                            ("pass", "missing", "rows", "kinds",
+                             "pair_market_count", "book_states",
+                             "down_probe_replies",
+                             "single_leg_spread_n",
+                             "single_leg_spread_median")},
+                           indent=2, sort_keys=True, default=str))
+          PY
+
+      - name: Stage 1 -- the gate, and nothing else
+        run: |
+          python - <<'PY'
+          import json, sys
+          v = json.load(open("analysis/gemini/btc15m_rec/validation.json"))
+          if not v.get("pass"):
+              print("::error::validation FAILED; missing %s"
+                    % v.get("missing"))
+              sys.exit(1)
+          print("validation PASSED: %s rows over %s pair markets"
+                % (v.get("rows"), v.get("pair_market_count")))
+          PY
+
+      # ---- STAGE 2: LESSON 1. Segment, gzip and COMMIT after every segment.
+      - name: Stage 2 -- segmented collection, committed incrementally
+        timeout-minutes: 560
+        env:
+          SEGMENTS: 24
+          SEGMENT_SECONDS: 1200
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for i in $(seq 1 "$SEGMENTS"); do
+            echo "---- segment $i/$SEGMENTS ----"
+            python -m src.gemini_research.btc15m_recorder \
+              --outdir data/gemini_btc15m_research \
+              --duration-s "$SEGMENT_SECONDS" --segments 1 \
+              --validate-out "analysis/gemini/btc15m_rec/validation_seg${i}.json" \
+              || echo "segment $i ended non-zero; its evidence is kept"
+            mkdir -p analysis/gemini/btc15m_rec
+            for f in data/gemini_btc15m_research/*.jsonl; do
+              [ -e "$f" ] || continue
+              gzip -9 -c "$f" > "analysis/gemini/btc15m_rec/$(basename "$f").gz"
+              rm -f "$f"
+            done
+            for f in analysis/gemini/btc15m_rec/*.jsonl.gz \
+                     analysis/gemini/btc15m_rec/validation*.json; do
+              if [ -e "$f" ]; then git add -- "$f"; fi
+            done
+            if git diff --cached --quiet; then
+              echo "segment $i produced no new evidence"; continue
+            fi
+            # ALLOW-LIST: this job may only ever commit its own two shapes.
+            if git diff --cached --name-only \
+                 | grep -qvE '^analysis/gemini/btc15m_rec/(btc15m_rec_[0-9TZ]+\.jsonl\.gz|validation(_seg[0-9]+)?\.json)$'; then
+              echo "::error::refusing to commit outside this recorder's evidence"
+              git diff --cached --name-only; exit 1
+            fi
+            git commit -m "evidence(gemini): btc15m two-sided recorder tape, segment $i [skip ci]"
+            pushed=0
+            for attempt in 1 2 3; do
+              if git push origin HEAD:${{ github.ref_name }}; then pushed=1; break; fi
+              echo "push rejected (attempt $attempt); rebasing onto remote"
+              git fetch origin ${{ github.ref_name }}
+              git rebase FETCH_HEAD || { git rebase --abort; break; }
+              sleep $((attempt * 3))
+            done
+            if [ "$pushed" != "1" ]; then
+              echo "::warning::segment $i not pushed; it stays committed locally"
+            fi
+          done
+
+      - name: Final sweep -- anything the loop did not get to
+        if: always()
+        run: |
+          mkdir -p analysis/gemini/btc15m_rec
+          for f in data/gemini_btc15m_research/*.jsonl; do
+            [ -e "$f" ] || continue
+            gzip -9 -c "$f" > "analysis/gemini/btc15m_rec/$(basename "$f").gz"
+          done
+          ls -la analysis/gemini/btc15m_rec/ || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in analysis/gemini/btc15m_rec/*.jsonl.gz \
+                   analysis/gemini/btc15m_rec/validation*.json; do
+            if [ -e "$f" ]; then git add -- "$f"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "nothing left to commit"; exit 0
+          fi
+          if git diff --cached --name-only \
+               | grep -qvE '^analysis/gemini/btc15m_rec/(btc15m_rec_[0-9TZ]+\.jsonl\.gz|validation(_seg[0-9]+)?\.json)$'; then
+            echo "::error::refusing to commit outside this recorder's evidence"
+            git diff --cached --name-only; exit 1
+          fi
+          git commit -m "evidence(gemini): btc15m two-sided recorder final sweep [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then exit 0; fi
+            git fetch origin ${{ github.ref_name }}
+            git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
+            sleep $((attempt * 3))
+          done
+          echo "::error::could not push final evidence after 3 attempts"; exit 1

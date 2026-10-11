@@ -1,0 +1,66 @@
+{
+ "1": {
+  "win": 11,
+  "fills": 17,
+  "long": 9.0,
+  "short": 8.0,
+  "matched": 2.0,
+  "resid": 13.0,
+  "mpnl": 0.24999999999999997,
+  "rpnl": -1.3599999999999999,
+  "pair_costs": {
+   "p50": 0.875,
+   "n": 2
+  },
+  "both_sided": 2,
+  "rpnl_n": 9
+ },
+ "5": {
+  "win": 11,
+  "fills": 17,
+  "long": 45.0,
+  "short": 40.0,
+  "matched": 10.0,
+  "resid": 65.0,
+  "mpnl": 1.25,
+  "rpnl": -6.799999999999997,
+  "pair_costs": {
+   "p50": 0.875,
+   "n": 2
+  },
+  "both_sided": 2,
+  "rpnl_n": 9
+ },
+ "10": {
+  "win": 11,
+  "fills": 19,
+  "long": 84.0,
+  "short": 68.0,
+  "matched": 17.0,
+  "resid": 118.0,
+  "mpnl": 2.23,
+  "rpnl": -10.029999999999994,
+  "pair_costs": {
+   "p50": 0.875,
+   "n": 2
+  },
+  "both_sided": 2,
+  "rpnl_n": 10
+ },
+ "25": {
+  "win": 11,
+  "fills": 20,
+  "long": 174.23,
+  "short": 113.0,
+  "matched": 32.0,
+  "resid": 223.23,
+  "mpnl": 4.63,
+  "rpnl": -9.921399999999997,
+  "pair_costs": {
+   "p50": 0.875,
+   "n": 2
+  },
+  "both_sided": 2,
+  "rpnl_n": 10
+ }
+}

@@ -1,0 +1,184 @@
+# SHADOW S1 -- zero-capital owned-order shadow on Polymarket public data.
+#
+# AUTHORIZED SCOPE: realtime shadow measurement only. No order submission,
+# no wallet signing, no live capital, no touch=fill, no private endpoints.
+# This workflow references NO secret and needs none: every endpoint is
+# public. The collector reuses polymarket_l5.http_client (HTTPS-only,
+# GET-only, allow-listed hosts, no Authorization/API-key/signature header
+# on any code path).
+#
+# It runs in CI because clob.polymarket.com answers CONNECT -> 000/403 from
+# the research container.
+#
+# FAIL CLOSED BEFORE COLLECTING: the candidate fingerprint must equal
+# 441c375e..., the nine fill-classifier cases and the AST safety tests must
+# pass, and the preflight must be green. Any of those failing aborts before
+# a single request reaches the venue.
+#
+# INCREMENTAL PERSISTENCE: each segment is finalised, committed and pushed,
+# so a workflow timeout costs one segment rather than the run.
+name: polymarket-shadow-s1
+
+on:
+  push:
+    paths:
+      - '.github/shadow_s1_request'
+
+concurrency:
+  group: polymarket-shadow-s1
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test deps only
+        run: python -m pip install -q pytest
+
+      - name: ASSERT the frozen candidate fingerprint
+        run: |
+          python - <<'PY'
+          from src.polymarket_l5.owned_order_shadow import (
+              FINGERPRINT, CANDIDATE)
+          EXPECT = ("441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea"
+                    "76caf333fe24b6fe")
+          print("expected", EXPECT)
+          print("actual  ", FINGERPRINT)
+          assert FINGERPRINT == EXPECT, "CANDIDATE CHANGED -- refusing to run"
+          assert CANDIDATE["no_5c_extend_rule"] is True
+          assert CANDIDATE["residual_control"] == "QUOTE_SUPPRESSION_ONLY"
+          assert CANDIDATE["quantity_shares"] == 23.61
+          assert CANDIDATE["residual_cap_shares"] == 80
+          assert CANDIDATE["tte_shutdown_s"] == 60
+          print("fingerprint and frozen parameters verified")
+          PY
+
+      - name: The nine fill-classifier cases and the AST safety tests
+        run: python -m pytest tests/test_owned_order_shadow.py -q
+
+      - name: Prove the whole import graph carries no write verb
+        run: |
+          python - <<'PY'
+          import ast
+          for f in ("src/polymarket_l5/owned_order_shadow.py",
+                    "src/polymarket_l5/http_client.py"):
+              t = ast.parse(open(f, encoding="utf-8").read())
+              attrs = {n.attr.lower() for n in ast.walk(t)
+                       if isinstance(n, ast.Attribute)}
+              for bad in ("post", "put", "delete", "patch", "sign",
+                          "send_transaction", "place_order",
+                          "create_order"):
+                  assert bad not in attrs, "%s in %s" % (bad, f)
+          print("no write verb anywhere in the shadow import graph")
+          PY
+
+      - name: Preflight
+        run: python -m src.polymarket_l5.owned_order_shadow --preflight-only
+
+      - name: COLLECT (segmented, committed after every segment)
+        run: |
+          set -uo pipefail
+          mkdir -p data/l5/shadow analysis/l5/shadow \
+                   analysis/l5/shadow/runs
+          # SELF-REGISTER this run in the tape manifest BEFORE collecting,
+          # so every tape it writes is attributable even if the job dies
+          # mid-segment. Validity starts PENDING and is decided by the
+          # gate order in the report, never assumed.
+          python - <<'PY' || true
+          import json, os, datetime
+          p = "analysis/l5/shadow/RUN_MANIFEST.json"
+          d = json.load(open(p)) if os.path.exists(p) else {"runs": []}
+          rid = int(os.environ.get("GITHUB_RUN_ID") or 0)
+          if rid and not any(r.get("run_id") == rid for r in d["runs"]):
+              d["runs"].append({
+                  "run_id": rid,
+                  "run_number": int(os.environ.get("GITHUB_RUN_NUMBER") or 0),
+                  "sha": os.environ.get("GITHUB_SHA"),
+                  "started_utc": datetime.datetime.now(
+                      datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "ended_utc": None,
+                  "conclusion": "in_progress",
+                  "validity": "PENDING_MEASUREMENT_VALIDITY",
+                  "why": "self-registered at collection start",
+              })
+              json.dump(d, open(p, "w"), indent=2)
+              print("registered run %d in the tape manifest" % rid)
+          PY
+          for i in $(seq 1 16); do
+            echo "=== segment $i ==="
+            python -m src.polymarket_l5.owned_order_shadow \
+              --outdir data/l5/shadow \
+              --minutes 19 --book-poll-s 1.0 --market-max-s 1200 \
+              2>&1 | tail -40 || echo "segment $i exited nonzero"
+            for f in data/l5/shadow/shadow_*.jsonl; do
+              [ -e "$f" ] || continue
+              gzip -f "$f" || true
+            done
+            # Cohort accounting lives in a committed, TESTED script, not
+            # inline here: it must establish MEASUREMENT VALIDITY before
+            # reporting strategy statistics, quarantine tapes from runs the
+            # manifest marks invalid, and stamp the producing run into the
+            # artifact so a stale file cannot masquerade as current.
+            # It imports nothing from the collector and cannot alter S1.
+            python scripts/shadow_cohort_report.py \
+              --out "analysis/l5/shadow/runs/${GITHUB_RUN_ID}.json" || true
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # ONLY uniquely-named, run-scoped files are committed. The
+            # shared COHORT_PROGRESS.json and RUN_MANIFEST.json are
+            # DELIBERATELY excluded: run 3 lost three segments of real
+            # evidence because CI rewrote COHORT_PROGRESS.json while a
+            # local commit had changed the same file, the rebase
+            # conflicted, and every later push died on the leftover
+            # .git/rebase-merge. Tapes and per-run files cannot collide.
+            for f in data/l5/shadow/shadow_*.jsonl.gz \
+                     "analysis/l5/shadow/runs/${GITHUB_RUN_ID}.json"; do
+              [ -e "$f" ] && git add -- "$f"
+            done
+            if git diff --cached --quiet; then
+              echo "segment $i produced nothing to commit"
+            else
+              if git diff --cached --name-only \
+                   | grep -qvE '^(data/l5/shadow/|analysis/l5/shadow/)'; then
+                echo "::error::refusing to commit outside the shadow dirs"
+                git diff --cached --name-only; exit 1
+              fi
+              git commit -m "evidence(shadow): S1 segment $i [skip ci]"
+              pushed=no
+              for k in 1 2 3 4; do
+                # Clear any half-finished rebase BEFORE pulling. Without
+                # this a single conflict wedges the repo for the rest of
+                # the job and every subsequent segment is silently lost.
+                git rebase --abort >/dev/null 2>&1 || true
+                rm -rf .git/rebase-merge .git/rebase-apply || true
+                if git pull --rebase --autostash -q origin \
+                     "${GITHUB_REF_NAME}" && \
+                   git push -q origin "HEAD:${GITHUB_REF_NAME}"; then
+                  pushed=yes; break
+                fi
+                sleep $((2**k))
+              done
+              if [ "$pushed" != yes ]; then
+                echo "::error::segment $i committed but COULD NOT PUSH; evidence exists only on this runner"
+                git log --oneline -1
+              fi
+            fi
+            COMPLETE=$(python -c "import json,os;print(json.load(open('analysis/l5/shadow/runs/%s.json' % os.environ['GITHUB_RUN_ID']))['COMPLETE_markets'])" 2>/dev/null || echo 0)
+            echo "COMPLETE markets so far: $COMPLETE / 25"
+            if [ "$COMPLETE" -ge 25 ]; then
+              echo "cohort target reached -- freezing collection for evaluation"
+              break
+            fi
+          done

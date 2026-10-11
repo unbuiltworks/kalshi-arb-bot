@@ -1,0 +1,172 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-21T12:35:25.861710+00:00",
+  "authorization_id": "NO-AUTHORIZATION-IN-FORCE",
+  "driver_executable_sha": "17a10e561c1e4e66aa7ed8b1a47fda4d1622e43d7edf906c4a1b3af10ede0f34",
+  "envelope_name": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+  "envelope_sha": "0ba19c6dc47c84e650a368402f4fcf76adf7b5ec425be7c0479b533774c98ca3",
+  "envelope": {
+    "name": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    "action_size": "1",
+    "max_actions": "12",
+    "max_same_side_run": "2",
+    "max_residual_contracts": "2",
+    "max_imbalance_contracts": "2",
+    "max_yes_contracts": "2",
+    "max_no_contracts": "2",
+    "max_total_spend_usd": "2.50",
+    "max_committed_usd": "2.50",
+    "max_residual_usd": "2.00",
+    "max_working_orders": "2",
+    "max_concurrent_markets": "1",
+    "cohort_prefix": "GEMI-BTC15M",
+    "worst_case_loss_usd": "2.50"
+  },
+  "driver_envelope_sha": "47f257f208017841d633c1bf5e2420eda2ca87b0ab502da34bd9d7e19690cf22",
+  "bundle_sha": "02f7a55800b952bfc2c76117dcfcc472825df19ff5952ba561c9f8fcc73b6bbb",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "family": {
+    "name": "BTC15m",
+    "prefix": "BTC15M",
+    "minutes": 15,
+    "resolved_symbol_prefix": "GEMI-BTC15M",
+    "explicit": true
+  },
+  "envelope_family": "GEMI-BTC15M",
+  "entry_schedule": {
+    "in_band": true,
+    "band": [
+      240.0,
+      280.0
+    ],
+    "waited_s": 298.84,
+    "polls": 35,
+    "entered_tte_s": 277.23228907585144,
+    "selection": {
+      "eligible": true,
+      "chosen": {
+        "symbol": "GEMI-BTC15M2609211245-UP",
+        "tte_s": 277.23228907585144,
+        "contract_status": "active",
+        "market_state": "open"
+      },
+      "band": [
+        240.0,
+        280.0
+      ],
+      "cohort": "BTC15m",
+      "considered": [
+        {
+          "symbol": "GEMI-BTC15M2609211245-UP",
+          "tte_s": 277.23228907585144,
+          "contract_status": "active",
+          "market_state": "open"
+        }
+      ]
+    },
+    "observed": [
+      {
+        "waited_s": 250.61,
+        "tte_s": [
+          327.0412757396698,
+          -572.9587242603302,
+          -1472.9587242603302,
+          -2372.95872426033
+        ]
+      },
+      {
+        "waited_s": 258.8,
+        "tte_s": [
+          318.5169126987457,
+          -581.4830873012543,
+          -1481.4830873012543,
+          -2381.4830873012543
+        ]
+      },
+      {
+        "waited_s": 266.8,
+        "tte_s": [
+          310.3269729614258,
+          -589.6730270385742,
+          -1489.6730270385742,
+          -2389.673027038574
+        ]
+      },
+      {
+        "waited_s": 274.61,
+        "tte_s": [
+          302.33242630958557,
+          -597.6675736904144,
+          -1497.6675736904144,
+          -2397.6675736904144
+        ]
+      },
+      {
+        "waited_s": 283.12,
+        "tte_s": [
+          294.51645159721375,
+          -605.4835484027863,
+          -1505.4835484027863,
+          -2405.4835484027863
+        ]
+      },
+      {
+        "waited_s": 291.9,
+        "tte_s": [
+          286.007483959198,
+          -613.992516040802,
+          -1513.992516040802,
+          -2413.992516040802
+        ]
+      }
+    ],
+    "labels": "EXPERIMENTAL SCHEDULING ONLY: this chose WHEN to begin. The controller, prices, sizing and every bound are unchanged and know nothing about it."
+  },
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC15M2609211245-UP",
+      "tte_s": 277.23228907585144,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "band": [
+      240.0,
+      280.0
+    ],
+    "cohort": "BTC15m",
+    "considered": [
+      {
+        "symbol": "GEMI-BTC15M2609211245-UP",
+        "tte_s": 277.23228907585144,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": false,
+    "verdict": "NO_CREDENTIALS",
+    "blocks_orders": true,
+    "why": "run where the Gemini credentials live"
+  },
+  "preflight": {
+    "agrees": false,
+    "discrepancies": [
+      {
+        "field": "terms_accepted",
+        "expected": "True",
+        "got": "False",
+        "why": "the venue's current answer differs from the assumption the envelope was sized against"
+      }
+    ],
+    "checked_before_latch": true
+  },
+  "state": "DO_NOT_TRADE",
+  "why": "fresh preflight differs from the frozen assumptions: [{\"field\": \"terms_accepted\", \"expected\": \"True\", \"got\": \"False\", \"why\": \"the venue's current answer differs from the assumption the envelope was sized against\"}]",
+  "latch": {
+    "consumed": false,
+    "why": "the preflight refused BEFORE the latch was spent, so the authorization is untouched"
+  },
+  "finished_utc": "2026-09-21T12:40:25.219159+00:00"
+}

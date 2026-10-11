@@ -1,0 +1,1940 @@
+{
+ "NOT_INFERABLE": {
+  "gaps_between_cancel_and_repost": "NOT OBSERVED. Nothing was resting there.",
+  "queue_position": "UNKNOWN on both arms. The arm would preserve queue position across what are currently k separate posts, which can only help, but nothing we record measures queue depth.",
+  "trades_while_resting": "NOT RECORDED. The order tape carries book extrema (min_opp_ask, max_touch) but no trade prints per rest window, so trade flow against a resting order is unobservable.",
+  "would_the_held_order_have_filled": "UNKNOWN. The historical order was cancelled, so the book path after the cancel was never recorded against a live order. No replay can answer it."
+ },
+ "arm": "CEILING_PINNED_PERSIST",
+ "matched_and_residual": {
+  "matched_inventory_delta": "0.00",
+  "pair_at_chosen_on_pinned_attempts": {
+   "n": 37,
+   "p50": 0.996740614334471
+  },
+  "pair_economics_delta": "0.0000",
+  "residual_delta": "0.00",
+  "terminal_residual_contracts": "32.77",
+  "why": "the arm invents no fill, so it adds no matched contract and removes no residual in replay. These are ZERO BY CONSTRUCTION, not a measured null result, and they must not be read as 'the arm has no economic effect'"
+ },
+ "persistence_ceiling": {
+  "note": "the arm does NOT change the rest bound, so a merged order still dies at the model's own next re-evaluation. This bounds how much persistence the arm can buy.",
+  "observed_median_deadline_rest_s": 6.436,
+  "rest_floor_s": 5.0,
+  "rest_policy": "model",
+  "rung": "R5FT"
+ },
+ "post_cutover": {
+  "ceiling_pinned_attempts": 51,
+  "ceiling_pinning_route": "recomputed_from_avg_cost -- EXACT; this corpus has no post-time touch",
+  "chains": 33,
+  "chains_the_arm_would_merge": 33,
+  "complement_ever_reached_our_price": 0,
+  "complete_attempts": 193,
+  "corpus": "post_cutover_cohort",
+  "fill_classification": {
+   "COUNTERFACTUAL_FILL_UNKNOWN": 13,
+   "OBSERVED_FILL": 1,
+   "OBSERVED_NO_FILL": 19
+  },
+  "identical_price_reposts_eliminated": 18,
+  "identical_price_reposts_eliminated_NAIVE": 18,
+  "merged_order_observed_lifetime_s": "NOT RECORDED -- the cohort store carries no rest_s, so order lifetime is unmeasurable on this corpus",
+  "naive_overstates_by": 0,
+  "orders_under_arm": 175,
+  "orders_under_control": 193,
+  "per_market": {
+   "aec-atpcq-andfen-ryaseg-2026-09-13": {
+    "ceiling_pinned_attempts": 18,
+    "chains": 14,
+    "complete_attempts": 66,
+    "detail": [
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_FILL",
+      "closest_complement_ask": "0.63",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "observed on an attempt in the chain",
+       "boundary": "filled",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "2.38",
+      "observed_rest_s_total": 0.0,
+      "price": "0.62",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.87",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.9",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.95",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.95",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.98",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.94",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.93",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.9",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.92",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.93",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.96",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.97",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.98",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.63",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 62,
+    "orders_under_control": 66,
+    "reposts_eliminated_deadline_bounded": 4,
+    "reposts_eliminated_naive": 4
+   },
+   "aec-wta-cribuc-biaand-2026-09-13": {
+    "ceiling_pinned_attempts": 32,
+    "chains": 18,
+    "complete_attempts": 104,
+    "detail": [
+     {
+      "attempts_merged": 3,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.87",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 3,
+       "attempts_with_no_rest_time": 3,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 2
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 2,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.87",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 3,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.9",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 3,
+       "attempts_with_no_rest_time": 3,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 2
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 2,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 3,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.92",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 3,
+       "attempts_with_no_rest_time": 3,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 2
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 2,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.93",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.88",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 3,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.81",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 3,
+       "attempts_with_no_rest_time": 3,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 2
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 2,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.95",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.95",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.94",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.96",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.96",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.9",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.9",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.9",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.96",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 2,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 1,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.96",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 3,
+      "book_polls_total": 0,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.98",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 3,
+       "attempts_with_no_rest_time": 3,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 2
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.66",
+      "reposts_eliminated": 2,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 90,
+    "orders_under_control": 104,
+    "reposts_eliminated_deadline_bounded": 14,
+    "reposts_eliminated_naive": 14
+   },
+   "asc-nfl-dal-nyg-2026-09-13-pos-3pt5": {
+    "ceiling_pinned_attempts": 0,
+    "chains": 0,
+    "complete_attempts": 11,
+    "detail": [],
+    "orders_under_arm": 11,
+    "orders_under_control": 11,
+    "reposts_eliminated_deadline_bounded": 0,
+    "reposts_eliminated_naive": 0
+   },
+   "asc-nfl-dal-nyg-2026-09-13-pos-7pt5": {
+    "ceiling_pinned_attempts": 1,
+    "chains": 1,
+    "complete_attempts": 12,
+    "detail": [
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 0,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.57",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 1,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 0,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 0.0,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 0.0,
+      "price": "0.54",
+      "reposts_eliminated": 0,
+      "touch_span": null,
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 12,
+    "orders_under_control": 12,
+    "reposts_eliminated_deadline_bounded": 0,
+    "reposts_eliminated_naive": 0
+   }
+  },
+  "reposts_eliminated_IS_A_NAIVE_UPPER_BOUND": "This corpus records no rest_s, so the deadline segmentation cannot bite and the figure degenerates to the naive one. On the corpus that DOES record rest time the naive count overstated the real one by 31%. Treat 18 as an upper bound, not a measurement.",
+  "rest_s_recorded": false,
+  "termination_boundary_reached": {
+   "UNKNOWN": 32,
+   "filled": 1
+  }
+ },
+ "pre_cutover": {
+  "ceiling_pinned_attempts": 136,
+  "ceiling_pinning_route": "recomputed_from_avg_cost -- EXACT. The weaker post-time-touch route was cross-checked against it and agreed on 259 of 260 orders; the exact route is used because it cannot be confused by a post-only trim, whose price signature appears on 79 of the 260.",
+  "chains": 20,
+  "chains_the_arm_would_merge": 20,
+  "complement_ever_reached_our_price": 0,
+  "complete_attempts": 260,
+  "corpus": "pre_cutover_live_sessions",
+  "fill_classification": {
+   "COUNTERFACTUAL_FILL_UNKNOWN": 12,
+   "OBSERVED_FILL": 1,
+   "OBSERVED_NO_FILL": 7
+  },
+  "identical_price_reposts_eliminated": 80,
+  "identical_price_reposts_eliminated_NAIVE": 116,
+  "merged_order_observed_lifetime_s": {
+   "max": 50.739,
+   "n": 20,
+   "p25": 2.369,
+   "p50": 5.942,
+   "p75": 15.362
+  },
+  "naive_overstates_by": 36,
+  "orders_under_arm": 180,
+  "orders_under_control": 260,
+  "per_market": {
+   "aec-atp-jayfri-maxbas-2026-09-13": {
+    "ceiling_pinned_attempts": 1,
+    "chains": 1,
+    "complete_attempts": 10,
+    "detail": [
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 1,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.61",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 1,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 1.341,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 1.341,
+      "price": "0.53",
+      "reposts_eliminated": 0,
+      "touch_span": [
+       "0.60",
+       "0.60"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 10,
+    "orders_under_control": 10,
+    "reposts_eliminated_deadline_bounded": 0,
+    "reposts_eliminated_naive": 0
+   },
+   "aec-cs2-mzp-ezt-2026-09-13": {
+    "ceiling_pinned_attempts": 11,
+    "chains": 7,
+    "complete_attempts": 26,
+    "detail": [
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 2,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.77",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 2,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 3.933,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 3.933,
+      "price": "0.63",
+      "reposts_eliminated": 1,
+      "touch_span": [
+       "0.75",
+       "0.79"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 3,
+      "book_polls_total": 3,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.75",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 3,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 2
+      },
+      "distinct_touches_while_resting": 3,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 5.942,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 5.942,
+      "price": "0.63",
+      "reposts_eliminated": 2,
+      "touch_span": [
+       "0.74",
+       "0.76"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 1,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.72",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 1,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 1.877,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 1.877,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": [
+       "0.70",
+       "0.70"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 1,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.72",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 1,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 1.356,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 1.356,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": [
+       "0.70",
+       "0.70"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 6,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.64",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 1,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 2,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 2,
+      "horizon": {
+       "basis": "observed on the final attempt",
+       "boundary": "deadline",
+       "observed_rest_s": 8.694,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 8.694,
+      "price": "0.63",
+      "reposts_eliminated": 1,
+      "touch_span": [
+       "0.63",
+       "0.74"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 1,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.78",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 1,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 1.724,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 1.724,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": [
+       "0.76",
+       "0.76"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 1,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.78",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 1,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 2.369,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 2.369,
+      "price": "0.63",
+      "reposts_eliminated": 0,
+      "touch_span": [
+       "0.76",
+       "0.76"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 23,
+    "orders_under_control": 26,
+    "reposts_eliminated_deadline_bounded": 3,
+    "reposts_eliminated_naive": 4
+   },
+   "aec-mlb-lad-mia-2026-09-13": {
+    "ceiling_pinned_attempts": 106,
+    "chains": 7,
+    "complete_attempts": 125,
+    "detail": [
+     {
+      "attempts_merged": 23,
+      "book_polls_total": 23,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.67",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 23,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 7,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 8,
+       "reposts_eliminated": 15,
+       "reposts_eliminated_naive": 22
+      },
+      "distinct_touches_while_resting": 10,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 50.739,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 50.739,
+      "price": "0.575",
+      "reposts_eliminated": 22,
+      "touch_span": [
+       "0.660",
+       "0.945"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 23,
+      "book_polls_total": 23,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.67",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 23,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 7,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 8,
+       "reposts_eliminated": 15,
+       "reposts_eliminated_naive": 22
+      },
+      "distinct_touches_while_resting": 10,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 49.302,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 49.302,
+      "price": "0.575",
+      "reposts_eliminated": 22,
+      "touch_span": [
+       "0.660",
+       "0.945"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 22,
+      "book_polls_total": 22,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.67",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 22,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 7,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 8,
+       "reposts_eliminated": 14,
+       "reposts_eliminated_naive": 21
+      },
+      "distinct_touches_while_resting": 10,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 47.255,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 47.255,
+      "price": "0.575",
+      "reposts_eliminated": 21,
+      "touch_span": [
+       "0.660",
+       "0.945"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 23,
+      "book_polls_total": 23,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.67",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 23,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 7,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 8,
+       "reposts_eliminated": 15,
+       "reposts_eliminated_naive": 22
+      },
+      "distinct_touches_while_resting": 11,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 48.451,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 48.451,
+      "price": "0.575",
+      "reposts_eliminated": 22,
+      "touch_span": [
+       "0.665",
+       "0.945"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 9,
+      "book_polls_total": 9,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.845",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 9,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 2,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 3,
+       "reposts_eliminated": 6,
+       "reposts_eliminated_naive": 8
+      },
+      "distinct_touches_while_resting": 7,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 15.777,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 15.777,
+      "price": "0.575",
+      "reposts_eliminated": 8,
+      "touch_span": [
+       "0.840",
+       "0.925"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 4,
+      "book_polls_total": 4,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.895",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 4,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 1,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 2,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 3
+      },
+      "distinct_touches_while_resting": 4,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 6.628,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 6.628,
+      "price": "0.575",
+      "reposts_eliminated": 3,
+      "touch_span": [
+       "0.890",
+       "0.925"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 2,
+      "book_polls_total": 2,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.895",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 2,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 1,
+       "reposts_eliminated_naive": 1
+      },
+      "distinct_touches_while_resting": 2,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 3.549,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 3.549,
+      "price": "0.575",
+      "reposts_eliminated": 1,
+      "touch_span": [
+       "0.890",
+       "0.910"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 57,
+    "orders_under_control": 125,
+    "reposts_eliminated_deadline_bounded": 68,
+    "reposts_eliminated_naive": 99
+   },
+   "aec-mlb-sea-ath-2026-09-13": {
+    "ceiling_pinned_attempts": 0,
+    "chains": 0,
+    "complete_attempts": 8,
+    "detail": [],
+    "orders_under_arm": 8,
+    "orders_under_control": 8,
+    "reposts_eliminated_deadline_bounded": 0,
+    "reposts_eliminated_naive": 0
+   },
+   "aec-nfl-buf-hou-2026-09-13": {
+    "ceiling_pinned_attempts": 2,
+    "chains": 2,
+    "complete_attempts": 31,
+    "detail": [
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 1,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.72",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 1,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 3.295,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 3.295,
+      "price": "0.605",
+      "reposts_eliminated": 0,
+      "touch_span": [
+       "0.715",
+       "0.715"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     },
+     {
+      "attempts_merged": 1,
+      "book_polls_total": 1,
+      "class": "OBSERVED_NO_FILL",
+      "closest_complement_ask": "0.73",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 1,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 0,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 1,
+       "reposts_eliminated": 0,
+       "reposts_eliminated_naive": 0
+      },
+      "distinct_touches_while_resting": 1,
+      "horizon": {
+       "basis": "the chain ended in a cancel the arm removes, and no other boundary was observed to fire",
+       "boundary": "UNKNOWN",
+       "observed_rest_s": 3.074,
+       "reaches_rest_bound": false,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 3.074,
+      "price": "0.605",
+      "reposts_eliminated": 0,
+      "touch_span": [
+       "0.725",
+       "0.725"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 31,
+    "orders_under_control": 31,
+    "reposts_eliminated_deadline_bounded": 0,
+    "reposts_eliminated_naive": 0
+   },
+   "aec-setkameua-sapole-salvas-2026-09-13": {
+    "ceiling_pinned_attempts": 4,
+    "chains": 1,
+    "complete_attempts": 9,
+    "detail": [
+     {
+      "attempts_merged": 4,
+      "book_polls_total": 3,
+      "class": "OBSERVED_FILL",
+      "closest_complement_ask": "0.91",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 4,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 1,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 2,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 3
+      },
+      "distinct_touches_while_resting": 2,
+      "horizon": {
+       "basis": "observed on an attempt in the chain",
+       "boundary": "filled",
+       "observed_rest_s": 7.614,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "1.13",
+      "observed_rest_s_total": 7.614,
+      "price": "0.65",
+      "reposts_eliminated": 3,
+      "touch_span": [
+       "0.88",
+       "0.89"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 7,
+    "orders_under_control": 9,
+    "reposts_eliminated_deadline_bounded": 2,
+    "reposts_eliminated_naive": 3
+   },
+   "asc-lal-lev-fcb-2026-09-13-pos-2pt5": {
+    "ceiling_pinned_attempts": 8,
+    "chains": 1,
+    "complete_attempts": 19,
+    "detail": [
+     {
+      "attempts_merged": 8,
+      "book_polls_total": 8,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.72",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 8,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 2,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 3,
+       "reposts_eliminated": 5,
+       "reposts_eliminated_naive": 7
+      },
+      "distinct_touches_while_resting": 3,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 15.362,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 15.362,
+      "price": "0.61",
+      "reposts_eliminated": 7,
+      "touch_span": [
+       "0.67",
+       "0.72"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 14,
+    "orders_under_control": 19,
+    "reposts_eliminated_deadline_bounded": 5,
+    "reposts_eliminated_naive": 7
+   },
+   "atc-epl-cov-bha-2026-09-13-bha": {
+    "ceiling_pinned_attempts": 4,
+    "chains": 1,
+    "complete_attempts": 32,
+    "detail": [
+     {
+      "attempts_merged": 4,
+      "book_polls_total": 4,
+      "class": "COUNTERFACTUAL_FILL_UNKNOWN",
+      "closest_complement_ask": "0.56",
+      "complement_ever_reached_our_price": false,
+      "deadline_segmented": {
+       "attempts_under_control": 4,
+       "attempts_with_no_rest_time": 0,
+       "basis": "observed rest time segmented at a 6.436s bound; the arm does not change that bound",
+       "deadline_expiries_inside_the_chain": 1,
+       "naive_orders_under_arm": 1,
+       "orders_under_arm": 2,
+       "reposts_eliminated": 2,
+       "reposts_eliminated_naive": 3
+      },
+      "distinct_touches_while_resting": 2,
+      "horizon": {
+       "basis": "merged observed rest already reaches the rest bound",
+       "boundary": "deadline",
+       "observed_rest_s": 7.702,
+       "reaches_rest_bound": true,
+       "rest_bound_s": 6.436
+      },
+      "observed_fill_qty": "0",
+      "observed_rest_s_total": 7.702,
+      "price": "0.54",
+      "reposts_eliminated": 3,
+      "touch_span": [
+       "0.55",
+       "0.56"
+      ],
+      "unobserved": "the gaps between cancel and repost, and all time past the final cancel: nothing was resting there, so no fill and no no-fill can be claimed"
+     }
+    ],
+    "orders_under_arm": 30,
+    "orders_under_control": 32,
+    "reposts_eliminated_deadline_bounded": 2,
+    "reposts_eliminated_naive": 3
+   }
+  },
+  "rest_s_recorded": true,
+  "termination_boundary_reached": {
+   "UNKNOWN": 10,
+   "deadline": 9,
+   "filled": 1
+  }
+ },
+ "profitability": "OUT OF SCOPE AND NOT CLAIMED. Even perfect conversion of the measured residual had insufficient margin in this corpus: the marginal pair is 0.9952 and the whole prize is $0.1563. Improved persistence is NOT expected profit and must not be described as such until filled and settled evidence exists.",
+ "safety": "would_cross is evaluated BEFORE the modified branch and is never suspended, so holding cannot breach post-only. bbo_unreadable and book_one_sided cancel immediately under both arms.",
+ "scope": "BOUNDED SHADOW EXPERIMENT. No production change. The arm is not imported by any production module, is in neither the probe image nor the recorder watch set, and nothing here is proposed for deployment.",
+ "the_one_changed_behaviour": "branch 6 of the live cancel ladder (touch_moved) is suppressed for a COMPLETE whose price is pinned by the pair ceiling AND whose recomputation against the refreshed book returns the same legal maker price. Every other branch, in its live order, is unchanged and still terminates the order.",
+ "unchanged": [
+  "price",
+  "pair ceiling",
+  "size",
+  "band",
+  "cap",
+  "admission",
+  "concurrency",
+  "settlement horizon",
+  "post-only status",
+  "campaign deadline",
+  "risk breakers",
+  "maker-only execution"
+ ]
+}

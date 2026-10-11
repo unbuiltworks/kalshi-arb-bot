@@ -1,0 +1,42 @@
+{
+  "label": "EXPLORATORY_V2_FROZEN",
+  "frozen_utc": "2026-09-17T15:28:42.807741+00:00",
+  "authority": "OWNER 2026-09-17: 'Freeze EXPLORATORY_V2. Do not tune it further.'",
+  "commit": "9fec3137100b2a7d3b44a6eb4da9602f90bdcb02",
+  "scope": "BTC15m only. Not promoted to other cohorts.",
+  "disposition": {
+    "V2E_matched_preservation": "LEADING ADAPTED HYPOTHESIS for PROSPECTIVE testing. NOT promoted to live. Chronologically positive in both periods while preserving 97.6-99.9% of matched P&L and ~98-100% of fills/turnover; removes residual at 0.43-0.72 of a matched dollar against a pure-shrinkage line of 1.342 TRAIN / 1.004 OOS.",
+    "V2A_residual_cap": "SECONDARY CHALLENGER, preserved. cap100 +$2,232 TRAIN / +$8,119 OOS, but retains only 51%/21% of matched P&L.",
+    "V2F_hybrid": "SECONDARY CHALLENGER, preserved. k100/n4/v0.05/t2 +$2,384 / +$7,855, retains 46%/17% of matched P&L.",
+    "V2C_run_cutoff": "REJECTED AS A CONTROL RULE despite the best OOS result (+$11,208 at run 2). The cutoff is TEMPORALLY UNSTABLE -- total per share crosses zero at run position ~9 in TRAIN and ~4 in OOS -- and every V2C member is NET-NEGATIVE in TRAIN. Retained as evidence, never as a gate.",
+    "V2B_linear": "retained as evidence; k200/k400 pass both periods but at 62%/33% matched P&L retention.",
+    "V2D_vol": "retained as evidence; only the loosest threshold (0.20) passes both periods."
+  },
+  "files": {
+    "analysis/l5/exploratory_v2/interventions.py": {
+      "sha256": "41a3ab427a22333847eee2c50da3aad562103f620a9b4eda5670bda4d894b2d0",
+      "bytes": 18013
+    },
+    "analysis/l5/exploratory_v2/run_vol_pair.py": {
+      "sha256": "60a1abb30a0d7e651beffbf6535f35d247771266e82fa62504998a3c152dc8f0",
+      "bytes": 13657
+    },
+    "analysis/l5/residual_exit/forensics.py": {
+      "sha256": "5c8ec668ce1879d887ae679f198c8f03d0076cbf5dfa2517e63609b22ebdb868",
+      "bytes": 34885
+    },
+    "analysis/l5/exploratory_v2/btc15m_v2_sweep.json": {
+      "sha256": "184c9cb38982f11c14db8923b5dcafdf371260735bb3f8c441f21cfc1471b32c",
+      "bytes": 127425
+    },
+    "analysis/l5/exploratory_v2/btc15m_v2_studies.json": {
+      "sha256": "b3dd380f1f9182ad6fa250d24c53b4e625034ecd28020a95b32a2b17537e206a",
+      "bytes": 28608
+    },
+    "analysis/l5/residual_exit/btc15m_v1.json": {
+      "sha256": "e29ee05e5ed572010493b7d35cea6520df98468af2b5bc5ae4fa0242f0e9bc01",
+      "bytes": 36202
+    }
+  },
+  "rule": "These files are evidence. Changing one after this point invalidates the freeze and must be recorded as a NEW study, not an edit to this one."
+}

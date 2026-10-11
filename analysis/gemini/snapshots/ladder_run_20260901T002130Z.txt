@@ -1,0 +1,5 @@
+L0: eng=8 fills=67 turn=$27.97 matched=0.4179 locked=4.2307 realizedAll=None net/$=None status=INCOMPLETE rungs={'0': 67}
+L1: eng=11 fills=70 turn=$29.79 matched=0.4 locked=4.2307 realizedAll=None net/$=None status=INCOMPLETE rungs={'0': 70}
+L2: eng=8 fills=68 turn=$28.47 matched=0.4118 locked=4.2307 realizedAll=None net/$=None status=INCOMPLETE rungs={'0': 67, '1': 1, '2': 0}
+L3: eng=11 fills=71 turn=$30.29 matched=0.3944 locked=4.2307 realizedAll=None net/$=None status=INCOMPLETE rungs={'0': 70, '1': 1, '2': 0}
+wrote analysis/gemini/ladder_frontier_future.json

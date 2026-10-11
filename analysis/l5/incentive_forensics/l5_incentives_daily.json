@@ -1,0 +1,485 @@
+{
+ "source": "https://data-api.polymarket.com/activity?user=<L5>&type={REWARD,MAKER_REBATE,TAKER_REBATE}",
+ "fetched_utc": "2026-09-15T23:25:01.536967Z",
+ "rows": 239,
+ "rows_with_conditionId": 0,
+ "attribution_verdict": "UNATTRIBUTABLE",
+ "why": "every incentive row the venue publishes for this account carries an EMPTY conditionId. There is no per-condition, per-market or per-cohort incentive record for another trader's account.",
+ "daily": {
+  "2026-04-21": {
+   "MAKER_REBATE": 29.9379
+  },
+  "2026-04-22": {
+   "MAKER_REBATE": 77.7858
+  },
+  "2026-04-23": {
+   "MAKER_REBATE": 113.1981
+  },
+  "2026-04-24": {
+   "MAKER_REBATE": 106.8854
+  },
+  "2026-04-25": {
+   "MAKER_REBATE": 79.6787
+  },
+  "2026-04-26": {
+   "MAKER_REBATE": 69.0054
+  },
+  "2026-04-27": {
+   "MAKER_REBATE": 55.3972
+  },
+  "2026-04-28": {
+   "MAKER_REBATE": 196.732
+  },
+  "2026-04-29": {
+   "MAKER_REBATE": 38.8784
+  },
+  "2026-04-30": {
+   "MAKER_REBATE": 150.3769
+  },
+  "2026-05-01": {
+   "MAKER_REBATE": 173.6918
+  },
+  "2026-05-02": {
+   "MAKER_REBATE": 199.4925
+  },
+  "2026-05-03": {
+   "MAKER_REBATE": 63.3019
+  },
+  "2026-05-04": {
+   "MAKER_REBATE": 94.469
+  },
+  "2026-05-05": {
+   "MAKER_REBATE": 148.6204
+  },
+  "2026-05-06": {
+   "MAKER_REBATE": 217.6823
+  },
+  "2026-05-07": {
+   "MAKER_REBATE": 26.8042
+  },
+  "2026-05-08": {
+   "MAKER_REBATE": 36.4471
+  },
+  "2026-05-09": {
+   "MAKER_REBATE": 75.0006
+  },
+  "2026-05-10": {
+   "MAKER_REBATE": 21.3733
+  },
+  "2026-05-11": {
+   "MAKER_REBATE": 5.8437
+  },
+  "2026-05-12": {
+   "MAKER_REBATE": 77.8588
+  },
+  "2026-05-13": {
+   "MAKER_REBATE": 37.1636
+  },
+  "2026-05-14": {
+   "MAKER_REBATE": 54.8784
+  },
+  "2026-05-15": {
+   "MAKER_REBATE": 61.9565
+  },
+  "2026-05-16": {
+   "MAKER_REBATE": 75.6292
+  },
+  "2026-05-19": {
+   "MAKER_REBATE": 75.8124
+  },
+  "2026-05-20": {
+   "MAKER_REBATE": 39.5662
+  },
+  "2026-05-21": {
+   "MAKER_REBATE": 64.968
+  },
+  "2026-05-22": {
+   "MAKER_REBATE": 52.2021
+  },
+  "2026-05-23": {
+   "MAKER_REBATE": 94.055
+  },
+  "2026-05-24": {
+   "MAKER_REBATE": 28.8158
+  },
+  "2026-05-25": {
+   "MAKER_REBATE": 13.2504
+  },
+  "2026-05-26": {
+   "MAKER_REBATE": 49.3305
+  },
+  "2026-05-27": {
+   "MAKER_REBATE": 46.9708
+  },
+  "2026-05-28": {
+   "MAKER_REBATE": 57.9291
+  },
+  "2026-05-29": {
+   "MAKER_REBATE": 59.8548
+  },
+  "2026-05-30": {
+   "MAKER_REBATE": 50.9039
+  },
+  "2026-06-02": {
+   "MAKER_REBATE": 94.2965
+  },
+  "2026-06-03": {
+   "MAKER_REBATE": 95.1864
+  },
+  "2026-06-04": {
+   "MAKER_REBATE": 106.5082
+  },
+  "2026-06-05": {
+   "MAKER_REBATE": 100.2115
+  },
+  "2026-06-06": {
+   "MAKER_REBATE": 77.243
+  },
+  "2026-06-09": {
+   "MAKER_REBATE": 93.4289
+  },
+  "2026-06-10": {
+   "MAKER_REBATE": 88.5242
+  },
+  "2026-06-11": {
+   "MAKER_REBATE": 45.4216
+  },
+  "2026-06-12": {
+   "MAKER_REBATE": 22.9186
+  },
+  "2026-06-13": {
+   "MAKER_REBATE": 30.9887
+  },
+  "2026-06-16": {
+   "MAKER_REBATE": 60.2588
+  },
+  "2026-06-17": {
+   "MAKER_REBATE": 85.6735
+  },
+  "2026-06-18": {
+   "MAKER_REBATE": 51.5754
+  },
+  "2026-06-19": {
+   "MAKER_REBATE": 32.7455
+  },
+  "2026-06-20": {
+   "MAKER_REBATE": 36.3116,
+   "TAKER_REBATE": 9.8575
+  },
+  "2026-06-23": {
+   "MAKER_REBATE": 42.9266,
+   "TAKER_REBATE": 265.1385
+  },
+  "2026-06-24": {
+   "MAKER_REBATE": 14.3309,
+   "TAKER_REBATE": 11.9736
+  },
+  "2026-06-25": {
+   "MAKER_REBATE": 80.6908,
+   "TAKER_REBATE": 80.3094
+  },
+  "2026-06-26": {
+   "MAKER_REBATE": 27.1769
+  },
+  "2026-06-27": {
+   "MAKER_REBATE": 88.0435,
+   "TAKER_REBATE": 86.8408
+  },
+  "2026-06-30": {
+   "MAKER_REBATE": 105.8428
+  },
+  "2026-07-01": {
+   "MAKER_REBATE": 65.4397,
+   "TAKER_REBATE": 147.9516
+  },
+  "2026-07-02": {
+   "MAKER_REBATE": 47.6044,
+   "TAKER_REBATE": 18.4613
+  },
+  "2026-07-03": {
+   "MAKER_REBATE": 98.1151,
+   "TAKER_REBATE": 36.5502
+  },
+  "2026-07-04": {
+   "MAKER_REBATE": 94.8623,
+   "TAKER_REBATE": 70.3858
+  },
+  "2026-07-07": {
+   "MAKER_REBATE": 93.6333,
+   "TAKER_REBATE": 68.4569
+  },
+  "2026-07-08": {
+   "MAKER_REBATE": 47.264,
+   "TAKER_REBATE": 61.4292
+  },
+  "2026-07-09": {
+   "MAKER_REBATE": 73.7643,
+   "TAKER_REBATE": 651.2286
+  },
+  "2026-07-10": {
+   "MAKER_REBATE": 86.498,
+   "TAKER_REBATE": 77.3488
+  },
+  "2026-07-11": {
+   "MAKER_REBATE": 93.2661,
+   "TAKER_REBATE": 99.8101
+  },
+  "2026-07-14": {
+   "MAKER_REBATE": 26.3856,
+   "TAKER_REBATE": 49.5513
+  },
+  "2026-07-15": {
+   "MAKER_REBATE": 99.9884,
+   "TAKER_REBATE": 99.667
+  },
+  "2026-07-16": {
+   "MAKER_REBATE": 187.8074,
+   "TAKER_REBATE": 181.2403
+  },
+  "2026-07-17": {
+   "MAKER_REBATE": 166.503,
+   "TAKER_REBATE": 147.9891
+  },
+  "2026-07-18": {
+   "MAKER_REBATE": 101.7083,
+   "TAKER_REBATE": 104.5288
+  },
+  "2026-07-20": {
+   "TAKER_REBATE": 25.7966
+  },
+  "2026-07-21": {
+   "MAKER_REBATE": 212.0918,
+   "TAKER_REBATE": 118.0257
+  },
+  "2026-07-22": {
+   "MAKER_REBATE": 393.9042,
+   "TAKER_REBATE": 166.7665
+  },
+  "2026-07-23": {
+   "MAKER_REBATE": 165.0344,
+   "TAKER_REBATE": 98.4835
+  },
+  "2026-07-24": {
+   "MAKER_REBATE": 264.8562,
+   "TAKER_REBATE": 131.2112
+  },
+  "2026-07-25": {
+   "MAKER_REBATE": 234.3047,
+   "TAKER_REBATE": 85.5356
+  },
+  "2026-07-28": {
+   "MAKER_REBATE": 193.2678,
+   "TAKER_REBATE": 47.5761
+  },
+  "2026-07-29": {
+   "MAKER_REBATE": 77.1371,
+   "TAKER_REBATE": 35.448
+  },
+  "2026-07-30": {
+   "MAKER_REBATE": 159.4646,
+   "TAKER_REBATE": 81.3502
+  },
+  "2026-07-31": {
+   "MAKER_REBATE": 82.6975,
+   "TAKER_REBATE": 102.7476
+  },
+  "2026-08-01": {
+   "MAKER_REBATE": 153.1038,
+   "TAKER_REBATE": 120.0985
+  },
+  "2026-08-02": {
+   "MAKER_REBATE": 12.2879,
+   "TAKER_REBATE": 12.8718
+  },
+  "2026-08-04": {
+   "MAKER_REBATE": 138.0718,
+   "TAKER_REBATE": 75.9878
+  },
+  "2026-08-05": {
+   "MAKER_REBATE": 243.1886,
+   "TAKER_REBATE": 125.9222
+  },
+  "2026-08-06": {
+   "MAKER_REBATE": 271.3124,
+   "TAKER_REBATE": 38.1634
+  },
+  "2026-08-07": {
+   "MAKER_REBATE": 408.4035,
+   "TAKER_REBATE": 39.4058
+  },
+  "2026-08-08": {
+   "MAKER_REBATE": 624.6774,
+   "REWARD": 471.5112,
+   "TAKER_REBATE": 109.4224
+  },
+  "2026-08-09": {
+   "MAKER_REBATE": 858.3373,
+   "REWARD": 1222.5904,
+   "TAKER_REBATE": 58.0863
+  },
+  "2026-08-11": {
+   "MAKER_REBATE": 666.0933,
+   "REWARD": 750.0216,
+   "TAKER_REBATE": 56.5333
+  },
+  "2026-08-12": {
+   "MAKER_REBATE": 937.8543,
+   "REWARD": 1207.239,
+   "TAKER_REBATE": 94.874
+  },
+  "2026-08-13": {
+   "MAKER_REBATE": 1272.2723,
+   "REWARD": 1016.6514,
+   "TAKER_REBATE": 76.8235
+  },
+  "2026-08-14": {
+   "MAKER_REBATE": 998.472,
+   "TAKER_REBATE": 78.0187
+  },
+  "2026-08-15": {
+   "MAKER_REBATE": 1546.6896,
+   "TAKER_REBATE": 101.2133
+  },
+  "2026-08-16": {
+   "MAKER_REBATE": 1303.3345,
+   "REWARD": 442.359,
+   "TAKER_REBATE": 89.9483
+  },
+  "2026-08-17": {
+   "MAKER_REBATE": 132.8736,
+   "REWARD": 201.043,
+   "TAKER_REBATE": 9.763
+  },
+  "2026-08-18": {
+   "MAKER_REBATE": 1391.5468,
+   "REWARD": 1664.9336,
+   "TAKER_REBATE": 202.6974
+  },
+  "2026-08-19": {
+   "MAKER_REBATE": 1796.5732,
+   "REWARD": 2559.3694,
+   "TAKER_REBATE": 386.4745
+  },
+  "2026-08-20": {
+   "MAKER_REBATE": 1830.3671,
+   "REWARD": 2061.7337,
+   "TAKER_REBATE": 294.1444
+  },
+  "2026-08-21": {
+   "MAKER_REBATE": 1588.207,
+   "REWARD": 1871.4363,
+   "TAKER_REBATE": 354.1974
+  },
+  "2026-08-22": {
+   "MAKER_REBATE": 1745.1438,
+   "REWARD": 1637.9055,
+   "TAKER_REBATE": 312.9246
+  },
+  "2026-08-23": {
+   "MAKER_REBATE": 424.7646,
+   "REWARD": 591.459,
+   "TAKER_REBATE": 81.4726
+  },
+  "2026-08-25": {
+   "MAKER_REBATE": 1088.5074,
+   "REWARD": 1622.2443,
+   "TAKER_REBATE": 179.7977
+  },
+  "2026-08-26": {
+   "MAKER_REBATE": 1579.5486,
+   "REWARD": 2303.3744,
+   "TAKER_REBATE": 339.4638
+  },
+  "2026-08-27": {
+   "MAKER_REBATE": 1307.2214,
+   "REWARD": 1489.2451,
+   "TAKER_REBATE": 265.9156
+  },
+  "2026-08-28": {
+   "MAKER_REBATE": 1662.4554,
+   "REWARD": 1842.771,
+   "TAKER_REBATE": 272.5308
+  },
+  "2026-08-29": {
+   "MAKER_REBATE": 1233.5698,
+   "REWARD": 1794.6578,
+   "TAKER_REBATE": 192.11
+  },
+  "2026-08-30": {
+   "MAKER_REBATE": 1346.8839,
+   "REWARD": 2205.7187,
+   "TAKER_REBATE": 192.2051
+  },
+  "2026-08-31": {
+   "MAKER_REBATE": 1298.9104,
+   "REWARD": 1841.424,
+   "TAKER_REBATE": 203.0052
+  },
+  "2026-09-01": {
+   "MAKER_REBATE": 967.2582,
+   "REWARD": 1174.3008,
+   "TAKER_REBATE": 148.2607
+  },
+  "2026-09-02": {
+   "MAKER_REBATE": 1091.5817,
+   "REWARD": 1502.6331,
+   "TAKER_REBATE": 150.5352
+  },
+  "2026-09-03": {
+   "MAKER_REBATE": 1053.5437,
+   "REWARD": 1605.5704,
+   "TAKER_REBATE": 182.4458
+  },
+  "2026-09-04": {
+   "MAKER_REBATE": 803.6066,
+   "REWARD": 1158.9136,
+   "TAKER_REBATE": 197.3523
+  },
+  "2026-09-05": {
+   "MAKER_REBATE": 1163.8283,
+   "REWARD": 1272.5349,
+   "TAKER_REBATE": 110.8184
+  },
+  "2026-09-06": {
+   "MAKER_REBATE": 1181.9176,
+   "REWARD": 1515.7071,
+   "TAKER_REBATE": 89.5764
+  },
+  "2026-09-07": {
+   "MAKER_REBATE": 1077.8461,
+   "TAKER_REBATE": 85.4691
+  },
+  "2026-09-08": {
+   "MAKER_REBATE": 1228.9821,
+   "TAKER_REBATE": 67.6706
+  },
+  "2026-09-09": {
+   "MAKER_REBATE": 1164.278,
+   "TAKER_REBATE": 60.8888
+  },
+  "2026-09-10": {
+   "MAKER_REBATE": 1380.6088,
+   "TAKER_REBATE": 54.0004
+  },
+  "2026-09-11": {
+   "MAKER_REBATE": 1424.6663,
+   "TAKER_REBATE": 55.0677
+  },
+  "2026-09-12": {
+   "MAKER_REBATE": 1584.515,
+   "TAKER_REBATE": 62.2348
+  },
+  "2026-09-13": {
+   "MAKER_REBATE": 2470.8555,
+   "TAKER_REBATE": 101.2088
+  },
+  "2026-09-14": {
+   "MAKER_REBATE": 1463.7672,
+   "TAKER_REBATE": 80.3821
+  },
+  "2026-09-15": {
+   "MAKER_REBATE": 1409.5819,
+   "TAKER_REBATE": 53.2598
+  }
+ }
+}

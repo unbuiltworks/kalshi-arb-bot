@@ -1,0 +1,325 @@
+{
+  "generated_utc": "2026-10-05T23:08:39.256365+00:00",
+  "scope": "another trader's public activity; nothing here is realized P&L for our account",
+  "sources": [
+    {
+      "source": "data/l5/raw/activity.jsonl + activity_gap.jsonl.gz wedge (usdcSize - price*size)",
+      "category": "CHARGED (reconstructed, model-validated)",
+      "fills": 768325,
+      "fee_bearing_fills": 174428,
+      "fee_bearing_fraction": 0.22702372043080726,
+      "total_wedge_usdc": 53756.24403075384,
+      "fee_bearing_gross_usdc": 2462351.646331316,
+      "fee_bearing_effective_bps": 218.312620420588,
+      "fee_per_contract_fee_bearing": {
+        "n": 174428,
+        "min": 6.993000000000004e-05,
+        "p10": 0.003947619047619152,
+        "p25": 0.007391999999999967,
+        "median": 0.013124941506785247,
+        "mean": 0.011712464439501932,
+        "p75": 0.016492000000000014,
+        "p90": 0.017387999999999928,
+        "max": 0.01800000000000009
+      },
+      "date_range_utc": [
+        "2026-03-19",
+        "2026-08-31"
+      ]
+    },
+    {
+      "source": "data/transfer_backtest/sports_trades.jsonl.gz",
+      "category": "TERM (placeholder/default \u2014 see .md)",
+      "events": 71,
+      "trades": 47120,
+      "maker_taker_bps_values": {
+        "(1000, 1000)": 71
+      },
+      "trades_with_usdcSize": 0,
+      "feeSchedule_present": false
+    },
+    {
+      "source": "on-chain gas / transaction cost",
+      "category": "UNAVAILABLE",
+      "note": "transactionHash present on fills (trades.jsonl: 10500 rows) but no gasUsed/gasPrice/effectiveGasPrice field exists anywhere in the corpus, and no RPC/receipt capture is on disk. Not estimated."
+    }
+  ],
+  "confirmed_fee_distribution": {
+    "field": "entryFeesUsdc",
+    "category": "CHARGED",
+    "file": "data/l5/raw/positions_all.jsonl",
+    "snapshot_fetched_at": [
+      "2026-08-31T17:58:53.276969Z",
+      "2026-08-31T17:58:53.671559Z",
+      "2026-08-31T17:58:54.038753Z",
+      "2026-08-31T17:58:54.352878Z"
+    ],
+    "legs_with_field": 1537,
+    "legs_fee_gt_zero": 1526,
+    "legs_fee_exactly_zero": 11,
+    "endDate_range": [
+      "2026-03-31",
+      "2026-08-31"
+    ],
+    "fee_per_leg_usdc_all": {
+      "n": 1537,
+      "min": 0.0,
+      "p10": 0.0686,
+      "p25": 0.14784,
+      "median": 0.46956,
+      "mean": 0.7712075016265446,
+      "p75": 0.97637,
+      "p90": 1.8134,
+      "max": 10.89507
+    },
+    "fee_per_leg_usdc_nonzero": {
+      "n": 1526,
+      "min": 0.00128,
+      "p10": 0.0686,
+      "p25": 0.15384,
+      "median": 0.47334,
+      "mean": 0.776766664482306,
+      "p75": 0.9816,
+      "p90": 1.81906,
+      "max": 10.89507
+    },
+    "fee_per_contract_usdc_nonzero": {
+      "n": 1526,
+      "min": 0.00011465056003494113,
+      "p10": 0.0020369999999999997,
+      "p25": 0.004556987951807229,
+      "median": 0.009408,
+      "mean": 0.009616740779811554,
+      "p75": 0.014973,
+      "p90": 0.017052,
+      "max": 0.0175
+    },
+    "fee_over_grossInitialValue_nonzero": {
+      "n": 1526,
+      "min": 0.00016499615571362916,
+      "p10": 0.023696377834877443,
+      "p25": 0.03207297831995579,
+      "median": 0.04905381042646703,
+      "mean": 0.0453255028313591,
+      "p75": 0.0598853060073329,
+      "p90": 0.0632746276681945,
+      "max": 0.06481478598979526
+    },
+    "total_fee_usdc": 1185.3459299999977,
+    "total_grossInitialValue_usdc": 39003.520991999896,
+    "aggregate_effective_bps_vs_gross": 303.90741652353046,
+    "implied_rate_if_fee_eq_rate_x_p_1mp_x_size": {
+      "n": 1526,
+      "min": 0.0005405701708987445,
+      "p10": 0.05569145799500805,
+      "p25": 0.06709881410872412,
+      "median": 0.06999475190217004,
+      "mean": 0.06621962612603742,
+      "p75": 0.07,
+      "p90": 0.07002677725552699,
+      "max": 0.07069982742712053
+    }
+  },
+  "representativeness": {
+    "population_note": "positions_all.jsonl is a single snapshot of OPEN positions; every row in it carries entryFeesUsdc. The 1,537 figure is the snapshot size, not a 1,537-of-N subset of the 761k-fill tape.",
+    "positions_all_rows": 1537,
+    "rows_with_entryFeesUsdc": 1537,
+    "coverage_within_file": 1.0,
+    "activity_tape_fills_incl_gap": 768325,
+    "coverage_of_tape": 0.002000455536394104,
+    "fee_gt_zero": {
+      "label": "entryFeesUsdc > 0",
+      "n": 1526,
+      "size": {
+        "n": 1526,
+        "min": 0.13,
+        "p10": 10.0,
+        "p25": 30.0,
+        "median": 54.53,
+        "mean": 85.35698204456104,
+        "p75": 101.0,
+        "p90": 177.28,
+        "max": 2172.2898
+      },
+      "avgPrice": {
+        "n": 1526,
+        "min": 0.0099,
+        "p10": 0.03,
+        "p25": 0.0774,
+        "median": 0.2071,
+        "mean": 0.28085183486238524,
+        "p75": 0.48,
+        "p90": 0.62,
+        "max": 0.95
+      },
+      "grossInitialValue": {
+        "n": 1526,
+        "min": 0.05346,
+        "p10": 1.0693,
+        "p25": 2.841955,
+        "median": 10.525,
+        "mean": 25.44430084272609,
+        "p75": 30.860948,
+        "p90": 62.843483,
+        "max": 1188.101345
+      },
+      "cohort_slug_prefix": {
+        "btc-updown-5m": 938,
+        "eth-updown-5m": 520,
+        "eth-updown-15m": 62,
+        "btc-updown-15m": 6
+      },
+      "endDate_range": [
+        "2026-04-30",
+        "2026-08-31"
+      ],
+      "redeemable_true": 1505,
+      "realizedPnl_nonzero": 1504
+    },
+    "fee_eq_zero": {
+      "label": "entryFeesUsdc == 0",
+      "n": 11,
+      "size": {
+        "n": 11,
+        "min": 4.7768,
+        "p10": 4.8092,
+        "p25": 12.7462,
+        "median": 15.7056,
+        "mean": 41.40755454545455,
+        "p75": 84.77,
+        "p90": 88.1276,
+        "max": 121.629
+      },
+      "avgPrice": {
+        "n": 11,
+        "min": 0.0272,
+        "p10": 0.1555,
+        "p25": 0.33,
+        "median": 0.4607,
+        "mean": 0.43911818181818185,
+        "p75": 0.6684,
+        "p90": 0.691,
+        "max": 0.7073
+      },
+      "grossInitialValue": {
+        "n": 11,
+        "min": 2.208176,
+        "p10": 2.3976,
+        "p25": 2.456255,
+        "median": 9.896447,
+        "mean": 15.956173272727272,
+        "p75": 17.916036,
+        "p90": 21.649402,
+        "max": 84.049193
+      },
+      "cohort_slug_prefix": {
+        "btc-updown-15m": 11
+      },
+      "endDate_range": [
+        "2026-03-31",
+        "2026-08-04"
+      ],
+      "redeemable_true": 11,
+      "realizedPnl_nonzero": 8
+    },
+    "file_row_counts": {
+      "positions_all.jsonl": 1537,
+      "positions_closed.jsonl": 1537,
+      "positions_redeemable.jsonl": 1516
+    },
+    "snapshot_times": {
+      "positions_all.jsonl": [
+        "2026-08-31T17:58:53.276969Z",
+        "2026-08-31T17:58:53.671559Z",
+        "2026-08-31T17:58:54.038753Z",
+        "2026-08-31T17:58:54.352878Z"
+      ],
+      "positions_closed.jsonl": [
+        "2026-08-31T17:58:56.739573Z",
+        "2026-08-31T17:58:57.105322Z",
+        "2026-08-31T17:58:57.451158Z",
+        "2026-08-31T17:58:57.801984Z"
+      ],
+      "positions_redeemable.jsonl": [
+        "2026-08-31T17:58:54.842498Z",
+        "2026-08-31T17:58:55.338724Z",
+        "2026-08-31T17:58:55.960028Z",
+        "2026-08-31T17:58:56.317981Z"
+      ]
+    }
+  },
+  "schedule": {
+    "file": "data/l5/raw/markets.jsonl",
+    "category": "TERM",
+    "market_records": 3528,
+    "feeSchedule_values": {
+      "{\"exponent\": 1, \"rate\": 0.07, \"rebateRate\": 0.2, \"takerOnly\": true}": 3470,
+      "{\"exponent\": 2, \"rate\": 0.25, \"rebateRate\": 0.2, \"takerOnly\": true}": 58
+    },
+    "other_term_fields": {
+      "feeType=\"crypto_fees\"": 58,
+      "feeType=\"crypto_fees_v2\"": 3470,
+      "feesEnabled=true": 3528,
+      "holdingRewardsEnabled=false": 3528,
+      "makerBaseFee=1000": 3528,
+      "makerRebatesFeeShareBps=10000": 3528,
+      "rewardsMaxSpread=0": 2533,
+      "rewardsMaxSpread=1.5": 188,
+      "rewardsMaxSpread=4.5": 807,
+      "rewardsMinSize=0": 2533,
+      "rewardsMinSize=50": 995,
+      "takerBaseFee=1000": 3528
+    },
+    "feeType_by_slug_prefix": {
+      "crypto_fees": {
+        "btc-updown-15m": 56,
+        "btc-updown-5m": 2
+      },
+      "crypto_fees_v2": {
+        "btc-updown-5m": 1820,
+        "eth-updown-5m": 1088,
+        "btc-updown-15m": 480,
+        "eth-updown-15m": 82
+      }
+    },
+    "clobRewards_records": 18,
+    "clobRewards_sample": [
+      {
+        "assetAddress": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+        "conditionId": "0x20ac546d48e08c22c88f27bfe4775ee50d247dff11ee3bad5d89ef57f4206567",
+        "endDate": "2500-12-31",
+        "id": "115082",
+        "rewardsAmount": 0,
+        "rewardsDailyRate": 0.001,
+        "startDate": "2026-03-26"
+      },
+      {
+        "assetAddress": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        "conditionId": "0xd68f733bbc30baa689e3a14bf1b27f5e5403024929634d4fe4fb6be17157ba88",
+        "endDate": "2500-12-31",
+        "id": "175810",
+        "rewardsAmount": 0,
+        "rewardsDailyRate": 0.001,
+        "startDate": "2026-04-12"
+      },
+      {
+        "assetAddress": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        "conditionId": "0xf6fdb8289ac38fe3d31635320b7eea4c6f665dbfd3c662452bbd103d9e812d30",
+        "endDate": "2500-12-31",
+        "id": "182177",
+        "rewardsAmount": 0,
+        "rewardsDailyRate": 0.001,
+        "startDate": "2026-04-14"
+      },
+      {
+        "assetAddress": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        "conditionId": "0x69ac654287f33b41b4247a511579de4e5573febe3fa893c2d0a9a84409c716f6",
+        "endDate": "2500-12-31",
+        "id": "182592",
+        "rewardsAmount": 0,
+        "rewardsDailyRate": 0.001,
+        "startDate": "2026-04-14"
+      }
+    ]
+  }
+}

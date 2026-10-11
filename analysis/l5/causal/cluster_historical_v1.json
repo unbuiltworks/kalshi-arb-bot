@@ -1,0 +1,60 @@
+{
+  "label": "CLUSTER_SIZE_FORENSICS_V1/historical",
+  "cohort": "BTC15m",
+  "unit_A_public_fills": {
+    "n_windows": 5501,
+    "n_actions": 693814,
+    "actions_per_window": 126.13,
+    "run_length": {
+      "mean": 3.636,
+      "max": 78,
+      "share_len1": 0.3321
+    },
+    "switches_per_window": 33.68,
+    "continuation_hazard": {
+      "1": 0.6745,
+      "2": 0.6954,
+      "3": 0.7299,
+      "4": 0.7508,
+      "5": 0.7623,
+      "6": 0.778,
+      "7": 0.7845,
+      "8": 0.7925,
+      "9": 0.795,
+      "10": 0.824
+    },
+    "hazard_rise_run1_to_run10": 0.1495,
+    "oos_logloss_prev_side": 0.595008,
+    "oos_logloss_state": 0.594049,
+    "state_gain_nats": 0.000959
+  },
+  "unit_B_collapsed_clusters": {
+    "n_windows": 5500,
+    "n_actions": 573584,
+    "actions_per_window": 104.29,
+    "run_length": {
+      "mean": 3.046,
+      "max": 71,
+      "share_len1": 0.3723
+    },
+    "switches_per_window": 33.23,
+    "continuation_hazard": {
+      "1": 0.6349,
+      "2": 0.6511,
+      "3": 0.6838,
+      "4": 0.7068,
+      "5": 0.7207,
+      "6": 0.7381,
+      "7": 0.7401,
+      "8": 0.7474,
+      "9": 0.7553,
+      "10": 0.7792
+    },
+    "hazard_rise_run1_to_run10": 0.1443,
+    "oos_logloss_prev_side": 0.637553,
+    "oos_logloss_state": 0.635966,
+    "state_gain_nats": 0.001587
+  },
+  "action_count_reduction": 0.1733,
+  "caveat": "The frozen tape CANNOT be collapsed to unit C: its receipts are pruned. B is a PROXY for C, and the chain measured its accuracy on recent activity -- 96% of RESOLVED multi-fill clusters were a single parent order. So these are 'as if same-instant clusters were parent orders', which is right about 96% of the time on a different population, and is not parent-order truth."
+}

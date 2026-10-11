@@ -1,0 +1,3101 @@
+{
+  "cadence_s": 60.0,
+  "durations": {
+    "15m": {
+      "by_candidate": {
+        "C1_momentum_no_base_pb3c": {
+          "$10": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -7.1341,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 3.774,
+                    "windows": 7
+                  },
+                  "2_flips": {
+                    "net_mean": -5.3764,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -15.4486,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -224.6029,
+                "extension_settlement_total": 39.2561,
+                "max_drawdown": -185.3469,
+                "net_per_window": -6.8647,
+                "net_per_window_after_2pct_fees": -9.5416,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 22.2,
+                "windows": 27
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 9.7751,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 6.7659,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": 1.6515,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -6.9094,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 6.1344,
+                "extension_settlement_total": 45.4903,
+                "max_drawdown": -31.7074,
+                "net_per_window": 1.5644,
+                "net_per_window_after_2pct_fees": -1.1568,
+                "no_trade_windows": 0,
+                "peak_capital_median": 60.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 63.6,
+                "windows": 33
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 5.152,
+                    "windows": 6
+                  },
+                  "1_flip": {
+                    "net_mean": -3.3793,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": -7.0878,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -22.2918,
+                    "windows": 13
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -377.5961,
+                "extension_settlement_total": 3.9057,
+                "max_drawdown": -373.6904,
+                "net_per_window": -8.8974,
+                "net_per_window_after_2pct_fees": -11.489,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 28.6,
+                "windows": 42
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.2428,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 7.4022,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": 2.6646,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -10.6344,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -104.1471,
+                "extension_settlement_total": 54.7442,
+                "max_drawdown": -88.4536,
+                "net_per_window": -1.5936,
+                "net_per_window_after_2pct_fees": -4.2517,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 51.6,
+                "windows": 31
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 7.2105,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": -0.7424,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -19.4356,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -22.3685,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -415.2023,
+                "extension_settlement_total": 63.3168,
+                "max_drawdown": -359.5439,
+                "net_per_window": -10.9964,
+                "net_per_window_after_2pct_fees": -13.66,
+                "no_trade_windows": 0,
+                "peak_capital_median": 40.0,
+                "unsold_shares_total": 20.2333,
+                "win_rate_pct": 28.1,
+                "windows": 32
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 7.5,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": -3.8274,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -7.7621,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -20.54,
+                    "windows": 9
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -287.4701,
+                "extension_settlement_total": 8.9529,
+                "max_drawdown": -278.5173,
+                "net_per_window": -8.1917,
+                "net_per_window_after_2pct_fees": -10.8102,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 26.5,
+                "windows": 34
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 29.2456,
+                    "windows": 7
+                  },
+                  "1_flip": {
+                    "net_mean": -0.5854,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": -8.3512,
+                    "windows": 7
+                  },
+                  "3+_flips": {
+                    "net_mean": -16.9386,
+                    "windows": 11
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -271.272,
+                "extension_settlement_total": 227.6962,
+                "max_drawdown": -122.7001,
+                "net_per_window": -1.4057,
+                "net_per_window_after_2pct_fees": -4.0789,
+                "no_trade_windows": 0,
+                "peak_capital_median": 60.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.9,
+                "windows": 31
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -25.266,
+                    "windows": 9
+                  },
+                  "1_flip": {
+                    "net_mean": -33.0883,
+                    "windows": 8
+                  },
+                  "2_flips": {
+                    "net_mean": -44.2011,
+                    "windows": 12
+                  },
+                  "3+_flips": {
+                    "net_mean": -63.7158,
+                    "windows": 6
+                  }
+                },
+                "exits_nothing_sellable": 10,
+                "extension_realized_total": -1392.304,
+                "extension_settlement_total": -12.5043,
+                "max_drawdown": -1404.8081,
+                "net_per_window": -40.1374,
+                "net_per_window_after_2pct_fees": -41.3438,
+                "no_trade_windows": 1,
+                "peak_capital_median": 20.0,
+                "unsold_shares_total": 289.4243,
+                "win_rate_pct": 0.0,
+                "windows": 35
+              }
+            },
+            "coins_positive": 1,
+            "coins_total": 8
+          },
+          "$2": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -1.1544,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 0.9362,
+                    "windows": 7
+                  },
+                  "2_flips": {
+                    "net_mean": -0.7854,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -2.8151,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -38.094,
+                "extension_settlement_total": 7.9047,
+                "max_drawdown": -30.2932,
+                "net_per_window": -1.1181,
+                "net_per_window_after_2pct_fees": -1.6561,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 37.0,
+                "windows": 27
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.5055,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 1.4696,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": 0.5435,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -1.2127,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 7.2254,
+                "extension_settlement_total": 9.1119,
+                "max_drawdown": -5.9845,
+                "net_per_window": 0.4951,
+                "net_per_window_after_2pct_fees": -0.0492,
+                "no_trade_windows": 0,
+                "peak_capital_median": 12.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 69.7,
+                "windows": 33
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.1495,
+                    "windows": 6
+                  },
+                  "1_flip": {
+                    "net_mean": -0.4846,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": -1.2046,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.3132,
+                    "windows": 13
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -68.4101,
+                "extension_settlement_total": 0.8898,
+                "max_drawdown": -67.5202,
+                "net_per_window": -1.6076,
+                "net_per_window_after_2pct_fees": -2.1276,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 33.3,
+                "windows": 42
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.5537,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 1.5384,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": 0.7057,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -2.0072,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -16.951,
+                "extension_settlement_total": 10.9649,
+                "max_drawdown": -16.101,
+                "net_per_window": -0.1931,
+                "net_per_window_after_2pct_fees": -0.7247,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 51.6,
+                "windows": 31
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.5416,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": 0.1726,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -3.6611,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.2271,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -78.0396,
+                "extension_settlement_total": 15.5036,
+                "max_drawdown": -64.1301,
+                "net_per_window": -1.9542,
+                "net_per_window_after_2pct_fees": -2.488,
+                "no_trade_windows": 0,
+                "peak_capital_median": 8.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 28.1,
+                "windows": 32
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.5983,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": -0.445,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -1.3873,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.848,
+                    "windows": 9
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -49.7707,
+                "extension_settlement_total": 1.8217,
+                "max_drawdown": -47.9491,
+                "net_per_window": -1.4103,
+                "net_per_window_after_2pct_fees": -1.9347,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 32.4,
+                "windows": 34
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 5.9609,
+                    "windows": 7
+                  },
+                  "1_flip": {
+                    "net_mean": -0.0007,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": -1.441,
+                    "windows": 7
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.2079,
+                    "windows": 11
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -49.2792,
+                "extension_settlement_total": 45.6271,
+                "max_drawdown": -22.7676,
+                "net_per_window": -0.1178,
+                "net_per_window_after_2pct_fees": -0.6533,
+                "no_trade_windows": 0,
+                "peak_capital_median": 12.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.9,
+                "windows": 31
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -5.0973,
+                    "windows": 9
+                  },
+                  "1_flip": {
+                    "net_mean": -7.5232,
+                    "windows": 8
+                  },
+                  "2_flips": {
+                    "net_mean": -9.4627,
+                    "windows": 12
+                  },
+                  "3+_flips": {
+                    "net_mean": -13.4515,
+                    "windows": 6
+                  }
+                },
+                "exits_nothing_sellable": 10,
+                "extension_realized_total": -297.4495,
+                "extension_settlement_total": -2.8738,
+                "max_drawdown": -300.3229,
+                "net_per_window": -8.5807,
+                "net_per_window_after_2pct_fees": -8.8435,
+                "no_trade_windows": 1,
+                "peak_capital_median": 4.0,
+                "unsold_shares_total": 18.038,
+                "win_rate_pct": 0.0,
+                "windows": 35
+              }
+            },
+            "coins_positive": 1,
+            "coins_total": 8
+          }
+        },
+        "C2_momentum_no_base_pb5c": {
+          "$10": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -7.1341,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 4.793,
+                    "windows": 7
+                  },
+                  "2_flips": {
+                    "net_mean": -1.228,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -15.891,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -188.7078,
+                "extension_settlement_total": 39.2561,
+                "max_drawdown": -161.0368,
+                "net_per_window": -5.5352,
+                "net_per_window_after_2pct_fees": -8.0788,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 33.3,
+                "windows": 27
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 33.5404,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 8.6591,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": 2.3113,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -8.3184,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 31.9898,
+                "extension_settlement_total": 82.9661,
+                "max_drawdown": -38.8597,
+                "net_per_window": 3.4835,
+                "net_per_window_after_2pct_fees": 0.8896,
+                "no_trade_windows": 0,
+                "peak_capital_median": 60.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 66.7,
+                "windows": 33
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 7.6671,
+                    "windows": 6
+                  },
+                  "1_flip": {
+                    "net_mean": -3.1508,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": -7.5825,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -22.4714,
+                    "windows": 13
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -370.3667,
+                "extension_settlement_total": 7.4566,
+                "max_drawdown": -362.91,
+                "net_per_window": -8.6407,
+                "net_per_window_after_2pct_fees": -11.0562,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 33.3,
+                "windows": 42
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 3.5571,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 7.59,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": 2.1942,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -10.178,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -100.0902,
+                "extension_settlement_total": 54.7442,
+                "max_drawdown": -95.6835,
+                "net_per_window": -1.4628,
+                "net_per_window_after_2pct_fees": -3.9724,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 48.4,
+                "windows": 31
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 7.5511,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": 1.6556,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -19.5243,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -21.9015,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -386.8925,
+                "extension_settlement_total": 63.1974,
+                "max_drawdown": -328.3894,
+                "net_per_window": -10.1155,
+                "net_per_window_after_2pct_fees": -12.5915,
+                "no_trade_windows": 0,
+                "peak_capital_median": 40.0,
+                "unsold_shares_total": 20.2333,
+                "win_rate_pct": 28.1,
+                "windows": 32
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 9.2939,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": -4.2685,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -5.24,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -20.5217,
+                    "windows": 9
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -256.387,
+                "extension_settlement_total": 8.5424,
+                "max_drawdown": -247.8445,
+                "net_per_window": -7.2895,
+                "net_per_window_after_2pct_fees": -9.7963,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 26.5,
+                "windows": 34
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 34.7987,
+                    "windows": 7
+                  },
+                  "1_flip": {
+                    "net_mean": -0.5854,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": -8.3764,
+                    "windows": 7
+                  },
+                  "3+_flips": {
+                    "net_mean": -16.9609,
+                    "windows": 11
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -232.8221,
+                "extension_settlement_total": 227.6962,
+                "max_drawdown": -126.3673,
+                "net_per_window": -0.1654,
+                "net_per_window_after_2pct_fees": -2.7418,
+                "no_trade_windows": 0,
+                "peak_capital_median": 60.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.9,
+                "windows": 31
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -25.266,
+                    "windows": 9
+                  },
+                  "1_flip": {
+                    "net_mean": -33.5462,
+                    "windows": 8
+                  },
+                  "2_flips": {
+                    "net_mean": -43.9761,
+                    "windows": 12
+                  },
+                  "3+_flips": {
+                    "net_mean": -63.7158,
+                    "windows": 6
+                  }
+                },
+                "exits_nothing_sellable": 10,
+                "extension_realized_total": -1393.3677,
+                "extension_settlement_total": -12.4043,
+                "max_drawdown": -1405.7718,
+                "net_per_window": -40.1649,
+                "net_per_window_after_2pct_fees": -41.3628,
+                "no_trade_windows": 1,
+                "peak_capital_median": 20.0,
+                "unsold_shares_total": 289.4243,
+                "win_rate_pct": 0.0,
+                "windows": 35
+              }
+            },
+            "coins_positive": 1,
+            "coins_total": 8
+          },
+          "$2": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -1.1544,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 1.1421,
+                    "windows": 7
+                  },
+                  "2_flips": {
+                    "net_mean": -0.0548,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -2.9108,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -31.7656,
+                "extension_settlement_total": 7.9047,
+                "max_drawdown": -27.6289,
+                "net_per_window": -0.8837,
+                "net_per_window_after_2pct_fees": -1.395,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 37.0,
+                "windows": 27
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 6.8143,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 1.8227,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": 0.6548,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -1.4961,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 10.8391,
+                "extension_settlement_total": 16.7625,
+                "max_drawdown": -7.5227,
+                "net_per_window": 0.8364,
+                "net_per_window_after_2pct_fees": 0.3176,
+                "no_trade_windows": 0,
+                "peak_capital_median": 12.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 72.7,
+                "windows": 33
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.6402,
+                    "windows": 6
+                  },
+                  "1_flip": {
+                    "net_mean": -0.4494,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": -1.402,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.3555,
+                    "windows": 13
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -68.2482,
+                "extension_settlement_total": 1.6062,
+                "max_drawdown": -66.642,
+                "net_per_window": -1.5867,
+                "net_per_window_after_2pct_fees": -2.0715,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 33.3,
+                "windows": 42
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.8167,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 1.5842,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": 0.6111,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -1.9211,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -16.1581,
+                "extension_settlement_total": 10.9649,
+                "max_drawdown": -17.4082,
+                "net_per_window": -0.1675,
+                "net_per_window_after_2pct_fees": -0.6695,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 54.8,
+                "windows": 31
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.6097,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": 0.6662,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -3.7277,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.1337,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -72.7259,
+                "extension_settlement_total": 15.4797,
+                "max_drawdown": -58.797,
+                "net_per_window": -1.7889,
+                "net_per_window_after_2pct_fees": -2.2852,
+                "no_trade_windows": 0,
+                "peak_capital_median": 8.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 28.1,
+                "windows": 32
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.9488,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": -0.5617,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -0.9046,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.8493,
+                    "windows": 9
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -44.1559,
+                "extension_settlement_total": 1.7396,
+                "max_drawdown": -42.4164,
+                "net_per_window": -1.2475,
+                "net_per_window_after_2pct_fees": -1.7496,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 29.4,
+                "windows": 34
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 7.0619,
+                    "windows": 7
+                  },
+                  "1_flip": {
+                    "net_mean": -0.0007,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": -1.4752,
+                    "windows": 7
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.2167,
+                    "windows": 11
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -41.9075,
+                "extension_settlement_total": 45.6271,
+                "max_drawdown": -23.4178,
+                "net_per_window": 0.12,
+                "net_per_window_after_2pct_fees": -0.3961,
+                "no_trade_windows": 0,
+                "peak_capital_median": 12.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.9,
+                "windows": 31
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -5.0973,
+                    "windows": 9
+                  },
+                  "1_flip": {
+                    "net_mean": -7.8681,
+                    "windows": 8
+                  },
+                  "2_flips": {
+                    "net_mean": -9.3708,
+                    "windows": 12
+                  },
+                  "3+_flips": {
+                    "net_mean": -13.4515,
+                    "windows": 6
+                  }
+                },
+                "exits_nothing_sellable": 10,
+                "extension_realized_total": -299.1477,
+                "extension_settlement_total": -2.833,
+                "max_drawdown": -301.9802,
+                "net_per_window": -8.628,
+                "net_per_window_after_2pct_fees": -8.8886,
+                "no_trade_windows": 1,
+                "peak_capital_median": 4.0,
+                "unsold_shares_total": 18.038,
+                "win_rate_pct": 0.0,
+                "windows": 35
+              }
+            },
+            "coins_positive": 2,
+            "coins_total": 8
+          }
+        },
+        "C3_liquidate_all_pb5c": {
+          "$10": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -8.1471,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 5.0249,
+                    "windows": 7
+                  },
+                  "2_flips": {
+                    "net_mean": -1.6187,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -16.2495,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -193.8206,
+                "extension_settlement_total": 39.2561,
+                "max_drawdown": -168.5113,
+                "net_per_window": -5.7987,
+                "net_per_window_after_2pct_fees": -8.3822,
+                "no_trade_windows": 0,
+                "peak_capital_median": 51.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 33.3,
+                "windows": 27
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 33.3757,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 9.1318,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": 2.2179,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -8.5183,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 35.0444,
+                "extension_settlement_total": 82.9661,
+                "max_drawdown": -39.2072,
+                "net_per_window": 3.5765,
+                "net_per_window_after_2pct_fees": 0.9426,
+                "no_trade_windows": 0,
+                "peak_capital_median": 60.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 66.7,
+                "windows": 33
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 7.0048,
+                    "windows": 6
+                  },
+                  "1_flip": {
+                    "net_mean": -2.8928,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": -7.9524,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -22.8055,
+                    "windows": 13
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -372.9531,
+                "extension_settlement_total": 7.4566,
+                "max_drawdown": -371.5734,
+                "net_per_window": -8.847,
+                "net_per_window_after_2pct_fees": -11.3024,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.5,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 33.3,
+                "windows": 42
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.8233,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 8.2797,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": 2.0441,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -10.317,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -98.7382,
+                "extension_settlement_total": 54.7442,
+                "max_drawdown": -94.5743,
+                "net_per_window": -1.4837,
+                "net_per_window_after_2pct_fees": -4.0334,
+                "no_trade_windows": 0,
+                "peak_capital_median": 52.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 48.4,
+                "windows": 31
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 7.2734,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": 1.8503,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -19.923,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -22.3277,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -391.2982,
+                "extension_settlement_total": 63.1974,
+                "max_drawdown": -335.1156,
+                "net_per_window": -10.3205,
+                "net_per_window_after_2pct_fees": -12.8365,
+                "no_trade_windows": 0,
+                "peak_capital_median": 41.0,
+                "unsold_shares_total": 20.2333,
+                "win_rate_pct": 28.1,
+                "windows": 32
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 8.7916,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": -3.8539,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -5.5155,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -20.7573,
+                    "windows": 9
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -255.4007,
+                "extension_settlement_total": 8.5424,
+                "max_drawdown": -250.8584,
+                "net_per_window": -7.3782,
+                "net_per_window_after_2pct_fees": -9.9249,
+                "no_trade_windows": 0,
+                "peak_capital_median": 50.5,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 26.5,
+                "windows": 34
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 34.2822,
+                    "windows": 7
+                  },
+                  "1_flip": {
+                    "net_mean": -0.3617,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": -8.9357,
+                    "windows": 7
+                  },
+                  "3+_flips": {
+                    "net_mean": -17.2063,
+                    "windows": 11
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -235.6706,
+                "extension_settlement_total": 227.6962,
+                "max_drawdown": -129.6983,
+                "net_per_window": -0.452,
+                "net_per_window_after_2pct_fees": -3.0685,
+                "no_trade_windows": 0,
+                "peak_capital_median": 60.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.9,
+                "windows": 31
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -26.8659,
+                    "windows": 9
+                  },
+                  "1_flip": {
+                    "net_mean": -34.9404,
+                    "windows": 8
+                  },
+                  "2_flips": {
+                    "net_mean": -45.7492,
+                    "windows": 12
+                  },
+                  "3+_flips": {
+                    "net_mean": -65.4524,
+                    "windows": 6
+                  }
+                },
+                "exits_nothing_sellable": 10,
+                "extension_realized_total": -1441.7208,
+                "extension_settlement_total": -12.4043,
+                "max_drawdown": -1463.0213,
+                "net_per_window": -41.8006,
+                "net_per_window_after_2pct_fees": -43.0385,
+                "no_trade_windows": 1,
+                "peak_capital_median": 22.0,
+                "unsold_shares_total": 289.4243,
+                "win_rate_pct": 0.0,
+                "windows": 35
+              }
+            },
+            "coins_positive": 1,
+            "coins_total": 8
+          },
+          "$2": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -2.1675,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 1.3741,
+                    "windows": 7
+                  },
+                  "2_flips": {
+                    "net_mean": -0.4455,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.2693,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -36.878,
+                "extension_settlement_total": 7.9047,
+                "max_drawdown": -35.1029,
+                "net_per_window": -1.1472,
+                "net_per_window_after_2pct_fees": -1.6984,
+                "no_trade_windows": 0,
+                "peak_capital_median": 11.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 40.7,
+                "windows": 27
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 6.6496,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 2.2953,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": 0.5615,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -1.696,
+                    "windows": 10
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 13.894,
+                "extension_settlement_total": 16.7625,
+                "max_drawdown": -7.8702,
+                "net_per_window": 0.9294,
+                "net_per_window_after_2pct_fees": 0.3706,
+                "no_trade_windows": 0,
+                "peak_capital_median": 12.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 72.7,
+                "windows": 33
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.9779,
+                    "windows": 6
+                  },
+                  "1_flip": {
+                    "net_mean": -0.1914,
+                    "windows": 13
+                  },
+                  "2_flips": {
+                    "net_mean": -1.7718,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.6897,
+                    "windows": 13
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -70.8344,
+                "extension_settlement_total": 1.6062,
+                "max_drawdown": -75.3051,
+                "net_per_window": -1.793,
+                "net_per_window_after_2pct_fees": -2.3177,
+                "no_trade_windows": 0,
+                "peak_capital_median": 11.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 33.3,
+                "windows": 42
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.0829,
+                    "windows": 2
+                  },
+                  "1_flip": {
+                    "net_mean": 2.2739,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": 0.461,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -2.0601,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -14.8067,
+                "extension_settlement_total": 10.9649,
+                "max_drawdown": -18.1671,
+                "net_per_window": -0.1884,
+                "net_per_window_after_2pct_fees": -0.7304,
+                "no_trade_windows": 0,
+                "peak_capital_median": 12.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 51.6,
+                "windows": 31
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.3321,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": 0.861,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -4.1264,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.5599,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -77.1314,
+                "extension_settlement_total": 15.4797,
+                "max_drawdown": -65.5227,
+                "net_per_window": -1.9939,
+                "net_per_window_after_2pct_fees": -2.5302,
+                "no_trade_windows": 0,
+                "peak_capital_median": 9.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 28.1,
+                "windows": 32
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.4465,
+                    "windows": 4
+                  },
+                  "1_flip": {
+                    "net_mean": -0.1471,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -1.1801,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.0849,
+                    "windows": 9
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -43.1701,
+                "extension_settlement_total": 1.7396,
+                "max_drawdown": -45.4305,
+                "net_per_window": -1.3362,
+                "net_per_window_after_2pct_fees": -1.8782,
+                "no_trade_windows": 0,
+                "peak_capital_median": 10.5,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 35.3,
+                "windows": 34
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 6.5454,
+                    "windows": 7
+                  },
+                  "1_flip": {
+                    "net_mean": 0.223,
+                    "windows": 6
+                  },
+                  "2_flips": {
+                    "net_mean": -2.0344,
+                    "windows": 7
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.4621,
+                    "windows": 11
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -44.7562,
+                "extension_settlement_total": 45.6271,
+                "max_drawdown": -26.749,
+                "net_per_window": -0.1667,
+                "net_per_window_after_2pct_fees": -0.7228,
+                "no_trade_windows": 0,
+                "peak_capital_median": 12.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 38.7,
+                "windows": 31
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -6.6972,
+                    "windows": 9
+                  },
+                  "1_flip": {
+                    "net_mean": -9.2623,
+                    "windows": 8
+                  },
+                  "2_flips": {
+                    "net_mean": -11.144,
+                    "windows": 12
+                  },
+                  "3+_flips": {
+                    "net_mean": -15.1881,
+                    "windows": 6
+                  }
+                },
+                "exits_nothing_sellable": 10,
+                "extension_realized_total": -347.5009,
+                "extension_settlement_total": -2.833,
+                "max_drawdown": -359.2297,
+                "net_per_window": -10.2637,
+                "net_per_window_after_2pct_fees": -10.5643,
+                "no_trade_windows": 1,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 18.038,
+                "win_rate_pct": 0.0,
+                "windows": 35
+              }
+            },
+            "coins_positive": 1,
+            "coins_total": 8
+          }
+        }
+      },
+      "coins": [
+        "bnb",
+        "btc",
+        "doge",
+        "eth",
+        "hype",
+        "sol",
+        "xrp",
+        "zec"
+      ],
+      "windows_per_day": 96
+    },
+    "5m": {
+      "by_candidate": {
+        "C1_momentum_no_base_pb3c": {
+          "$10": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 4.5667,
+                    "windows": 26
+                  },
+                  "1_flip": {
+                    "net_mean": -2.2545,
+                    "windows": 25
+                  },
+                  "2_flips": {
+                    "net_mean": -11.5792,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 2,
+                "extension_realized_total": -206.4992,
+                "extension_settlement_total": 95.1819,
+                "max_drawdown": -200.8387,
+                "net_per_window": -1.6866,
+                "net_per_window_after_2pct_fees": -2.5294,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 48.5,
+                "windows": 66
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 13.0145,
+                    "windows": 11
+                  },
+                  "1_flip": {
+                    "net_mean": -0.6955,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -8.1864,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -6.8544,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 4,
+                "extension_realized_total": -114.5699,
+                "extension_settlement_total": 65.9523,
+                "max_drawdown": -158.9797,
+                "net_per_window": -0.7842,
+                "net_per_window_after_2pct_fees": -1.7616,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 46.8,
+                "windows": 62
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 8.5326,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -1.4779,
+                    "windows": 18
+                  },
+                  "2_flips": {
+                    "net_mean": -20.8378,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -23.0226,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -298.7004,
+                "extension_settlement_total": 97.8245,
+                "max_drawdown": -242.8499,
+                "net_per_window": -3.9387,
+                "net_per_window_after_2pct_fees": -4.8308,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 4.273,
+                "win_rate_pct": 43.1,
+                "windows": 51
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 9.3095,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -1.312,
+                    "windows": 23
+                  },
+                  "2_flips": {
+                    "net_mean": -2.9592,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -16.6295,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 0.565,
+                "extension_settlement_total": -9.1693,
+                "max_drawdown": -145.7641,
+                "net_per_window": -0.1484,
+                "net_per_window_after_2pct_fees": -1.1174,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 51.7,
+                "windows": 58
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.5193,
+                    "windows": 19
+                  },
+                  "1_flip": {
+                    "net_mean": -5.0991,
+                    "windows": 22
+                  },
+                  "2_flips": {
+                    "net_mean": -11.0343,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -15.3354,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -294.3775,
+                "extension_settlement_total": 70.0499,
+                "max_drawdown": -233.3265,
+                "net_per_window": -4.2326,
+                "net_per_window_after_2pct_fees": -5.0925,
+                "no_trade_windows": 0,
+                "peak_capital_median": 20.0,
+                "unsold_shares_total": 11.5135,
+                "win_rate_pct": 43.4,
+                "windows": 53
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 11.1096,
+                    "windows": 16
+                  },
+                  "1_flip": {
+                    "net_mean": -6.427,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -11.2939,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -21.0869,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -389.0451,
+                "extension_settlement_total": 48.7377,
+                "max_drawdown": -354.7049,
+                "net_per_window": -5.0792,
+                "net_per_window_after_2pct_fees": -6.0106,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.8,
+                "windows": 67
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 8.6026,
+                    "windows": 17
+                  },
+                  "1_flip": {
+                    "net_mean": -2.7033,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -18.1013,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -19.6407,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -235.5522,
+                "extension_settlement_total": -4.6964,
+                "max_drawdown": -308.4476,
+                "net_per_window": -3.875,
+                "net_per_window_after_2pct_fees": -4.7363,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 50.0,
+                "windows": 62
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -6.7327,
+                    "windows": 40
+                  },
+                  "1_flip": {
+                    "net_mean": -15.9453,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -19.3803,
+                    "windows": 2
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 3,
+                "extension_realized_total": -429.0231,
+                "extension_settlement_total": -38.4992,
+                "max_drawdown": -467.5222,
+                "net_per_window": -8.9908,
+                "net_per_window_after_2pct_fees": -9.2242,
+                "no_trade_windows": 12,
+                "peak_capital_median": 4.95,
+                "unsold_shares_total": 102.3339,
+                "win_rate_pct": 3.8,
+                "windows": 52
+              }
+            },
+            "coins_positive": 0,
+            "coins_total": 8
+          },
+          "$2": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.0178,
+                    "windows": 26
+                  },
+                  "1_flip": {
+                    "net_mean": -0.3503,
+                    "windows": 25
+                  },
+                  "2_flips": {
+                    "net_mean": -2.1982,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 2,
+                "extension_realized_total": -34.4809,
+                "extension_settlement_total": 19.2138,
+                "max_drawdown": -33.7495,
+                "net_per_window": -0.2313,
+                "net_per_window_after_2pct_fees": -0.4001,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 53.0,
+                "windows": 66
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.6134,
+                    "windows": 11
+                  },
+                  "1_flip": {
+                    "net_mean": -0.1244,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -1.6288,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -1.2997,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 4,
+                "extension_realized_total": -22.1509,
+                "extension_settlement_total": 13.9027,
+                "max_drawdown": -31.1057,
+                "net_per_window": -0.133,
+                "net_per_window_after_2pct_fees": -0.3285,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 46.8,
+                "windows": 62
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.0385,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -0.2146,
+                    "windows": 18
+                  },
+                  "2_flips": {
+                    "net_mean": -4.0617,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.4692,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -52.4525,
+                "extension_settlement_total": 21.5048,
+                "max_drawdown": -40.0894,
+                "net_per_window": -0.6068,
+                "net_per_window_after_2pct_fees": -0.7856,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 45.1,
+                "windows": 51
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.9026,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -0.2001,
+                    "windows": 23
+                  },
+                  "2_flips": {
+                    "net_mean": -0.4993,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.2381,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 3.5845,
+                "extension_settlement_total": -1.599,
+                "max_drawdown": -28.1355,
+                "net_per_window": 0.0342,
+                "net_per_window_after_2pct_fees": -0.1597,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 53.4,
+                "windows": 58
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.4274,
+                    "windows": 19
+                  },
+                  "1_flip": {
+                    "net_mean": -0.9153,
+                    "windows": 22
+                  },
+                  "2_flips": {
+                    "net_mean": -2.081,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -2.9938,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -54.2175,
+                "extension_settlement_total": 15.4022,
+                "max_drawdown": -40.8591,
+                "net_per_window": -0.7324,
+                "net_per_window_after_2pct_fees": -0.9062,
+                "no_trade_windows": 0,
+                "peak_capital_median": 4.0,
+                "unsold_shares_total": 0.7027,
+                "win_rate_pct": 43.4,
+                "windows": 53
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.3177,
+                    "windows": 16
+                  },
+                  "1_flip": {
+                    "net_mean": -1.2167,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -2.1726,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.135,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -72.8969,
+                "extension_settlement_total": 10.243,
+                "max_drawdown": -66.3648,
+                "net_per_window": -0.9351,
+                "net_per_window_after_2pct_fees": -1.1214,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.8,
+                "windows": 67
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.7703,
+                    "windows": 17
+                  },
+                  "1_flip": {
+                    "net_mean": -0.4102,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -3.5307,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.8905,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -41.6217,
+                "extension_settlement_total": -0.5105,
+                "max_drawdown": -58.2586,
+                "net_per_window": -0.6796,
+                "net_per_window_after_2pct_fees": -0.8518,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 53.2,
+                "windows": 62
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -2.3963,
+                    "windows": 40
+                  },
+                  "1_flip": {
+                    "net_mean": -4.0844,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -4.8639,
+                    "windows": 2
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -140.6687,
+                "extension_settlement_total": -5.7532,
+                "max_drawdown": -146.4219,
+                "net_per_window": -2.8158,
+                "net_per_window_after_2pct_fees": -2.8873,
+                "no_trade_windows": 12,
+                "peak_capital_median": 2.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 3.8,
+                "windows": 52
+              }
+            },
+            "coins_positive": 1,
+            "coins_total": 8
+          }
+        },
+        "C2_momentum_no_base_pb5c": {
+          "$10": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 4.8699,
+                    "windows": 26
+                  },
+                  "1_flip": {
+                    "net_mean": -2.0135,
+                    "windows": 25
+                  },
+                  "2_flips": {
+                    "net_mean": -11.4292,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 2,
+                "extension_realized_total": -203.2983,
+                "extension_settlement_total": 108.1382,
+                "max_drawdown": -184.6816,
+                "net_per_window": -1.4418,
+                "net_per_window_after_2pct_fees": -2.2694,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 50.0,
+                "windows": 66
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 13.4452,
+                    "windows": 11
+                  },
+                  "1_flip": {
+                    "net_mean": -0.674,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -8.1864,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -7.6426,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 4,
+                "extension_realized_total": -142.6185,
+                "extension_settlement_total": 89.8823,
+                "max_drawdown": -163.0982,
+                "net_per_window": -0.8506,
+                "net_per_window_after_2pct_fees": -1.8086,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 46.8,
+                "windows": 62
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 10.7202,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -1.4779,
+                    "windows": 18
+                  },
+                  "2_flips": {
+                    "net_mean": -20.8378,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -23.0226,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -276.2169,
+                "extension_settlement_total": 114.717,
+                "max_drawdown": -203.4739,
+                "net_per_window": -3.1667,
+                "net_per_window_after_2pct_fees": -4.0509,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 4.273,
+                "win_rate_pct": 45.1,
+                "windows": 51
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 9.3095,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -1.7087,
+                    "windows": 23
+                  },
+                  "2_flips": {
+                    "net_mean": -2.9592,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -16.6295,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 1.4408,
+                "extension_settlement_total": -19.1693,
+                "max_drawdown": -145.7322,
+                "net_per_window": -0.3057,
+                "net_per_window_after_2pct_fees": -1.2678,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 51.7,
+                "windows": 58
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.577,
+                    "windows": 19
+                  },
+                  "1_flip": {
+                    "net_mean": -4.9251,
+                    "windows": 22
+                  },
+                  "2_flips": {
+                    "net_mean": -11.0141,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -15.3354,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -292.9305,
+                "extension_settlement_total": 73.7305,
+                "max_drawdown": -228.1988,
+                "net_per_window": -4.1358,
+                "net_per_window_after_2pct_fees": -4.9655,
+                "no_trade_windows": 0,
+                "peak_capital_median": 20.0,
+                "unsold_shares_total": 11.5135,
+                "win_rate_pct": 43.4,
+                "windows": 53
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 12.4059,
+                    "windows": 16
+                  },
+                  "1_flip": {
+                    "net_mean": -6.7824,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -11.3883,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -21.0869,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -369.6711,
+                "extension_settlement_total": 38.7377,
+                "max_drawdown": -345.3309,
+                "net_per_window": -4.9393,
+                "net_per_window_after_2pct_fees": -5.8557,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.8,
+                "windows": 67
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 9.1409,
+                    "windows": 17
+                  },
+                  "1_flip": {
+                    "net_mean": -2.5065,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -18.1013,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -19.6407,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -233.5996,
+                "extension_settlement_total": 8.0097,
+                "max_drawdown": -294.7263,
+                "net_per_window": -3.6385,
+                "net_per_window_after_2pct_fees": -4.4837,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 51.6,
+                "windows": 62
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -6.7327,
+                    "windows": 40
+                  },
+                  "1_flip": {
+                    "net_mean": -15.0761,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -19.3803,
+                    "windows": 2
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 3,
+                "extension_realized_total": -420.3314,
+                "extension_settlement_total": -38.4992,
+                "max_drawdown": -458.8305,
+                "net_per_window": -8.8237,
+                "net_per_window_after_2pct_fees": -9.0532,
+                "no_trade_windows": 12,
+                "peak_capital_median": 4.95,
+                "unsold_shares_total": 102.3339,
+                "win_rate_pct": 3.8,
+                "windows": 52
+              }
+            },
+            "coins_positive": 0,
+            "coins_total": 8
+          },
+          "$2": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.0815,
+                    "windows": 26
+                  },
+                  "1_flip": {
+                    "net_mean": -0.3072,
+                    "windows": 25
+                  },
+                  "2_flips": {
+                    "net_mean": -2.1685,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 2,
+                "extension_realized_total": -34.3166,
+                "extension_settlement_total": 22.2292,
+                "max_drawdown": -30.5699,
+                "net_per_window": -0.1831,
+                "net_per_window_after_2pct_fees": -0.3489,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 54.5,
+                "windows": 66
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.6996,
+                    "windows": 11
+                  },
+                  "1_flip": {
+                    "net_mean": -0.1207,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -1.6288,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -1.4573,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 4,
+                "extension_realized_total": -27.7806,
+                "extension_settlement_total": 18.6937,
+                "max_drawdown": -31.9443,
+                "net_per_window": -0.1466,
+                "net_per_window_after_2pct_fees": -0.3382,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 46.8,
+                "windows": 62
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.3125,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -0.2146,
+                    "windows": 18
+                  },
+                  "2_flips": {
+                    "net_mean": -4.0617,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.4692,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -51.08,
+                "extension_settlement_total": 25.0636,
+                "max_drawdown": -35.1582,
+                "net_per_window": -0.5101,
+                "net_per_window_after_2pct_fees": -0.6874,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 49.0,
+                "windows": 51
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.9026,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -0.2822,
+                    "windows": 23
+                  },
+                  "2_flips": {
+                    "net_mean": -0.4993,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.2381,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 3.6943,
+                "extension_settlement_total": -3.599,
+                "max_drawdown": -28.1236,
+                "net_per_window": 0.0016,
+                "net_per_window_after_2pct_fees": -0.1909,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 53.4,
+                "windows": 58
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.4389,
+                    "windows": 19
+                  },
+                  "1_flip": {
+                    "net_mean": -0.8828,
+                    "windows": 22
+                  },
+                  "2_flips": {
+                    "net_mean": -2.0773,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -2.9938,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -53.9827,
+                "extension_settlement_total": 16.1383,
+                "max_drawdown": -39.8883,
+                "net_per_window": -0.714,
+                "net_per_window_after_2pct_fees": -0.8818,
+                "no_trade_windows": 0,
+                "peak_capital_median": 4.0,
+                "unsold_shares_total": 0.7027,
+                "win_rate_pct": 43.4,
+                "windows": 53
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.5861,
+                    "windows": 16
+                  },
+                  "1_flip": {
+                    "net_mean": -1.2889,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -2.194,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.135,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -68.9428,
+                "extension_settlement_total": 8.243,
+                "max_drawdown": -64.4107,
+                "net_per_window": -0.906,
+                "net_per_window_after_2pct_fees": -1.0893,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.8,
+                "windows": 67
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.8677,
+                    "windows": 17
+                  },
+                  "1_flip": {
+                    "net_mean": -0.3717,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -3.5307,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.8905,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -41.4764,
+                "extension_settlement_total": 2.0797,
+                "max_drawdown": -55.7106,
+                "net_per_window": -0.6354,
+                "net_per_window_after_2pct_fees": -0.8045,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 54.8,
+                "windows": 62
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -2.3963,
+                    "windows": 40
+                  },
+                  "1_flip": {
+                    "net_mean": -3.9337,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -4.8639,
+                    "windows": 2
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -139.1623,
+                "extension_settlement_total": -5.7532,
+                "max_drawdown": -144.9155,
+                "net_per_window": -2.7868,
+                "net_per_window_after_2pct_fees": -2.8576,
+                "no_trade_windows": 12,
+                "peak_capital_median": 2.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 3.8,
+                "windows": 52
+              }
+            },
+            "coins_positive": 1,
+            "coins_total": 8
+          }
+        },
+        "C3_liquidate_all_pb5c": {
+          "$10": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 4.6954,
+                    "windows": 26
+                  },
+                  "1_flip": {
+                    "net_mean": -1.6343,
+                    "windows": 25
+                  },
+                  "2_flips": {
+                    "net_mean": -12.1126,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 2,
+                "extension_realized_total": -196.9794,
+                "extension_settlement_total": 108.1382,
+                "max_drawdown": -189.2267,
+                "net_per_window": -1.5222,
+                "net_per_window_after_2pct_fees": -2.3898,
+                "no_trade_windows": 0,
+                "peak_capital_median": 31.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 50.0,
+                "windows": 66
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 13.3847,
+                    "windows": 11
+                  },
+                  "1_flip": {
+                    "net_mean": -0.3288,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -8.6278,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -7.9549,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 4,
+                "extension_realized_total": -137.2744,
+                "extension_settlement_total": 89.8823,
+                "max_drawdown": -165.239,
+                "net_per_window": -0.8442,
+                "net_per_window_after_2pct_fees": -1.8423,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 50.0,
+                "windows": 62
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 10.4467,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -1.0135,
+                    "windows": 18
+                  },
+                  "2_flips": {
+                    "net_mean": -21.7178,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -23.6344,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -273.7207,
+                "extension_settlement_total": 114.717,
+                "max_drawdown": -211.3182,
+                "net_per_window": -3.3213,
+                "net_per_window_after_2pct_fees": -4.2455,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 4.273,
+                "win_rate_pct": 45.1,
+                "windows": 51
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 9.0199,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": -1.3367,
+                    "windows": 23
+                  },
+                  "2_flips": {
+                    "net_mean": -3.2899,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -16.9103,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 14.4279,
+                "extension_settlement_total": -19.1693,
+                "max_drawdown": -148.953,
+                "net_per_window": -0.3389,
+                "net_per_window_after_2pct_fees": -1.3411,
+                "no_trade_windows": 0,
+                "peak_capital_median": 31.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 53.4,
+                "windows": 58
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.307,
+                    "windows": 19
+                  },
+                  "1_flip": {
+                    "net_mean": -4.7127,
+                    "windows": 22
+                  },
+                  "2_flips": {
+                    "net_mean": -11.6389,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -16.1469,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -293.7899,
+                "extension_settlement_total": 73.7305,
+                "max_drawdown": -235.2739,
+                "net_per_window": -4.293,
+                "net_per_window_after_2pct_fees": -5.1627,
+                "no_trade_windows": 0,
+                "peak_capital_median": 22.0,
+                "unsold_shares_total": 11.5135,
+                "win_rate_pct": 43.4,
+                "windows": 53
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 12.0763,
+                    "windows": 16
+                  },
+                  "1_flip": {
+                    "net_mean": -6.65,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -12.0592,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -21.7512,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -373.4587,
+                "extension_settlement_total": 38.7377,
+                "max_drawdown": -362.6356,
+                "net_per_window": -5.1922,
+                "net_per_window_after_2pct_fees": -6.1486,
+                "no_trade_windows": 0,
+                "peak_capital_median": 30.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 41.8,
+                "windows": 67
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 8.8356,
+                    "windows": 17
+                  },
+                  "1_flip": {
+                    "net_mean": -2.1382,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -19.0049,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -20.1799,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -234.6434,
+                "extension_settlement_total": 8.0097,
+                "max_drawdown": -306.6908,
+                "net_per_window": -3.7919,
+                "net_per_window_after_2pct_fees": -4.6764,
+                "no_trade_windows": 0,
+                "peak_capital_median": 31.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 54.8,
+                "windows": 62
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -8.0978,
+                    "windows": 40
+                  },
+                  "1_flip": {
+                    "net_mean": -16.5756,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -21.3345,
+                    "windows": 2
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 3,
+                "extension_realized_total": -462.8141,
+                "extension_settlement_total": -38.4992,
+                "max_drawdown": -532.3383,
+                "net_per_window": -10.2373,
+                "net_per_window_after_2pct_fees": -10.5045,
+                "no_trade_windows": 12,
+                "peak_capital_median": 6.95,
+                "unsold_shares_total": 102.3339,
+                "win_rate_pct": 0.0,
+                "windows": 52
+              }
+            },
+            "coins_positive": 0,
+            "coins_total": 8
+          },
+          "$2": {
+            "by_coin": {
+              "bnb": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.9071,
+                    "windows": 26
+                  },
+                  "1_flip": {
+                    "net_mean": 0.0721,
+                    "windows": 25
+                  },
+                  "2_flips": {
+                    "net_mean": -2.8519,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 2,
+                "extension_realized_total": -27.9983,
+                "extension_settlement_total": 22.2292,
+                "max_drawdown": -35.1157,
+                "net_per_window": -0.2635,
+                "net_per_window_after_2pct_fees": -0.4693,
+                "no_trade_windows": 0,
+                "peak_capital_median": 7.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 51.5,
+                "windows": 66
+              },
+              "btc": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.6391,
+                    "windows": 11
+                  },
+                  "1_flip": {
+                    "net_mean": 0.2245,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -2.0702,
+                    "windows": 11
+                  },
+                  "3+_flips": {
+                    "net_mean": -1.7696,
+                    "windows": 12
+                  }
+                },
+                "exits_nothing_sellable": 4,
+                "extension_realized_total": -22.4369,
+                "extension_settlement_total": 18.6937,
+                "max_drawdown": -34.548,
+                "net_per_window": -0.1402,
+                "net_per_window_after_2pct_fees": -0.3718,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 53.2,
+                "windows": 62
+              },
+              "doge": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.039,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": 0.2497,
+                    "windows": 18
+                  },
+                  "2_flips": {
+                    "net_mean": -4.9417,
+                    "windows": 8
+                  },
+                  "3+_flips": {
+                    "net_mean": -5.0809,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -48.5838,
+                "extension_settlement_total": 25.0636,
+                "max_drawdown": -43.0021,
+                "net_per_window": -0.6648,
+                "net_per_window_after_2pct_fees": -0.882,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 47.1,
+                "windows": 51
+              },
+              "eth": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.613,
+                    "windows": 18
+                  },
+                  "1_flip": {
+                    "net_mean": 0.0898,
+                    "windows": 23
+                  },
+                  "2_flips": {
+                    "net_mean": -0.8299,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.519,
+                    "windows": 7
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": 16.6818,
+                "extension_settlement_total": -3.599,
+                "max_drawdown": -31.3442,
+                "net_per_window": -0.0316,
+                "net_per_window_after_2pct_fees": -0.2641,
+                "no_trade_windows": 0,
+                "peak_capital_median": 7.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 56.9,
+                "windows": 58
+              },
+              "hype": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 0.1689,
+                    "windows": 19
+                  },
+                  "1_flip": {
+                    "net_mean": -0.6705,
+                    "windows": 22
+                  },
+                  "2_flips": {
+                    "net_mean": -2.7022,
+                    "windows": 10
+                  },
+                  "3+_flips": {
+                    "net_mean": -3.8052,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -54.8423,
+                "extension_settlement_total": 16.1383,
+                "max_drawdown": -46.9639,
+                "net_per_window": -0.8712,
+                "net_per_window_after_2pct_fees": -1.079,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.7027,
+                "win_rate_pct": 45.3,
+                "windows": 53
+              },
+              "sol": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 2.2565,
+                    "windows": 16
+                  },
+                  "1_flip": {
+                    "net_mean": -1.1565,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -2.8649,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.7994,
+                    "windows": 8
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -72.7308,
+                "extension_settlement_total": 8.243,
+                "max_drawdown": -84.1595,
+                "net_per_window": -1.1589,
+                "net_per_window_after_2pct_fees": -1.3822,
+                "no_trade_windows": 0,
+                "peak_capital_median": 6.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 40.3,
+                "windows": 67
+              },
+              "xrp": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": 1.5624,
+                    "windows": 17
+                  },
+                  "1_flip": {
+                    "net_mean": -0.0034,
+                    "windows": 28
+                  },
+                  "2_flips": {
+                    "net_mean": -4.4342,
+                    "windows": 15
+                  },
+                  "3+_flips": {
+                    "net_mean": -4.4298,
+                    "windows": 2
+                  }
+                },
+                "exits_nothing_sellable": 0,
+                "extension_realized_total": -42.5206,
+                "extension_settlement_total": 2.0797,
+                "max_drawdown": -68.1686,
+                "net_per_window": -0.7888,
+                "net_per_window_after_2pct_fees": -0.9972,
+                "no_trade_windows": 0,
+                "peak_capital_median": 7.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 56.5,
+                "windows": 62
+              },
+              "zec": {
+                "by_flip_count": {
+                  "0_flips": {
+                    "net_mean": -3.7614,
+                    "windows": 40
+                  },
+                  "1_flip": {
+                    "net_mean": -5.4333,
+                    "windows": 10
+                  },
+                  "2_flips": {
+                    "net_mean": -6.818,
+                    "windows": 2
+                  },
+                  "3+_flips": {
+                    "net_mean": null,
+                    "windows": 0
+                  }
+                },
+                "exits_nothing_sellable": 1,
+                "extension_realized_total": -181.6449,
+                "extension_settlement_total": -5.7532,
+                "max_drawdown": -218.4232,
+                "net_per_window": -4.2004,
+                "net_per_window_after_2pct_fees": -4.3089,
+                "no_trade_windows": 12,
+                "peak_capital_median": 4.0,
+                "unsold_shares_total": 0.0,
+                "win_rate_pct": 0.0,
+                "windows": 52
+              }
+            },
+            "coins_positive": 0,
+            "coins_total": 8
+          }
+        }
+      },
+      "coins": [
+        "bnb",
+        "btc",
+        "doge",
+        "eth",
+        "hype",
+        "sol",
+        "xrp",
+        "zec"
+      ],
+      "windows_per_day": 288
+    }
+  },
+  "label": "MOMENTUM_PULLBACK_PERCOIN_V1",
+  "purpose": "diagnosis of the coin effect, NOT selection: no profitable subset is promoted to a strategy anywhere",
+  "sizes_usd": [
+    2.0,
+    10.0
+  ]
+}

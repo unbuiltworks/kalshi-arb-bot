@@ -1,0 +1,5503 @@
+{
+  "accounting_label": "historical replay on Gemini's own recorded books and settlements; no order was sent",
+  "by_duration": {
+    "BTC15M": {
+      "all_underdog_pooled": {
+        "actual_win_pct": 43.79,
+        "avg_executable_ask": 0.3051,
+        "breakeven_pct_taker_fees": 31.99,
+        "breakeven_pct_zero_fees": 30.51,
+        "depth_contracts": {
+          "max": null,
+          "median": null,
+          "p10": null
+        },
+        "distinct_windows": 15,
+        "edge_pp_ci95_low_vs_taker": -10.25,
+        "edge_pp_vs_taker_fees": 11.8,
+        "edge_pp_vs_zero_fees": 13.29,
+        "observations": 459,
+        "observations_in_cell_before_outcome_filter": 459,
+        "opportunities_per_day": 2937.6,
+        "pnl_per_dollar_risked_taker": 0.6497,
+        "pnl_per_dollar_risked_total": 298.2,
+        "win_pct_ci95_window_bootstrap": [
+          21.74,
+          65.26
+        ]
+      },
+      "both_sides_executable_observations": 537,
+      "by_bucket_all_checkpoints": {
+        "10-15c": {
+          "actual_win_pct": 59.38,
+          "avg_executable_ask": 0.1188,
+          "breakeven_pct_taker_fees": 12.61,
+          "breakeven_pct_zero_fees": 11.88,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 6,
+          "edge_pp_ci95_low_vs_taker": 2.2,
+          "edge_pp_vs_taker_fees": 46.77,
+          "edge_pp_vs_zero_fees": 47.5,
+          "observations": 32,
+          "observations_in_cell_before_outcome_filter": 32,
+          "opportunities_per_day": 512.0,
+          "pnl_per_dollar_risked_taker": 3.9607,
+          "pnl_per_dollar_risked_total": 126.74,
+          "win_pct_ci95_window_bootstrap": [
+            14.81,
+            91.43
+          ]
+        },
+        "15-20c": {
+          "actual_win_pct": 53.57,
+          "avg_executable_ask": 0.1668,
+          "breakeven_pct_taker_fees": 17.65,
+          "breakeven_pct_zero_fees": 16.68,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 7,
+          "edge_pp_ci95_low_vs_taker": -8.56,
+          "edge_pp_vs_taker_fees": 35.92,
+          "edge_pp_vs_zero_fees": 36.89,
+          "observations": 28,
+          "observations_in_cell_before_outcome_filter": 28,
+          "opportunities_per_day": 384.0,
+          "pnl_per_dollar_risked_taker": 2.1088,
+          "pnl_per_dollar_risked_total": 59.05,
+          "win_pct_ci95_window_bootstrap": [
+            9.09,
+            93.18
+          ]
+        },
+        "20-25c": {
+          "actual_win_pct": 33.33,
+          "avg_executable_ask": 0.2191,
+          "breakeven_pct_taker_fees": 23.11,
+          "breakeven_pct_zero_fees": 21.91,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 12,
+          "edge_pp_ci95_low_vs_taker": -15.79,
+          "edge_pp_vs_taker_fees": 10.22,
+          "edge_pp_vs_zero_fees": 11.42,
+          "observations": 45,
+          "observations_in_cell_before_outcome_filter": 45,
+          "opportunities_per_day": 360.0,
+          "pnl_per_dollar_risked_taker": 0.4514,
+          "pnl_per_dollar_risked_total": 20.31,
+          "win_pct_ci95_window_bootstrap": [
+            7.32,
+            67.21
+          ]
+        },
+        "25-30c": {
+          "actual_win_pct": 52.0,
+          "avg_executable_ask": 0.2714,
+          "breakeven_pct_taker_fees": 28.52,
+          "breakeven_pct_zero_fees": 27.14,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 11,
+          "edge_pp_ci95_low_vs_taker": -20.19,
+          "edge_pp_vs_taker_fees": 23.48,
+          "edge_pp_vs_zero_fees": 24.86,
+          "observations": 50,
+          "observations_in_cell_before_outcome_filter": 50,
+          "opportunities_per_day": 436.4,
+          "pnl_per_dollar_risked_taker": 0.8856,
+          "pnl_per_dollar_risked_total": 44.28,
+          "win_pct_ci95_window_bootstrap": [
+            8.33,
+            81.63
+          ]
+        },
+        "30-35c": {
+          "actual_win_pct": 35.48,
+          "avg_executable_ask": 0.3184,
+          "breakeven_pct_taker_fees": 33.36,
+          "breakeven_pct_zero_fees": 31.84,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 11,
+          "edge_pp_ci95_low_vs_taker": -24.4,
+          "edge_pp_vs_taker_fees": 2.13,
+          "edge_pp_vs_zero_fees": 3.65,
+          "observations": 62,
+          "observations_in_cell_before_outcome_filter": 62,
+          "opportunities_per_day": 541.1,
+          "pnl_per_dollar_risked_taker": 0.0712,
+          "pnl_per_dollar_risked_total": 4.41,
+          "win_pct_ci95_window_bootstrap": [
+            8.96,
+            68.42
+          ]
+        },
+        "35-40c": {
+          "actual_win_pct": 75.0,
+          "avg_executable_ask": 0.375,
+          "breakeven_pct_taker_fees": 39.14,
+          "breakeven_pct_zero_fees": 37.5,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 12,
+          "edge_pp_ci95_low_vs_taker": 9.01,
+          "edge_pp_vs_taker_fees": 35.86,
+          "edge_pp_vs_zero_fees": 37.5,
+          "observations": 44,
+          "observations_in_cell_before_outcome_filter": 44,
+          "opportunities_per_day": 352.0,
+          "pnl_per_dollar_risked_taker": 0.9511,
+          "pnl_per_dollar_risked_total": 41.85,
+          "win_pct_ci95_window_bootstrap": [
+            48.15,
+            90.0
+          ]
+        },
+        "40-45c": {
+          "actual_win_pct": 46.48,
+          "avg_executable_ask": 0.4232,
+          "breakeven_pct_taker_fees": 44.03,
+          "breakeven_pct_zero_fees": 42.32,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 15,
+          "edge_pp_ci95_low_vs_taker": -20.22,
+          "edge_pp_vs_taker_fees": 2.45,
+          "edge_pp_vs_zero_fees": 4.15,
+          "observations": 71,
+          "observations_in_cell_before_outcome_filter": 71,
+          "opportunities_per_day": 454.4,
+          "pnl_per_dollar_risked_taker": 0.0594,
+          "pnl_per_dollar_risked_total": 4.22,
+          "win_pct_ci95_window_bootstrap": [
+            23.81,
+            66.23
+          ]
+        },
+        "45-50c": {
+          "actual_win_pct": 40.24,
+          "avg_executable_ask": 0.472,
+          "breakeven_pct_taker_fees": 48.94,
+          "breakeven_pct_zero_fees": 47.2,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 12,
+          "edge_pp_ci95_low_vs_taker": -23.18,
+          "edge_pp_vs_taker_fees": -8.7,
+          "edge_pp_vs_zero_fees": -6.95,
+          "observations": 82,
+          "observations_in_cell_before_outcome_filter": 82,
+          "opportunities_per_day": 656.0,
+          "pnl_per_dollar_risked_taker": -0.1763,
+          "pnl_per_dollar_risked_total": -14.45,
+          "win_pct_ci95_window_bootstrap": [
+            25.76,
+            51.26
+          ]
+        },
+        "<10c": {
+          "actual_win_pct": 11.11,
+          "avg_executable_ask": 0.0696,
+          "breakeven_pct_taker_fees": 7.41,
+          "breakeven_pct_zero_fees": 6.96,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 4,
+          "edge_pp_ci95_low_vs_taker": -7.41,
+          "edge_pp_vs_taker_fees": 3.7,
+          "edge_pp_vs_zero_fees": 4.16,
+          "observations": 45,
+          "observations_in_cell_before_outcome_filter": 45,
+          "opportunities_per_day": 1080.0,
+          "pnl_per_dollar_risked_taker": 0.262,
+          "pnl_per_dollar_risked_total": 11.79,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            83.33
+          ]
+        }
+      },
+      "by_checkpoint_all_buckets": {
+        "120s": {
+          "actual_win_pct": 65.0,
+          "avg_executable_ask": 0.2635,
+          "breakeven_pct_taker_fees": 27.71,
+          "breakeven_pct_zero_fees": 26.35,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 4,
+          "edge_pp_ci95_low_vs_taker": -11.71,
+          "edge_pp_vs_taker_fees": 37.29,
+          "edge_pp_vs_zero_fees": 38.65,
+          "observations": 20,
+          "observations_in_cell_before_outcome_filter": 20,
+          "opportunities_per_day": 480.0,
+          "pnl_per_dollar_risked_taker": 1.2955,
+          "pnl_per_dollar_risked_total": 25.91,
+          "win_pct_ci95_window_bootstrap": [
+            16.0,
+            100.0
+          ]
+        },
+        "180s": {
+          "actual_win_pct": 44.44,
+          "avg_executable_ask": 0.2552,
+          "breakeven_pct_taker_fees": 26.85,
+          "breakeven_pct_zero_fees": 25.52,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 5,
+          "edge_pp_ci95_low_vs_taker": -26.85,
+          "edge_pp_vs_taker_fees": 17.6,
+          "edge_pp_vs_zero_fees": 18.93,
+          "observations": 27,
+          "observations_in_cell_before_outcome_filter": 27,
+          "opportunities_per_day": 518.4,
+          "pnl_per_dollar_risked_taker": 1.0906,
+          "pnl_per_dollar_risked_total": 29.45,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            88.89
+          ]
+        },
+        "240s": {
+          "actual_win_pct": 64.52,
+          "avg_executable_ask": 0.2758,
+          "breakeven_pct_taker_fees": 28.98,
+          "breakeven_pct_zero_fees": 27.58,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 7,
+          "edge_pp_ci95_low_vs_taker": -8.29,
+          "edge_pp_vs_taker_fees": 35.54,
+          "edge_pp_vs_zero_fees": 36.94,
+          "observations": 31,
+          "observations_in_cell_before_outcome_filter": 31,
+          "opportunities_per_day": 425.1,
+          "pnl_per_dollar_risked_taker": 1.1473,
+          "pnl_per_dollar_risked_total": 35.56,
+          "win_pct_ci95_window_bootstrap": [
+            20.69,
+            91.89
+          ]
+        },
+        "300s": {
+          "actual_win_pct": 36.73,
+          "avg_executable_ask": 0.2682,
+          "breakeven_pct_taker_fees": 28.19,
+          "breakeven_pct_zero_fees": 26.82,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 9,
+          "edge_pp_ci95_low_vs_taker": -22.42,
+          "edge_pp_vs_taker_fees": 8.54,
+          "edge_pp_vs_zero_fees": 9.92,
+          "observations": 49,
+          "observations_in_cell_before_outcome_filter": 49,
+          "opportunities_per_day": 522.7,
+          "pnl_per_dollar_risked_taker": 1.3781,
+          "pnl_per_dollar_risked_total": 67.53,
+          "win_pct_ci95_window_bootstrap": [
+            5.77,
+            72.73
+          ]
+        },
+        "360s": {
+          "actual_win_pct": 44.64,
+          "avg_executable_ask": 0.2564,
+          "breakeven_pct_taker_fees": 26.98,
+          "breakeven_pct_zero_fees": 25.64,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 9,
+          "edge_pp_ci95_low_vs_taker": -11.98,
+          "edge_pp_vs_taker_fees": 17.67,
+          "edge_pp_vs_zero_fees": 19.0,
+          "observations": 56,
+          "observations_in_cell_before_outcome_filter": 56,
+          "opportunities_per_day": 597.3,
+          "pnl_per_dollar_risked_taker": 1.0395,
+          "pnl_per_dollar_risked_total": 58.21,
+          "win_pct_ci95_window_bootstrap": [
+            15.0,
+            77.08
+          ]
+        },
+        "480s": {
+          "actual_win_pct": 50.0,
+          "avg_executable_ask": 0.2576,
+          "breakeven_pct_taker_fees": 27.1,
+          "breakeven_pct_zero_fees": 25.76,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 11,
+          "edge_pp_ci95_low_vs_taker": -5.67,
+          "edge_pp_vs_taker_fees": 22.9,
+          "edge_pp_vs_zero_fees": 24.24,
+          "observations": 50,
+          "observations_in_cell_before_outcome_filter": 50,
+          "opportunities_per_day": 436.4,
+          "pnl_per_dollar_risked_taker": 0.9066,
+          "pnl_per_dollar_risked_total": 45.33,
+          "win_pct_ci95_window_bootstrap": [
+            21.43,
+            80.33
+          ]
+        },
+        "600s": {
+          "actual_win_pct": 35.29,
+          "avg_executable_ask": 0.3243,
+          "breakeven_pct_taker_fees": 33.96,
+          "breakeven_pct_zero_fees": 32.43,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 12,
+          "edge_pp_ci95_low_vs_taker": -18.58,
+          "edge_pp_vs_taker_fees": 1.33,
+          "edge_pp_vs_zero_fees": 2.87,
+          "observations": 68,
+          "observations_in_cell_before_outcome_filter": 68,
+          "opportunities_per_day": 544.0,
+          "pnl_per_dollar_risked_taker": 0.2408,
+          "pnl_per_dollar_risked_total": 16.38,
+          "win_pct_ci95_window_bootstrap": [
+            15.38,
+            60.0
+          ]
+        },
+        "60s": {
+          "actual_win_pct": 55.56,
+          "avg_executable_ask": 0.2678,
+          "breakeven_pct_taker_fees": 28.15,
+          "breakeven_pct_zero_fees": 26.78,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 3,
+          "edge_pp_ci95_low_vs_taker": -28.15,
+          "edge_pp_vs_taker_fees": 27.41,
+          "edge_pp_vs_zero_fees": 28.78,
+          "observations": 9,
+          "observations_in_cell_before_outcome_filter": 9,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": 0.6868,
+          "pnl_per_dollar_risked_total": 6.18,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            100.0
+          ]
+        },
+        "720s": {
+          "actual_win_pct": 33.78,
+          "avg_executable_ask": 0.3254,
+          "breakeven_pct_taker_fees": 34.08,
+          "breakeven_pct_zero_fees": 32.54,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 13,
+          "edge_pp_ci95_low_vs_taker": -24.22,
+          "edge_pp_vs_taker_fees": -0.29,
+          "edge_pp_vs_zero_fees": 1.24,
+          "observations": 74,
+          "observations_in_cell_before_outcome_filter": 74,
+          "opportunities_per_day": 546.5,
+          "pnl_per_dollar_risked_taker": 0.011,
+          "pnl_per_dollar_risked_total": 0.81,
+          "win_pct_ci95_window_bootstrap": [
+            9.86,
+            60.94
+          ]
+        },
+        "840s": {
+          "actual_win_pct": 45.33,
+          "avg_executable_ask": 0.4052,
+          "breakeven_pct_taker_fees": 42.21,
+          "breakeven_pct_zero_fees": 40.52,
+          "depth_contracts": {
+            "max": null,
+            "median": null,
+            "p10": null
+          },
+          "distinct_windows": 15,
+          "edge_pp_ci95_low_vs_taker": -23.29,
+          "edge_pp_vs_taker_fees": 3.13,
+          "edge_pp_vs_zero_fees": 4.81,
+          "observations": 75,
+          "observations_in_cell_before_outcome_filter": 75,
+          "opportunities_per_day": 480.0,
+          "pnl_per_dollar_risked_taker": 0.1712,
+          "pnl_per_dollar_risked_total": 12.84,
+          "win_pct_ci95_window_bootstrap": [
+            18.92,
+            71.62
+          ]
+        }
+      },
+      "dollar5_test": {
+        "testable": false,
+        "why": "this duration's recorder preserved the touch prices but not the level sizes, and the $5 rule requires displayed depth for the WHOLE quantity. Running it against an assumed size would fabricate the fill, so it is reported untestable and moved to forward shadow collection."
+      },
+      "favorite_test": {
+        "50-60c": {
+          "actual_win_pct": 72.73,
+          "avg_executable_ask": 0.5692,
+          "breakeven_pct_taker_fees": 58.64,
+          "distinct_windows": 11,
+          "edge_pp_vs_taker_fees": 14.09,
+          "observations": 88,
+          "win_pct_ci95_window_bootstrap": [
+            62.07,
+            85.71
+          ]
+        },
+        "60-70c": {
+          "actual_win_pct": 51.02,
+          "avg_executable_ask": 0.6387,
+          "breakeven_pct_taker_fees": 65.49,
+          "distinct_windows": 15,
+          "edge_pp_vs_taker_fees": -14.47,
+          "observations": 147,
+          "win_pct_ci95_window_bootstrap": [
+            38.58,
+            71.74
+          ]
+        },
+        "70-80c": {
+          "actual_win_pct": 52.83,
+          "avg_executable_ask": 0.7432,
+          "breakeven_pct_taker_fees": 75.66,
+          "distinct_windows": 10,
+          "edge_pp_vs_taker_fees": -22.83,
+          "observations": 106,
+          "win_pct_ci95_window_bootstrap": [
+            22.03,
+            83.51
+          ]
+        },
+        "80-90c": {
+          "actual_win_pct": 62.07,
+          "avg_executable_ask": 0.8403,
+          "breakeven_pct_taker_fees": 84.97,
+          "distinct_windows": 12,
+          "edge_pp_vs_taker_fees": -22.9,
+          "observations": 87,
+          "win_pct_ci95_window_bootstrap": [
+            30.28,
+            91.4
+          ]
+        },
+        "90-99c": {
+          "actual_win_pct": 57.84,
+          "avg_executable_ask": 0.9591,
+          "breakeven_pct_taker_fees": 96.19,
+          "distinct_windows": 8,
+          "edge_pp_vs_taker_fees": -38.34,
+          "observations": 102,
+          "win_pct_ci95_window_bootstrap": [
+            6.1,
+            89.8
+          ]
+        },
+        "note": "requires BOTH sides executable so the favorite is identified from a real two-sided book, which is why n is far smaller than the underdog matrix"
+      },
+      "matrix": {
+        "120s": {
+          "10-15c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.11,
+            "breakeven_pct_taker_fees": 11.69,
+            "breakeven_pct_zero_fees": 11.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 88.31,
+            "edge_pp_vs_zero_fees": 89.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 8.0286,
+            "pnl_per_dollar_risked_total": 16.06,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "20-25c": {
+            "observations": 0
+          },
+          "25-30c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.28,
+            "breakeven_pct_taker_fees": 29.41,
+            "breakeven_pct_zero_fees": 28.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 70.59,
+            "edge_pp_vs_zero_fees": 72.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 2.521,
+            "pnl_per_dollar_risked_total": 2.52,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.31,
+            "breakeven_pct_taker_fees": 32.5,
+            "breakeven_pct_zero_fees": 31.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 67.5,
+            "edge_pp_vs_zero_fees": 69.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 2.1775,
+            "pnl_per_dollar_risked_total": 2.18,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.382,
+            "breakeven_pct_taker_fees": 39.85,
+            "breakeven_pct_zero_fees": 38.2,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": 60.15,
+            "edge_pp_vs_taker_fees": 60.15,
+            "edge_pp_vs_zero_fees": 61.8,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 240.0,
+            "pnl_per_dollar_risked_taker": 1.5756,
+            "pnl_per_dollar_risked_total": 7.88,
+            "win_pct_ci95_window_bootstrap": [
+              100.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.43,
+            "breakeven_pct_taker_fees": 44.72,
+            "breakeven_pct_zero_fees": 43.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 55.28,
+            "edge_pp_vs_zero_fees": 57.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 1.2869,
+            "pnl_per_dollar_risked_total": 2.57,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.475,
+            "breakeven_pct_taker_fees": 49.25,
+            "breakeven_pct_zero_fees": 47.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 50.75,
+            "edge_pp_vs_zero_fees": 52.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 1.0706,
+            "pnl_per_dollar_risked_total": 2.14,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.065,
+            "breakeven_pct_taker_fees": 6.93,
+            "breakeven_pct_zero_fees": 6.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -6.93,
+            "edge_pp_vs_zero_fees": -6.5,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 384.0,
+            "pnl_per_dollar_risked_taker": -1.0655,
+            "pnl_per_dollar_risked_total": -4.26,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          }
+        },
+        "180s": {
+          "10-15c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.12,
+            "breakeven_pct_taker_fees": 12.74,
+            "breakeven_pct_zero_fees": 12.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 87.26,
+            "edge_pp_vs_zero_fees": 88.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": 7.3106,
+            "pnl_per_dollar_risked_total": 21.93,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 83.06,
+            "edge_pp_vs_zero_fees": 84.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 5.1912,
+            "pnl_per_dollar_risked_total": 5.19,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.23,
+            "breakeven_pct_taker_fees": 24.24,
+            "breakeven_pct_zero_fees": 23.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 75.76,
+            "edge_pp_vs_zero_fees": 77.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 3.3022,
+            "pnl_per_dollar_risked_total": 6.6,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.265,
+            "breakeven_pct_taker_fees": 27.86,
+            "breakeven_pct_zero_fees": 26.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 72.14,
+            "edge_pp_vs_zero_fees": 73.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 2.7343,
+            "pnl_per_dollar_risked_total": 5.47,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 33.33,
+            "avg_executable_ask": 0.3267,
+            "breakeven_pct_taker_fees": 34.21,
+            "breakeven_pct_zero_fees": 32.67,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -34.21,
+            "edge_pp_vs_taker_fees": -0.87,
+            "edge_pp_vs_zero_fees": 0.67,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 144.0,
+            "pnl_per_dollar_risked_taker": -0.0055,
+            "pnl_per_dollar_risked_total": -0.02,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 50.0,
+            "avg_executable_ask": 0.38,
+            "breakeven_pct_taker_fees": 39.65,
+            "breakeven_pct_zero_fees": 38.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -39.65,
+            "edge_pp_vs_taker_fees": 10.35,
+            "edge_pp_vs_zero_fees": 12.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 0.2724,
+            "pnl_per_dollar_risked_total": 0.54,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 33.33,
+            "avg_executable_ask": 0.4233,
+            "breakeven_pct_taker_fees": 44.04,
+            "breakeven_pct_zero_fees": 42.33,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -44.04,
+            "edge_pp_vs_taker_fees": -10.71,
+            "edge_pp_vs_zero_fees": -9.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": -0.2828,
+            "pnl_per_dollar_risked_total": -0.85,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 25.0,
+            "avg_executable_ask": 0.4625,
+            "breakeven_pct_taker_fees": 47.99,
+            "breakeven_pct_zero_fees": 46.25,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -47.99,
+            "edge_pp_vs_taker_fees": -22.99,
+            "edge_pp_vs_zero_fees": -21.25,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 128.0,
+            "pnl_per_dollar_risked_taker": -0.4941,
+            "pnl_per_dollar_risked_total": -1.98,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.0743,
+            "breakeven_pct_taker_fees": 7.91,
+            "breakeven_pct_zero_fees": 7.43,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -7.91,
+            "edge_pp_vs_zero_fees": -7.43,
+            "observations": 7,
+            "observations_in_cell_before_outcome_filter": 7,
+            "opportunities_per_day": 672.0,
+            "pnl_per_dollar_risked_taker": -1.0648,
+            "pnl_per_dollar_risked_total": -7.45,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          }
+        },
+        "240s": {
+          "10-15c": {
+            "observations": 0
+          },
+          "15-20c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.155,
+            "breakeven_pct_taker_fees": 16.42,
+            "breakeven_pct_zero_fees": 15.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 83.58,
+            "edge_pp_vs_zero_fees": 84.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 5.3992,
+            "pnl_per_dollar_risked_total": 10.8,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 50.0,
+            "avg_executable_ask": 0.2025,
+            "breakeven_pct_taker_fees": 21.38,
+            "breakeven_pct_zero_fees": 20.25,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -21.38,
+            "edge_pp_vs_taker_fees": 28.62,
+            "edge_pp_vs_zero_fees": 29.75,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 1.3847,
+            "pnl_per_dollar_risked_total": 5.54,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.2767,
+            "breakeven_pct_taker_fees": 29.07,
+            "breakeven_pct_zero_fees": 27.67,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 70.93,
+            "edge_pp_vs_zero_fees": 72.33,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": 2.5649,
+            "pnl_per_dollar_risked_total": 7.69,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.3225,
+            "breakeven_pct_taker_fees": 33.78,
+            "breakeven_pct_zero_fees": 32.25,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": 66.22,
+            "edge_pp_vs_taker_fees": 66.22,
+            "edge_pp_vs_zero_fees": 67.75,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 2.0583,
+            "pnl_per_dollar_risked_total": 8.23,
+            "win_pct_ci95_window_bootstrap": [
+              100.0,
+              100.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.374,
+            "breakeven_pct_taker_fees": 39.04,
+            "breakeven_pct_zero_fees": 37.4,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": 60.96,
+            "edge_pp_vs_taker_fees": 60.96,
+            "edge_pp_vs_zero_fees": 62.6,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 160.0,
+            "pnl_per_dollar_risked_taker": 1.632,
+            "pnl_per_dollar_risked_total": 8.16,
+            "win_pct_ci95_window_bootstrap": [
+              100.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 40.0,
+            "avg_executable_ask": 0.426,
+            "breakeven_pct_taker_fees": 44.31,
+            "breakeven_pct_zero_fees": 42.6,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -44.31,
+            "edge_pp_vs_taker_fees": -4.31,
+            "edge_pp_vs_zero_fees": -2.6,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 160.0,
+            "pnl_per_dollar_risked_taker": -0.1205,
+            "pnl_per_dollar_risked_total": -0.6,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              66.67
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.475,
+            "breakeven_pct_taker_fees": 49.25,
+            "breakeven_pct_zero_fees": 47.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 50.75,
+            "edge_pp_vs_zero_fees": 52.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 1.0687,
+            "pnl_per_dollar_risked_total": 2.14,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.06,
+            "breakeven_pct_taker_fees": 6.39,
+            "breakeven_pct_zero_fees": 6.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -6.39,
+            "edge_pp_vs_zero_fees": -6.0,
+            "observations": 6,
+            "observations_in_cell_before_outcome_filter": 6,
+            "opportunities_per_day": 576.0,
+            "pnl_per_dollar_risked_taker": -1.0658,
+            "pnl_per_dollar_risked_total": -6.39,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          }
+        },
+        "300s": {
+          "10-15c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.1125,
+            "breakeven_pct_taker_fees": 11.95,
+            "breakeven_pct_zero_fees": 11.25,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": 88.05,
+            "edge_pp_vs_taker_fees": 88.05,
+            "edge_pp_vs_zero_fees": 88.75,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 7.9443,
+            "pnl_per_dollar_risked_total": 31.78,
+            "win_pct_ci95_window_bootstrap": [
+              100.0,
+              100.0
+            ]
+          },
+          "15-20c": {
+            "observations": 0
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.24,
+            "breakeven_pct_taker_fees": 25.28,
+            "breakeven_pct_zero_fees": 24.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -25.28,
+            "edge_pp_vs_zero_fees": -24.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": -1.0532,
+            "pnl_per_dollar_risked_total": -1.05,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 33.33,
+            "avg_executable_ask": 0.27,
+            "breakeven_pct_taker_fees": 28.38,
+            "breakeven_pct_zero_fees": 27.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -28.38,
+            "edge_pp_vs_taker_fees": 4.95,
+            "edge_pp_vs_zero_fees": 6.33,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 144.0,
+            "pnl_per_dollar_risked_taker": 0.1394,
+            "pnl_per_dollar_risked_total": 0.42,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 11.11,
+            "avg_executable_ask": 0.31,
+            "breakeven_pct_taker_fees": 32.5,
+            "breakeven_pct_zero_fees": 31.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -32.5,
+            "edge_pp_vs_taker_fees": -21.39,
+            "edge_pp_vs_zero_fees": -19.89,
+            "observations": 9,
+            "observations_in_cell_before_outcome_filter": 9,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.6899,
+            "pnl_per_dollar_risked_total": -6.21,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 50.0,
+            "avg_executable_ask": 0.365,
+            "breakeven_pct_taker_fees": 38.12,
+            "breakeven_pct_zero_fees": 36.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -38.12,
+            "edge_pp_vs_taker_fees": 11.88,
+            "edge_pp_vs_zero_fees": 13.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 0.3841,
+            "pnl_per_dollar_risked_total": 0.77,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 33.33,
+            "avg_executable_ask": 0.43,
+            "breakeven_pct_taker_fees": 44.72,
+            "breakeven_pct_zero_fees": 43.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -44.72,
+            "edge_pp_vs_taker_fees": -11.38,
+            "edge_pp_vs_zero_fees": -9.67,
+            "observations": 9,
+            "observations_in_cell_before_outcome_filter": 9,
+            "opportunities_per_day": 216.0,
+            "pnl_per_dollar_risked_taker": -0.245,
+            "pnl_per_dollar_risked_total": -2.21,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              90.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 42.86,
+            "avg_executable_ask": 0.4729,
+            "breakeven_pct_taker_fees": 49.03,
+            "breakeven_pct_zero_fees": 47.29,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -49.03,
+            "edge_pp_vs_taker_fees": -6.17,
+            "edge_pp_vs_zero_fees": -4.43,
+            "observations": 7,
+            "observations_in_cell_before_outcome_filter": 7,
+            "opportunities_per_day": 168.0,
+            "pnl_per_dollar_risked_taker": -0.1113,
+            "pnl_per_dollar_risked_total": -0.78,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              85.71
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 35.71,
+            "avg_executable_ask": 0.0671,
+            "breakeven_pct_taker_fees": 7.15,
+            "breakeven_pct_zero_fees": 6.71,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -7.15,
+            "edge_pp_vs_taker_fees": 28.56,
+            "edge_pp_vs_zero_fees": 29.0,
+            "observations": 14,
+            "observations_in_cell_before_outcome_filter": 14,
+            "opportunities_per_day": 448.0,
+            "pnl_per_dollar_risked_taker": 3.2006,
+            "pnl_per_dollar_risked_total": 44.81,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          }
+        },
+        "360s": {
+          "10-15c": {
+            "actual_win_pct": 61.54,
+            "avg_executable_ask": 0.1169,
+            "breakeven_pct_taker_fees": 12.42,
+            "breakeven_pct_zero_fees": 11.69,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -12.42,
+            "edge_pp_vs_taker_fees": 49.12,
+            "edge_pp_vs_zero_fees": 49.85,
+            "observations": 13,
+            "observations_in_cell_before_outcome_filter": 13,
+            "opportunities_per_day": 416.0,
+            "pnl_per_dollar_risked_taker": 4.0581,
+            "pnl_per_dollar_risked_total": 52.75,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.175,
+            "breakeven_pct_taker_fees": 18.51,
+            "breakeven_pct_zero_fees": 17.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 81.49,
+            "edge_pp_vs_zero_fees": 82.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 4.6612,
+            "pnl_per_dollar_risked_total": 9.32,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.225,
+            "breakeven_pct_taker_fees": 23.72,
+            "breakeven_pct_zero_fees": 22.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 76.28,
+            "edge_pp_vs_zero_fees": 77.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 3.3924,
+            "pnl_per_dollar_risked_total": 6.78,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.28,
+            "breakeven_pct_taker_fees": 29.41,
+            "breakeven_pct_zero_fees": 28.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -29.41,
+            "edge_pp_vs_zero_fees": -28.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": -1.0504,
+            "pnl_per_dollar_risked_total": -1.05,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.3267,
+            "breakeven_pct_taker_fees": 34.21,
+            "breakeven_pct_zero_fees": 32.67,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -34.21,
+            "edge_pp_vs_taker_fees": -34.21,
+            "edge_pp_vs_zero_fees": -32.67,
+            "observations": 6,
+            "observations_in_cell_before_outcome_filter": 6,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0471,
+            "pnl_per_dollar_risked_total": -6.28,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 40.0,
+            "avg_executable_ask": 0.378,
+            "breakeven_pct_taker_fees": 39.45,
+            "breakeven_pct_zero_fees": 37.8,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -39.45,
+            "edge_pp_vs_taker_fees": 0.55,
+            "edge_pp_vs_zero_fees": 2.2,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 160.0,
+            "pnl_per_dollar_risked_taker": 0.0248,
+            "pnl_per_dollar_risked_total": 0.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 75.0,
+            "avg_executable_ask": 0.4238,
+            "breakeven_pct_taker_fees": 44.08,
+            "breakeven_pct_zero_fees": 42.38,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -44.08,
+            "edge_pp_vs_taker_fees": 30.92,
+            "edge_pp_vs_zero_fees": 32.62,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 256.0,
+            "pnl_per_dollar_risked_taker": 0.718,
+            "pnl_per_dollar_risked_total": 5.74,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 62.5,
+            "avg_executable_ask": 0.4675,
+            "breakeven_pct_taker_fees": 48.49,
+            "breakeven_pct_zero_fees": 46.75,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -19.92,
+            "edge_pp_vs_taker_fees": 14.01,
+            "edge_pp_vs_zero_fees": 15.75,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 0.3161,
+            "pnl_per_dollar_risked_total": 2.53,
+            "win_pct_ci95_window_bootstrap": [
+              28.57,
+              100.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.0709,
+            "breakeven_pct_taker_fees": 7.55,
+            "breakeven_pct_zero_fees": 7.09,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -7.55,
+            "edge_pp_vs_taker_fees": -7.55,
+            "edge_pp_vs_zero_fees": -7.09,
+            "observations": 11,
+            "observations_in_cell_before_outcome_filter": 11,
+            "opportunities_per_day": 528.0,
+            "pnl_per_dollar_risked_taker": -1.065,
+            "pnl_per_dollar_risked_total": -11.72,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "480s": {
+          "10-15c": {
+            "actual_win_pct": 20.0,
+            "avg_executable_ask": 0.125,
+            "breakeven_pct_taker_fees": 13.27,
+            "breakeven_pct_zero_fees": 12.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -13.27,
+            "edge_pp_vs_taker_fees": 6.73,
+            "edge_pp_vs_zero_fees": 7.5,
+            "observations": 10,
+            "observations_in_cell_before_outcome_filter": 10,
+            "opportunities_per_day": 240.0,
+            "pnl_per_dollar_risked_taker": 0.4223,
+            "pnl_per_dollar_risked_total": 4.22,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              66.67
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 55.56,
+            "avg_executable_ask": 0.1678,
+            "breakeven_pct_taker_fees": 17.76,
+            "breakeven_pct_zero_fees": 16.78,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -17.76,
+            "edge_pp_vs_taker_fees": 37.8,
+            "edge_pp_vs_zero_fees": 38.78,
+            "observations": 9,
+            "observations_in_cell_before_outcome_filter": 9,
+            "opportunities_per_day": 216.0,
+            "pnl_per_dollar_risked_taker": 2.1091,
+            "pnl_per_dollar_risked_total": 18.98,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 60.0,
+            "avg_executable_ask": 0.218,
+            "breakeven_pct_taker_fees": 22.99,
+            "breakeven_pct_zero_fees": 21.8,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -22.99,
+            "edge_pp_vs_taker_fees": 37.01,
+            "edge_pp_vs_zero_fees": 38.2,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 120.0,
+            "pnl_per_dollar_risked_taker": 1.6834,
+            "pnl_per_dollar_risked_total": 8.42,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 60.0,
+            "avg_executable_ask": 0.26,
+            "breakeven_pct_taker_fees": 27.35,
+            "breakeven_pct_zero_fees": 26.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -27.35,
+            "edge_pp_vs_taker_fees": 32.65,
+            "edge_pp_vs_zero_fees": 34.0,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 160.0,
+            "pnl_per_dollar_risked_taker": 1.3482,
+            "pnl_per_dollar_risked_total": 6.74,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 33.33,
+            "avg_executable_ask": 0.32,
+            "breakeven_pct_taker_fees": 33.52,
+            "breakeven_pct_zero_fees": 32.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -33.52,
+            "edge_pp_vs_taker_fees": -0.19,
+            "edge_pp_vs_zero_fees": 1.33,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": -0.0375,
+            "pnl_per_dollar_risked_total": -0.11,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 75.0,
+            "avg_executable_ask": 0.365,
+            "breakeven_pct_taker_fees": 38.12,
+            "breakeven_pct_zero_fees": 36.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -38.12,
+            "edge_pp_vs_taker_fees": 36.88,
+            "edge_pp_vs_zero_fees": 38.5,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 128.0,
+            "pnl_per_dollar_risked_taker": 0.9836,
+            "pnl_per_dollar_risked_total": 3.93,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.42,
+            "breakeven_pct_taker_fees": 43.71,
+            "breakeven_pct_zero_fees": 42.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": 56.29,
+            "edge_pp_vs_taker_fees": 56.29,
+            "edge_pp_vs_zero_fees": 58.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 144.0,
+            "pnl_per_dollar_risked_taker": 1.344,
+            "pnl_per_dollar_risked_total": 4.03,
+            "win_pct_ci95_window_bootstrap": [
+              100.0,
+              100.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 62.5,
+            "avg_executable_ask": 0.4725,
+            "breakeven_pct_taker_fees": 48.99,
+            "breakeven_pct_zero_fees": 47.25,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -23.99,
+            "edge_pp_vs_taker_fees": 13.51,
+            "edge_pp_vs_zero_fees": 15.25,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 0.2881,
+            "pnl_per_dollar_risked_total": 2.3,
+            "win_pct_ci95_window_bootstrap": [
+              25.0,
+              100.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.09,
+            "breakeven_pct_taker_fees": 9.57,
+            "breakeven_pct_zero_fees": 9.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -9.57,
+            "edge_pp_vs_taker_fees": -9.57,
+            "edge_pp_vs_zero_fees": -9.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 144.0,
+            "pnl_per_dollar_risked_taker": -1.0637,
+            "pnl_per_dollar_risked_total": -3.19,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "600s": {
+          "10-15c": {
+            "observations": 0
+          },
+          "15-20c": {
+            "actual_win_pct": 71.43,
+            "avg_executable_ask": 0.1743,
+            "breakeven_pct_taker_fees": 18.44,
+            "breakeven_pct_zero_fees": 17.43,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": 6.56,
+            "edge_pp_vs_taker_fees": 52.99,
+            "edge_pp_vs_zero_fees": 54.0,
+            "observations": 7,
+            "observations_in_cell_before_outcome_filter": 7,
+            "opportunities_per_day": 168.0,
+            "pnl_per_dollar_risked_taker": 3.1663,
+            "pnl_per_dollar_risked_total": 22.16,
+            "win_pct_ci95_window_bootstrap": [
+              25.0,
+              100.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 14.29,
+            "avg_executable_ask": 0.2186,
+            "breakeven_pct_taker_fees": 23.05,
+            "breakeven_pct_zero_fees": 21.86,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -23.05,
+            "edge_pp_vs_taker_fees": -8.77,
+            "edge_pp_vs_zero_fees": -7.57,
+            "observations": 14,
+            "observations_in_cell_before_outcome_filter": 14,
+            "opportunities_per_day": 268.8,
+            "pnl_per_dollar_risked_taker": -0.4195,
+            "pnl_per_dollar_risked_total": -5.87,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              50.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 55.56,
+            "avg_executable_ask": 0.2644,
+            "breakeven_pct_taker_fees": 27.81,
+            "breakeven_pct_zero_fees": 26.44,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -27.81,
+            "edge_pp_vs_taker_fees": 27.75,
+            "edge_pp_vs_zero_fees": 29.11,
+            "observations": 9,
+            "observations_in_cell_before_outcome_filter": 9,
+            "opportunities_per_day": 172.8,
+            "pnl_per_dollar_risked_taker": 1.0413,
+            "pnl_per_dollar_risked_total": 9.37,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              92.86
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 23.08,
+            "avg_executable_ask": 0.3208,
+            "breakeven_pct_taker_fees": 33.6,
+            "breakeven_pct_zero_fees": 32.08,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -33.6,
+            "edge_pp_vs_taker_fees": -10.53,
+            "edge_pp_vs_zero_fees": -9.0,
+            "observations": 13,
+            "observations_in_cell_before_outcome_filter": 13,
+            "opportunities_per_day": 249.6,
+            "pnl_per_dollar_risked_taker": -0.3259,
+            "pnl_per_dollar_risked_total": -4.24,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              85.71
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 60.0,
+            "avg_executable_ask": 0.382,
+            "breakeven_pct_taker_fees": 39.85,
+            "breakeven_pct_zero_fees": 38.2,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -19.85,
+            "edge_pp_vs_taker_fees": 20.15,
+            "edge_pp_vs_zero_fees": 21.8,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 0.5222,
+            "pnl_per_dollar_risked_total": 2.61,
+            "win_pct_ci95_window_bootstrap": [
+              20.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 40.0,
+            "avg_executable_ask": 0.426,
+            "breakeven_pct_taker_fees": 44.31,
+            "breakeven_pct_zero_fees": 42.6,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -44.31,
+            "edge_pp_vs_taker_fees": -4.31,
+            "edge_pp_vs_zero_fees": -2.6,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 120.0,
+            "pnl_per_dollar_risked_taker": -0.0989,
+            "pnl_per_dollar_risked_total": -0.49,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              85.71
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 26.67,
+            "avg_executable_ask": 0.4787,
+            "breakeven_pct_taker_fees": 49.61,
+            "breakeven_pct_zero_fees": 47.87,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -44.05,
+            "edge_pp_vs_taker_fees": -22.95,
+            "edge_pp_vs_zero_fees": -21.2,
+            "observations": 15,
+            "observations_in_cell_before_outcome_filter": 15,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.4779,
+            "pnl_per_dollar_risked_total": -7.17,
+            "win_pct_ci95_window_bootstrap": [
+              5.56,
+              66.67
+            ]
+          },
+          "<10c": {
+            "observations": 0
+          }
+        },
+        "60s": {
+          "10-15c": {
+            "observations": 0
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 384.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -4.24,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.23,
+            "breakeven_pct_taker_fees": 24.24,
+            "breakeven_pct_zero_fees": 23.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 75.76,
+            "edge_pp_vs_zero_fees": 77.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 192.0,
+            "pnl_per_dollar_risked_taker": 3.3022,
+            "pnl_per_dollar_risked_total": 6.6,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "25-30c": {
+            "observations": 0
+          },
+          "30-35c": {
+            "observations": 0
+          },
+          "35-40c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.39,
+            "breakeven_pct_taker_fees": 40.67,
+            "breakeven_pct_zero_fees": 39.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 59.33,
+            "edge_pp_vs_zero_fees": 61.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 1.5214,
+            "pnl_per_dollar_risked_total": 1.52,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.43,
+            "breakeven_pct_taker_fees": 44.72,
+            "breakeven_pct_zero_fees": 43.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 55.28,
+            "edge_pp_vs_zero_fees": 57.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 1.2857,
+            "pnl_per_dollar_risked_total": 1.29,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.49,
+            "breakeven_pct_taker_fees": 50.75,
+            "breakeven_pct_zero_fees": 49.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": 49.25,
+            "edge_pp_vs_zero_fees": 51.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 96.0,
+            "pnl_per_dollar_risked_taker": 1.0051,
+            "pnl_per_dollar_risked_total": 1.01,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "<10c": {
+            "observations": 0
+          }
+        },
+        "720s": {
+          "10-15c": {
+            "observations": 0
+          },
+          "15-20c": {
+            "observations": 0
+          },
+          "20-25c": {
+            "actual_win_pct": 13.33,
+            "avg_executable_ask": 0.2193,
+            "breakeven_pct_taker_fees": 23.13,
+            "breakeven_pct_zero_fees": 21.93,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -23.13,
+            "edge_pp_vs_taker_fees": -9.8,
+            "edge_pp_vs_zero_fees": -8.6,
+            "observations": 15,
+            "observations_in_cell_before_outcome_filter": 15,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.4473,
+            "pnl_per_dollar_risked_total": -6.71,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              66.67
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 39.13,
+            "avg_executable_ask": 0.2748,
+            "breakeven_pct_taker_fees": 28.87,
+            "breakeven_pct_zero_fees": 27.48,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 6,
+            "edge_pp_ci95_low_vs_taker": -28.87,
+            "edge_pp_vs_taker_fees": 10.26,
+            "edge_pp_vs_zero_fees": 11.65,
+            "observations": 23,
+            "observations_in_cell_before_outcome_filter": 23,
+            "opportunities_per_day": 368.0,
+            "pnl_per_dollar_risked_taker": 0.402,
+            "pnl_per_dollar_risked_total": 9.25,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              83.33
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 22.22,
+            "avg_executable_ask": 0.3189,
+            "breakeven_pct_taker_fees": 33.41,
+            "breakeven_pct_zero_fees": 31.89,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -33.41,
+            "edge_pp_vs_taker_fees": -11.19,
+            "edge_pp_vs_zero_fees": -9.67,
+            "observations": 9,
+            "observations_in_cell_before_outcome_filter": 9,
+            "opportunities_per_day": 216.0,
+            "pnl_per_dollar_risked_taker": -0.3069,
+            "pnl_per_dollar_risked_total": -2.76,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              75.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 80.0,
+            "avg_executable_ask": 0.374,
+            "breakeven_pct_taker_fees": 39.04,
+            "breakeven_pct_zero_fees": 37.4,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -39.04,
+            "edge_pp_vs_taker_fees": 40.96,
+            "edge_pp_vs_zero_fees": 42.6,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 240.0,
+            "pnl_per_dollar_risked_taker": 1.0772,
+            "pnl_per_dollar_risked_total": 5.39,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 41.67,
+            "avg_executable_ask": 0.4208,
+            "breakeven_pct_taker_fees": 43.79,
+            "breakeven_pct_zero_fees": 42.08,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -36.65,
+            "edge_pp_vs_taker_fees": -2.12,
+            "edge_pp_vs_zero_fees": -0.42,
+            "observations": 12,
+            "observations_in_cell_before_outcome_filter": 12,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.0377,
+            "pnl_per_dollar_risked_total": -0.45,
+            "win_pct_ci95_window_bootstrap": [
+              7.14,
+              83.33
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 30.0,
+            "avg_executable_ask": 0.468,
+            "breakeven_pct_taker_fees": 48.54,
+            "breakeven_pct_zero_fees": 46.8,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -48.54,
+            "edge_pp_vs_taker_fees": -18.54,
+            "edge_pp_vs_zero_fees": -16.8,
+            "observations": 10,
+            "observations_in_cell_before_outcome_filter": 10,
+            "opportunities_per_day": 240.0,
+            "pnl_per_dollar_risked_taker": -0.3895,
+            "pnl_per_dollar_risked_total": -3.89,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              71.43
+            ]
+          },
+          "<10c": {
+            "observations": 0
+          }
+        },
+        "840s": {
+          "10-15c": {
+            "observations": 0
+          },
+          "15-20c": {
+            "observations": 0
+          },
+          "20-25c": {
+            "observations": 0
+          },
+          "25-30c": {
+            "actual_win_pct": 66.67,
+            "avg_executable_ask": 0.28,
+            "breakeven_pct_taker_fees": 29.41,
+            "breakeven_pct_zero_fees": 28.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -29.41,
+            "edge_pp_vs_taker_fees": 37.26,
+            "edge_pp_vs_zero_fees": 38.67,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 144.0,
+            "pnl_per_dollar_risked_taker": 1.2895,
+            "pnl_per_dollar_risked_total": 3.87,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 64.29,
+            "avg_executable_ask": 0.315,
+            "breakeven_pct_taker_fees": 33.01,
+            "breakeven_pct_zero_fees": 31.5,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -33.01,
+            "edge_pp_vs_taker_fees": 31.28,
+            "edge_pp_vs_zero_fees": 32.79,
+            "observations": 14,
+            "observations_in_cell_before_outcome_filter": 14,
+            "opportunities_per_day": 448.0,
+            "pnl_per_dollar_risked_taker": 0.973,
+            "pnl_per_dollar_risked_total": 13.62,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 80.0,
+            "avg_executable_ask": 0.371,
+            "breakeven_pct_taker_fees": 38.73,
+            "breakeven_pct_zero_fees": 37.1,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 6,
+            "edge_pp_ci95_low_vs_taker": -5.4,
+            "edge_pp_vs_taker_fees": 41.27,
+            "edge_pp_vs_zero_fees": 42.9,
+            "observations": 10,
+            "observations_in_cell_before_outcome_filter": 10,
+            "opportunities_per_day": 160.0,
+            "pnl_per_dollar_risked_taker": 1.092,
+            "pnl_per_dollar_risked_total": 10.92,
+            "win_pct_ci95_window_bootstrap": [
+              33.33,
+              100.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 34.78,
+            "avg_executable_ask": 0.42,
+            "breakeven_pct_taker_fees": 43.71,
+            "breakeven_pct_zero_fees": 42.0,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 10,
+            "edge_pp_ci95_low_vs_taker": -32.17,
+            "edge_pp_vs_taker_fees": -8.92,
+            "edge_pp_vs_zero_fees": -7.22,
+            "observations": 23,
+            "observations_in_cell_before_outcome_filter": 23,
+            "opportunities_per_day": 220.8,
+            "pnl_per_dollar_risked_taker": -0.2094,
+            "pnl_per_dollar_risked_total": -4.82,
+            "win_pct_ci95_window_bootstrap": [
+              11.54,
+              70.59
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 28.0,
+            "avg_executable_ask": 0.4708,
+            "breakeven_pct_taker_fees": 48.82,
+            "breakeven_pct_zero_fees": 47.08,
+            "depth_contracts": {
+              "max": null,
+              "median": null,
+              "p10": null
+            },
+            "distinct_windows": 10,
+            "edge_pp_ci95_low_vs_taker": -39.14,
+            "edge_pp_vs_taker_fees": -20.82,
+            "edge_pp_vs_zero_fees": -19.08,
+            "observations": 25,
+            "observations_in_cell_before_outcome_filter": 25,
+            "opportunities_per_day": 240.0,
+            "pnl_per_dollar_risked_taker": -0.4301,
+            "pnl_per_dollar_risked_total": -10.75,
+            "win_pct_ci95_window_bootstrap": [
+              9.68,
+              60.0
+            ]
+          },
+          "<10c": {
+            "observations": 0
+          }
+        }
+      },
+      "observations": 537,
+      "recorded_checkpoints": [
+        840,
+        720,
+        600,
+        480,
+        360,
+        300,
+        240,
+        180,
+        120,
+        60
+      ],
+      "requested_checkpoints_not_collected": [],
+      "settlement_reference_index_split": {
+        "null": 537
+      },
+      "state_counts": {
+        "NO_UNDERDOG_CHEAPEST_GE_50C": 78,
+        "UNDERDOG": 459
+      },
+      "structural_cost": {
+        "ask_UP_plus_ask_DOWN": {
+          "fraction_above_1": 1.0,
+          "max": 1.39,
+          "mean": 1.078,
+          "median": 1.08,
+          "min": 1.01
+        },
+        "two_sided_observations": 537,
+        "up_touch_spread": {
+          "median": 0.08,
+          "p10": 0.03,
+          "p90": 0.09
+        },
+        "why_it_matters": "a taker pays half this spread on entry. When the two executable asks sum materially above 1.00, no directional taker bet on either side can be positive on average: the excess IS the cost, and it is charged before any view."
+      },
+      "windows": 15
+    },
+    "BTC5M": {
+      "all_underdog_pooled": {
+        "actual_win_pct": 5.04,
+        "avg_executable_ask": 0.2161,
+        "breakeven_pct_taker_fees": 22.8,
+        "breakeven_pct_zero_fees": 21.61,
+        "depth_contracts": {
+          "max": 1815.0,
+          "median": 178.0,
+          "p10": 5.0
+        },
+        "distinct_windows": 128,
+        "edge_pp_ci95_low_vs_taker": -20.27,
+        "edge_pp_vs_taker_fees": -17.75,
+        "edge_pp_vs_zero_fees": -16.57,
+        "observations": 813,
+        "observations_in_cell_before_outcome_filter": 813,
+        "opportunities_per_day": 1829.2,
+        "pnl_per_dollar_risked_taker": -0.8671,
+        "pnl_per_dollar_risked_total": -704.91,
+        "win_pct_ci95_window_bootstrap": [
+          2.53,
+          8.25
+        ]
+      },
+      "both_sides_executable_observations": 118,
+      "by_bucket_all_checkpoints": {
+        "10-15c": {
+          "actual_win_pct": 0.0,
+          "avg_executable_ask": 0.1273,
+          "breakeven_pct_taker_fees": 13.5,
+          "breakeven_pct_zero_fees": 12.73,
+          "depth_contracts": {
+            "max": 5.5,
+            "median": 5.0,
+            "p10": 5.0
+          },
+          "distinct_windows": 9,
+          "edge_pp_ci95_low_vs_taker": -13.5,
+          "edge_pp_vs_taker_fees": -13.5,
+          "edge_pp_vs_zero_fees": -12.73,
+          "observations": 22,
+          "observations_in_cell_before_outcome_filter": 22,
+          "opportunities_per_day": 704.0,
+          "pnl_per_dollar_risked_taker": -1.0611,
+          "pnl_per_dollar_risked_total": -23.34,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "15-20c": {
+          "actual_win_pct": 3.11,
+          "avg_executable_ask": 0.1651,
+          "breakeven_pct_taker_fees": 17.47,
+          "breakeven_pct_zero_fees": 16.51,
+          "depth_contracts": {
+            "max": 1805.2,
+            "median": 178.0,
+            "p10": 178.0
+          },
+          "distinct_windows": 104,
+          "edge_pp_ci95_low_vs_taker": -16.83,
+          "edge_pp_vs_taker_fees": -14.36,
+          "edge_pp_vs_zero_fees": -13.39,
+          "observations": 289,
+          "observations_in_cell_before_outcome_filter": 289,
+          "opportunities_per_day": 800.3,
+          "pnl_per_dollar_risked_taker": -0.8781,
+          "pnl_per_dollar_risked_total": -253.78,
+          "win_pct_ci95_window_bootstrap": [
+            0.64,
+            6.62
+          ]
+        },
+        "20-25c": {
+          "actual_win_pct": 4.92,
+          "avg_executable_ask": 0.2183,
+          "breakeven_pct_taker_fees": 23.02,
+          "breakeven_pct_zero_fees": 21.83,
+          "depth_contracts": {
+            "max": 197.0,
+            "median": 187.0,
+            "p10": 6.0
+          },
+          "distinct_windows": 66,
+          "edge_pp_ci95_low_vs_taker": -22.26,
+          "edge_pp_vs_taker_fees": -18.1,
+          "edge_pp_vs_zero_fees": -16.91,
+          "observations": 122,
+          "observations_in_cell_before_outcome_filter": 122,
+          "opportunities_per_day": 532.4,
+          "pnl_per_dollar_risked_taker": -0.8251,
+          "pnl_per_dollar_risked_total": -100.66,
+          "win_pct_ci95_window_bootstrap": [
+            0.76,
+            10.58
+          ]
+        },
+        "25-30c": {
+          "actual_win_pct": 7.81,
+          "avg_executable_ask": 0.2677,
+          "breakeven_pct_taker_fees": 28.14,
+          "breakeven_pct_zero_fees": 26.77,
+          "depth_contracts": {
+            "max": 1815.0,
+            "median": 200.0,
+            "p10": 4.0
+          },
+          "distinct_windows": 38,
+          "edge_pp_ci95_low_vs_taker": -26.42,
+          "edge_pp_vs_taker_fees": -20.33,
+          "edge_pp_vs_zero_fees": -18.95,
+          "observations": 64,
+          "observations_in_cell_before_outcome_filter": 64,
+          "opportunities_per_day": 485.1,
+          "pnl_per_dollar_risked_taker": -0.77,
+          "pnl_per_dollar_risked_total": -49.28,
+          "win_pct_ci95_window_bootstrap": [
+            1.72,
+            16.33
+          ]
+        },
+        "30-35c": {
+          "actual_win_pct": 10.42,
+          "avg_executable_ask": 0.321,
+          "breakeven_pct_taker_fees": 33.63,
+          "breakeven_pct_zero_fees": 32.1,
+          "depth_contracts": {
+            "max": 258.1,
+            "median": 217.0,
+            "p10": 7.0
+          },
+          "distinct_windows": 32,
+          "edge_pp_ci95_low_vs_taker": -31.5,
+          "edge_pp_vs_taker_fees": -23.21,
+          "edge_pp_vs_zero_fees": -21.69,
+          "observations": 48,
+          "observations_in_cell_before_outcome_filter": 48,
+          "opportunities_per_day": 432.0,
+          "pnl_per_dollar_risked_taker": -0.7174,
+          "pnl_per_dollar_risked_total": -34.44,
+          "win_pct_ci95_window_bootstrap": [
+            2.13,
+            21.95
+          ]
+        },
+        "35-40c": {
+          "actual_win_pct": 15.09,
+          "avg_executable_ask": 0.3742,
+          "breakeven_pct_taker_fees": 39.05,
+          "breakeven_pct_zero_fees": 37.42,
+          "depth_contracts": {
+            "max": 270.0,
+            "median": 82.0,
+            "p10": 8.0
+          },
+          "distinct_windows": 31,
+          "edge_pp_ci95_low_vs_taker": -34.17,
+          "edge_pp_vs_taker_fees": -23.96,
+          "edge_pp_vs_zero_fees": -22.32,
+          "observations": 53,
+          "observations_in_cell_before_outcome_filter": 53,
+          "opportunities_per_day": 492.4,
+          "pnl_per_dollar_risked_taker": -0.6486,
+          "pnl_per_dollar_risked_total": -34.38,
+          "win_pct_ci95_window_bootstrap": [
+            4.88,
+            30.23
+          ]
+        },
+        "40-45c": {
+          "actual_win_pct": 9.38,
+          "avg_executable_ask": 0.4253,
+          "breakeven_pct_taker_fees": 44.24,
+          "breakeven_pct_zero_fees": 42.53,
+          "depth_contracts": {
+            "max": 292.0,
+            "median": 25.0,
+            "p10": 3.5
+          },
+          "distinct_windows": 19,
+          "edge_pp_ci95_low_vs_taker": -44.24,
+          "edge_pp_vs_taker_fees": -34.87,
+          "edge_pp_vs_zero_fees": -33.16,
+          "observations": 32,
+          "observations_in_cell_before_outcome_filter": 32,
+          "opportunities_per_day": 485.1,
+          "pnl_per_dollar_risked_taker": -0.8203,
+          "pnl_per_dollar_risked_total": -26.25,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            28.57
+          ]
+        },
+        "45-50c": {
+          "actual_win_pct": 10.87,
+          "avg_executable_ask": 0.4674,
+          "breakeven_pct_taker_fees": 48.48,
+          "breakeven_pct_zero_fees": 46.74,
+          "depth_contracts": {
+            "max": 302.0,
+            "median": 9.1,
+            "p10": 2.0
+          },
+          "distinct_windows": 25,
+          "edge_pp_ci95_low_vs_taker": -46.73,
+          "edge_pp_vs_taker_fees": -37.61,
+          "edge_pp_vs_zero_fees": -35.87,
+          "observations": 46,
+          "observations_in_cell_before_outcome_filter": 46,
+          "opportunities_per_day": 529.9,
+          "pnl_per_dollar_risked_taker": -0.8038,
+          "pnl_per_dollar_risked_total": -36.97,
+          "win_pct_ci95_window_bootstrap": [
+            1.75,
+            26.92
+          ]
+        },
+        "<10c": {
+          "actual_win_pct": 0.0,
+          "avg_executable_ask": 0.0809,
+          "breakeven_pct_taker_fees": 8.61,
+          "breakeven_pct_zero_fees": 8.09,
+          "depth_contracts": {
+            "max": 5.0,
+            "median": 5.0,
+            "p10": 5.0
+          },
+          "distinct_windows": 23,
+          "edge_pp_ci95_low_vs_taker": -8.61,
+          "edge_pp_vs_taker_fees": -8.61,
+          "edge_pp_vs_zero_fees": -8.09,
+          "observations": 137,
+          "observations_in_cell_before_outcome_filter": 137,
+          "opportunities_per_day": 1715.5,
+          "pnl_per_dollar_risked_taker": -1.0643,
+          "pnl_per_dollar_risked_total": -145.81,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "by_checkpoint_all_buckets": {
+        "10s": {
+          "actual_win_pct": 2.04,
+          "avg_executable_ask": 0.2098,
+          "breakeven_pct_taker_fees": 22.14,
+          "breakeven_pct_zero_fees": 20.98,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 5.0,
+            "p10": 3.5
+          },
+          "distinct_windows": 49,
+          "edge_pp_ci95_low_vs_taker": -22.14,
+          "edge_pp_vs_taker_fees": -20.1,
+          "edge_pp_vs_zero_fees": -18.94,
+          "observations": 49,
+          "observations_in_cell_before_outcome_filter": 49,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -1.003,
+          "pnl_per_dollar_risked_total": -49.15,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            6.12
+          ]
+        },
+        "120s": {
+          "actual_win_pct": 10.09,
+          "avg_executable_ask": 0.2688,
+          "breakeven_pct_taker_fees": 28.26,
+          "breakeven_pct_zero_fees": 26.88,
+          "depth_contracts": {
+            "max": 1815.0,
+            "median": 192.0,
+            "p10": 25.0
+          },
+          "distinct_windows": 109,
+          "edge_pp_ci95_low_vs_taker": -23.67,
+          "edge_pp_vs_taker_fees": -18.16,
+          "edge_pp_vs_zero_fees": -16.79,
+          "observations": 109,
+          "observations_in_cell_before_outcome_filter": 109,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -0.7026,
+          "pnl_per_dollar_risked_total": -76.58,
+          "win_pct_ci95_window_bootstrap": [
+            4.59,
+            15.6
+          ]
+        },
+        "15s": {
+          "actual_win_pct": 1.96,
+          "avg_executable_ask": 0.209,
+          "breakeven_pct_taker_fees": 22.06,
+          "breakeven_pct_zero_fees": 20.9,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 5.0,
+            "p10": 5.0
+          },
+          "distinct_windows": 51,
+          "edge_pp_ci95_low_vs_taker": -22.06,
+          "edge_pp_vs_taker_fees": -20.1,
+          "edge_pp_vs_zero_fees": -18.94,
+          "observations": 51,
+          "observations_in_cell_before_outcome_filter": 51,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -1.0051,
+          "pnl_per_dollar_risked_total": -51.26,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            5.88
+          ]
+        },
+        "1s": {
+          "actual_win_pct": 0.0,
+          "avg_executable_ask": 0.2336,
+          "breakeven_pct_taker_fees": 24.61,
+          "breakeven_pct_zero_fees": 23.36,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 5.0,
+            "p10": 3.5
+          },
+          "distinct_windows": 36,
+          "edge_pp_ci95_low_vs_taker": -24.61,
+          "edge_pp_vs_taker_fees": -24.61,
+          "edge_pp_vs_zero_fees": -23.36,
+          "observations": 36,
+          "observations_in_cell_before_outcome_filter": 36,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -1.0536,
+          "pnl_per_dollar_risked_total": -37.93,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "20s": {
+          "actual_win_pct": 0.0,
+          "avg_executable_ask": 0.2092,
+          "breakeven_pct_taker_fees": 22.07,
+          "breakeven_pct_zero_fees": 20.92,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 5.0,
+            "p10": 5.0
+          },
+          "distinct_windows": 48,
+          "edge_pp_ci95_low_vs_taker": -22.07,
+          "edge_pp_vs_taker_fees": -22.07,
+          "edge_pp_vs_zero_fees": -20.92,
+          "observations": 48,
+          "observations_in_cell_before_outcome_filter": 48,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -1.0554,
+          "pnl_per_dollar_risked_total": -50.66,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "2s": {
+          "actual_win_pct": 0.0,
+          "avg_executable_ask": 0.2223,
+          "breakeven_pct_taker_fees": 23.44,
+          "breakeven_pct_zero_fees": 22.23,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 5.0,
+            "p10": 3.5
+          },
+          "distinct_windows": 43,
+          "edge_pp_ci95_low_vs_taker": -23.44,
+          "edge_pp_vs_taker_fees": -23.44,
+          "edge_pp_vs_zero_fees": -22.23,
+          "observations": 43,
+          "observations_in_cell_before_outcome_filter": 43,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -1.0544,
+          "pnl_per_dollar_risked_total": -45.34,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "30s": {
+          "actual_win_pct": 3.8,
+          "avg_executable_ask": 0.1954,
+          "breakeven_pct_taker_fees": 20.65,
+          "breakeven_pct_zero_fees": 19.54,
+          "depth_contracts": {
+            "max": 1805.2,
+            "median": 8.0,
+            "p10": 5.0
+          },
+          "distinct_windows": 79,
+          "edge_pp_ci95_low_vs_taker": -20.65,
+          "edge_pp_vs_taker_fees": -16.85,
+          "edge_pp_vs_zero_fees": -15.75,
+          "observations": 79,
+          "observations_in_cell_before_outcome_filter": 79,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -0.9157,
+          "pnl_per_dollar_risked_total": -72.34,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            8.86
+          ]
+        },
+        "45s": {
+          "actual_win_pct": 6.72,
+          "avg_executable_ask": 0.1814,
+          "breakeven_pct_taker_fees": 19.18,
+          "breakeven_pct_zero_fees": 18.14,
+          "depth_contracts": {
+            "max": 1805.2,
+            "median": 178.0,
+            "p10": 5.0
+          },
+          "distinct_windows": 119,
+          "edge_pp_ci95_low_vs_taker": -16.66,
+          "edge_pp_vs_taker_fees": -12.46,
+          "edge_pp_vs_zero_fees": -11.42,
+          "observations": 119,
+          "observations_in_cell_before_outcome_filter": 119,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -0.8216,
+          "pnl_per_dollar_risked_total": -97.76,
+          "win_pct_ci95_window_bootstrap": [
+            2.52,
+            11.76
+          ]
+        },
+        "5s": {
+          "actual_win_pct": 0.0,
+          "avg_executable_ask": 0.2198,
+          "breakeven_pct_taker_fees": 23.18,
+          "breakeven_pct_zero_fees": 21.98,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 5.5,
+            "p10": 2.7
+          },
+          "distinct_windows": 48,
+          "edge_pp_ci95_low_vs_taker": -23.18,
+          "edge_pp_vs_taker_fees": -23.18,
+          "edge_pp_vs_zero_fees": -21.98,
+          "observations": 48,
+          "observations_in_cell_before_outcome_filter": 48,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -1.0546,
+          "pnl_per_dollar_risked_total": -50.62,
+          "win_pct_ci95_window_bootstrap": [
+            0.0,
+            0.0
+          ]
+        },
+        "60s": {
+          "actual_win_pct": 5.98,
+          "avg_executable_ask": 0.2001,
+          "breakeven_pct_taker_fees": 21.13,
+          "breakeven_pct_zero_fees": 20.01,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 178.0,
+            "p10": 178.0
+          },
+          "distinct_windows": 117,
+          "edge_pp_ci95_low_vs_taker": -19.42,
+          "edge_pp_vs_taker_fees": -15.15,
+          "edge_pp_vs_zero_fees": -14.03,
+          "observations": 117,
+          "observations_in_cell_before_outcome_filter": 117,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -0.7995,
+          "pnl_per_dollar_risked_total": -93.54,
+          "win_pct_ci95_window_bootstrap": [
+            1.71,
+            10.26
+          ]
+        },
+        "90s": {
+          "actual_win_pct": 8.77,
+          "avg_executable_ask": 0.232,
+          "breakeven_pct_taker_fees": 24.45,
+          "breakeven_pct_zero_fees": 23.2,
+          "depth_contracts": {
+            "max": 1627.2,
+            "median": 182.0,
+            "p10": 25.0
+          },
+          "distinct_windows": 114,
+          "edge_pp_ci95_low_vs_taker": -20.94,
+          "edge_pp_vs_taker_fees": -15.68,
+          "edge_pp_vs_zero_fees": -14.43,
+          "observations": 114,
+          "observations_in_cell_before_outcome_filter": 114,
+          "opportunities_per_day": 288.0,
+          "pnl_per_dollar_risked_taker": -0.6994,
+          "pnl_per_dollar_risked_total": -79.73,
+          "win_pct_ci95_window_bootstrap": [
+            3.51,
+            14.04
+          ]
+        }
+      },
+      "dollar5_test": {
+        "capital_at_risk_usd": {
+          "max": 5.58,
+          "median": 1.41
+        },
+        "depth_blocked_opportunities": 296,
+        "distinct_windows": 128,
+        "losses": 478,
+        "max_concurrent_capital_usd": 26.9,
+        "max_consecutive_losses": 115,
+        "max_drawdown_usd": -673.67,
+        "net_per_day_usd": -1503.65,
+        "net_per_trade_usd": -1.293,
+        "net_per_window_usd": -5.221,
+        "opportunities_per_day": 1163.2,
+        "opportunities_with_UNKNOWN_depth": 0,
+        "ratio_to_480_per_day": -3.1326,
+        "required_contracts": {
+          "max": 11,
+          "median": 7,
+          "min": 6
+        },
+        "sizing_rule": "q = ceil(5 / ((1-p)*(1-0.07p))); a deterministic function of entry price alone. No martingale, no size increase after a loss.",
+        "total_net_usd": -668.29,
+        "trades": 517,
+        "wins": 39
+      },
+      "favorite_test": {
+        "50-60c": {
+          "observations": 0
+        },
+        "60-70c": {
+          "actual_win_pct": 44.44,
+          "avg_executable_ask": 0.6689,
+          "breakeven_pct_taker_fees": 68.44,
+          "distinct_windows": 7,
+          "edge_pp_vs_taker_fees": -23.99,
+          "observations": 9,
+          "win_pct_ci95_window_bootstrap": [
+            10.0,
+            80.0
+          ]
+        },
+        "70-80c": {
+          "actual_win_pct": 42.86,
+          "avg_executable_ask": 0.7679,
+          "breakeven_pct_taker_fees": 78.03,
+          "distinct_windows": 10,
+          "edge_pp_vs_taker_fees": -35.18,
+          "observations": 14,
+          "win_pct_ci95_window_bootstrap": [
+            15.0,
+            81.82
+          ]
+        },
+        "80-90c": {
+          "actual_win_pct": 72.73,
+          "avg_executable_ask": 0.8512,
+          "breakeven_pct_taker_fees": 86.01,
+          "distinct_windows": 27,
+          "edge_pp_vs_taker_fees": -13.28,
+          "observations": 33,
+          "win_pct_ci95_window_bootstrap": [
+            53.33,
+            90.62
+          ]
+        },
+        "90-99c": {
+          "actual_win_pct": 70.97,
+          "avg_executable_ask": 0.9484,
+          "breakeven_pct_taker_fees": 95.18,
+          "distinct_windows": 47,
+          "edge_pp_vs_taker_fees": -24.21,
+          "observations": 62,
+          "win_pct_ci95_window_bootstrap": [
+            56.72,
+            85.25
+          ]
+        },
+        "note": "requires BOTH sides executable so the favorite is identified from a real two-sided book, which is why n is far smaller than the underdog matrix"
+      },
+      "matrix": {
+        "10s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.135,
+            "breakeven_pct_taker_fees": 14.32,
+            "breakeven_pct_zero_fees": 13.5,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -14.32,
+            "edge_pp_vs_taker_fees": -14.32,
+            "edge_pp_vs_zero_fees": -13.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0606,
+            "pnl_per_dollar_risked_total": -2.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 295.1,
+              "p10": 5.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -16.94,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2189,
+            "breakeven_pct_taker_fees": 23.09,
+            "breakeven_pct_zero_fees": 21.89,
+            "depth_contracts": {
+              "max": 125.0,
+              "median": 6.0,
+              "p10": 0.2
+            },
+            "distinct_windows": 9,
+            "edge_pp_ci95_low_vs_taker": -23.09,
+            "edge_pp_vs_taker_fees": -23.09,
+            "edge_pp_vs_zero_fees": -21.89,
+            "observations": 9,
+            "observations_in_cell_before_outcome_filter": 9,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0547,
+            "pnl_per_dollar_risked_total": -9.49,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.268,
+            "breakeven_pct_taker_fees": 28.17,
+            "breakeven_pct_zero_fees": 26.8,
+            "depth_contracts": {
+              "max": 1607.0,
+              "median": 11.0,
+              "p10": 2.7
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -28.17,
+            "edge_pp_vs_taker_fees": -28.17,
+            "edge_pp_vs_zero_fees": -26.8,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0512,
+            "pnl_per_dollar_risked_total": -5.26,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.3233,
+            "breakeven_pct_taker_fees": 33.86,
+            "breakeven_pct_zero_fees": 32.33,
+            "depth_contracts": {
+              "max": 117.6,
+              "median": 7.0,
+              "p10": 7.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -33.86,
+            "edge_pp_vs_taker_fees": -33.86,
+            "edge_pp_vs_zero_fees": -32.33,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0474,
+            "pnl_per_dollar_risked_total": -3.14,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 25.0,
+            "avg_executable_ask": 0.3825,
+            "breakeven_pct_taker_fees": 39.9,
+            "breakeven_pct_zero_fees": 38.25,
+            "depth_contracts": {
+              "max": 82.0,
+              "median": 36.0,
+              "p10": 0.1
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -39.9,
+            "edge_pp_vs_taker_fees": -14.9,
+            "edge_pp_vs_zero_fees": -13.25,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.4022,
+            "pnl_per_dollar_risked_total": -1.61,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              75.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.435,
+            "breakeven_pct_taker_fees": 45.22,
+            "breakeven_pct_zero_fees": 43.5,
+            "depth_contracts": {
+              "max": 8.0,
+              "median": 5.8,
+              "p10": 3.5
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -45.22,
+            "edge_pp_vs_taker_fees": -45.22,
+            "edge_pp_vs_zero_fees": -43.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0395,
+            "pnl_per_dollar_risked_total": -2.08,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.4667,
+            "breakeven_pct_taker_fees": 48.41,
+            "breakeven_pct_zero_fees": 46.67,
+            "depth_contracts": {
+              "max": 9.1,
+              "median": 9.0,
+              "p10": 2.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -48.41,
+            "edge_pp_vs_taker_fees": -48.41,
+            "edge_pp_vs_zero_fees": -46.67,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0373,
+            "pnl_per_dollar_risked_total": -3.11,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.0806,
+            "breakeven_pct_taker_fees": 8.57,
+            "breakeven_pct_zero_fees": 8.06,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 18,
+            "edge_pp_ci95_low_vs_taker": -8.57,
+            "edge_pp_vs_taker_fees": -8.57,
+            "edge_pp_vs_zero_fees": -8.06,
+            "observations": 18,
+            "observations_in_cell_before_outcome_filter": 18,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0644,
+            "pnl_per_dollar_risked_total": -19.16,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "120s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.11,
+            "breakeven_pct_taker_fees": 11.69,
+            "breakeven_pct_zero_fees": 11.0,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -11.69,
+            "edge_pp_vs_taker_fees": -11.69,
+            "edge_pp_vs_zero_fees": -11.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0623,
+            "pnl_per_dollar_risked_total": -2.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 4.0,
+            "avg_executable_ask": 0.1704,
+            "breakeven_pct_taker_fees": 18.03,
+            "breakeven_pct_zero_fees": 17.04,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 180.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 25,
+            "edge_pp_ci95_low_vs_taker": -18.03,
+            "edge_pp_vs_taker_fees": -14.03,
+            "edge_pp_vs_zero_fees": -13.04,
+            "observations": 25,
+            "observations_in_cell_before_outcome_filter": 25,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.8475,
+            "pnl_per_dollar_risked_total": -21.19,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              12.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 7.69,
+            "avg_executable_ask": 0.2162,
+            "breakeven_pct_taker_fees": 22.8,
+            "breakeven_pct_zero_fees": 21.62,
+            "depth_contracts": {
+              "max": 197.0,
+              "median": 190.5,
+              "p10": 187.0
+            },
+            "distinct_windows": 26,
+            "edge_pp_ci95_low_vs_taker": -22.8,
+            "edge_pp_vs_taker_fees": -15.11,
+            "edge_pp_vs_zero_fees": -13.92,
+            "observations": 26,
+            "observations_in_cell_before_outcome_filter": 26,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.6794,
+            "pnl_per_dollar_risked_total": -17.66,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              19.23
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 11.76,
+            "avg_executable_ask": 0.2659,
+            "breakeven_pct_taker_fees": 27.95,
+            "breakeven_pct_zero_fees": 26.59,
+            "depth_contracts": {
+              "max": 1815.0,
+              "median": 202.0,
+              "p10": 200.0
+            },
+            "distinct_windows": 17,
+            "edge_pp_ci95_low_vs_taker": -27.95,
+            "edge_pp_vs_taker_fees": -16.19,
+            "edge_pp_vs_zero_fees": -14.82,
+            "observations": 17,
+            "observations_in_cell_before_outcome_filter": 17,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.6234,
+            "pnl_per_dollar_risked_total": -10.6,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              29.41
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 10.0,
+            "avg_executable_ask": 0.322,
+            "breakeven_pct_taker_fees": 33.73,
+            "breakeven_pct_zero_fees": 32.2,
+            "depth_contracts": {
+              "max": 252.0,
+              "median": 220.0,
+              "p10": 217.0
+            },
+            "distinct_windows": 10,
+            "edge_pp_ci95_low_vs_taker": -33.73,
+            "edge_pp_vs_taker_fees": -23.73,
+            "edge_pp_vs_zero_fees": -22.2,
+            "observations": 10,
+            "observations_in_cell_before_outcome_filter": 10,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.7249,
+            "pnl_per_dollar_risked_total": -7.25,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              30.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 30.0,
+            "avg_executable_ask": 0.361,
+            "breakeven_pct_taker_fees": 37.71,
+            "breakeven_pct_zero_fees": 36.1,
+            "depth_contracts": {
+              "max": 263.0,
+              "median": 232.0,
+              "p10": 25.0
+            },
+            "distinct_windows": 10,
+            "edge_pp_ci95_low_vs_taker": -37.71,
+            "edge_pp_vs_taker_fees": -7.71,
+            "edge_pp_vs_zero_fees": -6.1,
+            "observations": 10,
+            "observations_in_cell_before_outcome_filter": 10,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.2323,
+            "pnl_per_dollar_risked_total": -2.32,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              60.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.422,
+            "breakeven_pct_taker_fees": 43.91,
+            "breakeven_pct_zero_fees": 42.2,
+            "depth_contracts": {
+              "max": 292.0,
+              "median": 263.0,
+              "p10": 25.0
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -43.91,
+            "edge_pp_vs_taker_fees": -43.91,
+            "edge_pp_vs_zero_fees": -42.2,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0405,
+            "pnl_per_dollar_risked_total": -5.2,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 16.67,
+            "avg_executable_ask": 0.465,
+            "breakeven_pct_taker_fees": 48.24,
+            "breakeven_pct_zero_fees": 46.5,
+            "depth_contracts": {
+              "max": 302.0,
+              "median": 277.5,
+              "p10": 25.0
+            },
+            "distinct_windows": 12,
+            "edge_pp_ci95_low_vs_taker": -48.24,
+            "edge_pp_vs_taker_fees": -31.57,
+            "edge_pp_vs_zero_fees": -29.83,
+            "observations": 12,
+            "observations_in_cell_before_outcome_filter": 12,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.675,
+            "pnl_per_dollar_risked_total": -8.1,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              41.67
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.08,
+            "breakeven_pct_taker_fees": 8.52,
+            "breakeven_pct_zero_fees": 8.0,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -8.52,
+            "edge_pp_vs_taker_fees": -8.52,
+            "edge_pp_vs_zero_fees": -8.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0644,
+            "pnl_per_dollar_risked_total": -2.13,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "15s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.135,
+            "breakeven_pct_taker_fees": 14.32,
+            "breakeven_pct_zero_fees": 13.5,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -14.32,
+            "edge_pp_vs_taker_fees": -14.32,
+            "edge_pp_vs_zero_fees": -13.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0606,
+            "pnl_per_dollar_risked_total": -2.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 295.1,
+              "p10": 5.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -16.94,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.224,
+            "breakeven_pct_taker_fees": 23.62,
+            "breakeven_pct_zero_fees": 22.4,
+            "depth_contracts": {
+              "max": 6.0,
+              "median": 6.0,
+              "p10": 6.0
+            },
+            "distinct_windows": 10,
+            "edge_pp_ci95_low_vs_taker": -23.62,
+            "edge_pp_vs_taker_fees": -23.62,
+            "edge_pp_vs_zero_fees": -22.4,
+            "observations": 10,
+            "observations_in_cell_before_outcome_filter": 10,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0543,
+            "pnl_per_dollar_risked_total": -10.54,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.27,
+            "breakeven_pct_taker_fees": 28.38,
+            "breakeven_pct_zero_fees": 27.0,
+            "depth_contracts": {
+              "max": 1607.0,
+              "median": 9.0,
+              "p10": 2.7
+            },
+            "distinct_windows": 6,
+            "edge_pp_ci95_low_vs_taker": -28.38,
+            "edge_pp_vs_taker_fees": -28.38,
+            "edge_pp_vs_zero_fees": -27.0,
+            "observations": 6,
+            "observations_in_cell_before_outcome_filter": 6,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0511,
+            "pnl_per_dollar_risked_total": -6.31,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.34,
+            "breakeven_pct_taker_fees": 35.57,
+            "breakeven_pct_zero_fees": 34.0,
+            "depth_contracts": {
+              "max": 7.0,
+              "median": 7.0,
+              "p10": 7.0
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -35.57,
+            "edge_pp_vs_zero_fees": -34.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0462,
+            "pnl_per_dollar_risked_total": -1.05,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 20.0,
+            "avg_executable_ask": 0.382,
+            "breakeven_pct_taker_fees": 39.85,
+            "breakeven_pct_zero_fees": 38.2,
+            "depth_contracts": {
+              "max": 82.0,
+              "median": 8.0,
+              "p10": 1.1
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -39.85,
+            "edge_pp_vs_taker_fees": -19.85,
+            "edge_pp_vs_zero_fees": -18.2,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.5304,
+            "pnl_per_dollar_risked_total": -2.65,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              60.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.435,
+            "breakeven_pct_taker_fees": 45.22,
+            "breakeven_pct_zero_fees": 43.5,
+            "depth_contracts": {
+              "max": 8.0,
+              "median": 5.8,
+              "p10": 3.5
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -45.22,
+            "edge_pp_vs_taker_fees": -45.22,
+            "edge_pp_vs_zero_fees": -43.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0395,
+            "pnl_per_dollar_risked_total": -2.08,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.4667,
+            "breakeven_pct_taker_fees": 48.41,
+            "breakeven_pct_zero_fees": 46.67,
+            "depth_contracts": {
+              "max": 9.1,
+              "median": 9.0,
+              "p10": 2.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -48.41,
+            "edge_pp_vs_taker_fees": -48.41,
+            "edge_pp_vs_zero_fees": -46.67,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0373,
+            "pnl_per_dollar_risked_total": -3.11,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.0805,
+            "breakeven_pct_taker_fees": 8.57,
+            "breakeven_pct_zero_fees": 8.05,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 19,
+            "edge_pp_ci95_low_vs_taker": -8.57,
+            "edge_pp_vs_taker_fees": -8.57,
+            "edge_pp_vs_zero_fees": -8.05,
+            "observations": 19,
+            "observations_in_cell_before_outcome_filter": 19,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0644,
+            "pnl_per_dollar_risked_total": -20.22,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "1s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.135,
+            "breakeven_pct_taker_fees": 14.32,
+            "breakeven_pct_zero_fees": 13.5,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -14.32,
+            "edge_pp_vs_taker_fees": -14.32,
+            "edge_pp_vs_zero_fees": -13.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0606,
+            "pnl_per_dollar_risked_total": -2.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 295.1,
+              "p10": 5.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -16.94,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.21,
+            "breakeven_pct_taker_fees": 22.16,
+            "breakeven_pct_zero_fees": 21.0,
+            "depth_contracts": {
+              "max": 125.0,
+              "median": 51.1,
+              "p10": 0.2
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -22.16,
+            "edge_pp_vs_taker_fees": -22.16,
+            "edge_pp_vs_zero_fees": -21.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0553,
+            "pnl_per_dollar_risked_total": -4.22,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.27,
+            "breakeven_pct_taker_fees": 28.38,
+            "breakeven_pct_zero_fees": 27.0,
+            "depth_contracts": {
+              "max": 1607.0,
+              "median": 15.9,
+              "p10": 4.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -28.38,
+            "edge_pp_vs_taker_fees": -28.38,
+            "edge_pp_vs_zero_fees": -27.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0511,
+            "pnl_per_dollar_risked_total": -4.2,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.3233,
+            "breakeven_pct_taker_fees": 33.86,
+            "breakeven_pct_zero_fees": 32.33,
+            "depth_contracts": {
+              "max": 258.1,
+              "median": 117.6,
+              "p10": 7.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -33.86,
+            "edge_pp_vs_taker_fees": -33.86,
+            "edge_pp_vs_zero_fees": -32.33,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0474,
+            "pnl_per_dollar_risked_total": -3.14,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.38,
+            "breakeven_pct_taker_fees": 39.65,
+            "breakeven_pct_zero_fees": 38.0,
+            "depth_contracts": {
+              "max": 82.0,
+              "median": 64.1,
+              "p10": 8.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -39.65,
+            "edge_pp_vs_taker_fees": -39.65,
+            "edge_pp_vs_zero_fees": -38.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0434,
+            "pnl_per_dollar_risked_total": -3.13,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.435,
+            "breakeven_pct_taker_fees": 45.22,
+            "breakeven_pct_zero_fees": 43.5,
+            "depth_contracts": {
+              "max": 8.0,
+              "median": 5.8,
+              "p10": 3.5
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -45.22,
+            "edge_pp_vs_taker_fees": -45.22,
+            "edge_pp_vs_zero_fees": -43.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0395,
+            "pnl_per_dollar_risked_total": -2.08,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.47,
+            "breakeven_pct_taker_fees": 48.74,
+            "breakeven_pct_zero_fees": 47.0,
+            "depth_contracts": {
+              "max": 9.1,
+              "median": 5.5,
+              "p10": 1.9
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -48.74,
+            "edge_pp_vs_taker_fees": -48.74,
+            "edge_pp_vs_zero_fees": -47.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0371,
+            "pnl_per_dollar_risked_total": -4.15,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.08,
+            "breakeven_pct_taker_fees": 8.52,
+            "breakeven_pct_zero_fees": 8.0,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 11,
+            "edge_pp_ci95_low_vs_taker": -8.52,
+            "edge_pp_vs_taker_fees": -8.52,
+            "edge_pp_vs_zero_fees": -8.0,
+            "observations": 11,
+            "observations_in_cell_before_outcome_filter": 11,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0644,
+            "pnl_per_dollar_risked_total": -11.71,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "20s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.1267,
+            "breakeven_pct_taker_fees": 13.44,
+            "breakeven_pct_zero_fees": 12.67,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -13.44,
+            "edge_pp_vs_taker_fees": -13.44,
+            "edge_pp_vs_zero_fees": -12.67,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0611,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 295.1,
+              "p10": 5.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -16.94,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2213,
+            "breakeven_pct_taker_fees": 23.33,
+            "breakeven_pct_zero_fees": 22.12,
+            "depth_contracts": {
+              "max": 6.0,
+              "median": 6.0,
+              "p10": 0.2
+            },
+            "distinct_windows": 8,
+            "edge_pp_ci95_low_vs_taker": -23.33,
+            "edge_pp_vs_taker_fees": -23.33,
+            "edge_pp_vs_zero_fees": -22.12,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0545,
+            "pnl_per_dollar_risked_total": -8.44,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2675,
+            "breakeven_pct_taker_fees": 28.12,
+            "breakeven_pct_zero_fees": 26.75,
+            "depth_contracts": {
+              "max": 1607.0,
+              "median": 15.9,
+              "p10": 6.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -28.12,
+            "edge_pp_vs_taker_fees": -28.12,
+            "edge_pp_vs_zero_fees": -26.75,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0513,
+            "pnl_per_dollar_risked_total": -4.21,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.32,
+            "breakeven_pct_taker_fees": 33.52,
+            "breakeven_pct_zero_fees": 32.0,
+            "depth_contracts": {
+              "max": 7.0,
+              "median": 7.0,
+              "p10": 7.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -33.52,
+            "edge_pp_vs_taker_fees": -33.52,
+            "edge_pp_vs_zero_fees": -32.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0476,
+            "pnl_per_dollar_risked_total": -2.1,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.38,
+            "breakeven_pct_taker_fees": 39.65,
+            "breakeven_pct_zero_fees": 38.0,
+            "depth_contracts": {
+              "max": 82.0,
+              "median": 36.0,
+              "p10": 8.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -39.65,
+            "edge_pp_vs_taker_fees": -39.65,
+            "edge_pp_vs_zero_fees": -38.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0434,
+            "pnl_per_dollar_risked_total": -4.17,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.435,
+            "breakeven_pct_taker_fees": 45.22,
+            "breakeven_pct_zero_fees": 43.5,
+            "depth_contracts": {
+              "max": 8.0,
+              "median": 5.8,
+              "p10": 3.5
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -45.22,
+            "edge_pp_vs_taker_fees": -45.22,
+            "edge_pp_vs_zero_fees": -43.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0395,
+            "pnl_per_dollar_risked_total": -2.08,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.4625,
+            "breakeven_pct_taker_fees": 47.99,
+            "breakeven_pct_zero_fees": 46.25,
+            "depth_contracts": {
+              "max": 9.1,
+              "median": 9.0,
+              "p10": 2.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -47.99,
+            "edge_pp_vs_taker_fees": -47.99,
+            "edge_pp_vs_zero_fees": -46.25,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0376,
+            "pnl_per_dollar_risked_total": -4.15,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.0811,
+            "breakeven_pct_taker_fees": 8.63,
+            "breakeven_pct_zero_fees": 8.11,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 18,
+            "edge_pp_ci95_low_vs_taker": -8.63,
+            "edge_pp_vs_taker_fees": -8.63,
+            "edge_pp_vs_zero_fees": -8.11,
+            "observations": 18,
+            "observations_in_cell_before_outcome_filter": 18,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0643,
+            "pnl_per_dollar_risked_total": -19.16,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "2s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.135,
+            "breakeven_pct_taker_fees": 14.32,
+            "breakeven_pct_zero_fees": 13.5,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -14.32,
+            "edge_pp_vs_taker_fees": -14.32,
+            "edge_pp_vs_zero_fees": -13.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0606,
+            "pnl_per_dollar_risked_total": -2.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 295.1,
+              "p10": 5.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -16.94,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2188,
+            "breakeven_pct_taker_fees": 23.07,
+            "breakeven_pct_zero_fees": 21.88,
+            "depth_contracts": {
+              "max": 125.0,
+              "median": 6.0,
+              "p10": 0.2
+            },
+            "distinct_windows": 8,
+            "edge_pp_ci95_low_vs_taker": -23.07,
+            "edge_pp_vs_taker_fees": -23.07,
+            "edge_pp_vs_zero_fees": -21.88,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0547,
+            "pnl_per_dollar_risked_total": -8.44,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.27,
+            "breakeven_pct_taker_fees": 28.38,
+            "breakeven_pct_zero_fees": 27.0,
+            "depth_contracts": {
+              "max": 1607.0,
+              "median": 15.9,
+              "p10": 2.7
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -28.38,
+            "edge_pp_vs_taker_fees": -28.38,
+            "edge_pp_vs_zero_fees": -27.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0511,
+            "pnl_per_dollar_risked_total": -4.2,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.3233,
+            "breakeven_pct_taker_fees": 33.86,
+            "breakeven_pct_zero_fees": 32.33,
+            "depth_contracts": {
+              "max": 258.1,
+              "median": 117.6,
+              "p10": 7.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -33.86,
+            "edge_pp_vs_taker_fees": -33.86,
+            "edge_pp_vs_zero_fees": -32.33,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0474,
+            "pnl_per_dollar_risked_total": -3.14,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.38,
+            "breakeven_pct_taker_fees": 39.65,
+            "breakeven_pct_zero_fees": 38.0,
+            "depth_contracts": {
+              "max": 82.0,
+              "median": 64.1,
+              "p10": 8.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -39.65,
+            "edge_pp_vs_taker_fees": -39.65,
+            "edge_pp_vs_zero_fees": -38.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0434,
+            "pnl_per_dollar_risked_total": -3.13,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.435,
+            "breakeven_pct_taker_fees": 45.22,
+            "breakeven_pct_zero_fees": 43.5,
+            "depth_contracts": {
+              "max": 8.0,
+              "median": 5.8,
+              "p10": 3.5
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -45.22,
+            "edge_pp_vs_taker_fees": -45.22,
+            "edge_pp_vs_zero_fees": -43.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0395,
+            "pnl_per_dollar_risked_total": -2.08,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.47,
+            "breakeven_pct_taker_fees": 48.74,
+            "breakeven_pct_zero_fees": 47.0,
+            "depth_contracts": {
+              "max": 9.1,
+              "median": 5.5,
+              "p10": 1.9
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -48.74,
+            "edge_pp_vs_taker_fees": -48.74,
+            "edge_pp_vs_zero_fees": -47.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0371,
+            "pnl_per_dollar_risked_total": -4.15,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.08,
+            "breakeven_pct_taker_fees": 8.52,
+            "breakeven_pct_zero_fees": 8.0,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 14,
+            "edge_pp_ci95_low_vs_taker": -8.52,
+            "edge_pp_vs_taker_fees": -8.52,
+            "edge_pp_vs_zero_fees": -8.0,
+            "observations": 14,
+            "observations_in_cell_before_outcome_filter": 14,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0644,
+            "pnl_per_dollar_risked_total": -14.9,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "30s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.125,
+            "breakeven_pct_taker_fees": 13.27,
+            "breakeven_pct_zero_fees": 12.5,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -13.27,
+            "edge_pp_vs_taker_fees": -13.27,
+            "edge_pp_vs_zero_fees": -12.5,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0613,
+            "pnl_per_dollar_risked_total": -4.25,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 3.33,
+            "avg_executable_ask": 0.162,
+            "breakeven_pct_taker_fees": 17.15,
+            "breakeven_pct_zero_fees": 16.2,
+            "depth_contracts": {
+              "max": 1805.2,
+              "median": 178.0,
+              "p10": 178.0
+            },
+            "distinct_windows": 30,
+            "edge_pp_ci95_low_vs_taker": -17.15,
+            "edge_pp_vs_taker_fees": -13.82,
+            "edge_pp_vs_zero_fees": -12.87,
+            "observations": 30,
+            "observations_in_cell_before_outcome_filter": 30,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.8735,
+            "pnl_per_dollar_risked_total": -26.2,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              10.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2225,
+            "breakeven_pct_taker_fees": 23.46,
+            "breakeven_pct_zero_fees": 22.25,
+            "depth_contracts": {
+              "max": 187.0,
+              "median": 6.0,
+              "p10": 0.2
+            },
+            "distinct_windows": 8,
+            "edge_pp_ci95_low_vs_taker": -23.46,
+            "edge_pp_vs_taker_fees": -23.46,
+            "edge_pp_vs_zero_fees": -22.25,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0544,
+            "pnl_per_dollar_risked_total": -8.44,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.26,
+            "breakeven_pct_taker_fees": 27.35,
+            "breakeven_pct_zero_fees": 26.0,
+            "depth_contracts": {
+              "max": 200.0,
+              "median": 4.0,
+              "p10": 1.4
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -27.35,
+            "edge_pp_vs_taker_fees": -27.35,
+            "edge_pp_vs_zero_fees": -26.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0518,
+            "pnl_per_dollar_risked_total": -3.16,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 25.0,
+            "avg_executable_ask": 0.3225,
+            "breakeven_pct_taker_fees": 33.78,
+            "breakeven_pct_zero_fees": 32.25,
+            "depth_contracts": {
+              "max": 220.0,
+              "median": 167.3,
+              "p10": 7.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -33.78,
+            "edge_pp_vs_taker_fees": -8.78,
+            "edge_pp_vs_zero_fees": -7.25,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.241,
+            "pnl_per_dollar_risked_total": -0.96,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              75.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.3675,
+            "breakeven_pct_taker_fees": 38.38,
+            "breakeven_pct_zero_fees": 36.75,
+            "depth_contracts": {
+              "max": 234.0,
+              "median": 7.5,
+              "p10": 7.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -38.38,
+            "edge_pp_vs_taker_fees": -38.38,
+            "edge_pp_vs_zero_fees": -36.75,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0443,
+            "pnl_per_dollar_risked_total": -4.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 33.33,
+            "avg_executable_ask": 0.4333,
+            "breakeven_pct_taker_fees": 45.05,
+            "breakeven_pct_zero_fees": 43.33,
+            "depth_contracts": {
+              "max": 263.0,
+              "median": 8.0,
+              "p10": 3.5
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -45.05,
+            "edge_pp_vs_taker_fees": -11.72,
+            "edge_pp_vs_zero_fees": -10.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.2645,
+            "pnl_per_dollar_risked_total": -0.79,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.4775,
+            "breakeven_pct_taker_fees": 49.5,
+            "breakeven_pct_zero_fees": 47.75,
+            "depth_contracts": {
+              "max": 283.0,
+              "median": 26.1,
+              "p10": 2.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -49.5,
+            "edge_pp_vs_taker_fees": -49.5,
+            "edge_pp_vs_zero_fees": -47.75,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0366,
+            "pnl_per_dollar_risked_total": -4.15,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.0816,
+            "breakeven_pct_taker_fees": 8.68,
+            "breakeven_pct_zero_fees": 8.16,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 19,
+            "edge_pp_ci95_low_vs_taker": -8.68,
+            "edge_pp_vs_taker_fees": -8.68,
+            "edge_pp_vs_zero_fees": -8.16,
+            "observations": 19,
+            "observations_in_cell_before_outcome_filter": 19,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0643,
+            "pnl_per_dollar_risked_total": -20.22,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "45s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.125,
+            "breakeven_pct_taker_fees": 13.27,
+            "breakeven_pct_zero_fees": 12.5,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -13.27,
+            "edge_pp_vs_taker_fees": -13.27,
+            "edge_pp_vs_zero_fees": -12.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0613,
+            "pnl_per_dollar_risked_total": -2.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 1.3,
+            "avg_executable_ask": 0.1632,
+            "breakeven_pct_taker_fees": 17.28,
+            "breakeven_pct_zero_fees": 16.32,
+            "depth_contracts": {
+              "max": 1805.2,
+              "median": 178.0,
+              "p10": 178.0
+            },
+            "distinct_windows": 77,
+            "edge_pp_ci95_low_vs_taker": -17.28,
+            "edge_pp_vs_taker_fees": -15.98,
+            "edge_pp_vs_zero_fees": -15.03,
+            "observations": 77,
+            "observations_in_cell_before_outcome_filter": 77,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.9774,
+            "pnl_per_dollar_risked_total": -75.26,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              3.9
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 12.5,
+            "avg_executable_ask": 0.2175,
+            "breakeven_pct_taker_fees": 22.94,
+            "breakeven_pct_zero_fees": 21.75,
+            "depth_contracts": {
+              "max": 197.0,
+              "median": 190.5,
+              "p10": 187.0
+            },
+            "distinct_windows": 8,
+            "edge_pp_ci95_low_vs_taker": -22.94,
+            "edge_pp_vs_taker_fees": -10.44,
+            "edge_pp_vs_zero_fees": -9.25,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.5339,
+            "pnl_per_dollar_risked_total": -4.27,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              37.5
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 60.0,
+            "avg_executable_ask": 0.268,
+            "breakeven_pct_taker_fees": 28.17,
+            "breakeven_pct_zero_fees": 26.8,
+            "depth_contracts": {
+              "max": 211.0,
+              "median": 205.0,
+              "p10": 200.0
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -8.17,
+            "edge_pp_vs_taker_fees": 31.83,
+            "edge_pp_vs_zero_fees": 33.2,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": 1.0934,
+            "pnl_per_dollar_risked_total": 5.47,
+            "win_pct_ci95_window_bootstrap": [
+              20.0,
+              100.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.324,
+            "breakeven_pct_taker_fees": 33.93,
+            "breakeven_pct_zero_fees": 32.4,
+            "depth_contracts": {
+              "max": 227.0,
+              "median": 220.0,
+              "p10": 214.0
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -33.93,
+            "edge_pp_vs_taker_fees": -33.93,
+            "edge_pp_vs_zero_fees": -32.4,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0473,
+            "pnl_per_dollar_risked_total": -5.24,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 25.0,
+            "avg_executable_ask": 0.3825,
+            "breakeven_pct_taker_fees": 39.9,
+            "breakeven_pct_zero_fees": 38.25,
+            "depth_contracts": {
+              "max": 245.0,
+              "median": 241.0,
+              "p10": 241.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -39.9,
+            "edge_pp_vs_taker_fees": -14.9,
+            "edge_pp_vs_zero_fees": -13.25,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.4022,
+            "pnl_per_dollar_risked_total": -1.61,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              75.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.4,
+            "breakeven_pct_taker_fees": 41.68,
+            "breakeven_pct_zero_fees": 40.0,
+            "depth_contracts": {
+              "max": 250.0,
+              "median": 250.0,
+              "p10": 250.0
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -41.68,
+            "edge_pp_vs_zero_fees": -40.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.042,
+            "pnl_per_dollar_risked_total": -1.04,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 100.0,
+            "avg_executable_ask": 0.46,
+            "breakeven_pct_taker_fees": 47.74,
+            "breakeven_pct_zero_fees": 46.0,
+            "depth_contracts": {
+              "max": 283.0,
+              "median": 277.5,
+              "p10": 272.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": 52.26,
+            "edge_pp_vs_taker_fees": 52.26,
+            "edge_pp_vs_zero_fees": 54.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": 1.1371,
+            "pnl_per_dollar_risked_total": 2.27,
+            "win_pct_ci95_window_bootstrap": [
+              100.0,
+              100.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.0813,
+            "breakeven_pct_taker_fees": 8.66,
+            "breakeven_pct_zero_fees": 8.13,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 15,
+            "edge_pp_ci95_low_vs_taker": -8.66,
+            "edge_pp_vs_taker_fees": -8.66,
+            "edge_pp_vs_zero_fees": -8.13,
+            "observations": 15,
+            "observations_in_cell_before_outcome_filter": 15,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0643,
+            "pnl_per_dollar_risked_total": -15.96,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "5s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.135,
+            "breakeven_pct_taker_fees": 14.32,
+            "breakeven_pct_zero_fees": 13.5,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -14.32,
+            "edge_pp_vs_taker_fees": -14.32,
+            "edge_pp_vs_zero_fees": -13.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0606,
+            "pnl_per_dollar_risked_total": -2.12,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.16,
+            "breakeven_pct_taker_fees": 16.94,
+            "breakeven_pct_zero_fees": 16.0,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 295.1,
+              "p10": 5.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -16.94,
+            "edge_pp_vs_taker_fees": -16.94,
+            "edge_pp_vs_zero_fees": -16.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0588,
+            "pnl_per_dollar_risked_total": -3.18,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2227,
+            "breakeven_pct_taker_fees": 23.48,
+            "breakeven_pct_zero_fees": 22.27,
+            "depth_contracts": {
+              "max": 125.0,
+              "median": 6.0,
+              "p10": 6.0
+            },
+            "distinct_windows": 11,
+            "edge_pp_ci95_low_vs_taker": -23.48,
+            "edge_pp_vs_taker_fees": -23.48,
+            "edge_pp_vs_zero_fees": -22.27,
+            "observations": 11,
+            "observations_in_cell_before_outcome_filter": 11,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0544,
+            "pnl_per_dollar_risked_total": -11.6,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2683,
+            "breakeven_pct_taker_fees": 28.21,
+            "breakeven_pct_zero_fees": 26.83,
+            "depth_contracts": {
+              "max": 1607.0,
+              "median": 8.5,
+              "p10": 1.4
+            },
+            "distinct_windows": 6,
+            "edge_pp_ci95_low_vs_taker": -28.21,
+            "edge_pp_vs_taker_fees": -28.21,
+            "edge_pp_vs_zero_fees": -26.83,
+            "observations": 6,
+            "observations_in_cell_before_outcome_filter": 6,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0512,
+            "pnl_per_dollar_risked_total": -6.31,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.325,
+            "breakeven_pct_taker_fees": 34.04,
+            "breakeven_pct_zero_fees": 32.5,
+            "depth_contracts": {
+              "max": 258.1,
+              "median": 132.5,
+              "p10": 7.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -34.04,
+            "edge_pp_vs_taker_fees": -34.04,
+            "edge_pp_vs_zero_fees": -32.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0473,
+            "pnl_per_dollar_risked_total": -2.09,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.38,
+            "breakeven_pct_taker_fees": 39.65,
+            "breakeven_pct_zero_fees": 38.0,
+            "depth_contracts": {
+              "max": 82.0,
+              "median": 64.1,
+              "p10": 8.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -39.65,
+            "edge_pp_vs_taker_fees": -39.65,
+            "edge_pp_vs_zero_fees": -38.0,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0434,
+            "pnl_per_dollar_risked_total": -3.13,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.435,
+            "breakeven_pct_taker_fees": 45.22,
+            "breakeven_pct_zero_fees": 43.5,
+            "depth_contracts": {
+              "max": 8.0,
+              "median": 5.8,
+              "p10": 3.5
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -45.22,
+            "edge_pp_vs_taker_fees": -45.22,
+            "edge_pp_vs_zero_fees": -43.5,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0395,
+            "pnl_per_dollar_risked_total": -2.08,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.47,
+            "breakeven_pct_taker_fees": 48.74,
+            "breakeven_pct_zero_fees": 47.0,
+            "depth_contracts": {
+              "max": 9.1,
+              "median": 5.5,
+              "p10": 1.9
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -48.74,
+            "edge_pp_vs_taker_fees": -48.74,
+            "edge_pp_vs_zero_fees": -47.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0371,
+            "pnl_per_dollar_risked_total": -4.15,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.08,
+            "breakeven_pct_taker_fees": 8.52,
+            "breakeven_pct_zero_fees": 8.0,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 15,
+            "edge_pp_ci95_low_vs_taker": -8.52,
+            "edge_pp_vs_taker_fees": -8.52,
+            "edge_pp_vs_zero_fees": -8.0,
+            "observations": 15,
+            "observations_in_cell_before_outcome_filter": 15,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0644,
+            "pnl_per_dollar_risked_total": -15.97,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "60s": {
+          "10-15c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.1,
+            "breakeven_pct_taker_fees": 10.63,
+            "breakeven_pct_zero_fees": 10.0,
+            "depth_contracts": {
+              "max": 5.5,
+              "median": 5.5,
+              "p10": 5.5
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -10.63,
+            "edge_pp_vs_zero_fees": -10.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.063,
+            "pnl_per_dollar_risked_total": -1.06,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "15-20c": {
+            "actual_win_pct": 2.47,
+            "avg_executable_ask": 0.1623,
+            "breakeven_pct_taker_fees": 17.19,
+            "breakeven_pct_zero_fees": 16.23,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 178.0,
+              "p10": 178.0
+            },
+            "distinct_windows": 81,
+            "edge_pp_ci95_low_vs_taker": -17.19,
+            "edge_pp_vs_taker_fees": -14.72,
+            "edge_pp_vs_zero_fees": -13.77,
+            "observations": 81,
+            "observations_in_cell_before_outcome_filter": 81,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.9089,
+            "pnl_per_dollar_risked_total": -73.62,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              6.17
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 13.33,
+            "avg_executable_ask": 0.2193,
+            "breakeven_pct_taker_fees": 23.13,
+            "breakeven_pct_zero_fees": 21.93,
+            "depth_contracts": {
+              "max": 197.0,
+              "median": 192.0,
+              "p10": 187.0
+            },
+            "distinct_windows": 15,
+            "edge_pp_ci95_low_vs_taker": -23.13,
+            "edge_pp_vs_taker_fees": -9.8,
+            "edge_pp_vs_zero_fees": -8.6,
+            "observations": 15,
+            "observations_in_cell_before_outcome_filter": 15,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.4183,
+            "pnl_per_dollar_risked_total": -6.27,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              33.33
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.2667,
+            "breakeven_pct_taker_fees": 28.04,
+            "breakeven_pct_zero_fees": 26.67,
+            "depth_contracts": {
+              "max": 208.0,
+              "median": 202.0,
+              "p10": 202.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -28.04,
+            "edge_pp_vs_taker_fees": -28.04,
+            "edge_pp_vs_zero_fees": -26.67,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0513,
+            "pnl_per_dollar_risked_total": -3.15,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 25.0,
+            "avg_executable_ask": 0.3125,
+            "breakeven_pct_taker_fees": 32.75,
+            "breakeven_pct_zero_fees": 31.25,
+            "depth_contracts": {
+              "max": 223.0,
+              "median": 217.0,
+              "p10": 214.0
+            },
+            "distinct_windows": 8,
+            "edge_pp_ci95_low_vs_taker": -32.75,
+            "edge_pp_vs_taker_fees": -7.75,
+            "edge_pp_vs_zero_fees": -6.25,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.2905,
+            "pnl_per_dollar_risked_total": -2.32,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              62.5
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.36,
+            "breakeven_pct_taker_fees": 37.61,
+            "breakeven_pct_zero_fees": 36.0,
+            "depth_contracts": {
+              "max": 234.0,
+              "median": 234.0,
+              "p10": 234.0
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -37.61,
+            "edge_pp_vs_zero_fees": -36.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0448,
+            "pnl_per_dollar_risked_total": -1.04,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 33.33,
+            "avg_executable_ask": 0.4267,
+            "breakeven_pct_taker_fees": 44.38,
+            "breakeven_pct_zero_fees": 42.67,
+            "depth_contracts": {
+              "max": 267.0,
+              "median": 267.0,
+              "p10": 250.0
+            },
+            "distinct_windows": 3,
+            "edge_pp_ci95_low_vs_taker": -44.38,
+            "edge_pp_vs_taker_fees": -11.05,
+            "edge_pp_vs_zero_fees": -9.33,
+            "observations": 3,
+            "observations_in_cell_before_outcome_filter": 3,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.2826,
+            "pnl_per_dollar_risked_total": -0.85,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.46,
+            "breakeven_pct_taker_fees": 47.74,
+            "breakeven_pct_zero_fees": 46.0,
+            "depth_contracts": {
+              "max": 283.0,
+              "median": 277.5,
+              "p10": 272.0
+            },
+            "distinct_windows": 4,
+            "edge_pp_ci95_low_vs_taker": -47.74,
+            "edge_pp_vs_taker_fees": -47.74,
+            "edge_pp_vs_zero_fees": -46.0,
+            "observations": 4,
+            "observations_in_cell_before_outcome_filter": 4,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0378,
+            "pnl_per_dollar_risked_total": -4.15,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.09,
+            "breakeven_pct_taker_fees": 9.57,
+            "breakeven_pct_zero_fees": 9.0,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 1,
+            "edge_pp_ci95_low_vs_taker": null,
+            "edge_pp_vs_taker_fees": -9.57,
+            "edge_pp_vs_zero_fees": -9.0,
+            "observations": 1,
+            "observations_in_cell_before_outcome_filter": 1,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0637,
+            "pnl_per_dollar_risked_total": -1.06,
+            "win_pct_ci95_window_bootstrap": [
+              null,
+              null
+            ]
+          }
+        },
+        "90s": {
+          "10-15c": {
+            "observations": 0
+          },
+          "15-20c": {
+            "actual_win_pct": 6.9,
+            "avg_executable_ask": 0.1721,
+            "breakeven_pct_taker_fees": 18.2,
+            "breakeven_pct_zero_fees": 17.21,
+            "depth_contracts": {
+              "max": 1627.2,
+              "median": 180.0,
+              "p10": 178.0
+            },
+            "distinct_windows": 58,
+            "edge_pp_ci95_low_vs_taker": -16.48,
+            "edge_pp_vs_taker_fees": -11.31,
+            "edge_pp_vs_zero_fees": -10.31,
+            "observations": 58,
+            "observations_in_cell_before_outcome_filter": 58,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.663,
+            "pnl_per_dollar_risked_total": -38.45,
+            "win_pct_ci95_window_bootstrap": [
+              1.72,
+              13.79
+            ]
+          },
+          "20-25c": {
+            "actual_win_pct": 6.67,
+            "avg_executable_ask": 0.212,
+            "breakeven_pct_taker_fees": 22.37,
+            "breakeven_pct_zero_fees": 21.2,
+            "depth_contracts": {
+              "max": 197.0,
+              "median": 189.0,
+              "p10": 187.0
+            },
+            "distinct_windows": 15,
+            "edge_pp_ci95_low_vs_taker": -22.37,
+            "edge_pp_vs_taker_fees": -15.7,
+            "edge_pp_vs_zero_fees": -14.53,
+            "observations": 15,
+            "observations_in_cell_before_outcome_filter": 15,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.7521,
+            "pnl_per_dollar_risked_total": -11.28,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              20.0
+            ]
+          },
+          "25-30c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.27,
+            "breakeven_pct_taker_fees": 28.38,
+            "breakeven_pct_zero_fees": 27.0,
+            "depth_contracts": {
+              "max": 208.0,
+              "median": 208.0,
+              "p10": 200.0
+            },
+            "distinct_windows": 7,
+            "edge_pp_ci95_low_vs_taker": -28.38,
+            "edge_pp_vs_taker_fees": -28.38,
+            "edge_pp_vs_zero_fees": -27.0,
+            "observations": 7,
+            "observations_in_cell_before_outcome_filter": 7,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0511,
+            "pnl_per_dollar_risked_total": -7.36,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          },
+          "30-35c": {
+            "actual_win_pct": 14.29,
+            "avg_executable_ask": 0.32,
+            "breakeven_pct_taker_fees": 33.52,
+            "breakeven_pct_zero_fees": 32.0,
+            "depth_contracts": {
+              "max": 227.0,
+              "median": 217.0,
+              "p10": 214.0
+            },
+            "distinct_windows": 7,
+            "edge_pp_ci95_low_vs_taker": -33.52,
+            "edge_pp_vs_taker_fees": -19.24,
+            "edge_pp_vs_zero_fees": -17.71,
+            "observations": 7,
+            "observations_in_cell_before_outcome_filter": 7,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.5714,
+            "pnl_per_dollar_risked_total": -4.0,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              42.86
+            ]
+          },
+          "35-40c": {
+            "actual_win_pct": 16.67,
+            "avg_executable_ask": 0.3733,
+            "breakeven_pct_taker_fees": 38.97,
+            "breakeven_pct_zero_fees": 37.33,
+            "depth_contracts": {
+              "max": 270.0,
+              "median": 237.5,
+              "p10": 25.0
+            },
+            "distinct_windows": 12,
+            "edge_pp_ci95_low_vs_taker": -38.97,
+            "edge_pp_vs_taker_fees": -22.3,
+            "edge_pp_vs_zero_fees": -20.67,
+            "observations": 12,
+            "observations_in_cell_before_outcome_filter": 12,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.6165,
+            "pnl_per_dollar_risked_total": -7.4,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              41.67
+            ]
+          },
+          "40-45c": {
+            "actual_win_pct": 12.5,
+            "avg_executable_ask": 0.4125,
+            "breakeven_pct_taker_fees": 42.95,
+            "breakeven_pct_zero_fees": 41.25,
+            "depth_contracts": {
+              "max": 292.0,
+              "median": 250.0,
+              "p10": 25.0
+            },
+            "distinct_windows": 8,
+            "edge_pp_ci95_low_vs_taker": -42.95,
+            "edge_pp_vs_taker_fees": -30.45,
+            "edge_pp_vs_zero_fees": -28.75,
+            "observations": 8,
+            "observations_in_cell_before_outcome_filter": 8,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.7362,
+            "pnl_per_dollar_risked_total": -5.89,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              37.5
+            ]
+          },
+          "45-50c": {
+            "actual_win_pct": 50.0,
+            "avg_executable_ask": 0.48,
+            "breakeven_pct_taker_fees": 49.75,
+            "breakeven_pct_zero_fees": 48.0,
+            "depth_contracts": {
+              "max": 25.0,
+              "median": 25.0,
+              "p10": 25.0
+            },
+            "distinct_windows": 2,
+            "edge_pp_ci95_low_vs_taker": -49.75,
+            "edge_pp_vs_taker_fees": 0.25,
+            "edge_pp_vs_zero_fees": 2.0,
+            "observations": 2,
+            "observations_in_cell_before_outcome_filter": 2,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -0.016,
+            "pnl_per_dollar_risked_total": -0.03,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              100.0
+            ]
+          },
+          "<10c": {
+            "actual_win_pct": 0.0,
+            "avg_executable_ask": 0.084,
+            "breakeven_pct_taker_fees": 8.94,
+            "breakeven_pct_zero_fees": 8.4,
+            "depth_contracts": {
+              "max": 5.0,
+              "median": 5.0,
+              "p10": 5.0
+            },
+            "distinct_windows": 5,
+            "edge_pp_ci95_low_vs_taker": -8.94,
+            "edge_pp_vs_taker_fees": -8.94,
+            "edge_pp_vs_zero_fees": -8.4,
+            "observations": 5,
+            "observations_in_cell_before_outcome_filter": 5,
+            "opportunities_per_day": 288.0,
+            "pnl_per_dollar_risked_taker": -1.0641,
+            "pnl_per_dollar_risked_total": -5.32,
+            "win_pct_ci95_window_bootstrap": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      "observations": 1463,
+      "recorded_checkpoints": [
+        120,
+        90,
+        60,
+        45,
+        30,
+        20,
+        15,
+        10,
+        5,
+        2,
+        1
+      ],
+      "requested_checkpoints_not_collected": [
+        240,
+        180
+      ],
+      "settlement_reference_index_split": {
+        "LS-LRRR-XBTUSD": 1463
+      },
+      "state_counts": {
+        "NEITHER_SIDE_EXECUTABLE": 410,
+        "NO_UNDERDOG_CHEAPEST_GE_50C": 240,
+        "UNDERDOG": 813
+      },
+      "structural_cost": {
+        "ask_UP_plus_ask_DOWN": {
+          "fraction_above_1": 1.0,
+          "max": 1.92,
+          "mean": 1.3412,
+          "median": 1.33,
+          "min": 1.01
+        },
+        "two_sided_observations": 118,
+        "up_touch_spread": {
+          "median": 0.33,
+          "p10": 0.21,
+          "p90": 0.44
+        },
+        "why_it_matters": "a taker pays half this spread on entry. When the two executable asks sum materially above 1.00, no directional taker bet on either side can be positive on average: the excess IS the cost, and it is charged before any view."
+      },
+      "windows": 133
+    }
+  },
+  "checkpoints": {
+    "BTC15M_requested": [
+      840,
+      720,
+      600,
+      480,
+      360,
+      300,
+      240,
+      180,
+      120,
+      60
+    ],
+    "BTC5M_recorded_extra": [
+      20,
+      10,
+      5,
+      2,
+      1
+    ],
+    "BTC5M_requested": [
+      240,
+      180,
+      120,
+      90,
+      60,
+      45,
+      30,
+      15
+    ]
+  },
+  "durations_present": [
+    "BTC15M",
+    "BTC5M"
+  ],
+  "execution_discipline": "executable ask only. UP pays the YES ask; DOWN pays 1 - the YES bid and consumes the bid ladder. No midpoint, no last trade, no UI probability, no touch-beyond-size, no queue assumption, no future quote, no post-settlement reference as an entry feature.",
+  "fee_model": {
+    "formula": "rate * q * p * (1 - p)",
+    "maker_rate": 0.0175,
+    "reconciliation": "NOT fully reconciled against our own authenticated fills; every cell also reports zero-fee breakeven",
+    "source": "gemini.com/fees/predictions, recorded in src/gemini_execution/rebate_program.py 2026-09-19",
+    "taker_rate": 0.07
+  },
+  "label": "GEMINI_UNDERDOG_MATRIX_V1",
+  "lane": "GEMINI -- no PMUS data, thresholds, fees or samples",
+  "statistical_unit": "WINDOW (bootstrap resamples windows, not ticks)"
+}

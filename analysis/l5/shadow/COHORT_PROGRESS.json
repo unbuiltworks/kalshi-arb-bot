@@ -1,0 +1,121 @@
+{
+  "produced_at_utc": "2026-10-06T02:30:24Z",
+  "produced_by_run_id": null,
+  "produced_by_sha": null,
+  "produced_by_run_number": null,
+  "tapes_read": [
+    "shadow_20261006T012333Z.jsonl",
+    "shadow_20261006T012525Z.jsonl.gz",
+    "shadow_20261006T014643Z.jsonl",
+    "shadow_20261006T014819Z.jsonl.gz",
+    "shadow_20261006T020917Z.jsonl"
+  ],
+  "candidate_fingerprint": "441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe",
+  "cohort_target": 25,
+  "COMPLETE_markets": 0,
+  "valid_measurement_markets": 0,
+  "infrastructure_failures_not_counted": 0,
+  "quarantined_tapes": [
+    {
+      "tape": "shadow_20261006T012333Z.jsonl",
+      "run_id": null,
+      "validity": "INVALID_UNATTRIBUTED_TAPE",
+      "markets_excluded": 0
+    },
+    {
+      "tape": "shadow_20261006T012525Z.jsonl.gz",
+      "run_id": 37399000910,
+      "validity": "INVALID_NO_BOOK_READS",
+      "markets_excluded": 84
+    },
+    {
+      "tape": "shadow_20261006T014643Z.jsonl",
+      "run_id": 37399000910,
+      "validity": "INVALID_NO_BOOK_READS",
+      "markets_excluded": 0
+    },
+    {
+      "tape": "shadow_20261006T014819Z.jsonl.gz",
+      "run_id": 37400932571,
+      "validity": "INVALID_NO_DISCOVERY",
+      "markets_excluded": 57
+    },
+    {
+      "tape": "shadow_20261006T020917Z.jsonl",
+      "run_id": 37400932571,
+      "validity": "INVALID_NO_DISCOVERY",
+      "markets_excluded": 0
+    }
+  ],
+  "evidenced_fills_valid_markets_only": 0,
+  "uncertain_fills_valid_markets_only": 0,
+  "gate_counts_counted_tapes": {},
+  "per_tape": [
+    {
+      "tape": "shadow_20261006T012333Z.jsonl",
+      "tape_stamp_utc": "2026-10-06T01:23:33Z",
+      "run_id": null,
+      "run_number": null,
+      "sha": null,
+      "run_validity": "INVALID_UNATTRIBUTED_TAPE",
+      "discovery_errors": [],
+      "gate_counts": {},
+      "markets_excluded": 0,
+      "detail_withheld": "per-market rows omitted: this run is marked invalid, so its rows are not measurements. The raw tape is retained and unmodified."
+    },
+    {
+      "tape": "shadow_20261006T012525Z.jsonl.gz",
+      "tape_stamp_utc": "2026-10-06T01:25:25Z",
+      "run_id": 37399000910,
+      "run_number": 1,
+      "sha": "5af61f30ced2567850d970c02b799a0fefa86299",
+      "run_validity": "INVALID_NO_BOOK_READS",
+      "discovery_errors": [],
+      "gate_counts": {
+        "GATE3_NO_POLLS": 27,
+        "GATE1_NO_MARKET_IDENTITY": 57
+      },
+      "markets_excluded": 84,
+      "detail_withheld": "per-market rows omitted: this run is marked invalid, so its rows are not measurements. The raw tape is retained and unmodified."
+    },
+    {
+      "tape": "shadow_20261006T014643Z.jsonl",
+      "tape_stamp_utc": "2026-10-06T01:46:43Z",
+      "run_id": 37399000910,
+      "run_number": 1,
+      "sha": "5af61f30ced2567850d970c02b799a0fefa86299",
+      "run_validity": "INVALID_NO_BOOK_READS",
+      "discovery_errors": [],
+      "gate_counts": {},
+      "markets_excluded": 0,
+      "detail_withheld": "per-market rows omitted: this run is marked invalid, so its rows are not measurements. The raw tape is retained and unmodified."
+    },
+    {
+      "tape": "shadow_20261006T014819Z.jsonl.gz",
+      "tape_stamp_utc": "2026-10-06T01:48:19Z",
+      "run_id": 37400932571,
+      "run_number": 2,
+      "sha": "46c464ab0e2214ff413284eff7bd66ef04a0fcc1",
+      "run_validity": "INVALID_NO_DISCOVERY",
+      "discovery_errors": [],
+      "gate_counts": {
+        "GATE1_NO_MARKET_IDENTITY": 57
+      },
+      "markets_excluded": 57,
+      "detail_withheld": "per-market rows omitted: this run is marked invalid, so its rows are not measurements. The raw tape is retained and unmodified."
+    },
+    {
+      "tape": "shadow_20261006T020917Z.jsonl",
+      "tape_stamp_utc": "2026-10-06T02:09:17Z",
+      "run_id": 37400932571,
+      "run_number": 2,
+      "sha": "46c464ab0e2214ff413284eff7bd66ef04a0fcc1",
+      "run_validity": "INVALID_NO_DISCOVERY",
+      "discovery_errors": [],
+      "gate_counts": {},
+      "markets_excluded": 0,
+      "detail_withheld": "per-market rows omitted: this run is marked invalid, so its rows are not measurements. The raw tape is retained and unmodified."
+    }
+  ],
+  "note": "Measurement validity is established BEFORE strategy statistics. A market failing gates 1-5 is an infrastructure result and does not count toward the cohort whatever its fill count; missing or unreadable data is never a zero fill. Only COMPLETE markets that also pass every gate count. Tapes from runs the manifest marks INVALID are quarantined, not summed, so a defective run cannot masquerade as a current result. Uncertain fills are excluded from primary economics."
+}

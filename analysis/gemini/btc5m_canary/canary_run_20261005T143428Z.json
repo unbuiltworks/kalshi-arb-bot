@@ -1,0 +1,511 @@
+{
+  "accounting_labels": "SUBMITTED -> FILLED -> SETTLED -> CASH_CONFIRMED -> REALIZED; nothing is called realized without the venue's own cashflow record",
+  "cohort_final": {
+    "attempts_consumed": 0,
+    "attempts_remaining": 5,
+    "committed_headroom_usd": "4.5315",
+    "committed_usd": "0",
+    "halted": null,
+    "windows_touched": []
+  },
+  "evidence": [
+    {
+      "book": {
+        "ask": "0.45",
+        "ask_size": "272.0",
+        "bid": "0.18",
+        "bid_size": "833.0"
+      },
+      "elapsed_since_open_s": 15.097470045089722,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": -1.9,
+      "requested_price": "0.45",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T14:35:17.861169+00:00",
+      "window": "GEMI-BTC05M2610051440-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T14:35:17.882613+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051440-UP"
+    },
+    {
+      "book": {
+        "ask": "0.47",
+        "ask_size": "283.0",
+        "bid": "0.19",
+        "bid_size": "789.0"
+      },
+      "elapsed_since_open_s": 15.879505157470703,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": -0.12,
+      "requested_price": "0.47",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T14:40:16.894856+00:00",
+      "window": "GEMI-BTC05M2610051445-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T14:40:16.895322+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051445-UP"
+    },
+    {
+      "book": {
+        "ask": "0.48",
+        "ask_size": "25.0",
+        "bid": "0.2",
+        "bid_size": "750.0"
+      },
+      "elapsed_since_open_s": 15.561220407485962,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": 0.561,
+      "requested_price": "0.48",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T14:45:16.157594+00:00",
+      "window": "GEMI-BTC05M2610051450-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T14:45:16.158039+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051450-UP"
+    },
+    {
+      "book": {
+        "ask": "0.64",
+        "ask_size": "416.0",
+        "bid": "0.38",
+        "bid_size": "394.0"
+      },
+      "elapsed_since_open_s": 15.52753734588623,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": 0.528,
+      "requested_price": "0.64",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T14:50:16.025189+00:00",
+      "window": "GEMI-BTC05M2610051455-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T14:50:16.025674+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051455-UP"
+    },
+    {
+      "book": {
+        "ask": "0.68",
+        "ask_size": "493.0",
+        "bid": "0.41",
+        "bid_size": "25.0"
+      },
+      "elapsed_since_open_s": 15.652267456054688,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": 0.652,
+      "requested_price": "0.68",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T14:55:15.957938+00:00",
+      "window": "GEMI-BTC05M2610051500-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T14:55:15.958412+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051500-UP"
+    },
+    {
+      "book": {
+        "ask": "0.75",
+        "ask_size": "25.0",
+        "bid": "0.5",
+        "bid_size": "25.0"
+      },
+      "elapsed_since_open_s": 15.122278690338135,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": 0.122,
+      "requested_price": "0.75",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T15:00:15.692202+00:00",
+      "window": "GEMI-BTC05M2610051505-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T15:00:15.692712+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051505-UP"
+    },
+    {
+      "book": {
+        "ask": "0.71",
+        "ask_size": "517.0",
+        "bid": "0.41",
+        "bid_size": "390.0"
+      },
+      "elapsed_since_open_s": 15.293812274932861,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": 0.294,
+      "requested_price": "0.71",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T15:05:15.857445+00:00",
+      "window": "GEMI-BTC05M2610051510-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T15:05:15.857893+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051510-UP"
+    },
+    {
+      "book": {
+        "ask": "0.48",
+        "ask_size": "288.0",
+        "bid": "0.19",
+        "bid_size": "789.0"
+      },
+      "elapsed_since_open_s": 15.712481498718262,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": -0.287,
+      "requested_price": "0.48",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T15:10:16.895218+00:00",
+      "window": "GEMI-BTC05M2610051515-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T15:10:16.895726+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051515-UP"
+    },
+    {
+      "book": {
+        "ask": "0.57",
+        "ask_size": "25.0",
+        "bid": "0.31",
+        "bid_size": "25.0"
+      },
+      "elapsed_since_open_s": 15.687116384506226,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": 0.687,
+      "requested_price": "0.57",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T15:15:16.112741+00:00",
+      "window": "GEMI-BTC05M2610051520-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T15:15:16.113186+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051520-UP"
+    },
+    {
+      "book": {
+        "ask": "0.65",
+        "ask_size": "25.0",
+        "bid": "0.4",
+        "bid_size": "25.0"
+      },
+      "elapsed_since_open_s": 15.799097061157227,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": -0.201,
+      "requested_price": "0.65",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T15:20:16.198238+00:00",
+      "window": "GEMI-BTC05M2610051525-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T15:20:16.198751+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051525-UP"
+    },
+    {
+      "book": {
+        "ask": "0.52",
+        "ask_size": "25.0",
+        "bid": "0.26",
+        "bid_size": "25.0"
+      },
+      "elapsed_since_open_s": 15.889240741729736,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": -0.111,
+      "requested_price": "0.52",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T15:25:16.414537+00:00",
+      "window": "GEMI-BTC05M2610051530-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T15:25:16.414987+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051530-UP"
+    },
+    {
+      "book": {
+        "ask": "0.75",
+        "ask_size": "25.0",
+        "bid": "0.48",
+        "bid_size": "337.0"
+      },
+      "elapsed_since_open_s": 15.044320583343506,
+      "failed_checks": [],
+      "kind": "DECISION",
+      "qualifies": true,
+      "quote_age_s": 0.044,
+      "requested_price": "0.75",
+      "requested_quantity": "1",
+      "utc": "2026-10-05T15:30:15.617796+00:00",
+      "window": "GEMI-BTC05M2610051535-UP"
+    },
+    {
+      "kind": "REFUSED",
+      "utc": "2026-10-05T15:30:15.618230+00:00",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051535-UP"
+    }
+  ],
+  "label": "GEMINI_BTC5M_CANARY_RUN_V1",
+  "note": "EXECUTION CANARY. Its P&L is mechanics evidence, not strategy evidence.",
+  "preflight": {
+    "arming_state": {
+      "armed": true,
+      "auth_id_matches": true,
+      "auth_id_present": true,
+      "expected_auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1",
+      "expired": false,
+      "expiry_supplied": true,
+      "live_flag": true,
+      "why_not": null
+    },
+    "auth_gate": {
+      "arming_matches": true,
+      "build_expected_auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1",
+      "canary_auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1",
+      "ci15m_submit_is_now_refused": true,
+      "env_matches": true,
+      "live_auth_id_from_env": "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1",
+      "note": "exactly one authorization holds the taker key; this grant holding it is what makes ci15m_probe.submit() refuse, so the BTC15m PERSIST4 cohort cannot be spent on it",
+      "taker_key_holder": "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1",
+      "taker_key_matches": true
+    },
+    "checks": {
+      "arithmetic_matches_authorized_cap": true,
+      "arming_constant_names_this_grant": true,
+      "attempts_remaining": true,
+      "btc15m_persist4_path_is_closed": true,
+      "envelope_attempts_is_5": true,
+      "envelope_price_cap_is_0_90": true,
+      "envelope_quantity_is_one": true,
+      "not_halted": true,
+      "q1_at_or_above_venue_minimum": true,
+      "sell_not_permitted": true,
+      "size_changes_not_permitted": true,
+      "taker_key_names_this_grant": true
+    },
+    "cohort": {
+      "attempts_consumed": 0,
+      "attempts_remaining": 5,
+      "committed_headroom_usd": "4.5315",
+      "committed_usd": "0",
+      "halted": null,
+      "windows_touched": []
+    },
+    "credential_free": "this preflight touches no account surface and needs no secret",
+    "envelope": {
+      "auth_id": "OWNER-2026-10-05-GEMINI-BTC5M-CANARY-1",
+      "envelope": {
+        "averaging_down_permitted": false,
+        "deadman": true,
+        "duration": "BTC05M",
+        "hold_to_settlement": true,
+        "max_acquisition_price": "0.90",
+        "max_attempts_per_window": 1,
+        "max_cohort_acquisition_outlay_usd": "4.5315",
+        "max_entry_attempts": 5,
+        "max_outstanding_orders": 1,
+        "max_quote_age_s": 2.0,
+        "min_checkpoint_s_since_open": 15.0,
+        "quantity": "1",
+        "sell_permitted": false,
+        "side_rule": "UP_ALWAYS_NON_DIRECTIONAL",
+        "size_changes_permitted": false
+      },
+      "worst_case_cohort_usd": "4.5315",
+      "worst_case_per_trade_usd": "0.9063"
+    },
+    "failed": [],
+    "label": "GEMINI_BTC5M_CANARY_RUN_V1",
+    "ok": true,
+    "utc": "2026-10-05T14:34:28.072159+00:00"
+  },
+  "stop_reason": "RUNTIME_ELAPSED",
+  "strategy_evidence": false,
+  "utc": "2026-10-05T14:34:28.072237+00:00",
+  "windows": [
+    {
+      "expiry_t": 1791211200.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051440-UP",
+      "t0": 1791210900.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051440",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051440-UP"
+    },
+    {
+      "expiry_t": 1791211500.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051445-UP",
+      "t0": 1791211200.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051445",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051445-UP"
+    },
+    {
+      "expiry_t": 1791211800.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051450-UP",
+      "t0": 1791211500.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051450",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051450-UP"
+    },
+    {
+      "expiry_t": 1791212100.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051455-UP",
+      "t0": 1791211800.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051455",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051455-UP"
+    },
+    {
+      "expiry_t": 1791212400.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051500-UP",
+      "t0": 1791212100.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051500",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051500-UP"
+    },
+    {
+      "expiry_t": 1791212700.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051505-UP",
+      "t0": 1791212400.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051505",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051505-UP"
+    },
+    {
+      "expiry_t": 1791213000.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051510-UP",
+      "t0": 1791212700.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051510",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051510-UP"
+    },
+    {
+      "expiry_t": 1791213300.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051515-UP",
+      "t0": 1791213000.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051515",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051515-UP"
+    },
+    {
+      "expiry_t": 1791213600.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051520-UP",
+      "t0": 1791213300.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051520",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051520-UP"
+    },
+    {
+      "expiry_t": 1791213900.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051525-UP",
+      "t0": 1791213600.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051525",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051525-UP"
+    },
+    {
+      "expiry_t": 1791214200.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051530-UP",
+      "t0": 1791213900.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051530",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051530-UP"
+    },
+    {
+      "expiry_t": 1791214500.0,
+      "outcome": "REFUSED",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051535-UP",
+      "t0": 1791214200.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051535",
+      "why": "active orders could not be read (No module named 'dotenv'); an account whose orders cannot be read is not an account with none",
+      "window": "GEMI-BTC05M2610051535-UP"
+    },
+    {
+      "expiry_t": 1791214800.0,
+      "outcome": "NO_TRADE",
+      "strike": null,
+      "symbol": "GEMI-BTC05M2610051540-UP",
+      "t0": 1791214500.0,
+      "t0_source": "availableAt",
+      "ticker": "BTC05M2610051540",
+      "why": "no instant satisfied the frozen rule before the window ended; this does not consume an attempt",
+      "window": "GEMI-BTC05M2610051540-UP"
+    }
+  ]
+}

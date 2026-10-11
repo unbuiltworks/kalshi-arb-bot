@@ -1,0 +1,1314 @@
+{
+  "accounting": "FILLED -> SETTLED -> CASH_CONFIRMED -> REALIZED. SETTLED and CASH_CONFIRMED are kept separate and a settled outcome is never reported as realized.",
+  "cash_leg_readable": true,
+  "cash_leg_reads": [
+    {
+      "cashOuts": 0,
+      "params": {
+        "limit": 100,
+        "withCashOuts": true
+      },
+      "positions": 115,
+      "status": 200
+    },
+    {
+      "cashOuts": 0,
+      "params": {
+        "limit": 100,
+        "withCashOuts": "true"
+      },
+      "positions": 115,
+      "status": 200
+    }
+  ],
+  "cohort_state": {
+    "attempts_consumed": 5,
+    "attempts_remaining": 0,
+    "committed_headroom_usd": "1.0855",
+    "committed_usd": "3.4460",
+    "halted": null,
+    "windows_touched": [
+      "GEMI-BTC05M2610051550-UP",
+      "GEMI-BTC05M2610051555-UP",
+      "GEMI-BTC05M2610051600-UP",
+      "GEMI-BTC05M2610051605-UP",
+      "GEMI-BTC05M2610051610-UP"
+    ]
+  },
+  "excluded_from_strategy": [
+    "GEMI-BTC05M2610051550-UP",
+    "GEMI-BTC05M2610051555-UP",
+    "GEMI-BTC05M2610051600-UP",
+    "GEMI-BTC05M2610051605-UP",
+    "GEMI-BTC05M2610051610-UP"
+  ],
+  "label": "GEMINI_BTC5M_COHORT1_AUDIT_V1",
+  "read_only": "this audit imports no order path; it reads the contract object, positions/settled and our own durable ledger",
+  "rows": [
+    {
+      "ACK": {
+        "client_order_id": "c4ac0348-e139-4125-9bc0-f0fe6a367806",
+        "created_at": "2026-10-05T15:45:16.085Z",
+        "latency_ms": 493.77,
+        "order_id": "145828836798388805",
+        "venue_status": "open"
+      },
+      "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
+        "confirmed": true,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.72",
+        "rows": [
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758114",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 11:50am ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 11:50am EDT",
+              "eventTicker": "BTC05M2610051550",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T15:50:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051550-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T15:50:05.510Z",
+              "settlementValue": "85309.41433333333",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T15:45:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T15:45:00.000Z",
+                "type": "reference",
+                "value": "85309.86"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.72",
+            "instrumentId": 34235802,
+            "instrumentSymbol": "GEMI-BTC05M2610051550-UP",
+            "netProfit": "-0.72",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T15:50:05.499Z"
+          },
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758114",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 11:50am ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 11:50am EDT",
+              "eventTicker": "BTC05M2610051550",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T15:50:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051550-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T15:50:05.510Z",
+              "settlementValue": "85309.41433333333",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T15:45:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T15:45:00.000Z",
+                "type": "reference",
+                "value": "85309.86"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.72",
+            "instrumentId": 34235802,
+            "instrumentSymbol": "GEMI-BTC05M2610051550-UP",
+            "netProfit": "-0.72",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T15:50:05.499Z"
+          }
+        ],
+        "settled_at": "2026-10-05T15:50:05.499Z",
+        "venue_cost_basis_usd": "0.72",
+        "venue_fee_usd": "0",
+        "venue_net_profit_usd": "-0.72",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.5",
+        "elapsed_since_open_s": 15.396137714385986,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.4,
+        "up_ask": "0.72",
+        "up_ask_size": "25.0",
+        "up_bid": "0.5",
+        "up_bid_size": "234.0",
+        "utc": "2026-10-05T15:45:15.513283+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "the nearest published reference is 5704s old; a stale value is NOT the reference at entry",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": {
+          "down_entry_price": "0.5",
+          "label": "COUNTERFACTUAL. No DOWN order was sent, so this is modelled, never realized, and its fee is the published schedule rather than a charged one.",
+          "modelled_fee_usd": "0.02",
+          "net_usd": "0.48",
+          "payout_usd": "1"
+        },
+        "down_price_contemporaneous": "0.5",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 5703.513,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 5703.513,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5718.513,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5733.513,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5763.513,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5793.513,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5823.513,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5883.513,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5943.513,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 5988.513,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": "85309.41433333333"
+        },
+        "settlement_side": "no",
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85309.86",
+        "up_entry_price": "0.72",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.72",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.72",
+        "quantity": "1",
+        "role": "maker",
+        "venue_fee_usd": "0"
+      },
+      "SETTLED": {
+        "distinct_readings": [
+          "settled/no"
+        ],
+        "expiryDate": "2026-10-05T15:50:00.000Z",
+        "flapped": false,
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "missing_fields": [],
+        "payout_usd": "0",
+        "readable": true,
+        "reads": 3,
+        "reads_settled": 3,
+        "resolutionSide": "no",
+        "resolvedAt": "2026-10-05T15:50:05.510Z",
+        "settlementValue": "85309.41433333333",
+        "status": "settled",
+        "strike_consistency": {
+          "agrees": true,
+          "available": true,
+          "implied_by_strike": "no",
+          "published_resolutionSide": "no",
+          "rule": "UP resolves yes when settlementValue >= strike.value",
+          "settlementValue": "85309.41433333333",
+          "strike": "85309.86"
+        },
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85309.86",
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.7341",
+        "requested_price": "0.72",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T15:45:16.131550+00:00"
+      },
+      "market": "GEMI-BTC05M2610051550-UP",
+      "slot": 1
+    },
+    {
+      "ACK": {
+        "client_order_id": "ceded863-4fbf-4e26-a05f-13f7414d6c87",
+        "created_at": "2026-10-05T15:50:16.850Z",
+        "latency_ms": 183.139,
+        "order_id": "145828836798486502",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
+        "confirmed": true,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.69",
+        "rows": [
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758127",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 11:55am ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 11:55am EDT",
+              "eventTicker": "BTC05M2610051555",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T15:55:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051555-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T15:55:05.540Z",
+              "settlementValue": "85289.7355",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T15:50:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T15:50:00.000Z",
+                "type": "reference",
+                "value": "85309.41"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.67",
+            "instrumentId": 34235809,
+            "instrumentSymbol": "GEMI-BTC05M2610051555-UP",
+            "netProfit": "-0.67",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T15:55:05.525Z"
+          },
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758127",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 11:55am ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 11:55am EDT",
+              "eventTicker": "BTC05M2610051555",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T15:55:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051555-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T15:55:05.540Z",
+              "settlementValue": "85289.7355",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T15:50:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T15:50:00.000Z",
+                "type": "reference",
+                "value": "85309.41"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.67",
+            "instrumentId": 34235809,
+            "instrumentSymbol": "GEMI-BTC05M2610051555-UP",
+            "netProfit": "-0.67",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T15:55:05.525Z"
+          }
+        ],
+        "settled_at": "2026-10-05T15:55:05.525Z",
+        "venue_cost_basis_usd": "0.67",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "-0.67",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.63",
+        "elapsed_since_open_s": 15.341307401657104,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": -0.659,
+        "up_ask": "0.67",
+        "up_ask_size": "25.0",
+        "up_bid": "0.37",
+        "up_bid_size": "405.0",
+        "utc": "2026-10-05T15:50:16.580080+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "the nearest published reference is 6005s old; a stale value is NOT the reference at entry",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": {
+          "down_entry_price": "0.63",
+          "label": "COUNTERFACTUAL. No DOWN order was sent, so this is modelled, never realized, and its fee is the published schedule rather than a charged one.",
+          "modelled_fee_usd": "0.02",
+          "net_usd": "0.35",
+          "payout_usd": "1"
+        },
+        "down_price_contemporaneous": "0.63",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6004.58,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6004.58,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6019.58,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6034.58,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6064.58,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6094.58,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6124.58,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6184.58,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6244.58,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6289.58,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": "85289.7355"
+        },
+        "settlement_side": "no",
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85309.41",
+        "up_entry_price": "0.67",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.67",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.67",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "distinct_readings": [
+          "settled/no"
+        ],
+        "expiryDate": "2026-10-05T15:55:00.000Z",
+        "flapped": false,
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "missing_fields": [],
+        "payout_usd": "0",
+        "readable": true,
+        "reads": 3,
+        "reads_settled": 3,
+        "resolutionSide": "no",
+        "resolvedAt": "2026-10-05T15:55:05.540Z",
+        "settlementValue": "85289.7355",
+        "status": "settled",
+        "strike_consistency": {
+          "agrees": true,
+          "available": true,
+          "implied_by_strike": "no",
+          "published_resolutionSide": "no",
+          "rule": "UP resolves yes when settlementValue >= strike.value",
+          "settlementValue": "85289.7355",
+          "strike": "85309.41"
+        },
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85309.41",
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.6855",
+        "requested_price": "0.67",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T15:50:16.857098+00:00"
+      },
+      "market": "GEMI-BTC05M2610051555-UP",
+      "slot": 2
+    },
+    {
+      "ACK": {
+        "client_order_id": "1c2eb398-04d7-4670-9c0d-30035acdef18",
+        "created_at": "2026-10-05T15:55:16.019Z",
+        "latency_ms": 123.781,
+        "order_id": "145828836798601425",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
+        "confirmed": true,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.62",
+        "rows": [
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758137",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 12pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 12pm EDT",
+              "eventTicker": "BTC05M2610051600",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T16:00:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051600-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T16:00:06.516Z",
+              "settlementValue": "85246.313",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T15:55:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T15:55:00.000Z",
+                "type": "reference",
+                "value": "85289.74"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.6",
+            "instrumentId": 34235814,
+            "instrumentSymbol": "GEMI-BTC05M2610051600-UP",
+            "netProfit": "-0.6",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T16:00:06.490Z"
+          },
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758137",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 12pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 12pm EDT",
+              "eventTicker": "BTC05M2610051600",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T16:00:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051600-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T16:00:06.516Z",
+              "settlementValue": "85246.313",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T15:55:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T15:55:00.000Z",
+                "type": "reference",
+                "value": "85289.74"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.6",
+            "instrumentId": 34235814,
+            "instrumentSymbol": "GEMI-BTC05M2610051600-UP",
+            "netProfit": "-0.6",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T16:00:06.490Z"
+          }
+        ],
+        "settled_at": "2026-10-05T16:00:06.490Z",
+        "venue_cost_basis_usd": "0.6",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "-0.6",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.68",
+        "elapsed_since_open_s": 15.614298343658447,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.614,
+        "up_ask": "0.6",
+        "up_ask_size": "400.0",
+        "up_bid": "0.32",
+        "up_bid_size": "25.0",
+        "utc": "2026-10-05T15:55:15.803119+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "the nearest published reference is 6304s old; a stale value is NOT the reference at entry",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": {
+          "down_entry_price": "0.68",
+          "label": "COUNTERFACTUAL. No DOWN order was sent, so this is modelled, never realized, and its fee is the published schedule rather than a charged one.",
+          "modelled_fee_usd": "0.02",
+          "net_usd": "0.30",
+          "payout_usd": "1"
+        },
+        "down_price_contemporaneous": "0.68",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6303.803,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6303.803,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6318.803,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6333.803,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6363.803,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6393.803,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6423.803,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6483.803,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6543.803,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6588.803,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": "85246.313"
+        },
+        "settlement_side": "no",
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85289.74",
+        "up_entry_price": "0.6",
+        "up_was_at_entry": "DOWN"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.6",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.6",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "distinct_readings": [
+          "settled/no"
+        ],
+        "expiryDate": "2026-10-05T16:00:00.000Z",
+        "flapped": false,
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "missing_fields": [],
+        "payout_usd": "0",
+        "readable": true,
+        "reads": 3,
+        "reads_settled": 3,
+        "resolutionSide": "no",
+        "resolvedAt": "2026-10-05T16:00:06.516Z",
+        "settlementValue": "85246.313",
+        "status": "settled",
+        "strike_consistency": {
+          "agrees": true,
+          "available": true,
+          "implied_by_strike": "no",
+          "published_resolutionSide": "no",
+          "rule": "UP resolves yes when settlementValue >= strike.value",
+          "settlementValue": "85246.313",
+          "strike": "85289.74"
+        },
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85289.74",
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.6168",
+        "requested_price": "0.6",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T15:55:16.024729+00:00"
+      },
+      "market": "GEMI-BTC05M2610051600-UP",
+      "slot": 3
+    },
+    {
+      "ACK": {
+        "client_order_id": "b7ca1493-8858-4c5e-8d88-98788b31e924",
+        "created_at": "2026-10-05T16:00:16.029Z",
+        "latency_ms": 148.879,
+        "order_id": "145828836798659256",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
+        "confirmed": true,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "-0.66",
+        "rows": [
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758147",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 12:05pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 12:05pm EDT",
+              "eventTicker": "BTC05M2610051605",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T16:05:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051605-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T16:05:05.584Z",
+              "settlementValue": "85200.1825",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T16:00:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T16:00:00.000Z",
+                "type": "reference",
+                "value": "85246.31"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.64",
+            "instrumentId": 34235817,
+            "instrumentSymbol": "GEMI-BTC05M2610051605-UP",
+            "netProfit": "-0.64",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T16:05:05.570Z"
+          },
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758147",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 12:05pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 12:05pm EDT",
+              "eventTicker": "BTC05M2610051605",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T16:05:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051605-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "no",
+              "resolvedAt": "2026-10-05T16:05:05.584Z",
+              "settlementValue": "85200.1825",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T16:00:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T16:00:00.000Z",
+                "type": "reference",
+                "value": "85246.31"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.64",
+            "instrumentId": 34235817,
+            "instrumentSymbol": "GEMI-BTC05M2610051605-UP",
+            "netProfit": "-0.64",
+            "outcome": "yes",
+            "payout": "0",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "no",
+            "settledAt": "2026-10-05T16:05:05.570Z"
+          }
+        ],
+        "settled_at": "2026-10-05T16:05:05.570Z",
+        "venue_cost_basis_usd": "0.64",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "-0.64",
+        "venue_payout_usd": "0",
+        "venue_realized_pnl_usd": "0"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.63",
+        "elapsed_since_open_s": 15.53202486038208,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.532,
+        "up_ask": "0.64",
+        "up_ask_size": "416.0",
+        "up_bid": "0.37",
+        "up_bid_size": "405.0",
+        "utc": "2026-10-05T16:00:15.823868+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "the nearest published reference is 6604s old; a stale value is NOT the reference at entry",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": {
+          "down_entry_price": "0.63",
+          "label": "COUNTERFACTUAL. No DOWN order was sent, so this is modelled, never realized, and its fee is the published schedule rather than a charged one.",
+          "modelled_fee_usd": "0.02",
+          "net_usd": "0.35",
+          "payout_usd": "1"
+        },
+        "down_price_contemporaneous": "0.63",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6603.824,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6603.824,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6618.824,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6633.824,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6663.824,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6693.824,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6723.824,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6783.824,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6843.824,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6888.824,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": "85200.1825"
+        },
+        "settlement_side": "no",
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85246.31",
+        "up_entry_price": "0.64",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.64",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.64",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "distinct_readings": [
+          "settled/no"
+        ],
+        "expiryDate": "2026-10-05T16:05:00.000Z",
+        "flapped": false,
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "missing_fields": [],
+        "payout_usd": "0",
+        "readable": true,
+        "reads": 3,
+        "reads_settled": 3,
+        "resolutionSide": "no",
+        "resolvedAt": "2026-10-05T16:05:05.584Z",
+        "settlementValue": "85200.1825",
+        "status": "settled",
+        "strike_consistency": {
+          "agrees": true,
+          "available": true,
+          "implied_by_strike": "no",
+          "published_resolutionSide": "no",
+          "rule": "UP resolves yes when settlementValue >= strike.value",
+          "settlementValue": "85200.1825",
+          "strike": "85246.31"
+        },
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85246.31",
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.6561",
+        "requested_price": "0.64",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T16:00:16.048735+00:00"
+      },
+      "market": "GEMI-BTC05M2610051605-UP",
+      "slot": 4
+    },
+    {
+      "ACK": {
+        "client_order_id": "bfcf3c1d-6a3e-4992-933a-9f64dff05715",
+        "created_at": "2026-10-05T16:05:16.143Z",
+        "latency_ms": 152.304,
+        "order_id": "145828836798737214",
+        "venue_status": "filled"
+      },
+      "CASH_CONFIRMED": {
+        "agrees_with_venue_net_profit_before_fees": true,
+        "cash_out_rows": 0,
+        "confirmed": true,
+        "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
+        "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
+        "realized_net_usd": "0.24",
+        "rows": [
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758216",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 12:10pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 12:10pm EDT",
+              "eventTicker": "BTC05M2610051610",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T16:10:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051610-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "yes",
+              "resolvedAt": "2026-10-05T16:10:05.509Z",
+              "settlementValue": "85280.8975",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T16:05:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T16:05:00.000Z",
+                "type": "reference",
+                "value": "85200.18"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.74",
+            "instrumentId": 34235864,
+            "instrumentSymbol": "GEMI-BTC05M2610051610-UP",
+            "netProfit": "0.26",
+            "outcome": "yes",
+            "payout": "1",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "yes",
+            "settledAt": "2026-10-05T16:10:05.498Z"
+          },
+          {
+            "_key": "positions",
+            "accountId": 97209861,
+            "contractMetadata": {
+              "category": "Bitcoin",
+              "color": "#4CAF50",
+              "contractId": "758216",
+              "contractName": "Up",
+              "contractStatus": "Settled",
+              "contractTicker": "UP",
+              "description": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on October 5, 2026 at 12:10pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the LS-LRRR-XBTUSD index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_398860b3-ea2f-47a7-b167-a8c6ad03d6d7.pdf).",
+              "eventImageUrl": "https://assets.gemini.com/predictions/images/btc_ace6c0f4-f500-4b7d-a66c-a3ea5ea1d9e9.avif",
+              "eventName": "BTC price today at 12:10pm EDT",
+              "eventTicker": "BTC05M2610051610",
+              "eventType": "binary",
+              "expiryDate": "2026-10-05T16:10:00.000Z",
+              "instrumentSymbol": "GEMI-BTC05M2610051610-UP",
+              "parentCategory": "Crypto",
+              "resolutionSide": "yes",
+              "resolvedAt": "2026-10-05T16:10:05.509Z",
+              "settlementValue": "85280.8975",
+              "sortOrder": 0,
+              "startTime": "2026-10-05T16:05:00.000Z",
+              "strike": {
+                "availableAt": "2026-10-05T16:05:00.000Z",
+                "type": "reference",
+                "value": "85200.18"
+              },
+              "template": "crypto-up-down"
+            },
+            "costBasis": "0.74",
+            "instrumentId": 34235864,
+            "instrumentSymbol": "GEMI-BTC05M2610051610-UP",
+            "netProfit": "0.26",
+            "outcome": "yes",
+            "payout": "1",
+            "position": 1,
+            "positionQuantity": "1",
+            "realizedPnl": "0",
+            "resolutionSide": "yes",
+            "settledAt": "2026-10-05T16:10:05.498Z"
+          }
+        ],
+        "settled_at": "2026-10-05T16:10:05.498Z",
+        "venue_cost_basis_usd": "0.74",
+        "venue_fee_usd": "0.02",
+        "venue_net_profit_usd": "0.26",
+        "venue_payout_usd": "1",
+        "venue_realized_pnl_usd": "0"
+      },
+      "DECISION": {
+        "down_acquisition_contemporaneous": "0.55",
+        "elapsed_since_open_s": 15.604108095169067,
+        "failed_checks": [],
+        "qualifies": true,
+        "quote_age_s": 0.604,
+        "up_ask": "0.74",
+        "up_ask_size": "25.0",
+        "up_bid": "0.45",
+        "up_bid_size": "181.75",
+        "utc": "2026-10-05T16:05:15.912119+00:00"
+      },
+      "DESCRIPTIVE": {
+        "D_entry_reference_minus_strike": null,
+        "D_entry_unavailable_why": "the nearest published reference is 6904s old; a stale value is NOT the reference at entry",
+        "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
+        "counterfactual_down": {
+          "down_entry_price": "0.55",
+          "label": "COUNTERFACTUAL. No DOWN order was sent, so this is modelled, never realized, and its fee is the published schedule rather than a charged one.",
+          "modelled_fee_usd": "0.02",
+          "net_usd": "-0.57",
+          "payout_usd": "0"
+        },
+        "down_price_contemporaneous": "0.55",
+        "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
+        "reference_at_entry": {
+          "age_s": 6903.912,
+          "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
+          "stale": true,
+          "value": "86621.88566666667"
+        },
+        "reference_trajectory": {
+          "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
+          "points": [
+            {
+              "age_s": 6903.912,
+              "offset_s_from_entry": 0,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6918.912,
+              "offset_s_from_entry": 15,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6933.912,
+              "offset_s_from_entry": 30,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6963.912,
+              "offset_s_from_entry": 60,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 6993.912,
+              "offset_s_from_entry": 90,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7023.912,
+              "offset_s_from_entry": 120,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7083.912,
+              "offset_s_from_entry": 180,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7143.912,
+              "offset_s_from_entry": 240,
+              "stale": true,
+              "value": "86621.88566666667"
+            },
+            {
+              "age_s": 7188.912,
+              "offset_s_from_entry": 285,
+              "stale": true,
+              "value": "86621.88566666667"
+            }
+          ],
+          "settlementValue": "85280.8975"
+        },
+        "settlement_side": "yes",
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85200.18",
+        "up_entry_price": "0.74",
+        "up_was_at_entry": "UP"
+      },
+      "FILLED": {
+        "acquisition_principal_usd": "0.74",
+        "attributed": true,
+        "attribution_route": "ORDER_ID",
+        "foreign": [],
+        "price": "0.74",
+        "quantity": "1",
+        "role": "taker",
+        "venue_fee_usd": "0.02"
+      },
+      "SETTLED": {
+        "distinct_readings": [
+          "settled/yes"
+        ],
+        "expiryDate": "2026-10-05T16:10:00.000Z",
+        "flapped": false,
+        "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
+        "missing_fields": [],
+        "payout_usd": "1",
+        "readable": true,
+        "reads": 3,
+        "reads_settled": 3,
+        "resolutionSide": "yes",
+        "resolvedAt": "2026-10-05T16:10:05.509Z",
+        "settlementValue": "85280.8975",
+        "status": "settled",
+        "strike_consistency": {
+          "agrees": true,
+          "available": true,
+          "implied_by_strike": "yes",
+          "published_resolutionSide": "yes",
+          "rule": "UP resolves yes when settlementValue >= strike.value",
+          "settlementValue": "85280.8975",
+          "strike": "85200.18"
+        },
+        "strike_source": "contract.strike.value via strike_check",
+        "strike_value": "85200.18",
+        "verdict": "SETTLED"
+      },
+      "SUBMITTED": {
+        "committed_usd": "0.7535",
+        "requested_price": "0.74",
+        "requested_quantity": "1",
+        "utc": "2026-10-05T16:05:16.152692+00:00"
+      },
+      "market": "GEMI-BTC05M2610051610-UP",
+      "slot": 5
+    }
+  ]
+}

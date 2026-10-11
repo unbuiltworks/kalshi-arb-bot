@@ -1,0 +1,235 @@
+{
+ "label": "PMUS_MIRROR_BOUNDS_V1",
+ "aggressor_proof": {
+  "rows_checked_against_a_book": 269,
+  "breakdown": {
+   "buy_at_or_above_ask": 121,
+   "sell_at_or_below_bid": 143,
+   "unknown_dir": 5
+  },
+  "consistent": 264,
+  "inconsistent": 0,
+  "consistency": 1.0,
+  "hypothesis": "buy = YES-taker (lifts the ask); sell = NO-taker (hits the bid)",
+  "verdict": "PROVEN",
+  "consequence": "mapping may be applied",
+  "why_this_bar": "95% consistency on at least 20 resolvable rows. A mis-read aggressor turns non-interaction into TRADE_AT_PRICE and fabricates the very evidence this exercise exists to find."
+ },
+ "tape": {
+  "markets": {
+   "cpc-btc-updown-15m-2026-09-23-1615z": 267,
+   "cpc-btc-updown-15m-2026-09-23-1630z": 321
+  },
+  "rows_with_on_row_book": 269,
+  "rows_total": 588
+ },
+ "orders": {
+  "realtime_total": 334,
+  "with_authenticated_tape": 68,
+  "windows_with_tape": [
+   "16:15",
+   "16:30"
+  ]
+ },
+ "per_window_classes": {
+  "16:15": {
+   "OBSERVABLE_FILL_PLAUSIBLE": 3,
+   "side_UP": 37,
+   "TRADE_THROUGH_PRICE": 3,
+   "side_DOWN": 12,
+   "NO_INTERACTION": 37,
+   "QUEUE_AMBIGUOUS": 6
+  },
+  "16:30": {
+   "QUEUE_AMBIGUOUS": 3,
+   "side_UP": 17,
+   "TRADE_THROUGH_PRICE": 10,
+   "side_DOWN": 2,
+   "NO_INTERACTION": 6
+  }
+ },
+ "bounds": {
+  "label": "PMUS_MIRROR_RAW_BOUNDS_V1",
+  "classes": {
+   "OBSERVABLE_FILL_PLAUSIBLE": 3,
+   "TRADE_THROUGH_PRICE": 13,
+   "NO_INTERACTION": 43,
+   "QUEUE_AMBIGUOUS": 9
+  },
+  "orders": 68,
+  "bound_definitions": {
+   "STRICT": "TRADE_THROUGH_PRICE only -- queue-INDEPENDENT: a print through our price consumed everything resting at it",
+   "PLAUSIBLE": "TRADE_AT_PRICE / TRADE_THROUGH_PRICE / OBSERVABLE_FILL_PLAUSIBLE -- real interaction, but queue-DEPENDENT",
+   "COPYABILITY": "every action maker-copyable at receipt, no interaction requirement -- the upper bound"
+  },
+  "bounds": {
+   "STRICT": {
+    "bound": "STRICT",
+    "first_side_acquisition": "DOWN",
+    "opposite_side_acquisition": true,
+    "acquisitions": 13,
+    "up": 10,
+    "dn": 3,
+    "matched_pairs": 3,
+    "avg_pair_cost": "1.1007",
+    "residual_units": 7,
+    "residual_cost_basis_usd": "4.4380",
+    "residual_settlement_pnl": null,
+    "residual_note": "UNMARKED. Its value is the window's outcome, which is not knowable from the tape, and L5's own residual line is negative.",
+    "settlement_implied_pnl_matched_usd": "-0.3020",
+    "maker_rebate_accrual_usd": "0.0373",
+    "taker_fees_usd": "0.0000",
+    "taker_fees_note": "every intent is a maker join; nothing crosses",
+    "liquidity_rewards_usd": "0.00",
+    "net_shadow_economics_usd": "-0.2647",
+    "net_note": "matched settlement plus the rebate ACCRUAL. The residual is excluded because it is unmarked, so this is not a complete P&L.",
+    "label": "SHADOW. No order existed; no fill is claimed."
+   },
+   "PLAUSIBLE": {
+    "bound": "PLAUSIBLE",
+    "first_side_acquisition": "UP",
+    "opposite_side_acquisition": true,
+    "acquisitions": 16,
+    "up": 13,
+    "dn": 3,
+    "matched_pairs": 3,
+    "avg_pair_cost": "1.0590",
+    "residual_units": 10,
+    "residual_cost_basis_usd": "5.9231",
+    "residual_settlement_pnl": null,
+    "residual_note": "UNMARKED. Its value is the window's outcome, which is not knowable from the tape, and L5's own residual line is negative.",
+    "settlement_implied_pnl_matched_usd": "-0.1769",
+    "maker_rebate_accrual_usd": "0.0466",
+    "taker_fees_usd": "0.0000",
+    "taker_fees_note": "every intent is a maker join; nothing crosses",
+    "liquidity_rewards_usd": "0.00",
+    "net_shadow_economics_usd": "-0.1303",
+    "net_note": "matched settlement plus the rebate ACCRUAL. The residual is excluded because it is unmarked, so this is not a complete P&L.",
+    "label": "SHADOW. No order existed; no fill is claimed."
+   },
+   "COPYABILITY": {
+    "bound": "COPYABILITY",
+    "first_side_acquisition": "UP",
+    "opposite_side_acquisition": true,
+    "acquisitions": 26,
+    "up": 16,
+    "dn": 10,
+    "matched_pairs": 10,
+    "avg_pair_cost": "1.1046",
+    "residual_units": 6,
+    "residual_cost_basis_usd": "2.8238",
+    "residual_settlement_pnl": null,
+    "residual_note": "UNMARKED. Its value is the window's outcome, which is not knowable from the tape, and L5's own residual line is negative.",
+    "settlement_implied_pnl_matched_usd": "-1.0463",
+    "maker_rebate_accrual_usd": "0.0734",
+    "taker_fees_usd": "0.0000",
+    "taker_fees_note": "every intent is a maker join; nothing crosses",
+    "liquidity_rewards_usd": "0.00",
+    "net_shadow_economics_usd": "-0.9729",
+    "net_note": "matched settlement plus the rebate ACCRUAL. The residual is excluded because it is unmarked, so this is not a complete P&L.",
+    "label": "SHADOW. No order existed; no fill is claimed."
+   }
+  },
+  "never_mixed": "each bound has its own inventory; no figure crosses between them",
+  "any_actual_fill": false
+ },
+ "comparison": {
+  "ACTUAL_L5": {
+   "actions": 510,
+   "relations": {
+    "open": 33,
+    "extend": 294,
+    "complete": 183
+   },
+   "sides": {
+    "DOWN": 277,
+    "UP": 233
+   },
+   "p_extend": 0.576,
+   "p_extend_historical_btc15m": 0.66,
+   "sells": 0
+  },
+  "MIRROR_RAW": {
+   "STRICT": {
+    "bound": "STRICT",
+    "first_side_acquisition": "DOWN",
+    "opposite_side_acquisition": true,
+    "acquisitions": 13,
+    "up": 10,
+    "dn": 3,
+    "matched_pairs": 3,
+    "avg_pair_cost": "1.1007",
+    "residual_units": 7,
+    "residual_cost_basis_usd": "4.4380",
+    "residual_settlement_pnl": null,
+    "residual_note": "UNMARKED. Its value is the window's outcome, which is not knowable from the tape, and L5's own residual line is negative.",
+    "settlement_implied_pnl_matched_usd": "-0.3020",
+    "maker_rebate_accrual_usd": "0.0373",
+    "taker_fees_usd": "0.0000",
+    "taker_fees_note": "every intent is a maker join; nothing crosses",
+    "liquidity_rewards_usd": "0.00",
+    "net_shadow_economics_usd": "-0.2647",
+    "net_note": "matched settlement plus the rebate ACCRUAL. The residual is excluded because it is unmarked, so this is not a complete P&L.",
+    "label": "SHADOW. No order existed; no fill is claimed."
+   },
+   "PLAUSIBLE": {
+    "bound": "PLAUSIBLE",
+    "first_side_acquisition": "UP",
+    "opposite_side_acquisition": true,
+    "acquisitions": 16,
+    "up": 13,
+    "dn": 3,
+    "matched_pairs": 3,
+    "avg_pair_cost": "1.0590",
+    "residual_units": 10,
+    "residual_cost_basis_usd": "5.9231",
+    "residual_settlement_pnl": null,
+    "residual_note": "UNMARKED. Its value is the window's outcome, which is not knowable from the tape, and L5's own residual line is negative.",
+    "settlement_implied_pnl_matched_usd": "-0.1769",
+    "maker_rebate_accrual_usd": "0.0466",
+    "taker_fees_usd": "0.0000",
+    "taker_fees_note": "every intent is a maker join; nothing crosses",
+    "liquidity_rewards_usd": "0.00",
+    "net_shadow_economics_usd": "-0.1303",
+    "net_note": "matched settlement plus the rebate ACCRUAL. The residual is excluded because it is unmarked, so this is not a complete P&L.",
+    "label": "SHADOW. No order existed; no fill is claimed."
+   },
+   "COPYABILITY": {
+    "bound": "COPYABILITY",
+    "first_side_acquisition": "UP",
+    "opposite_side_acquisition": true,
+    "acquisitions": 26,
+    "up": 16,
+    "dn": 10,
+    "matched_pairs": 10,
+    "avg_pair_cost": "1.1046",
+    "residual_units": 6,
+    "residual_cost_basis_usd": "2.8238",
+    "residual_settlement_pnl": null,
+    "residual_note": "UNMARKED. Its value is the window's outcome, which is not knowable from the tape, and L5's own residual line is negative.",
+    "settlement_implied_pnl_matched_usd": "-1.0463",
+    "maker_rebate_accrual_usd": "0.0734",
+    "taker_fees_usd": "0.0000",
+    "taker_fees_note": "every intent is a maker join; nothing crosses",
+    "liquidity_rewards_usd": "0.00",
+    "net_shadow_economics_usd": "-0.9729",
+    "net_note": "matched settlement plus the rebate ACCRUAL. The residual is excluded because it is unmarked, so this is not a complete P&L.",
+    "label": "SHADOW. No order existed; no fill is claimed."
+   }
+  },
+  "CLONE_MODEL": {
+   "ticks": {
+    "QUOTE": 167,
+    "HOLD": 32
+   },
+   "quote_relations": {
+    "open": 167
+   },
+   "hold_reasons": {
+    "entry_band": 32
+   },
+   "note": "advances inventory only on fill evidence; the feed supplies none, so it stays at OPEN by construction"
+  },
+  "note": "three separate accounts; never summed"
+ }
+}

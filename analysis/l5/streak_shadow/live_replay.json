@@ -1,0 +1,213 @@
+{
+ "arms_disagree": {
+  "n": 33,
+  "pct": 5.1,
+  "transitions": {
+   "complete->extend": 14,
+   "extend->complete": 10,
+   "open->complete": 5,
+   "open->extend": 4
+  }
+ },
+ "conversion_matrix_sampled_to_acted": {
+  "complete": {
+   "complete": 163,
+   "extend": 0,
+   "hold": 0,
+   "open": 0
+  },
+  "extend": {
+   "complete": 72,
+   "extend": 213,
+   "hold": 0,
+   "open": 0
+  },
+  "open": {
+   "complete": 4,
+   "extend": 0,
+   "hold": 1,
+   "open": 197
+  }
+ },
+ "corpus": {
+  "campaigns": 37,
+  "decisions": 650,
+  "first_t_utc": "2026-09-13T13:00:23.074043+00:00",
+  "last_t_utc": "2026-09-13T21:10:25.240641+00:00",
+  "markets": 37,
+  "order_join": {
+   "joined": 582,
+   "unjoinable": 7
+  },
+  "safety_shell_versions": [
+   "R5FT/cap30.00/unmatched-none/complete-l5touch/conc1/maker-only/rest-model5s/action1.00"
+  ]
+ },
+ "distributions": {
+  "acted_incl_hold": {
+   "complete": 0.3677,
+   "extend": 0.3277,
+   "hold": 0.0015,
+   "open": 0.3031
+  },
+  "l1_acted_vs_l5": 0.2248,
+  "l1_acted_vs_sampled_frozen": 0.2369,
+  "l1_sampled_frozen_vs_l5": 0.0121,
+  "l1_sampled_streak_vs_l5": 0.0346,
+  "l5_expected_frozen": {
+   "complete": 0.2568,
+   "extend": 0.4335,
+   "open": 0.3097
+  },
+  "l5_expected_streak": {
+   "complete": 0.2664,
+   "extend": 0.4456,
+   "open": 0.2881
+  },
+  "sampled_frozen": {
+   "complete": 0.2508,
+   "extend": 0.4385,
+   "open": 0.3108
+  },
+  "sampled_streak": {
+   "complete": 0.2523,
+   "extend": 0.4508,
+   "open": 0.2969
+  }
+ },
+ "executability_classes": {
+  "A": {
+   "n": 2,
+   "pct_of_overrides": 2.6
+  },
+  "B": {
+   "n": 75,
+   "pct_of_overrides": 97.4
+  }
+ },
+ "fills": {
+  "complete": {
+   "fill_rate": 0.0678,
+   "filled": 16,
+   "orders": 236,
+   "outcomes": {
+    "filled": 16,
+    "no_fill_cancelled": 220
+   }
+  },
+  "complete_chosen_by_model": {
+   "fill_rate": 0.0802,
+   "filled": 13,
+   "orders": 162,
+   "outcomes": {
+    "filled": 13,
+    "no_fill_cancelled": 149
+   }
+  },
+  "complete_forced_by_override": {
+   "fill_rate": 0.0405,
+   "filled": 3,
+   "orders": 74,
+   "outcomes": {
+    "filled": 3,
+    "no_fill_cancelled": 71
+   }
+  },
+  "extend": {
+   "fill_rate": 0.1407,
+   "filled": 19,
+   "orders": 135,
+   "outcomes": {
+    "filled": 19,
+    "no_fill_cancelled": 116
+   }
+  },
+  "open": {
+   "fill_rate": 0.0471,
+   "filled": 9,
+   "orders": 191,
+   "outcomes": {
+    "filled": 9,
+    "no_fill_cancelled": 182
+   }
+  }
+ },
+ "labels": "SHADOW ONLY; no live behaviour was changed by this replay",
+ "override_reasons": {
+  "by_shell_gate": {
+   "entry_band_left": {
+    "n": 75,
+    "pct_of_overrides": 97.4
+   },
+   "residual_cap": {
+    "n": 2,
+    "pct_of_overrides": 2.6
+   }
+  },
+  "by_taxonomy": {
+   "fee_safe": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "inventory_state": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "no_legal_maker_price": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "opening_budget": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "order_rest_limit": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "other": {
+    "n": 75,
+    "pct_of_overrides": 97.4
+   },
+   "pair_ceiling": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "post_only": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "residual_risk": {
+    "n": 2,
+    "pct_of_overrides": 2.6
+   },
+   "settlement_horizon": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   },
+   "stale_evidence": {
+    "n": 0,
+    "pct_of_overrides": 0.0
+   }
+  },
+  "converted_decisions": 77,
+  "share_of_all_decisions": 0.1185
+ },
+ "rng_control": {
+  "draws_checked": 650,
+  "note": "both arms are drawn from the engine's own u; a mismatch here would invalidate every comparison below",
+  "reproduced_the_engines_own_draw": 650
+ },
+ "streak_coverage": {
+  "by_bucket": {
+   "s0": 167,
+   "s1": 166,
+   "s2": 140,
+   "s3": 10,
+   "s4+": 163,
+   "unknown": 4
+  },
+  "cells_backed_off_to_production": 171,
+  "cells_with_evidence": 479
+ }
+}

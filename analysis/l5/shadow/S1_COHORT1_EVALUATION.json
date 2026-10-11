@@ -1,0 +1,664 @@
+{
+  "cohort": {
+    "preregistered_n": 25,
+    "markets": [
+      "btc-updown-5m-1791257700",
+      "eth-updown-15m-1791257400",
+      "btc-updown-5m-1791258300",
+      "eth-updown-5m-1791258600",
+      "bitcoin-up-or-down-october-5-2026-11pm-et",
+      "eth-updown-5m-1791259200",
+      "eth-updown-5m-1791259500",
+      "btc-updown-15m-1791259200",
+      "eth-updown-5m-1791260100",
+      "eth-updown-5m-1791260400",
+      "eth-updown-15m-1791260100",
+      "eth-updown-5m-1791261000",
+      "btc-updown-5m-1791261300",
+      "eth-updown-15m-1791261000",
+      "eth-updown-5m-1791261900",
+      "btc-updown-5m-1791262800",
+      "eth-updown-5m-1791263100",
+      "btc-updown-15m-1791262800",
+      "btc-updown-5m-1791263700",
+      "eth-updown-5m-1791264000",
+      "eth-updown-15m-1791263700",
+      "btc-updown-5m-1791264600",
+      "btc-updown-5m-1791264900",
+      "eth-updown-15m-1791264600",
+      "btc-updown-5m-1791265500"
+    ],
+    "n": 25,
+    "held_out_not_pooled": 0
+  },
+  "fill_opportunity": {
+    "evidenced_fills_total": 313,
+    "evidenced_fills_per_market_mean": 12.52,
+    "evidenced_fills_per_market_median": 13,
+    "markets_with_zero_evidenced_fills": 0,
+    "uncertain_fills_total_EXCLUDED": 1138,
+    "uncertain_to_evidenced_ratio": 3.64,
+    "median_fill_gap_s": 2.6
+  },
+  "inventory_formation": {
+    "both_outcome_fill_markets": 22,
+    "both_outcome_fill_fraction": 0.88,
+    "matched_fraction_median": 0.6667,
+    "terminal_residual_shares_median": 94.44,
+    "terminal_residual_shares_max": 188.88,
+    "residual_cap_shares": 80,
+    "pair_cost_median": 0.8491,
+    "pair_cost_n": 22,
+    "pair_cost_below_1": 22
+  },
+  "capital": {
+    "hypothetical_peak_notional_usd_per_market_max": 265.85,
+    "hypothetical_notional_usd_median": 138.83,
+    "note": "gross notional of evidenced hypothetical fills. NOT capital deployed, NOT P&L, and NOT realized: no order was ever submitted and no capital was at risk."
+  },
+  "markouts_signed_as_buyer": {
+    "definition": "markout = mid(t+h) - our fill price, signed as a buyer: positive means the mid rose after we bought. A horizon past the market's last observation is reported as missing coverage, never extrapolated.",
+    "spread_capture_at_fill": {
+      "n": 312,
+      "mean": -0.02676,
+      "median": -0.015,
+      "note": "mid at the fill minus our price. This is the mechanical edge a passive bid starts with; it is NOT profit and is not realized."
+    },
+    "horizons": {
+      "plus_1s": {
+        "n": 312,
+        "missing_coverage": 1,
+        "markout_mean": -0.02946,
+        "markout_median": -0.0225,
+        "adverse_drift_mean": -0.0027,
+        "adverse_drift_median": 0.0
+      },
+      "plus_5s": {
+        "n": 309,
+        "missing_coverage": 4,
+        "markout_mean": -0.03398,
+        "markout_median": -0.025,
+        "adverse_drift_mean": -0.00706,
+        "adverse_drift_median": 0.0
+      },
+      "plus_10s": {
+        "n": 305,
+        "missing_coverage": 8,
+        "markout_mean": -0.04111,
+        "markout_median": -0.035,
+        "adverse_drift_mean": -0.0141,
+        "adverse_drift_median": -0.01
+      },
+      "plus_30s": {
+        "n": 294,
+        "missing_coverage": 19,
+        "markout_mean": -0.04744,
+        "markout_median": -0.055,
+        "adverse_drift_mean": -0.01995,
+        "adverse_drift_median": -0.03
+      },
+      "plus_60s": {
+        "n": 279,
+        "missing_coverage": 34,
+        "markout_mean": -0.02788,
+        "markout_median": -0.035,
+        "adverse_drift_mean": -0.00012,
+        "adverse_drift_median": -0.02
+      }
+    }
+  },
+  "per_market": [
+    {
+      "market": "btc-updown-5m-1791257700",
+      "observations": 109,
+      "span_s": 142.6,
+      "evidenced_fills": 4,
+      "uncertain_fills_excluded": 16,
+      "fills_by_outcome": {
+        "down": 4
+      },
+      "both_outcomes_filled": false,
+      "inventory_shares": {
+        "down": 94.44,
+        "up": 0.0
+      },
+      "matched_shares": 0.0,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.0,
+      "pair_cost": null,
+      "notional_usd": 7.08,
+      "median_fill_gap_s": 1.3
+    },
+    {
+      "market": "eth-updown-15m-1791257400",
+      "observations": 228,
+      "span_s": 297.9,
+      "evidenced_fills": 10,
+      "uncertain_fills_excluded": 72,
+      "fills_by_outcome": {
+        "up": 3,
+        "down": 7
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 165.26999999999998,
+        "up": 70.83
+      },
+      "matched_shares": 70.83,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.6,
+      "pair_cost": 0.9829,
+      "notional_usd": 161.94,
+      "median_fill_gap_s": 5.2
+    },
+    {
+      "market": "btc-updown-5m-1791258300",
+      "observations": 228,
+      "span_s": 298.1,
+      "evidenced_fills": 16,
+      "uncertain_fills_excluded": 11,
+      "fills_by_outcome": {
+        "up": 6,
+        "down": 10
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 236.1,
+        "up": 141.66
+      },
+      "matched_shares": 141.66,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.75,
+      "pair_cost": 0.814,
+      "notional_usd": 147.8,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "eth-updown-5m-1791258600",
+      "observations": 227,
+      "span_s": 299.1,
+      "evidenced_fills": 12,
+      "uncertain_fills_excluded": 4,
+      "fills_by_outcome": {
+        "down": 8,
+        "up": 4
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 188.88,
+        "up": 94.44
+      },
+      "matched_shares": 94.44,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.6667,
+      "pair_cost": 0.955,
+      "notional_usd": 124.9,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "bitcoin-up-or-down-october-5-2026-11pm-et",
+      "observations": 195,
+      "span_s": 298.6,
+      "evidenced_fills": 14,
+      "uncertain_fills_excluded": 22,
+      "fills_by_outcome": {
+        "up": 7,
+        "down": 7
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 165.26999999999998,
+        "up": 165.26999999999998
+      },
+      "matched_shares": 165.27,
+      "terminal_residual_shares": 0.0,
+      "matched_fraction": 1.0,
+      "pair_cost": 0.8643,
+      "notional_usd": 142.84,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "eth-updown-5m-1791259200",
+      "observations": 227,
+      "span_s": 297.3,
+      "evidenced_fills": 13,
+      "uncertain_fills_excluded": 4,
+      "fills_by_outcome": {
+        "down": 5,
+        "up": 8
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 118.05,
+        "up": 188.88
+      },
+      "matched_shares": 118.05,
+      "terminal_residual_shares": 70.83,
+      "matched_fraction": 0.7692,
+      "pair_cost": 0.8732,
+      "notional_usd": 146.38,
+      "median_fill_gap_s": 7.9
+    },
+    {
+      "market": "eth-updown-5m-1791259500",
+      "observations": 228,
+      "span_s": 298.5,
+      "evidenced_fills": 6,
+      "uncertain_fills_excluded": 4,
+      "fills_by_outcome": {
+        "up": 1,
+        "down": 5
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 118.05,
+        "up": 23.61
+      },
+      "matched_shares": 23.61,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.3333,
+      "pair_cost": 0.892,
+      "notional_usd": 52.41,
+      "median_fill_gap_s": 1.3
+    },
+    {
+      "market": "btc-updown-15m-1791259200",
+      "observations": 229,
+      "span_s": 299.3,
+      "evidenced_fills": 4,
+      "uncertain_fills_excluded": 104,
+      "fills_by_outcome": {
+        "up": 1,
+        "down": 3
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 70.83,
+        "up": 23.61
+      },
+      "matched_shares": 23.61,
+      "terminal_residual_shares": 47.22,
+      "matched_fraction": 0.5,
+      "pair_cost": 0.98,
+      "notional_usd": 24.08,
+      "median_fill_gap_s": 48.8
+    },
+    {
+      "market": "eth-updown-5m-1791260100",
+      "observations": 226,
+      "span_s": 298.5,
+      "evidenced_fills": 18,
+      "uncertain_fills_excluded": 111,
+      "fills_by_outcome": {
+        "down": 13,
+        "up": 5
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 306.93,
+        "up": 118.05
+      },
+      "matched_shares": 118.05,
+      "terminal_residual_shares": 188.88,
+      "matched_fraction": 0.5556,
+      "pair_cost": 0.9663,
+      "notional_usd": 180.62,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "eth-updown-5m-1791260400",
+      "observations": 228,
+      "span_s": 298.2,
+      "evidenced_fills": 14,
+      "uncertain_fills_excluded": 18,
+      "fills_by_outcome": {
+        "up": 5,
+        "down": 9
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 212.49,
+        "up": 118.05
+      },
+      "matched_shares": 118.05,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.7143,
+      "pair_cost": 0.7798,
+      "notional_usd": 124.9,
+      "median_fill_gap_s": 5.4
+    },
+    {
+      "market": "eth-updown-15m-1791260100",
+      "observations": 229,
+      "span_s": 298.7,
+      "evidenced_fills": 14,
+      "uncertain_fills_excluded": 85,
+      "fills_by_outcome": {
+        "down": 5,
+        "up": 9
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 118.05,
+        "up": 212.49
+      },
+      "matched_shares": 118.05,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.7143,
+      "pair_cost": 0.8144,
+      "notional_usd": 158.9,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "eth-updown-5m-1791261000",
+      "observations": 228,
+      "span_s": 297.8,
+      "evidenced_fills": 4,
+      "uncertain_fills_excluded": 4,
+      "fills_by_outcome": {
+        "up": 4
+      },
+      "both_outcomes_filled": false,
+      "inventory_shares": {
+        "down": 0.0,
+        "up": 94.44
+      },
+      "matched_shares": 0.0,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.0,
+      "pair_cost": null,
+      "notional_usd": 53.12,
+      "median_fill_gap_s": 1.3
+    },
+    {
+      "market": "btc-updown-5m-1791261300",
+      "observations": 227,
+      "span_s": 298.4,
+      "evidenced_fills": 15,
+      "uncertain_fills_excluded": 18,
+      "fills_by_outcome": {
+        "up": 7,
+        "down": 8
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 188.88,
+        "up": 165.26999999999998
+      },
+      "matched_shares": 165.27,
+      "terminal_residual_shares": 23.61,
+      "matched_fraction": 0.9333,
+      "pair_cost": 0.8321,
+      "notional_usd": 146.85,
+      "median_fill_gap_s": 4.0
+    },
+    {
+      "market": "eth-updown-15m-1791261000",
+      "observations": 229,
+      "span_s": 298.2,
+      "evidenced_fills": 6,
+      "uncertain_fills_excluded": 177,
+      "fills_by_outcome": {
+        "up": 5,
+        "down": 1
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 23.61,
+        "up": 118.05
+      },
+      "matched_shares": 23.61,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.3333,
+      "pair_cost": 0.928,
+      "notional_usd": 71.77,
+      "median_fill_gap_s": 6.6
+    },
+    {
+      "market": "eth-updown-5m-1791261900",
+      "observations": 230,
+      "span_s": 299.2,
+      "evidenced_fills": 20,
+      "uncertain_fills_excluded": 12,
+      "fills_by_outcome": {
+        "down": 8,
+        "up": 12
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 188.88,
+        "up": 283.32
+      },
+      "matched_shares": 188.88,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.8,
+      "pair_cost": 0.7146,
+      "notional_usd": 160.55,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "btc-updown-5m-1791262800",
+      "observations": 229,
+      "span_s": 297.8,
+      "evidenced_fills": 20,
+      "uncertain_fills_excluded": 21,
+      "fills_by_outcome": {
+        "up": 12,
+        "down": 8
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 188.88,
+        "up": 283.32
+      },
+      "matched_shares": 188.88,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.8,
+      "pair_cost": 0.7329,
+      "notional_usd": 161.26,
+      "median_fill_gap_s": 3.9
+    },
+    {
+      "market": "eth-updown-5m-1791263100",
+      "observations": 230,
+      "span_s": 299.3,
+      "evidenced_fills": 18,
+      "uncertain_fills_excluded": 28,
+      "fills_by_outcome": {
+        "down": 11,
+        "up": 7
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 259.71,
+        "up": 165.26999999999998
+      },
+      "matched_shares": 165.27,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.7778,
+      "pair_cost": 0.6758,
+      "notional_usd": 141.66,
+      "median_fill_gap_s": 1.3
+    },
+    {
+      "market": "btc-updown-15m-1791262800",
+      "observations": 227,
+      "span_s": 297.9,
+      "evidenced_fills": 6,
+      "uncertain_fills_excluded": 117,
+      "fills_by_outcome": {
+        "up": 1,
+        "down": 5
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 118.05,
+        "up": 23.61
+      },
+      "matched_shares": 23.61,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.3333,
+      "pair_cost": 0.9752,
+      "notional_usd": 25.4,
+      "median_fill_gap_s": 11.8
+    },
+    {
+      "market": "btc-updown-5m-1791263700",
+      "observations": 230,
+      "span_s": 298.9,
+      "evidenced_fills": 22,
+      "uncertain_fills_excluded": 19,
+      "fills_by_outcome": {
+        "up": 13,
+        "down": 9
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 212.49,
+        "up": 306.93
+      },
+      "matched_shares": 212.49,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.8182,
+      "pair_cost": 0.7261,
+      "notional_usd": 180.14,
+      "median_fill_gap_s": 3.9
+    },
+    {
+      "market": "eth-updown-5m-1791264000",
+      "observations": 229,
+      "span_s": 298.2,
+      "evidenced_fills": 18,
+      "uncertain_fills_excluded": 9,
+      "fills_by_outcome": {
+        "down": 11,
+        "up": 7
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 259.71,
+        "up": 165.26999999999998
+      },
+      "matched_shares": 165.27,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.7778,
+      "pair_cost": 0.7304,
+      "notional_usd": 138.83,
+      "median_fill_gap_s": 2.7
+    },
+    {
+      "market": "eth-updown-15m-1791263700",
+      "observations": 229,
+      "span_s": 297.7,
+      "evidenced_fills": 12,
+      "uncertain_fills_excluded": 79,
+      "fills_by_outcome": {
+        "up": 8,
+        "down": 4
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 94.44,
+        "up": 188.88
+      },
+      "matched_shares": 94.44,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.6667,
+      "pair_cost": 0.8175,
+      "notional_usd": 102.7,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "btc-updown-5m-1791264600",
+      "observations": 226,
+      "span_s": 299.4,
+      "evidenced_fills": 27,
+      "uncertain_fills_excluded": 25,
+      "fills_by_outcome": {
+        "down": 12,
+        "up": 15
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 283.32,
+        "up": 354.15
+      },
+      "matched_shares": 283.32,
+      "terminal_residual_shares": 70.83,
+      "matched_fraction": 0.8889,
+      "pair_cost": 0.882,
+      "notional_usd": 265.85,
+      "median_fill_gap_s": 2.0
+    },
+    {
+      "market": "btc-updown-5m-1791264900",
+      "observations": 229,
+      "span_s": 298.1,
+      "evidenced_fills": 6,
+      "uncertain_fills_excluded": 3,
+      "fills_by_outcome": {
+        "up": 1,
+        "down": 5
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 118.05,
+        "up": 23.61
+      },
+      "matched_shares": 23.61,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.3333,
+      "pair_cost": 0.834,
+      "notional_usd": 61.62,
+      "median_fill_gap_s": 24.9
+    },
+    {
+      "market": "eth-updown-15m-1791264600",
+      "observations": 229,
+      "span_s": 298.9,
+      "evidenced_fills": 10,
+      "uncertain_fills_excluded": 169,
+      "fills_by_outcome": {
+        "up": 7,
+        "down": 3
+      },
+      "both_outcomes_filled": true,
+      "inventory_shares": {
+        "down": 70.83,
+        "up": 165.26999999999998
+      },
+      "matched_shares": 70.83,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.6,
+      "pair_cost": 0.9324,
+      "notional_usd": 110.02,
+      "median_fill_gap_s": 2.6
+    },
+    {
+      "market": "btc-updown-5m-1791265500",
+      "observations": 225,
+      "span_s": 297.8,
+      "evidenced_fills": 4,
+      "uncertain_fills_excluded": 6,
+      "fills_by_outcome": {
+        "up": 4
+      },
+      "both_outcomes_filled": false,
+      "inventory_shares": {
+        "down": 0.0,
+        "up": 94.44
+      },
+      "matched_shares": 0.0,
+      "terminal_residual_shares": 94.44,
+      "matched_fraction": 0.0,
+      "pair_cost": null,
+      "notional_usd": 42.97,
+      "median_fill_gap_s": 5.2
+    }
+  ],
+  "discipline": {
+    "candidate_fingerprint": "441c375e35cc2d588b075d7d9f6a740db7c92f95c10bf7ea76caf333fe24b6fe",
+    "labels": "SHADOW ONLY. Not submitted, not filled, not settled, not realized. Uncertain fills are reported separately and excluded from every aggregate above.",
+    "no_parameter_changed_after_seeing_results": true
+  }
+}

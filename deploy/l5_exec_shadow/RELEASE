@@ -1,0 +1,108 @@
+{
+  "service": "l5-exec-shadow",
+  "code_sha": "2df9f7d29246a5650368dd6d80c14b4ae7e500ee",
+  "labels": "The commit whose CODE this image was built from. The promotion sentinel commit that triggers the build sits one commit later and changes only deploy/_promote/l5-exec-shadow, so the code serving is this tree. The image ships no .git, so provenance reads this file rather than an environment variable -- nothing in the supervisor can be configured by one.",
+  "window_forensics_migration": {
+    "module": "src/l5_window_forensics.py",
+    "module_sha256_before": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "module_sha256_after": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "argv": [
+      "--windows",
+      "3",
+      "--lead-s",
+      "120",
+      "--follow-s",
+      "300"
+    ],
+    "environment_before": {
+      "host": "session container (ephemeral, reclaimed three times on 2026-09-17: 17:16Z, 17:37Z, 18:10Z)",
+      "out_dir": "data/l5_window_forensics (container filesystem)",
+      "supervision": "none -- a bare process"
+    },
+    "environment_after": {
+      "host": "Railway service l5-exec-shadow (restartPolicyType ALWAYS)",
+      "out_dir": "/state/l5-research/l5-window-forensics/seg_<stamp>_<n> (50GB durable volume)",
+      "supervision": "src.l5_research_supervisor, freshness-watched"
+    },
+    "transition_utc": 1789669526.4022691,
+    "labels": "The module bytes are identical before and after. Only where it runs and where it writes changed. The container tape and the volume tape are separate tapes; neither continues the other and nothing is backfilled between them."
+  },
+  "pre_deploy_state_20260917T2005Z": {
+    "serving_deployment": "e6e180eb-9532-4be2-838c-871aa9c17cd4",
+    "serving_commit": "4518b64a85f99ff9a70068f1d1894a9a37236139",
+    "serving_code_sha": "5248ec3fe6e66b48394ecd6415b2b3716e20c35a",
+    "window_forensics_module_sha256": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6",
+    "segment": "/state/l5-research/l5-window-forensics/seg_20260917T183036Z_001",
+    "uptime_s_at_2000Z": 5411.6,
+    "failures": {
+      "exec_shadow": 0,
+      "gemini_depth": 0,
+      "chain_validate": 0,
+      "book_context": 0,
+      "gemini_surface": 0,
+      "window_forensics": 0
+    },
+    "terminal_states": [
+      {
+        "window": 1789670700,
+        "window_done_utc": 1789673100.153
+      },
+      {
+        "window": 1789672500,
+        "window_done_utc": 1789674904.113
+      },
+      {
+        "window": 1789674300,
+        "window_done_utc": 1789675509.592
+      }
+    ],
+    "labels": "recorded BEFORE the reporting promotion so the sample's provenance cannot be attributed to the deployment that scores it"
+  },
+  "frozen_specs_20260917": {
+    "FIDELITY_OBSERVABLE_V1": "d583fa4005d1b815223f40235d368a347208b942633603aa31d90f6dde58cb95",
+    "L5_ADAPTED_V1": "fe9d6557af80df02f40ac3a691650aa77da65f3b6505d818803ab54b8764d777",
+    "mechanism_verdict": "UNRESOLVED",
+    "chain_proven_parents": 208,
+    "units_scored": 238,
+    "L5_ADAPTED_PMUS_SPORTS": "2237304d81ac63f51ea2adaf43849f6220fca7578c4b4a18ba68dc112877915c",
+    "L5_ADAPTED_GEMINI_CRYPTO": "62d004d80b4af8b97823e239d8919ee3abff5420c0318d18623c2810bdb3c2a6",
+    "lane_labels": "each lane inherits 4 TRANSFERRED fields from FIDELITY_OBSERVABLE_V1 and measures nothing of its own yet; observed_here is empty for both."
+  },
+  "served_modules": {
+    "labels": "the SHA256 of every module this image serves, recorded at promotion. A test asserts these match the files on disk, so a RELEASE left stale by a promotion breaks CI instead of silently attributing a segment to code that did not produce it -- which is exactly what happened at 21:46Z, when the gemini_surface counters shipped under the previous code_sha.",
+    "modules": {
+      "exec_shadow": {
+        "module": "src.l5_shadow.service",
+        "module_sha256": "1459c50cff0eef9bca101e91bc343adb572d64c4a3d58422ec66006844ea43dc"
+      },
+      "gemini_depth": {
+        "module": "analysis.l5.gemini_depth.probe",
+        "module_sha256": "f97915a1b3e33725459594f846470c1e002d0b7cbe3ae7f783fd8644d2e4269c"
+      },
+      "chain_validate": {
+        "module": "analysis.l5.chain_observer.validate",
+        "module_sha256": "28ec7e051d88e86378bfe3a8a3a4e2692634debe36ac272b825c4021392f9028"
+      },
+      "book_context": {
+        "module": "src.l5_book_context",
+        "module_sha256": "8d59cdf426f9ad1c581cf61ba62340457abd0e890c927481e0f329e0e9c2bf7e"
+      },
+      "gemini_surface": {
+        "module": "src.gemini_l5_surface_shadow",
+        "module_sha256": "8ad4bb1ca723146a16b186e593f6a0feb2d027ff1b4ab324fbc9647f74da7734"
+      },
+      "surface_shadow": {
+        "module": "src.l5_surface.shadow",
+        "module_sha256": "965a96b7386e5b583d74cd0d1d0ec8978f52dde9a96117c5e2d8f93559243951"
+      },
+      "window_forensics": {
+        "module": "src.l5_window_forensics",
+        "module_sha256": "48214f23bfaee4f7f3999f017fd435c1babac8b68e808debf586777737ce68e6"
+      },
+      "pmus_surface": {
+        "module": "src.pmus_l5_surface_runner",
+        "module_sha256": "a64b7feba3df1bc626ffe75045e899e8e8684b4ee39091e5e54f2835e1c96064"
+      }
+    }
+  }
+}

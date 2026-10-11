@@ -1,0 +1,133 @@
+# LEAD/LAG LAYER-1 COLLECTOR -- READ-ONLY. No credential, no order path.
+#
+# It runs in CI because every external feed is BLOCKED from the research
+# container's egress proxy (403 on all four candidates), so admissibility
+# cannot even be established locally.
+#
+# PROBE FIRST, GATE, THEN COLLECT. A feed whose clock/timestamp semantics
+# cannot be established is rejected, and if fewer than two venues are
+# admissible the job stops rather than collect a consensus of one.
+#
+# It cannot disturb anything: its own concurrency group, its own request
+# file, its own outdir and its own commit allow-list. Layers 2 and 3 keep
+# coming from the recorder, untouched.
+name: gemini-leadlag
+
+on:
+  push:
+    paths:
+      - '.github/leadlag_request'
+
+concurrency:
+  group: gemini-leadlag
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  leadlag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prove the collector has NO order path
+        run: |
+          python - <<'PY'
+          import ast
+          for f in ("src/gemini_research/leadlag_collector.py",
+                    "src/gemini_research/leadlag_probe.py"):
+              src = open(f, encoding="utf-8").read()
+              t = ast.parse(src)
+              names = {n.attr for n in ast.walk(t)
+                       if isinstance(n, ast.Attribute)} | {
+                  n.id for n in ast.walk(t) if isinstance(n, ast.Name)}
+              bad = sorted({"place", "submit", "cancel", "attempt",
+                            "order_place", "build_sell"} & names)
+              assert not bad, (f, bad)
+              assert "/v1/prediction-markets/order" not in src, f
+              imports = set()
+              for n in ast.walk(t):
+                  if isinstance(n, ast.ImportFrom) and n.module:
+                      imports.add(n.module)
+                  elif isinstance(n, ast.Import):
+                      for al in n.names:
+                          imports.add(al.name)
+              for b in ("src.gemini_execution.transport",
+                        "src.gemini_execution.payload"):
+                  assert b not in imports, (f, b)
+              print("READ-ONLY:", f)
+          PY
+
+      - name: Feed admissibility probe
+        run: |
+          mkdir -p analysis/gemini/leadlag
+          python -m src.gemini_research.leadlag_probe \
+            > analysis/gemini/leadlag/feed_probe.json
+          python - <<'PY'
+          import json
+          v = json.load(open("analysis/gemini/leadlag/feed_probe.json"))
+          print("admissible:", v["admissible_venues"])
+          print("rejected:", json.dumps(v["rejected"], indent=2))
+          for p in v["probes"]:
+              print(" ", p["venue"], "admissible=", p.get("admissible"),
+                    "| clock=", json.dumps(p.get("clock")),
+                    "| seq=", p.get("sequence_id_published"),
+                    "| failed=", p.get("failed_requirement"))
+          # A CONSENSUS OF ONE IS NOT A CONSENSUS.
+          assert len(v["admissible_venues"]) >= 2, (
+              "fewer than two admissible feeds; refusing to build an "
+              "external consensus from one venue: %s" % v["rejected"])
+          PY
+
+      - name: Collect LAYER 1 (external venues only)
+        timeout-minutes: 70
+        run: |
+          mkdir -p data/gemini_leadlag analysis/gemini/leadlag
+          python -m src.gemini_research.leadlag_collector \
+            --outdir data/gemini_leadlag \
+            --duration-s 3600 --hz 1.0 \
+            --probe-out analysis/gemini/leadlag/feed_probe_run.json
+
+      - name: Preserve the tape
+        if: always()
+        run: |
+          mkdir -p analysis/gemini/leadlag
+          for f in data/gemini_leadlag/*.jsonl; do
+            [ -e "$f" ] || continue
+            gzip -9 -c "$f" > "analysis/gemini/leadlag/$(basename "$f").gz"
+          done
+          ls -la analysis/gemini/leadlag/ || true
+
+      - name: Commit the evidence
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in analysis/gemini/leadlag/*.jsonl.gz \
+                   analysis/gemini/leadlag/feed_probe*.json; do
+            if [ -e "$f" ]; then git add -- "$f"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "no new evidence artifact"; exit 0
+          fi
+          if git diff --cached --name-only \
+               | grep -qvE '^analysis/gemini/leadlag/(leadlag_l1_[0-9TZ]+\.jsonl\.gz|feed_probe(_run)?\.json)$'; then
+            echo "::error::refusing to commit outside the leadlag evidence"
+            git diff --cached --name-only; exit 1
+          fi
+          git commit -m "evidence(gemini): leadlag layer-1 tape [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:${{ github.ref_name }}; then exit 0; fi
+            git fetch origin ${{ github.ref_name }}
+            git rebase FETCH_HEAD || { git rebase --abort; exit 1; }
+            sleep $((attempt * 3))
+          done
+          echo "::error::could not push evidence"; exit 1

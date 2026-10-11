@@ -1,0 +1,83 @@
+{
+  "label": "L5_PREINCENTIVE_CASHFLOW_AUDIT_V1",
+  "what_the_claim_is": "trading_net_ex_incentives = matched*(1-pair_cost) + residual_accrual + spread_capture - confirmed_fees. Its largest term is MODELLED FROM PAIR COST and the actual redemption cashflow is excluded from it. This audit replaces it with cash_pnl = redemption + sell_proceeds - buy_principal - fees.",
+  "corpus": {
+    "rows_admitted": 776749,
+    "payload_not_list": 1,
+    "dupes_dropped": 7751
+  },
+  "unattributed_records": {
+    "no_conditionId_MAKER_REBATE": 110,
+    "no_conditionId_TAKER_REBATE": 73,
+    "no_conditionId_REWARD": 20
+  },
+  "confirmed_fee_legs": 1537,
+  "pre_incentive_boundary_utc": "2026-08-01T00:00:00Z",
+  "aggregates": [
+    {
+      "label": "ALL pre-incentive conditions",
+      "events": 6252,
+      "buy_principal": 2962059.76,
+      "sell_proceeds": 2.18,
+      "redeem_cash": 3010789.73,
+      "fees_confirmed": 438.17,
+      "events_with_confirmed_fee": 380,
+      "CASH_PNL": 48293.97,
+      "fills": 336342
+    },
+    {
+      "label": "pre-incentive WITH a redemption record",
+      "events": 5870,
+      "buy_principal": 2948223.21,
+      "sell_proceeds": 0.0,
+      "redeem_cash": 3010789.73,
+      "fees_confirmed": 0.0,
+      "events_with_confirmed_fee": 0,
+      "CASH_PNL": 62566.52,
+      "fills": 335220
+    },
+    {
+      "label": "pre-incentive WITHOUT any redemption record",
+      "events": 382,
+      "buy_principal": 13836.55,
+      "sell_proceeds": 2.18,
+      "redeem_cash": 0.0,
+      "fees_confirmed": 438.17,
+      "events_with_confirmed_fee": 380,
+      "CASH_PNL": -14272.55,
+      "fills": 1122
+    },
+    {
+      "label": "FULLY RECONCILED (redemption AND confirmed fee)",
+      "events": 0,
+      "buy_principal": 0,
+      "sell_proceeds": 0,
+      "redeem_cash": 0,
+      "fees_confirmed": 0,
+      "events_with_confirmed_fee": 0,
+      "CASH_PNL": 0,
+      "fills": 0
+    }
+  ],
+  "coverage": {
+    "pre_incentive_conditions": 6252,
+    "with_redemption": 5870,
+    "with_redemption_pct": 93.89,
+    "fully_reconciled": 0,
+    "fully_reconciled_pct": 0.0
+  },
+  "fee_stress_test": {
+    "claim_usd": 20424.0,
+    "pre_incentive_fills": 336342,
+    "breakeven_missing_cost_per_fill": 0.060724,
+    "note": "the average additional cost per TRADE fill that would take the claim to exactly $0"
+  },
+  "integrity_checks": {
+    "conditions_with_both_legs_redeemed": 0,
+    "conditions_where_redeem_exceeds_entitlement_by_gt_1": 73,
+    "largest_redeem_minus_entitlement": 293.55,
+    "sum_redeem_minus_entitlement": -1265.96,
+    "why": "redemption should pay $1 per winning share HELD. Cash materially above entitlement would mean the ledger credits shares L5 did not hold -- i.e. artificial profit."
+  },
+  "profit_attribution": "NONE for our account. Historical reconstruction of another trader's public activity."
+}

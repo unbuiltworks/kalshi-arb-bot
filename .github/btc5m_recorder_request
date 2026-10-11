@@ -1,0 +1,3 @@
+BTC5m research recorder request
+requested: 2026-10-05T14:33:25Z
+retry: 5 -- the GATE step failed on a PASSING validation: its success branch still printed the renamed key v["book_states"]. I fixed that key in the informational echo and reported it fixed without grepping for the second reference. Stage 2 has therefore never run. Proved locally that the gate now exits 0 on run 6 validation.json (pass true, 9/9).

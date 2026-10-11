@@ -1,0 +1,71 @@
+{
+  "label": "GEMINI_L5_PREMUTATION_PROBE_V1",
+  "utc": "2026-09-19T03:28:43.650072+00:00",
+  "driver_executable_sha": "50996ee0f7d36126273299919a9be8bb8d4cf6135a1a0bd63f427cbee37659bd",
+  "driver_envelope_sha": "b3bff654b55a6792a72b5ea7ac39157a3a1d4183b15cc4ada4bdc961bd77aa17",
+  "envelope": {
+    "max_actions": "12",
+    "action_size": "0.01",
+    "max_total_spend_usd": "0.15",
+    "max_residual": "0.04",
+    "max_imbalance": "0.04",
+    "max_yes": "0.10",
+    "max_no": "0.10",
+    "no_new_open_extend_tte_s": "60.0",
+    "withdraw_all_tte_s": "30.0",
+    "cohort_prefix": "GEMI-BTC05M",
+    "maker_tif": "MOC"
+  },
+  "gates": [
+    {
+      "gate": "symbol_selected",
+      "ok": false,
+      "why": "no BTC5m contract is inside the entry band [90.0, 300.0] right now"
+    }
+  ],
+  "frames_sent": 0,
+  "latch_consumed": false,
+  "symbol_selection": {
+    "eligible": false,
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609190330-UP",
+        "tte_s": 76.34928011894226,
+        "contract_status": "active",
+        "market_state": "open",
+        "why": "tte 76.34928011894226 outside [90.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609190325-UP",
+        "tte_s": -223.65071988105774,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -223.65071988105774 outside [90.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609190320-UP",
+        "tte_s": -523.6507198810577,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -523.6507198810577 outside [90.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609190315-UP",
+        "tte_s": -823.6507198810577,
+        "contract_status": "settled",
+        "market_state": "closed",
+        "why": "tte -823.6507198810577 outside [90.0, 300.0]"
+      }
+    ],
+    "band": [
+      90.0,
+      300.0
+    ],
+    "why": "no BTC5m contract is inside the entry band [90.0, 300.0] right now"
+  },
+  "failed_gates": [
+    "symbol_selected"
+  ],
+  "verdict": "BLOCKED_BEFORE_THE_BOUNDARY",
+  "why": "no BTC5m contract is inside the entry band [90.0, 300.0] right now"
+}

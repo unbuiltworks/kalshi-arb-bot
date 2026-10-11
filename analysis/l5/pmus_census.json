@@ -1,0 +1,99 @@
+{
+ "generated_utc": "2026-09-02T18:40:00Z",
+ "workstream": "#167 comment 5514279117 \u2014 Polymarket US sports layer",
+ "api": {
+  "public_gateway": "https://gateway.polymarket.us (keyless, 20 req/s per IP)",
+  "endpoints_public": [
+   "/v1/markets",
+   "/v1/market/slug/{slug}",
+   "/v1/markets/{slug}/bbo",
+   "/v1/markets/{slug}/book",
+   "/v1/markets/{slug}/settlement",
+   "/v1/events",
+   "/v2/sports",
+   "/v2/leagues",
+   "/v2/leagues/{slug}/events",
+   "/v1/incentives"
+  ],
+  "auth_api": "https://api.polymarket.us (Ed25519; sig = ts+method+path; X-PM-* headers; keys via polymarket.us/developer after KYC'd app account)",
+  "websockets": {
+   "private": "wss://api.polymarket.us/v1/ws/private",
+   "markets": "wss://api.polymarket.us/v1/ws/markets (book + trade streaming; AUTH REQUIRED)"
+  },
+  "historical_trades_public": false,
+  "book_public_limitation": "public /book returned bid side only in every live sample; ask-side depth requires auth WS or short-side inference",
+  "order_features": [
+   "batch create/cancel/modify up to 20",
+   "preview order",
+   "close-position order",
+   "combos/RFQ (parlays)"
+  ],
+  "no_bare_trades_endpoint": "BBO carries lastTradePx + cumulative sharesTraded + openInterest -> keyless volume-delta flow proxy at poll cadence"
+ },
+ "fees_effective_2026_07_01": {
+  "taker": "0.06 * C * p * (1-p)",
+  "maker_rebate": "-0.0125 * C * p * (1-p) (paid at trade)",
+  "taker_volume_rebates": "10%/25%/50% at $250k/$1M/$10M prior-month taker volume; accelerated placement with proof of volume elsewhere",
+  "at_p50_per_100_contracts": {
+   "taker": "$1.50",
+   "maker_receives": "$0.31"
+  }
+ },
+ "incentives_live": {
+  "programs_total": 100,
+  "active_periods": 121,
+  "active_program_ids": {
+   "us_open_womens_20260901": {
+    "pool": 2500,
+    "period": "live",
+    "markets": "tennis (aqc-)"
+   },
+   "atp_wta_futures_20260712": {
+    "pool": 500,
+    "period": "daily_event"
+   },
+   "cfb_t2_period_winners_live_20260831": {
+    "pool": 1200,
+    "period": "live"
+   }
+  },
+  "mlb_programs_now": 0
+ },
+ "market_structure": {
+  "mlb_slate_2026_09_02": {
+   "events": 10,
+   "markets_per_event": "~15 (moneyline aec-, spreads asc-, totals tsc-, first-5 a5c-)"
+  },
+  "tick_size": "0.005 (half-cent)",
+  "whole_contracts_only": true,
+  "event_state_feed": "live score/inning/base state embedded in event metadata"
+ },
+ "live_microstructure_sample": {
+  "window_utc": "2026-09-02 ~18:22-18:34, two in-play MLB moneylines, 5s cadence",
+  "aec-mlb-sd-cin": {
+   "vol_shares_per_min": 7922,
+   "median_spread": 0.005,
+   "one_tick_spread_pct": 91.4,
+   "median_bid_touch_qty": 196681,
+   "last_px_bid_ask_mix": "46/54"
+  },
+  "aec-mlb-atl-wsh": {
+   "vol_shares_per_min": 816,
+   "median_spread": 0.005,
+   "one_tick_spread_pct": 100.0,
+   "median_bid_touch_qty": 167071,
+   "last_px_bid_ask_mix": "58/42"
+  }
+ },
+ "transfer_implications": {
+  "pair_economics_overlay": "matched pair under PMUS rebates averages ~1.57c vs 1.0c Gemini (bounds not loosened); see transfer_backtest_pmus_overlay.json",
+  "queue_reality": "~170-200k shares resting at touch: a q=1 join at the back of the touch queue effectively never fills at price; STRICT (price-through) tier is the correct fill expectation on PMUS, unlike Gemini where queues are ~250 shares",
+  "taker_completion_valve_cost": "~1.5c at mids (0.06*p*(1-p)) minus first-leg rebate; crossing to complete erases the 1c min edge unless spread capture exceeds ~1.2c",
+  "no_backtest_possible": "no public historical trades: PMUS requires FORWARD collection; global-Polymarket MLB replay is the flow proxy (25.1 matched/100 slots strict, 82.5% two-sided)"
+ },
+ "blockers": [
+  "auth WS (true trade tape + full book) needs an API key: operator-side account/KYC/developer-portal step; app may still be invite-gated",
+  "public /book ask-side gap must be resolved (auth WS or short-instrument book) before exact shadow fills",
+  "MLB has no liquidity program today; tennis/CFB pools exist \u2014 program schedule should steer venue-category choice"
+ ]
+}

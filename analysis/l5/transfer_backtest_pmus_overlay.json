@@ -1,0 +1,53 @@
+{
+ "labeling": "THEORETICAL cross-venue overlay: global-Polymarket flow, PMUS fee schedule (maker rebate 0.0125*p*(1-p)); completion bounds NOT loosened",
+ "results": {
+  "mlb:moneyline:optimistic": {
+   "slots": 577,
+   "matched": 231,
+   "holds": 128,
+   "amb": 5,
+   "pair_pnl_0fee": "2.3256402609",
+   "pair_pnl_pmus_rebate": "3.653831818908912252778375",
+   "avg_pair_pnl_pmus_cents": 1.58,
+   "hold_pnl_0fee": "6.1622249360",
+   "hold_pnl_pmus_rebate": "6.513287162228511887751750",
+   "net_pmus": "10.167118981137424140530125"
+  },
+  "mlb:moneyline:strict": {
+   "slots": 577,
+   "matched": 145,
+   "holds": 150,
+   "amb": 5,
+   "pair_pnl_0fee": "1.4445798386",
+   "pair_pnl_pmus_rebate": "2.271246995279196782550750",
+   "avg_pair_pnl_pmus_cents": 1.57,
+   "hold_pnl_0fee": "7.0487590942",
+   "hold_pnl_pmus_rebate": "7.464200692880722664799500",
+   "net_pmus": "9.735447688159919447350250"
+  },
+  "epl:moneyline:optimistic": {
+   "slots": 78,
+   "matched": 29,
+   "holds": 3,
+   "amb": 0,
+   "pair_pnl_0fee": "0.2868725174",
+   "pair_pnl_pmus_rebate": "0.445498945486132957736000",
+   "avg_pair_pnl_pmus_cents": 1.54,
+   "hold_pnl_0fee": "0.8699998295",
+   "hold_pnl_pmus_rebate": "0.877651078690124636621875",
+   "net_pmus": "1.323150024176257594357875"
+  },
+  "epl:moneyline:strict": {
+   "slots": 78,
+   "matched": 23,
+   "holds": 5,
+   "amb": 0,
+   "pair_pnl_0fee": "0.2282883504",
+   "pair_pnl_pmus_rebate": "0.358206005567926657358750",
+   "avg_pair_pnl_pmus_cents": 1.56,
+   "hold_pnl_0fee": "0.9299999993",
+   "hold_pnl_pmus_rebate": "0.942646249295099999993875",
+   "net_pmus": "1.300852254863026657352625"
+  }
+ }
+}

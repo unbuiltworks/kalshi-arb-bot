@@ -1,0 +1,707 @@
+{
+ "labeling": "print-only public-tape reconstruction of today's attempted windows; ledger initializer prices live on the container-local Railway ledger and are NOT reproduced here",
+ "windows": [
+  {
+   "window": "BTC05M2609021450",
+   "span_prints": 2,
+   "buys": 0,
+   "sells": 2,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 56.5,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.23",
+    "0.22"
+   ]
+  },
+  {
+   "window": "BTC05M2609021455",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021500",
+   "span_prints": 5,
+   "buys": 5,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 148.0,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.88",
+    "0.61",
+    "0.41",
+    "0.59",
+    "0.17"
+   ]
+  },
+  {
+   "window": "BTC05M2609021505",
+   "span_prints": 7,
+   "buys": 3,
+   "sells": 4,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 11.1,
+   "opp_print_latency_s": 83.6,
+   "prices": [
+    "0.28",
+    "0.21",
+    "0.15",
+    "0.1",
+    "0.42",
+    "0.76",
+    "0.77"
+   ]
+  },
+  {
+   "window": "BTC05M2609021510",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 1.5,
+   "opp_print_latency_s": 59.7,
+   "prices": [
+    "0.47",
+    "0.46"
+   ]
+  },
+  {
+   "window": "BTC05M2609021515",
+   "span_prints": 5,
+   "buys": 3,
+   "sells": 2,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 21.9,
+   "opp_print_latency_s": 23.9,
+   "prices": [
+    "0.45",
+    "0.31",
+    "0.18",
+    "0.31",
+    "0.44"
+   ]
+  },
+  {
+   "window": "BTC05M2609021520",
+   "span_prints": 2,
+   "buys": 2,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 40.3,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.81",
+    "0.85"
+   ]
+  },
+  {
+   "window": "BTC05M2609021525",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 28.0,
+   "opp_print_latency_s": 112.4,
+   "prices": [
+    "0.26",
+    "0.03"
+   ]
+  },
+  {
+   "window": "BTC05M2609021530",
+   "span_prints": 13,
+   "buys": 1,
+   "sells": 12,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 38.9,
+   "opp_print_latency_s": 31.9,
+   "prices": [
+    "0.28",
+    "0.35",
+    "0.43",
+    "0.43",
+    "0.36",
+    "0.67",
+    "0.64",
+    "0.64"
+   ]
+  },
+  {
+   "window": "BTC05M2609021535",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021540",
+   "span_prints": 3,
+   "buys": 2,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 60.4,
+   "opp_print_latency_s": 8.0,
+   "prices": [
+    "0.36",
+    "0.33",
+    "0.3"
+   ]
+  },
+  {
+   "window": "BTC05M2609021545",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 50.5,
+   "opp_print_latency_s": 50.9,
+   "prices": [
+    "0.53",
+    "0.4"
+   ]
+  },
+  {
+   "window": "BTC05M2609021550",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 95.0,
+   "opp_print_latency_s": 30.2,
+   "prices": [
+    "0.36",
+    "0.12"
+   ]
+  },
+  {
+   "window": "BTC05M2609021555",
+   "span_prints": 3,
+   "buys": 0,
+   "sells": 3,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 53.1,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.23",
+    "0.29",
+    "0.36"
+   ]
+  },
+  {
+   "window": "BTC05M2609021600",
+   "span_prints": 3,
+   "buys": 3,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 79.6,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.64",
+    "0.74",
+    "0.66"
+   ]
+  },
+  {
+   "window": "BTC05M2609021605",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021610",
+   "span_prints": 1,
+   "buys": 1,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 33.3,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.6"
+   ]
+  },
+  {
+   "window": "BTC05M2609021615",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021620",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 31.8,
+   "opp_print_latency_s": 41.4,
+   "prices": [
+    "0.39",
+    "0.49"
+   ]
+  },
+  {
+   "window": "BTC05M2609021625",
+   "span_prints": 3,
+   "buys": 0,
+   "sells": 3,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 19.8,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.76",
+    "0.45",
+    "0.45"
+   ]
+  },
+  {
+   "window": "BTC05M2609021630",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.12",
+    "0.34"
+   ]
+  },
+  {
+   "window": "BTC05M2609021635",
+   "span_prints": 2,
+   "buys": 2,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 40.1,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.73",
+    "0.78"
+   ]
+  },
+  {
+   "window": "BTC05M2609021640",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021645",
+   "span_prints": 1,
+   "buys": 0,
+   "sells": 1,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 35.3,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.27"
+   ]
+  },
+  {
+   "window": "BTC05M2609021650",
+   "span_prints": 5,
+   "buys": 4,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 55.9,
+   "opp_print_latency_s": 170.2,
+   "prices": [
+    "0.34",
+    "0.18",
+    "0.38",
+    "0.37",
+    "0.46"
+   ]
+  },
+  {
+   "window": "BTC05M2609021655",
+   "span_prints": 1,
+   "buys": 0,
+   "sells": 1,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 58.4,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.36"
+   ]
+  },
+  {
+   "window": "BTC05M2609021700",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021705",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021710",
+   "span_prints": 1,
+   "buys": 1,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 57.9,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.4"
+   ]
+  },
+  {
+   "window": "BTC05M2609021715",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 0.7,
+   "opp_print_latency_s": 63.1,
+   "prices": [
+    "0.5",
+    "0.86"
+   ]
+  },
+  {
+   "window": "BTC05M2609021720",
+   "span_prints": 4,
+   "buys": 3,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 3.6,
+   "opp_print_latency_s": 113.1,
+   "prices": [
+    "0.65",
+    "0.56",
+    "0.77",
+    "0.81"
+   ]
+  },
+  {
+   "window": "BTC05M2609021725",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021730",
+   "span_prints": 4,
+   "buys": 3,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 3.8,
+   "opp_print_latency_s": 98.8,
+   "prices": [
+    "0.51",
+    "0.51",
+    "0.51",
+    "0.57"
+   ]
+  },
+  {
+   "window": "BTC05M2609021735",
+   "span_prints": 6,
+   "buys": 6,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 4.9,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.71",
+    "0.71",
+    "0.71",
+    "0.71",
+    "0.71",
+    "0.94"
+   ]
+  },
+  {
+   "window": "BTC05M2609021740",
+   "span_prints": 1,
+   "buys": 0,
+   "sells": 1,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 99.5,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.37"
+   ]
+  },
+  {
+   "window": "BTC05M2609021745",
+   "span_prints": 18,
+   "buys": 13,
+   "sells": 5,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 0.2,
+   "opp_print_latency_s": 151.2,
+   "prices": [
+    "0.47",
+    "0.77",
+    "0.92",
+    "0.95",
+    "0.84",
+    "0.92",
+    "0.95",
+    "0.96"
+   ]
+  },
+  {
+   "window": "BTC05M2609021750",
+   "span_prints": 9,
+   "buys": 2,
+   "sells": 7,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 0.7,
+   "opp_print_latency_s": 83.9,
+   "prices": [
+    "0.51",
+    "0.78",
+    "0.79",
+    "0.85",
+    "0.85",
+    "0.75",
+    "0.87",
+    "0.92"
+   ]
+  },
+  {
+   "window": "BTC05M2609021755",
+   "span_prints": 2,
+   "buys": 0,
+   "sells": 2,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 150.3,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.18",
+    "0.18"
+   ]
+  },
+  {
+   "window": "BTC05M2609021800",
+   "span_prints": 1,
+   "buys": 1,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 24.9,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.49"
+   ]
+  },
+  {
+   "window": "BTC05M2609021805",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021810",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021815",
+   "span_prints": 2,
+   "buys": 2,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 0.7,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.51",
+    "0.62"
+   ]
+  },
+  {
+   "window": "BTC05M2609021820",
+   "span_prints": 0,
+   "buys": 0,
+   "sells": 0,
+   "class": "NO_FILL(no wait-window print)",
+   "first_print_latency_s": null,
+   "opp_print_latency_s": null,
+   "prices": []
+  },
+  {
+   "window": "BTC05M2609021825",
+   "span_prints": 3,
+   "buys": 2,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 14.4,
+   "opp_print_latency_s": 86.2,
+   "prices": [
+    "0.38",
+    "0.26",
+    "0.23"
+   ]
+  },
+  {
+   "window": "BTC05M2609021830",
+   "span_prints": 1,
+   "buys": 0,
+   "sells": 1,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 14.8,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.45"
+   ]
+  },
+  {
+   "window": "BTC05M2609021835",
+   "span_prints": 17,
+   "buys": 5,
+   "sells": 12,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 9.8,
+   "opp_print_latency_s": 32.4,
+   "prices": [
+    "0.57",
+    "0.55",
+    "0.56",
+    "0.56",
+    "0.56",
+    "0.42",
+    "0.74",
+    "0.75"
+   ]
+  },
+  {
+   "window": "BTC05M2609021840",
+   "span_prints": 2,
+   "buys": 1,
+   "sells": 1,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 0.6,
+   "opp_print_latency_s": 47.7,
+   "prices": [
+    "0.47",
+    "0.44"
+   ]
+  },
+  {
+   "window": "BTC05M2609021845",
+   "span_prints": 6,
+   "buys": 3,
+   "sells": 3,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 11.3,
+   "opp_print_latency_s": 0.2,
+   "prices": [
+    "0.43",
+    "0.31",
+    "0.31",
+    "0.49",
+    "0.38",
+    "0.68"
+   ]
+  },
+  {
+   "window": "BTC05M2609021850",
+   "span_prints": 9,
+   "buys": 4,
+   "sells": 5,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 19.6,
+   "opp_print_latency_s": 173.8,
+   "prices": [
+    "0.42",
+    "0.42",
+    "0.5",
+    "0.41",
+    "0.54",
+    "0.55",
+    "0.67",
+    "0.95"
+   ]
+  },
+  {
+   "window": "BTC05M2609021855",
+   "span_prints": 2,
+   "buys": 2,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 116.7,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.29",
+    "0.24"
+   ]
+  },
+  {
+   "window": "BTC05M2609021900",
+   "span_prints": 3,
+   "buys": 1,
+   "sells": 2,
+   "class": "MATCHABLE(two-sided after first fill)",
+   "first_print_latency_s": 30.0,
+   "opp_print_latency_s": 34.7,
+   "prices": [
+    "0.78",
+    "0.59",
+    "0.53"
+   ]
+  },
+  {
+   "window": "BTC05M2609021905",
+   "span_prints": 1,
+   "buys": 1,
+   "sells": 0,
+   "class": "HOLD-SHAPE(one-sided after first fill)",
+   "first_print_latency_s": 31.2,
+   "opp_print_latency_s": null,
+   "prices": [
+    "0.39"
+   ]
+  }
+ ],
+ "aggregate": {
+  "HOLD-SHAPE": 19,
+  "NO_FILL": 12,
+  "MATCHABLE": 21
+ }
+}

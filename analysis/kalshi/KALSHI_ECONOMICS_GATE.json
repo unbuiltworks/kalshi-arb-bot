@@ -1,0 +1,366 @@
+{
+  "accounting_labels": {
+    "CONFIRMED_CREDITED": "$0.00 for every Kalshi program. No credit has ever been observed.",
+    "ESTIMATED_COMPENSATION": "arithmetic under those terms. NOT income, NOT realized.",
+    "SOURCED_TERMS": "published/declared terms. A term, not a cashflow."
+  },
+  "compensation_by_market_class": [
+    {
+      "CONFIRMED_CREDITED_usd": 0.0,
+      "ESTIMATED_compensation_usd_per_filled_contract": 0.0,
+      "MAXIMUM_compensation_usd_per_filled_contract": 0.0,
+      "SOURCED_TERMS_pool_usd_per_period": 0.0,
+      "arithmetic": "compensation $0.0000 - quadratic fee (>= $0) = at most $0.0000 per contract, versus a $0.2380 break-even requirement. Deficit >= $0.2380/contract. Pair economics cannot offset it: pair_cost < 1.00 in 0 of 2,269 snapshots (median 1.020). This result is INDEPENDENT of the unsourced fee coefficient, because zero compensation minus a non-negative fee is at most zero.",
+      "class": "A_LIQUID_UNSUBSIDISED",
+      "clears_hurdle": false,
+      "fill_evidence": "YES -- 40,791 deduped prints, 51 windows, 6.9h (SOL/XRP/DOGE)",
+      "hurdle_usd_per_contract": 0.238,
+      "markets": [
+        "KXBTC15M",
+        "KXETH15M",
+        "KXSOL15M",
+        "KXXRP15M",
+        "KXDOGE15M"
+      ],
+      "shortfall_usd_per_contract": -0.238,
+      "sourced_basis": "0 of 383 KXBTC15M+KXETH15M leg-tape rows under an active program (independently recomputed this session). Prior full-corpus pull (238,339 programs, 2026-09-23) found KXBTC15M's last program started 2026-05-12 and was volume-type, paid_out."
+    },
+    {
+      "CONFIRMED_CREDITED_usd": 0.0,
+      "ELIGIBILITY": "UNSOURCED -- whether an ordinary non-market-maker account qualifies for the Liquidity Incentive Program is not determinable from the public API. Kalshi's API-key documentation gates key creation on 'Premier or Market Maker' usage levels; whether the LIP is gated the same way is UNKNOWN. No Kalshi credentials are present in this container, so no authenticated eligibility check is possible.",
+      "ESTIMATED_compensation_usd_per_filled_contract": null,
+      "ESTIMATED_note": "NOT COMPUTABLE. reward/filled-contract = pool_share / our_fills, and BOTH terms are unmeasured: pool_share needs the unsourced scoring rule, our_fills needs fill evidence that does not exist for any subsidised market.",
+      "MAXIMUM_compensation_usd_per_filled_contract": 20.0,
+      "MAXIMUM_note": "Unbounded-in-principle ceiling of $20.00/contract, attained only in the degenerate case of capturing the entire period pool while being filled on exactly one contract. This ceiling is a statement about an empty market, not an opportunity.",
+      "SCORING_RULE": "UNSOURCED -- the pro-rata split of the pool is not exposed by the API",
+      "SOURCED_TERMS_discount_factor_bps": 5000,
+      "SOURCED_TERMS_pool_usd_per_period": 20.0,
+      "SOURCED_TERMS_target_size_contracts": [
+        300,
+        1000
+      ],
+      "arithmetic": "At full $20.00 pool capture, break-even tolerates up to 84 filled contracts per 15-minute period (8,067/day). Headline ceiling is $1,920/day/market, which is NOT below the $480/day target -- so headline arithmetic alone does not kill class B. What kills it operationally is that the subsidised markets are empty (13 trades / $177 notional per window observed 2026-09-23) while the markets that print 14,854+ contracts/window pay $0.00.",
+      "class": "B_SUBSIDISED_ILLIQUID",
+      "clears_hurdle": "NOT KILLED ON ARITHMETIC; UNSOURCED ON TERMS",
+      "fill_evidence": "NONE anywhere on disk",
+      "headline_pool_usd_per_day_per_market": 1920.0,
+      "markets": [
+        "KXCRYPTOLEAD15M",
+        "KXNATGAS15M",
+        "KXCOPPER15M",
+        "KXGOLD15M",
+        "KXWTI15M",
+        "KXSILVER15M"
+      ],
+      "max_fills_per_period_still_clearing_hurdle_at_full_pool": 84.0,
+      "sourced_basis": "period_reward = 200000 centi-cents = $20.00 and target_size in {300, 1000} recomputed this session from 1,886 leg-tape rows; discount_factor_bps = 5000 read from qualifying_snapshot.json. Units per the published IncentiveProgram schema."
+    }
+  ],
+  "credentials_present": false,
+  "evidence": {
+    "leg_tape": {
+      "THINNESS_WARNING": "2269 book snapshots over 83 minutes of a single day (2026-09-09). This is a point-in-time census of PROGRAM PRESENCE and BOOK SHAPE. It contains NO fills, NO maker P&L and NO credited rewards, and cannot support any per-contract realized number.",
+      "by_series": {
+        "KXBTC15M": {
+          "period_reward_raw_centi_cents": [],
+          "period_reward_usd": [],
+          "program_fraction": 0.0,
+          "program_rows": 0,
+          "rows": 191,
+          "target_size_contracts": []
+        },
+        "KXCOPPER15M": {
+          "period_reward_raw_centi_cents": [
+            200000
+          ],
+          "period_reward_usd": [
+            20.0
+          ],
+          "program_fraction": 1.0,
+          "program_rows": 185,
+          "rows": 185,
+          "target_size_contracts": [
+            300.0
+          ]
+        },
+        "KXCRYPTOLEAD15M": {
+          "period_reward_raw_centi_cents": [
+            200000
+          ],
+          "period_reward_usd": [
+            20.0
+          ],
+          "program_fraction": 1.0,
+          "program_rows": 935,
+          "rows": 935,
+          "target_size_contracts": [
+            1000.0
+          ]
+        },
+        "KXETH15M": {
+          "period_reward_raw_centi_cents": [],
+          "period_reward_usd": [],
+          "program_fraction": 0.0,
+          "program_rows": 0,
+          "rows": 192,
+          "target_size_contracts": []
+        },
+        "KXGOLD15M": {
+          "period_reward_raw_centi_cents": [
+            200000
+          ],
+          "period_reward_usd": [
+            20.0
+          ],
+          "program_fraction": 1.0,
+          "program_rows": 195,
+          "rows": 195,
+          "target_size_contracts": [
+            300.0
+          ]
+        },
+        "KXNATGAS15M": {
+          "period_reward_raw_centi_cents": [
+            200000
+          ],
+          "period_reward_usd": [
+            20.0
+          ],
+          "program_fraction": 1.0,
+          "program_rows": 178,
+          "rows": 178,
+          "target_size_contracts": [
+            300.0
+          ]
+        },
+        "KXSILVER15M": {
+          "period_reward_raw_centi_cents": [
+            200000
+          ],
+          "period_reward_usd": [
+            20.0
+          ],
+          "program_fraction": 1.0,
+          "program_rows": 197,
+          "rows": 197,
+          "target_size_contracts": [
+            300.0
+          ]
+        },
+        "KXWTI15M": {
+          "period_reward_raw_centi_cents": [
+            200000
+          ],
+          "period_reward_usd": [
+            20.0
+          ],
+          "program_fraction": 1.0,
+          "program_rows": 196,
+          "rows": 196,
+          "target_size_contracts": [
+            300.0
+          ]
+        }
+      },
+      "pair_cost": {
+        "fraction_at_or_below_0_96": 0.0,
+        "fraction_below_1_00": 0.0,
+        "max": 1.17,
+        "median": 1.02,
+        "min": 1.001,
+        "n": 2269,
+        "note": "pair_cost = yes_bid + no_bid at the touch. It is NEVER below 1.00 in 2,269 observations. The spring-discipline <=0.96 fee-safe pair-completion target is satisfied in 0 of 2,269 snapshots, so there is NO locked pair-economics offset to subsidise the maker hurdle on this venue sample.",
+        "p10": 1.005
+      },
+      "prior_claim_83_1_pct": {
+        "but": "The claim is arithmetically true and economically misleading. 100% of the active-program rows are in series we have NO fill evidence for; 0 of 383 rows in the two liquid series (KXBTC15M, KXETH15M) are under any program. The 83.1% is an artifact of WHICH tickers were polled, not of where flow is.",
+        "claim": "83.1% of leg-tape rows under an active program",
+        "recomputed": 0.8312,
+        "verdict": "VERIFIED (1886/2269 = 83.12%)"
+      },
+      "rows": 2269,
+      "source": "analysis/kalshi/leg_tape.jsonl.gz",
+      "span_minutes": 82.7,
+      "tickers": 72,
+      "utc_range": [
+        "2026-09-09T00:16:26Z",
+        "2026-09-09T01:39:07Z"
+      ]
+    },
+    "print_tape": {
+      "by_series": {
+        "GEMI": {
+          "active_liquidity_program_observed": false,
+          "contracts_per_window_median": 0,
+          "contracts_total": 0,
+          "notional_usd": 0,
+          "trades": 141,
+          "windows": 35
+        },
+        "KXDOGE15M": {
+          "active_liquidity_program_observed": false,
+          "contracts_per_window_median": 7866,
+          "contracts_total": 176978,
+          "notional_usd": 90288,
+          "trades": 9419,
+          "windows": 17
+        },
+        "KXSOL15M": {
+          "active_liquidity_program_observed": false,
+          "contracts_per_window_median": 14854,
+          "contracts_total": 298065,
+          "notional_usd": 145760,
+          "trades": 15916,
+          "windows": 17
+        },
+        "KXXRP15M": {
+          "active_liquidity_program_observed": false,
+          "contracts_per_window_median": 13822,
+          "contracts_total": 287386,
+          "notional_usd": 128748,
+          "trades": 15315,
+          "windows": 17
+        }
+      },
+      "deduped_prints": 40791,
+      "note": "This is the ONLY fill-volume evidence on disk, and it covers KXSOL15M / KXXRP15M / KXDOGE15M -- three series with NO observed active liquidity program. The subsidised series (KXCRYPTOLEAD15M, commodity 15Ms) have ZERO fill evidence anywhere on disk. Flow and subsidy are measured in disjoint market sets.",
+      "source": "data/policy_d_port_ext/*.jsonl",
+      "span_hours": 6.9,
+      "utc_range": [
+        "2026-08-31T22:03:04.296959Z",
+        "2026-09-01T04:55:32.025128Z"
+      ]
+    }
+  },
+  "fees": {
+    "SOURCED_TERMS": {
+      "clearing_settlement_fee": "UNSOURCED",
+      "fee_multiplier": 1,
+      "fee_type": "quadratic",
+      "maker_vs_taker_split": "UNSOURCED -- the API declares a single fee_type per series",
+      "pending_fee_changes": 0,
+      "price_level_structure": "tapered_deci_cent",
+      "provenance": "GET /trade-api/v2/series/{KXBTC15M,KXETH15M,KXCRYPTOLEAD15M,KXGOLD15M,KXWTI15M,KXSILVER15M,KXNATGAS15M,KXCOPPER15M} and GET /trade-api/v2/series/fee_changes, pulled 2026-09-23 by the prior P22 survey. Re-verification BLOCKED this session."
+    },
+    "coefficient_status": "UNSOURCED_THIS_SESSION",
+    "finding": "Across the whole plausible coefficient range the per-contract fee is $0.000-$0.025 -- at most ~10.5% of the $0.238 hurdle. FEES ARE NOT THE BINDING CONSTRAINT. The gate turns entirely on whether maker COMPENSATION exists, and its unsourced coefficient therefore does not change the verdict in either direction.",
+    "sensitivity": [
+      {
+        "break_even_pair_cost": 1.0,
+        "coefficient_c": 0.0,
+        "fee_as_fraction_of_0.238_hurdle": 0.0,
+        "maker_fee_per_contract_at_P_0.20_usd": 0.0,
+        "maker_fee_per_contract_at_P_0.50_usd": 0.0,
+        "pair_fee_both_legs_at_P_0.50_usd": 0.0
+      },
+      {
+        "break_even_pair_cost": 0.9825,
+        "coefficient_c": 0.035,
+        "fee_as_fraction_of_0.238_hurdle": 0.0368,
+        "maker_fee_per_contract_at_P_0.20_usd": 0.0056,
+        "maker_fee_per_contract_at_P_0.50_usd": 0.00875,
+        "pair_fee_both_legs_at_P_0.50_usd": 0.0175
+      },
+      {
+        "break_even_pair_cost": 0.965,
+        "coefficient_c": 0.07,
+        "fee_as_fraction_of_0.238_hurdle": 0.0735,
+        "maker_fee_per_contract_at_P_0.20_usd": 0.0112,
+        "maker_fee_per_contract_at_P_0.50_usd": 0.0175,
+        "pair_fee_both_legs_at_P_0.50_usd": 0.035
+      },
+      {
+        "break_even_pair_cost": 0.95,
+        "coefficient_c": 0.1,
+        "fee_as_fraction_of_0.238_hurdle": 0.105,
+        "maker_fee_per_contract_at_P_0.20_usd": 0.016,
+        "maker_fee_per_contract_at_P_0.50_usd": 0.025,
+        "pair_fee_both_legs_at_P_0.50_usd": 0.05
+      }
+    ]
+  },
+  "hurdle": {
+    "bootstrap_ci_window_level": [
+      -0.2831,
+      -0.1935
+    ],
+    "break_even_compensation_usd_per_contract": 0.238,
+    "measured_on": "Gemini BTC5m",
+    "non_toxic_states_found": 0,
+    "pessimistic_bound_usd_per_contract": 0.2831,
+    "sample": "46 windows, 10,698 evidenced maker fills",
+    "target_480_per_day_at_q25_usd_per_contract": 0.3047,
+    "transfer_caveat": "This hurdle is a GEMINI measurement. No equivalent per-contract adverse-selection measurement exists for Kalshi 15m strikes. Applying it to Kalshi assumes comparable maker toxicity, which is UNMEASURED.",
+    "unrebated_maker_pnl_per_contract_usd": -0.238
+  },
+  "kind": "KALSHI_ECONOMICS_GATE",
+  "network": {
+    "attempts": [
+      {
+        "host": "api.elections.kalshi.com",
+        "result": "CONNECT tunnel failed, HTTP 403 Forbidden (egress proxy policy denial)"
+      },
+      {
+        "host": "trading-api.kalshi.com",
+        "result": "CONNECT tunnel failed, HTTP 403 Forbidden (egress proxy policy denial)"
+      },
+      {
+        "host": "kalshi.com",
+        "result": "CONNECT tunnel failed, HTTP 403 Forbidden (egress proxy policy denial)"
+      },
+      {
+        "host": "docs.kalshi.com",
+        "result": "CONNECT tunnel failed, HTTP 403 Forbidden (egress proxy policy denial)"
+      }
+    ],
+    "status": "Current terms could NOT be re-sourced this session. Every SOURCED_TERMS entry below is inherited from the prior P22 survey's dated public-API pulls (2026-09-09, 2026-09-23) and is carried with that provenance and that staleness, not as a live reading. TLS verification was not disabled and HTTPS_PROXY was not unset.",
+    "terms_sourced_this_session": false
+  },
+  "next_measurement": [
+    {
+      "blocking": true,
+      "confirm": "Does an ordinary non-market-maker account qualify for the LIP at all?",
+      "cost": "zero capital",
+      "how": "Kalshi LIP terms page + API-key usage-level docs; failing that, a written answer from Kalshi support quoting current program rules.",
+      "id": "M1"
+    },
+    {
+      "blocking": true,
+      "confirm": "The pool-scoring rule: how target_size, discount_factor_bps and proximity-to-reference-price convert rested size into a pro-rata share.",
+      "cost": "zero capital",
+      "how": "Published LIP methodology. The API exposes the parameters but not the rule, so this cannot be reverse-engineered from the public API.",
+      "id": "M2"
+    },
+    {
+      "blocking": false,
+      "confirm": "The numeric quadratic fee coefficient, and whether maker and taker fees differ.",
+      "how": "Kalshi published fee schedule (kalshi.com, 403 from this container).",
+      "id": "M3",
+      "note": "Non-blocking: at most 10.5% of the hurdle, cannot flip the verdict."
+    },
+    {
+      "blocking": true,
+      "confirm": "Does a liquidity program ever reappear over a LIQUID series (KXBTC15M / KXETH15M / KXSOL15M / KXXRP15M / KXDOGE15M)?",
+      "cost": "zero capital",
+      "how": "The existing read-only collector already logs KALSHI_INCENTIVE_STATE every cycle. Watch it. No new code.",
+      "id": "M4",
+      "note": "This is the ONE observation that would make Kalshi interesting again. Until it fires, the two halves of the business -- flow and subsidy -- remain in different markets."
+    },
+    {
+      "blocking": true,
+      "confirm": "A Kalshi-native per-contract maker adverse-selection measurement, to replace the transferred Gemini -$0.2380.",
+      "cost": "zero capital",
+      "how": "Shadow maker quotes against the existing read-only tape; label strictly as shadow, never realized. Requires a fills tape far longer than the 83-minute leg tape.",
+      "id": "M5"
+    }
+  ],
+  "question": "Can the specific accessible Kalshi 15-minute markets actually provide the per-contract compensation that L5's incentive-era behaviour appears to require?",
+  "read_only": true,
+  "section": 7,
+  "venue_writes": 0,
+  "verdict": {
+    "accessible_liquid_markets": "KILLED",
+    "overall": "SPLIT. The incentive-replication hypothesis is KILLED at Kalshi for every market where we have fill evidence: compensation there is a sourced $0.00/contract against a $0.2380 break-even, a deficit that no fee coefficient and no pair economics can close. For the subsidised markets the hypothesis is NOT killed on arithmetic -- it is UNSOURCEABLE on eligibility and on the pool-scoring rule, and unmeasured on fills. Recommend NO trading experiment at Kalshi. The next step is a MEASUREMENT, not a strategy.",
+    "subsidised_markets": "TERMS UNSOURCED (not the same as insufficient)"
+  }
+}

@@ -1,0 +1,429 @@
+{
+  "accounting": "census of pre-existing recorded data; no order was sent and nothing here is realized",
+  "answerable": false,
+  "blockers": [
+    "NO_CONTEMPORANEOUS_REFERENCE_SERIES",
+    "ZERO_WINDOWS_WITH_ALL_FOUR_REQUIREMENTS",
+    "CHECKPOINT_GRID_REACHES_ONLY_1_OF_8"
+  ],
+  "executable_corpus": {
+    "btc5m_rows": 1463,
+    "btc5m_windows": 133,
+    "earliest_observation_is_T_plus_s": 180,
+    "executable_depth_at_the_one_reachable_checkpoint": {
+      "q1": {
+        "both_fillable": 56,
+        "both_fillable_pct": 42.11,
+        "down_fillable": 103,
+        "observations": 133,
+        "up_fillable": 85
+      },
+      "q10": {
+        "both_fillable": 56,
+        "both_fillable_pct": 42.11,
+        "down_fillable": 100,
+        "observations": 133,
+        "up_fillable": 80
+      },
+      "q25": {
+        "both_fillable": 55,
+        "both_fillable_pct": 41.35,
+        "down_fillable": 98,
+        "observations": 133,
+        "up_fillable": 80
+      },
+      "q5": {
+        "both_fillable": 56,
+        "both_fillable_pct": 42.11,
+        "down_fillable": 103,
+        "observations": 133,
+        "up_fillable": 85
+      }
+    },
+    "file": "analysis/gemini/info_edge/ie_tte_ladder.json",
+    "present": true,
+    "tte_grid_s": [
+      120,
+      90,
+      60,
+      45,
+      30,
+      20,
+      15,
+      10,
+      5,
+      2,
+      1
+    ],
+    "wanted_checkpoint_reachability": {
+      "T+120s": {
+        "equivalent_tte_s": 180,
+        "present_in_grid": false,
+        "windows_observed": 0
+      },
+      "T+150s": {
+        "equivalent_tte_s": 150,
+        "present_in_grid": false,
+        "windows_observed": 0
+      },
+      "T+15s": {
+        "equivalent_tte_s": 285,
+        "present_in_grid": false,
+        "windows_observed": 0
+      },
+      "T+180s": {
+        "equivalent_tte_s": 120,
+        "present_in_grid": true,
+        "windows_observed": 133
+      },
+      "T+30s": {
+        "equivalent_tte_s": 270,
+        "present_in_grid": false,
+        "windows_observed": 0
+      },
+      "T+45s": {
+        "equivalent_tte_s": 255,
+        "present_in_grid": false,
+        "windows_observed": 0
+      },
+      "T+60s": {
+        "equivalent_tte_s": 240,
+        "present_in_grid": false,
+        "windows_observed": 0
+      },
+      "T+90s": {
+        "equivalent_tte_s": 210,
+        "present_in_grid": false,
+        "windows_observed": 0
+      }
+    },
+    "windows_with_a_contemporaneous_reference_observation": 0,
+    "windows_with_all_four_requirements": 0,
+    "windows_with_authoritative_strike": 133,
+    "windows_with_settlement": 133
+  },
+  "frozen_untouched": [
+    "gemini_early_window_analysis.py f2800e3e55672485708a7e0ebd167d92d69bb160f7091ccd8b43f6a6c960e90b",
+    "gemini_btc5m_chained_study.py b2f6d50a035b56c0edc4efea49d4ade8fc5eec292e2dada2e58e405a142f9bc6"
+  ],
+  "label": "GEMINI_CHAINED_HISTORICAL_FEASIBILITY_EXPLORATORY",
+  "proxy_feasibility_bound": {
+    "bound": "a 1.08 bps median proxy error is ~5x smaller than the 5 bps threshold and ~23x smaller than 25 bps, so a proxy study would NOT be swamped by proxy error at those magnitudes -- but it would still be a different signal, and the checkpoint gap below blocks it anyway",
+    "measured_proxy_error_btc_only": {
+      "median_bps": 1.08,
+      "median_usd": 8.39,
+      "source": "ref_lag_study.json, recomputed BTC-only",
+      "windows": 16
+    },
+    "not_run_because": "substituting another signal was explicitly excluded, and the corpus reaches only one of the eight stated checkpoints regardless",
+    "thresholds_the_hypothesis_states": {
+      "25_bps_at_85k_usd": 212.5,
+      "5_bps_at_85k_usd": 42.5
+    },
+    "what_exists": "a `coinbase` spot price and a `cb_dist` distance, per row -- a PROXY for the reference, never the published reference itself"
+  },
+  "reference_corpus": {
+    "excluded_by_path": "analysis/gemini/btc5m_rec/* -- the prospective recorder's tapes, which belong to the frozen prospective lane",
+    "files_merely_NAMING_the_index": [
+      {
+        "file": "analysis/gemini/btc5m_canary/cohort1_audit.json",
+        "name_only_hits": {
+          "LS-LRRR-XBTUSD": 10
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_run_20260922T020508Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 28
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_run_20260922T113521Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 79
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_run_B_20260923T113513Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 19
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T021535Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 8
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T023032Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 4
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T024529Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 7
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T030021Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 5
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T114525Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 6
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T120022Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 7
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T121525Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 7
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T123032Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 6
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T124527Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 7
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T130021Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 5
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T131522Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 6
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T133022Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 6
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T134529Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 6
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T140023Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 7
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260922T141522Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 5
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260923T113532Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 7
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260923T114027Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 4
+        }
+      },
+      {
+        "file": "analysis/gemini/cohort_window_20260923T115049Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 6
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260918T143045Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 2
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260918T172750Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 3
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260918T210518Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 2
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260918T221133Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 2
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260918T232743Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 3
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260919T013250Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 6
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260921T074031Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 7
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260921T165558Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 3
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260921T185547Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 5
+        }
+      },
+      {
+        "file": "analysis/gemini/continuous_run_20260921T225322Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 2
+        }
+      },
+      {
+        "file": "analysis/gemini/fill_forensics_20260921T105113Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 137
+        }
+      },
+      {
+        "file": "analysis/gemini/fill_forensics_20260921T173227Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 137
+        }
+      },
+      {
+        "file": "analysis/gemini/fill_forensics_20260921T175242Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 10
+        }
+      },
+      {
+        "file": "analysis/gemini/fill_forensics_20260921T193012Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 15
+        }
+      },
+      {
+        "file": "analysis/gemini/fill_forensics_20260923T050022Z.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 16
+        }
+      },
+      {
+        "file": "analysis/gemini/info_edge/ie_diagnostics.json",
+        "name_only_hits": {
+          "LS-LRRR-XBTUSD": 3861
+        }
+      },
+      {
+        "file": "analysis/gemini/info_edge/ie_usable_windows.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 129,
+          "LS-LRRR-XBTUSD": 236
+        }
+      },
+      {
+        "file": "analysis/gemini/info_edge/probe_records/semantics_probe_20261003T123300Z.json",
+        "name_only_hits": {
+          "LS-LRRR-XBTUSD": 1
+        }
+      },
+      {
+        "file": "analysis/gemini/updown/CHAINED_HISTORICAL_FEASIBILITY.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 5,
+          "LS-LRRR-XBTUSD": 1
+        }
+      },
+      {
+        "file": "analysis/gemini/updown/early_analysis_T1.json",
+        "name_only_hits": {
+          "LRRR_XBT": 1
+        }
+      },
+      {
+        "file": "analysis/gemini/updown/selection_gap_diagnostic.json",
+        "name_only_hits": {
+          "LS-LRRR-XBTUSD": 4
+        }
+      },
+      {
+        "file": "analysis/gemini/updown/settlement_reference_identification.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 2,
+          "LRRR_XBT": 1,
+          "LS-LRRR-XBTUSD": 1
+        }
+      },
+      {
+        "file": "analysis/gemini/updown/settlement_state_calibration.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 1,
+          "LS-LRRR-XBTUSD": 4
+        }
+      },
+      {
+        "file": "analysis/gemini/updown/state_conditioned_favorite.json",
+        "name_only_hits": {
+          "LS-LRRR-XBTUSD": 1
+        }
+      },
+      {
+        "file": "analysis/gemini/updown/underdog_matrix.json",
+        "name_only_hits": {
+          "LS-LRRR-XBTUSD": 1
+        }
+      },
+      {
+        "file": "analysis/gemini/venue_resolution_shape_20260918.json",
+        "name_only_hits": {
+          "GRR-KAIKO_RFR_BTCUSD_60S": 2
+        }
+      }
+    ],
+    "files_scanned": 3640,
+    "files_with_a_reference_VALUE_series": [],
+    "note": "the index stream was only established on 2026-10-05, in recorder run 5; the settlement reference also CHANGED mid-programme (GRR-KAIKO_RFR_BTCUSD_60S through the 2026-10-02T17:45Z expiry, LS-LRRR-XBTUSD from 17:50Z), so even a recovered pre-10-02 series would be a different index from the one the hypothesis is stated on",
+    "verdict": "ABSENT -- no pre-existing artifact carries a timestamped settlement-reference value series"
+  },
+  "status": "EXPLORATORY / IN-SAMPLE / NOT VALIDATION",
+  "touches_frozen_analyzers": false
+}

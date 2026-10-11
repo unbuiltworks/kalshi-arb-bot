@@ -1,0 +1,61 @@
+--- /tmp/claude-0/chained_ORIG.py	2026-10-05 19:56:46.518028433 +0000
++++ scripts/gemini_btc5m_chained_study.py	2026-10-05 19:57:09.200228083 +0000
+@@ -173,7 +173,28 @@
+ 
+ 
+ def windows(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+-    """BTC5m windows with an AUTHORITATIVE strike, plus their checkpoints."""
++    """BTC5m windows with an AUTHORITATIVE strike, plus their checkpoints.
++
++    LOADER CORRECTION, 2026-10-05, authorized as loader-only. THE DEFECT: this
++    read the strike from `kind == "window"` rows alone. The venue sets
++    strike.value AT availableAt, and the recorder's metadata poll re-reads the
++    contract every cycle -- emitting the FIRST read as `window` and every
++    re-read as `window_poll`. The first read therefore carries strike: null by
++    construction, so this loader found a strike for 2 of 18 tickers on a tape
++    whose window_poll rows carry one for 18, and the study ran on ~1-2 windows
++    while reporting 0 trades across 32 candidates. That was a measurement
++    failure, not a test of the hypothesis.
++
++    The strike taken is EXACTLY what the venue supplied -- the FIRST non-null
++    reading, with its row kind, strike_type and the row's own t_ns kept as
++    provenance, matching the corrected census rule. Nothing is inferred and a
++    window with no authoritative strike FAILS CLOSED (it simply has no
++    `strike` key, and observations() already returns [] for it).
++
++    NOTHING ELSE CHANGED: no candidate rule, checkpoint, D definition, bin,
++    threshold, fee model, capacity calculation, selection criterion,
++    discovery/OOS split or OOS seal.
++    """
+     w: Dict[str, Dict[str, Any]] = {}
+     for r in rows:
+         if r.get("duration") != "BTC05M":
+@@ -181,15 +202,25 @@
+         tk = r.get("ticker")
+         if not tk or tk in EXCLUDED_TICKERS:
+             continue
+-        if r.get("kind") == "window":
++        if r.get("kind") in ("window", "window_poll"):
+             k = _dec(r.get("strike"))
+             if k is None:
+                 continue
+             d = w.setdefault(tk, {"ticker": tk, "checkpoints": []})
++            if d.get("strike") is not None:
++                continue              # keep the FIRST non-null venue reading
+             d["strike"] = k
+             d["strike_type"] = r.get("strike_type")
+-            d["strike_source"] = "contract.strike (tape `window` row)"
+-            d["t0_epoch"] = None
++            d["strike_source"] = ("contract.strike.value, venue-supplied, "
++                                  "from a `%s` row" % r.get("kind"))
++            d["strike_observed_t_ns"] = r.get("t_ns")
++            d["strike_availableAt"] = r.get("availableAt")
++            d["strike_inferred"] = False
++            # t0_epoch IS NOT RESET HERE. The original assigned None on every
++            # window row; with 9,200 poll rows that would erase a t0_epoch a
++            # checkpoint had already supplied, and the checkpoint branch is
++            # the only authority on it.
++            d.setdefault("t0_epoch", None)
+             d["expiry"] = r.get("expiry")
+             d["resolved_index"] = r.get("resolved_index")
+         elif r.get("kind") == "checkpoint":

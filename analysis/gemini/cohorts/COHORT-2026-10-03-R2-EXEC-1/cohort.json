@@ -1,0 +1,13 @@
+{
+  "label": "GEMINI_MUTATION_COHORT_V1",
+  "cohort_id": "COHORT-2026-10-03-R2-EXEC-1",
+  "created_utc": "2026-10-03T13:30:26.315904+00:00",
+  "budget": 10,
+  "ledger_path": "analysis/gemini/cohorts/COHORT-2026-10-03-R2-EXEC-1/ledger.jsonl",
+  "predecessor_ledger": "analysis/gemini/continuous_ledger.jsonl",
+  "predecessor_sha256": "89cf9de6d949cf8838afe1aca18ff7c6d1cacf3472e4562c25439c2064ea40a7",
+  "predecessor_consumed": 12,
+  "envelope_max_actions": 12,
+  "note": "R2 execution validation, owner-authorized 2026-10-03 against protocol 49d7fc58",
+  "labels": "NO ROLLOVER: this budget is fixed and unused slots never carry. NO REWRITE: the predecessor ledger is hashed, never modified. NO AUTOMATIC CREATION: nothing in the package calls create()."
+}

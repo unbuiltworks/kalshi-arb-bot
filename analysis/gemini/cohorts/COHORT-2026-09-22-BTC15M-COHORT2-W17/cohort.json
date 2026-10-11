@@ -1,0 +1,13 @@
+{
+  "label": "GEMINI_MUTATION_COHORT_V1",
+  "cohort_id": "COHORT-2026-09-22-BTC15M-COHORT2-W17",
+  "created_utc": "2026-09-22T04:19:41.473981+00:00",
+  "budget": 12,
+  "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-22-BTC15M-COHORT2-W17/ledger.jsonl",
+  "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-21-BTC15M-COHORT1-W10/ledger.jsonl",
+  "predecessor_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "predecessor_consumed": 0,
+  "envelope_max_actions": 12,
+  "note": "COHORT-2 window 17 of 20. One WHOLE 12-action ledger per bound BTC15m contract; unspent slots expire with that contract and are never inherited by the next one.",
+  "labels": "NO ROLLOVER: this budget is fixed and unused slots never carry. NO REWRITE: the predecessor ledger is hashed, never modified. NO AUTOMATIC CREATION: nothing in the package calls create()."
+}

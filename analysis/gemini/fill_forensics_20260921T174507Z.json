@@ -1,0 +1,171 @@
+{
+ "label": "GEMINI_FILL_FORENSICS_V1",
+ "utc": "2026-09-21T17:45:07.310903+00:00",
+ "window": {
+  "since": "2026-09-21T00:00:00Z",
+  "until": "2026-09-03T00:00:00Z"
+ },
+ "statuses": [
+  "filled",
+  "cancelled"
+ ],
+ "reads": {
+  "order_history": {
+   "readable": false,
+   "verdict": "UNREADABLE",
+   "path": "/v1/prediction-markets/orders/history",
+   "window_ms": [
+    1789948800000,
+    1788393600000
+   ],
+   "total_rows": 0
+  },
+  "per_status": [
+   {
+    "status_filter": "filled",
+    "http": 400,
+    "rows": null,
+    "unreadable": true,
+    "page_is_full": false,
+    "detail": {
+     "error": "InvalidDateRange",
+     "message": "'from' must be before 'to'"
+    }
+   },
+   {
+    "status_filter": "cancelled",
+    "http": 400,
+    "rows": null,
+    "unreadable": true,
+    "page_is_full": false,
+    "detail": {
+     "error": "InvalidDateRange",
+     "message": "'from' must be before 'to'"
+    }
+   }
+  ],
+  "positions_now": {
+   "ok": true,
+   "rows": [
+    {
+     "symbol": "GEMI-NFL-2609220015-NYG-LAR-S-LAR6",
+     "instrumentId": 34128455,
+     "totalQuantity": "1.81",
+     "quantityOnHold": "0",
+     "avgPrice": "0.53",
+     "outcome": "yes",
+     "contractMetadata": {
+      "contractId": "624022",
+      "contractName": "Los Angeles R wins by more than 6.5 points",
+      "contractTicker": "LAR6",
+      "eventTicker": "NFL-2609220015-NYG-LAR-S",
+      "eventName": "New York G vs Los Angeles R: Point Spread",
+      "category": "Pro Football",
+      "contractStatus": "Active",
+      "eventType": "categorical",
+      "instrumentSymbol": "GEMI-NFL-2609220015-NYG-LAR-S-LAR6",
+      "parentCategory": "Sports",
+      "imageUrl": "https://assets.gemini.com/predictions/images/Los_Angeles_RamsDark_14601cab-9590-42fe-9107-55f725d3b96e.avif",
+      "expiryDate": "2026-09-23T12:15:00.000Z",
+      "description": "This market resolves to Yes if the score differential recorded in favor of Los Angeles R in the entire NFL game between New York G and Los Angeles R scheduled for 2026-09-21 at 7:15 p.m. CT is above 6.5. Otherwise, it resolves to No. The Underlying is the score differential (Los Angeles R's score minus New York G's score) for the specified game. Source Agencies, in order, are the league governing the event (NFL), ESPN, Fox Sports, and the official broadcast partner of the event. If the Expiration Value cannot be determined on the Expiration Date (including because the event is cancelled or a team forfeits, withdraws, or is disqualified), the Exchange may determine payouts pursuant to the Market Outcome Review Process. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/Terms_and_Conditions_NFL_Spread_Class_0f39c9d8-cb86-45f3-b36d-48271846eff4.pdf).",
+      "eventImageUrl": "https://assets.gemini.com/predictions/images/Football_fb67fb13-3768-40c7-a99d-cbe2644d299e.avif",
+      "sortOrder": 16,
+      "parentEventTicker": "NFL-2609220015-NYG-LAR-M",
+      "parentEventName": "New York G vs Los Angeles R",
+      "template": "sports-spread",
+      "color": "#0f9ee7",
+      "startTime": "2026-09-22T00:15:00.000Z",
+      "strike": {
+       "type": "spread",
+       "value": "6.5"
+      }
+     },
+     "prices": {
+      "buy": {
+       "yes": "0.53",
+       "no": "0.48"
+      },
+      "sell": {
+       "yes": "0.52",
+       "no": "0.47"
+      },
+      "bestBid": "0.52",
+      "bestAsk": "0.53",
+      "lastTradePrice": "0.52"
+     },
+     "isAboveAutoStartThreshold": false,
+     "isLive": false,
+     "realizedPl": "0",
+     "marketValue": "0.94",
+     "unrealizedPnl": "-0.02",
+     "unrealizedPct": -1.8868,
+     "lastActivityAt": "2026-09-21T16:23:26.648Z"
+    },
+    {
+     "symbol": "GEMI-NFL-2609220015-NYG-LAR-S-NYG6",
+     "instrumentId": 34128439,
+     "totalQuantity": "4.66",
+     "quantityOnHold": "0",
+     "avgPrice": "0.15",
+     "outcome": "yes",
+     "contractMetadata": {
+      "contractId": "624006",
+      "contractName": "New York G wins by more than 6.5 points",
+      "contractTicker": "NYG6",
+      "eventTicker": "NFL-2609220015-NYG-LAR-S",
+      "eventName": "New York G vs Los Angeles R: Point Spread",
+      "category": "Pro Football",
+      "contractStatus": "Active",
+      "eventType": "categorical",
+      "instrumentSymbol": "GEMI-NFL-2609220015-NYG-LAR-S-NYG6",
+      "parentCategory": "Sports",
+      "imageUrl": "https://assets.gemini.com/predictions/images/New_York_GiantsDark_e9eceb86-ad28-4e8c-8547-9346460c51b7.avif",
+      "expiryDate": "2026-09-23T12:15:00.000Z",
+      "description": "This market resolves to Yes if the score differential recorded in favor of New York G in the entire NFL game between New York G and Los Angeles R scheduled for 2026-09-21 at 7:15 p.m. CT is above 6.5. Otherwise, it resolves to No. The Underlying is the score differential (New York G's score minus Los Angeles R's score) for the specified game. Source Agencies, in order, are the league governing the event (NFL), ESPN, Fox Sports, and the official broadcast partner of the event. If the Expiration Value cannot be determined on the Expiration Date (including because the event is cancelled or a team forfeits, withdraws, or is disqualified), the Exchange may determine payouts pursuant to the Market Outcome Review Process. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/Terms_and_Conditions_NFL_Spread_Class_0f39c9d8-cb86-45f3-b36d-48271846eff4.pdf).",
+      "eventImageUrl": "https://assets.gemini.com/predictions/images/Football_fb67fb13-3768-40c7-a99d-cbe2644d299e.avif",
+      "sortOrder": 0,
+      "parentEventTicker": "NFL-2609220015-NYG-LAR-M",
+      "parentEventName": "New York G vs Los Angeles R",
+      "template": "sports-spread",
+      "color": "#0f9ee7",
+      "startTime": "2026-09-22T00:15:00.000Z",
+      "strike": {
+       "type": "spread",
+       "value": "6.5"
+      }
+     },
+     "prices": {
+      "buy": {
+       "yes": "0.15",
+       "no": "0.88"
+      },
+      "sell": {
+       "yes": "0.12",
+       "no": "0.85"
+      },
+      "bestBid": "0.12",
+      "bestAsk": "0.15",
+      "lastTradePrice": "0.15"
+     },
+     "isAboveAutoStartThreshold": false,
+     "isLive": false,
+     "realizedPl": "0",
+     "marketValue": "0.56",
+     "unrealizedPnl": "-0.14",
+     "unrealizedPct": -20,
+     "lastActivityAt": "2026-09-21T16:23:54.419Z"
+    }
+   ],
+   "why": "the CURRENT position surface. It is evidence about the representation the venue uses, never about a historical moment that has since settled."
+  }
+ },
+ "rows": [],
+ "by_contract": {},
+ "labels": "RAW venue rows, preserved verbatim. Nothing here is a position, a P&L or a settlement; it is what the account record says about orders and their fill state.",
+ "verdict": {
+  "contracts_seen": 0,
+  "contracts_with_BOTH_outcomes_filled": [],
+  "n_both": 0,
+  "why": "a contract qualifies only when rows on BOTH outcomes carry a fill. Accepted-but-unfilled opposite-side orders do NOT qualify, which is exactly the distinction the question turns on."
+ }
+}

@@ -1,0 +1,150 @@
+{
+  "kind": "ADAPTED",
+  "label": "L5_ADAPTED_GEMINI_BTC15M_V2",
+  "notes": "L5_ADAPTED_GEMINI_BTC15M_V2 corrects exactly one field of L5_ADAPTED_GEMINI_CRYPTO@62d004d80b4af8b9: TTE_policy. Every other field is that lane's, byte for byte, and L5_ADAPTED_GEMINI_CRYPTO is preserved unchanged as the control.",
+  "params": {
+    "TTE_policy": {
+      "evidence": null,
+      "name": "TTE_policy",
+      "pending_source": null,
+      "prior_evidence": "CORRECTION to L5_ADAPTED_GEMINI_CRYPTO.TTE_policy, which was {'quote_between_tte_s': [0, 300]}. GEMINI_CRYPTO quotes only tte <= 300. That 300 is the length of a Gemini BTC5m contract: OURS_ADAPTED, never measured from L5, chosen for the 5-minute cohort and then inherited unchanged when the same lane was bound to BTC15m (TTE_PROVENANCE_1.md). TTE_policy is instrument-specific precisely because the number is a window length, and a Gemini BTC15m window is 900s -- so the instrument rule, applied to THIS instrument, gives 900. L5's own measured TTE_policy on a 900s window is [0, 900], which is the same number arrived at independently. L5 BTC15m fills, 63,569 deduped across 527 windows: 560 of 626 OPEN fills (89.5%) land at tte 600-900, 46 at 300-600, and NONE below tte 60 -- under [0, 300] the clone is present only for the 3.2% tail in which L5 has stopped opening. Paired observed-price replay over 96 identical Gemini BTC15m contracts: a fee-positive complement is price-observable in 28 contracts under [300, 900] against 12 under [0, 300]; the discordant pairs split 22 to 6 (two-sided sign test p=0.0037); and 38 of the 96 contracts have NO prints whatsoever inside [0, 300]. See L5_TTE_SEGMENTS_1.md and analysis/gemini/early_15m_observed*.json. NOT CHANGED: side selection, tick_offsets, rung_count, both_sides_policy, sequential inventory state, EXTEND/COMPLETE classification, base_parent_qty, secondary_rung_qty, max_residual, NO_NEW_OPEN_EXTEND_TTE_S (60s), WITHDRAW_ALL_TTE_S (30s), MAX_ACTIONS (12). SHADOW ONLY. Not authorized for any live path, and it carries no live-progression gate. It is run ALONGSIDE the lane it corrects so the two decision records can be compared on one tape.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "quote_between_tte_s": [
+          0,
+          900
+        ]
+      }
+    },
+    "base_parent_qty": {
+      "evidence": null,
+      "name": "base_parent_qty",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": "1"
+    },
+    "both_sides_policy": {
+      "evidence": null,
+      "name": "both_sides_policy",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: both-outcome share 0.7278 over 2788 readable snapshots",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": {
+        "outcomes": [
+          "Up",
+          "Down"
+        ]
+      }
+    },
+    "inventory_price_skew": {
+      "evidence": null,
+      "name": "inventory_price_skew",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "reducing_ticks": 0,
+        "widening_ticks": 0
+      }
+    },
+    "inventory_size_skew": {
+      "evidence": null,
+      "name": "inventory_size_skew",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "reducing_multiplier": 1,
+        "widening_multiplier": 1
+      }
+    },
+    "max_residual": {
+      "evidence": null,
+      "name": "max_residual",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": "3.00"
+    },
+    "minimum_rest_time": {
+      "evidence": null,
+      "name": "minimum_rest_time",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": 30.0
+    },
+    "refresh_policy": {
+      "evidence": null,
+      "name": "refresh_policy",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: opposite-already-present share 0.9208 over 101 resolved reversals",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": {
+        "mode": "STANDING"
+      }
+    },
+    "replenishment_policy": {
+      "evidence": null,
+      "name": "replenishment_policy",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "mode": "REPLACE_AFTER_FILL"
+      }
+    },
+    "rung_count": {
+      "evidence": null,
+      "name": "rung_count",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: the established offset set has 1 rungs",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": 1
+    },
+    "secondary_rung_qty": {
+      "evidence": null,
+      "name": "secondary_rung_qty",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": "1"
+    },
+    "tick_offsets": {
+      "evidence": null,
+      "name": "tick_offsets",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: 73 of 108 parents (0.68) rested at offsets [0]",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": [
+        0
+      ]
+    },
+    "withdrawal_policy": {
+      "evidence": null,
+      "name": "withdrawal_policy",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "mode": "WITHDRAW_ON_TTE_FLOOR",
+        "tte_floor_s": 0
+      }
+    }
+  },
+  "spec_sha256": "cd8ad6a914dc9fc0a27a82de3159c990a2d3a380b6186cb95e5f87aa36defe7a"
+}

@@ -1,0 +1,2175 @@
+{
+ "label": "historical reconstruction of another trader's public activity; NOT realized profit for our account",
+ "research_only": "no orders, no venue writes, no network; no credential values printed",
+ "generated_at_utc": "2026-10-05T22:30:42.337201+00:00",
+ "generator": "scripts/l5_constant_reconciliation.py",
+ "identity_rule": "IDENTITY = PROVENANCE. Envelope params.user == 0xb945945d5bca...; disqualify only on a contradicting name/proxyWallet; NEVER filter on name == 'l5Zn1bWoM8eTsK'. Dedupe across both files on (transactionHash, conditionId, outcomeIndex, timestamp, str(price), str(size), type) -- the bare (txh, asset, timestamp) key degenerates because the gap file has no `asset` and produced 33,057 silent conflicts.",
+ "corpus": {
+  "files": [
+   "data/l5/raw/activity.jsonl",
+   "data/l5/raw/activity_gap.jsonl.gz"
+  ],
+  "raw_payload_records": 784500,
+  "raw_by_file": {
+   "activity.jsonl": 78000,
+   "activity_gap.jsonl.gz": 706500
+  },
+  "contradicting_identity_dropped": 0,
+  "cross_file_duplicates_dropped": 7751,
+  "records_without_name_kept_by_provenance": 706500,
+  "records_by_type": {
+   "MAKER_REBATE": 110,
+   "REDEEM": 15729,
+   "REWARD": 20,
+   "TAKER_REBATE": 73,
+   "TRADE": 760817
+  },
+  "deduped_trades": 760817,
+  "independent_events": 17003,
+  "distinct_utc_days": 127,
+  "date_range_utc": [
+   "2026-03-19T10:09:37+00:00",
+   "2026-08-31T23:11:19+00:00"
+  ]
+ },
+ "narrow_corpus_recompute": {
+  "label": "historical reconstruction of another trader's public activity; NOT realized profit for our account",
+  "fills": 10457,
+  "events": 312,
+  "events_skipped_no_epoch_in_slug": 0,
+  "distinct_utc_days": 1,
+  "date_range_utc": [
+   "2026-08-30T07:49:16+00:00",
+   "2026-08-30T20:52:43+00:00"
+  ],
+  "first_fill_price": {
+   "n": 312,
+   "p10": 0.2,
+   "median": 0.583,
+   "p90": 0.82,
+   "p99": 0.94,
+   "max": 0.96
+  },
+  "first_fill_t_plus_s": {
+   "n": 312,
+   "p10": 6.0,
+   "median": 44.0,
+   "p90": 181.0,
+   "p99": 256.0,
+   "max": 271.0
+  },
+  "favored_first_pct": 68.27,
+  "ever_complement_pct": 71.47,
+  "events_ever_complement": 223,
+  "transitions": {
+   "OPEN": 312,
+   "EXTEND": 7161,
+   "SWITCH_OR_COMPLETE": 2984
+  },
+  "same_side_extends_before_complement": {
+   "n": 2984,
+   "p10": 0.0,
+   "median": 1.0,
+   "p90": 6.0,
+   "p99": 16.0,
+   "max": 34.0
+  },
+  "pair_cost_at_opposite_side_buy": {
+   "n": 2984,
+   "p10": 0.7438,
+   "median": 0.9908,
+   "p90": 1.2412,
+   "p99": 1.4464,
+   "max": 1.75
+  },
+  "pair_cost_if_extend_same_side": {
+   "n": 7161,
+   "p10": 0.3629,
+   "median": 0.8544,
+   "p90": 1.522,
+   "p99": 1.7731,
+   "max": 1.91
+  },
+  "FINAL_matched_pair_cost": {
+   "n": 223,
+   "p10": 0.7589,
+   "median": 0.977,
+   "p90": 1.2556,
+   "p99": 1.54,
+   "max": 1.75
+  },
+  "seconds_first_fill_to_first_matched_increase": {
+   "n": 223,
+   "p10": 5.0,
+   "median": 52.0,
+   "p90": 144.0,
+   "p99": 214.0,
+   "max": 247.0
+  },
+  "inter_fill_gap_s": {
+   "n": 10145,
+   "p10": 0.0,
+   "median": 2.0,
+   "p90": 17.0,
+   "p99": 80.0,
+   "max": 249.0
+  },
+  "fills_per_event": {
+   "n": 312,
+   "p10": 1.0,
+   "median": 6.0,
+   "p90": 146.0,
+   "p99": 271.0,
+   "max": 332.0
+  },
+  "event_working_span_s": {
+   "n": 312,
+   "p10": 0.0,
+   "median": 143.5,
+   "p90": 723.0,
+   "p99": 858.0,
+   "max": 881.0
+  },
+  "same_side_repeat_price_direction": {
+   "higher": 3838,
+   "lower": 3867,
+   "same": 2217
+  },
+  "sides_observed": {
+   "BUY": 10457
+  },
+  "durations_by_event": {
+   "5m": 261,
+   "15m": 51
+  },
+  "assets_by_event": {
+   "btc": 200,
+   "eth": 112
+  }
+ },
+ "periods": {
+  "method": "median active UTC day of the corpus's own daily grid; descriptive halves, NOT detected regimes",
+  "cut_day_utc": "2026-06-15",
+  "active_days": 128,
+  "early_label": "early high-completion period (2026-03-19..2026-06-15)",
+  "late_label": "late low-completion period (2026-06-15..2026-08-31)",
+  "early_events": 1853,
+  "late_events": 15150,
+  "early_range_utc": [
+   "2026-03-19T10:09:37+00:00",
+   "2026-06-12T17:44:46+00:00"
+  ],
+  "late_range_utc": [
+   "2026-06-15T08:01:15+00:00",
+   "2026-08-31T23:11:19+00:00"
+  ]
+ },
+ "full_corpus_derivation": {
+  "label": "historical reconstruction of another trader's public activity; NOT realized profit for our account",
+  "fills": 760817,
+  "events": 17003,
+  "events_skipped_no_epoch_in_slug": 1,
+  "distinct_utc_days": 127,
+  "date_range_utc": [
+   "2026-03-19T10:09:37+00:00",
+   "2026-08-31T23:11:19+00:00"
+  ],
+  "first_fill_price": {
+   "n": 17003,
+   "p10": 0.25,
+   "median": 0.54,
+   "p90": 0.79,
+   "p99": 0.94,
+   "max": 0.991
+  },
+  "first_fill_t_plus_s": {
+   "n": 17003,
+   "p10": 6.0,
+   "median": 42.0,
+   "p90": 209.0,
+   "p99": 516.0,
+   "max": 880.0
+  },
+  "favored_first_pct": 60.18,
+  "ever_complement_pct": 76.07,
+  "events_ever_complement": 12934,
+  "transitions": {
+   "OPEN": 17003,
+   "EXTEND": 536253,
+   "SWITCH_OR_COMPLETE": 204359
+  },
+  "same_side_extends_before_complement": {
+   "n": 204359,
+   "p10": 0.0,
+   "median": 1.0,
+   "p90": 7.0,
+   "p99": 18.0,
+   "max": 77.0
+  },
+  "pair_cost_at_opposite_side_buy": {
+   "n": 204359,
+   "p10": 0.7489,
+   "median": 0.986,
+   "p90": 1.2222,
+   "p99": 1.4331,
+   "max": 1.8927
+  },
+  "pair_cost_if_extend_same_side": {
+   "n": 536253,
+   "p10": 0.3353,
+   "median": 0.917,
+   "p90": 1.5564,
+   "p99": 1.7833,
+   "max": 1.98
+  },
+  "FINAL_matched_pair_cost": {
+   "n": 12934,
+   "p10": 0.7948,
+   "median": 0.968,
+   "p90": 1.1715,
+   "p99": 1.4737,
+   "max": 1.89
+  },
+  "seconds_first_fill_to_first_matched_increase": {
+   "n": 12934,
+   "p10": 7.0,
+   "median": 49.0,
+   "p90": 168.0,
+   "p99": 353.0,
+   "max": 804.0
+  },
+  "inter_fill_gap_s": {
+   "n": 740612,
+   "p10": 0.0,
+   "median": 2.0,
+   "p90": 19.0,
+   "p99": 84.0,
+   "max": 768.0
+  },
+  "fills_per_event": {
+   "n": 17003,
+   "p10": 2.0,
+   "median": 7.0,
+   "p90": 147.0,
+   "p99": 310.0,
+   "max": 756.0
+  },
+  "event_working_span_s": {
+   "n": 17003,
+   "p10": 0.0,
+   "median": 198.0,
+   "p90": 833.0,
+   "p99": 879.0,
+   "max": 1128.0
+  },
+  "same_side_repeat_price_direction": {
+   "higher": 272445,
+   "same": 185184,
+   "lower": 270049
+  },
+  "sides_observed": {
+   "BUY": 757613,
+   "SELL": 2
+  },
+  "durations_by_event": {
+   "5m": 10920,
+   "15m": 6083
+  },
+  "assets_by_event": {
+   "btc": 13592,
+   "eth": 3411
+  }
+ },
+ "early_period_derivation": {
+  "label": "historical reconstruction of another trader's public activity; NOT realized profit for our account",
+  "fills": 163343,
+  "events": 1853,
+  "events_skipped_no_epoch_in_slug": 1,
+  "distinct_utc_days": 63,
+  "date_range_utc": [
+   "2026-03-19T10:09:37+00:00",
+   "2026-06-12T17:44:46+00:00"
+  ],
+  "first_fill_price": {
+   "n": 1853,
+   "p10": 0.36,
+   "median": 0.5,
+   "p90": 0.63,
+   "p99": 0.88,
+   "max": 0.98
+  },
+  "first_fill_t_plus_s": {
+   "n": 1853,
+   "p10": 14.0,
+   "median": 39.0,
+   "p90": 180.0,
+   "p99": 667.0,
+   "max": 830.0
+  },
+  "favored_first_pct": 44.41,
+  "ever_complement_pct": 98.06,
+  "events_ever_complement": 1817,
+  "transitions": {
+   "OPEN": 1853,
+   "EXTEND": 112888,
+   "SWITCH_OR_COMPLETE": 45406
+  },
+  "same_side_extends_before_complement": {
+   "n": 45406,
+   "p10": 0.0,
+   "median": 1.0,
+   "p90": 6.0,
+   "p99": 15.0,
+   "max": 58.0
+  },
+  "pair_cost_at_opposite_side_buy": {
+   "n": 45406,
+   "p10": 0.7475,
+   "median": 0.9758,
+   "p90": 1.208,
+   "p99": 1.4109,
+   "max": 1.8927
+  },
+  "pair_cost_if_extend_same_side": {
+   "n": 112888,
+   "p10": 0.3524,
+   "median": 0.9216,
+   "p90": 1.5308,
+   "p99": 1.7655,
+   "max": 1.96
+  },
+  "FINAL_matched_pair_cost": {
+   "n": 1817,
+   "p10": 0.8793,
+   "median": 0.9583,
+   "p90": 1.0382,
+   "p99": 1.1498,
+   "max": 1.2951
+  },
+  "seconds_first_fill_to_first_matched_increase": {
+   "n": 1817,
+   "p10": 6.0,
+   "median": 32.0,
+   "p90": 114.0,
+   "p99": 278.0,
+   "max": 666.0
+  },
+  "inter_fill_gap_s": {
+   "n": 158294,
+   "p10": 0.0,
+   "median": 2.0,
+   "p90": 21.0,
+   "p99": 72.0,
+   "max": 734.0
+  },
+  "fills_per_event": {
+   "n": 1853,
+   "p10": 22.0,
+   "median": 81.0,
+   "p90": 155.0,
+   "p99": 236.0,
+   "max": 363.0
+  },
+  "event_working_span_s": {
+   "n": 1853,
+   "p10": 411.0,
+   "median": 752.0,
+   "p90": 863.0,
+   "p99": 888.0,
+   "max": 1128.0
+  },
+  "same_side_repeat_price_direction": {
+   "higher": 60036,
+   "same": 38524,
+   "lower": 57917
+  },
+  "sides_observed": {
+   "BUY": 160145,
+   "SELL": 2
+  },
+  "durations_by_event": {
+   "15m": 1851,
+   "5m": 2
+  },
+  "assets_by_event": {
+   "btc": 1853
+  }
+ },
+ "late_period_derivation": {
+  "label": "historical reconstruction of another trader's public activity; NOT realized profit for our account",
+  "fills": 597474,
+  "events": 15150,
+  "events_skipped_no_epoch_in_slug": 1,
+  "distinct_utc_days": 64,
+  "date_range_utc": [
+   "2026-06-15T08:01:15+00:00",
+   "2026-08-31T23:11:19+00:00"
+  ],
+  "first_fill_price": {
+   "n": 15150,
+   "p10": 0.23,
+   "median": 0.55,
+   "p90": 0.8,
+   "p99": 0.94,
+   "max": 0.991
+  },
+  "first_fill_t_plus_s": {
+   "n": 15150,
+   "p10": 6.0,
+   "median": 43.0,
+   "p90": 210.0,
+   "p99": 460.0,
+   "max": 880.0
+  },
+  "favored_first_pct": 62.11,
+  "ever_complement_pct": 73.38,
+  "events_ever_complement": 11117,
+  "transitions": {
+   "OPEN": 15150,
+   "SWITCH_OR_COMPLETE": 158953,
+   "EXTEND": 423365
+  },
+  "same_side_extends_before_complement": {
+   "n": 158953,
+   "p10": 0.0,
+   "median": 1.0,
+   "p90": 7.0,
+   "p99": 18.0,
+   "max": 77.0
+  },
+  "pair_cost_at_opposite_side_buy": {
+   "n": 158953,
+   "p10": 0.7493,
+   "median": 0.9896,
+   "p90": 1.2264,
+   "p99": 1.4378,
+   "max": 1.89
+  },
+  "pair_cost_if_extend_same_side": {
+   "n": 423365,
+   "p10": 0.3316,
+   "median": 0.9148,
+   "p90": 1.5626,
+   "p99": 1.7874,
+   "max": 1.98
+  },
+  "FINAL_matched_pair_cost": {
+   "n": 11117,
+   "p10": 0.7803,
+   "median": 0.97,
+   "p90": 1.195,
+   "p99": 1.485,
+   "max": 1.89
+  },
+  "seconds_first_fill_to_first_matched_increase": {
+   "n": 11117,
+   "p10": 7.0,
+   "median": 53.0,
+   "p90": 176.0,
+   "p99": 375.0,
+   "max": 804.0
+  },
+  "inter_fill_gap_s": {
+   "n": 582318,
+   "p10": 0.0,
+   "median": 2.0,
+   "p90": 18.0,
+   "p99": 87.0,
+   "max": 768.0
+  },
+  "fills_per_event": {
+   "n": 15150,
+   "p10": 1.0,
+   "median": 6.0,
+   "p90": 143.0,
+   "p99": 319.0,
+   "max": 756.0
+  },
+  "event_working_span_s": {
+   "n": 15150,
+   "p10": 0.0,
+   "median": 176.0,
+   "p90": 818.0,
+   "p99": 879.0,
+   "max": 894.0
+  },
+  "same_side_repeat_price_direction": {
+   "lower": 212132,
+   "higher": 212409,
+   "same": 146660
+  },
+  "sides_observed": {
+   "BUY": 597468
+  },
+  "durations_by_event": {
+   "5m": 10918,
+   "15m": 4232
+  },
+  "assets_by_event": {
+   "btc": 11739,
+   "eth": 3411
+  }
+ },
+ "reconciliation_table": [
+  {
+   "metric": "first-acquisition (first-fill) median price",
+   "old_9901_fill_value": {
+    "frozen": 0.588,
+    "recomputed_narrow": 0.583
+   },
+   "full_corpus_value": 0.54,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 0.5,
+    "late low-completion period (2026-06-15..2026-08-31)": 0.55
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:33 (docstring 0.583/0.588)"
+   ],
+   "notes": "frozen value came from one 13.1-hour day; recomputed over the full corpus"
+  },
+  {
+   "metric": "first-fill price band (p10, p90) -> L5_BAND",
+   "old_9901_fill_value": [
+    0.2,
+    0.82
+   ],
+   "full_corpus_value": [
+    0.25,
+    0.79
+   ],
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": [
+     0.36,
+     0.63
+    ],
+    "late low-completion period (2026-06-15..2026-08-31)": [
+     0.23,
+     0.8
+    ]
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:130 L5_BAND",
+    "same file lines 311/320/334 gate OPEN and EXTEND on it"
+   ],
+   "notes": "the acquisition admission band of the replay state machine"
+  },
+  {
+   "metric": "% of events whose first fill is the FAVORED side (price > 0.5)",
+   "old_9901_fill_value": 69.4,
+   "full_corpus_value": 60.18,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 44.41,
+    "late low-completion period (2026-06-15..2026-08-31)": 62.11
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py (derive favored_first_pct)",
+    "quoted in L5 behavioral-thesis documentation"
+   ],
+   "notes": "descriptive statistic, no direct gate, but it motivates the band"
+  },
+  {
+   "metric": "median first acquisition T+Ns into the window",
+   "old_9901_fill_value": 44.0,
+   "full_corpus_value": 42.0,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 39.0,
+    "late low-completion period (2026-06-15..2026-08-31)": 43.0
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:138 ACQUIRE_FLOOR_S = 44.0 * SCALE"
+   ],
+   "notes": "a hard FLOOR in the replay: no OPEN before it. Window-duration dependent, and the full corpus mixes durations"
+  },
+  {
+   "metric": "% of events that EVER complement (both legs held)",
+   "old_9901_fill_value": 71.5,
+   "full_corpus_value": 76.07,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 98.06,
+    "late low-completion period (2026-06-15..2026-08-31)": 73.38
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py (derive ever_complement_pct)",
+    "src/l5_shadow/cohorts.py:15 quotes '72.7% two-sided'"
+   ],
+   "notes": "the single largest early-vs-late divergence; see period contrast"
+  },
+  {
+   "metric": "median seconds to first matched increase",
+   "old_9901_fill_value": 52.0,
+   "full_corpus_value": 49.0,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 32.0,
+    "late low-completion period (2026-06-15..2026-08-31)": 53.0
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:140 PATIENCE_REF_S = 52.0 * SCALE"
+   ],
+   "notes": "a patience REFERENCE, not a wait; feeds the COMPLETE cadence"
+  },
+  {
+   "metric": "median same-side EXTENDs before complementing -> L5_EXTEND_BUDGET",
+   "old_9901_fill_value": 1,
+   "full_corpus_value": 1.0,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 1.0,
+    "late low-completion period (2026-06-15..2026-08-31)": 1.0
+   },
+   "still_valid": "CHECK (see value)",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:136 L5_EXTEND_BUDGET = 1",
+    "same file:273 default arg; :525-529 arms incl. ABLATION_NO_EXTEND"
+   ],
+   "notes": "integer budget; robust if the full-corpus median is still 1"
+  },
+  {
+   "metric": "median fills per event (p90)",
+   "old_9901_fill_value": {
+    "median": 6,
+    "p90": 136
+   },
+   "full_corpus_value": {
+    "median": 7.0,
+    "p90": 147.0
+   },
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": {
+     "median": 81.0,
+     "p90": 155.0
+    },
+    "late low-completion period (2026-06-15..2026-08-31)": {
+     "median": 6.0,
+     "p90": 143.0
+    }
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "src/pmus_spring_l5_session.py:123 ('12 extra attempts ... covers L5's p90 completion')",
+    "cadence/retry budgeting in the spring session"
+   ],
+   "notes": "drives how many attempts the live shell budgets per window"
+  },
+  {
+   "metric": "median inter-fill gap s -> MIN_GAP_S",
+   "old_9901_fill_value": 2.0,
+   "full_corpus_value": 2.0,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 2.0,
+    "late low-completion period (2026-06-15..2026-08-31)": 2.0
+   },
+   "still_valid": "CHECK (see value)",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:142 MIN_GAP_S = max(1.0, 2.0*SCALE)"
+   ],
+   "notes": "clamped to >=1s by the 1 Hz tape, so a small change is absorbed"
+  },
+  {
+   "metric": "pair cost at the instant of opposite-side buy (COMPRESS trigger)",
+   "old_9901_fill_value": 0.991,
+   "full_corpus_value": 0.986,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 0.9758,
+    "late low-completion period (2026-06-15..2026-08-31)": 0.9896
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:132 L5_COMPRESS_TRIGGER = 0.991",
+    "same file:524 arm L5_DERIVED_0.991"
+   ],
+   "notes": "the replay's COMPLETE trigger for the L5-derived arm"
+  },
+  {
+   "metric": "FINAL achieved matched pair unit cost (median)",
+   "old_9901_fill_value": {
+    "quoted_elsewhere": 0.9624,
+    "narrow_recompute": 0.977
+   },
+   "full_corpus_value": 0.968,
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": 0.9583,
+    "late low-completion period (2026-06-15..2026-08-31)": 0.97
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "src/l5_shadow/inventory_policy.py:25 ('L5 achieves 0.9624')",
+    "src/l5_shadow/two_sided.py:64 ('0.96 sits on the MEDIAN')",
+    "src/l5_shadow/cohorts.py:15 ('median pair cost 0.9646')"
+   ],
+   "notes": "the EMPIRICAL claim used to justify the 0.96 POLICY ceiling"
+  },
+  {
+   "metric": "spring pair-completion target <= 0.96 (POLICY, not a measurement)",
+   "old_9901_fill_value": 0.96,
+   "full_corpus_value": "POLICY -- unchanged by this reconciliation",
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": "policy",
+    "late low-completion period (2026-06-15..2026-08-31)": "policy"
+   },
+   "still_valid": "POLICY (owner-set; its EMPIRICAL JUSTIFICATION is SUPERSEDED)",
+   "used_in_code": [
+    "src/l5_shadow/two_sided.py:69 ADAPTED_EXECUTABLE_PAIR_CEILING",
+    "src/l5_shadow/adapted_policy.py:36 REFERENCE_PAIR_CEILING",
+    "src/gemini_execution/ci15m_budget.py:112 MAX_PAIR_COST",
+    "src/gemini_execution/ci15m_probe.py:88 max_pair_cost",
+    "src/gemini_execution/hybrid_complete.py:65 THRESHOLDS",
+    "src/gemini_execution/residual_timeline.py:581,601 target default",
+    "scripts/gemini_l5_inventory_replay.py:134 SPRING_COMPRESS_TRIGGER",
+    "scripts/l5_vs_frozen_entry_study.py:290 frozen_ceiling",
+    "src/l5_touch_proximity.py:54 OUR_GATES",
+    "src/polymarket_l5/spring_representativeness.py:34-35 PAIR_CAPS",
+    "src/pmus_spring_l5_session.py:28",
+    "src/l5_expectancy_replay.py:437"
+   ],
+   "notes": "0.96 stays as owner spring discipline. What this reconciliation removes is the claim that it sits on L5's achieved MEDIAN"
+  },
+  {
+   "metric": "same-side EXTEND is NOT price-improvement gated",
+   "old_9901_fill_value": {
+    "lower": null,
+    "higher": null,
+    "conclusion": false
+   },
+   "full_corpus_value": {
+    "higher": 272445,
+    "same": 185184,
+    "lower": 270049,
+    "conclusion_extend_is_improvement_gated": false
+   },
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": {
+     "higher": 60036,
+     "same": 38524,
+     "lower": 57917
+    },
+    "late low-completion period (2026-06-15..2026-08-31)": {
+     "lower": 212132,
+     "higher": 212409,
+     "same": 146660
+    }
+   },
+   "still_valid": "CONFIRMED on the full corpus",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:47-50 extend_gate_note",
+    "src/gemini_execution/arming.py:112,143,173,198 ('EXTEND needs >=5c average improvement') -- CONTRADICTED by the tape"
+   ],
+   "notes": "L5 pays both lower and higher on same-side repeats; the arming modules' 5c-improvement EXTEND rule is OUR invention, not L5's"
+  },
+  {
+   "metric": "relation mix OPEN / EXTEND / SWITCH-or-COMPLETE",
+   "old_9901_fill_value": "UNAVAILABLE",
+   "full_corpus_value": {
+    "OPEN": 17003,
+    "EXTEND": 536253,
+    "SWITCH_OR_COMPLETE": 204359
+   },
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": {
+     "OPEN": 1853,
+     "EXTEND": 112888,
+     "SWITCH_OR_COMPLETE": 45406
+    },
+    "late low-completion period (2026-06-15..2026-08-31)": {
+     "OPEN": 15150,
+     "SWITCH_OR_COMPLETE": 158953,
+     "EXTEND": 423365
+    }
+   },
+   "still_valid": "SUPERSEDED (frozen model fitted on the narrow corpus)",
+   "used_in_code": [
+    "analysis/l5/l5_action_model_v2.json (relation masses)",
+    "src/l5_fidelity_gate.py + analysis/l5/l5_fidelity_gate.json (action_distribution_relation L1 <= 0.10 sampled / 0.20 acted)"
+   ],
+   "notes": "the fidelity gate scores our clone against masses derived from the narrow corpus, so a PASS currently proves fidelity to 13 hours"
+  },
+  {
+   "metric": "sides observed (BUY only?)",
+   "old_9901_fill_value": "BUY only",
+   "full_corpus_value": {
+    "BUY": 757613,
+    "SELL": 2
+   },
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": {
+     "BUY": 160145,
+     "SELL": 2
+    },
+    "late low-completion period (2026-06-15..2026-08-31)": {
+     "BUY": 597468
+    }
+   },
+   "still_valid": "CONFIRMED on the full corpus",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:'sides_observed' -> the replay state machine has no SELL transition"
+   ],
+   "notes": "L5 is effectively BUY-ONLY across the full corpus (a negligible handful of SELLs). KEEP THIS DISTINCT from the documented ~9s 'side switch' mechanic in L5_STATUS.md: that is L5 alternating WHICH OUTCOME IT BUYS (i.e. COMPLETE / SWITCH), not selling. Buy-only does not contradict it."
+  },
+  {
+   "metric": "event durations / asset scope",
+   "old_9901_fill_value": "btc-updown-15m assumed (L5_WINDOW_S = 900.0)",
+   "full_corpus_value": {
+    "durations": {
+     "5m": 10920,
+     "15m": 6083
+    },
+    "assets": {
+     "btc": 13592,
+     "eth": 3411
+    }
+   },
+   "per_regime_values": {
+    "early high-completion period (2026-03-19..2026-06-15)": {
+     "15m": 1851,
+     "5m": 2
+    },
+    "late low-completion period (2026-06-15..2026-08-31)": {
+     "5m": 10918,
+     "15m": 4232
+    }
+   },
+   "still_valid": "SUPERSEDED",
+   "used_in_code": [
+    "scripts/gemini_l5_inventory_replay.py:124 L5_WINDOW_S = 900.0 and SCALE = 300/900 -- EVERY time constant is rescaled through it"
+   ],
+   "notes": "if the corpus mixes durations, a single 900s SCALE mis-scales ACQUIRE_FLOOR_S, PATIENCE_REF_S and MIN_GAP_S together"
+  }
+ ],
+ "incentive_records": {
+  "label": "historical reconstruction of another trader's public activity; NOT realized profit for our account",
+  "by_type": {
+   "MAKER_REBATE": {
+    "records": 110,
+    "usdc_total": 35228.32,
+    "usdc_median": 93.84415,
+    "first_day_utc": "2026-04-21",
+    "last_day_utc": "2026-08-31",
+    "distinct_days": 110
+   },
+   "REDEEM": {
+    "records": 15729,
+    "usdc_total": 7623781.77,
+    "usdc_median": 164.6604,
+    "first_day_utc": "2026-03-19",
+    "last_day_utc": "2026-08-31",
+    "distinct_days": 121
+   },
+   "REWARD": {
+    "records": 20,
+    "usdc_total": 28797.69,
+    "usdc_median": 1630.0749,
+    "first_day_utc": "2026-08-08",
+    "last_day_utc": "2026-08-31",
+    "distinct_days": 20
+   },
+   "TAKER_REBATE": {
+    "records": 73,
+    "usdc_total": 7525.73,
+    "usdc_median": 76.8235,
+    "first_day_utc": "2026-06-20",
+    "last_day_utc": "2026-08-31",
+    "distinct_days": 57
+   },
+   "TRADE": {
+    "records": 760817,
+    "usdc_total": 7605338.06,
+    "usdc_median": 4.9056,
+    "first_day_utc": "2026-03-19",
+    "last_day_utc": "2026-08-31",
+    "distinct_days": 128
+   }
+  }
+ },
+ "maker_compensation_per_contract": {
+  "full_corpus": {
+   "trade_contracts": 15712351.07,
+   "maker_rebate_usdc": 35228.3219,
+   "taker_rebate_usdc": 7525.7312,
+   "reward_usdc": 28797.6884,
+   "maker_rebate_per_contract": 0.002242,
+   "all_incentives_per_contract": 0.004554,
+   "note": "credited incentives / contracts traded; separate from trading P&L per CLAUDE.md; a LOWER BOUND on required venue compensation, never realized profit for us"
+  },
+  "early_half": {
+   "trade_contracts": 2839182.51,
+   "maker_rebate_usdc": 3676.4757,
+   "taker_rebate_usdc": 0.0,
+   "reward_usdc": 0.0,
+   "maker_rebate_per_contract": 0.001295,
+   "all_incentives_per_contract": 0.001295,
+   "note": "credited incentives / contracts traded; separate from trading P&L per CLAUDE.md; a LOWER BOUND on required venue compensation, never realized profit for us"
+  },
+  "late_half": {
+   "trade_contracts": 12873168.56,
+   "maker_rebate_usdc": 31551.8462,
+   "taker_rebate_usdc": 7525.7312,
+   "reward_usdc": 28797.6884,
+   "maker_rebate_per_contract": 0.002451,
+   "all_incentives_per_contract": 0.005273,
+   "note": "credited incentives / contracts traded; separate from trading P&L per CLAUDE.md; a LOWER BOUND on required venue compensation, never realized profit for us"
+  }
+ },
+ "venue_requirements": {
+  "label": "historical reconstruction of another trader's public activity; NOT realized profit for our account",
+  "note": "the two regimes are NOT assumed to suit one venue; requirements are derived separately",
+  "inventory_compression_regime": {
+   "regime": "inventory / pair-compression regime",
+   "derived_from": "early high-completion period (2026-03-19..2026-06-15) vs late low-completion period (2026-06-15..2026-08-31) on the corpus's own daily grid (cut 2026-06-15)",
+   "requirements": {
+    "trades_per_minute_min": {
+     "threshold": 30.0,
+     "measurement": "60 / median inter-fill gap 2.0s over 17003 independent events, ['2026-03-19T10:09:37+00:00', '2026-08-31T23:11:19+00:00']",
+     "unit": "own fills per minute while working one event"
+    },
+    "fills_per_event_min": {
+     "threshold": 7.0,
+     "stretch_p90": 147.0,
+     "measurement": "median / p90 fills per independent event, n=17003 events"
+    },
+    "two_sided_fill_frequency_min": {
+     "threshold": 76.07,
+     "unit": "percent of events reaching both legs",
+     "measurement": "12934 of 17003 independent events ever held both outcomes",
+     "period_contrast": {
+      "early high-completion period (2026-03-19..2026-06-15)": 98.06,
+      "late low-completion period (2026-06-15..2026-08-31)": 73.38
+     }
+    },
+    "complement_latency_max_s": {
+     "threshold": 49.0,
+     "p90": 168.0,
+     "measurement": "seconds from first fill to first matched increase; the venue must let the complement be reachable inside this, n=12934 events"
+    },
+    "window_duration_min": {
+     "threshold": "event durations parsed from eventSlug: {\"5m\": 10920, \"15m\": 6083}",
+     "working_span_median_s": 198.0,
+     "working_span_p90_s": 833.0,
+     "measurement": "the venue's contract must stay open at least as long as the median working span"
+    },
+    "pair_completion_cost_ceiling": {
+     "threshold": 0.968,
+     "p10": 0.7948,
+     "p90": 1.1715,
+     "measurement": "achieved final matched pair unit cost over 12934 completing events; the venue's two-sided pricing must reach this",
+     "period_contrast": {
+      "early high-completion period (2026-03-19..2026-06-15)": 0.9583,
+      "late low-completion period (2026-06-15..2026-08-31)": 0.97
+     }
+    },
+    "spread_and_depth_min": {
+     "threshold": "UNAVAILABLE",
+     "why": "this corpus is L5's own PRINTS only. It contains no order book, no BBO, no quote sizes and no resting orders, so spread and depth cannot be recomputed and are not approximated here."
+    },
+    "executable_capacity_min": {
+     "threshold": {
+      "usdc_per_event_median": 138.41,
+      "usdc_per_event_p90": 1333.09,
+      "contracts_per_fill_median": 15.0,
+      "contracts_per_fill_p90": 50.0
+     },
+     "why_partial": "own-notional per event IS measurable and is reported below as a capacity FLOOR, but the venue capacity that absorbed it (book depth at his prices) is UNAVAILABLE from prints.",
+     "measurement": "own notional per independent event (n=17004 events) and own contracts per fill (n=760817 fills); a FLOOR on the capacity the venue must absorb"
+    }
+   }
+  },
+  "incentive_liquidity_regime": {
+   "regime": "incentive / liquidity-provision regime",
+   "derived_from": "MAKER_REBATE / TAKER_REBATE / REWARD records in the same corpus",
+   "requirements": {
+    "maker_compensation_per_contract_min": {
+     "threshold": 0.002242,
+     "all_incentives_per_contract": 0.004554,
+     "measurement": "credited maker-rebate usdc / own contracts traded, full corpus; period contrast below",
+     "period_contrast": {
+      "early high-completion period (2026-03-19..2026-06-15)": 0.001295,
+      "late low-completion period (2026-06-15..2026-08-31)": 0.002451
+     },
+     "caveat": "a LOWER BOUND: what L5 was credited, not what he required. Per CLAUDE.md, no rebate is assumed until credited and source-accounted for OUR account."
+    },
+    "reward_structure_required": {
+     "threshold": "the corpus shows MAKER_REBATE,REWARD,TAKER_REBATE record types; see incentive_records for counts, first/last day and totals",
+     "measurement": "per-type record counts and usdc totals by day"
+    },
+    "adverse_selection_tolerance": {
+     "threshold": "UNAVAILABLE",
+     "why": "adverse selection needs the mid/BBO at fill time and the subsequent mark. The corpus has neither a book nor a maker/taker flag, so toxicity cannot be recomputed here."
+    },
+    "fill_rate_min": {
+     "threshold": "UNAVAILABLE",
+     "why": "fill rate needs SUBMITTED orders as the denominator. This corpus contains only FILLS; unfilled resting orders are not public."
+    },
+    "spread_and_depth_min": {
+     "threshold": "UNAVAILABLE",
+     "why": "no book data in the corpus (same reason as above)."
+    }
+   }
+  }
+ },
+ "daily_grid": [
+  {
+   "day": "2026-03-19",
+   "fills": 5,
+   "events": 3,
+   "usdc_notional": 4.23,
+   "events_ever_complement": 0,
+   "complement_pct": 0.0,
+   "fills_per_event": 1.67
+  },
+  {
+   "day": "2026-03-25",
+   "fills": 4,
+   "events": 4,
+   "usdc_notional": 4.0,
+   "events_ever_complement": 0,
+   "complement_pct": 0.0,
+   "fills_per_event": 1.0
+  },
+  {
+   "day": "2026-03-26",
+   "fills": 128,
+   "events": 8,
+   "usdc_notional": 288.33,
+   "events_ever_complement": 4,
+   "complement_pct": 50.0,
+   "fills_per_event": 16.0
+  },
+  {
+   "day": "2026-03-27",
+   "fills": 864,
+   "events": 28,
+   "usdc_notional": 3154.11,
+   "events_ever_complement": 28,
+   "complement_pct": 100.0,
+   "fills_per_event": 30.86
+  },
+  {
+   "day": "2026-03-28",
+   "fills": 285,
+   "events": 15,
+   "usdc_notional": 1290.67,
+   "events_ever_complement": 14,
+   "complement_pct": 93.33,
+   "fills_per_event": 19.0
+  },
+  {
+   "day": "2026-03-30",
+   "fills": 448,
+   "events": 20,
+   "usdc_notional": 2122.11,
+   "events_ever_complement": 19,
+   "complement_pct": 95.0,
+   "fills_per_event": 22.4
+  },
+  {
+   "day": "2026-03-31",
+   "fills": 197,
+   "events": 10,
+   "usdc_notional": 927.95,
+   "events_ever_complement": 8,
+   "complement_pct": 80.0,
+   "fills_per_event": 19.7
+  },
+  {
+   "day": "2026-04-01",
+   "fills": 85,
+   "events": 4,
+   "usdc_notional": 425.66,
+   "events_ever_complement": 4,
+   "complement_pct": 100.0,
+   "fills_per_event": 21.25
+  },
+  {
+   "day": "2026-04-02",
+   "fills": 150,
+   "events": 9,
+   "usdc_notional": 724.32,
+   "events_ever_complement": 8,
+   "complement_pct": 88.89,
+   "fills_per_event": 16.67
+  },
+  {
+   "day": "2026-04-06",
+   "fills": 41,
+   "events": 5,
+   "usdc_notional": 190.17,
+   "events_ever_complement": 5,
+   "complement_pct": 100.0,
+   "fills_per_event": 8.2
+  },
+  {
+   "day": "2026-04-09",
+   "fills": 299,
+   "events": 16,
+   "usdc_notional": 1326.36,
+   "events_ever_complement": 14,
+   "complement_pct": 87.5,
+   "fills_per_event": 18.69
+  },
+  {
+   "day": "2026-04-10",
+   "fills": 106,
+   "events": 9,
+   "usdc_notional": 493.28,
+   "events_ever_complement": 9,
+   "complement_pct": 100.0,
+   "fills_per_event": 11.78
+  },
+  {
+   "day": "2026-04-13",
+   "fills": 337,
+   "events": 19,
+   "usdc_notional": 2112.37,
+   "events_ever_complement": 18,
+   "complement_pct": 94.74,
+   "fills_per_event": 17.74
+  },
+  {
+   "day": "2026-04-14",
+   "fills": 433,
+   "events": 21,
+   "usdc_notional": 3616.11,
+   "events_ever_complement": 21,
+   "complement_pct": 100.0,
+   "fills_per_event": 20.62
+  },
+  {
+   "day": "2026-04-15",
+   "fills": 112,
+   "events": 6,
+   "usdc_notional": 862.87,
+   "events_ever_complement": 6,
+   "complement_pct": 100.0,
+   "fills_per_event": 18.67
+  },
+  {
+   "day": "2026-04-17",
+   "fills": 118,
+   "events": 9,
+   "usdc_notional": 724.85,
+   "events_ever_complement": 5,
+   "complement_pct": 55.56,
+   "fills_per_event": 13.11
+  },
+  {
+   "day": "2026-04-20",
+   "fills": 1416,
+   "events": 25,
+   "usdc_notional": 9858.33,
+   "events_ever_complement": 25,
+   "complement_pct": 100.0,
+   "fills_per_event": 56.64
+  },
+  {
+   "day": "2026-04-21",
+   "fills": 3191,
+   "events": 52,
+   "usdc_notional": 24654.98,
+   "events_ever_complement": 52,
+   "complement_pct": 100.0,
+   "fills_per_event": 61.37
+  },
+  {
+   "day": "2026-04-22",
+   "fills": 2544,
+   "events": 40,
+   "usdc_notional": 25352.53,
+   "events_ever_complement": 38,
+   "complement_pct": 95.0,
+   "fills_per_event": 63.6
+  },
+  {
+   "day": "2026-04-23",
+   "fills": 2451,
+   "events": 38,
+   "usdc_notional": 21820.26,
+   "events_ever_complement": 38,
+   "complement_pct": 100.0,
+   "fills_per_event": 64.5
+  },
+  {
+   "day": "2026-04-24",
+   "fills": 2457,
+   "events": 45,
+   "usdc_notional": 22096.11,
+   "events_ever_complement": 44,
+   "complement_pct": 97.78,
+   "fills_per_event": 54.6
+  },
+  {
+   "day": "2026-04-25",
+   "fills": 1988,
+   "events": 27,
+   "usdc_notional": 17631.55,
+   "events_ever_complement": 27,
+   "complement_pct": 100.0,
+   "fills_per_event": 73.63
+  },
+  {
+   "day": "2026-04-26",
+   "fills": 1535,
+   "events": 19,
+   "usdc_notional": 12977.1,
+   "events_ever_complement": 19,
+   "complement_pct": 100.0,
+   "fills_per_event": 80.79
+  },
+  {
+   "day": "2026-04-27",
+   "fills": 4668,
+   "events": 57,
+   "usdc_notional": 56081.04,
+   "events_ever_complement": 57,
+   "complement_pct": 100.0,
+   "fills_per_event": 81.89
+  },
+  {
+   "day": "2026-04-28",
+   "fills": 2554,
+   "events": 39,
+   "usdc_notional": 23213.31,
+   "events_ever_complement": 39,
+   "complement_pct": 100.0,
+   "fills_per_event": 65.49
+  },
+  {
+   "day": "2026-04-29",
+   "fills": 4313,
+   "events": 53,
+   "usdc_notional": 39935.28,
+   "events_ever_complement": 52,
+   "complement_pct": 98.11,
+   "fills_per_event": 81.38
+  },
+  {
+   "day": "2026-04-30",
+   "fills": 5425,
+   "events": 55,
+   "usdc_notional": 48864.79,
+   "events_ever_complement": 54,
+   "complement_pct": 98.18,
+   "fills_per_event": 98.64
+  },
+  {
+   "day": "2026-05-01",
+   "fills": 5132,
+   "events": 54,
+   "usdc_notional": 55506.9,
+   "events_ever_complement": 54,
+   "complement_pct": 100.0,
+   "fills_per_event": 95.04
+  },
+  {
+   "day": "2026-05-02",
+   "fills": 2141,
+   "events": 25,
+   "usdc_notional": 22727.98,
+   "events_ever_complement": 25,
+   "complement_pct": 100.0,
+   "fills_per_event": 85.64
+  },
+  {
+   "day": "2026-05-03",
+   "fills": 3044,
+   "events": 30,
+   "usdc_notional": 28795.98,
+   "events_ever_complement": 30,
+   "complement_pct": 100.0,
+   "fills_per_event": 101.47
+  },
+  {
+   "day": "2026-05-04",
+   "fills": 4768,
+   "events": 48,
+   "usdc_notional": 57946.14,
+   "events_ever_complement": 48,
+   "complement_pct": 100.0,
+   "fills_per_event": 99.33
+  },
+  {
+   "day": "2026-05-05",
+   "fills": 6030,
+   "events": 63,
+   "usdc_notional": 77403.11,
+   "events_ever_complement": 63,
+   "complement_pct": 100.0,
+   "fills_per_event": 95.71
+  },
+  {
+   "day": "2026-05-06",
+   "fills": 1438,
+   "events": 20,
+   "usdc_notional": 11040.85,
+   "events_ever_complement": 18,
+   "complement_pct": 90.0,
+   "fills_per_event": 71.9
+  },
+  {
+   "day": "2026-05-07",
+   "fills": 2365,
+   "events": 31,
+   "usdc_notional": 17215.15,
+   "events_ever_complement": 29,
+   "complement_pct": 93.55,
+   "fills_per_event": 76.29
+  },
+  {
+   "day": "2026-05-08",
+   "fills": 4334,
+   "events": 53,
+   "usdc_notional": 32166.76,
+   "events_ever_complement": 53,
+   "complement_pct": 100.0,
+   "fills_per_event": 81.77
+  },
+  {
+   "day": "2026-05-09",
+   "fills": 1231,
+   "events": 12,
+   "usdc_notional": 8602.88,
+   "events_ever_complement": 12,
+   "complement_pct": 100.0,
+   "fills_per_event": 102.58
+  },
+  {
+   "day": "2026-05-10",
+   "fills": 347,
+   "events": 4,
+   "usdc_notional": 2325.38,
+   "events_ever_complement": 4,
+   "complement_pct": 100.0,
+   "fills_per_event": 86.75
+  },
+  {
+   "day": "2026-05-11",
+   "fills": 4018,
+   "events": 36,
+   "usdc_notional": 28500.91,
+   "events_ever_complement": 36,
+   "complement_pct": 100.0,
+   "fills_per_event": 111.61
+  },
+  {
+   "day": "2026-05-12",
+   "fills": 2154,
+   "events": 27,
+   "usdc_notional": 15852.28,
+   "events_ever_complement": 27,
+   "complement_pct": 100.0,
+   "fills_per_event": 79.78
+  },
+  {
+   "day": "2026-05-13",
+   "fills": 3037,
+   "events": 41,
+   "usdc_notional": 20705.54,
+   "events_ever_complement": 41,
+   "complement_pct": 100.0,
+   "fills_per_event": 74.07
+  },
+  {
+   "day": "2026-05-14",
+   "fills": 3196,
+   "events": 1,
+   "usdc_notional": 22062.69,
+   "events_ever_complement": 1,
+   "complement_pct": 100.0,
+   "fills_per_event": 3196.0
+  },
+  {
+   "day": "2026-05-15",
+   "fills": 3960,
+   "events": 38,
+   "usdc_notional": 25987.26,
+   "events_ever_complement": 37,
+   "complement_pct": 97.37,
+   "fills_per_event": 104.21
+  },
+  {
+   "day": "2026-05-18",
+   "fills": 4219,
+   "events": 36,
+   "usdc_notional": 30266.04,
+   "events_ever_complement": 36,
+   "complement_pct": 100.0,
+   "fills_per_event": 117.19
+  },
+  {
+   "day": "2026-05-19",
+   "fills": 3028,
+   "events": 33,
+   "usdc_notional": 22340.77,
+   "events_ever_complement": 32,
+   "complement_pct": 96.97,
+   "fills_per_event": 91.76
+  },
+  {
+   "day": "2026-05-20",
+   "fills": 4160,
+   "events": 39,
+   "usdc_notional": 28298.09,
+   "events_ever_complement": 39,
+   "complement_pct": 100.0,
+   "fills_per_event": 106.67
+  },
+  {
+   "day": "2026-05-21",
+   "fills": 3006,
+   "events": 32,
+   "usdc_notional": 19590.84,
+   "events_ever_complement": 32,
+   "complement_pct": 100.0,
+   "fills_per_event": 93.94
+  },
+  {
+   "day": "2026-05-22",
+   "fills": 5829,
+   "events": 51,
+   "usdc_notional": 39180.11,
+   "events_ever_complement": 51,
+   "complement_pct": 100.0,
+   "fills_per_event": 114.29
+  },
+  {
+   "day": "2026-05-23",
+   "fills": 1591,
+   "events": 13,
+   "usdc_notional": 10496.32,
+   "events_ever_complement": 13,
+   "complement_pct": 100.0,
+   "fills_per_event": 122.38
+  },
+  {
+   "day": "2026-05-24",
+   "fills": 894,
+   "events": 8,
+   "usdc_notional": 6121.86,
+   "events_ever_complement": 8,
+   "complement_pct": 100.0,
+   "fills_per_event": 111.75
+  },
+  {
+   "day": "2026-05-25",
+   "fills": 3699,
+   "events": 33,
+   "usdc_notional": 23779.42,
+   "events_ever_complement": 33,
+   "complement_pct": 100.0,
+   "fills_per_event": 112.09
+  },
+  {
+   "day": "2026-05-26",
+   "fills": 4146,
+   "events": 42,
+   "usdc_notional": 28958.55,
+   "events_ever_complement": 41,
+   "complement_pct": 97.62,
+   "fills_per_event": 98.71
+  },
+  {
+   "day": "2026-05-27",
+   "fills": 4227,
+   "events": 41,
+   "usdc_notional": 27982.94,
+   "events_ever_complement": 41,
+   "complement_pct": 100.0,
+   "fills_per_event": 103.1
+  },
+  {
+   "day": "2026-05-28",
+   "fills": 4240,
+   "events": 42,
+   "usdc_notional": 28805.0,
+   "events_ever_complement": 42,
+   "complement_pct": 100.0,
+   "fills_per_event": 100.95
+  },
+  {
+   "day": "2026-05-29",
+   "fills": 2861,
+   "events": 24,
+   "usdc_notional": 19338.28,
+   "events_ever_complement": 24,
+   "complement_pct": 100.0,
+   "fills_per_event": 119.21
+  },
+  {
+   "day": "2026-06-01",
+   "fills": 5589,
+   "events": 41,
+   "usdc_notional": 36605.25,
+   "events_ever_complement": 41,
+   "complement_pct": 100.0,
+   "fills_per_event": 136.32
+  },
+  {
+   "day": "2026-06-02",
+   "fills": 5555,
+   "events": 46,
+   "usdc_notional": 40620.29,
+   "events_ever_complement": 46,
+   "complement_pct": 100.0,
+   "fills_per_event": 120.76
+  },
+  {
+   "day": "2026-06-03",
+   "fills": 4966,
+   "events": 39,
+   "usdc_notional": 41251.33,
+   "events_ever_complement": 39,
+   "complement_pct": 100.0,
+   "fills_per_event": 127.33
+  },
+  {
+   "day": "2026-06-04",
+   "fills": 4812,
+   "events": 41,
+   "usdc_notional": 41209.11,
+   "events_ever_complement": 41,
+   "complement_pct": 100.0,
+   "fills_per_event": 117.37
+  },
+  {
+   "day": "2026-06-05",
+   "fills": 4007,
+   "events": 34,
+   "usdc_notional": 36797.11,
+   "events_ever_complement": 34,
+   "complement_pct": 100.0,
+   "fills_per_event": 117.85
+  },
+  {
+   "day": "2026-06-08",
+   "fills": 5894,
+   "events": 48,
+   "usdc_notional": 55203.29,
+   "events_ever_complement": 48,
+   "complement_pct": 100.0,
+   "fills_per_event": 122.79
+  },
+  {
+   "day": "2026-06-09",
+   "fills": 2827,
+   "events": 35,
+   "usdc_notional": 21897.99,
+   "events_ever_complement": 35,
+   "complement_pct": 100.0,
+   "fills_per_event": 80.77
+  },
+  {
+   "day": "2026-06-10",
+   "fills": 1732,
+   "events": 17,
+   "usdc_notional": 15514.92,
+   "events_ever_complement": 16,
+   "complement_pct": 94.12,
+   "fills_per_event": 101.88
+  },
+  {
+   "day": "2026-06-11",
+   "fills": 1148,
+   "events": 18,
+   "usdc_notional": 8934.01,
+   "events_ever_complement": 18,
+   "complement_pct": 100.0,
+   "fills_per_event": 63.78
+  },
+  {
+   "day": "2026-06-12",
+   "fills": 1564,
+   "events": 22,
+   "usdc_notional": 13792.07,
+   "events_ever_complement": 22,
+   "complement_pct": 100.0,
+   "fills_per_event": 71.09
+  },
+  {
+   "day": "2026-06-15",
+   "fills": 2935,
+   "events": 35,
+   "usdc_notional": 23529.75,
+   "events_ever_complement": 35,
+   "complement_pct": 100.0,
+   "fills_per_event": 83.86
+  },
+  {
+   "day": "2026-06-16",
+   "fills": 3951,
+   "events": 43,
+   "usdc_notional": 32138.1,
+   "events_ever_complement": 43,
+   "complement_pct": 100.0,
+   "fills_per_event": 91.88
+  },
+  {
+   "day": "2026-06-17",
+   "fills": 2301,
+   "events": 26,
+   "usdc_notional": 17960.25,
+   "events_ever_complement": 26,
+   "complement_pct": 100.0,
+   "fills_per_event": 88.5
+  },
+  {
+   "day": "2026-06-18",
+   "fills": 1525,
+   "events": 22,
+   "usdc_notional": 11755.49,
+   "events_ever_complement": 22,
+   "complement_pct": 100.0,
+   "fills_per_event": 69.32
+  },
+  {
+   "day": "2026-06-19",
+   "fills": 1693,
+   "events": 24,
+   "usdc_notional": 13078.98,
+   "events_ever_complement": 24,
+   "complement_pct": 100.0,
+   "fills_per_event": 70.54
+  },
+  {
+   "day": "2026-06-22",
+   "fills": 2097,
+   "events": 24,
+   "usdc_notional": 17639.27,
+   "events_ever_complement": 24,
+   "complement_pct": 100.0,
+   "fills_per_event": 87.38
+  },
+  {
+   "day": "2026-06-23",
+   "fills": 965,
+   "events": 26,
+   "usdc_notional": 8298.49,
+   "events_ever_complement": 25,
+   "complement_pct": 96.15,
+   "fills_per_event": 37.12
+  },
+  {
+   "day": "2026-06-24",
+   "fills": 5451,
+   "events": 121,
+   "usdc_notional": 57154.6,
+   "events_ever_complement": 118,
+   "complement_pct": 97.52,
+   "fills_per_event": 45.05
+  },
+  {
+   "day": "2026-06-25",
+   "fills": 3456,
+   "events": 103,
+   "usdc_notional": 39355.85,
+   "events_ever_complement": 100,
+   "complement_pct": 97.09,
+   "fills_per_event": 33.55
+  },
+  {
+   "day": "2026-06-26",
+   "fills": 6323,
+   "events": 131,
+   "usdc_notional": 62942.31,
+   "events_ever_complement": 127,
+   "complement_pct": 96.95,
+   "fills_per_event": 48.27
+  },
+  {
+   "day": "2026-06-29",
+   "fills": 4761,
+   "events": 41,
+   "usdc_notional": 39958.07,
+   "events_ever_complement": 41,
+   "complement_pct": 100.0,
+   "fills_per_event": 116.12
+  },
+  {
+   "day": "2026-06-30",
+   "fills": 3545,
+   "events": 94,
+   "usdc_notional": 35506.17,
+   "events_ever_complement": 76,
+   "complement_pct": 80.85,
+   "fills_per_event": 37.71
+  },
+  {
+   "day": "2026-07-01",
+   "fills": 2187,
+   "events": 126,
+   "usdc_notional": 20873.54,
+   "events_ever_complement": 68,
+   "complement_pct": 53.97,
+   "fills_per_event": 17.36
+  },
+  {
+   "day": "2026-07-02",
+   "fills": 4354,
+   "events": 148,
+   "usdc_notional": 42230.03,
+   "events_ever_complement": 102,
+   "complement_pct": 68.92,
+   "fills_per_event": 29.42
+  },
+  {
+   "day": "2026-07-03",
+   "fills": 4359,
+   "events": 157,
+   "usdc_notional": 42135.71,
+   "events_ever_complement": 93,
+   "complement_pct": 59.24,
+   "fills_per_event": 27.76
+  },
+  {
+   "day": "2026-07-06",
+   "fills": 4265,
+   "events": 159,
+   "usdc_notional": 41179.63,
+   "events_ever_complement": 108,
+   "complement_pct": 67.92,
+   "fills_per_event": 26.82
+  },
+  {
+   "day": "2026-07-07",
+   "fills": 2674,
+   "events": 151,
+   "usdc_notional": 28786.93,
+   "events_ever_complement": 109,
+   "complement_pct": 72.19,
+   "fills_per_event": 17.71
+  },
+  {
+   "day": "2026-07-08",
+   "fills": 3623,
+   "events": 105,
+   "usdc_notional": 33598.5,
+   "events_ever_complement": 88,
+   "complement_pct": 83.81,
+   "fills_per_event": 34.5
+  },
+  {
+   "day": "2026-07-09",
+   "fills": 4527,
+   "events": 159,
+   "usdc_notional": 47070.96,
+   "events_ever_complement": 124,
+   "complement_pct": 77.99,
+   "fills_per_event": 28.47
+  },
+  {
+   "day": "2026-07-10",
+   "fills": 4934,
+   "events": 177,
+   "usdc_notional": 52570.98,
+   "events_ever_complement": 134,
+   "complement_pct": 75.71,
+   "fills_per_event": 27.88
+  },
+  {
+   "day": "2026-07-13",
+   "fills": 1739,
+   "events": 118,
+   "usdc_notional": 21446.34,
+   "events_ever_complement": 89,
+   "complement_pct": 75.42,
+   "fills_per_event": 14.74
+  },
+  {
+   "day": "2026-07-14",
+   "fills": 4689,
+   "events": 123,
+   "usdc_notional": 48368.17,
+   "events_ever_complement": 96,
+   "complement_pct": 78.05,
+   "fills_per_event": 38.12
+  },
+  {
+   "day": "2026-07-15",
+   "fills": 8380,
+   "events": 236,
+   "usdc_notional": 90203.3,
+   "events_ever_complement": 183,
+   "complement_pct": 77.54,
+   "fills_per_event": 35.51
+  },
+  {
+   "day": "2026-07-16",
+   "fills": 7738,
+   "events": 208,
+   "usdc_notional": 78019.89,
+   "events_ever_complement": 140,
+   "complement_pct": 67.31,
+   "fills_per_event": 37.2
+  },
+  {
+   "day": "2026-07-17",
+   "fills": 4843,
+   "events": 113,
+   "usdc_notional": 52190.18,
+   "events_ever_complement": 76,
+   "complement_pct": 67.26,
+   "fills_per_event": 42.86
+  },
+  {
+   "day": "2026-07-19",
+   "fills": 386,
+   "events": 40,
+   "usdc_notional": 6558.76,
+   "events_ever_complement": 31,
+   "complement_pct": 77.5,
+   "fills_per_event": 9.65
+  },
+  {
+   "day": "2026-07-20",
+   "fills": 8565,
+   "events": 129,
+   "usdc_notional": 80208.52,
+   "events_ever_complement": 93,
+   "complement_pct": 72.09,
+   "fills_per_event": 66.4
+  },
+  {
+   "day": "2026-07-21",
+   "fills": 12854,
+   "events": 185,
+   "usdc_notional": 121709.09,
+   "events_ever_complement": 161,
+   "complement_pct": 87.03,
+   "fills_per_event": 69.48
+  },
+  {
+   "day": "2026-07-22",
+   "fills": 6585,
+   "events": 162,
+   "usdc_notional": 64760.4,
+   "events_ever_complement": 125,
+   "complement_pct": 77.16,
+   "fills_per_event": 40.65
+  },
+  {
+   "day": "2026-07-23",
+   "fills": 9838,
+   "events": 219,
+   "usdc_notional": 88476.72,
+   "events_ever_complement": 150,
+   "complement_pct": 68.49,
+   "fills_per_event": 44.92
+  },
+  {
+   "day": "2026-07-24",
+   "fills": 8603,
+   "events": 182,
+   "usdc_notional": 73614.93,
+   "events_ever_complement": 107,
+   "complement_pct": 58.79,
+   "fills_per_event": 47.27
+  },
+  {
+   "day": "2026-07-27",
+   "fills": 7286,
+   "events": 96,
+   "usdc_notional": 56961.84,
+   "events_ever_complement": 69,
+   "complement_pct": 71.88,
+   "fills_per_event": 75.9
+  },
+  {
+   "day": "2026-07-28",
+   "fills": 3614,
+   "events": 95,
+   "usdc_notional": 28535.76,
+   "events_ever_complement": 56,
+   "complement_pct": 58.95,
+   "fills_per_event": 38.04
+  },
+  {
+   "day": "2026-07-29",
+   "fills": 6712,
+   "events": 201,
+   "usdc_notional": 58650.44,
+   "events_ever_complement": 123,
+   "complement_pct": 61.19,
+   "fills_per_event": 33.39
+  },
+  {
+   "day": "2026-07-30",
+   "fills": 4473,
+   "events": 160,
+   "usdc_notional": 44902.99,
+   "events_ever_complement": 118,
+   "complement_pct": 73.75,
+   "fills_per_event": 27.96
+  },
+  {
+   "day": "2026-07-31",
+   "fills": 6768,
+   "events": 218,
+   "usdc_notional": 64250.73,
+   "events_ever_complement": 136,
+   "complement_pct": 62.39,
+   "fills_per_event": 31.05
+  },
+  {
+   "day": "2026-08-01",
+   "fills": 489,
+   "events": 15,
+   "usdc_notional": 5292.34,
+   "events_ever_complement": 13,
+   "complement_pct": 86.67,
+   "fills_per_event": 32.6
+  },
+  {
+   "day": "2026-08-03",
+   "fills": 5978,
+   "events": 184,
+   "usdc_notional": 53373.86,
+   "events_ever_complement": 116,
+   "complement_pct": 63.04,
+   "fills_per_event": 32.49
+  },
+  {
+   "day": "2026-08-04",
+   "fills": 9700,
+   "events": 234,
+   "usdc_notional": 94828.25,
+   "events_ever_complement": 188,
+   "complement_pct": 80.34,
+   "fills_per_event": 41.45
+  },
+  {
+   "day": "2026-08-05",
+   "fills": 7282,
+   "events": 137,
+   "usdc_notional": 69499.77,
+   "events_ever_complement": 92,
+   "complement_pct": 67.15,
+   "fills_per_event": 53.15
+  },
+  {
+   "day": "2026-08-06",
+   "fills": 7057,
+   "events": 131,
+   "usdc_notional": 65517.65,
+   "events_ever_complement": 94,
+   "complement_pct": 71.76,
+   "fills_per_event": 53.87
+  },
+  {
+   "day": "2026-08-07",
+   "fills": 9016,
+   "events": 335,
+   "usdc_notional": 106885.86,
+   "events_ever_complement": 222,
+   "complement_pct": 66.27,
+   "fills_per_event": 26.91
+  },
+  {
+   "day": "2026-08-08",
+   "fills": 10882,
+   "events": 97,
+   "usdc_notional": 108510.98,
+   "events_ever_complement": 94,
+   "complement_pct": 96.91,
+   "fills_per_event": 112.19
+  },
+  {
+   "day": "2026-08-10",
+   "fills": 8685,
+   "events": 205,
+   "usdc_notional": 99046.59,
+   "events_ever_complement": 133,
+   "complement_pct": 64.88,
+   "fills_per_event": 42.37
+  },
+  {
+   "day": "2026-08-11",
+   "fills": 12616,
+   "events": 284,
+   "usdc_notional": 138316.37,
+   "events_ever_complement": 187,
+   "complement_pct": 65.85,
+   "fills_per_event": 44.42
+  },
+  {
+   "day": "2026-08-12",
+   "fills": 16403,
+   "events": 315,
+   "usdc_notional": 172006.89,
+   "events_ever_complement": 184,
+   "complement_pct": 58.41,
+   "fills_per_event": 52.07
+  },
+  {
+   "day": "2026-08-13",
+   "fills": 13536,
+   "events": 277,
+   "usdc_notional": 139134.5,
+   "events_ever_complement": 181,
+   "complement_pct": 65.34,
+   "fills_per_event": 48.87
+  },
+  {
+   "day": "2026-08-14",
+   "fills": 19454,
+   "events": 426,
+   "usdc_notional": 210960.98,
+   "events_ever_complement": 256,
+   "complement_pct": 60.09,
+   "fills_per_event": 45.67
+  },
+  {
+   "day": "2026-08-15",
+   "fills": 19609,
+   "events": 289,
+   "usdc_notional": 166780.16,
+   "events_ever_complement": 214,
+   "complement_pct": 74.05,
+   "fills_per_event": 67.85
+  },
+  {
+   "day": "2026-08-16",
+   "fills": 2165,
+   "events": 37,
+   "usdc_notional": 18508.57,
+   "events_ever_complement": 25,
+   "complement_pct": 67.57,
+   "fills_per_event": 58.51
+  },
+  {
+   "day": "2026-08-17",
+   "fills": 19334,
+   "events": 425,
+   "usdc_notional": 218590.82,
+   "events_ever_complement": 355,
+   "complement_pct": 83.53,
+   "fills_per_event": 45.49
+  },
+  {
+   "day": "2026-08-18",
+   "fills": 28463,
+   "events": 662,
+   "usdc_notional": 319364.93,
+   "events_ever_complement": 585,
+   "complement_pct": 88.37,
+   "fills_per_event": 43.0
+  },
+  {
+   "day": "2026-08-19",
+   "fills": 25787,
+   "events": 571,
+   "usdc_notional": 290059.22,
+   "events_ever_complement": 453,
+   "complement_pct": 79.33,
+   "fills_per_event": 45.16
+  },
+  {
+   "day": "2026-08-20",
+   "fills": 22546,
+   "events": 721,
+   "usdc_notional": 293554.87,
+   "events_ever_complement": 567,
+   "complement_pct": 78.64,
+   "fills_per_event": 31.27
+  },
+  {
+   "day": "2026-08-21",
+   "fills": 24694,
+   "events": 698,
+   "usdc_notional": 302062.17,
+   "events_ever_complement": 507,
+   "complement_pct": 72.64,
+   "fills_per_event": 35.38
+  },
+  {
+   "day": "2026-08-22",
+   "fills": 6741,
+   "events": 197,
+   "usdc_notional": 72646.15,
+   "events_ever_complement": 145,
+   "complement_pct": 73.6,
+   "fills_per_event": 34.22
+  },
+  {
+   "day": "2026-08-24",
+   "fills": 16056,
+   "events": 476,
+   "usdc_notional": 177738.17,
+   "events_ever_complement": 345,
+   "complement_pct": 72.48,
+   "fills_per_event": 33.73
+  },
+  {
+   "day": "2026-08-25",
+   "fills": 22408,
+   "events": 702,
+   "usdc_notional": 270911.41,
+   "events_ever_complement": 527,
+   "complement_pct": 75.07,
+   "fills_per_event": 31.92
+  },
+  {
+   "day": "2026-08-26",
+   "fills": 18969,
+   "events": 554,
+   "usdc_notional": 207425.44,
+   "events_ever_complement": 388,
+   "complement_pct": 70.04,
+   "fills_per_event": 34.24
+  },
+  {
+   "day": "2026-08-27",
+   "fills": 23697,
+   "events": 654,
+   "usdc_notional": 251523.27,
+   "events_ever_complement": 474,
+   "complement_pct": 72.48,
+   "fills_per_event": 36.23
+  },
+  {
+   "day": "2026-08-28",
+   "fills": 18518,
+   "events": 569,
+   "usdc_notional": 198602.21,
+   "events_ever_complement": 387,
+   "complement_pct": 68.01,
+   "fills_per_event": 32.54
+  },
+  {
+   "day": "2026-08-29",
+   "fills": 20025,
+   "events": 567,
+   "usdc_notional": 209381.2,
+   "events_ever_complement": 408,
+   "complement_pct": 71.96,
+   "fills_per_event": 35.32
+  },
+  {
+   "day": "2026-08-30",
+   "fills": 19461,
+   "events": 559,
+   "usdc_notional": 203995.67,
+   "events_ever_complement": 402,
+   "complement_pct": 71.91,
+   "fills_per_event": 34.81
+  },
+  {
+   "day": "2026-08-31",
+   "fills": 14904,
+   "events": 474,
+   "usdc_notional": 149622.0,
+   "events_ever_complement": 335,
+   "complement_pct": 70.68,
+   "fills_per_event": 31.44
+  }
+ ],
+ "unavailable": [
+  "spread, depth, BBO, quote sizes, resting order book -- the corpus is L5's own PRINTS only; nothing is approximated.",
+  "maker/taker flag per fill -- not in the public activity payload, so maker share and the fidelity gate's maker_taker dimension cannot be recomputed from this corpus.",
+  "fill rate -- needs SUBMITTED orders as a denominator; unfilled resting orders are not public.",
+  "adverse-selection tolerance / toxicity -- needs mid at fill time and the subsequent mark.",
+  "queue position and cancel/replace behaviour -- not public.",
+  "any SEPTEMBER 2026 behaviour -- the canonical corpus spans 2026-03-19 -> 2026-08-31 only. September evidence lives in a SEPARATE harvest under data/l5/raw/sep/ and is THIN; no row in the Section 5 table is computed from it.",
+  "L5's realized P&L -- redemption cashflows are present as REDEEM records but fees, rebate crediting timing and off-venue transfers are not fully observable; and in any case no number here is realized profit for OUR account."
+ ]
+}

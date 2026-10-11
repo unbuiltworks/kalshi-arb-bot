@@ -1,0 +1,88 @@
+{
+  "labels": "VERBATIM Gemini responses captured 2026-09-18 for the RESOLVED CONTINUOUS-4 contract. Fixtures built from these are exercised against the real shape, not an invented one.",
+  "captured_utc": "2026-09-18T18:1xZ",
+  "symbol": "GEMI-BTC05M2609181730-UP",
+  "contract_object": {
+    "id": "259270-642682",
+    "label": "Up",
+    "description": {
+      "data": {},
+      "content": [
+        {
+          "data": {},
+          "marks": [],
+          "value": "If the price of Bitcoin (BTC) is greater than or equal to the price specified in the title on September 18, 2026 at 1:30pm ET, this market will resolve to Yes. Otherwise, it will resolve to No. If no eligible trade occurs during the contract window, this contract will resolve based on the most recent traded price prior. Outcome verified against the GRR-KAIKO_RFR_BTCUSD_60S index. View the [full rules](https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf).",
+          "nodeType": "text"
+        }
+      ],
+      "nodeType": "document"
+    },
+    "prices": {
+      "buy": {},
+      "sell": {}
+    },
+    "status": "settled",
+    "createdAt": "2026-09-18T16:20:51.271Z",
+    "termsAndConditionsUrl": "https://assets.gemini.com/predictions/terms_and_conditions/btc_227f8e79-2af6-40f9-9a0c-a8297696e7ab.pdf",
+    "ticker": "UP",
+    "instrumentSymbol": "GEMI-BTC05M2609181730-UP",
+    "marketState": "closed",
+    "abbreviatedName": "Up",
+    "color": "#4CAF50",
+    "expiryDate": "2026-09-18T17:30:00.000Z",
+    "resolutionSide": "yes",
+    "resolvedAt": "2026-09-18T17:30:07.369Z",
+    "effectiveDate": "2026-09-18T17:25:00.000Z",
+    "sortOrder": 0,
+    "strike": {
+      "type": "reference",
+      "value": "80694.84",
+      "availableAt": "2026-09-18T17:25:00.000Z"
+    },
+    "source": "GRR-KAIKO_RFR_BTCUSD_60S",
+    "settlementValue": "80727.9451111111",
+    "isCombo": false,
+    "quantityIncrement": "0.01",
+    "quantityMinimum": "0.01",
+    "priceIncrement": "0.01",
+    "quoteAssetPrecision": 2,
+    "priceMinimum": "0.01"
+  },
+  "event_level": {
+    "ticker": "BTC05M2609181730",
+    "status": "settled",
+    "resolvedAt": "2026-09-18T17:30:07.369Z",
+    "settlement": {
+      "value": "80727.9451111111"
+    },
+    "expiryDate": "2026-09-18T17:30:00.000Z",
+    "title": "BTC price today at 1:30pm EDT",
+    "slug": "btc-price-today-at-130pm-edt"
+  },
+  "resolution_for": {
+    "readable": true,
+    "verdict": "SETTLED",
+    "resolutionSide": "yes",
+    "resolvedAt": "2026-09-18T17:30:07.369Z",
+    "settlementValue": "80727.9451111111",
+    "marketState": "closed",
+    "status": "settled",
+    "expired": true,
+    "is_terminal": true,
+    "flapped": false,
+    "reads": 3,
+    "reads_readable": 3,
+    "reads_settled": 3,
+    "strike_check": {
+      "available": true,
+      "agrees": true,
+      "published_resolutionSide": "yes",
+      "implied_by_strike": "yes",
+      "settlementValue": "80727.9451111111",
+      "strike": "80694.84",
+      "rule": "UP resolves yes when settlementValue >= strike.value"
+    },
+    "source": "/v1/prediction-markets/events/{eventTicker} contract object (PUBLIC)",
+    "missing_fields": []
+  }
+}

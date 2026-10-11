@@ -1,0 +1,79 @@
+{
+ "generated_utc": "2026-08-31T15:57:54.712868+00:00",
+ "sample": "ALL_WINDOWS_CAPACITY_DIAGNOSTIC",
+ "variant": "S2",
+ "sizes": [
+  5.0,
+  10.0,
+  25.0,
+  50.0,
+  100.0
+ ],
+ "sweep": {
+  "5": {
+   "engaged": 14,
+   "pairs": 15.0,
+   "pairs_per_window": 1.07,
+   "flat_windows": 0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "realized_settlement_pnl": "INCOMPLETE",
+   "realized_net_sep2": null,
+   "worst_case_residual": 21.58,
+   "rebates_separate": 0.26,
+   "capital_minutes": 53.4
+  },
+  "10": {
+   "engaged": 14,
+   "pairs": 24.5,
+   "pairs_per_window": 1.75,
+   "flat_windows": 0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "realized_settlement_pnl": "INCOMPLETE",
+   "realized_net_sep2": null,
+   "worst_case_residual": 44.78,
+   "rebates_separate": 0.59,
+   "capital_minutes": 103.7
+  },
+  "25": {
+   "engaged": 14,
+   "pairs": 39.5,
+   "pairs_per_window": 2.82,
+   "flat_windows": 0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "realized_settlement_pnl": "INCOMPLETE",
+   "realized_net_sep2": null,
+   "worst_case_residual": 97.07,
+   "rebates_separate": 1.23,
+   "capital_minutes": 170.6
+  },
+  "50": {
+   "engaged": 14,
+   "pairs": 64.5,
+   "pairs_per_window": 4.61,
+   "flat_windows": 0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "realized_settlement_pnl": "INCOMPLETE",
+   "realized_net_sep2": null,
+   "worst_case_residual": 176.82,
+   "rebates_separate": 2.26,
+   "capital_minutes": 265.2
+  },
+  "100": {
+   "engaged": 14,
+   "pairs": 114.5,
+   "pairs_per_window": 8.18,
+   "flat_windows": 0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "realized_settlement_pnl": "INCOMPLETE",
+   "realized_net_sep2": null,
+   "worst_case_residual": 310.32,
+   "rebates_separate": 4.14,
+   "capital_minutes": 396.1
+  }
+ }
+}

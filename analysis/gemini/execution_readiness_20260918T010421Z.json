@@ -1,0 +1,122 @@
+{
+  "label": "GEMINI_EXECUTION_READINESS_V2",
+  "gates": {
+    "preflight_ok": false,
+    "VENUE_WRITE_PATH": "PROVEN",
+    "armed": false,
+    "authorization_unconsumed": true,
+    "instrument_metadata_readable": false,
+    "contract_tradeable": false,
+    "quantity_valid": false,
+    "price_valid": false,
+    "terms_accepted": true,
+    "request_transport_accepted": false
+  },
+  "instrument_metadata": {
+    "readable": false,
+    "why": "no eligible instrument"
+  },
+  "smallest_valid_quantity": null,
+  "quantity_check": {
+    "valid": null
+  },
+  "price_check": {
+    "valid": null
+  },
+  "max_cash_exposure_usd": null,
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "latest_terms_version": {
+    "readable": true,
+    "version": 1,
+    "termsType": "PREDICTIONS_MARKET",
+    "updatedAt": "2025-12-14T01:56:34Z"
+  },
+  "request_transport": {
+    "verdict": "UNRESOLVED",
+    "why": "no eligible instrument"
+  },
+  "blocking": [
+    "preflight_ok",
+    "armed",
+    "instrument_metadata_readable",
+    "contract_tradeable",
+    "quantity_valid",
+    "price_valid",
+    "request_transport_accepted"
+  ],
+  "venue_write_path": {
+    "VENUE_WRITE_PATH": "PROVEN",
+    "place": "/v1/prediction-markets/order",
+    "cancel": "/v1/prediction-markets/order/cancel",
+    "reconcile": "/v1/prediction-markets/orders/active",
+    "maker_protection": "makerOrCancel: true (a boolean, per the API)",
+    "order_type": "limit",
+    "arm_gated": true,
+    "verified_against": "developer.gemini.com, 2026-09-17. NOT inferred from the PMUS executor or older Gemini code: the prediction-market schema takes quantity, outcome and a BOOLEAN makerOrCancel, where spot takes amount and an options array.",
+    "exercised_against_the_venue": false,
+    "caveat": "the request is constructed and unit-proven. Venue acceptance, and maker-only rejection behaviour, stay UNCLAIMED until the canary actually runs. The API exposes no preview or sandbox for this path, so there is no way to prove venue behaviour without placing one."
+  },
+  "arming": {
+    "armed": false,
+    "live_flag": false,
+    "auth_id_present": false,
+    "auth_id_matches": false,
+    "expiry_supplied": false,
+    "expired": null,
+    "expected_auth_id": "OWNER-2026-09-17-GEMINI-CANARY-1",
+    "why_not": "GEMINI_CANARY_LIVE is not YES"
+  },
+  "latch": null,
+  "preflight": {
+    "label": "GEMINI_CANARY_PREFLIGHT_V1",
+    "ok": false,
+    "verdict": "NO_ELIGIBLE_WINDOW",
+    "rejected": [
+      {
+        "symbol": "GEMI-BTC05M2609180105-UP",
+        "tte_s": 38.0,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180110-UP",
+        "tte_s": 338.0,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180115-UP",
+        "tte_s": 638.0,
+        "why": "TTE outside [60.0, 300.0]"
+      },
+      {
+        "symbol": "GEMI-BTC05M2609180120-UP",
+        "tte_s": 938.0,
+        "why": "TTE outside [60.0, 300.0]"
+      }
+    ],
+    "why": "no live window met the envelope",
+    "authorization": "NOT GRANTED. Nothing is submitted."
+  },
+  "verdict": "SPECIFIC_FIX_REQUIRED",
+  "authorization": "NOT GRANTED by this report. Readiness is a statement about capability and gates, never an authorization to submit."
+}

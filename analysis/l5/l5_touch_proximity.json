@@ -1,0 +1,85 @@
+{
+  "question": "does L5 transact at/near the touch, and are we optimising pair price harder than he does?",
+  "liquidity_role": {
+    "fills": 71984,
+    "counts": {
+      "unknown": 5269,
+      "maker": 55647,
+      "taker": 11068
+    },
+    "labelled": 66715,
+    "unlabelled": 5269,
+    "maker_share_of_labelled": 0.8341,
+    "coverage_note": "maker/taker comes from a full-era takerOnly walk of the venue's /trades; fills outside that era are `unknown` and are never assumed to be either."
+  },
+  "pair_cost": {
+    "n": 66642,
+    "not_computable": "L5's distance from touch and queue position are NOT COMPUTABLE: no contemporaneous order book exists for these windows, on disk or from the venue. They are not estimated from his prices.",
+    "mean": 0.9928,
+    "p05": 0.908,
+    "p25": 0.9605,
+    "median": 0.9876,
+    "p75": 1.0151,
+    "p95": 1.0949,
+    "against_our_gates": {
+      "a <=0.96 spring preference": 0.246,
+      "b 0.96-0.98 observation cap": 0.1778,
+      "c 0.98-1.00 hard ceiling": 0.2039,
+      "d >1.00 we REFUSE": 0.3723,
+      "would_clear_our_0_96_preference": 0.246,
+      "would_clear_our_1_00_ceiling": 0.6277
+    },
+    "by_duration_minutes": {
+      "15": {
+        "n": 61706,
+        "median": 0.9871,
+        "share_above_par": 0.358
+      },
+      "5": {
+        "n": 4936,
+        "median": 1.0247,
+        "share_above_par": 0.5506
+      }
+    }
+  },
+  "maker_pair_cost": {
+    "n": 54429,
+    "not_computable": "L5's distance from touch and queue position are NOT COMPUTABLE: no contemporaneous order book exists for these windows, on disk or from the venue. They are not estimated from his prices.",
+    "mean": 0.9901,
+    "p05": 0.9239,
+    "p25": 0.9634,
+    "median": 0.9877,
+    "p75": 1.0118,
+    "p95": 1.0657,
+    "against_our_gates": {
+      "a <=0.96 spring preference": 0.2205,
+      "b 0.96-0.98 observation cap": 0.1931,
+      "c 0.98-1.00 hard ceiling": 0.2256,
+      "d >1.00 we REFUSE": 0.3609,
+      "would_clear_our_0_96_preference": 0.2205,
+      "would_clear_our_1_00_ceiling": 0.6391
+    }
+  },
+  "taker_pair_cost": {
+    "n": 7533,
+    "not_computable": "L5's distance from touch and queue position are NOT COMPUTABLE: no contemporaneous order book exists for these windows, on disk or from the venue. They are not estimated from his prices.",
+    "mean": 1.0241,
+    "p05": 0.7599,
+    "p25": 0.941,
+    "median": 0.9972,
+    "p75": 1.1016,
+    "p95": 1.3503,
+    "against_our_gates": {
+      "a <=0.96 spring preference": 0.3195,
+      "b 0.96-0.98 observation cap": 0.0961,
+      "c 0.98-1.00 hard ceiling": 0.0964,
+      "d >1.00 we REFUSE": 0.488,
+      "would_clear_our_0_96_preference": 0.3195,
+      "would_clear_our_1_00_ceiling": 0.512
+    }
+  },
+  "limits": [
+    "L5's distance from touch and queue position are NOT COMPUTABLE: no contemporaneous order book exists for these windows, on disk or from the venue. They are not estimated from his prices.",
+    "self-trading is not tested: the trade rows carry a transaction hash but no counterparty identity, so the question is unanswerable from this data and no claim either way is made."
+  ]
+}

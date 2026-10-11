@@ -1,0 +1,2171 @@
+{
+  "label": "GEMINI_L5_SEGMENTED_HABITAT_CENSUS_V1",
+  "sources": {
+    "shadow_cycles": "analysis/gemini/continuous_v1/continuous_v1.jsonl",
+    "live_windows": "analysis/gemini/continuous_run_*.json"
+  },
+  "regate": {
+    "rows_regated": 22,
+    "rows_total": 542,
+    "why": "the soak predates `continuous_probe.crossed`; the recorded book is unchanged and only its verdict is re-read"
+  },
+  "live_windows": [
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-2",
+      "file": "continuous_run_20260918T143045Z.json",
+      "entry_tte_s": null,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "post_window_fills": 0,
+      "fills_are_a_floor": true,
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-3",
+      "file": "continuous_run_20260918T161537Z.json",
+      "entry_tte_s": null,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "post_window_fills": 0,
+      "fills_are_a_floor": false,
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "file": "continuous_run_20260918T172750Z.json",
+      "entry_tte_s": null,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 2,
+      "fill_prices": [
+        "0.14",
+        "0.92"
+      ],
+      "post_window_fills": 0,
+      "fills_are_a_floor": true,
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
+      "file": "continuous_run_20260918T210518Z.json",
+      "entry_tte_s": 275.9174520969391,
+      "decisions": 2,
+      "places": 2,
+      "cancels": 1,
+      "fills": 1,
+      "fill_prices": [
+        "0.46"
+      ],
+      "post_window_fills": 1,
+      "fills_are_a_floor": true,
+      "rungs_resolved": 2,
+      "resting_seconds_total": 70.13
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+      "file": "continuous_run_20260918T221133Z.json",
+      "entry_tte_s": 199.66616344451904,
+      "decisions": 8,
+      "places": 4,
+      "cancels": 3,
+      "fills": 1,
+      "fill_prices": [
+        "0.21"
+      ],
+      "post_window_fills": 0,
+      "fills_are_a_floor": true,
+      "rungs_resolved": 4,
+      "resting_seconds_total": 122.55
+    },
+    {
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-7",
+      "file": "continuous_run_20260918T232743Z.json",
+      "entry_tte_s": 125.30212664604187,
+      "decisions": 12,
+      "places": 3,
+      "cancels": 3,
+      "fills": 0,
+      "fill_prices": [],
+      "post_window_fills": 0,
+      "fills_are_a_floor": false,
+      "rungs_resolved": 3,
+      "resting_seconds_total": 142.22
+    },
+    {
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "file": "continuous_run_20260919T010705Z.json",
+      "entry_tte_s": 279.88969135284424,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "post_window_fills": 0,
+      "fills_are_a_floor": false,
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "file": "continuous_run_20260919T011743Z.json",
+      "entry_tte_s": 277.75862646102905,
+      "decisions": 0,
+      "places": 0,
+      "cancels": 0,
+      "fills": 0,
+      "fill_prices": [],
+      "post_window_fills": 0,
+      "fills_are_a_floor": false,
+      "rungs_resolved": 0,
+      "resting_seconds_total": 0
+    },
+    {
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "file": "continuous_run_20260919T013250Z.json",
+      "entry_tte_s": 278.3392996788025,
+      "decisions": 9,
+      "places": 6,
+      "cancels": 5,
+      "fills": 1,
+      "fill_prices": [
+        "0.31"
+      ],
+      "post_window_fills": 0,
+      "fills_are_a_floor": false,
+      "rungs_resolved": 6,
+      "resting_seconds_total": 116.98
+    }
+  ],
+  "live_states": {
+    "decision_states": {
+      "OPEN": 26,
+      "NO_ACTION": 4,
+      "COMPLETE+EXTEND": 1
+    },
+    "post_fill_decisions": [
+      {
+        "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+        "cycle": 9,
+        "utc": "2026-09-19T01:36:37.170616+00:00",
+        "tte_s": 202.82938647270203,
+        "state": "STOPPED",
+        "classification": [
+          "EXTEND",
+          "COMPLETE"
+        ],
+        "actions": [
+          {
+            "outcome": "Up",
+            "leg": "YES",
+            "price": "0.12",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "EXTEND",
+            "stage": "DECIDED"
+          },
+          {
+            "outcome": "Down",
+            "leg": "NO",
+            "price": "0.69",
+            "qty": "0.01",
+            "rung_index": 0,
+            "ticks_behind_bid": 0,
+            "action": "COMPLETE",
+            "stage": "DECIDED"
+          }
+        ],
+        "inventory": {
+          "yes_qty": "0.01",
+          "no_qty": "0",
+          "matched_qty": "0",
+          "directional_residual": "0.01",
+          "inventory_imbalance": "0.01",
+          "avg_yes_cost": "0.31",
+          "avg_no_cost": null,
+          "effective_matched_pair_cost": null,
+          "total_spend_usd": "0.0031",
+          "same_side_run": {
+            "leg": "YES",
+            "len": 1
+          },
+          "n_fills": 1,
+          "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+        }
+      }
+    ],
+    "why": "SHADOW can never reach EXTEND or COMPLETE: with no order resting there is no fill, inventory stays flat and `classify()` derives the action from the residual alone. This census is live-only for that reason."
+  },
+  "adverse_movement": [
+    {
+      "leg": "YES",
+      "fill_price": "0.92",
+      "samples": [],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": false,
+      "why": "no cycle after the fill presented a readable book",
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "filled_utc": "2026-09-18T17:28:33.389Z",
+      "cycles_after_fill_on_record": 0
+    },
+    {
+      "leg": "NO",
+      "fill_price": "0.14",
+      "samples": [],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": false,
+      "why": "no cycle after the fill presented a readable book",
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "filled_utc": "2026-09-18T17:27:59.492Z",
+      "cycles_after_fill_on_record": 0
+    },
+    {
+      "leg": "YES",
+      "fill_price": "0.21",
+      "samples": [
+        {
+          "utc": "2026-09-18T22:12:45.110179+00:00",
+          "mid": null,
+          "why": "book refused at this cycle"
+        }
+      ],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": false,
+      "why": "no cycle after the fill presented a readable book",
+      "authorization_id": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+      "filled_utc": "2026-09-18T22:12:44.125Z",
+      "cycles_after_fill_on_record": 1
+    },
+    {
+      "leg": "YES",
+      "fill_price": "0.31",
+      "samples": [
+        {
+          "utc": "2026-09-19T01:36:37.170616+00:00",
+          "mid": "0.215",
+          "vs_fill": "-0.095"
+        }
+      ],
+      "labels": "mark-to-market on the PRESENTED mid. Not realized, not a P&L line, and never summed with matched-pair economics.",
+      "readable": true,
+      "worst_against": "-0.095",
+      "best_for": "-0.095",
+      "last": "-0.095",
+      "authorization_id": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "filled_utc": "2026-09-19T01:36:28.553Z",
+      "cycles_after_fill_on_record": 1
+    }
+  ],
+  "pre_entry_study": {
+    "windows_with_a_pre_entry_read": 12,
+    "windows_without_one": 12,
+    "dispersion": {
+      "windows": 12,
+      "prior_prints_per_min": {
+        "field": "prior_prints_per_min",
+        "n": 10,
+        "min": 0.0,
+        "p25": 0.0,
+        "median": 0.0,
+        "p75": 0.98,
+        "p90": 3.176,
+        "max": 19.439,
+        "zero_share": 0.5,
+        "spread_p90_over_median": null
+      },
+      "own_prints_on_tape": {
+        "field": "own_prints_on_tape",
+        "n": 12,
+        "min": 0.0,
+        "p25": 0.0,
+        "median": 0.0,
+        "p75": 0.0,
+        "p90": 1.0,
+        "max": 2.0,
+        "zero_share": 0.75,
+        "spread_p90_over_median": null
+      },
+      "spot_prints_per_min": {
+        "field": "spot_prints_per_min",
+        "n": 12,
+        "min": 0.902,
+        "p25": 0.998,
+        "median": 1.055,
+        "p75": 1.123,
+        "p90": 1.141,
+        "max": 14.13,
+        "zero_share": 0.0,
+        "spread_p90_over_median": 1.08
+      },
+      "spot_range_bps": {
+        "field": "spot_range_bps",
+        "n": 12,
+        "min": 0.0,
+        "p25": 5.1,
+        "median": 6.0,
+        "p75": 8.0,
+        "p90": 13.0,
+        "max": 14.2,
+        "zero_share": 0.083,
+        "spread_p90_over_median": 2.17
+      },
+      "spread": {
+        "field": "spread",
+        "n": 5,
+        "min": 0.28,
+        "p25": 0.31,
+        "median": 0.32,
+        "p75": 0.34,
+        "p90": 0.34,
+        "max": 0.35,
+        "zero_share": 0.0,
+        "spread_p90_over_median": 1.06
+      },
+      "touch_depth": {
+        "field": "touch_depth",
+        "n": 12,
+        "min": 10.0,
+        "p25": 294.0,
+        "median": 394.0,
+        "p75": 468.0,
+        "p90": 510.0,
+        "max": 882.0,
+        "zero_share": 0.0,
+        "spread_p90_over_median": 1.29
+      },
+      "two_sided_prior_share": 0.333,
+      "labels": "DISPERSION, not a verdict. A wide spread between median and p90 means windows differ and a selector has something to select on; a narrow one means it does not."
+    },
+    "persistence": {
+      "n_pairs": 10,
+      "min_pairs": 20,
+      "computable": false,
+      "why": "10 pairs; 20 are needed before a persistence statement means anything"
+    },
+    "windows": [
+      {
+        "symbol": "GEMI-BTC05M2609191255-UP",
+        "started_utc": "2026-09-19T12:50:42.713282+00:00",
+        "entry_tte_s": 257.28669357299805,
+        "prior_prints_per_min": "19.439",
+        "prior_two_sided": true,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.055",
+        "spot_range_bps": "7.2",
+        "spread": "0.32",
+        "touch_depth": "294.0",
+        "crossed": false,
+        "touch_changed": true,
+        "actual_mean_prints_per_min": 0.0,
+        "actual_zero_share": 1.0,
+        "rank": [
+          19.439,
+          1.0,
+          0.0,
+          1.055
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191310-UP",
+        "started_utc": "2026-09-19T13:04:33.095421+00:00",
+        "entry_tte_s": 273.0543704032898,
+        "prior_prints_per_min": "3.176",
+        "prior_two_sided": true,
+        "own_prints": 0,
+        "spot_prints_per_min": "0.998",
+        "spot_range_bps": "6.0",
+        "spread": "0.28",
+        "touch_depth": "454.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.0,
+        "actual_zero_share": 1.0,
+        "rank": [
+          3.176,
+          1.0,
+          0.0,
+          0.998
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191200-UP",
+        "started_utc": "2026-09-19T11:51:34.329383+00:00",
+        "entry_tte_s": 278.9158627986908,
+        "prior_prints_per_min": "2.500",
+        "prior_two_sided": true,
+        "own_prints": 0,
+        "spot_prints_per_min": "14.130",
+        "spot_range_bps": "0.0",
+        "spread": null,
+        "touch_depth": "375.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.452,
+        "actual_zero_share": 0.952,
+        "rank": [
+          2.5,
+          1.0,
+          0.0,
+          14.13
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191305-UP",
+        "started_utc": "2026-09-19T12:59:39.802280+00:00",
+        "entry_tte_s": 272.46957755088806,
+        "prior_prints_per_min": "0.980",
+        "prior_two_sided": true,
+        "own_prints": 1,
+        "spot_prints_per_min": "0.984",
+        "spot_range_bps": "5.8",
+        "spread": "0.34",
+        "touch_depth": "576.0",
+        "crossed": false,
+        "touch_changed": true,
+        "actual_mean_prints_per_min": 0.519,
+        "actual_zero_share": 0.958,
+        "rank": [
+          0.98,
+          1.0,
+          1.0,
+          0.984
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191150-UP",
+        "started_utc": "2026-09-19T11:44:09.316499+00:00",
+        "entry_tte_s": 279.1347064971924,
+        "prior_prints_per_min": "0.500",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.123",
+        "spot_range_bps": "8.0",
+        "spread": null,
+        "touch_depth": "510.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.592,
+        "actual_zero_share": 0.905,
+        "rank": [
+          0.5,
+          0.0,
+          0.0,
+          1.123
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191205-UP",
+        "started_utc": "2026-09-19T11:59:34.949112+00:00",
+        "entry_tte_s": 277.32616686820984,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "8.902",
+        "spot_range_bps": "1.6",
+        "spread": null,
+        "touch_depth": "10.0",
+        "crossed": false,
+        "touch_changed": true,
+        "actual_mean_prints_per_min": 1.752,
+        "actual_zero_share": 0.762,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          8.902
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191145-UP",
+        "started_utc": "2026-09-19T11:39:11.455661+00:00",
+        "entry_tte_s": 277.5175004005432,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.141",
+        "spot_range_bps": "5.2",
+        "spread": null,
+        "touch_depth": "882.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.852,
+        "actual_zero_share": 0.857,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          1.141
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191140-UP",
+        "started_utc": "2026-09-19T11:34:07.759170+00:00",
+        "entry_tte_s": 274.1654477119446,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.058",
+        "spot_range_bps": "5.1",
+        "spread": null,
+        "touch_depth": "10.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.292,
+        "actual_zero_share": 0.952,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          1.058
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191155-UP",
+        "started_utc": "2026-09-19T11:49:09.218123+00:00",
+        "entry_tte_s": 276.0418031215668,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "1.016",
+        "spot_range_bps": "6.1",
+        "spread": null,
+        "touch_depth": "394.0",
+        "crossed": false,
+        "touch_changed": true,
+        "actual_mean_prints_per_min": 0.0,
+        "actual_zero_share": 1.0,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          1.016
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191135-UP",
+        "started_utc": "2026-09-19T11:27:26.444412+00:00",
+        "entry_tte_s": 279.90794920921326,
+        "prior_prints_per_min": "0.000",
+        "prior_two_sided": false,
+        "own_prints": 0,
+        "spot_prints_per_min": "0.902",
+        "spot_range_bps": "13.0",
+        "spread": null,
+        "touch_depth": "468.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.523,
+        "actual_zero_share": 0.905,
+        "rank": [
+          0.0,
+          0.0,
+          0.0,
+          0.902
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191315-UP",
+        "started_utc": "2026-09-19T13:09:31.822693+00:00",
+        "entry_tte_s": 270.7601156234741,
+        "prior_prints_per_min": null,
+        "prior_two_sided": false,
+        "own_prints": 2,
+        "spot_prints_per_min": "1.072",
+        "spot_range_bps": "14.0",
+        "spread": "0.31",
+        "touch_depth": "312.0",
+        "crossed": false,
+        "touch_changed": false,
+        "actual_mean_prints_per_min": 0.828,
+        "actual_zero_share": 0.864,
+        "rank": [
+          -1.0,
+          0.0,
+          2.0,
+          1.072
+        ]
+      },
+      {
+        "symbol": "GEMI-BTC05M2609191300-UP",
+        "started_utc": "2026-09-19T12:54:34.520200+00:00",
+        "entry_tte_s": 273.2109258174896,
+        "prior_prints_per_min": null,
+        "prior_two_sided": false,
+        "own_prints": 2,
+        "spot_prints_per_min": "1.042",
+        "spot_range_bps": "14.2",
+        "spread": "0.35",
+        "touch_depth": "441.0",
+        "crossed": false,
+        "touch_changed": true,
+        "actual_mean_prints_per_min": 0.251,
+        "actual_zero_share": 0.958,
+        "rank": [
+          -1.0,
+          0.0,
+          2.0,
+          1.042
+        ]
+      }
+    ],
+    "labels": "RANKED FOR READING ONLY. The soak recorded these and acted on none of them; admission is unchanged and no threshold exists."
+  },
+  "rung_lives": {
+    "lives": [
+      {
+        "leg": "YES",
+        "price": "0.26",
+        "resting_s": 6.448,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 0,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 1,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-5"
+      },
+      {
+        "leg": "NO",
+        "price": "0.46",
+        "resting_s": 63.681,
+        "ended": "FILL",
+        "filled": true,
+        "reprices_on_this_leg": 0,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 1,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-5"
+      },
+      {
+        "leg": "NO",
+        "price": "0.52",
+        "resting_s": 7.265,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 2,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 1,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
+      },
+      {
+        "leg": "NO",
+        "price": "0.60",
+        "resting_s": 6.695,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 2,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 1,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
+      },
+      {
+        "leg": "NO",
+        "price": "0.69",
+        "resting_s": 45.924,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 2,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 5,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
+      },
+      {
+        "leg": "YES",
+        "price": "0.21",
+        "resting_s": 62.669,
+        "ended": "FILL",
+        "filled": true,
+        "reprices_on_this_leg": 0,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 6,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6"
+      },
+      {
+        "leg": "NO",
+        "price": "0.79",
+        "resting_s": 8.272,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 1,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 1,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-7"
+      },
+      {
+        "leg": "NO",
+        "price": "0.95",
+        "resting_s": 61.839,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 1,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 7,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-7"
+      },
+      {
+        "leg": "YES",
+        "price": "0.01",
+        "resting_s": 72.111,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 0,
+        "cycles_observed": 0,
+        "cycles_in_life_without_a_book": 8,
+        "at_touch_cycles": 0,
+        "at_touch_share": null,
+        "bid_moved_while_resting": null,
+        "bid_range": null,
+        "ask_moved_while_resting": null,
+        "ask_range": null,
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-7"
+      },
+      {
+        "leg": "NO",
+        "price": "0.42",
+        "resting_s": 12.313,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 4,
+        "cycles_observed": 1,
+        "cycles_in_life_without_a_book": 0,
+        "at_touch_cycles": 0,
+        "at_touch_share": 0.0,
+        "bid_moved_while_resting": false,
+        "bid_range": [
+          "0.57",
+          "0.57"
+        ],
+        "ask_moved_while_resting": false,
+        "ask_range": [
+          "0.69",
+          "0.69"
+        ],
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [
+          {
+            "utc": "2026-09-19T01:35:42.835030+00:00",
+            "cycle": 2,
+            "tte_s": 257.1649749279022,
+            "our_price": "0.42",
+            "best_bid": "0.57",
+            "best_ask": "0.69",
+            "at_touch": false,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          }
+        ],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8"
+      },
+      {
+        "leg": "NO",
+        "price": "0.57",
+        "resting_s": 6.415,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 4,
+        "cycles_observed": 1,
+        "cycles_in_life_without_a_book": 0,
+        "at_touch_cycles": 0,
+        "at_touch_share": 0.0,
+        "bid_moved_while_resting": false,
+        "bid_range": [
+          "0.62",
+          "0.62"
+        ],
+        "ask_moved_while_resting": false,
+        "ask_range": [
+          "0.69",
+          "0.69"
+        ],
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [
+          {
+            "utc": "2026-09-19T01:35:50.357209+00:00",
+            "cycle": 3,
+            "tte_s": 249.64279556274414,
+            "our_price": "0.57",
+            "best_bid": "0.62",
+            "best_ask": "0.69",
+            "at_touch": false,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          }
+        ],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8"
+      },
+      {
+        "leg": "NO",
+        "price": "0.62",
+        "resting_s": 21.492,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 4,
+        "cycles_observed": 3,
+        "cycles_in_life_without_a_book": 0,
+        "at_touch_cycles": 2,
+        "at_touch_share": 0.667,
+        "bid_moved_while_resting": true,
+        "bid_range": [
+          "0.62",
+          "0.65"
+        ],
+        "ask_moved_while_resting": false,
+        "ask_range": [
+          "0.69",
+          "0.69"
+        ],
+        "ask_travel_toward_us": "0.00",
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [
+          {
+            "utc": "2026-09-19T01:35:59.550539+00:00",
+            "cycle": 4,
+            "tte_s": 240.44946479797363,
+            "our_price": "0.62",
+            "best_bid": "0.62",
+            "best_ask": "0.69",
+            "at_touch": true,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          },
+          {
+            "utc": "2026-09-19T01:36:06.113345+00:00",
+            "cycle": 5,
+            "tte_s": 233.8866581916809,
+            "our_price": "0.62",
+            "best_bid": "0.62",
+            "best_ask": "0.69",
+            "at_touch": true,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          },
+          {
+            "utc": "2026-09-19T01:36:13.497054+00:00",
+            "cycle": 6,
+            "tte_s": 226.50295162200928,
+            "our_price": "0.62",
+            "best_bid": "0.65",
+            "best_ask": "0.69",
+            "at_touch": false,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          }
+        ],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8"
+      },
+      {
+        "leg": "NO",
+        "price": "0.65",
+        "resting_s": 12.807,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 4,
+        "cycles_observed": 2,
+        "cycles_in_life_without_a_book": 0,
+        "at_touch_cycles": 1,
+        "at_touch_share": 0.5,
+        "bid_moved_while_resting": true,
+        "bid_range": [
+          "0.65",
+          "0.67"
+        ],
+        "ask_moved_while_resting": false,
+        "ask_range": [
+          "0.69",
+          "0.69"
+        ],
+        "ask_travel_toward_us": "0.00",
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [
+          {
+            "utc": "2026-09-19T01:36:20.948583+00:00",
+            "cycle": 7,
+            "tte_s": 219.05142092704773,
+            "our_price": "0.65",
+            "best_bid": "0.65",
+            "best_ask": "0.69",
+            "at_touch": true,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          },
+          {
+            "utc": "2026-09-19T01:36:27.391924+00:00",
+            "cycle": 8,
+            "tte_s": 212.60808086395264,
+            "our_price": "0.65",
+            "best_bid": "0.67",
+            "best_ask": "0.69",
+            "at_touch": false,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          }
+        ],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8"
+      },
+      {
+        "leg": "NO",
+        "price": "0.67",
+        "resting_s": 6.159,
+        "ended": "CANCEL",
+        "filled": false,
+        "reprices_on_this_leg": 4,
+        "cycles_observed": 1,
+        "cycles_in_life_without_a_book": 0,
+        "at_touch_cycles": 0,
+        "at_touch_share": 0.0,
+        "bid_moved_while_resting": false,
+        "bid_range": [
+          "0.69",
+          "0.69"
+        ],
+        "ask_moved_while_resting": false,
+        "ask_range": [
+          "0.88",
+          "0.88"
+        ],
+        "ask_travel_toward_us": null,
+        "queue_ahead_first": null,
+        "queue_ahead_last": null,
+        "queue_ahead_vanished": null,
+        "size_at_our_price_first": null,
+        "size_at_our_price_last": null,
+        "alone_at_touch_cycles": 0,
+        "alone_at_touch_share": null,
+        "gap_to_next_bid_first": null,
+        "gap_to_next_bid_last": null,
+        "gap_widened": null,
+        "samples": [
+          {
+            "utc": "2026-09-19T01:36:37.170616+00:00",
+            "cycle": 9,
+            "tte_s": 202.82938647270203,
+            "our_price": "0.67",
+            "best_bid": "0.69",
+            "best_ask": "0.88",
+            "at_touch": false,
+            "queue_ahead": null,
+            "size_at_our_price": null,
+            "next_bid_below": null,
+            "gap_to_next_bid": null,
+            "ladder_side": "contract ladder is the YES side; a NO rung's queue is not readable from it"
+          }
+        ],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8"
+      },
+      {
+        "leg": "YES",
+        "price": "0.31",
+        "resting_s": 57.796,
+        "ended": "FILL",
+        "filled": true,
+        "reprices_on_this_leg": 0,
+        "cycles_observed": 7,
+        "cycles_in_life_without_a_book": 0,
+        "at_touch_cycles": 7,
+        "at_touch_share": 1.0,
+        "bid_moved_while_resting": false,
+        "bid_range": [
+          "0.31",
+          "0.31"
+        ],
+        "ask_moved_while_resting": true,
+        "ask_range": [
+          "0.33",
+          "0.43"
+        ],
+        "ask_travel_toward_us": "0.10",
+        "queue_ahead_first": "0",
+        "queue_ahead_last": "0",
+        "queue_ahead_vanished": false,
+        "size_at_our_price_first": "0.01",
+        "size_at_our_price_last": "0.01",
+        "alone_at_touch_cycles": 7,
+        "alone_at_touch_share": 1.0,
+        "gap_to_next_bid_first": "0.06",
+        "gap_to_next_bid_last": "0.19",
+        "gap_widened": true,
+        "samples": [
+          {
+            "utc": "2026-09-19T01:35:42.835030+00:00",
+            "cycle": 2,
+            "tte_s": 257.1649749279022,
+            "our_price": "0.31",
+            "best_bid": "0.31",
+            "best_ask": "0.43",
+            "at_touch": true,
+            "queue_ahead": "0",
+            "size_at_our_price": "0.01",
+            "next_bid_below": "0.25",
+            "gap_to_next_bid": "0.06",
+            "ladder_side": null
+          },
+          {
+            "utc": "2026-09-19T01:35:50.357209+00:00",
+            "cycle": 3,
+            "tte_s": 249.64279556274414,
+            "our_price": "0.31",
+            "best_bid": "0.31",
+            "best_ask": "0.38",
+            "at_touch": true,
+            "queue_ahead": "0",
+            "size_at_our_price": "0.01",
+            "next_bid_below": "0.21",
+            "gap_to_next_bid": "0.10",
+            "ladder_side": null
+          },
+          {
+            "utc": "2026-09-19T01:35:59.550539+00:00",
+            "cycle": 4,
+            "tte_s": 240.44946479797363,
+            "our_price": "0.31",
+            "best_bid": "0.31",
+            "best_ask": "0.38",
+            "at_touch": true,
+            "queue_ahead": "0",
+            "size_at_our_price": "0.01",
+            "next_bid_below": "0.15",
+            "gap_to_next_bid": "0.16",
+            "ladder_side": null
+          },
+          {
+            "utc": "2026-09-19T01:36:06.113345+00:00",
+            "cycle": 5,
+            "tte_s": 233.8866581916809,
+            "our_price": "0.31",
+            "best_bid": "0.31",
+            "best_ask": "0.38",
+            "at_touch": true,
+            "queue_ahead": "0",
+            "size_at_our_price": "0.01",
+            "next_bid_below": "0.17",
+            "gap_to_next_bid": "0.14",
+            "ladder_side": null
+          },
+          {
+            "utc": "2026-09-19T01:36:13.497054+00:00",
+            "cycle": 6,
+            "tte_s": 226.50295162200928,
+            "our_price": "0.31",
+            "best_bid": "0.31",
+            "best_ask": "0.35",
+            "at_touch": true,
+            "queue_ahead": "0",
+            "size_at_our_price": "0.01",
+            "next_bid_below": "0.17",
+            "gap_to_next_bid": "0.14",
+            "ladder_side": null
+          },
+          {
+            "utc": "2026-09-19T01:36:20.948583+00:00",
+            "cycle": 7,
+            "tte_s": 219.05142092704773,
+            "our_price": "0.31",
+            "best_bid": "0.31",
+            "best_ask": "0.35",
+            "at_touch": true,
+            "queue_ahead": "0",
+            "size_at_our_price": "0.01",
+            "next_bid_below": "0.12",
+            "gap_to_next_bid": "0.19",
+            "ladder_side": null
+          },
+          {
+            "utc": "2026-09-19T01:36:27.391924+00:00",
+            "cycle": 8,
+            "tte_s": 212.60808086395264,
+            "our_price": "0.31",
+            "best_bid": "0.31",
+            "best_ask": "0.33",
+            "at_touch": true,
+            "queue_ahead": "0",
+            "size_at_our_price": "0.01",
+            "next_bid_below": "0.12",
+            "gap_to_next_bid": "0.19",
+            "ladder_side": null
+          }
+        ],
+        "flow_through_our_price": null,
+        "flow_why": "the PUBLIC print tape was not recorded in live windows before 2026-09-19, so prints at our price during this rung's life cannot be counted. `book_state.flow` now carries it and the next live window can answer it.",
+        "labels": "EVIDENCE ONLY -- model B. Measured from the recorded book, never from our own order price, and it changes nothing in the controller.",
+        "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8"
+      }
+    ],
+    "census": {
+      "rungs_with_a_book_behind_them": 6,
+      "rungs_without_one": 9,
+      "filled": {
+        "n": 1,
+        "at_touch_share": 1.0,
+        "alone_at_touch_share": 1.0,
+        "gap_widened_share": 1.0,
+        "ask_moved_share": 1.0
+      },
+      "unfilled": {
+        "n": 5,
+        "at_touch_share": 0.4,
+        "alone_at_touch_share": null,
+        "gap_widened_share": null,
+        "ask_moved_share": 0.0
+      },
+      "confounds": [
+        "THE REPRICED LEG IS THE MOVING LEG. 'repriced rungs do not fill' and 'the leg whose price is moving does not fill' are the same observation in this data and cannot be separated by it.",
+        "NEITHER RESTING NOR NOT-REPRICING IS SUFFICIENT. C7's YES rung was placed once at 0.01, never repriced, rested 72.1 s, and did not fill. A penny bid left alone is still a penny bid.",
+        "n = 5 FILLS, and only three of them have a mutation record. Every share above is over single digits.",
+        "ONE WINDOW HAS A BOOK BEHIND EVERY CYCLE. Book-state capture began with C8B, so the per-cycle surroundings below come almost entirely from one window on one day.",
+        "PRINTS AT OUR PRICE ARE NOT IN THE RECORD for any existing rung; the live tape reader landed after all of them.",
+        "BEING ALONE AT THE TOUCH IS NOT THE SAME AS BEING PATIENT. The one fill with a book behind it stood as the ENTIRE bid, 6 to 19 cents above the next real one, while the offer walked 10 cents down toward it. 'Rested 58 s then filled' and 'was the last bid standing in a falling market' describe the same event, and this record cannot separate them either."
+      ],
+      "labels": "HYPOTHESIS GENERATOR, not a rule, and not a tuning input. Nothing here reaches the L5 policy."
+    }
+  },
+  "rebate_reality": {
+    "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+    "crypto_rate": "0.30",
+    "taker_rate": "0.07",
+    "eligible_band": [
+      "0.20",
+      "0.80"
+    ],
+    "paid": "17:00 America/New_York",
+    "our_five_fills": {
+      "n_fills": 5,
+      "n_eligible": 3,
+      "n_outside_band": 2,
+      "accrued_usd": "0.0001319220",
+      "would_pay_usd": "0.00",
+      "pays_nothing": true,
+      "shortfall_to_one_cent_usd": "0.0098680780",
+      "rounding": "rounded DOWN to the next cent, per the published rules",
+      "fills": [
+        {
+          "contracts": "0.01",
+          "price": "0.92",
+          "rebate_rate": "0.30",
+          "taker_rate": "0.07",
+          "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+          "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+          "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+          "eligibility": {
+            "eligible": false,
+            "price": "0.92",
+            "band": [
+              "0.20",
+              "0.80"
+            ],
+            "why": "execution price 0.92 is outside the eligible band"
+          },
+          "computable": true,
+          "accrued_usd": "0",
+          "why": "execution price 0.92 is outside the eligible band"
+        },
+        {
+          "contracts": "0.01",
+          "price": "0.14",
+          "rebate_rate": "0.30",
+          "taker_rate": "0.07",
+          "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+          "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+          "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+          "eligibility": {
+            "eligible": false,
+            "price": "0.14",
+            "band": [
+              "0.20",
+              "0.80"
+            ],
+            "why": "execution price 0.14 is outside the eligible band"
+          },
+          "computable": true,
+          "accrued_usd": "0",
+          "why": "execution price 0.14 is outside the eligible band"
+        },
+        {
+          "contracts": "0.01",
+          "price": "0.46",
+          "rebate_rate": "0.30",
+          "taker_rate": "0.07",
+          "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+          "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+          "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+          "eligibility": {
+            "eligible": true,
+            "price": "0.46",
+            "band": [
+              "0.20",
+              "0.80"
+            ],
+            "why": null
+          },
+          "computable": true,
+          "accrued_usd": "0.0000521640",
+          "uncapped_usd": "0.0000521640",
+          "notional_usd": "0.0046",
+          "cap_usd": "0.000230",
+          "capped": false,
+          "effective_bps_of_notional": "113.40"
+        },
+        {
+          "contracts": "0.01",
+          "price": "0.21",
+          "rebate_rate": "0.30",
+          "taker_rate": "0.07",
+          "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+          "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+          "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+          "eligibility": {
+            "eligible": true,
+            "price": "0.21",
+            "band": [
+              "0.20",
+              "0.80"
+            ],
+            "why": null
+          },
+          "computable": true,
+          "accrued_usd": "0.0000348390",
+          "uncapped_usd": "0.0000348390",
+          "notional_usd": "0.0021",
+          "cap_usd": "0.000105",
+          "capped": false,
+          "effective_bps_of_notional": "165.90"
+        },
+        {
+          "contracts": "0.01",
+          "price": "0.31",
+          "rebate_rate": "0.30",
+          "taker_rate": "0.07",
+          "formula": "rebate_rate * taker_rate * C * P * (1 - P)",
+          "source": "https://developer.gemini.com/prediction-markets/maker-rebate-program + https://www.gemini.com/fees/predictions, read 2026-09-19",
+          "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit.",
+          "eligibility": {
+            "eligible": true,
+            "price": "0.31",
+            "band": [
+              "0.20",
+              "0.80"
+            ],
+            "why": null
+          },
+          "computable": true,
+          "accrued_usd": "0.0000449190",
+          "uncapped_usd": "0.0000449190",
+          "notional_usd": "0.0031",
+          "cap_usd": "0.000155",
+          "capped": false,
+          "effective_bps_of_notional": "144.90"
+        }
+      ],
+      "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit."
+    },
+    "band_coverage": {
+      "n": 5,
+      "eligible": 3,
+      "outside_band": 2,
+      "unreadable": 0,
+      "eligible_share": 0.6,
+      "band": [
+        "0.20",
+        "0.80"
+      ],
+      "why": "a maker fill outside the band earns nothing, so a policy that quotes into the tails is quoting where the rebate does not reach"
+    },
+    "one_cent_needs": {
+      "at_best_price_0_50": {
+        "computable": true,
+        "price": "0.50",
+        "per_contract_usd": "0.00525000",
+        "contracts_needed": "1.9048",
+        "fills_of_0_01_needed": "190.5",
+        "notional_needed_usd": "0.9524",
+        "why": "below this a day's whole accrual rounds down to $0.00 and no credit can appear"
+      },
+      "at_our_fill_price_0_31": {
+        "computable": true,
+        "price": "0.31",
+        "per_contract_usd": "0.00449190",
+        "contracts_needed": "2.2262",
+        "fills_of_0_01_needed": "222.6",
+        "notional_needed_usd": "0.6901",
+        "why": "below this a day's whole accrual rounds down to $0.00 and no credit can appear"
+      }
+    },
+    "consistency_with_confirmed_credits": {
+      "computable": true,
+      "observed_bps": "97.59",
+      "implied_avg_price": "0.5353",
+      "inside_eligible_band": true,
+      "verdict": "CONSISTENT_WITH_PUBLISHED_RULES",
+      "why": "the implied notional-weighted average fill price is inside the eligible band, so the confirmed credits do not contradict the current published rate",
+      "caveat": "CONSISTENT IS NOT PROVEN. Ineligible fills sit in the denominator and earn nothing, biasing the implied price; this check can only fail to contradict."
+    },
+    "labels": "ACCRUED FROM PUBLISHED RULES. Not a rebate, not realized, and never added to trading P&L. A rebate is CONFIRMED only when a Gemini account record shows the credit."
+  },
+  "fills": [
+    {
+      "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "leg": "NO",
+      "price": "0.14",
+      "qty": "0.01",
+      "venue_order_id": "145828836246611835",
+      "venue_created": "2026-09-18T17:27:59.483Z",
+      "venue_updated": "2026-09-18T17:27:59.492Z",
+      "post_window_fill": false,
+      "evidence_file": null,
+      "spread": "NOT_PRESENTED_AT_DECISION",
+      "probability_band": "NOT_PRESENTED_AT_DECISION",
+      "touch_depth": "NOT_PRESENTED_AT_DECISION",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "l5_state": "NOT_PRESENTED_AT_DECISION",
+      "tte": "120-180s",
+      "state_why": "no decision record names this price; book-state capture did not exist in this window"
+    },
+    {
+      "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-4",
+      "leg": "YES",
+      "price": "0.92",
+      "qty": "0.01",
+      "venue_order_id": "145828836246613472",
+      "venue_created": "2026-09-18T17:28:05.939Z",
+      "venue_updated": "2026-09-18T17:28:33.389Z",
+      "post_window_fill": false,
+      "evidence_file": null,
+      "spread": "NOT_PRESENTED_AT_DECISION",
+      "probability_band": "NOT_PRESENTED_AT_DECISION",
+      "touch_depth": "NOT_PRESENTED_AT_DECISION",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "l5_state": "NOT_PRESENTED_AT_DECISION",
+      "tte": "60-120s",
+      "state_why": "no decision record names this price; book-state capture did not exist in this window"
+    },
+    {
+      "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-5",
+      "leg": "NO",
+      "price": "0.46",
+      "qty": "0.01",
+      "venue_order_id": "145828836250441357",
+      "venue_created": "2026-09-18T21:05:25.646Z",
+      "venue_updated": "2026-09-18T21:06:29.459Z",
+      "post_window_fill": true,
+      "evidence_file": "reconcile_slot_20260918T214547Z_c5s0.json",
+      "decision_cycle": 1,
+      "tte": ">240s",
+      "l5_state": "OPEN",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "spread": "NOT_PRESENTED_AT_DECISION",
+      "probability_band": "NOT_PRESENTED_AT_DECISION",
+      "touch_depth": "NOT_PRESENTED_AT_DECISION",
+      "book_capture_absent": true,
+      "presented_yes_bid": null,
+      "presented_yes_spread": null,
+      "touch_qty": null
+    },
+    {
+      "window": "OWNER-2026-09-18-GEMINI-CONTINUOUS-6",
+      "leg": "YES",
+      "price": "0.21",
+      "qty": "0.01",
+      "venue_order_id": "145828836251359298",
+      "venue_created": "2026-09-18T22:11:41.436Z",
+      "venue_updated": "2026-09-18T22:12:44.125Z",
+      "post_window_fill": false,
+      "evidence_file": null,
+      "decision_cycle": 1,
+      "tte": "180-240s",
+      "l5_state": "OPEN",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "spread": "NOT_PRESENTED_AT_DECISION",
+      "probability_band": "NOT_PRESENTED_AT_DECISION",
+      "touch_depth": "NOT_PRESENTED_AT_DECISION",
+      "book_capture_absent": true,
+      "presented_yes_bid": null,
+      "presented_yes_spread": null,
+      "touch_qty": null
+    },
+    {
+      "window": "OWNER-2026-09-19-GEMINI-CONTINUOUS-8",
+      "leg": "YES",
+      "price": "0.31",
+      "qty": "0.01",
+      "venue_order_id": "145828836256673007",
+      "venue_created": "2026-09-19T01:35:30.748Z",
+      "venue_updated": "2026-09-19T01:36:28.553Z",
+      "post_window_fill": false,
+      "evidence_file": null,
+      "decision_cycle": 1,
+      "tte": ">240s",
+      "l5_state": "OPEN",
+      "flow": "NOT_PRESENTED_AT_DECISION",
+      "spread": "0.21-0.30",
+      "probability_band": "0.26-0.50",
+      "touch_depth": "101-500",
+      "book_capture_absent": false,
+      "presented_yes_bid": "0.31",
+      "presented_yes_spread": "0.27",
+      "touch_qty": "483.0"
+    }
+  ],
+  "rungs": [
+    {
+      "leg": "YES",
+      "price": "0.26",
+      "placed_utc": "2026-09-18T21:05:25.624526+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T21:05:32.072667+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.448,
+      "filled": false,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.46",
+      "placed_utc": "2026-09-18T21:05:25.777788+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T21:06:29.459Z",
+      "ended": "FILL",
+      "resting_s": 63.681,
+      "filled": true,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": ">60s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.52",
+      "placed_utc": "2026-09-18T22:11:41.503464+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:11:48.768500+00:00",
+      "ended": "CANCEL",
+      "resting_s": 7.265,
+      "filled": false,
+      "places_on_this_leg": 3,
+      "reprices_on_this_leg": 2,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.60",
+      "placed_utc": "2026-09-18T22:11:50.642835+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:11:57.338179+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.695,
+      "filled": false,
+      "places_on_this_leg": 3,
+      "reprices_on_this_leg": 2,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.69",
+      "placed_utc": "2026-09-18T22:11:59.824426+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:12:45.748070+00:00",
+      "ended": "CANCEL",
+      "resting_s": 45.924,
+      "filled": false,
+      "places_on_this_leg": 3,
+      "reprices_on_this_leg": 2,
+      "resting_bucket": "30-60s"
+    },
+    {
+      "leg": "YES",
+      "price": "0.21",
+      "placed_utc": "2026-09-18T22:11:41.456386+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T22:12:44.125Z",
+      "ended": "FILL",
+      "resting_s": 62.669,
+      "filled": true,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": ">60s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.79",
+      "placed_utc": "2026-09-18T23:27:57.350528+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T23:28:05.622192+00:00",
+      "ended": "CANCEL",
+      "resting_s": 8.272,
+      "filled": false,
+      "places_on_this_leg": 2,
+      "reprices_on_this_leg": 1,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.95",
+      "placed_utc": "2026-09-18T23:28:07.450022+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T23:29:09.289344+00:00",
+      "ended": "CANCEL",
+      "resting_s": 61.839,
+      "filled": false,
+      "places_on_this_leg": 2,
+      "reprices_on_this_leg": 1,
+      "resting_bucket": ">60s"
+    },
+    {
+      "leg": "YES",
+      "price": "0.01",
+      "placed_utc": "2026-09-18T23:27:57.267171+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-18T23:29:09.378497+00:00",
+      "ended": "CANCEL",
+      "resting_s": 72.111,
+      "filled": false,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": ">60s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.42",
+      "placed_utc": "2026-09-19T01:35:30.771951+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:35:43.084606+00:00",
+      "ended": "CANCEL",
+      "resting_s": 12.313,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "10-30s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.57",
+      "placed_utc": "2026-09-19T01:35:44.181134+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:35:50.596069+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.415,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.62",
+      "placed_utc": "2026-09-19T01:35:52.292266+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:13.784726+00:00",
+      "ended": "CANCEL",
+      "resting_s": 21.492,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "10-30s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.65",
+      "placed_utc": "2026-09-19T01:36:14.771840+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:27.578875+00:00",
+      "ended": "CANCEL",
+      "resting_s": 12.807,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "10-30s"
+    },
+    {
+      "leg": "NO",
+      "price": "0.67",
+      "placed_utc": "2026-09-19T01:36:31.210750+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:37.370089+00:00",
+      "ended": "CANCEL",
+      "resting_s": 6.159,
+      "filled": false,
+      "places_on_this_leg": 5,
+      "reprices_on_this_leg": 4,
+      "resting_bucket": "1-10s"
+    },
+    {
+      "leg": "YES",
+      "price": "0.31",
+      "placed_utc": "2026-09-19T01:35:30.757048+00:00",
+      "action": "OPEN",
+      "ended_utc": "2026-09-19T01:36:28.553Z",
+      "ended": "FILL",
+      "resting_s": 57.796,
+      "filled": true,
+      "places_on_this_leg": 1,
+      "reprices_on_this_leg": 0,
+      "resting_bucket": "30-60s"
+    }
+  ],
+  "census": {
+    "cycles": 542,
+    "book_refused_cycles": 52,
+    "book_refused_share": 0.096,
+    "refusal_reasons": [
+      "CROSSED book: a bid at or above its own ask",
+      "TimeoutError: The read operation timed out",
+      "crossed or absent quote -- refused by the gate added after this cycle was recorded",
+      "the contract does not publish both outcomes' prices; nothing is derived in their place"
+    ],
+    "touch_was_ours_cycles": 0,
+    "fills_total": 5,
+    "rates_stated": false,
+    "why_no_rates": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts.",
+    "dimensions": {
+      "spread": {
+        "0.06-0.10": {
+          "cycles": 17,
+          "share": 0.031,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.11-0.20": {
+          "cycles": 84,
+          "share": 0.155,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.21-0.30": {
+          "cycles": 178,
+          "share": 0.328,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "<=0.05": {
+          "cycles": 1,
+          "share": 0.002,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">0.30": {
+          "cycles": 210,
+          "share": 0.387,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 52,
+          "share": 0.096,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 4,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "touch_depth": {
+        "101-500": {
+          "cycles": 226,
+          "share": 0.417,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "11-100": {
+          "cycles": 3,
+          "share": 0.006,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "2-10": {
+          "cycles": 168,
+          "share": 0.31,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">500": {
+          "cycles": 90,
+          "share": 0.166,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 55,
+          "share": 0.101,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 4,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "flow": {
+        "0/min": {
+          "cycles": 468,
+          "share": 0.863,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "2-6/min": {
+          "cycles": 5,
+          "share": 0.009,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "6-15/min": {
+          "cycles": 43,
+          "share": 0.079,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">15/min": {
+          "cycles": 1,
+          "share": 0.002,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 25,
+          "share": 0.046,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 5,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "tte": {
+        "120-180s": {
+          "cycles": 146,
+          "share": 0.269,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "180-240s": {
+          "cycles": 153,
+          "share": 0.282,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "60-120s": {
+          "cycles": 129,
+          "share": 0.238,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "<=60s": {
+          "cycles": 28,
+          "share": 0.052,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        ">240s": {
+          "cycles": 86,
+          "share": 0.159,
+          "fills": 2,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "probability_band": {
+        "0.00-0.10": {
+          "cycles": 98,
+          "share": 0.181,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.11-0.25": {
+          "cycles": 79,
+          "share": 0.146,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.26-0.50": {
+          "cycles": 156,
+          "share": 0.288,
+          "fills": 1,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.51-0.75": {
+          "cycles": 104,
+          "share": 0.192,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.76-0.90": {
+          "cycles": 52,
+          "share": 0.096,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "0.91-1.00": {
+          "cycles": 1,
+          "share": 0.002,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "UNREADABLE": {
+          "cycles": 52,
+          "share": 0.096,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 4,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      },
+      "l5_state": {
+        "NO_ACTION": {
+          "cycles": 88,
+          "share": 0.162,
+          "fills": 0,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "OPEN": {
+          "cycles": 454,
+          "share": 0.838,
+          "fills": 3,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        },
+        "NOT_PRESENTED_AT_DECISION": {
+          "cycles": 0,
+          "share": null,
+          "fills": 2,
+          "rate": null,
+          "rate_why": "NO CONVERSION RATE IS STATED. 5 fills exist in the whole programme and 10 are needed before a per-segment rate is anything but noise. The census below is what the venue OFFERED; the fill column is where the fills we have landed, as counts."
+        }
+      }
+    },
+    "resting_time": {
+      "1-10s": {
+        "rungs": 6,
+        "fills": 0
+      },
+      ">60s": {
+        "rungs": 4,
+        "fills": 2
+      },
+      "30-60s": {
+        "rungs": 2,
+        "fills": 1
+      },
+      "10-30s": {
+        "rungs": 3,
+        "fills": 0
+      }
+    },
+    "repricing": {
+      "rungs_total": 15,
+      "rungs_on_a_repriced_leg": 10,
+      "fills_on_a_repriced_leg": 0,
+      "rungs_never_repriced": 5,
+      "fills_never_repriced": 3,
+      "caution": "ASSOCIATION, NOT CAUSE, and confounded on its face: the leg that gets repriced is the leg whose price is moving, so 'repriced rungs do not fill' and 'the moving leg does not fill' are the same observation here. Nothing in the controller may be changed on this."
+    },
+    "labels": "SEGMENTED HABITAT CENSUS -- model B evidence. Not a verdict, not a tuning input, not realized economics, and not reachable from the L5 policy."
+  },
+  "labels": "EVIDENCE ONLY -- model B. Read-only over preserved records. No rate is stated, nothing here reaches the L5 policy, and no line here is realized P&L."
+}

@@ -1,0 +1,521 @@
+{
+ "generated_utc": "2026-10-05T23:45:41.589999+00:00",
+ "corpus": {
+  "raw_records": 784500,
+  "deduped": 776749,
+  "buy_trades": 760815,
+  "non_buy_trades": 2,
+  "conditions_with_redeem": 15519,
+  "incentive_rows_usd_kept_separate": {
+   "pre_incentive": {
+    "MAKER_REBATE": 7367.650200000003,
+    "TAKER_REBATE": 3161.6598,
+    "TOTAL": 10529.310000000003
+   },
+   "post_incentive": {
+    "MAKER_REBATE": 27860.671700000006,
+    "TAKER_REBATE": 4364.0714,
+    "REWARD": 28797.688400000006,
+    "TOTAL": 61022.43150000001
+   },
+   "pre_incentive_per_day": 95.72100000000003,
+   "note": "KEPT SEPARATE from trading P&L and never added to it. Every REWARD dollar is post-2026-08-01: the $480/day figure cannot be reconstructed from pre-incentive trading plus pre-incentive rebates."
+  }
+ },
+ "clone_rules": {
+  "policy_path": "analysis/gemini/info_edge/btc15m_shadow_policy.py",
+  "policy_fingerprint": "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329",
+  "EXTEND_MIN_AVG_IMPROVEMENT": 0.05,
+  "MAX_EXTENDS_BEFORE_COMPLEMENT": 2,
+  "MAX_PAIR_COST": 0.96,
+  "HARD_MAX_PRICE": 0.9,
+  "MAX_RESIDUAL_PRINCIPAL": 4.0,
+  "OPEN_TTE_LO": 120.0,
+  "OPEN_TTE_HI": 840.0,
+  "MAX_TOTAL_COST": 12.0,
+  "MAX_RESIDUAL": 6.0,
+  "MAX_ACTIONS": 8.0,
+  "MAX_WORST_CASE_LOSS": -6.0,
+  "QUANTITY": 1.0,
+  "L5_WINDOW_S": 900.0,
+  "GEM_WINDOW_S": 300.0,
+  "L5_COMPRESS_TRIGGER": 0.991,
+  "SPRING_COMPRESS_TRIGGER": 0.96,
+  "L5_EXTEND_BUDGET": 1.0,
+  "ACQUIRE_FLOOR_S": 44.0,
+  "PATIENCE_REF_S": 52.0,
+  "L5_BAND": [
+   0.2,
+   0.82
+  ],
+  "SCALE": 0.3333333333333333
+ },
+ "tte_verification": {
+  "compared": 20000,
+  "trailing_matches_OPEN": 20000,
+  "trailing_matches_CLOSE": 0,
+  "verdict": "trailing integer is the window OPEN epoch; TTE = open + duration - t",
+  "examples": [
+   {
+    "slug": "btc-updown-5m-1773914700",
+    "trailing_int": 1773914700,
+    "duration_s": 300,
+    "market_start": "2026-03-19T10:05:00Z",
+    "market_end": "2026-03-19T10:10:00Z",
+    "question": "Bitcoin Up or Down - March 19, 6:05AM-6:10AM ET",
+    "fill_ts": 1773914977,
+    "tte_if_open": 23
+   },
+   {
+    "slug": "btc-updown-5m-1773915600",
+    "trailing_int": 1773915600,
+    "duration_s": 300,
+    "market_start": "2026-03-19T10:20:00Z",
+    "market_end": "2026-03-19T10:25:00Z",
+    "question": "Bitcoin Up or Down - March 19, 6:20AM-6:25AM ET",
+    "fill_ts": 1773915613,
+    "tte_if_open": 287
+   },
+   {
+    "slug": "btc-updown-15m-1773917100",
+    "trailing_int": 1773917100,
+    "duration_s": 900,
+    "market_start": "2026-03-19T10:45:00Z",
+    "market_end": "2026-03-19T11:00:00Z",
+    "question": "Bitcoin Up or Down - March 19, 6:45AM-7:00AM ET",
+    "fill_ts": 1773917919,
+    "tte_if_open": 81
+   }
+  ]
+ },
+ "incentive_rows_separate": {
+  "pre_incentive": {
+   "MAKER_REBATE": 7367.650200000003,
+   "TAKER_REBATE": 3161.6598,
+   "TOTAL": 10529.310000000003
+  },
+  "post_incentive": {
+   "MAKER_REBATE": 27860.671700000006,
+   "TAKER_REBATE": 4364.0714,
+   "REWARD": 28797.688400000006,
+   "TOTAL": 61022.43150000001
+  },
+  "pre_incentive_per_day": 95.72100000000003,
+  "note": "KEPT SEPARATE from trading P&L and never added to it. Every REWARD dollar is post-2026-08-01: the $480/day figure cannot be reconstructed from pre-incentive trading plus pre-incentive rebates."
+ },
+ "baseline_validation": {
+  "confirmed": {
+   "events": 5870,
+   "fills": 335220,
+   "buy_usdc": 2976920.863475001,
+   "redemption": 3012055.6832199944,
+   "charged_fee": 28697.653244395184,
+   "cash": 35134.81974500008
+  },
+  "all_conditions": {
+   "events": 6252,
+   "fills": 336340,
+   "buy_usdc": 2991195.5866340054,
+   "redemption": 3012055.6832199944,
+   "charged_fee": 29135.822664387288,
+   "cash": 20860.09658600006
+  },
+  "redemption_reconstruction_delta_vs_published": 1265.6832199944183,
+  "redemption_reconstruction_delta_pct": 0.042038243118730244,
+  "method": "redemption = winning-outcome TRADE size * $1, with the winner taken from the condition's REDEEM record (REDEEM carries the winning outcomeIndex but zero price/size/usdcSize). Merges are UNAVAILABLE.",
+  "published_checks": [
+   {
+    "name": "all_events",
+    "got": 6252,
+    "published": 6252,
+    "ok": true
+   },
+   {
+    "name": "all_fills",
+    "got": 336340,
+    "published": 336342,
+    "ok": true
+   },
+   {
+    "name": "buy_usdc",
+    "got": 2991195.5866340054,
+    "published": 2991196,
+    "ok": true
+   },
+   {
+    "name": "redemption",
+    "got": 3012055.6832199944,
+    "published": 3010790,
+    "ok": true
+   },
+   {
+    "name": "charged_fee",
+    "got": 29135.822664387288,
+    "published": 29136,
+    "ok": true
+   },
+   {
+    "name": "all_cash",
+    "got": 20860.09658600006,
+    "published": 19596,
+    "ok": true
+   },
+   {
+    "name": "confirmed_events",
+    "got": 5870,
+    "published": 5870,
+    "ok": true
+   },
+   {
+    "name": "confirmed_cash",
+    "got": 35134.81974500008,
+    "published": 33869,
+    "ok": true
+   }
+  ],
+  "mismatches": []
+ },
+ "q7_capacity": {
+  "events_pre_incentive": 6252,
+  "events_redeem_confirmed": 5870,
+  "fills_pre_incentive": 336340,
+  "days": 110.0,
+  "deployed_capital_per_event": {
+   "median": 316.05159599999996,
+   "p75": 750.6238829999998,
+   "p90": 1131.3021469999999,
+   "p99": 1942.3405190000005,
+   "max": 3050.0559490000023,
+   "mean": 478.4381936394752,
+   "note": "L5 is buy-only, so within one event cash outlay is monotone and PEAK outlay = total outlay for that event. Redemption arrives only at settlement, after the window closes."
+  },
+  "return_on_deployed": {
+   "median": 0.0324360594673065,
+   "p25": -0.049144477234571056,
+   "p75": 0.132081409081859,
+   "p10": -0.18434401973624115,
+   "p90": 0.3271965334927416,
+   "capital_weighted_mean": 0.011802403005092558,
+   "frac_events_positive": 0.6122657580919932
+  },
+  "aggregate": {
+   "total_cash": 35134.81974500008,
+   "cash_per_day": 319.40745222727344,
+   "total_deployed_sum_over_events": 2976920.863475001,
+   "cash_per_event": 5.985488883304954,
+   "events_per_day": 56.836363636363636
+  },
+  "concurrency": {
+   "max_simultaneous_events": 2,
+   "time_share_by_concurrency": {
+    "0": 0.7455306304759016,
+    "1": 0.2212413705083233,
+    "2": 0.033227999015775035
+   },
+   "peak_concurrent_deployed_usd": 3061.6770380000003
+  },
+  "target_backward_all_baselines": {
+   "138.5": {
+    "baseline_per_day": 138.5,
+    "required_multiple": 3.4657039711191335,
+    "label": "published CONSERVATIVE, all caveats charged"
+   },
+   "178.15": {
+    "baseline_per_day": 178.15,
+    "required_multiple": 2.69435868650014,
+    "label": "published UPPER-BOUND, all pre-incentive conditions"
+   },
+   "307.9": {
+    "baseline_per_day": 307.9,
+    "required_multiple": 1.5589477102955507,
+    "label": "published CONFIRMED subset (has a redemption record)"
+   },
+   "240.0": {
+    "baseline_per_day": 240.0,
+    "required_multiple": 2.0,
+    "label": "stated L5 pre-incentive PEAK, trading-only"
+   }
+  },
+  "target_backward": {
+   "target_per_day": 480.0,
+   "observed_cash_per_day": 319.40745222727344,
+   "required_multiple": 1.502782720480978,
+   "lever_size": {
+    "statement": "same markets, same event count: multiply size by 1.50x, taking median deployed from $316.05 to $474.96 per event and peak concurrent deployed from $3061.68 to $4601.04",
+    "depth_support": "UNAVAILABLE -- this corpus has no order book depth, no maker/taker flag, no queue position and no cancels, so whether the book absorbs 1.50x at L5's prices CANNOT be answered here."
+   },
+   "lever_concurrency": {
+    "required_simultaneous_events": 3.005565440961956,
+    "observed_cap": 2,
+    "statement": "concurrency alone needs ~3.0 simultaneous markets against an observed cap of 2 held across the whole corpus despite ~120x scaling"
+   },
+   "lever_eligible_events": {
+    "observed_events_per_day": 56.836363636363636,
+    "required_events_per_day": 85.41270516770068,
+    "additional_per_day": 28.576341531337043
+   },
+   "lever_execution": {
+    "observed_cash_per_event": 5.985488883304954,
+    "required_cash_per_event": 8.99488926746167,
+    "required_improvement_per_event": 3.009400384156716,
+    "required_rod": 0.017736447296205864,
+    "observed_rod": 0.011802403005092558
+   }
+  }
+ },
+ "q8_clone_divergence": {
+  "pre_incentive_fills": 336340,
+  "pre_incentive_events": 6252,
+  "action_mix": {
+   "OPEN": 6252,
+   "EXTEND": 172187,
+   "COMPLEMENT": 157901,
+   "OPEN2": 0
+  },
+  "duration_mix": {
+   "900": {
+    "events": 3391,
+    "fills": 313774
+   },
+   "300": {
+    "events": 2861,
+    "fills": 22566
+   }
+  },
+  "method": "MARGINAL per-rule suppression: each rule is evaluated ALONE against L5's actual sequence, with all earlier L5 fills allowed to stand. Cumulative replay would confound the rules and understate every one but the first to bind.",
+  "cash_attribution": "a fill's cash = (1 if its outcome won else 0) * size - usdcSize. Buy-only, so these sum exactly to the event's settlement cash result. NOT realized profit for our account.",
+  "fill_size_shares": {
+   "median": 19.22,
+   "p25": 6.635,
+   "p75": 30.0,
+   "p90": 30.0,
+   "p99": 60.0,
+   "max": 227.98,
+   "mean": 18.24631107360317,
+   "clone_q": 1.0,
+   "frac_above_clone_q": 0.9731432479039067
+  },
+  "window_population_note": "PRE-INCENTIVE, 15m DOMINATES BOTH WAYS: 900s = 3391 events / 313774 fills; 300s = 2861 events / 22566 fills. The 64%-5m-by-count figure is a WHOLE-CORPUS statistic; restricted to the pre-incentive population that this audit scores, 15m is the majority by events too. L5_WINDOW_S = 900 is therefore the correct reference for this population, and the TTE band is reported BOTH unscaled and scaled per-window.",
+  "rules": [
+   {
+    "rule": "max_total_cost_12_per_market",
+    "blocked_fills": 331157,
+    "pct_of_pre_incentive_fills": 98.45899982160908,
+    "blocked_events_touched": 6032,
+    "pct_of_pre_incentive_events": 96.4811260396673,
+    "blocked_shares": 6067387.749745697,
+    "blocked_usdc_outlay": 2967302.7833901965,
+    "cash_attached_to_blocked_fills": 19180.393825001283,
+    "blocked_fills_with_known_outcome": 331157,
+    "applicable_action_class": "ALL",
+    "applicable_fills": 336340,
+    "pct_of_APPLICABLE_fills": 98.45899982160908
+   },
+   {
+    "rule": "quantity_q1_fixed",
+    "blocked_fills": 327307,
+    "pct_of_pre_incentive_fills": 97.31432479039067,
+    "blocked_events_touched": 6249,
+    "pct_of_pre_incentive_events": 99.95201535508637,
+    "blocked_shares": 6132652.203072176,
+    "blocked_usdc_outlay": 2989237.0409792373,
+    "cash_attached_to_blocked_fills": 20847.201115001044,
+    "blocked_fills_with_known_outcome": 327307,
+    "applicable_action_class": "ALL",
+    "applicable_fills": 336340,
+    "pct_of_APPLICABLE_fills": 97.31432479039067
+   },
+   {
+    "rule": "max_actions_8_per_market",
+    "blocked_fills": 294508,
+    "pct_of_pre_incentive_fills": 87.5625854789796,
+    "blocked_events_touched": 4246,
+    "pct_of_pre_incentive_events": 67.91426743442099,
+    "blocked_shares": 5178162.7587817395,
+    "blocked_usdc_outlay": 2479609.583451132,
+    "cash_attached_to_blocked_fills": 15551.36938700042,
+    "blocked_fills_with_known_outcome": 294508,
+    "applicable_action_class": "ALL",
+    "applicable_fills": 336340,
+    "pct_of_APPLICABLE_fills": 87.5625854789796
+   },
+   {
+    "rule": "max_residual_6_contracts",
+    "blocked_fills": 176829,
+    "pct_of_pre_incentive_fills": 52.57447820657668,
+    "blocked_events_touched": 6216,
+    "pct_of_pre_incentive_events": 99.42418426103647,
+    "blocked_shares": 3251893.87502902,
+    "blocked_usdc_outlay": 1623151.622516034,
+    "cash_attached_to_blocked_fills": 20259.86031099997,
+    "blocked_fills_with_known_outcome": 176829,
+    "applicable_action_class": "OPEN|OPEN2|EXTEND",
+    "applicable_fills": 178439,
+    "pct_of_APPLICABLE_fills": 99.09773087721855
+   },
+   {
+    "rule": "max_residual_principal_4.00",
+    "blocked_fills": 174434,
+    "pct_of_pre_incentive_fills": 51.86240114170185,
+    "blocked_events_touched": 6143,
+    "pct_of_pre_incentive_events": 98.25655790147152,
+    "blocked_shares": 3224438.544276021,
+    "blocked_usdc_outlay": 1620241.4069350266,
+    "cash_attached_to_blocked_fills": 20276.29179899996,
+    "blocked_fills_with_known_outcome": 174434,
+    "applicable_action_class": "OPEN|OPEN2|EXTEND",
+    "applicable_fills": 178439,
+    "pct_of_APPLICABLE_fills": 97.75553550513061
+   },
+   {
+    "rule": "extend_budget_1_replay_harness",
+    "blocked_fills": 120215,
+    "pct_of_pre_incentive_fills": 35.74210620205744,
+    "blocked_events_touched": 5279,
+    "pct_of_pre_incentive_events": 84.43698016634677,
+    "blocked_shares": 2069876.2461219898,
+    "blocked_usdc_outlay": 1011179.1452450048,
+    "cash_attached_to_blocked_fills": 10349.167608999678,
+    "blocked_fills_with_known_outcome": 120215,
+    "applicable_action_class": "EXTEND",
+    "applicable_fills": 172187,
+    "pct_of_APPLICABLE_fills": 69.8165366723388
+   },
+   {
+    "rule": "extend_5c_improvement",
+    "blocked_fills": 96637,
+    "pct_of_pre_incentive_fills": 28.731937919961943,
+    "blocked_events_touched": 5680,
+    "pct_of_pre_incentive_events": 90.850927703135,
+    "blocked_shares": 1831366.0698679907,
+    "blocked_usdc_outlay": 1253364.8771429998,
+    "cash_attached_to_blocked_fills": 5447.793665999777,
+    "blocked_fills_with_known_outcome": 96637,
+    "applicable_action_class": "EXTEND",
+    "applicable_fills": 172187,
+    "pct_of_APPLICABLE_fills": 56.123284568521434
+   },
+   {
+    "rule": "max_extends_before_complement_2",
+    "blocked_fills": 85082,
+    "pct_of_pre_incentive_fills": 25.296426235357078,
+    "blocked_events_touched": 4732,
+    "pct_of_pre_incentive_events": 75.68777991042866,
+    "blocked_shares": 1410287.7274930018,
+    "blocked_usdc_outlay": 668554.4330080027,
+    "cash_attached_to_blocked_fills": 6242.589414999871,
+    "blocked_fills_with_known_outcome": 85082,
+    "applicable_action_class": "EXTEND",
+    "applicable_fills": 172187,
+    "pct_of_APPLICABLE_fills": 49.41255727784328
+   },
+   {
+    "rule": "pair_cost_ceiling_0.96",
+    "blocked_fills": 80557,
+    "pct_of_pre_incentive_fills": 23.95106142593804,
+    "blocked_events_touched": 4515,
+    "pct_of_pre_incentive_events": 72.2168905950096,
+    "blocked_shares": 1564320.4003099923,
+    "blocked_usdc_outlay": 1069482.9291930178,
+    "cash_attached_to_blocked_fills": -2237.9757209999457,
+    "blocked_fills_with_known_outcome": 80557,
+    "applicable_action_class": "COMPLEMENT",
+    "applicable_fills": 157901,
+    "pct_of_APPLICABLE_fills": 51.017409642750835
+   },
+   {
+    "rule": "locked_stop",
+    "blocked_fills": 26697,
+    "pct_of_pre_incentive_fills": 7.937503716477374,
+    "blocked_events_touched": 566,
+    "pct_of_pre_incentive_events": 9.053103007037748,
+    "blocked_shares": 469153.0956910046,
+    "blocked_usdc_outlay": 229123.7680630007,
+    "cash_attached_to_blocked_fills": 2760.874760000023,
+    "blocked_fills_with_known_outcome": 26697,
+    "applicable_action_class": "ALL",
+    "applicable_fills": 336340,
+    "pct_of_APPLICABLE_fills": 7.937503716477374
+   },
+   {
+    "rule": "hard_max_price_0.90",
+    "blocked_fills": 13734,
+    "pct_of_pre_incentive_fills": 4.083368020455492,
+    "blocked_events_touched": 2257,
+    "pct_of_pre_incentive_events": 36.10044785668586,
+    "blocked_shares": 280263.7403299999,
+    "blocked_usdc_outlay": 264928.5897199925,
+    "cash_attached_to_blocked_fills": 2545.8631930000056,
+    "blocked_fills_with_known_outcome": 13734,
+    "applicable_action_class": "OPEN|OPEN2|EXTEND",
+    "applicable_fills": 178439,
+    "pct_of_APPLICABLE_fills": 7.696747908248757
+   },
+   {
+    "rule": "open_tte_band_900s_unscaled",
+    "blocked_fills": 3188,
+    "pct_of_pre_incentive_fills": 0.9478503894868288,
+    "blocked_events_touched": 3188,
+    "pct_of_pre_incentive_events": 50.9916826615483,
+    "blocked_shares": 72106.524765,
+    "blocked_usdc_outlay": 37828.482556,
+    "cash_attached_to_blocked_fills": -903.3162140000004,
+    "blocked_fills_with_known_outcome": 3188,
+    "applicable_action_class": "OPEN|OPEN2",
+    "applicable_fills": 6252,
+    "pct_of_APPLICABLE_fills": 50.9916826615483
+   },
+   {
+    "rule": "open_tte_band_scaled_to_window",
+    "blocked_fills": 3112,
+    "pct_of_pre_incentive_fills": 0.9252542070523875,
+    "blocked_events_touched": 3112,
+    "pct_of_pre_incentive_events": 49.776071657069735,
+    "blocked_shares": 68244.34676799997,
+    "blocked_usdc_outlay": 35867.152134999975,
+    "cash_attached_to_blocked_fills": -424.43850499999996,
+    "blocked_fills_with_known_outcome": 3112,
+    "applicable_action_class": "OPEN|OPEN2",
+    "applicable_fills": 6252,
+    "pct_of_APPLICABLE_fills": 49.776071657069735
+   },
+   {
+    "rule": "acquire_floor_s",
+    "blocked_fills": 2964,
+    "pct_of_pre_incentive_fills": 0.8812511149432122,
+    "blocked_events_touched": 2964,
+    "pct_of_pre_incentive_events": 47.408829174664106,
+    "blocked_shares": 66581.44042299992,
+    "blocked_usdc_outlay": 35467.343758000025,
+    "cash_attached_to_blocked_fills": -344.0291950000003,
+    "blocked_fills_with_known_outcome": 2964,
+    "applicable_action_class": "OPEN|OPEN2",
+    "applicable_fills": 6252,
+    "pct_of_APPLICABLE_fills": 47.408829174664106
+   },
+   {
+    "rule": "l5_band_entry_0.20_0.82",
+    "blocked_fills": 703,
+    "pct_of_pre_incentive_fills": 0.20901468751858238,
+    "blocked_events_touched": 703,
+    "pct_of_pre_incentive_events": 11.244401791426743,
+    "blocked_shares": 23318.807767,
+    "blocked_usdc_outlay": 12622.255035000013,
+    "cash_attached_to_blocked_fills": 122.02402599999988,
+    "blocked_fills_with_known_outcome": 703,
+    "applicable_action_class": "OPEN|OPEN2",
+    "applicable_fills": 6252,
+    "pct_of_APPLICABLE_fills": 11.244401791426743
+   }
+  ]
+ },
+ "unavailable": [
+  "order book depth",
+  "maker/taker flag per fill",
+  "queue position",
+  "cancels",
+  "unfilled orders",
+  "resting time",
+  "rebates actually credited"
+ ]
+}

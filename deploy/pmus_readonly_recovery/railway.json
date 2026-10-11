@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "READ-ONLY. Probe 04 recovery. Holds only a transport that raises on any method but GET. Runs once and exits; never restarts.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/pmus_readonly_recovery/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "python3 -m scripts.pmus_readonly_recovery",
+    "restartPolicyType": "NEVER"
+  }
+}

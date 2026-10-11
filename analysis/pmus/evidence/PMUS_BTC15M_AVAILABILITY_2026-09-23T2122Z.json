@@ -1,0 +1,61 @@
+{
+ "utc": "2026-09-23T21:23:24.117937+00:00",
+ "observed_via": "PUBLIC gateway.polymarket.us, unauthenticated GET",
+ "caveat": "the authenticated view may differ; this cannot be settled without credentials, which is exactly what the preflight is for",
+ "checks": {
+  "series_listing_contains_btc_updown_15m": false,
+  "series_listing_size": 300,
+  "series_375_in_listing": false,
+  "events_series_id_375": 0,
+  "events_unfiltered": 10,
+  "current_window_bbo": {
+   "ok": true,
+   "body_keys": [
+    "marketData"
+   ]
+  },
+  "todays_expired_window_bbo": {
+   "ok": true,
+   "body_keys": [
+    "marketData"
+   ]
+  },
+  "venue_serving_other_series": true
+ },
+ "reading": "CORRECTED. My first reading -- that the series had been delisted -- was WRONG and is retracted. Re-probing showed cpc-btc-updown-15m-2026-09-23-2115z resolving as MARKET_STATE_OPEN with bid=None and ask=None: the market EXISTS and is OPEN, it simply has NO BOOK on either side. 2130z 404s because that window has not been created yet, not because it is gone. The empty /v1/events?series_id=375 listing is a separate endpoint quirk and does not mean the series is absent, since its market slugs resolve.",
+ "quantified_no_book_rate_by_window": {
+  "note": "share of L5 actions whose PMUS book was unreadable at our receipt",
+  "100_percent_windows": [
+   "14:30",
+   "14:45",
+   "15:00",
+   "17:00",
+   "17:15",
+   "18:00",
+   "19:45"
+  ],
+  "partial_windows": {
+   "15:30": "36.1%",
+   "16:00": "33.0%",
+   "16:30": "18.7%",
+   "17:30": "18.2%",
+   "17:45": "19.2%",
+   "19:30": "11.1%",
+   "20:45": "79.5%",
+   "21:00": "38.9%"
+  },
+  "best_window": {
+   "15:15": "0.0%"
+  },
+  "reading": "the PMUS BTC15m book comes and goes through the day. This is a habitat/liquidity fact and is preserved as evidence, not fixed."
+ },
+ "consequence_for_the_probe": "With no bid and no ask there is nothing to cross into and nothing to rest against, so every L5 action becomes NO_BOOK and the faithful engine reproduces none of them. Book availability at probe time is therefore a GO/NO-GO input in its own right, and the preflight's book_two_sided gate already refuses on exactly this condition.",
+ "root_cause_2136Z": {
+  "finding": "PUBLIC gateway exposes a BTC15m market only PARTWAY THROUGH its own window. Probed at 21:36Z: 20:45/21:00/21:15 all resolve as MARKET_STATE_EXPIRED, while 21:30 (the LIVE window), 21:45 and 22:00 all return HTTP 404. The 21:15 market resolved with a deep book at 21:28Z, 13 minutes into its own window.",
+  "authenticated_contradiction": "the AUTHENTICATED tape shows the first print at +9.1s (16:15) and +6.8s (16:30) after window start, in the two windows where we hold dense tape. The market is therefore live and trading within seconds, while the public gateway still 404s it. This is user point 8: an authenticated/public endpoint difference hiding the actual book.",
+  "slug_convention_confirmed": "event slug is btc-updown-15m-<date>-<hhmm>z (unprefixed, as in the UI URL); the MARKET slug keeps the cpc- prefix and is correct -- it returned bestBid 0.9300 / bestAsk 0.9500 with 8 bid and 5 ask levels. We were querying the right market, by the right identifier, on the wrong endpoint.",
+  "consequence": "the observer uses PUBLIC GETs only, so it is STRUCTURALLY blind to the book for the first minutes of every window -- exactly when L5 opens. No retry or fallback on the public endpoint can fix this; the book must be read over the authenticated path the recorder already uses.",
+  "not_yet_tested": "whether the AUTHENTICATED market/book endpoint returns the market earlier. This cannot be tested from this session: no credentials are held here. It is the decisive next check and belongs with the Railway preflight.",
+  "probed_utc": "2026-09-23T21:36:48.359059+00:00"
+ }
+}
