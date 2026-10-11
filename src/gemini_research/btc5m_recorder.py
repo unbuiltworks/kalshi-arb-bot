@@ -521,9 +521,26 @@ async def index_task(sink: Sink, stop: asyncio.Event,
 
 async def book_task(sink: Sink, stop: asyncio.Event,
                     known: Dict[str, Dict[str, Any]],
-                    books: Dict[str, Book]) -> None:
-    """Raw depth/trade/snapshot streams, preserved, and the local book."""
+                    books: Dict[str, Book],
+                    subscribe_lead_s: Optional[float] = None) -> None:
+    """Raw depth/trade/snapshot streams, preserved, and the local book.
+
+    `subscribe_lead_s` is how long BEFORE expiry a market's streams are opened.
+    It defaults to this module's `SUBSCRIBE_LEAD_S`, which is sized for the
+    300-second BTC5m window. A caller recording a LONGER series MUST pass its
+    own lead: a 420-second lead on a 900-second window leaves the first 480
+    seconds of every window unrecorded, and a fill study run on such a tape
+    silently describes only the late window. Audited 2026-10-11; see
+    `analysis/l5/btc15m_execution_audit/REPORT.md`.
+
+    Every SUBSCRIBE and UNSUBSCRIBE row carries the lead in force and the
+    per-market time-to-expiry at the moment the frame went out, so the
+    coverage a tape actually achieved is readable from the tape itself rather
+    than inferred from a constant.
+    """
     import websockets
+    lead_s = float(SUBSCRIBE_LEAD_S if subscribe_lead_s is None
+                   else subscribe_lead_s)
     backoff = 1.0
     while not stop.is_set():
         try:
@@ -533,13 +550,15 @@ async def book_task(sink: Sink, stop: asyncio.Event,
                                           ssl=ssl_ctx(), open_timeout=15,
                                           ping_interval=15, ping_timeout=10,
                                           max_queue=20000) as ws:
-                sink.write({"t_ns": now_ns(), "kind": "book_open"})
+                sink.write({"t_ns": now_ns(), "kind": "book_open",
+                            "subscribe_lead_s": lead_s,
+                            "retain_after_s": RETAIN_AFTER_S})
                 backoff = 1.0
                 while not stop.is_set() and time.monotonic() < deadline:
                     tnow = time.time()
                     add = [s for s, m in list(known.items())
                            if s not in subscribed
-                           and (m["expiry_t"] - SUBSCRIBE_LEAD_S) <= tnow
+                           and (m["expiry_t"] - lead_s) <= tnow
                            <= (m["expiry_t"] + RETAIN_AFTER_S)]
                     drop = [s for s in list(subscribed)
                             if tnow > known.get(s, {}).get("expiry_t", 0)
@@ -564,7 +583,13 @@ async def book_task(sink: Sink, stop: asyncio.Event,
                                 subscribed.discard(s)
                         sink.write({"t_ns": now_ns(),
                                     "kind": method.lower(),
-                                    "markets": group})
+                                    "markets": group,
+                                    "subscribe_lead_s": lead_s,
+                                    "tte_s": {
+                                        s2: round(
+                                            known.get(s2, {}).get(
+                                                "expiry_t", 0.0) - tnow, 3)
+                                        for s2 in group}})
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     except asyncio.TimeoutError:

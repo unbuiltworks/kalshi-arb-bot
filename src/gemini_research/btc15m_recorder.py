@@ -88,6 +88,31 @@ from src.gemini_research.btc5m_recorder import (
 LABEL = "GEMINI_BTC15M_TWO_SIDED_RESEARCH_RECORDER_V1"
 SERIES_REGEX_DEFAULT = r"^BTC15M\d{10}$"
 PAIR_TICK_S = 1.0
+
+#: WINDOW LENGTH of this series, seconds. A BTC15m contract is 900 s long.
+WINDOW_S = 900.0
+
+#: HOW LONG BEFORE EXPIRY THIS RECORDER OPENS A MARKET'S STREAMS.
+#:
+#: This module used to inherit `btc5m_recorder.SUBSCRIBE_LEAD_S = 420.0`, a
+#: value sized for a 300-second window. On a 900-second window that opened the
+#: streams at TTE 420 and left TTE 900 -> 420 unrecorded. The 2026-10-06 tape
+#: proves it: across 15,149 book events and 51 venue prints, the maximum
+#: observed TTE was 419.9 s and NOTHING existed above the wall, so 58% of the
+#: continuous-inventory policy's quoting band [120, 840] was absent -- and the
+#: only two-sided maker completion this programme has obtained came from
+#: windows entered at TTE 865-879, inside the gap.
+#:
+#: 960 s is the window plus a 60-second margin, so a market's streams are open
+#: before its window begins. See
+#: `analysis/l5/btc15m_execution_audit/REPORT.md`.
+SUBSCRIBE_LEAD_S = 960.0
+
+#: A SEGMENT MUST OBSERVE A STREAMED ROW AT OR ABOVE THIS TTE OR IT FAILS.
+#: Set to the top of the policy's quoting band. The validator turns this into
+#: a REQUIRED check, so a lead regression fails the Stage 1 gate instead of
+#: producing a confident fill statistic over the late window only.
+COVERAGE_MIN_TTE_S = 840.0
 #: modules the job genuinely needs at runtime; a missing one must fail closed
 #: rather than silently record nothing (see the dotenv lesson above).
 PREFLIGHT_MODULES = ("httpx", "websockets", "src.gemini_research.btc5m_recorder",
@@ -326,6 +351,14 @@ REQUIRED = {
                                    "availableAt, not the null first listing",
     "down_instrument_probed": "a down_probe row: the venue was asked whether "
                               "a separate -DOWN instrument exists",
+    "subscribe_lead_verified": "a SUBSCRIBE row whose recorded per-market "
+                               "tte_s reaches COVERAGE_MIN_TTE_S -- the lead "
+                               "actually in force, read off the tape, not "
+                               "assumed from a constant",
+    "early_window_streamed": "a STREAMED row (p_snapshot / p_depth / "
+                             "p_trade) at or above COVERAGE_MIN_TTE_S -- "
+                             "proof the opening portion of a window was "
+                             "received, not merely subscribed to",
 }
 
 
@@ -337,6 +370,14 @@ def validate(path: Path) -> Dict[str, Any]:
     spreads: List[float] = []
     examples: Dict[str, Any] = {}
     probe_replies = 0
+    #: COVERAGE. Two independent readings, both off the tape:
+    #:   subscribe rows  -- the lead the recorder actually applied
+    #:   streamed rows   -- the earliest window moment data was received for
+    expiry_t: Dict[str, float] = {}
+    max_sub_tte: Optional[float] = None
+    leads: Set[float] = set()
+    stream_max_tte: Dict[str, float] = {}
+    deferred: List[Dict[str, Any]] = []
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             try:
@@ -345,6 +386,30 @@ def validate(path: Path) -> Dict[str, Any]:
                 continue
             k = str(r.get("kind"))
             kinds[k] = kinds.get(k, 0) + 1
+            if k == "subscribe":
+                if r.get("subscribe_lead_s") is not None:
+                    leads.add(float(r["subscribe_lead_s"]))
+                for _m, _t in (r.get("tte_s") or {}).items():
+                    try:
+                        _tf = float(_t)
+                    except (TypeError, ValueError):
+                        continue
+                    if max_sub_tte is None or _tf > max_sub_tte:
+                        max_sub_tte = _tf
+                    examples.setdefault("subscribe_tte", {
+                        "market": _m, "tte_s": _tf,
+                        "subscribe_lead_s": r.get("subscribe_lead_s")})
+            elif k in ("p_snapshot", "p_depth", "p_trade"):
+                #: expiry_t is learned from pair_snapshot rows, which may
+                #: arrive after the first streamed row, so streamed rows are
+                #: resolved in a second pass rather than dropped.
+                deferred.append({"market": str(r.get("market")),
+                                 "t": (r.get("t_ns") or 0) / 1e9})
+            if k == "pair_snapshot" and r.get("expiry_t") is not None:
+                try:
+                    expiry_t[str(r.get("market"))] = float(r["expiry_t"])
+                except (TypeError, ValueError):
+                    pass
             if k in ("window", "window_poll"):
                 if str(r.get("duration") or "").upper() == "BTC15M":
                     got["btc15m_window_seen"] = True
@@ -393,10 +458,53 @@ def validate(path: Path) -> Dict[str, Any]:
                 if isinstance(s, (int, float)):
                     got["single_leg_spread_present"] = True
                     spreads.append(float(s))
+    for d in deferred:
+        E = expiry_t.get(d["market"])
+        if E is None or not d["t"]:
+            continue
+        tte = E - d["t"]
+        if tte > stream_max_tte.get(d["market"], float("-inf")):
+            stream_max_tte[d["market"]] = tte
+    max_stream_tte = max(stream_max_tte.values()) if stream_max_tte else None
+
+    got["subscribe_lead_verified"] = (max_sub_tte is not None
+                                      and max_sub_tte >= COVERAGE_MIN_TTE_S)
+    got["early_window_streamed"] = (max_stream_tte is not None
+                                    and max_stream_tte >= COVERAGE_MIN_TTE_S)
+
+    band_lo, band_hi = 120.0, COVERAGE_MIN_TTE_S
+    observed_hi = (min(max_stream_tte, band_hi)
+                   if max_stream_tte is not None else band_lo)
+    band_fraction = round(max(0.0, observed_hi - band_lo)
+                          / (band_hi - band_lo), 4)
+    coverage = {
+        "window_s": WINDOW_S,
+        "subscribe_lead_s_configured": SUBSCRIBE_LEAD_S,
+        "subscribe_lead_s_observed_on_tape": sorted(leads) or None,
+        "coverage_min_tte_s": COVERAGE_MIN_TTE_S,
+        "max_subscribe_tte_s": (None if max_sub_tte is None
+                                else round(max_sub_tte, 1)),
+        "max_streamed_tte_s": (None if max_stream_tte is None
+                               else round(max_stream_tte, 1)),
+        "per_market_max_streamed_tte_s": {
+            m: round(v, 1) for m, v in sorted(stream_max_tte.items())},
+        "markets_streamed_from_above_min_tte": sum(
+            1 for v in stream_max_tte.values() if v >= COVERAGE_MIN_TTE_S),
+        "markets_streamed": len(stream_max_tte),
+        "policy_band_tte": [band_lo, band_hi],
+        "policy_band_fraction_observed": band_fraction,
+        "reading": ("A segment that starts mid-window legitimately shows a "
+                    "low max TTE for the market already in progress, so the "
+                    "gate asks for AT LEAST ONE market streamed from above "
+                    "coverage_min_tte_s. per_market_max_streamed_tte_s is "
+                    "published so a partially covered window can be excluded "
+                    "downstream instead of silently averaged in."),
+    }
     spreads.sort()
     return {
         "path": str(path), "rows": sum(kinds.values()), "kinds": kinds,
         "checks": got,
+        "coverage": coverage,
         "missing": sorted(k for k, v in got.items() if not v),
         "pass": all(got.values()),
         "requirements": REQUIRED,
@@ -442,7 +550,8 @@ async def run_segment(args, seg: int) -> Dict[str, Any]:
     tasks = [asyncio.create_task(meta_task(sink, stop, known, series_re)),
              asyncio.create_task(settlement_task(sink, stop, series_re)),
              asyncio.create_task(index_task(sink, stop, known, latest)),
-             asyncio.create_task(book_task(sink, stop, known, books)),
+             asyncio.create_task(book_task(sink, stop, known, books,
+                                           subscribe_lead_s=SUBSCRIBE_LEAD_S)),
              asyncio.create_task(pair_task(sink, stop, known, books)),
              asyncio.create_task(strike_task(sink, stop, known)),
              asyncio.create_task(down_probe_task(sink, stop, known))]
