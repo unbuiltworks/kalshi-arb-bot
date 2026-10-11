@@ -1,0 +1,93 @@
+The one-hunk change to the shared engine file, for an owner to apply.
+
+NOT APPLIED BY ME. `src/pmus_spring_l5_session.py` is a shared, money-moving
+file; the permission classifier blocked my edit to it and the standing
+instruction is not to bypass that. The predicate itself and its tests are in
+`src/pmus_acquisition_rest.py` and `tests/test_pmus_acquisition_rest.py`, so
+this hunk adds a call, not logic.
+
+TARGET: feature/l5-transfer-backtest @ b67f267b,
+        src/pmus_spring_l5_session.py, line 2875, inside the nested
+        `check()` closure of `_still_wanted`.
+
+The anchor line is unique in the file. Everything above it -- the
+`would_cross` guard, the `entry_ok` and band gates for open/extend, the
+observable-book tracking -- is untouched and still runs first, so the change
+cannot make a quote aggressive or admit one outside the band.
+
+--- a/src/pmus_spring_l5_session.py
++++ b/src/pmus_spring_l5_session.py
+@@
+                 if px_ >= D(str(opp_ask)):
+                     return f"would_cross:{opp_ask}"
+                 if relation_ in requote_relations() and touch != px_:
++                    # L5-STYLE BID-RESTING: an acquisition quote that is
++                    # still at or BEHIND the bid, within the configured
++                    # tolerance, keeps its queue position instead of being
++                    # cancelled and reposted. Default OFF; see
++                    # src/pmus_acquisition_rest.py for the measured
++                    # thresholds and the venue tick difference. COMPLETE is
++                    # not an acquisition relation and still falls through to
++                    # PR #188's own suppression below.
++                    if _acq_rest.keep_resting(relation_, px_, touch,
++                                              spec["tick"]):
++                        track["requotes_suppressed"] = int(
++                            track.get("requotes_suppressed") or 0) + 1
++                        return None
+                     # A RE-QUOTE THAT REPOSTS THE SAME PRICE IS PURE LOSS.
+
+and one import beside the module's existing `from src import ...` lines:
+
++from src import pmus_acquisition_rest as _acq_rest
+
+
+WHY THE CALL SITE IS HERE AND NOT EARLIER
+-----------------------------------------
+Placing it after `would_cross` is deliberate. A quote that would breach
+post-only must still be cancelled regardless of how far behind the bid it
+sits, and `would_cross` is the check that decides that. Placing the new call
+before it would let the tolerance keep a crossing quote alive.
+
+Placing it inside the `touch != px_` branch rather than replacing that branch
+is also deliberate: when the quote IS at the touch the branch never fires, so
+there is nothing to decide, and leaving the condition alone keeps the diff to
+an insertion.
+
+WHAT STAYS EXACTLY AS IT IS
+---------------------------
+  q1.POLL_S = 1.0                 the one-second resting poll
+  q1.cancel_exact(t, oid)         cancellation by exact order id
+  fl.CANCEL_SETTLE_S = 1.0        the unconfirmed-cancel re-read, the
+                                  larger-cumulative-wins rule and the
+                                  filled_in_cancel_race / unconfirmed_cancel
+                                  end reasons
+  fill ledger                     order-keyed cumulative deltas, backwards
+                                  cumulative fails closed, an order stays
+                                  OPEN until the venue says terminal
+  spring_state_key                inventory-priority repricing
+                                  (l5_action_changed)
+  entry_ok / SPRING_BAND          price-region admission
+  admits() / $0.05                the per-market cumulative notional cap
+  MAX_RESIDUAL_UNITS = 3          residual bound
+  effective pair cap 0.98         fee-safe completion discipline
+  PR #188                         COMPLETE identical-repost suppression
+
+TO ARM, AFTER REVIEW AND ONLY UNDER A SCOPED AUTHORIZATION
+----------------------------------------------------------
+  PMUS_SPRING_REST_AT_OR_BEHIND_TOUCH=1
+  PMUS_SPRING_REST_BEHIND_TICKS=4        # $0.0100 at the PMUS 0.0025 tick
+
+Arming the flag without the ticks variable enables only the at-or-behind
+rule with ZERO tolerance, which is a no-op against today's behaviour. That is
+intentional: a half-configured flag must not widen anything.
+
+VERIFICATION NOT YET DONE, AND WHY
+----------------------------------
+`tests/test_pmus_acquisition_rest.py` is written but UNRUN: the Bash tool was
+blocked for the remainder of that session by a safety check on earlier
+conversation content, so I could neither run pytest nor commit. Before this
+hunk is applied, run:
+
+  python3 -m pytest tests/test_pmus_acquisition_rest.py -q
+  python3 -m pytest tests/ -q          # expect PR #188's byte-identical
+                                       # failure list, zero new failures
