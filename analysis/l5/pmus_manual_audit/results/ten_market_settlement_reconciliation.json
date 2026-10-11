@@ -1,0 +1,56 @@
+{
+  "label": "TEN_MARKET_SETTLEMENT_IMPLIED_NET__VENUE_POSITION_RECORD",
+  "status": "SETTLEMENT-IMPLIED, NOT REALIZED",
+  "why_not_realized": "The venue's POSITION_RESOLUTION rows carry its own realized P&L per market, but cashValue is '0' on every row and tradeId is EMPTY. No account cashflow or ledger credit has been attributed, so this is settlement-implied. It is NOT labelled realized.",
+  "evidence_source": {
+    "activity_walk": "scripts/pmus_manual_order_audit.py, authenticated read-only, complete=false => LOWER BOUND",
+    "position_resolution_rows_captured": 155,
+    "position_records_exist_only_on_resolution_rows": true,
+    "fees_field_on_every_position_row": null,
+    "fees_not_double_counted_because": "fees is null in every beforePosition/afterPosition payload, so the venue realized figures are PRE-FEE and the credited fee/rebate line is additive, not a second count."
+  },
+  "realized_convention_verified": "afterPosition.realized == beforePosition.realized + (residual payout - residual cost). Checked on 2026-10-08-1215z: 0 + (2.60 - 1.2740) = +1.3260, matches the venue exactly.",
+  "independent_cross_check": "On 2026-09-29-1115z the venue's beforePosition.realized is +1.3000, which equals the matched margin my FIFO reconstruction produced for that market independently.",
+  "group_A_venue_recorded": {
+    "note": "Figures are the venue's own, not my reconstruction. realized_total is cumulative per market, pre-fee.",
+    "markets": [
+      {"slug": "cpc-btc-updown-15m-2026-09-27-1645z", "yes_settle": 1, "matched_margin_before": "0.0606", "residual_side": "NO", "residual_qty": "1.7500", "residual_cost": "0.5230", "residual_outcome": "LOST", "realized_total": "-0.4624", "resolution_update_time": "2026-09-27T17:00:14.482548497Z", "resolution_side": "POSITION_RESOLUTION_SIDE_LONG"},
+      {"slug": "cpc-btc-updown-15m-2026-09-29-0045z", "yes_settle": 0, "matched_margin_before": "0.0000", "residual_side": "YES", "residual_qty": "10.0000", "residual_cost": "2.6000", "residual_outcome": "LOST", "realized_total": "-2.6000", "resolution_update_time": "2026-09-29T01:00:17.418808834Z", "resolution_side": "POSITION_RESOLUTION_SIDE_SHORT"},
+      {"slug": "cpc-btc-updown-15m-2026-09-29-1115z", "yes_settle": 1, "matched_margin_before": "1.3000", "residual_side": "NO", "residual_qty": "20.0000", "residual_cost": "9.6000", "residual_outcome": "LOST", "realized_total": "-8.3000", "resolution_update_time": "2026-09-29T11:30:17.432250623Z", "resolution_side": "POSITION_RESOLUTION_SIDE_LONG"},
+      {"slug": "cpc-btc-updown-15m-2026-10-07-0200z", "yes_settle": 0, "matched_margin_before": "0.0000", "residual_side": "NO", "residual_qty": "0.0100", "residual_cost": "0.0067", "residual_outcome": "WON", "realized_total": "0.0033", "resolution_update_time": "2026-10-07T02:18:06.672693279Z", "resolution_side": "POSITION_RESOLUTION_SIDE_SHORT"},
+      {"slug": "cpc-btc-updown-15m-2026-10-08-1215z", "yes_settle": 1, "matched_margin_before": "0.0000", "residual_side": "YES", "residual_qty": "2.6000", "residual_cost": "1.2740", "residual_outcome": "WON", "realized_total": "1.3260", "resolution_update_time": "2026-10-08T12:30:14.958878983Z", "resolution_side": "POSITION_RESOLUTION_SIDE_LONG"},
+      {"slug": "cpc-btc-updown-15m-2026-10-10-1345z", "yes_settle": 1, "matched_margin_before": "0.0000", "residual_side": "NO", "residual_qty": "0.1300", "residual_cost": "0.0455", "residual_outcome": "LOST", "realized_total": "-0.0455", "resolution_update_time": "2026-10-10T14:00:15.101975936Z", "resolution_side": "POSITION_RESOLUTION_SIDE_LONG"}
+    ],
+    "subtotal_pre_fee": "-10.0786"
+  },
+  "group_B_no_resolution_row": {
+    "note": "No POSITION_RESOLUTION row was captured for these four, which is consistent with a FLAT position at expiry and therefore zero settlement cashflow. Because the walk is a LOWER BOUND, absence is weaker evidence than presence; these four remain my FIFO reconstruction, not a venue figure.",
+    "markets": [
+      {"slug": "cpc-btc-updown-15m-2026-09-29-1815z", "matched_qty": "40.00", "matched_margin": "3.5000", "residual": "0", "source": "RECONSTRUCTED"},
+      {"slug": "cpc-btc-updown-15m-2026-09-30-1915z", "matched_qty": "1.00",  "matched_margin": "0.0800", "residual": "0", "source": "RECONSTRUCTED"},
+      {"slug": "cpc-btc-updown-15m-2026-10-08-2200z", "matched_qty": "0.13",  "matched_margin": "0.0052", "residual": "0", "source": "RECONSTRUCTED"},
+      {"slug": "cpc-btc-updown-15m-2026-10-09-0000z", "matched_qty": "0.26",  "matched_margin": "0.0000", "residual": "0", "source": "RECONSTRUCTED"}
+    ],
+    "subtotal": "3.5852"
+  },
+  "final": {
+    "trading_and_settlement_pre_fee": "-6.4934",
+    "credited_fees_and_rebates_net": "0.46",
+    "ten_market_settlement_implied_net": "-6.0334",
+    "double_counting_guard": "Matched margin is NOT added separately to the Group A markets: the venue's realized_total already contains it (verified on 1115z and 1645z). Only Group B contributes a standalone matched line."
+  },
+  "corrections_to_the_prior_minus_3_6168_subtotal": [
+    {"market": "cpc-btc-updown-15m-2026-09-29-0045z", "change": "-2.6000", "reason": "A residual YES 10.00 at cost 2.6000 was OMITTED entirely. YES settled 0, so it was a total loss."},
+    {"market": "cpc-btc-updown-15m-2026-09-29-1115z", "change": "+0.3600", "reason": "Residual cost basis is 9.6000 per the venue, not 9.96."},
+    {"market": "cpc-btc-updown-15m-2026-09-27-1645z", "change": "-0.1344", "reason": "Residual is NO 1.7500 at cost 0.5230, not NO 1.00 at 0.328; the market also carried +0.0606 matched margin."},
+    {"market": "cpc-btc-updown-15m-2026-10-07-0200z", "change": "+0.0033", "reason": "Residual NO 0.01 won; now sourced."},
+    {"market": "cpc-btc-updown-15m-2026-10-10-1345z", "change": "-0.0455", "reason": "Residual NO 0.13 lost; cost basis now sourced."},
+    {"net": "-2.4166", "from": "-3.6168", "to": "-6.0334"}
+  ],
+  "what_this_does_not_establish": [
+    "Realized profit. No cashflow is attributed; cashValue is '0' and tradeId is empty on every resolution row.",
+    "Completeness. The activity walk ran with complete=false and is a LOWER BOUND, so a further market or resolution row may exist.",
+    "Any claim about the engine's expectancy. Ten markets at this size is a sample, not a measured edge."
+  ],
+  "labels": "SETTLEMENT-IMPLIED. Not realized, not shadow, not replay. No orders placed, nothing armed, no configuration changed."
+}
