@@ -8,7 +8,7 @@
         "limit": 100,
         "withCashOuts": true
       },
-      "positions": 115,
+      "positions": 121,
       "status": 200
     },
     {
@@ -17,10 +17,12 @@
         "limit": 100,
         "withCashOuts": "true"
       },
-      "positions": 115,
+      "positions": 121,
       "status": 200
     }
   ],
+  "cohort": "canary",
+  "cohort_ledger": "analysis/gemini/btc5m_canary/cohort.jsonl",
   "cohort_state": {
     "attempts_consumed": 5,
     "attempts_remaining": 0,
@@ -166,8 +168,8 @@
         "utc": "2026-10-05T15:45:15.513283+00:00"
       },
       "DESCRIPTIVE": {
-        "D_entry_reference_minus_strike": null,
-        "D_entry_unavailable_why": "the nearest published reference is 5704s old; a stale value is NOT the reference at entry",
+        "D_entry_reference_minus_strike": "2.551",
+        "D_entry_unavailable_why": null,
         "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
         "counterfactual_down": {
           "down_entry_price": "0.5",
@@ -179,67 +181,67 @@
         "down_price_contemporaneous": "0.5",
         "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
         "reference_at_entry": {
-          "age_s": 5703.513,
+          "age_s": 0.513,
           "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
-          "stale": true,
-          "value": "86621.88566666667"
+          "stale": false,
+          "value": "85312.411"
         },
         "reference_trajectory": {
           "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
           "points": [
             {
-              "age_s": 5703.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 0,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85312.411"
             },
             {
-              "age_s": 5718.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 15,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85320.61166666666"
             },
             {
-              "age_s": 5733.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 30,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85328.17016666666"
             },
             {
-              "age_s": 5763.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 60,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85334.13683333334"
             },
             {
-              "age_s": 5793.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 90,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85349.84"
             },
             {
-              "age_s": 5823.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 120,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85367.16916666667"
             },
             {
-              "age_s": 5883.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 180,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85391.978"
             },
             {
-              "age_s": 5943.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 240,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85368.84733333334"
             },
             {
-              "age_s": 5988.513,
+              "age_s": 0.513,
               "offset_s_from_entry": 285,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85309.41433333333"
             }
           ],
           "settlementValue": "85309.41433333333"
@@ -254,6 +256,9 @@
         "acquisition_principal_usd": "0.72",
         "attributed": true,
         "attribution_route": "ORDER_ID",
+        "fill_record_readable": true,
+        "fill_record_source": "preserved run artifact",
+        "fill_record_why": null,
         "foreign": [],
         "price": "0.72",
         "quantity": "1",
@@ -268,7 +273,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "0",
+        "our_outcome_leg": null,
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": null,
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -287,7 +294,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85309.86",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": null
       },
       "SUBMITTED": {
         "committed_usd": "0.7341",
@@ -419,8 +427,8 @@
         "utc": "2026-10-05T15:50:16.580080+00:00"
       },
       "DESCRIPTIVE": {
-        "D_entry_reference_minus_strike": null,
-        "D_entry_unavailable_why": "the nearest published reference is 6005s old; a stale value is NOT the reference at entry",
+        "D_entry_reference_minus_strike": "-3.855",
+        "D_entry_unavailable_why": null,
         "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
         "counterfactual_down": {
           "down_entry_price": "0.63",
@@ -432,67 +440,67 @@
         "down_price_contemporaneous": "0.63",
         "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
         "reference_at_entry": {
-          "age_s": 6004.58,
+          "age_s": 0.58,
           "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
-          "stale": true,
-          "value": "86621.88566666667"
+          "stale": false,
+          "value": "85305.555"
         },
         "reference_trajectory": {
           "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
           "points": [
             {
-              "age_s": 6004.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 0,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85305.555"
             },
             {
-              "age_s": 6019.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 15,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85298.57933333333"
             },
             {
-              "age_s": 6034.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 30,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85298.22783333334"
             },
             {
-              "age_s": 6064.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 60,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85282.425"
             },
             {
-              "age_s": 6094.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 90,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85269.58983333333"
             },
             {
-              "age_s": 6124.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 120,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85264.807"
             },
             {
-              "age_s": 6184.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 180,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85281.1295"
             },
             {
-              "age_s": 6244.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 240,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85264.551"
             },
             {
-              "age_s": 6289.58,
+              "age_s": 0.58,
               "offset_s_from_entry": 285,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85290.67783333334"
             }
           ],
           "settlementValue": "85289.7355"
@@ -507,6 +515,9 @@
         "acquisition_principal_usd": "0.67",
         "attributed": true,
         "attribution_route": "ORDER_ID",
+        "fill_record_readable": true,
+        "fill_record_source": "preserved run artifact",
+        "fill_record_why": null,
         "foreign": [],
         "price": "0.67",
         "quantity": "1",
@@ -521,7 +532,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "0",
+        "our_outcome_leg": null,
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": null,
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -540,7 +553,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85309.41",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": null
       },
       "SUBMITTED": {
         "committed_usd": "0.6855",
@@ -672,8 +686,8 @@
         "utc": "2026-10-05T15:55:15.803119+00:00"
       },
       "DESCRIPTIVE": {
-        "D_entry_reference_minus_strike": null,
-        "D_entry_unavailable_why": "the nearest published reference is 6304s old; a stale value is NOT the reference at entry",
+        "D_entry_reference_minus_strike": "0.908",
+        "D_entry_unavailable_why": null,
         "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
         "counterfactual_down": {
           "down_entry_price": "0.68",
@@ -685,67 +699,67 @@
         "down_price_contemporaneous": "0.68",
         "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
         "reference_at_entry": {
-          "age_s": 6303.803,
+          "age_s": 0.803,
           "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
-          "stale": true,
-          "value": "86621.88566666667"
+          "stale": false,
+          "value": "85290.648"
         },
         "reference_trajectory": {
           "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
           "points": [
             {
-              "age_s": 6303.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 0,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85290.648"
             },
             {
-              "age_s": 6318.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 15,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85286.21233333333"
             },
             {
-              "age_s": 6333.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 30,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85272.64383333334"
             },
             {
-              "age_s": 6363.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 60,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85247.73433333333"
             },
             {
-              "age_s": 6393.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 90,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85230.19883333333"
             },
             {
-              "age_s": 6423.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 120,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85221.34683333333"
             },
             {
-              "age_s": 6483.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 180,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85221.11366666667"
             },
             {
-              "age_s": 6543.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 240,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85216.59116666667"
             },
             {
-              "age_s": 6588.803,
+              "age_s": 0.803,
               "offset_s_from_entry": 285,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85246.313"
             }
           ],
           "settlementValue": "85246.313"
@@ -760,6 +774,9 @@
         "acquisition_principal_usd": "0.6",
         "attributed": true,
         "attribution_route": "ORDER_ID",
+        "fill_record_readable": true,
+        "fill_record_source": "preserved run artifact",
+        "fill_record_why": null,
         "foreign": [],
         "price": "0.6",
         "quantity": "1",
@@ -774,7 +791,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "0",
+        "our_outcome_leg": null,
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": null,
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -793,7 +812,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85289.74",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": null
       },
       "SUBMITTED": {
         "committed_usd": "0.6168",
@@ -925,8 +945,8 @@
         "utc": "2026-10-05T16:00:15.823868+00:00"
       },
       "DESCRIPTIVE": {
-        "D_entry_reference_minus_strike": null,
-        "D_entry_unavailable_why": "the nearest published reference is 6604s old; a stale value is NOT the reference at entry",
+        "D_entry_reference_minus_strike": "5.74533333334",
+        "D_entry_unavailable_why": null,
         "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
         "counterfactual_down": {
           "down_entry_price": "0.63",
@@ -938,67 +958,67 @@
         "down_price_contemporaneous": "0.63",
         "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
         "reference_at_entry": {
-          "age_s": 6603.824,
+          "age_s": 0.824,
           "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
-          "stale": true,
-          "value": "86621.88566666667"
+          "stale": false,
+          "value": "85252.05533333334"
         },
         "reference_trajectory": {
           "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
           "points": [
             {
-              "age_s": 6603.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 0,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85252.05533333334"
             },
             {
-              "age_s": 6618.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 15,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85257.35666666667"
             },
             {
-              "age_s": 6633.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 30,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85259.4825"
             },
             {
-              "age_s": 6663.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 60,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85255.13283333334"
             },
             {
-              "age_s": 6693.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 90,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85233.17516666667"
             },
             {
-              "age_s": 6723.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 120,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85226.75566666666"
             },
             {
-              "age_s": 6783.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 180,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85217.382"
             },
             {
-              "age_s": 6843.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 240,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85202.50883333334"
             },
             {
-              "age_s": 6888.824,
+              "age_s": 0.824,
               "offset_s_from_entry": 285,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85200.1825"
             }
           ],
           "settlementValue": "85200.1825"
@@ -1013,6 +1033,9 @@
         "acquisition_principal_usd": "0.64",
         "attributed": true,
         "attribution_route": "ORDER_ID",
+        "fill_record_readable": true,
+        "fill_record_source": "preserved run artifact",
+        "fill_record_why": null,
         "foreign": [],
         "price": "0.64",
         "quantity": "1",
@@ -1027,7 +1050,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "0",
+        "our_outcome_leg": null,
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": null,
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -1046,7 +1071,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85246.31",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": null
       },
       "SUBMITTED": {
         "committed_usd": "0.6561",
@@ -1178,8 +1204,8 @@
         "utc": "2026-10-05T16:05:15.912119+00:00"
       },
       "DESCRIPTIVE": {
-        "D_entry_reference_minus_strike": null,
-        "D_entry_unavailable_why": "the nearest published reference is 6904s old; a stale value is NOT the reference at entry",
+        "D_entry_reference_minus_strike": "6.53816666667",
+        "D_entry_unavailable_why": null,
         "D_label": "an observed difference, published reference minus strike. NOT Z: the LRRR statistic's mechanics are not established.",
         "counterfactual_down": {
           "down_entry_price": "0.55",
@@ -1191,67 +1217,67 @@
         "down_price_contemporaneous": "0.55",
         "label": "DESCRIPTIVE ONLY, on five probe-contaminated windows. It selects no strategy and no threshold.",
         "reference_at_entry": {
-          "age_s": 6903.912,
+          "age_s": 0.912,
           "note": "the last value published AT OR BEFORE the instant; a later value would be future information",
-          "stale": true,
-          "value": "86621.88566666667"
+          "stale": false,
+          "value": "85206.71816666667"
         },
         "reference_trajectory": {
           "label": "each point is the last value published AT OR BEFORE that instant; nothing is read forward",
           "points": [
             {
-              "age_s": 6903.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 0,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85206.71816666667"
             },
             {
-              "age_s": 6918.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 15,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85209.55716666667"
             },
             {
-              "age_s": 6933.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 30,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85221.6315"
             },
             {
-              "age_s": 6963.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 60,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85237.95266666666"
             },
             {
-              "age_s": 6993.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 90,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85212.2475"
             },
             {
-              "age_s": 7023.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 120,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85207.63283333334"
             },
             {
-              "age_s": 7083.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 180,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85238.0765"
             },
             {
-              "age_s": 7143.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 240,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85265.14433333333"
             },
             {
-              "age_s": 7188.912,
+              "age_s": 0.912,
               "offset_s_from_entry": 285,
-              "stale": true,
-              "value": "86621.88566666667"
+              "stale": false,
+              "value": "85280.8975"
             }
           ],
           "settlementValue": "85280.8975"
@@ -1266,6 +1292,9 @@
         "acquisition_principal_usd": "0.74",
         "attributed": true,
         "attribution_route": "ORDER_ID",
+        "fill_record_readable": true,
+        "fill_record_source": "preserved run artifact",
+        "fill_record_why": null,
         "foreign": [],
         "price": "0.74",
         "quantity": "1",
@@ -1280,7 +1309,9 @@
         "flapped": false,
         "label": "SETTLED is the OUTCOME leg only. It is not cash and not realized.",
         "missing_fields": [],
-        "payout_usd": "1",
+        "our_outcome_leg": null,
+        "payout_basis": "$1 per share iff the contract resolved to the outcome leg WE hold; a NO holder is paid $0 by a `yes` resolution",
+        "payout_usd": null,
         "readable": true,
         "reads": 3,
         "reads_settled": 3,
@@ -1299,7 +1330,8 @@
         },
         "strike_source": "contract.strike.value via strike_check",
         "strike_value": "85200.18",
-        "verdict": "SETTLED"
+        "verdict": "SETTLED",
+        "won": null
       },
       "SUBMITTED": {
         "committed_usd": "0.7535",
