@@ -62,7 +62,7 @@
         "confirmed": true,
         "label": "REALIZED. The venue's own settled-position cashflow record, not a mark and not an outcome.",
         "realized_net_basis": "venue payout minus venue costBasis minus the venue's own charged fee",
-        "realized_net_usd": "-0.52",
+        "realized_net_usd": null,
         "rows": [
           {
             "_key": "positions",
@@ -151,7 +151,7 @@
         ],
         "settled_at": "2026-10-05T17:30:05.554Z",
         "venue_cost_basis_usd": "0.5",
-        "venue_fee_usd": "0.02",
+        "venue_fee_usd": null,
         "venue_net_profit_usd": "-0.5",
         "venue_payout_usd": "0",
         "venue_realized_pnl_usd": "0"
@@ -254,17 +254,17 @@
         "up_was_at_entry": "UP"
       },
       "FILLED": {
-        "acquisition_principal_usd": "0.5",
+        "acquisition_principal_usd": null,
         "attributed": true,
-        "attribution_route": "ORDER_ID",
-        "fill_record_readable": true,
+        "attribution_route": null,
+        "fill_record_readable": false,
         "fill_record_source": "venue order_history + mytrades, joined on order_id",
-        "fill_record_why": null,
+        "fill_record_why": "mytrades returned 400",
         "foreign": [],
-        "price": "0.5",
+        "price": null,
         "quantity": "1",
-        "role": "taker",
-        "venue_fee_usd": "0.02"
+        "role": null,
+        "venue_fee_usd": null
       },
       "SETTLED": {
         "distinct_readings": [
