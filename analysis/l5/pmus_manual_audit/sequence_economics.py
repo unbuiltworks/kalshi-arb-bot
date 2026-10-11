@@ -132,6 +132,47 @@ def market_economics(seq: Dict[str, Any],
             "MANUAL_ORDER_INDICATOR_", "") or "UNKNOWN"
         origins[mi] = origins.get(mi, 0) + 1
 
+    # ---- FIFO PAIRING, in venue time order.
+    #
+    # Averaging the two legs and multiplying is ALLOCATION-DEPENDENT, and
+    # this programme has already withdrawn a +$62.66 matched-economics claim
+    # for exactly that reason. On the ATP market below, average pairing says
+    # one number for two pairs that were really 1.10 (a locked loss) and 0.99
+    # (a small win). Both views are reported; neither is presented alone.
+    pend = {"YES": [], "NO": []}          # [shares, own_price] queues
+    pairs: List[Dict[str, Any]] = []
+    for f in sorted(seq.get("fills") or [],
+                    key=lambda x: str(x.get("t") or "")):
+        dirn = _direction(f)
+        own = _own(f)
+        sh = _d(f.get("shares"))
+        if dirn not in ("LONG", "SHORT") or own is None or sh is None:
+            continue
+        leg = "YES" if dirn == "LONG" else "NO"
+        other = "NO" if leg == "YES" else "YES"
+        while sh > 0 and pend[other]:
+            take = min(sh, pend[other][0][0])
+            pairs.append({
+                "shares": str(take),
+                "YES_price": str(own if leg == "YES"
+                                 else pend[other][0][1]),
+                "NO_price": str(pend[other][0][1] if leg == "YES"
+                                else own),
+                "pair_cost": str(own + pend[other][0][1]),
+                "pair_margin": str(ONE - (own + pend[other][0][1])),
+                "t": f.get("t"),
+            })
+            pend[other][0][0] -= take
+            sh -= take
+            if pend[other][0][0] == 0:
+                pend[other].pop(0)
+        if sh > 0:
+            pend[leg].append([sh, own])
+
+    fifo_matched = sum((D(p2["shares"]) for p2 in pairs), D("0"))
+    fifo_margin = sum((D(p2["shares"]) * D(p2["pair_margin"])
+                       for p2 in pairs), D("0"))
+
     matched = min(qty["YES"], qty["NO"])
     avg = {k: (cost[k] / qty[k] if qty[k] else D("0")) for k in qty}
     paired_cost = matched * (avg["YES"] + avg["NO"])
@@ -156,6 +197,15 @@ def market_economics(seq: Dict[str, Any],
         "YES_avg_own_price": str(avg["YES"]),
         "NO_avg_own_price": str(avg["NO"]),
         "matched_pairs": str(matched),
+        "fifo_pairs": pairs,
+        "fifo_matched_shares": str(fifo_matched),
+        "fifo_paired_margin": str(fifo_margin),
+        "fifo_pair_costs": [p2["pair_cost"] for p2 in pairs],
+        "pairing_note": ("fifo_* pairs the legs in VENUE TIME ORDER; the "
+                         "matched_*/paired_acquisition_cost lines use leg "
+                         "averages. Averaging is allocation-dependent -- a "
+                         "+$62.66 matched claim was withdrawn over it -- so "
+                         "both are reported and neither stands alone."),
         "paired_acquisition_cost": str(paired_cost),
         "paired_cost_per_pair": (str(paired_cost / matched) if matched
                                  else None),
