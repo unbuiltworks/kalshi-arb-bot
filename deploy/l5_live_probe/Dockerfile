@@ -36,6 +36,12 @@ COPY src/l5_preview_gate.py src/l5_preview_gate.py
 # the proven execution transport: preflight, arm, preview-then-submit, cancel
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
 # inventory, exposure reservation, safety overlay, venue reconciliation
+# l5_phantom_inventory_guard: the provenance/refusal helpers that
+# InventoryStore.reconcile_from_venue now imports at module scope. Without
+# this line the image cannot import its own execution path and the service
+# never starts -- tests/test_l5_live_probe_image_closure.py is the guard
+# that says so, and it caught exactly this.
+COPY src/l5_phantom_inventory_guard.py src/l5_phantom_inventory_guard.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 # the SECOND treatment. Reads the frozen rule's output and turns the actions
 # it refused STRICT_NOT_EVALUABLE -- restable, but unprovable in replay --
