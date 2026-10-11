@@ -1,0 +1,212 @@
+{
+  "label": "BTC15M_TAPE_MEASUREMENT_VALIDITY_V1",
+  "tape_dir": "data/gemini_infoedge_15m",
+  "accounting": "public market-data audit; nothing is realized",
+  "G1_window_coverage": {
+    "policy_band_tte": [
+      120.0,
+      840.0
+    ],
+    "policy_band_seconds": 720.0,
+    "max_observed_tte_s": 419.9,
+    "book_events": 15149,
+    "book_events_above_recorder_lead": 0,
+    "prints_above_recorder_lead": 0,
+    "band_seconds_observed": 299.9,
+    "band_fraction_observed": 0.4165,
+    "unobserved_band_tte": [
+      419.9,
+      840.0
+    ],
+    "verdict": "FAIL_EARLY_WINDOW_ABSENT",
+    "reading": "Streams open at btc5m SUBSCRIBE_LEAD_S=420 s, inherited unchanged by the 15m recorder. A 900 s window's early TTE 840->420 is never recorded, so no fill, print or pair-completion statistic from this tape describes it."
+  },
+  "G2_print_capture": {
+    "captured_p_trade_rows": 51,
+    "rest_lastTradePrice_changes_in_same_streamed_intervals": 85,
+    "capture_ratio_upper_bound": 0.6,
+    "verdict": "FAIL_PRINT_TAPE_INCOMPLETE",
+    "reading": "lastTradePrice changes are a LOWER bound on trades, so a ratio below 1.0 means the print tape is missing flow and every evidenced-fill count from it is a lower bound."
+  },
+  "G3_settlement_resolvability": {
+    "tickers_seen": 106,
+    "resolved": 84,
+    "unresolved": 22,
+    "by_provenance": {
+      "VENUE_FIELD": 58,
+      "UNRESOLVED_NO_SETTLEMENT_VALUE": 2,
+      "UNRESOLVED_NO_STRIKE_NO_VALUE": 9,
+      "UNRESOLVED_NO_STRIKE": 11,
+      "DERIVED_VALUE_VS_STRIKE": 26
+    },
+    "windows_with_book_and_resolution": 26,
+    "windows_with_book": 27,
+    "verdict": "PARTIAL_SOME_WINDOWS_UNRESOLVABLE",
+    "reading": "btc15m_shadow_policy emits no settlement block when resolution_side is absent, so an unresolvable window contributes 0 to every economic total rather than failing closed."
+  },
+  "per_window": {
+    "BTC15M2610031445": {
+      "book_events": 405,
+      "prints": 0,
+      "max_tte": 419.9,
+      "min_tte": 15.5
+    },
+    "BTC15M2610060030": {
+      "book_events": 375,
+      "prints": 8,
+      "max_tte": 181.4,
+      "min_tte": -180.8
+    },
+    "BTC15M2610060045": {
+      "book_events": 553,
+      "prints": 5,
+      "max_tte": 419.0,
+      "min_tte": -117.4
+    },
+    "BTC15M2610060100": {
+      "book_events": 610,
+      "prints": 1,
+      "max_tte": 418.6,
+      "min_tte": -180.4
+    },
+    "BTC15M2610060115": {
+      "book_events": 609,
+      "prints": 0,
+      "max_tte": 418.5,
+      "min_tte": -180.0
+    },
+    "BTC15M2610060130": {
+      "book_events": 438,
+      "prints": 2,
+      "max_tte": 418.7,
+      "min_tte": -14.6
+    },
+    "BTC15M2610060145": {
+      "book_events": 602,
+      "prints": 0,
+      "max_tte": 418.9,
+      "min_tte": -180.5
+    },
+    "BTC15M2610060200": {
+      "book_events": 619,
+      "prints": 2,
+      "max_tte": 418.8,
+      "min_tte": -180.4
+    },
+    "BTC15M2610060215": {
+      "book_events": 595,
+      "prints": 1,
+      "max_tte": 418.6,
+      "min_tte": -180.5
+    },
+    "BTC15M2610060230": {
+      "book_events": 459,
+      "prints": 0,
+      "max_tte": 419.4,
+      "min_tte": -31.7
+    },
+    "BTC15M2610060245": {
+      "book_events": 607,
+      "prints": 3,
+      "max_tte": 418.9,
+      "min_tte": -180.4
+    },
+    "BTC15M2610060300": {
+      "book_events": 615,
+      "prints": 1,
+      "max_tte": 419.1,
+      "min_tte": -180.2
+    },
+    "BTC15M2610060315": {
+      "book_events": 612,
+      "prints": 8,
+      "max_tte": 418.6,
+      "min_tte": -180.4
+    },
+    "BTC15M2610060330": {
+      "book_events": 473,
+      "prints": 3,
+      "max_tte": 418.5,
+      "min_tte": -46.8
+    },
+    "BTC15M2610060345": {
+      "book_events": 602,
+      "prints": 0,
+      "max_tte": 419.1,
+      "min_tte": -180.4
+    },
+    "BTC15M2610060400": {
+      "book_events": 610,
+      "prints": 2,
+      "max_tte": 418.5,
+      "min_tte": -180.6
+    },
+    "BTC15M2610060415": {
+      "book_events": 600,
+      "prints": 0,
+      "max_tte": 418.3,
+      "min_tte": -180.8
+    },
+    "BTC15M2610060430": {
+      "book_events": 493,
+      "prints": 1,
+      "max_tte": 419.2,
+      "min_tte": -60.9
+    },
+    "BTC15M2610060445": {
+      "book_events": 606,
+      "prints": 7,
+      "max_tte": 419.0,
+      "min_tte": -180.6
+    },
+    "BTC15M2610060500": {
+      "book_events": 608,
+      "prints": 0,
+      "max_tte": 419.6,
+      "min_tte": -180.6
+    },
+    "BTC15M2610060515": {
+      "book_events": 600,
+      "prints": 0,
+      "max_tte": 418.2,
+      "min_tte": -180.2
+    },
+    "BTC15M2610060530": {
+      "book_events": 500,
+      "prints": 1,
+      "max_tte": 418.5,
+      "min_tte": -78.1
+    },
+    "BTC15M2610060545": {
+      "book_events": 614,
+      "prints": 0,
+      "max_tte": 418.6,
+      "min_tte": -180.6
+    },
+    "BTC15M2610060600": {
+      "book_events": 608,
+      "prints": 2,
+      "max_tte": 418.5,
+      "min_tte": -180.9
+    },
+    "BTC15M2610060615": {
+      "book_events": 595,
+      "prints": 0,
+      "max_tte": 418.9,
+      "min_tte": -180.4
+    },
+    "BTC15M2610060630": {
+      "book_events": 524,
+      "prints": 2,
+      "max_tte": 418.3,
+      "min_tte": -97.1
+    },
+    "BTC15M2610060645": {
+      "book_events": 617,
+      "prints": 2,
+      "max_tte": 418.6,
+      "min_tte": -180.9
+    }
+  },
+  "median_book_event_tte_s": 134.6
+}
