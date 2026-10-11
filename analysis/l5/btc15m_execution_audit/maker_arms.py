@@ -215,10 +215,18 @@ def load(tape_dir: str) -> Dict[str, Dict[str, Any]]:
                                 for p, s in asks.items()},
             })
         if timeline:
+            #: COVERAGE of THIS window, read off the tape. A window whose
+            #: first streamed observation is already below the top of the
+            #: quoting band was only partly recorded, and averaging it in
+            #: with a complete one would understate fill opportunity exactly
+            #: the way the 420 s lead did. Admission is decided per window.
+            first_tte = E - min(e["t"] for e in timeline)
             out[tk] = {"expiry": E, "timeline": timeline,
                        "resolution": res.get(tk, {}).get("resolution_side"),
                        "resolution_provenance":
-                           res.get(tk, {}).get("provenance")}
+                           res.get(tk, {}).get("provenance"),
+                       "first_observation_tte_s": round(first_tte, 1),
+                       "fully_covered": first_tte >= OPEN_TTE_HI}
     return out
 
 
@@ -425,6 +433,12 @@ def main() -> None:
     ap.add_argument("tape_dir")
     ap.add_argument("--out", default=None)
     ap.add_argument("--verify-fi-core", default=None)
+    ap.add_argument("--allow-partial-windows", action="store_true",
+                    help="also evaluate windows whose recording began BELOW "
+                         "the top of the quoting band. Off by default: a "
+                         "partly recorded window understates fill "
+                         "opportunity, which is the defect this tool exists "
+                         "to stop reporting as a result.")
     a = ap.parse_args()
     if a.verify_fi_core:
         verify_fi_core(a.verify_fi_core)
@@ -438,14 +452,31 @@ def main() -> None:
           "OPTIMISTIC is a bound and is never counted.")
     print("=" * 100)
     resolved = {tk: w for tk, w in ws.items() if w["resolution"] in ("yes", "no")}
+    full = {tk: w for tk, w in resolved.items() if w["fully_covered"]}
+    partial = {tk: w for tk, w in resolved.items() if not w["fully_covered"]}
+    admitted = resolved if a.allow_partial_windows else full
     print(f"windows with a reconstructed book: {len(ws)}  "
           f"settlement-resolved: {len(resolved)}")
+    print(f"fully covered (first observation at TTE >= {OPEN_TTE_HI:.0f}): "
+          f"{len(full)}   partially covered: {len(partial)}")
+    if partial:
+        print("  partially covered windows, first observation TTE:")
+        for tk, w in sorted(partial.items()):
+            print(f"    {tk}  {w['first_observation_tte_s']}s"
+                  + ("  [INCLUDED by --allow-partial-windows]"
+                     if a.allow_partial_windows else "  [EXCLUDED]"))
+    if not admitted:
+        print("\nNO ADMISSIBLE WINDOW. Nothing is reported: a comparison "
+              "over zero complete windows is not a result.")
+        return
+    print(f"ADMITTED for the arm comparison: {len(admitted)} "
+          "(identical opportunity set for every arm)")
     print()
 
     results: Dict[str, Dict[str, Any]] = {}
     for name, (behind, repeg, inv_aware) in ARMS.items():
         per = {}
-        for tk, w in sorted(resolved.items()):
+        for tk, w in sorted(admitted.items()):
             per[tk] = run_arm(w, behind, repeg, inv_aware)
         results[name] = per
 
@@ -505,6 +536,17 @@ def main() -> None:
         "max_pair_cost": str(MAX_PAIR_COST),
         "arms": {k: {"behind_ticks": v[0], "repeg": v[1],
                      "inventory_aware": v[2]} for k, v in ARMS.items()},
+        "coverage_admission": {
+            "windows_with_book": len(ws),
+            "settlement_resolved": len(resolved),
+            "fully_covered": len(full),
+            "partially_covered": len(partial),
+            "admitted": len(admitted),
+            "allow_partial_windows": a.allow_partial_windows,
+            "first_observation_tte_s": {
+                tk: w["first_observation_tte_s"]
+                for tk, w in sorted(resolved.items())},
+        },
         "summary": summary,
         "per_window": results,
     }
