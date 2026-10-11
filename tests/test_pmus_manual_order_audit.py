@@ -129,15 +129,33 @@ def test_maker_classification_comes_from_the_venue_not_from_price():
     assert o["resting_s"] == pytest.approx(6.848, abs=0.01)
 
 
-def test_order_ids_are_collected_from_nested_rows():
+def test_order_ids_come_from_the_embedded_executions_only():
+    """The feed embeds both sides of every trade, each with its FULL order.
+    An earlier version scanned for any id-shaped string and spent 163 of its
+    200 reads on trade ids that 404."""
     from scripts import pmus_manual_order_audit as m
 
-    ids = m._order_ids([
-        {"type": "ACTIVITY_TYPE_TRADE", "orderId": "AAA111BBB222"},
-        {"nested": {"fills": [{"makerOrderId": "CCC333DDD444"}]}},
-        {"orderId": "AAA111BBB222"},
-    ])
+    row = {"type": "ACTIVITY_TYPE_TRADE", "trade": {
+        "id": "TRADEID12345",
+        "aggressorExecution": {"aggressor": True,
+                               "order": {"id": "AAA111BBB222"}},
+        "passiveExecution": {"aggressor": False,
+                             "order": {"id": "CCC333DDD444"}}}}
+    ids = m._order_ids([row, row])          # the duplicate must not repeat
     assert ids == ["AAA111BBB222", "CCC333DDD444"]
+    assert "TRADEID12345" not in ids, "a trade id is not an order id"
+    ex = m._executions(row)
+    assert [e["role"] for e in ex] == ["aggressorExecution",
+                                       "passiveExecution"]
+    assert all(e["trade_id"] == "TRADEID12345" for e in ex)
+
+
+def test_a_non_404_probe_never_counts_as_not_ours():
+    """`/v1/order/{id}` 404s for a counterparty's order, which is the
+    ownership test. A 429 is not a statement about ownership."""
+    src = Path("scripts/pmus_manual_order_audit.py").read_text()
+    assert 'r.get("status") == 404' in src
+    assert "ownership_undetermined" in src
 
 
 def test_output_is_chunked_so_the_log_line_cap_cannot_eat_the_history():
@@ -151,7 +169,8 @@ def test_output_is_chunked_so_the_log_line_cap_cannot_eat_the_history():
     from scripts import pmus_manual_order_audit as m
 
     out = {"audit": "X",
-           "activities": [{"a": i, "pad": "x" * 200} for i in range(400)],
+           "sequences": [{"slug": "s%d" % i, "pad": "x" * 200}
+                         for i in range(400)],
            "orders": [{"id": "O%d" % i, "slug": "s"} for i in range(300)],
            "balances": {"b": 1}}
     buf = io.StringIO()
@@ -166,9 +185,9 @@ def test_output_is_chunked_so_the_log_line_cap_cannot_eat_the_history():
             if l.startswith("MA_ROW ")]
     # every row is independently parseable and self-locating
     assert all(("i" in r and "n" in r and "section" in r) for r in rows)
-    for sect, n in (("activities", 400), ("orders", 300)):
+    for sect, n in (("sequences", 400), ("orders", 300)):
         got = sum(len(r.get("items", [])) for r in rows if r["section"] == sect)
         assert got == n, (sect, got, n)
     head = _json.loads(lines[0][len("MA_HEAD "):])
-    assert head["sections"]["activities"] == 400
+    assert head["sections"]["sequences"] == 400
     assert head["row_count"] == len(rows)

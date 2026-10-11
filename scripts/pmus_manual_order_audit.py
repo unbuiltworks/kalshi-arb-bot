@@ -187,26 +187,40 @@ def walk_activities(t: Any) -> Dict[str, Any]:
                 "history and no absence may be read from it")}
 
 
+def _executions(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The one or two executions an ACTIVITY_TYPE_TRADE row embeds.
+
+    THE FEED ALREADY CARRIES THE ORDERS. Each trade row holds an
+    `aggressorExecution` and a `passiveExecution`, and each of those holds
+    the FULL order -- price, quantity, cumQuantity, state, times, commission,
+    avgPx, outcomeSide, intent and manualOrderIndicator -- plus `aggressor`
+    and `lastShares` / `lastPx` for that execution. An earlier version of
+    this script walked the feed and then issued a `/v1/order/{id}` GET for
+    every id-shaped string it could find, which spent 163 of its 200 reads
+    on trade ids that 404. None of that was ever necessary.
+    """
+    t = row.get("trade")
+    if not isinstance(t, dict):
+        return []
+    out = []
+    for key in ("aggressorExecution", "passiveExecution"):
+        ex = t.get(key)
+        if isinstance(ex, dict) and isinstance(ex.get("order"), dict):
+            out.append({"role": key, "exec": ex, "order": ex["order"],
+                        "trade_id": t.get("id")})
+    return out
+
+
 def _order_ids(rows: Iterable[dict]) -> List[str]:
-    """Every venue-order-shaped id anywhere in the rows, order preserved."""
+    """Distinct ORDER ids, from the embedded executions only."""
     seen: Set[str] = set()
     out: List[str] = []
-
-    def walk(node: Any, key: Optional[str] = None) -> None:
-        if isinstance(node, dict):
-            for k, v in node.items():
-                walk(v, k)
-        elif isinstance(node, list):
-            for v in node:
-                walk(v, key)
-        elif isinstance(node, str):
-            if key in ORDER_ID_KEYS and 6 <= len(node) <= 40:
-                if node not in seen:
-                    seen.add(node)
-                    out.append(node)
-
     for r in rows:
-        walk(r)
+        for e in _executions(r):
+            oid = e["order"].get("id")
+            if isinstance(oid, str) and oid and oid not in seen:
+                seen.add(oid)
+                out.append(oid)
     return out
 
 
@@ -285,7 +299,10 @@ CHUNK_CHARS = int(os.getenv("AUDIT_CHUNK_CHARS", "6000"))
 
 def emit(out: Dict[str, Any]) -> None:
     """One line per row, each small enough to survive the log line cap."""
-    big = ("activities", "orders", "orders_unreadable", "market_state",
+    #: `activities` is DELIBERATELY NOT emitted raw. 1,984 rows as log lines
+    #: were dropped by the log pipeline on the 15:05Z run; the sequences
+    #: built from them are the deliverable and are far smaller.
+    big = ("sequences", "orders", "ownership_undetermined", "market_state",
            "positions", "open_orders", "balances", "slugs")
     head = {k: v for k, v in out.items() if k not in big}
     rows: List[Dict[str, Any]] = []
@@ -343,32 +360,89 @@ def main() -> int:
     # 2. the account-scoped history
     walk = walk_activities(t)
     out["activities_walk"] = {k: v for k, v in walk.items() if k != "rows"}
-    out["activities"] = scrub(walk["rows"])
+    out["activity_rows_walked"] = len(walk["rows"])
     out["activity_kinds"] = {}
     for r in walk["rows"]:
         k = str(r.get("type"))
         out["activity_kinds"][k] = out["activity_kinds"].get(k, 0) + 1
 
-    # 3. per-order venue detail for every id the history references
+    # 3. OWNERSHIP. The feed embeds both sides of every trade, so being in
+    #    the row is not evidence that an order is ours. `/v1/order/{id}`
+    #    answers 200 for our own orders and 404 for a counterparty's, so it
+    #    is used as the ownership test and nothing else -- one GET per
+    #    DISTINCT ORDER id, bounded.
     ids = _order_ids(walk["rows"])
-    out["order_ids_seen"] = len(ids)
-    out["order_reads_capped"] = len(ids) > MAX_ORDER_READS
-    orders: List[Dict[str, Any]] = []
-    unreadable: List[Dict[str, Any]] = []
+    out["distinct_order_ids_in_feed"] = len(ids)
+    out["ownership_probe_capped"] = len(ids) > MAX_ORDER_READS
+    owned: Dict[str, Dict[str, Any]] = {}
+    not_owned: List[str] = []
+    probe_errors: List[Dict[str, Any]] = []
     for oid in ids[:MAX_ORDER_READS]:
         time.sleep(ORDER_PAUSE_S)
         r = get(t, "/v1/order/%s" % oid)
-        if not r["ok"]:
-            unreadable.append({"id": oid, "err": r.get("err"),
-                               "status": r.get("status")})
-            continue
-        body = r["body"]
-        o = body.get("order") if isinstance(body, dict) else None
-        orders.append(slim_order(scrub(o if isinstance(o, dict) else body)))
-    out["orders"] = orders
-    out["orders_unreadable"] = unreadable
+        if r["ok"]:
+            body = r["body"]
+            o = body.get("order") if isinstance(body, dict) else None
+            owned[oid] = slim_order(scrub(o if isinstance(o, dict) else body))
+        elif r.get("status") == 404:
+            not_owned.append(oid)
+        else:
+            #: NOT a 404, so ownership is UNDETERMINED -- never recorded as
+            #: not-ours. A rate limit is not a statement about ownership.
+            probe_errors.append({"id": oid, "err": r.get("err"),
+                                 "status": r.get("status")})
+    out["orders"] = list(owned.values())
+    out["orders_not_owned"] = len(not_owned)
+    out["ownership_undetermined"] = probe_errors
 
-    # 4. current state
+    # 4. SAME-MARKET SEQUENCES, built here rather than shipped raw. 1,984
+    #    activity rows as log lines were dropped by the log pipeline; the
+    #    sequences are what the audit is for and they are two orders of
+    #    magnitude smaller.
+    seqs: Dict[str, Dict[str, Any]] = {}
+    for row in walk["rows"]:
+        if str(row.get("type")) != "ACTIVITY_TYPE_TRADE":
+            continue
+        for e in _executions(row):
+            o, ex = e["order"], e["exec"]
+            oid = str(o.get("id"))
+            if oid not in owned:
+                continue                      # not ours, or undetermined
+            slug = str(o.get("marketSlug") or "")
+            S = seqs.setdefault(slug, {"slug": slug, "fills": [],
+                                       "order_ids": []})
+            if oid not in S["order_ids"]:
+                S["order_ids"].append(oid)
+            px = ex.get("lastPx")
+            S["fills"].append({
+                "trade_id": e["trade_id"], "order_id": oid,
+                "t": ex.get("transactTime"),
+                "role": "AGGRESSOR" if ex.get("aggressor") else "PASSIVE",
+                "aggressor_flag": ex.get("aggressor"),
+                "exec_type": ex.get("type"),
+                "shares": ex.get("lastShares"),
+                "wire_px": (px.get("value") if isinstance(px, dict) else px),
+                "commission": ((ex.get("commissionNotionalCollected") or {})
+                               .get("value")),
+                "intent": o.get("intent"),
+                "outcomeSide": o.get("outcomeSide"),
+                "side": o.get("side"),
+                "manualOrderIndicator": o.get("manualOrderIndicator"),
+            })
+    for row in walk["rows"]:
+        if str(row.get("type")) != "ACTIVITY_TYPE_POSITION_RESOLUTION":
+            continue
+        r2 = row.get("positionResolution") or row.get("resolution") or row
+        slug = str(r2.get("marketSlug") or r2.get("slug") or "")
+        if slug:
+            seqs.setdefault(slug, {"slug": slug, "fills": [],
+                                   "order_ids": []})["resolution"] = scrub(r2)
+    for S in seqs.values():
+        S["fills"].sort(key=lambda f: str(f.get("t") or ""))
+        S["n_fills"] = len(S["fills"])
+    out["sequences"] = list(seqs.values())
+
+    # 5. current state
     for path, label, base in (
             ("/v1/orders/open", "open_orders", A.API),
             ("/v1/portfolio/positions", "positions", A.API),
@@ -376,10 +450,8 @@ def main() -> int:
         r = get(t, path, base)
         out[label] = r if not r["ok"] else scrub(r["body"])
 
-    # 5. settlement state for every slug the history touched
-    slugs = sorted({str(o.get("slug")) for o in orders if o.get("slug")}
-                   | {str(r.get("marketSlug")) for r in walk["rows"]
-                      if isinstance(r, dict) and r.get("marketSlug")})
+    # 6. settlement state for every slug the history touched
+    slugs = sorted({s2 for s2 in seqs if s2})
     out["slugs"] = slugs
     bbo: Dict[str, Any] = {}
     for s in slugs[:60]:

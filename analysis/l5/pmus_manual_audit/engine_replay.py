@@ -91,6 +91,37 @@ def load_gates() -> Gates:
     )
 
 
+def _direction(order: Dict[str, Any]) -> str:
+    """LONG / SHORT / UNKNOWN, from the VENUE's intent, via the engine's own
+    reader. `l5_venue_accounting.direction` raises rather than guessing LONG,
+    because guessing understates a short's settlement liability."""
+    from src import l5_venue_accounting as va
+    try:
+        return va.direction({"intent": order.get("intent"),
+                             "side": order.get("side"),
+                             "outcomeSide": order.get("outcomeSide")})
+    except Exception:                                          # noqa: BLE001
+        return "UNKNOWN"
+
+
+def _own_price(order: Dict[str, Any]) -> Optional[D]:
+    """The venue's wire price translated into OUR outcome's own terms.
+
+    `src/l5_order_body.venue_price` maps own -> wire and is its own inverse
+    (1 - (1 - x) == x), so it is reused rather than restated: there is one
+    definition of this convention in the codebase and this is not a second.
+    """
+    px = _d(order.get("limit_price"))
+    if px is None:
+        return None
+    from src import l5_order_body as ob
+    outcome = str(order.get("outcomeSide") or "")
+    if not outcome:
+        outcome = ("OUTCOME_SIDE_NO" if _direction(order) == "SHORT"
+                   else "OUTCOME_SIDE_YES")
+    return ob.venue_price(outcome, px)
+
+
 def _d(v: Any) -> Optional[D]:
     if v is None or v == "":
         return None
@@ -107,20 +138,24 @@ def judge(order: Dict[str, Any], g: Gates,
     `cumulative_notional` is this market's already-counted spend, because the
     engine's cap is cumulative per market, not per order.
     """
-    px = _d(order.get("limit_price"))
+    px = _d(order.get("limit_price"))          # the WIRE value, YES terms
     qty = _d(order.get("quantity"))
     refusals: List[Dict[str, Any]] = []
-
-    notional = (px * qty) if (px is not None and qty is not None) else None
-    if px is None or qty is None:
+    own = _own_price(order)                    # the price in OUR terms
+    # EVERY gate below is applied in OWN terms, because that is what the
+    # engine's own constants are stated in and what the position actually
+    # costs. For a short, wire 0.29 is own 0.71: using the wire price would
+    # understate this order's cost by 2.4x and put it in a different band.
+    notional = (own * qty) if (own is not None and qty is not None) else None
+    if own is None or qty is None:
         refusals.append({"gate": "unreadable_order",
                          "detail": "missing price or quantity"})
     else:
-        if not (g.band_lo <= px <= g.band_hi):
+        if not (g.band_lo <= own <= g.band_hi):
             refusals.append({
                 "gate": "spring_band",
-                "detail": "limit %s outside [%s, %s]" % (px, g.band_lo,
-                                                         g.band_hi)})
+                "detail": ("own-terms price %s outside [%s, %s] "
+                           "(wire %s)" % (own, g.band_lo, g.band_hi, px))})
         if cumulative_notional + notional > g.notional_cap:
             refusals.append({
                 "gate": "per_market_notional_cap",
@@ -137,20 +172,59 @@ def judge(order: Dict[str, Any], g: Gates,
                 "gate": "max_residual_units",
                 "detail": "qty %s > %s" % (qty, g.max_residual_units)})
 
-    # THE ENGINE HAS NO SELL PATH AT ALL. This is not a cap that could be
-    # raised: `pmus_sports_l5_decision.decide` returns
-    # {"decision": "no_action", "reason": "l5_sell_is_noop"} for a sell
-    # relation, and `pmus_spring_l5_session` records the same stop_reason.
-    # OPEN, EXTEND and COMPLETE are all BUYS. A sell order is therefore not
-    # resized or blocked by a threshold -- it cannot be expressed.
-    side = str(order.get("side") or "")
-    if side.endswith("SELL"):
+    # ---------------------------------------------------------------- side
+    # WHAT THE VENUE'S `side` ACTUALLY MEANS, and why an earlier draft of
+    # this file was wrong about it.
+    #
+    # PMUS prices and sides are stated in LONG (YES) TOKEN terms. The venue
+    # expresses "buy NO" as "sell YES", and `src/l5_order_body.py` encodes
+    # the convention the hard way round: `price.value` is ALWAYS the long
+    # side's price, and to buy NO at X the WIRE value is 1 - X. That was
+    # learned live on 2026-09-05/06 when 24 of 24 NO-side post-only orders
+    # priced in NO terms were rejected.
+    #
+    # So the triple ORDER_SIDE_SELL + OUTCOME_SIDE_NO + ORDER_INTENT_BUY_SHORT
+    # is a PURCHASE of the NO outcome, not a liquidation. It is exactly what
+    # the engine's own DOWN leg serializes to. An earlier version of this
+    # module refused it as `no_sell_path` on `side.endswith("SELL")`, which
+    # read the venue's YES-token view as a sell of inventory. That was a
+    # misreading of the venue, not a finding about the engine, and it is
+    # withdrawn.
+    #
+    # `l5_sell_is_noop` is real, but it is about a LIQUIDATING sell -- exiting
+    # inventory already held. The venue cannot distinguish that from an
+    # opening short at the order level, because both are ORDER_SIDE_SELL;
+    # only inventory state at submission time can, so this module reports the
+    # ambiguity instead of resolving it by assumption.
+    direction = _direction(order)
+    own_px = _own_price(order)
+    engine_equivalent = None
+    if direction == "SHORT":
+        engine_equivalent = {
+            "engine_side": "DOWN",
+            "outcome_side": "OUTCOME_SIDE_NO",
+            "own_terms_price": None if own_px is None else str(own_px),
+            "wire_price_value": None if px is None else str(px),
+            "serializer": "src.l5_order_body.build(side='DOWN', "
+                          "price=<own terms>, qty=..., post_only=True)",
+            "note": ("the engine already submits its DOWN leg this way: "
+                     "OUTCOME_SIDE_NO with price.value = 1 - own price. On "
+                     "the wire an engine DOWN order and this manual order "
+                     "are the same shape."),
+        }
+    elif direction == "LONG":
+        engine_equivalent = {
+            "engine_side": "UP",
+            "outcome_side": "OUTCOME_SIDE_YES",
+            "own_terms_price": None if own_px is None else str(own_px),
+            "wire_price_value": None if px is None else str(px),
+            "serializer": "src.l5_order_body.build(side='UP', ...)",
+        }
+    else:
         refusals.append({
-            "gate": "no_sell_path",
-            "detail": ("the engine's action vocabulary is OPEN/EXTEND/"
-                       "COMPLETE, all buys; a sell relation returns "
-                       "no_action with reason l5_sell_is_noop"),
-            "engine_reason": "l5_sell_is_noop",
+            "gate": "direction_unreadable",
+            "detail": "neither intent nor side+outcomeSide states a "
+                      "direction; never assumed LONG",
             "structural": True})
 
     # maker-only: the venue's own record of whether the order was passive
@@ -164,15 +238,15 @@ def judge(order: Dict[str, Any], g: Gates,
 
     # the complement a pair would need, so the owner's leg is admissible
     complement_max = None
-    if px is not None:
-        complement_max = g.effective_pair_cap - px
+    if own is not None:
+        complement_max = g.effective_pair_cap - own
         if complement_max <= 0:
             refusals.append({
                 "gate": "pair_cost",
-                "detail": ("leg at %s leaves %s for the complement under the "
-                           "effective pair cap %s: no complement price "
-                           "exists" % (px, complement_max,
-                                       g.effective_pair_cap))})
+                "detail": ("own-terms leg at %s leaves %s for the "
+                           "complement under the effective pair cap %s: no "
+                           "complement price exists"
+                           % (own, complement_max, g.effective_pair_cap))})
 
     # size the engine WOULD have used, if the only problem is size
     # Headroom can be zero but never negative: a cap already spent leaves
@@ -180,8 +254,25 @@ def judge(order: Dict[str, Any], g: Gates,
     # arithmetic.
     headroom = max(D("0"), g.notional_cap - cumulative_notional)
     engine_qty = None
-    if px is not None and px > 0:
-        engine_qty = headroom / px
+    if own is not None and own > 0:
+        engine_qty = headroom / own
+
+    # ------------------------------------------------- the four categories
+    CAPITAL_GATES = {"per_market_notional_cap"}
+    POLICY_GATES = {"spring_band", "pair_cost", "max_residual_units",
+                    "maker_only"}
+    hit = {r["gate"] for r in refusals}
+    if any(r.get("structural") for r in refusals):
+        category = "1_UNSUPPORTED_ACTION"
+    elif not hit:
+        category = ("2_EXPRESSED_DIFFERENTLY" if direction == "SHORT"
+                    else "0_DIRECTLY_SUPPORTED")
+    elif hit & POLICY_GATES:
+        category = "3_BLOCKED_BY_PRICING_OR_INVENTORY_POLICY"
+    elif hit <= CAPITAL_GATES:
+        category = "4_BLOCKED_SOLELY_BY_CAPITAL_LIMITS"
+    else:
+        category = "3_BLOCKED_BY_PRICING_OR_INVENTORY_POLICY"
 
     structural = any(r.get("structural") for r in refusals)
     only_size = (refusals and not structural
@@ -205,11 +296,23 @@ def judge(order: Dict[str, Any], g: Gates,
         #: can share a size, but they cannot share this.
         "ORIGIN": origin,
         "intent": order.get("intent"),
+        "direction": direction,
+        "own_terms_price": None if own is None else str(own),
+        "wire_price_value": None if px is None else str(px),
+        "CATEGORY": category,
+        "engine_equivalent_action": engine_equivalent,
+        "liquidation_ambiguity": (
+            "a SHORT order is an opening NO purchase unless inventory was "
+            "already long that outcome, in which case it is a liquidation "
+            "and l5_sell_is_noop would apply. The venue does not state "
+            "which; only inventory at submission time can."
+            if direction == "SHORT" else None),
         "manualOrderIndicator": order.get("manualOrderIndicator") or None,
         "side": order.get("side"),
-        "limit_price": None if px is None else str(px),
+        "limit_price_own_terms": None if own is None else str(own),
         "owner_quantity": None if qty is None else str(qty),
-        "owner_notional": None if notional is None else str(notional),
+        "owner_notional_own_terms": (None if notional is None
+                                     else str(notional)),
         "venue_state": order.get("state"),
         "venue_cumQuantity": order.get("cumQuantity"),
         "venue_participateDontInitiate": pdi,
@@ -245,12 +348,21 @@ def replay(audit: Dict[str, Any]) -> Dict[str, Any]:
         #: own activity, which is not what would have happened.
         if r["ORIGIN"] == "MANUAL":
             continue
-        n = _d(r["owner_notional"])
+        n = _d(r["owner_notional_own_terms"])
         if n is not None:
             spent[slug] = spent.get(slug, D("0")) + n
     counts: Dict[str, int] = {}
     for r in rows:
         counts[r["ENGINE_VERDICT"]] = counts.get(r["ENGINE_VERDICT"], 0) + 1
+    category_counts: Dict[str, int] = {}
+    for r in rows:
+        category_counts[r["CATEGORY"]] = \
+            category_counts.get(r["CATEGORY"], 0) + 1
+    manual_category_counts: Dict[str, int] = {}
+    for r in rows:
+        if r["ORIGIN"] == "MANUAL":
+            manual_category_counts[r["CATEGORY"]] = \
+                manual_category_counts.get(r["CATEGORY"], 0) + 1
     origin_counts: Dict[str, int] = {}
     for r in rows:
         origin_counts[r["ORIGIN"]] = origin_counts.get(r["ORIGIN"], 0) + 1
@@ -290,6 +402,19 @@ def replay(audit: Dict[str, Any]) -> Dict[str, Any]:
         "gate_sources": g.source,
         "verdict_counts": counts,
         "origin_counts": origin_counts,
+        "category_counts": category_counts,
+        "manual_category_counts": manual_category_counts,
+        "category_legend": {
+            "0_DIRECTLY_SUPPORTED": "a LONG buy the engine admits as-is",
+            "1_UNSUPPORTED_ACTION": "the engine has no way to express it",
+            "2_EXPRESSED_DIFFERENTLY": ("supported economic exposure; the "
+                                        "venue states it in long-token "
+                                        "terms and the engine's DOWN leg "
+                                        "serializes to the same wire order"),
+            "3_BLOCKED_BY_PRICING_OR_INVENTORY_POLICY":
+                "band, pair cost, residual or maker-only refuses it",
+            "4_BLOCKED_SOLELY_BY_CAPITAL_LIMITS":
+                "nothing but the per-market notional cap refuses it"},
         "manual_orders": len(manual),
         "manual_verdict_counts": manual_counts,
         "manual_refusing_gate_counts": manual_gate_hits,
@@ -321,7 +446,8 @@ def main() -> int:
     for o in r["orders"]:
         print("%-14s %-42s %7s %9s %10s %-10s %s"
               % (str(o["order_id"])[:14], str(o["slug"])[:42],
-                 o["limit_price"], o["owner_quantity"], o["owner_notional"],
+                 o["limit_price_own_terms"], o["owner_quantity"],
+                 o["owner_notional_own_terms"],
                  str(o["venue_state"]).replace("ORDER_STATE_", "")[:10],
                  o["ENGINE_VERDICT"]
                  + ("  <- " + ", ".join(x["gate"] for x in o["refusals"])
