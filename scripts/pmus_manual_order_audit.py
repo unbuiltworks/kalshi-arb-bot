@@ -333,8 +333,52 @@ def emit(out: Dict[str, Any]) -> None:
     print("MA_DONE %d" % len(rows))
 
 
+#: SETTLEMENT-ONLY MODE. A comma-separated slug list. When set, the script
+#: reads `/v1/markets/{slug}/bbo` for exactly those markets and nothing else
+#: -- no walk, no ownership probe. The full run's value is the history; once
+#: the history is in hand, reconciling the settlement of a known set of
+#: markets is ten GETs, and re-walking 1,984 rows and re-probing thousands of
+#: order ids to get them is waste that also risks the rate limit that made
+#: the 15:24Z run overrun.
+SETTLE_SLUGS = [x.strip() for x in
+                os.getenv("AUDIT_SETTLE_SLUGS", "").split(",") if x.strip()]
+
+
+def settlement_only(t: Any) -> Dict[str, Any]:
+    """Venue settlement state for a named set of markets. GET only."""
+    out: Dict[str, Any] = {
+        "audit": "PMUS_SETTLEMENT_ONLY", "READ_ONLY": True,
+        "transport": "src.pmus_auth.ReadOnlyTransport",
+        "now_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "requested": len(SETTLE_SLUGS),
+        "accounting": ("venue settlement reads only. A market whose state "
+                       "cannot be read is reported UNREADABLE, never as "
+                       "unsettled and never as zero."),
+    }
+    rows: Dict[str, Any] = {}
+    for sl in SETTLE_SLUGS:
+        time.sleep(ORDER_PAUSE_S)
+        r = get(t, "/v1/markets/%s/bbo" % sl)
+        if r["ok"] and isinstance(r["body"], dict):
+            md = r["body"].get("marketData") or r["body"]
+            rows[sl] = {k: md.get(k) for k in
+                        ("marketSlug", "state", "settlementPx", "currentPx",
+                         "lastTradePx", "bestBid", "bestAsk")}
+        else:
+            rows[sl] = {"UNREADABLE": r.get("err"), "status": r.get("status")}
+    out["market_state"] = rows
+    out["readable"] = sum(1 for v in rows.values() if "UNREADABLE" not in v)
+    out["settled"] = sum(1 for v in rows.values()
+                         if v.get("settlementPx") not in (None, "")
+                         and "UNREADABLE" not in v)
+    return out
+
+
 def main() -> int:
     t = A.ReadOnlyTransport()
+    if SETTLE_SLUGS:
+        emit(settlement_only(t))
+        return 0
     out: Dict[str, Any] = {
         "audit": "PMUS_MANUAL_ORDER_AUDIT",
         "READ_ONLY": True,
