@@ -49,6 +49,14 @@ COPY src/__init__.py src/__init__.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# Disarmed-shadow validation additions. This image COPYs an explicit file
+# list, so a module missing here is an ImportError at runtime, which would
+# leave the protection ABSENT while the operator believed it was on.
+# l5_authoritative_ledger_repair is deliberately NOT here: nothing in the
+# image imports it (the repair entries are declarative data in the runner),
+# and the graft test correctly refuses a module outside the closure.
+COPY src/l5_halt_gate.py src/l5_halt_gate.py
+COPY src/l5_live_validation_gates.py src/l5_live_validation_gates.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py

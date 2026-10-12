@@ -210,6 +210,9 @@ class Runner:
         self.store = LX.InventoryStore(os.path.join(root, "inventory.json"))
         repair_orphaned_keys(self.store)
         repair_ledger_from_venue(self.store)
+        # settlement deltas for markets already retired. Separate from
+        # the repair above because it must never re-settle a market.
+        apply_ledger_adjustments(self.store)
         rebase_contaminated_accounting(self.store)
         self.limits = LX.SafetyLimits(**PROBE_LIMITS)
         self.lam = lam
@@ -260,6 +263,19 @@ class Runner:
         # fresh 429 cool-off every fifteen minutes.
         self.transport = T.PmusTransport(
             market_slug=slug, http=self.http, limiter=T.shared_limiter())
+        # STRUCTURAL DISARM, applied before the executor is given the
+        # transport, so there is no window in which it holds a
+        # submit-capable object.
+        if shadow_only():
+            self.transport = ShadowOnlyTransport(self.transport)
+            emit("L5_LIVE_SHADOW_LOCK", {
+                "locked": True, "env": SHADOW_ONLY_ENV,
+                "blocked": list(ShadowOnlyTransport.BLOCKED),
+                "cancel_still_permitted": True,
+                "labels": ("submit() raises NotArmed regardless of "
+                           "PMUS_Q1_LIVE/SESSION_ID/ARM. The owner's "
+                           "live authorization is unchanged; this "
+                           "lock sits in front of it.")})
         self.executor = LX.FaithfulExecutor(
             self.store, self.limits, transport=self.transport, lam=self.lam,
             now_fn=lambda: dt.datetime.fromtimestamp(self.now_t,
@@ -272,6 +288,31 @@ class Runner:
             # or unreadable is OFF, so a typo cannot silently half-enable a
             # policy, and OFF is byte-for-byte the frozen behaviour.
             residual_cap_k=residual_cap_k())
+        # DISARMED-SHADOW VALIDATION PROTECTIONS, attached after construction
+        # so the executor's own signature is unchanged.
+        #
+        # The validation gates are ON by default. They are refuse-only, so
+        # the worst they can do is decline an action the deployed limits
+        # already allowed -- and in shadow nothing is submitted anyway, so
+        # turning them on here is how we find out they bind.
+        self.executor.validation_gates = validation_gates()
+        # The independent halt is INERT unless L5_HALT_URL names the guard's
+        # read-only endpoint, so this deployment changes nothing by itself.
+        # Once named, it FAILS CLOSED: absent, stale or unreachable all
+        # refuse, because a halt that fails open is not a halt.
+        self.executor.halt_gate = halt_gate()
+        # authoritative cash, when a reading exists. None means the cash gate
+        # binds on its configured ceiling alone and require_cash_evidence()
+        # refuses to arm -- never that cash is unlimited.
+        self.executor.available_cash_usd = None
+        emit("L5_LIVE_GATES", {
+            "validation_gates": (self.executor.validation_gates.as_dict()
+                                 if self.executor.validation_gates else None),
+            "halt_gate_configured": self.executor.halt_gate is not None,
+            "halt_url_env": HALT_URL_ENV,
+            "available_cash_usd": None,
+            "labels": ("additive refuse-only gates. They cannot raise any "
+                       "pre-existing limit and cannot arm anything.")})
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
         self.preflight_attempts = 0
@@ -1198,7 +1239,306 @@ LEDGER_REPAIRS = [
                                     "this entry keeps what it replaced"),
         },
     },
+    {
+        "id": "1245z-manual-yes-fill-no-cost-basis",
+        "market": "cpc-btc-updown-15m-2026-10-12-1245z",
+        "side": "UP",
+        "qty": D("2"), "cost": D("1.6800"),
+        "expect_qty": D("2.0000"), "expect_cost": D("0"),
+        "evidence": {
+            "source": "/v1/order read by the GET-only pmus-readonly-recovery",
+            "orders": ["D23N485QAZ89"],
+            "detail": ("D23N485QAZ89 ORDER_STATE_FILLED quantity 2 "
+                       "cumQuantity 2 leavesQuantity 0 avgPx 0.8400 "
+                       "commission 0.0000, OUTCOME_SIDE_YES, "
+                       "ORDER_INTENT_BUY_LONG, limit_price 0.84, "
+                       "resting_s 10.274, "
+                       "manualOrderIndicator MANUAL_ORDER_INDICATOR_MANUAL"),
+            "settlement": ("/v1/markets/.../bbo state MARKET_STATE_EXPIRED, "
+                           "settlementPx 0.0000: the 2 UP redeemed nothing, "
+                           "so settling this leg posts -1.6800"),
+            "positions_at_repair": ("/v1/portfolio/positions {} with "
+                                    "unsettledFunds 0, openOrders 0 and "
+                                    "buyingPower 243.15505 -- the venue holds "
+                                    "nothing, because it already settled"),
+            "what_went_wrong": ("the order was MANUAL, so the executor never "
+                                "recorded a fill for it and took the quantity "
+                                "from venue reconciliation with no cost. "
+                                "QUANTITY_WITHOUT_COST then refused to settle "
+                                "it 4,107+ times"),
+            "why_not_dropped": ("on settlement price alone this looks like a "
+                                "phantom: cost 0, cash_deployed 0, "
+                                "fills_booked 0, venue net 0, settlementPx "
+                                "0.0000. It is NOT. $1.68 of cash genuinely "
+                                "left the account. A settlement price says "
+                                "what a share PAID; only the order record "
+                                "says what it COST. Dropping this quantity "
+                                "would have erased a real loss"),
+        },
+    },
+    {
+        "id": "nfl-bal-atl-manual-yes-legs-undercounted",
+        "market": "aec-nfl-bal-atl-2026-10-11",
+        "side": "UP",
+        "qty": D("4"), "cost": D("1.7700"),
+        "expect_qty": D("2"), "expect_cost": D("0.8800"),
+        "evidence": {
+            "source": "/v1/order reads by the GET-only pmus-readonly-recovery",
+            "orders": ["D1SA9RRSTZ73", "D1S42Z0APZ73"],
+            "detail": ("D1SA9RRSTZ73 FILLED qty 2 cumQuantity 2 avgPx 0.4400 "
+                       "commission -0.0100; D1S42Z0APZ73 FILLED qty 2 "
+                       "cumQuantity 2 avgPx 0.4450 commission +0.0300; both "
+                       "OUTCOME_SIDE_YES ORDER_INTENT_BUY_LONG and MANUAL. "
+                       "Own-outcome UP cost = 2*0.4400 + 2*0.4450 = 1.7700"),
+            "settlement": ("state MARKET_STATE_EXPIRED settlementPx 1.0000: "
+                           "4 UP redeem 4.0000 against cost 1.7700"),
+            "what_went_wrong": ("the ledger held only ONE of the two YES "
+                                "orders (2 @ 0.4400 = 0.8800); the second was "
+                                "never booked because it was MANUAL"),
+        },
+    },
+    {
+        "id": "nfl-bal-atl-manual-no-legs-no-cost-basis",
+        "market": "aec-nfl-bal-atl-2026-10-11",
+        "side": "DOWN",
+        "qty": D("4"), "cost": D("2.1700"),
+        "expect_qty": D("2.0000"), "expect_cost": D("0"),
+        "evidence": {
+            "source": "/v1/order reads by the GET-only pmus-readonly-recovery",
+            "orders": ["D1SA22CA2Z7Z", "D1S4RM12JZ7T"],
+            "detail": ("D1SA22CA2Z7Z FILLED qty 2 cumQuantity 2 avgPx 0.4650 "
+                       "commission +0.0300; D1S4RM12JZ7T FILLED qty 2 "
+                       "cumQuantity 2 avgPx 0.4500 commission -0.0100; both "
+                       "OUTCOME_SIDE_NO ORDER_INTENT_BUY_SHORT and MANUAL. "
+                       "The venue quotes ONE number per market, the LONG "
+                       "price, so a NO leg's own-outcome cost is 1 - wire: "
+                       "2*(1-0.4650) + 2*(1-0.4500) = 1.0700 + 1.1000 "
+                       "= 2.1700 for 4 DOWN"),
+            "settlement": ("state MARKET_STATE_EXPIRED settlementPx 1.0000: "
+                           "4 DOWN redeem 0.0000 against cost 2.1700, so the "
+                           "market's own-outcome settlement is "
+                           "(4.0000-1.7700) + (0-2.1700) = +0.0600 gross, "
+                           "and +0.0200 net of the 0.0400 of commissions "
+                           "which this ledger keeps as a separate line"),
+            "what_went_wrong": ("both NO legs were MANUAL, so the ledger held "
+                                "a DOWN quantity with no cost at all"),
+        },
+    },
 ]
+
+
+#: SETTLEMENT ADJUSTMENTS -- for a market already retired, whose recognised
+#: settlement is provably wrong by a known amount.
+#:
+#: SEPARATE FROM LEDGER_REPAIRS ON PURPOSE. A repair fixes a cost basis
+#: BEFORE settlement. This corrects a figure recognised AFTER it. It must
+#: never retire the market again, never rewrite the original
+#: `retired_markets` entry, and never bypass ALREADY_RETIRED -- that guard
+#: exists because 2115z re-emitted its settlement 40+ times on 2026-09-26,
+#: and a second pass would post a second P&L and move the loss halt with it.
+#:
+#: So this adds a DELTA to `realized_attributed` and nothing else, keyed by a
+#: unique id in its own applied-list, and it verifies the market's recorded
+#: settlement_pnl is exactly the wrong value it was written for. If the
+#: ledger says anything else, the adjustment refuses rather than guesses.
+LEDGER_ADJUSTMENTS = [
+    {
+        "id": "0030z-settlement-understated-by-two-cents",
+        "market": "cpc-btc-updown-15m-2026-10-12-0030z",
+        "expect_recorded_pnl": D("1.6800"),
+        "authoritative_pnl": D("1.7000"),
+        "delta": D("0.0200"),
+        "evidence": {
+            "source": "/v1/order and /v1/markets/.../bbo via the GET-only "
+                      "pmus-readonly-recovery service",
+            "orders": ["D1SCCX4F8Z84"],
+            "detail": ("D1SCCX4F8Z84 ORDER_STATE_FILLED quantity 2 "
+                       "cumQuantity 2 avgPx 0.8500 commission 0.0000, "
+                       "OUTCOME_SIDE_NO ORDER_INTENT_BUY_SHORT, MANUAL. "
+                       "Own-outcome DOWN cost = 2*(1-0.8500) = 0.3000"),
+            "settlement": ("state MARKET_STATE_EXPIRED settlementPx 0.0000: "
+                           "2 DOWN redeem 2.0000 against cost 0.3000, so the "
+                           "authoritative settlement is +1.7000. The venue "
+                           "independently reported realized 1.7000 for this "
+                           "position, which this computation reproduces from "
+                           "the order alone"),
+            "before": "retired_markets settlement_pnl 1.6800",
+            "after": "realized_attributed increased by 0.0200; the "
+                     "retired_markets entry is left EXACTLY as written",
+            "why_an_adjustment_and_not_a_repair": (
+                "the market is already retired. Re-settling it would post a "
+                "second P&L, so ALREADY_RETIRED correctly forbids it. The "
+                "discrepancy is real but can only be corrected as a labelled "
+                "delta, never by replaying the settlement"),
+        },
+    },
+]
+
+
+def apply_ledger_adjustments(store) -> Optional[Dict[str, Any]]:
+    """Add labelled settlement deltas to already-retired markets.
+
+    Idempotent by id in `ledger_adjustments_applied`, which persists in the
+    state file, so a restart cannot apply one twice. Refuses unless the
+    market is retired AND its recorded settlement_pnl is exactly the value
+    the adjustment was written for.
+    """
+    done = store.state.setdefault("ledger_adjustments_applied", [])
+    applied: List[Dict[str, Any]] = []
+    for a in LEDGER_ADJUSTMENTS:
+        if a["id"] in done:
+            continue
+        retired = (store.state.get("retired_markets") or {}).get(a["market"])
+        if not retired:
+            emit("L5_LIVE_ADJUST_REFUSED", {
+                "id": a["id"], "market": a["market"],
+                "why": ("the market is not retired, so there is no recognised "
+                        "settlement to adjust. A cost-basis repair, not an "
+                        "adjustment, is what an unsettled market needs")})
+            continue
+        recorded = D(str(retired.get("settlement_pnl") or 0))
+        if recorded != a["expect_recorded_pnl"]:
+            emit("L5_LIVE_ADJUST_REFUSED", {
+                "id": a["id"], "market": a["market"],
+                "recorded_pnl": str(recorded),
+                "expected_recorded_pnl": str(a["expect_recorded_pnl"]),
+                "why": ("the ledger does not hold the figure this adjustment "
+                        "was written for; adjusting blind is manufacturing "
+                        "P&L")})
+            continue
+        before = D(str(store.state.get("realized_attributed") or 0))
+        after = before + D(str(a["delta"]))
+        store.state["realized_attributed"] = str(after)
+        # the legacy scalar is kept moving in step, as settlement does
+        store.state["realized_today"] = str(
+            D(str(store.state.get("realized_today") or 0))
+            + D(str(a["delta"])))
+        log = store.state.setdefault("settlement_adjustments", [])
+        log.append({
+            "id": a["id"], "market": a["market"],
+            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "recorded_pnl": str(recorded),
+            "authoritative_pnl": str(a["authoritative_pnl"]),
+            "delta": str(a["delta"]),
+            "realized_attributed_before": str(before),
+            "realized_attributed_after": str(after),
+            "evidence": a["evidence"],
+            "retired_entry_untouched": True,
+        })
+        done.append(a["id"])
+        store.save()
+        rec = {"id": a["id"], "market": a["market"],
+               "delta": str(a["delta"]),
+               "realized_attributed_before": str(before),
+               "realized_attributed_after": str(after),
+               "retired_entry_untouched": True,
+               "orders": a["evidence"]["orders"]}
+        emit("L5_LIVE_ADJUSTED", rec)
+        applied.append(rec)
+    return {"applied": applied} if applied else None
+
+
+#: SHADOW-ONLY LOCK. "0" releases it; anything else (including unset) locks.
+SHADOW_ONLY_ENV = "L5_SHADOW_ONLY"
+
+
+class ShadowOnlyTransport:
+    """Everything the real transport does, except it cannot submit an order.
+
+    WHY A PROXY AND NOT A FLAG. `armed()` is three environment variables that
+    must agree, and all three are already present on this service. A flag
+    checked somewhere in the decision path can be bypassed by any code path
+    that forgets to check it; a transport that has no working submit cannot
+    be talked into one. The disarmed state becomes a property of the object
+    graph rather than an observation about a heartbeat.
+
+    `submit` raises `NotArmed`, which is the SAME exception the disarmed
+    transport already raises, so it lands in the executor's existing,
+    already-tested handler: the order reservation is undone and the decision
+    is recorded as NOT_ARMED. No new code path runs on the money side.
+
+    CANCEL IS DELIBERATELY NOT BLOCKED. Cancelling only ever reduces
+    exposure, and a lock that prevented it could strand a resting order.
+    Reads pass through untouched so reconciliation, settlement and the
+    shadow all keep working.
+
+    This does NOT alter the owner's live authorization. It sits in front of
+    it, and the owner releases it explicitly with L5_SHADOW_ONLY=0.
+    """
+
+    #: every name that could put an order on the venue
+    BLOCKED = ("submit",)
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    @property
+    def inner(self) -> Any:
+        return self._inner
+
+    def submit(self, intent: Mapping[str, Any]) -> Dict[str, Any]:
+        raise LX.NotArmed(
+            "SHADOW_ONLY: this deployment cannot submit orders. The lock is "
+            "structural, not a flag, and is released only by setting "
+            "%s=0." % SHADOW_ONLY_ENV)
+
+    def __getattr__(self, name: str) -> Any:
+        # anything not named above delegates. BLOCKED names are defined
+        # explicitly on the class, so they never reach here.
+        if name in self.BLOCKED:                       # pragma: no cover
+            raise AttributeError(name)
+        return getattr(self._inner, name)
+
+
+def shadow_only() -> bool:
+    return str(os.getenv(SHADOW_ONLY_ENV, "1")).strip() != "0"
+
+
+#: names the guard service's READ-ONLY halt endpoint. Unset = inert.
+HALT_URL_ENV = "L5_HALT_URL"
+#: "0" disables the validation gates; anything else (including unset) is ON
+GATES_ENV = "L5_VALIDATION_GATES"
+
+
+def validation_gates():
+    """The run-scoped additive gates, or None when explicitly disabled."""
+    if str(os.getenv(GATES_ENV, "1")).strip() == "0":
+        return None
+    try:
+        from src import l5_live_validation_gates as VG
+        return VG.ValidationGates(
+            max_cash_deployed_usd=D(str(os.getenv(
+                "L5_MAX_CASH_DEPLOYED_USD", "10"))),
+            max_unmatched_contracts=D(str(os.getenv(
+                "L5_MAX_UNMATCHED_CONTRACTS", "5"))),
+            max_cumulative_loss_usd=D(str(os.getenv(
+                "L5_MAX_CUMULATIVE_LOSS_USD", "20"))),
+            cash_policy=VG.NO_RECYCLING)
+    except Exception as exc:                                   # noqa: BLE001
+        # a gate we cannot build is announced, never silently skipped
+        emit("L5_LIVE_ALARM", {
+            "kind": "validation_gates_unavailable",
+            "error": "%s: %s" % (type(exc).__name__, str(exc)[:120]),
+            "labels": ("the additive gates are NOT active. Pre-existing "
+                       "limits are unaffected.")})
+        return None
+
+
+def halt_gate():
+    """The independent halt, or None when no endpoint is configured."""
+    url = str(os.getenv(HALT_URL_ENV, "")).strip()
+    if not url:
+        return None
+    try:
+        from src import l5_halt_gate as HG
+        return HG.HaltGate(HG.HttpHaltStore(url))
+    except Exception as exc:                                   # noqa: BLE001
+        emit("L5_LIVE_ALARM", {
+            "kind": "halt_gate_unavailable",
+            "error": "%s: %s" % (type(exc).__name__, str(exc)[:120]),
+            "labels": ("L5_HALT_URL is set but the gate could not be built, "
+                       "so the independent halt is ABSENT")})
+        return None
 
 
 def repair_ledger_from_venue(store) -> Optional[Dict[str, Any]]:

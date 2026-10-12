@@ -2264,6 +2264,18 @@ class FaithfulExecutor:
         self.limits = limits
         self.transport = transport or NullTransport()
         self.lam = lam
+        #: DISARMED-SHADOW HOOKS, declared here rather than attached from
+        #: outside. The graft test is right to insist: an attribute the
+        #: runner sets but the class never declares is duck-typing that
+        #: breaks silently when a refactor renames it.
+        #:
+        #: None means ABSENT, and absent is never permission. The halt gate
+        #: is consulted only when one is installed; available_cash_usd of
+        #: None means "no authoritative reading", so the cash gate binds on
+        #: its configured ceiling and require_cash_evidence() refuses to arm.
+        self.halt_gate: Optional[Any] = None
+        self.validation_gates: Optional[Any] = None
+        self.available_cash_usd: Optional[D] = None
         #: MAKER_TREATMENT: an action the frozen rule called MAKER and then
         #: refused STRICT_NOT_EVALUABLE is RESTED at L5's own price instead of
         #: dropped. That refusal is about replay evidence -- whether a
@@ -2311,6 +2323,39 @@ class FaithfulExecutor:
         key = str(row.get("action_key"))
         dec = FT.l5_native(row)
         prov = Provenance(key, dec or {"unreadable": True}, market, window)
+
+        # INDEPENDENT HALT, read FIRST. Before translation, before the book,
+        # before any other gate: a halt must not depend on the rest of this
+        # method working. Absent, stale or unreachable all refuse, because a
+        # gate that fails open is not a gate.
+        hg = self.halt_gate
+        if hg is not None:
+            detail = None
+            try:
+                permitted = hg.submissions_permitted()
+                hreason = hg.refuse_reason()
+                # refuse_reason() is the coarse classification
+                # (halt_asserted / halt_record_stale / ...). The guard's own
+                # reason lives in the record, and an operator needs it: a
+                # log saying only "halt_asserted" does not say what the
+                # watchdog saw.
+                try:
+                    rec_ = (hg.state() or {}).get("record") or {}
+                    detail = rec_.get("reason") or None
+                except Exception:                          # noqa: BLE001
+                    detail = None
+            except Exception as exc:                       # noqa: BLE001
+                permitted = False
+                hreason = "HALT_GATE_UNREADABLE:%s" % type(exc).__name__
+            prov.stage("HALT_GATE", {"submissions_permitted": permitted,
+                                     "reason": hreason,
+                                     "guard_reason": detail})
+            if not permitted:
+                return prov.refuse(
+                    "HALT_GATE",
+                    "HALT:%s" % (("%s:%s" % (hreason, detail)) if detail
+                                 else hreason))
+
         if dec is None:
             return prov.refuse("L5_NATIVE", "UNREADABLE_ROW")
 
@@ -2431,6 +2476,29 @@ class FaithfulExecutor:
             "basis": "REALIZED residual; outstanding orders are not counted"})
         if self.suppress_imbalance_increase and klass == INCREASE_RESIDUAL:
             return prov.refuse("SAFETY_OVERLAY", "IMBALANCE_INCREASE_SUPPRESSED")
+
+        # RUN-SCOPED VALIDATION GATES, additive and refuse-only. They are
+        # consulted AFTER every pre-existing limit, so a deployed refusal is
+        # never masked by one of these, and they can only ever turn an
+        # allowed action into a refused one -- never the reverse.
+        vg = self.validation_gates
+        if vg is not None:
+            try:
+                vreason = vg.refuse(
+                    order_qty=tr["qty"], order_price=tr["price"],
+                    order_intent=("ORDER_INTENT_BUY_SHORT"
+                                  if str(dec.get("side")).upper() == "DOWN"
+                                  else "ORDER_INTENT_BUY_LONG"),
+                    unmatched_after=self.store.residual(market),
+                    cumulative_realized=self.store.realized_today(),
+                    available_cash_usd=self.available_cash_usd)
+            except Exception as exc:                       # noqa: BLE001
+                # a gate that cannot evaluate refuses. Failing open here
+                # would silently remove the protection it exists to be.
+                vreason = "VALIDATION_GATE_ERROR:%s" % type(exc).__name__
+            if vreason:
+                prov.stage("VALIDATION_GATES", {"refused": vreason})
+                return prov.refuse("VALIDATION_GATES", vreason)
 
         resid_after = resid_before + (
             tr["qty"] if dec["side"] == "UP" else -tr["qty"])
