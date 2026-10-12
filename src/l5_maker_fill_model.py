@@ -57,6 +57,8 @@ import collections
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src import pmus_ws_evidence_recorder as _REC
+
 CONSERVATIVE = "CONSERVATIVE"
 BASE = "BASE"
 OPTIMISTIC = "OPTIMISTIC"
@@ -117,17 +119,38 @@ class Ladder:
         self.rejected = 0
 
     def ingest(self, msg: Any, now: float) -> Optional[str]:
-        """Fold one raw frame. Returns the slug it updated, or None."""
-        if not isinstance(msg, Mapping):
+        """Fold one raw frame, via the RECORDER'S OWN envelope walker.
+
+        The first version of this read marketSlug/bids/offers off the TOP
+        LEVEL of the message and deployment 1093d4d1 proved that wrong:
+        frames 0, slugs 0, every queue_ahead null, so CONSERVATIVE and BASE
+        were unmeasurable. The live WS nests the book below the slug (the
+        walker carries a slug_hint and recurses through lists and
+        sub-documents for exactly that reason), so the top level has neither.
+        `_walk_market_events` is the extractor apply_events itself uses and
+        is already proven against the live schema, camelCase and snake_case
+        alike -- reusing it is the fix, and re-deriving the envelope shape
+        here is what caused the bug.
+        """
+        events: List[dict] = []
+        try:
+            _REC._walk_market_events(msg, events)
+        except Exception:                                      # noqa: BLE001
             return None
-        slug = msg.get("marketSlug") or msg.get("market_slug") or \
-            msg.get("slug")
+        last = None
+        for ev in events:
+            if ev.get("kind") != "book":
+                continue
+            got = self._fold(ev.get("slug"), ev.get("bids"),
+                             ev.get("asks"), now)
+            last = got or last
+        return last
+
+    def _fold(self, slug: Any, raw_b: Any, raw_a: Any,
+              now: float) -> Optional[str]:
+        """One normalised book event into the ladder."""
         if not isinstance(slug, str) or not slug:
             return None
-        raw_b = msg.get("bids")
-        raw_a = msg.get("offers")
-        if raw_a is None:
-            raw_a = msg.get("asks")
         if not isinstance(raw_b, list) and not isinstance(raw_a, list):
             return None
 
@@ -502,9 +525,21 @@ class ModelSession:
     conservative one.
     """
 
-    def __init__(self, slug: str, tick: D = D("0.01")):
+    def __init__(self, slug: str, tick: D = D("0.01"),
+                 max_abs_residual: Optional[D] = None):
         self.slug = slug
         self.tick = tick
+        #: the DEPLOYED 5-contract residual cap, applied to the MODELLED
+        #: book too. 1845z modelled OPEN+EXTEND+EXTEND+EXTEND to a residual
+        #: of -5.55, and live the executor's RESIDUAL_ABOVE_CAP would have
+        #: refused that fourth leg -- so the economics reported for that
+        #: sequence were for something that could not happen. A modelled
+        #: number that describes an infeasible sequence cannot inform a
+        #: bounded live test. This can only ever SUPPRESS a modelled fill,
+        #: never create one, and it does not touch any real gate.
+        self.max_abs_residual = max_abs_residual
+        self.suppressed_by_residual_cap: Dict[str, int] = {
+            sc: 0 for sc in SCENARIOS}
         self.ladder = Ladder()
         self.inv: Dict[str, HypoInventory] = {s: HypoInventory()
                                               for s in SCENARIOS}
@@ -542,6 +577,21 @@ class ModelSession:
     # ---------------------------------------------------------- ingest
     def ingest_frame(self, msg: Any, now: float) -> None:
         self.ladder.ingest(msg, now)
+
+    def _over_cap(self, scenario: str, side: str, qty: D) -> bool:
+        """Would this modelled leg breach the deployed residual cap?
+
+        A leg that SHRINKS the absolute residual is never refused, at any
+        depth -- the same rule the deployed RESIDUAL_CAP policy states.
+        """
+        cap = self.max_abs_residual
+        if cap is None:
+            return False
+        r = self.inv[scenario].residual(self.slug)
+        after = r + (qty if side == UP else -qty)
+        if abs(after) <= abs(r):
+            return False                  # reduces imbalance: always allowed
+        return abs(after) > cap
 
     def classify(self, scenario: str, side: str) -> str:
         r = self.inv[scenario].residual(self.slug)
@@ -649,6 +699,12 @@ class ModelSession:
                         continue
                     self.booked.add(key)
                     kind = self.classify(s, o.side)
+                    if self._over_cap(s, o.side, o.qty):
+                        # the deployed cap would have refused this leg, so
+                        # the modelled book must not take it either.
+                        self.suppressed_by_residual_cap[s] += 1
+                        self.counts[s]["suppressed:%s" % kind] += 1
+                        continue
                     self.inv[s].fill(self.slug, o.side, o.qty, o.own_px,
                                      o.fill_t[s])
                     self.counts[s]["fill:%s" % kind] += 1
@@ -683,6 +739,8 @@ class ModelSession:
                                if o.queue_ahead is not None),
             "queue_unknown": sum(1 for o in self.orders
                                  if o.queue_ahead is None),
+            "max_abs_residual": (None if self.max_abs_residual is None
+                                 else str(self.max_abs_residual)),
             "prints_consumed": self.prints_consumed,
             "trade_coverage": {
                 "coverage_gaps": self.coverage_gaps,
@@ -733,6 +791,8 @@ class ModelSession:
                 "adverse_rate": (round(float(sum(1 for a in adv
                                                  if a["adverse"])) / len(adv),
                                        4) if adv else None),
+                "suppressed_by_residual_cap":
+                    self.suppressed_by_residual_cap[s],
             }
             if up_won is not None:
                 blk["settlement"] = self.inv[s].settle(self.slug, up_won)

@@ -591,3 +591,150 @@ def test_modelled_inventory_cannot_create_or_alter_an_intent():
     # ...and only the CLASSIFICATION differs
     assert ra["modelled_intent_kind"][M.BASE] == M.COMPLETE
     assert rb["modelled_intent_kind"][M.BASE] == M.OPEN
+
+
+# ============================================ the real WS envelope
+# Deployment 1093d4d1 reported ladder {frames: 0, slugs: 0} with every
+# queue_ahead null, because ingest read marketSlug/bids/offers off the TOP
+# LEVEL. The live feed nests the book below the slug. These tests use the
+# nested shapes and would all have failed against that first version.
+
+def _nested_marketdata(slug=SLUG):
+    """The documented live shape: a marketData sub-document."""
+    return {"marketData": {
+        "marketSlug": slug,
+        "bids": [{"px": {"value": "0.5300"}, "qty": "300"},
+                 {"px": {"value": "0.5200"}, "qty": "500"}],
+        "offers": [{"px": {"value": "0.5400"}, "qty": "400"}]}}
+
+
+def _slug_outside_book_inside(slug=SLUG):
+    """The slug at an outer level and the book below it -- the case the
+    walker's slug_hint exists for."""
+    return {"marketSlug": slug,
+            "payload": [{"bids": [{"px": {"value": "0.5300"}, "qty": "300"}],
+                         "offers": [{"px": {"value": "0.5400"},
+                                     "qty": "400"}]}]}
+
+
+def test_a_nested_marketdata_frame_populates_the_ladder():
+    L = M.Ladder()
+    assert L.ingest(_nested_marketdata(), 1.0) == SLUG
+    assert L.frames == 1
+    assert L.depth_at(SLUG, M.BID, D("0.5300")) == D("300")
+    assert L.depth_at(SLUG, M.ASK, D("0.5400")) == D("400")
+    assert L.ahead_of_us(SLUG, M.BID, D("0.5200")) == D("800")
+
+
+def test_a_slug_carried_outside_the_book_still_populates():
+    L = M.Ladder()
+    assert L.ingest(_slug_outside_book_inside(), 1.0) == SLUG
+    assert L.depth_at(SLUG, M.BID, D("0.5300")) == D("300")
+
+
+def test_a_frame_list_is_walked():
+    L = M.Ladder()
+    L.ingest([_nested_marketdata(), _nested_marketdata("other-slug")], 1.0)
+    assert L.status()["slugs"] == 2
+
+
+def test_a_quote_at_the_touch_gets_a_KNOWN_queue_from_a_nested_frame():
+    """The runtime symptom: ticks_behind_touch 0 and queue_ahead null. A
+    quote resting AT the touch must have a known queue."""
+    L = M.Ladder()
+    L.ingest(_nested_marketdata(), 1.0)
+    o = M.HypoOrder(SLUG, M.UP, D("0.53"), D("5"), 1.0, ladder=L,
+                    bid=D("0.53"), ask=D("0.54"))
+    assert o.ticks_behind_touch() == 0
+    assert o.queue_ahead == D("300"), "queue still unknown at the touch"
+
+
+def test_a_garbage_frame_is_ignored_without_raising():
+    L = M.Ladder()
+    for junk in (None, 7, "x", {}, [], {"nothing": "here"}):
+        assert L.ingest(junk, 1.0) is None
+    assert L.frames == 0
+
+
+def test_the_ladder_reports_zero_frames_when_nothing_matched():
+    """The diagnostic that located this bug must keep working."""
+    L = M.Ladder()
+    L.ingest({"unrelated": True}, 1.0)
+    st = L.status()
+    assert st["frames"] == 0 and st["slugs"] == 0
+
+
+# ============================================ the deployed residual cap
+# 1845z modelled OPEN+EXTEND+EXTEND+EXTEND to a residual of -5.55. Live,
+# RESIDUAL_ABOVE_CAP would have refused the fourth leg, so the economics
+# reported for that sequence were for something that cannot happen.
+
+def _capped(cap="5"):
+    s = M.ModelSession(SLUG, max_abs_residual=D(cap))
+    s.ingest_frame(_nested_marketdata(), 100.0)
+    return s
+
+
+def _fill_leg(s, side, own_px, qty, t):
+    """Place and sweep-fill one leg.
+
+    The book passed must be CONSISTENT with the leg's wire price or
+    `restable` correctly rejects it: a DOWN leg at own-cost 0.92 rests as
+    an ask at wire 0.08, which would cross a 0.53 bid. 0.06/0.07 is the
+    real 1845z book these prices came from.
+    """
+    s.place(side, D(own_px), D(qty), t, D("0.06"), D("0.07"))
+    wire = D(own_px) if side == M.UP else D(1) - D(own_px)
+    through = wire - D("0.01") if side == M.UP else wire + D("0.01")
+    direction = "SELL" if side == M.UP else "BUY"
+    s.advance([pr(str(through), "99999", direction, t=t + 1)])
+
+
+def test_the_modelled_book_cannot_exceed_the_deployed_residual_cap():
+    s = _capped("5")
+    for i, q in enumerate(("1.8", "1.8", "1.8", "1.8")):
+        _fill_leg(s, M.DOWN, "0.92", q, 10.0 + i * 10)
+    assert abs(s.inv[M.OPTIMISTIC].residual(SLUG)) <= D("5")
+    assert s.suppressed_by_residual_cap[M.OPTIMISTIC] >= 1
+
+
+def test_the_cap_suppresses_rather_than_invents_and_is_reported():
+    s = _capped("5")
+    for i in range(4):
+        _fill_leg(s, M.DOWN, "0.92", "1.8", 10.0 + i * 10)
+    rep = s.close(up_won=False, wire_at_close=D("0.03"))
+    o = rep["scenarios"][M.OPTIMISTIC]
+    assert o["suppressed_by_residual_cap"] >= 1
+    assert rep["max_abs_residual"] == "5"
+
+
+def test_a_leg_that_reduces_imbalance_is_never_capped():
+    """The deployed rule exactly: a leg shrinking |residual| is never
+    refused, at any depth."""
+    s = _capped("1")
+    _fill_leg(s, M.DOWN, "0.92", "1.0", 10.0)
+    assert s.inv[M.OPTIMISTIC].residual(SLUG) == D("-1.0")
+    _fill_leg(s, M.UP, "0.05", "1.0", 30.0)        # closes the imbalance
+    assert s.inv[M.OPTIMISTIC].residual(SLUG) == D("0")
+    assert s.suppressed_by_residual_cap[M.OPTIMISTIC] == 0
+
+
+def test_no_cap_configured_means_no_suppression():
+    s = M.ModelSession(SLUG)
+    s.ingest_frame(_nested_marketdata(), 100.0)
+    for i in range(4):
+        _fill_leg(s, M.DOWN, "0.92", "1.8", 10.0 + i * 10)
+    assert s.suppressed_by_residual_cap[M.OPTIMISTIC] == 0
+    assert s.close(up_won=False)["max_abs_residual"] is None
+
+
+def test_the_cap_cannot_create_a_fill():
+    """It is suppression only: never more fills with a cap than without."""
+    a, b = _capped("5"), M.ModelSession(SLUG)
+    b.ingest_frame(_nested_marketdata(), 100.0)
+    for i in range(4):
+        _fill_leg(a, M.DOWN, "0.92", "1.8", 10.0 + i * 10)
+        _fill_leg(b, M.DOWN, "0.92", "1.8", 10.0 + i * 10)
+    ra = a.close(up_won=False)["scenarios"][M.OPTIMISTIC]
+    rb = b.close(up_won=False)["scenarios"][M.OPTIMISTIC]
+    assert ra["modelled_fills"] <= rb["modelled_fills"]

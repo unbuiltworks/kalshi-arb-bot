@@ -290,7 +290,12 @@ class Runner:
         # observer here is what gives a maker quote a queue position; it is
         # detached-by-default and feeds nothing but this model.
         if model_fills():
-            self.model = FM.ModelSession(slug)
+            # the MODELLED book is held to the DEPLOYED residual cap, so a
+            # modelled sequence is one a bounded live test could actually
+            # run. 1845z modelled a -5.55 residual that RESIDUAL_ABOVE_CAP
+            # would have refused live.
+            self.model = FM.ModelSession(
+                slug, max_abs_residual=self.limits.max_abs_residual)
             self.book.frame_observer = self.model.ingest_frame
         else:
             self.model = None
