@@ -664,6 +664,34 @@ class Runner:
         t = self.transport
         if t is None or t.armed or self.halted():
             return
+        # UNRESOLVED ACCOUNTING. orders_uncertain already refuses while the
+        # row is incoherent -- proven in production, arm_refused_orders_
+        # uncertain hit 221 in 1715z -- so this is NOT a second copy of that
+        # refusal. It exists for the case orders_uncertain cannot cover: it
+        # is RECOMPUTED every reconcile, so a book that stopped failing
+        # coherence would silently clear it and arming would resume with the
+        # loss still unaccounted. The registry is declared in code and does
+        # not clear, so a market it names that the ledger no longer reports
+        # as unresolved is a DISCREPANCY, not an all-clear.
+        #
+        # Scoped to a ledger that actually holds the market: a registry
+        # entry must not make arming unreachable on an unrelated book, which
+        # would turn the whole arming path into untestable dead code.
+        stale = unresolved_discrepancies(self.store)
+        if stale:
+            self.win["arm_refused_unresolved_accounting"] += 1
+            if self.win["arm_refused_unresolved_accounting"] == 1:
+                emit("L5_LIVE_DISARMED", {
+                    "market": t.market_slug,
+                    "why": ("UNRESOLVED ACCOUNTING silently cleared from "
+                            "the ledger; refusing to arm"),
+                    "discrepancies": stale,
+                    "labels": ("the registry names a market whose row the "
+                               "ledger no longer reports as unresolved. A "
+                               "possible loss of unknown size was on the "
+                               "books and its disappearance is not "
+                               "evidence that it was resolved.")})
+            return
         # never arm on a book the venue has not confirmed
         self.reconcile_if_needed(self.now_t)
         if not self.reconciled:
@@ -813,10 +841,54 @@ class Runner:
             "armed": bool(t and t.armed)})
         # recv, not a fresh clock read: the placement time is when we
         # OBSERVED the action, which is what the queue model must date.
-        self.model_place(order.get("intent"), row, recv)
+        self.model_place(order.get("intent"), row, recv, rec=rec,
+                         refused_reason=rec.get("refused_reason"))
+
+    def observable_despite_refusal(self, rec: Mapping[str, Any],
+                                   refused_reason: Optional[str]
+                                   ) -> Optional[Mapping[str, Any]]:
+        """A MAKER translation worth MODELLING although live refused it.
+
+        Only for ORDER_STATE_UNCERTAIN, and only when the uncertainty is
+        about a DIFFERENT market. The purpose is narrow: an unresolved cost
+        basis on an EXPIRED market must not cost us the shadow evidence from
+        every later independent window, and the model touches no ledger, no
+        cash and no order path.
+
+        It is NOT extended to any other refusal. MAKER_ONLY_NO_TAKER,
+        RESIDUAL_ABOVE_CAP and the rest are policy decisions about what this
+        engine would actually do, and modelling past them would describe a
+        different engine. Uncertainty about THIS market is also excluded:
+        a book we cannot explain is not one to model against.
+        """
+        if not refused_reason:
+            return None
+        if "ORDER_STATE_UNCERTAIN" not in str(refused_reason):
+            return None
+        m = self.model
+        if m is None:
+            return None
+        # never observe a window whose OWN book is the unresolved one
+        if m.slug in unresolved_markets():
+            return None
+        try:
+            if self.store.book_violations(m.slug):
+                return None
+        except Exception:                                      # noqa: BLE001
+            return None
+        tr = rec.get("MAKER_TREATMENT") or {}
+        px, qty = tr.get("rested_at_l5_price"), tr.get("qty")
+        if px is None or qty is None:
+            return None
+        side = str((rec.get("L5_NATIVE") or {}).get("side")
+                   or (rec.get("row") or {}).get("side") or "").upper()
+        return {"price": px, "qty": qty, "mode": "MAKER", "side": side,
+                "client_order_id": rec.get("action_key")}
 
     def model_place(self, intent: Optional[Mapping[str, Any]],
-                    row: Mapping[str, Any], now: float) -> None:
+                    row: Mapping[str, Any], now: float,
+                    rec: Optional[Mapping[str, Any]] = None,
+                    refused_reason: Optional[str] = None) -> None:
         """Record one MAKER intent as a MODELLED resting order.
 
         MODELLED THROUGHOUT. The intent was already refused NOT_ARMED by the
@@ -825,7 +897,13 @@ class Runner:
         than raised, because the modelling must never disturb the executor.
         """
         m = self.model
-        if m is None or not intent:
+        if m is None:
+            return
+        observed_despite_refusal = False
+        if not intent and rec is not None:
+            intent = self.observable_despite_refusal(rec, refused_reason)
+            observed_despite_refusal = intent is not None
+        if not intent:
             return
         if str(intent.get("mode") or "").upper() != "MAKER":
             return                      # a taker intent never rests
@@ -834,11 +912,20 @@ class Runner:
             side = str(intent.get("side") or "").upper()
             if side not in (FM.UP, FM.DOWN):
                 return
-            rec = m.place(side, D(str(intent["price"])),
+            out = m.place(side, D(str(intent["price"])),
                           D(str(intent["qty"])), now,
                           FM._d(bbo.get("bid")), FM._d(bbo.get("ask")),
                           coid=intent.get("client_order_id"))
-            emit("L5_MODEL_INTENT", rec)
+            out["observed_despite_live_refusal"] = observed_despite_refusal
+            if observed_despite_refusal:
+                out["blocked_live_by"] = "ORDER_STATE_UNCERTAIN"
+                out["labels"] = (
+                    "MODELLED ONLY, and the live engine REFUSED this action "
+                    "for ORDER_STATE_UNCERTAIN arising from a DIFFERENT, "
+                    "expired market. It is observation of an independent "
+                    "window, not a claim the engine would have traded. "
+                    + str(out.get("labels") or ""))
+            emit("L5_MODEL_INTENT", out)
         except Exception as exc:                               # noqa: BLE001
             self.stats["model_place_errors"] += 1
             emit("L5_MODEL_ERROR", {"where": "place", "error": T.redact(
@@ -1085,6 +1172,19 @@ class Runner:
             # $1.8171 worst case. Reported so the difference is visible.
             "cash_deployed": [self.store.cash_deployed_usd(m)
                               for m in self.store.markets_with_exposure()],
+            # UNRESOLVED ACCOUNTING, on EVERY heartbeat. A record that is
+            # only visible when something goes looking for it is one that
+            # can be forgotten.
+            "unresolved_accounting": {
+                "count": len(unresolved_accounting()),
+                "records": unresolved_accounting(),
+                "blocks_live_authorization": bool(unresolved_accounting()),
+                "labels": ("a possible loss of UNKNOWN size is on the "
+                           "books. realized P&L is therefore unknown and "
+                           "the daily and cumulative loss limits cannot be "
+                           "evaluated, so live authorization is refused. "
+                           "This is NOT reconciled and NOT repaired."),
+            },
             "available_cash": {
                 "usd": (None if self.available_cash_usd is None
                         else str(self.available_cash_usd)),
@@ -1719,6 +1819,117 @@ class ShadowOnlyTransport:
         if name in self.BLOCKED:                       # pragma: no cover
             raise AttributeError(name)
         return getattr(self._inner, name)
+
+
+#: UNRESOLVED ACCOUNTING, declared in code so it is durable across restarts
+#: and cannot be cleared by a reconcile that merely stops noticing.
+#:
+#: 1900z: the venue itself reported net UP 1.0000 at 19:15:10Z and our GROSS
+#: book AGREED (gross_net_agrees true), so the QUANTITY is venue-confirmed
+#: and must never be zeroed. The market expired at 19:15:15Z and positions
+#: cleared, so no venue read can now recover the COST. /v1/orders answers
+#: 501, /v1/mytrades and /v1/trades answer 404, and the venue exposes order
+#: detail only at /v1/order/{id} -- so with no discoverable id the cost
+#: basis is unobtainable and the possible loss stays possible.
+#:
+#: This is NOT a repair. It records that the row is unresolved, keeps it
+#: unresolved, and blocks live authorization while it stands.
+UNRESOLVED_ACCOUNTING: List[Dict[str, Any]] = [
+    {
+        "id": "1900z-up-1.0-unknown-cost-basis",
+        "market": "cpc-btc-updown-15m-2026-10-12-1900z",
+        #: the LEDGER this applies to, matched on the store's own path.
+        #: Scoping to the ledger rather than to the row's PRESENCE is what
+        #: stops a deletion from removing the protection: the entry applies
+        #: whether or not the row is still there.
+        "ledger": "l5-live-20261012z",
+        "side": "UP",
+        "qty": "1.0000",
+        "cost_basis": "UNKNOWN",
+        "discovered_utc": "2026-10-12T19:15:30Z",
+        "venue_confirmed_quantity": True,
+        "venue_evidence": (
+            "L5_LIVE_RECONCILE 19:15:10Z venue_net "
+            "{cpc-btc-updown-15m-2026-10-12-1900z: 1.0000}, "
+            "gross_net_agrees true"),
+        "missing_evidence": (
+            "the 1900z venue order id. /v1/orders is 501, /v1/mytrades and "
+            "/v1/trades are 404, and order detail exists only at "
+            "/v1/order/{id}. Needs the id from the owner's order history, "
+            "an account statement or a trade confirmation."),
+        "may_not": (
+            "book a cost basis from the balance delta, or zero the "
+            "venue-confirmed quantity. Either falsifies the record."),
+    },
+]
+
+
+def unresolved_accounting() -> List[Dict[str, Any]]:
+    """Every unresolved-accounting record. Never empty while one stands."""
+    return [dict(r) for r in UNRESOLVED_ACCOUNTING]
+
+
+def unresolved_discrepancies(store: Any) -> List[Dict[str, Any]]:
+    """Registry entries the LEDGER has stopped reporting as unresolved.
+
+    A module function over the store, NOT a Runner method: try_arm is
+    grafted onto stubs in the arm-retry suite, so a new instance attribute
+    there is the same duck-typing hazard the graft closure test exists to
+    catch -- and it bit this change once already.
+
+    Empty is normal in two very different situations, and both are correct:
+      * the ledger still holds the unresolved row -- orders_uncertain
+        refuses on its own and this adds nothing;
+      * the ledger does not hold that market at all (a different or fresh
+        book) -- the entry is about a specific row in a specific ledger and
+        must not block an unrelated one, which would make the whole arming
+        path unreachable dead code.
+    Non-empty means the row was cleared WITHOUT the missing evidence, which
+    is the one thing orders_uncertain cannot notice.
+    """
+    out: List[Dict[str, Any]] = []
+    # the store's own path identifies the LEDGER. Read with a default
+    # because the arm-retry suite's partial stub has none -- InventoryStore
+    # declares self.path, so this is a partial stub rather than an
+    # undeclared attribute, and both branches are tested.
+    path = str(getattr(store, "path", "") or "")
+    for rec in unresolved_accounting():
+        m = str(rec.get("market") or "")
+        ledger = str(rec.get("ledger") or "")
+        if not m or not ledger:
+            continue
+        if ledger not in path:
+            continue                 # a different ledger: never blocked
+        try:
+            keys = set(store.state.get("positions") or {})
+            present = any(k.rsplit("|", 1)[0] == m for k in keys)
+            violating = bool(store.book_violations(m)) if present else False
+        except Exception as exc:                               # noqa: BLE001
+            # FAIL CLOSED. This is the named ledger and we cannot read the
+            # book we are responsible for, so we must not conclude all-clear.
+            out.append({"id": rec.get("id"), "market": m,
+                        "was": "QUANTITY_WITHOUT_COST",
+                        "now": "ledger UNREADABLE: %s" % type(exc).__name__,
+                        "missing_evidence": rec.get("missing_evidence")})
+            continue
+        if present and violating:
+            continue                 # orders_uncertain refuses on its own
+        out.append({
+            "id": rec.get("id"), "market": m,
+            "was": "QUANTITY_WITHOUT_COST",
+            # an ABSENT row is the dangerous case: deleting or losing it
+            # must never read as resolution.
+            "now": ("row ABSENT from the ledger" if not present
+                    else "row present but no violation reported"),
+            "missing_evidence": rec.get("missing_evidence"),
+            "labels": ("the loss was never accounted. Its row "
+                       "disappearing is not evidence it was resolved."),
+        })
+    return out
+
+
+def unresolved_markets() -> set:
+    return {str(r.get("market")) for r in UNRESOLVED_ACCOUNTING}
 
 
 MODEL_FILLS_ENV = "L5_MODEL_FILLS"
