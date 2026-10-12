@@ -1,0 +1,106 @@
+{
+  "label": "POST_MIGRATION_VERIFICATION__l5-pmus-live__VENUE_RECONCILED_LEDGER_ON_PERSISTENT_STORAGE",
+  "executed_utc": "2026-10-12T00:28Z-00:31Z",
+  "service": {"name": "l5-pmus-live", "id": "87f1834e-530e-4fc4-a310-91c8d3add196",
+              "project": "arb-ev-wallet-shadow", "environment": "production"},
+  "what_changed_in_production": {
+    "volume": {
+      "action": "REUSED AND MOVED, NOT CREATED. The project was at Railway's hard 20-volume cap, so create-volume was refused.",
+      "volume_id": "3c08c916-dc42-4eb4-9592-3b25dc07958f",
+      "old_name": "l5-clone-shadow-state-was-l5-pmus-live",
+      "new_name": "l5-pmus-live-ledger",
+      "moved_from": "r5ft-clean-2ebb50f-buildcheck at /data/l5_clone_shadow (a dead buildcheck service)",
+      "moved_to": "l5-pmus-live at /data",
+      "size_mb": 50000,
+      "region": "us-east4-eqdc4a",
+      "why_this_volume": "its name records that it WAS l5-pmus-live's own state volume. Moving it back is non-destructive and keeps whatever history it holds, where deleting any volume to free a cap slot would have destroyed data the owner did not authorize losing.",
+      "data_destroyed": "NONE. update-volume moves a volume and keeps its contents."
+    },
+    "variable": {
+      "name": "L5_LIVE_ROOT",
+      "set_to": "/data/l5-live-20261012z",
+      "owner_asked_for": "/data/l5-live",
+      "why_deviated": "the moved volume may still contain an l5-live/ directory from when it was this service's volume. Mounting at /data and pointing the root at /data/l5-live could have RELOADED stale state and resurrected the very phantom being cleared, which is the opposite of reconstructing from venue evidence. A dated root is unambiguously fresh and leaves any old data intact beside it for forensics.",
+      "applied_with": "skipDeploys, so the volume attach carried both into ONE deployment as instructed"
+    },
+    "code": "NONE. Deployment 77eff69b built the same commit 77939fe2 as the deployment it replaced. No source change, no branch change, no watch-pattern change.",
+    "other_services": "untouched, except that r5ft-clean-2ebb50f-buildcheck redeployed without the mount it no longer has. It is a buildcheck service with no running workload."
+  },
+  "deployments": {
+    "before": {"id": "6a6b9468-cbcb-4c15-87f1-eb97870965cc", "now": "REMOVED"},
+    "after": {"id": "77eff69b-24ab-4d17-9bdd-997e85499936", "status": "SUCCESS",
+              "commit": "77939fe22953e16a7766fc6f88f383eb019ff7a2"}
+  },
+  "gate_1_ledger_on_persistent_storage": {
+    "PASS": true,
+    "evidence": "L5_LIVE_START root=\"/data/l5-live-20261012z\" at 2026-10-12T00:29:48Z",
+    "mount_confirmed": "describe-service volumeMounts {3c08c916: /data}, volumes[0] state live"
+  },
+  "gate_2_phantom_eliminated": {
+    "PASS": true,
+    "before": "drift {\"cpc-btc-updown-15m-2026-10-10-1345z|DOWN\": {\"ours\":\"0.1300\",\"venue\":\"0\"}}, gross_before showed dn 0.1300 / residual -0.1300, gross_net_agrees false, gross_detail_lost listed the market, 38 L5_LIVE_SETTLE_REFUSED",
+    "after": "drift {}, gross_before {}, gross_net_agrees {}, gross_detail_lost []",
+    "QUANTITY_WITHOUT_COST": "ABSENT. Zero SETTLE_REFUSED lines on the new deployment, before or after restart.",
+    "uncertainty_cleared": true,
+    "cleared_uncertainty": "\"\" (was \"incoherent book for cpc-btc-updown-15m-2026-10-10-1345z while settling: QUANTITY_WITHOUT_COST\")",
+    "mechanism": "NOT a phantom deletion and NOT a flat-anchor adoption. The venue reports 0 for that market because the position genuinely SETTLED on 2026-10-10T14:00:15Z. A ledger reconstructed from venue evidence simply holds no 1345z position.",
+    "see": "THE_0_13_IS_NOT_A_PHANTOM.md -- the 0.13 was real (avgPx 0.3500, cost 0.0455, realized -0.0455), so this was a missing cost basis, not a fictitious quantity."
+  },
+  "gate_3_executor_disarmed_throughout": {
+    "PASS": true,
+    "armed": false,
+    "owner_arm_token": false,
+    "halt": false,
+    "open_orders_at_venue": 0,
+    "live_orders": 0,
+    "pending_terminal": [],
+    "quarantined": [],
+    "orders_submitted_by_this_recovery": 0,
+    "orders_cancelled_by_this_recovery": 0,
+    "note": "PMUS_Q1_ARM was never read or written by this recovery. list-variables is credential-materializing and was refused; arm state is taken from the process's own heartbeats, which is stronger evidence than the variable anyway."
+  },
+  "gate_4_reconstructed_from_fresh_venue_evidence": {
+    "PASS": true,
+    "authority": "VENUE",
+    "trigger": "SOAK_PERIODIC",
+    "reconciled": true,
+    "positions": "none; venue reports flat for every market it was asked about",
+    "open_orders": 0,
+    "reservations": "none outstanding; committed_usd {} and cash_deployed []",
+    "accounting_consistency": "drift {} and gross_net_agrees {} -- our gross book and the venue's net agree everywhere, trivially, because both are empty",
+    "nothing_invented": "no historical record was reconstructed or back-filled. The new ledger opens at realized 0 and says so."
+  },
+  "gate_5_persistence_and_reconciliation_after_restart": {
+    "PASS_WITH_A_STATED_LIMIT": true,
+    "restart_utc": "2026-10-12T00:30:40Z (in-place restart of deployment 77eff69b, no rebuild)",
+    "root_after_restart": "/data/l5-live-20261012z -- identical, so the mount and the variable both survive a restart",
+    "reconcile_after_restart": "reconciled true, drift {}, uncertainty_cleared true, armed false, 0 open orders, nothing quarantined",
+    "settle_refused_after_restart": 0,
+    "THE_LIMIT": "this proves the volume mount, the root path and a clean reconciliation all survive a restart. It does NOT prove durable INVENTORY survives a restart, because there is no inventory to survive -- the book is flat. That proof requires a position on the books, which requires arming, which is not authorized."
+  },
+  "opening_balance_of_the_new_ledger": {
+    "realized_attributed": "0",
+    "realized_unattributed": "0",
+    "realized_total": "0",
+    "retired_markets": [],
+    "carried_separately_and_NOT_summed": {
+      "log_derived_floor": "-0.08550000 (cache-derived, now unreproducible; ACCOUNTING_FLOOR_PRE_MIGRATION.json)",
+      "venue_confirmed_1345z_settlement": "-0.0455 (inside the ten-market reconciliation at analysis/l5/pmus_manual_audit/results/)",
+      "why_not_summed": "they overlap by an unknown amount. Neither is realized with an attributed cashflow."
+    }
+  },
+  "limits_unchanged": {
+    "max_usd_per_market": "5", "max_abs_residual": "10", "max_total_exposure_usd": "5",
+    "max_concurrent_markets": 1, "max_live_orders": 8, "daily_realized_loss_halt_usd": "5",
+    "policy": "RESIDUAL_CAP_k2", "frozen_rule": "030d8bf",
+    "acquisition_tolerance": "PMUS_SPRING_REST_AT_OR_BEHIND_TOUCH remains unset/off; the engine patch remains unapplied"
+  },
+  "new_infrastructure_cost": {
+    "new_volumes": 0,
+    "new_services": 0,
+    "new_deployments_beyond_the_one_config_redeploy": 0,
+    "incremental_monthly_cost_usd": 0,
+    "why_zero": "no volume was created. An already-provisioned, already-billed 50 GB volume was moved from a dead buildcheck service to this one. Storage consumed does not change; the volume count does not change."
+  },
+  "labels": "Config-only production change. No code, no limits, no arming, no orders, no new service, no new volume."
+}
