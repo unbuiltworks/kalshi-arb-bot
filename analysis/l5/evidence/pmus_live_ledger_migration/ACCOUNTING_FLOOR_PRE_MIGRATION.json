@@ -1,0 +1,56 @@
+{
+  "label": "FINAL_LOG_DERIVED_ACCOUNTING_FLOOR__l5-pmus-live__PRE_VOLUME_MIGRATION",
+  "captured_utc": "2026-10-12T00:22:03Z",
+  "captured_from": "Railway deploy logs, service l5-pmus-live (87f1834e-530e-4fc4-a310-91c8d3add196), project arb-ev-wallet-shadow, env production. Log-derived: this is the floor the EPHEMERAL cache last reported, not an independent reconstruction.",
+  "deployment_at_capture": {
+    "id": "6a6b9468-cbcb-4c15-87f1-eb97870965cc",
+    "status": "SUCCESS",
+    "created": "2026-10-09T02:12:21.644Z",
+    "source_branch": "claude/gemini-btc-economic-viability-h3u7zl",
+    "uptime_s_at_capture": 252506.7,
+    "volumes_before": [],
+    "L5_LIVE_ROOT_before": "ephemeral container path (Dockerfile default /state/l5-live; service variable present but value not read -- list-variables is credential-materializing and was refused)"
+  },
+  "executor_state_at_capture": {
+    "armed": false,
+    "owner_arm_token": false,
+    "halt": false,
+    "preflight_latest": "PASSED",
+    "disarm_reason": "orders in an UNCERTAIN state; refusing to arm",
+    "open_orders_at_venue": 0,
+    "live_orders_pending_terminal": [],
+    "live_orders_released_unacked": [],
+    "quarantined": [],
+    "account_funded_usd": "243.11505",
+    "account_key_fingerprint": "keyfp:d51b44a3fa83"
+  },
+  "THE_FLOOR": {
+    "realized_attributed": "-0.08550000",
+    "realized_today": "-0.08550000",
+    "note": "Both fields read the same value in every one of the 8 heartbeats and 30 reconciliations captured. This is the ONLY surviving quantitative accounting figure; its cache-internal derivation is among the details the owner accepted losing."
+  },
+  "retired_markets_last_reported": [
+    "aec-atp-alebub-branak-2026-10-09",
+    "aec-nfl-phi-jax-2026-10-11",
+    "cpc-btc-updown-15m-2026-10-11-1430z"
+  ],
+  "permanently_lost_as_accepted_by_owner": {
+    "cost_reconstructions": "NOT PRESENT in any captured log line. Cache-only. Lost.",
+    "flat_adoptions": "NOT PRESENT in any captured log line. Cache-only. Lost.",
+    "retired_markets_detail": "only the three slugs above survive; per-market detail was cache-only. Lost.",
+    "fill_count": "NOT PRESENT in any captured log line. Cache-only. Lost.",
+    "realized_attributed_derivation": "the -0.0855 total survives; the per-market build-up behind it does not. Lost."
+  },
+  "incoherent_book_at_capture": {
+    "market": "cpc-btc-updown-15m-2026-10-10-1345z",
+    "our_book": {"side": "DOWN", "qty": "0.1300", "cost": "0", "fills_booked": 0},
+    "venue_now_reports": "0",
+    "violation": "QUANTITY_WITHOUT_COST",
+    "engine_refusal": "L5_LIVE_SETTLE_REFUSED / INCOHERENT_BOOK",
+    "engine_own_words": "quantity with no cost basis and no fill that attested a zero price; the cost of these shares is unknown, not zero",
+    "why_refusing_is_correct": "a settlement computed against an incoherent book posts a wrong realized P&L and moves the loss halt with it",
+    "settle_refusals_captured": 38,
+    "operational_impact": "this is what disarms the executor: L5_LIVE_DISARMED 'orders in an UNCERTAIN state; refusing to arm'. The incoherent book, not a risk limit, is the thing blocking live progression."
+  },
+  "labels": "Log-derived floor only. No orders, nothing armed, no configuration changed by this capture. Read-only."
+}
