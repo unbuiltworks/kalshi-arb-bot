@@ -1298,6 +1298,49 @@ LEDGER_REPAIRS = [
         },
     },
     {
+        # RUNTIME-DISCOVERED, deployment 583ced9b: this market was ALREADY
+        # RETIRED before the repair shipped, so retire_settled_market never
+        # ran for it here -- and retirement is what pops the position rows.
+        # Its DOWN row survived with no cost, book_violations kept reporting
+        # QUANTITY_WITHOUT_COST, and reconcile therefore RE-SET
+        # orders_uncertain on every pass. SafetyLimits.refuse() returns
+        # ORDER_STATE_UNCERTAIN before any other check, so every MAKER
+        # action in the window was refused. Observed in the 1715z window at
+        # 17:16-17:18Z with "incoherent book ['...0030z']".
+        #
+        # This books ONLY the cost basis the venue established, which makes
+        # the book coherent. It posts NO P&L: reconstruct_cost_basis does
+        # not touch realized, and the market is already retired so
+        # ALREADY_RETIRED makes a second settlement impossible. The +1.7000
+        # for this market is already recognised via the labelled adjustment.
+        "id": "0030z-retired-row-missing-cost-basis",
+        "market": "cpc-btc-updown-15m-2026-10-12-0030z",
+        "side": "DOWN",
+        "qty": D("2"), "cost": D("0.3000"),
+        "expect_qty": D("2.0000"), "expect_cost": D("0"),
+        "evidence": {
+            "source": "/v1/order read by the GET-only pmus-readonly-recovery",
+            "orders": ["D1SCCX4F8Z84"],
+            "detail": ("D1SCCX4F8Z84 ORDER_STATE_FILLED quantity 2 "
+                       "cumQuantity 2 avgPx 0.8500 commission 0.0000, "
+                       "OUTCOME_SIDE_NO ORDER_INTENT_BUY_SHORT, MANUAL. The "
+                       "venue quotes the LONG price, so the own-outcome DOWN "
+                       "cost is 2 * (1 - 0.8500) = 0.3000"),
+            "settlement": ("state MARKET_STATE_EXPIRED settlementPx 0.0000. "
+                           "Already retired, and its +1.7000 is already "
+                           "recognised through the labelled 0.0200 "
+                           "adjustment, so this books a cost basis ONLY and "
+                           "posts no P&L"),
+            "what_went_wrong": ("the ledger repair retired the two UNretired "
+                                "markets and corrected this one's realized "
+                                "figure, but left this position row in "
+                                "place. A retired market's stale row still "
+                                "fails book coherence, which kept "
+                                "orders_uncertain set and refused every "
+                                "MAKER action"),
+        },
+    },
+    {
         "id": "nfl-bal-atl-manual-no-legs-no-cost-basis",
         "market": "aec-nfl-bal-atl-2026-10-11",
         "side": "DOWN",

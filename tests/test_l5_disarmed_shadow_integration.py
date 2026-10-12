@@ -151,9 +151,35 @@ def test_repair_ids_are_unique():
     assert len(ids) == len(set(ids))
 
 
-def test_no_repair_entry_targets_the_already_retired_market():
-    assert all(r["market"] != Z0030 for r in RUN.LEDGER_REPAIRS), \
-        "0030z must be corrected by adjustment, never by re-settling"
+def test_the_retired_market_is_never_re_settled_by_a_repair():
+    """NARROWED after runtime evidence from deployment 583ced9b.
+
+    The original rule here was "no repair may target the retired market at
+    all". That was too broad and the deployment disproved it: 0030z kept a
+    stale DOWN row with no cost, book_violations kept failing, and reconcile
+    re-set orders_uncertain on every pass, which refused every MAKER action.
+
+    The REAL invariant is narrower: a retired market may be repaired for
+    COHERENCE, because a cost-basis repair posts no P&L; it may never be
+    re-settled, and its P&L may only move through the labelled adjustment.
+    """
+    repairs = [r for r in RUN.LEDGER_REPAIRS if r["market"] == Z0030]
+    assert len(repairs) == 1
+    r = repairs[0]
+    # cost basis only, from a named venue order
+    assert r["cost"] == D("0.3000") and r["qty"] == D("2")
+    assert r["evidence"]["orders"] == ["D1SCCX4F8Z84"]
+    # and P&L for this market moves ONLY through the adjustment
+    adj = [a for a in RUN.LEDGER_ADJUSTMENTS if a["market"] == Z0030]
+    assert len(adj) == 1 and adj[0]["delta"] == D("0.0200")
+
+
+def test_repair_ledger_from_venue_never_posts_realized():
+    """The mechanism that repairs a retired market must not touch P&L."""
+    src = (ROOT / "src" / "l5_pmus_live_runner.py").read_text()
+    body = src.split("def repair_ledger_from_venue")[1].split("\ndef ")[0]
+    assert "realized_attributed" not in body
+    assert "retire_settled_market" not in body
 
 
 def test_a_repair_refuses_when_the_ledger_holds_something_else():
