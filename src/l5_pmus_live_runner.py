@@ -77,6 +77,12 @@ PREFLIGHT_RETRY_S = 3.0
 #: a fixed 3s against a market that does not exist yet is not urgency, it is
 #: a busy-wait against a rate limit.
 PREFLIGHT_BACKOFF_S = (3.0, 6.0, 12.0, 24.0)
+
+#: a value no preflight report can produce, so the first outcome of a
+#: window always logs. `None` cannot serve: it is exactly what the
+#: fatal-exception report yields for blocking_failures.
+_BLOCKERS_UNSET = object()
+
 #: while the book is uncertain, how often we may re-ask the venue. Not every
 #: tick: hammering a venue that is already erroring turns a transient fault
 #: into a rate limit.
@@ -88,6 +94,12 @@ RECONCILE_RETRY_S = 15.0
 #: the uncertainty path could not rescue it either.
 STALLED_ORDER_S = 90.0
 HB_EVERY_S = 60.0
+#: how old an authoritative buying-power reading may be before it is
+#: re-read. The reconcile path alone is NOT a cadence: it short-circuits
+#: on a confirmed book, so a reading taken at startup would sit there for
+#: the rest of the run and be reported as though it were current. One GET
+#: a minute against a 1.5 rps budget is negligible.
+CASH_REFRESH_S = 60.0
 #: how often ONE order may be re-read. The tick is 3s and the old code
 #: polled every live order on every tick: with a full envelope that is 2.7
 #: GETs a second from this path alone, which is most of how we rate-limited
@@ -222,11 +234,23 @@ class Runner:
         self.transport: Optional[T.PmusTransport] = None
         self.executor: Optional[LX.FaithfulExecutor] = None
         self.reconciled = False        # venue has not confirmed our book
+        #: authoritative buying power, and when it was read. None means
+        #: no reading -- never unlimited.
+        self.available_cash_usd = None
+        self.available_cash_t = None
         self.last_reconcile_t = 0.0
         self.last_progress_t = 0.0
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
-        self.last_blockers: Optional[List[str]] = None
+        #: _BLOCKERS_UNSET, not None, because a preflight that dies in the
+        #: fatal-exception path produces a report with NO
+        #: blocking_failures key at all. Initialised to None, the
+        #: "only log when what blocks it CHANGES" test read None != None
+        #: and stayed quiet forever: 1730z failed preflight five times
+        #: and emitted not one L5_LIVE_PREFLIGHT line, so the reason was
+        #: unobservable. A sentinel makes the FIRST outcome always differ,
+        #: and a repeat of the same blockers still says nothing.
+        self.last_blockers: Any = _BLOCKERS_UNSET
         self.win = collections.Counter()
         self.first_action_t: Optional[float] = None
         self.stats = collections.Counter()
@@ -316,7 +340,7 @@ class Runner:
         self.preflight_status = "NOT_RUN"
         self.last_preflight_t = 0.0
         self.preflight_attempts = 0
-        self.last_blockers = None
+        self.last_blockers = _BLOCKERS_UNSET
         self.win = collections.Counter()
         self.first_action_t = None
 
@@ -596,6 +620,11 @@ class Runner:
             return
         self.reconciled = True
         self.last_progress_t = now
+        # The authoritative buying-power read is deliberately NOT called
+        # from here. Reconciliation establishes the BOOK, and a balance read
+        # that errors must never take the book's confirmation down with it.
+        # It runs on the main loop instead, self-throttled by
+        # CASH_REFRESH_S and with its own error counter.
         emit("L5_LIVE_RECONCILE",
              dict(out, market=t.market_slug,
                   cleared_uncertainty=str(uncertain or ""),
@@ -764,6 +793,57 @@ class Runner:
             "intent": order.get("intent"),
             "armed": bool(t and t.armed)})
 
+    def refresh_available_cash(self, t, now: float) -> None:
+        """Feed the cash gate the venue's own buying power.
+
+        The pieces already existed and were simply never connected:
+        `transport.account()` GETs /v1/account/balances and
+        `PmusTransport.buying_power()` reads it out of the LIST-shaped
+        response. Until now available_cash_usd was hardcoded None, so the
+        cash gate bound on its configured ceiling alone while the venue was
+        reporting 243.15505.
+
+        THIS CANNOT WEAKEN THE GATE, and that is the whole design:
+
+          * a SUCCESSFUL read installs a number, and a number can only ADD
+            a refusal -- the gate refuses when committed exceeds available,
+            on top of the ceiling it already enforces;
+          * a FAILED or unreadable read installs None, which is exactly
+            today's production state, so it is not a regression -- and
+            require_cash_evidence() still refuses to ARM on None;
+          * a STALE value is never reused. Freshness is recorded and
+            published so staleness is observable rather than assumed.
+
+        Read-only throughout. No order path, no credential handling here.
+        """
+        if (self.available_cash_t is not None
+                and now - self.available_cash_t < CASH_REFRESH_S):
+            return                     # the reading in hand is still fresh
+        value = None
+        err = None
+        try:
+            bal = t.account() or {}
+            value = T.PmusTransport.buying_power(bal)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            err = "%s: %s" % (type(exc).__name__,
+                              T.redact("%s" % exc)[:120])
+        self.available_cash_usd = value
+        self.available_cash_t = now if value is not None else None
+        if self.executor is not None:
+            # None means "no authoritative reading", never "unlimited"
+            self.executor.available_cash_usd = value
+        emit("L5_LIVE_CASH", {
+            "available_cash_usd": (None if value is None else str(value)),
+            "source": "/v1/account/balances via transport.account()",
+            "read_ok": value is not None, "error": err,
+            "age_s": 0.0 if value is not None else None,
+            "refresh_s": CASH_REFRESH_S,
+            "labels": ("authoritative buying power. None is NOT unlimited: "
+                       "the cash gate then binds on its configured ceiling "
+                       "alone and require_cash_evidence() refuses to arm.")})
+
     def orders_stalled_for_s(self, now: float) -> float:
         """How long our live orders have gone without any venue progress.
 
@@ -912,6 +992,14 @@ class Runner:
             # $1.8171 worst case. Reported so the difference is visible.
             "cash_deployed": [self.store.cash_deployed_usd(m)
                               for m in self.store.markets_with_exposure()],
+            "available_cash": {
+                "usd": (None if self.available_cash_usd is None
+                        else str(self.available_cash_usd)),
+                "age_s": (None if self.available_cash_t is None
+                          else round(self.now_t - self.available_cash_t, 1)),
+                "source": "/v1/account/balances",
+                "labels": ("None is no reading, never unlimited. A number "
+                           "only ADDS a refusal to the cash gate.")},
             "risk_gate": {
                 "measures": "worst-case loss over both settlements",
                 "max_usd_per_market": str(self.limits.max_usd_per_market),
@@ -1738,6 +1826,17 @@ def main() -> int:
             runner.stats["tick_errors"] += 1
             emit("L5_LIVE_ERROR", {"error": T.redact("%s: %s" % (
                 type(exc).__name__, exc))})
+        if runner.transport is not None:
+            # read-only, and self-throttled by CASH_REFRESH_S. On the main
+            # loop because reconcile_if_needed returns early on a confirmed
+            # book: without this, a reading taken once at startup would be
+            # published for the whole run as if it were current.
+            try:
+                runner.refresh_available_cash(runner.transport, now)
+            except Exception as exc:                           # noqa: BLE001
+                runner.stats["cash_refresh_errors"] += 1
+                emit("L5_LIVE_ERROR", {"error": T.redact("%s: %s" % (
+                    type(exc).__name__, exc))})
         if now - last_hb >= HB_EVERY_S:
             runner.heartbeat()
             last_hb = now
