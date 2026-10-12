@@ -169,6 +169,72 @@ def order_age_s(row: Mapping[str, Any], *, now: Optional[dt.datetime] = None
     return ((now or _utc()) - t).total_seconds()
 
 
+AUTOMATIC = "MANUAL_ORDER_INDICATOR_AUTOMATIC"
+
+
+class OwnershipOracle:
+    """Reads the executor's own durable claim of which ids are its own.
+
+    THE OWNER'S CORRECTION, IN CODE. Account-wide open orders plus an age test
+    is not ownership on a SHARED account: it would have cancelled the owner's
+    manual orders, D23N1EHTTZ7D among them. Ownership has two independent
+    requirements here and both must hold:
+
+      1. the id appears in the executor's durable live-order record, served
+         read-only by `l5_order_registry_server` off the volume the executor
+         writes its ACKs to;
+      2. the VENUE's own row for that id agrees on the market and reports
+         `manualOrderIndicator` AUTOMATIC.
+
+    (1) without (2) means our record disagrees with the venue, which is
+    uncertain identity. (2) without (1) is any other automated desk on this
+    account. Neither is sufficient, which is why neither alone is accepted.
+
+    FAILING TO READ IS FAILING TO OWN. An unreachable registry, an unparseable
+    body, or a registry reporting `readable: false` all yield NO owned ids, so
+    the watchdog latches the halt and cancels nothing. That is the safe
+    direction: an uncancelled order with the executor already halted is
+    recoverable by hand; somebody else's cancelled order is not.
+    """
+
+    DEFAULT_TIMEOUT_S = 3.0
+
+    def __init__(self, url: str, *, timeout_s: float = DEFAULT_TIMEOUT_S,
+                 opener=None) -> None:
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("OwnershipOracle needs a url")
+        self.url = url.strip().rstrip("/")
+        self.timeout_s = float(timeout_s)
+        self._opener = opener
+
+    def claimed(self) -> Dict[str, Dict[str, Any]]:
+        """{venue_order_id: row} the executor says it owns. {} on any doubt."""
+        from src import l5_order_registry_server as REG
+        url = "%s/%s" % (self.url, REG.REGISTRY_KEY)
+        try:
+            if self._opener is not None:
+                raw = self._opener(url, self.timeout_s)
+            else:
+                import urllib.request
+                with urllib.request.urlopen(url, timeout=self.timeout_s) as r:
+                    if getattr(r, "status", 200) != 200:
+                        return {}
+                    raw = r.read()
+            doc = json.loads(raw or b"{}")
+        except BaseException:                                  # noqa: BLE001
+            return {}
+        if not isinstance(doc, dict) or doc.get("readable") is not True:
+            return {}
+        out: Dict[str, Dict[str, Any]] = {}
+        for row in (doc.get("orders") or []):
+            if not isinstance(row, Mapping):
+                continue
+            vid = str(row.get("venue_order_id") or "").strip()
+            if vid:
+                out[vid] = dict(row)
+        return out
+
+
 class Watchdog:
     """One sweep: look, latch, cancel exactly, verify.
 
@@ -180,13 +246,19 @@ class Watchdog:
 
     def __init__(self, transport: Any, asserter: Any, *,
                  max_order_age_s: float = DEFAULT_MAX_ORDER_AGE_S,
-                 cancel_enabled: bool = False, who: str = "l5-watchdog"
-                 ) -> None:
+                 cancel_enabled: bool = False, who: str = "l5-watchdog",
+                 oracle: Any = None) -> None:
         self.t = transport
         self.asserter = asserter
         self.max_order_age_s = float(max_order_age_s)
-        self.cancel_enabled = bool(cancel_enabled)
         self.who = str(who)
+        self.oracle = oracle
+        #: NO ORACLE, NO CANCEL -- and not as a default that a flag can
+        #: override. Without a durable ownership record there is nothing that
+        #: distinguishes our order from the owner's manual one, so the cancel
+        #: power is not merely off, it is unavailable.
+        self.cancel_enabled = bool(cancel_enabled) and oracle is not None
+        self.cancel_requested = bool(cancel_enabled)
 
     def sweep(self, *, now: Optional[dt.datetime] = None) -> Dict[str, Any]:
         now = now or _utc()
@@ -196,7 +268,7 @@ class Watchdog:
             "cancel_enabled": self.cancel_enabled,
             "open_orders": 0, "overdue": [], "halted": None,
             "cancelled": [], "still_open": [], "unverified": [],
-            "read_error": None,
+            "not_ours": [], "read_error": None,
         }
         try:
             rows = self.t.open_orders()
@@ -267,11 +339,60 @@ class Watchdog:
             out["cancel_skipped"] = (
                 "cancel is not enabled on this watchdog; the halt is "
                 "asserted and the order is STILL RESTING")
+            out["cancel_unavailable_no_oracle"] = (
+                self.cancel_requested and self.oracle is None)
+            return out
+        # OWNERSHIP, from the executor's own durable record. Read ONCE per
+        # sweep: a per-id read would let the answer change mid-loop.
+        claimed = self.oracle.claimed()
+        out["claimed_ids"] = len(claimed)
+        if not claimed:
+            out["cancel_skipped"] = (
+                "the ownership registry named no ids, so NOTHING is "
+                "cancellable; the halt is asserted and the order is STILL "
+                "RESTING")
             return out
         for o in overdue:
             vid = o["venue_order_id"]
             if not vid:
                 out["unverified"].append(dict(o, verify_error="NO_ID"))
+                continue
+            mine = claimed.get(vid)
+            if mine is None:
+                # Not ours as far as any durable record goes. On a SHARED
+                # account that includes the owner's manual orders, so this
+                # is the branch that must never be relaxed.
+                out["not_ours"].append(dict(o, why="NOT_IN_OWNERSHIP_REGISTRY"))
+                continue
+            # VENUE CORROBORATION BEFORE ANY POST. Our record is one
+            # witness; the venue is the other, and they must agree before a
+            # cancel is sent. A row the venue says is MANUAL, or that names a
+            # different market than our claim, is uncertain identity -- the
+            # same contract l5_e1_cancel_by_id enforces -- and nothing is
+            # sent for it.
+            try:
+                pre = self.t.order(vid)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                out["unverified"].append(
+                    dict(o, verify_error=type(exc).__name__,
+                         why="OWNERSHIP_UNCONFIRMED_NO_POST_SENT"))
+                continue
+            indicator = str(pre.get("manualOrderIndicator") or "")
+            venue_slug = str(pre.get("marketSlug") or "")
+            claim_slug = str(mine.get("market") or "")
+            if indicator != AUTOMATIC:
+                out["not_ours"].append(
+                    dict(o, why="VENUE_SAYS_MANUAL",
+                         manual_order_indicator=indicator or None,
+                         labels=("a MANUAL order is never cancellable by "
+                                 "this path, however it is claimed")))
+                continue
+            if claim_slug and venue_slug and claim_slug != venue_slug:
+                out["not_ours"].append(
+                    dict(o, why="MARKET_MISMATCH", venue_market=venue_slug,
+                         claimed_market=claim_slug))
                 continue
             ack_error = None
             try:
@@ -316,4 +437,16 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
         max_order_age_s=float(os.getenv("L5_WATCHDOG_MAX_ORDER_AGE_S",
                                         str(DEFAULT_MAX_ORDER_AGE_S))),
         cancel_enabled=str(
-            os.getenv("L5_WATCHDOG_CANCEL", "")).strip().upper() == "YES")
+            os.getenv("L5_WATCHDOG_CANCEL", "")).strip().upper() == "YES",
+        oracle=oracle_from_env())
+
+
+def oracle_from_env() -> Optional[OwnershipOracle]:
+    """The executor's read-only registry, or None -- which disables cancel."""
+    url = str(os.getenv("L5_ORDER_REGISTRY_URL", "")).strip()
+    if not url:
+        return None
+    try:
+        return OwnershipOracle(url)
+    except BaseException:                                      # noqa: BLE001
+        return None

@@ -227,6 +227,31 @@ class Runner:
         # the repair above because it must never re-settle a market.
         apply_ledger_adjustments(self.store)
         rebase_contaminated_accounting(self.store)
+        # OWNERSHIP, PUBLISHED READ-ONLY. The watchdog cannot cancel one of
+        # our orders without a durable record that it is ours -- account-wide
+        # open orders say what is resting, not whose it is, and this account
+        # is SHARED. This serves `live_orders` over GET and nothing else; it
+        # is off entirely unless L5_ORDER_REGISTRY_PORT is set, so the default
+        # changes no behaviour. It never writes.
+        self.registry_server = None
+        try:
+            from src import l5_order_registry_server as REG
+            self.registry_server = REG.serve_from_env(self.store)
+            if self.registry_server is not None:
+                emit("L5_LIVE_ORDER_REGISTRY", {
+                    "serving": "/" + REG.REGISTRY_KEY,
+                    "port": os.getenv(REG.PORT_ENV),
+                    "labels": ("GET-only. The watchdog reads this to learn "
+                               "which venue order ids are ours; a claim here "
+                               "is necessary and NOT sufficient, because the "
+                               "watchdog also requires the venue's own row "
+                               "to report AUTOMATIC and the same market.")})
+        except Exception as exc:                               # noqa: BLE001
+            emit("L5_LIVE_ALARM", {
+                "kind": "order_registry_unavailable",
+                "error": "%s: %s" % (type(exc).__name__, str(exc)[:120]),
+                "labels": ("the watchdog cannot establish ownership, so it "
+                           "cannot cancel. It can still latch the halt.")})
         self.limits = LX.SafetyLimits(**PROBE_LIMITS)
         self.lam = lam
         self.seen: set = set()

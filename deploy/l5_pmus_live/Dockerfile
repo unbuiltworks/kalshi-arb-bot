@@ -57,6 +57,13 @@ COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py
 # image imports it (the repair entries are declarative data in the runner),
 # and the graft test correctly refuses a module outside the closure.
 COPY src/l5_halt_gate.py src/l5_halt_gate.py
+# The read-only ownership registry. The runner imports it at boot to publish,
+# over GET, which venue order ids are its own -- without that the watchdog
+# cannot tell our resting order from a manual one on this SHARED account and
+# must refuse to cancel anything. Caught missing by
+# test_the_image_copies_every_module_the_entrypoint_can_reach, which is the
+# test that exists because an import the image lacks fails only in production.
+COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
 COPY src/l5_live_validation_gates.py src/l5_live_validation_gates.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py

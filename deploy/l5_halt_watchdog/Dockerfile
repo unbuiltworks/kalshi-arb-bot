@@ -26,11 +26,16 @@ COPY src/pmus_auth.py         src/pmus_auth.py
 COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 COPY src/l5_halt_server.py    src/l5_halt_server.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
+# the ownership contract's constants (REGISTRY_KEY). The watchdog imports it
+# to name the key it reads; it serves nothing and holds no venue route.
+COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
 COPY scripts/__init__.py      scripts/__init__.py
 COPY scripts/l5_halt_watchdog.py scripts/l5_halt_watchdog.py
 
 ENV PYTHONUNBUFFERED=1
 ENV L5_WATCHDOG_STATE_DIR=/data
-# cancel is OPT-IN: L5_WATCHDOG_CANCEL=YES. Without it the watchdog latches
-# the halt and reports that the order is still resting.
+# Cancel needs BOTH L5_WATCHDOG_CANCEL=YES and L5_ORDER_REGISTRY_URL pointing
+# at the executor's read-only ownership registry. Without the registry the
+# power is UNAVAILABLE, not merely off: on a shared account there is nothing
+# else that tells our order from the owner's manual one.
 CMD ["python3", "-m", "scripts.l5_halt_watchdog"]

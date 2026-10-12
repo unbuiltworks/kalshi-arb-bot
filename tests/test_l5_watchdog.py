@@ -19,10 +19,15 @@ MARKET = "cpc-btc-updown-15m-2026-10-12-2200z"
 
 
 def open_row(oid="D1W00001", *, created="2026-10-12T21:40:00.000000000Z",
-             leaves="1.00", state="ORDER_STATE_OPEN"):
+             leaves="1.00", state="ORDER_STATE_OPEN",
+             indicator=None):
+    """A venue row. `manualOrderIndicator` is the venue's own ownership
+    signal and the watchdog now requires it to read AUTOMATIC before any
+    cancel, so the double carries it."""
     return {"id": oid, "marketSlug": MARKET, "state": state,
             "leavesQuantity": leaves, "cumQuantity": "0",
-            "createTime": created, "insertTime": created}
+            "createTime": created, "insertTime": created,
+            "manualOrderIndicator": indicator or W.AUTOMATIC}
 
 
 class Venue:
@@ -49,11 +54,41 @@ class Venue:
     def order(self, oid):
         if oid in self.read_raises:
             raise TimeoutError("slow")
-        return self._reads[oid]
+        row = dict(self._reads[oid])
+        # The real venue always returns these two, and the watchdog now
+        # requires both before it will POST a cancel. Defaulting them here
+        # keeps each test on its own subject; ownership itself is tested in
+        # tests/test_l5_watchdog_ownership.py, including the MANUAL case.
+        row.setdefault("manualOrderIndicator", W.AUTOMATIC)
+        row.setdefault("marketSlug", MARKET)
+        return row
+
+
+class ClaimsOpenOrders:
+    """An ownership oracle claiming every id the venue shows resting.
+
+    These tests predate the ownership requirement and are about the latch,
+    the cancel mechanics and the failure modes -- not about ownership, which
+    tests/test_l5_watchdog_ownership.py covers on its own. Supplying a
+    permissive oracle keeps each test on its own subject.
+    """
+
+    def __init__(self, venue):
+        self.venue = venue
+
+    def claimed(self):
+        try:
+            rows = self.venue.open_orders()
+        except BaseException:
+            return {}
+        return {str(r.get("id")): {"venue_order_id": str(r.get("id")),
+                                   "market": str(r.get("marketSlug") or "")}
+                for r in rows}
 
 
 def wd(tmp_path, venue, **kw):
     store = HG.FileStore(str(tmp_path))
+    kw.setdefault("oracle", ClaimsOpenOrders(venue))
     return W.Watchdog(venue, HG.HaltAsserter(store, who="test"), **kw), store
 
 
@@ -250,7 +285,8 @@ def test_the_halt_is_asserted_before_the_cancel_is_attempted(tmp_path):
 
     v = Noisy([open_row()], {"D1W00001": open_row()})
     w = W.Watchdog(v, Watcher(HG.FileStore(str(tmp_path)), who="t"),
-                   max_order_age_s=300, cancel_enabled=True)
+                   max_order_age_s=300, cancel_enabled=True,
+                   oracle=ClaimsOpenOrders(v))
     w.sweep(now=NOW)
     assert order_of_events[:2] == ["halt", "cancel"]
     assert gate(tmp_path).submissions_permitted() is False
@@ -306,15 +342,21 @@ def test_an_assert_only_watchdog_says_the_order_is_still_resting(tmp_path):
     assert gate(tmp_path).submissions_permitted() is False
 
 
-def test_cancel_needs_an_explicit_yes_from_the_environment(monkeypatch,
-                                                           tmp_path):
+def test_cancel_needs_an_explicit_yes_AND_an_ownership_registry(monkeypatch,
+                                                                tmp_path):
     monkeypatch.setenv("L5_WATCHDOG_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("L5_ORDER_REGISTRY_URL", "http://registry:8081")
     for val in ("", "1", "true", "yes ", "Y"):
         monkeypatch.setenv("L5_WATCHDOG_CANCEL", val)
         assert W.from_env(transport=Venue()).cancel_enabled is (
             val.strip().upper() == "YES")
     monkeypatch.setenv("L5_WATCHDOG_CANCEL", "YES")
     assert W.from_env(transport=Venue()).cancel_enabled is True
+
+    # and YES alone is not enough: with no registry the power is unavailable
+    monkeypatch.delenv("L5_ORDER_REGISTRY_URL")
+    w = W.from_env(transport=Venue())
+    assert w.cancel_requested is True and w.cancel_enabled is False
 
 
 def test_the_venue_fraction_format_parses(tmp_path):
@@ -474,15 +516,23 @@ def test_a_state_with_no_leaves_field_falls_back_to_the_words(tmp_path):
                           "leavesQuantity": "garbage"}) is False
 
 
-def test_only_the_ids_it_actually_observed_are_ever_cancelled(tmp_path):
-    """Exact-order-only, and the ids come from the venue's own open list."""
+def test_exactly_one_named_id_is_cancelled_and_nothing_else(tmp_path):
+    """Exact-order-only.
+
+    This test used to say the ids "come from the venue's own open list",
+    which was the design the owner rejected: on a SHARED account that list
+    includes other people's orders. Ownership now comes from the executor's
+    durable record cross-checked against the venue, and
+    tests/test_l5_watchdog_ownership.py owns that question. What remains
+    here is the narrower claim: one cancel per overdue id, by venue id, and
+    no broader route.
+    """
     v = Venue([open_row("D1SEEN001")],
               {"D1SEEN001": {"id": "D1SEEN001",
                              "state": "ORDER_STATE_CANCELED",
-                             "leavesQuantity": "0", "cumQuantity": "0"}})
+                             "leavesQuantity": "0", "cumQuantity": "0",
+                             "marketSlug": MARKET,
+                             "manualOrderIndicator": W.AUTOMATIC}})
     w, _ = wd(tmp_path, v, max_order_age_s=300, cancel_enabled=True)
     w.sweep(now=NOW)
-    assert v.cancelled == ["D1SEEN001"], "one id, the one it saw"
-    # the manual order the owner told us never to touch is not in the open
-    # list, so it is not in the sweep and cannot be named by it
-    assert "D23N1EHTTZ7D" not in v.cancelled
+    assert v.cancelled == ["D1SEEN001"]
