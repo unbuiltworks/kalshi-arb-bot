@@ -1,0 +1,196 @@
+{
+ "label": "RANKED_ECONOMIC_DIAGNOSIS__L5_vs_ENGINE__R4_THREE_MARKET_SAMPLE",
+ "source": "analysis/l5/r4_fidelity_decomposition.json (existing, committed). Fees src/pmus_fees.py.",
+ "sample": {
+  "markets": 3,
+  "decisions": 217,
+  "orders_submitted": 64,
+  "orders_filled": 10,
+  "fill_rate": "0.156",
+  "aggregate_venue_realized_usd": "0.0043",
+  "WARNING": "three markets, one day. Ranks mechanisms by demonstrated dollars; establishes NO expectancy."
+ },
+ "fee_adjustment": {
+  "maker_fee_usd": "0.0000",
+  "why": "src/pmus_fees.py exposes no maker_fee at all: a PMUS maker pays no fee and accrues a rebate. All ten fills were maker.",
+  "thetas_on_2026_09_07": {
+   "taker": "0.06",
+   "maker_rebate": "0.0125"
+  },
+  "maker_rebate_accrual_usd": "0.1348",
+  "rebate_status": "UNCONFIRMED CREDIT. Never netted into edge, per the operating model."
+ },
+ "l5_decision_vs_engine_action": {
+  "complete": {
+   "l5_decisions": 71,
+   "engine_acted_complete": 49,
+   "agreement": "0.69",
+   "held": {
+    "complement_not_priceable": 21,
+    "complete_without_residual": 1
+   }
+  },
+  "extend": {
+   "l5_decisions": 109,
+   "engine_acted_extend": 1,
+   "agreement": "0.009",
+   "held": {
+    "unmatched_usd_cap": 62,
+    "entry_band_left": 44,
+    "off_distribution_hold": 1
+   },
+   "note": "one further extend was executed as a complete"
+  },
+  "open": {
+   "l5_decisions": 37,
+   "engine_acted_open": 13,
+   "agreement": "0.35",
+   "held": {
+    "off_distribution_hold": 23,
+    "spend_cap_reached": 1
+   }
+  }
+ },
+ "per_market": [
+  {
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "submitted": 19,
+   "filled": 1,
+   "matched": "0",
+   "pair_cost": null,
+   "matched_usd": "0",
+   "residual": "5.24 YES",
+   "residual_usd": "-1.9912",
+   "venue_realized_usd": "-1.9912",
+   "status": "REALIZED",
+   "rebate_accrual_usd": "0.0154"
+  },
+  {
+   "slug": "aec-atpcq-aleher-tundur-2026-09-07",
+   "submitted": 16,
+   "filled": 5,
+   "matched": "8.55",
+   "pair_cost": "0.8798",
+   "matched_usd": "1.0279",
+   "residual": "1.86 YES",
+   "residual_usd": "0.9676",
+   "venue_realized_usd": "1.9955",
+   "status": "REALIZED",
+   "rebate_accrual_usd": "0.0558"
+  },
+  {
+   "slug": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "submitted": 29,
+   "filled": 4,
+   "matched": "10.21",
+   "pair_cost": "0.9992",
+   "matched_usd": "0.0082",
+   "residual": "0.00",
+   "residual_usd": null,
+   "venue_realized_usd": null,
+   "status": "SETTLED_REALIZED_UNCONFIRMED",
+   "rebate_accrual_usd": "0.0636"
+  }
+ ],
+ "ranking": [
+  {
+   "rank": 1,
+   "discrepancy": "UNMATCHED SECOND LEG",
+   "demonstrated_realized_usd": "-1.9912",
+   "share_of_all_realized_losses": "1.00",
+   "category": [
+    "PMUS_EXECUTION_LIMITATION",
+    "BEHAVIORAL_LOGIC"
+   ],
+   "mechanism": "petbru-alecan filled 1 of 19 orders (5.3%); engine chose complete 18 times and completed nothing; 5.24 YES left naked at cost 1.9912; market settled NO; full basis lost.",
+   "execution_limitation_evidence": "complement_not_priceable, 21 refusals, ALL 21 on the NO side, i.e. every one blocking a COMPLETE leg",
+   "behavioral_evidence": "18 complete attempts, 0 completing fills: re-chosen and re-submitted without achieving a fill",
+   "fee_adjusted": "unchanged; -1.976 even crediting the unconfirmed rebate",
+   "why_rank_1": "it is every realized dollar lost in the sample, and the same sample contains a WORKING completion at 0.8798, so the fix direction is unambiguous"
+  },
+  {
+   "rank": 2,
+   "discrepancy": "PAIR COMPLETION AT ~$1.00",
+   "demonstrated_realized_usd": "0.0082",
+   "capital_deployed_usd": "10.2018",
+   "gross_return_on_capital": "0.0008",
+   "category": [
+    "BEHAVIORAL_LOGIC"
+   ],
+   "mechanism": "norgom-ollwal matched 10.21 contracts, the largest matched book of the three, at pair cost 0.9992",
+   "discipline_breach": "spring discipline prefers <= 0.96 and locks near-$1.00 tolerance as late incentive-era L5 behavior; at 0.9992 it did not bind",
+   "rebate_dominates_margin": "rebate accrual 0.0636 is 7.8x the 0.0082 trading margin, so the trade only works as rebate farming, which the operating model forbids as a justification and which is unconfirmed",
+   "grounded_counterfactual_usd": "~1.23 if the same 10.21 pairs had completed at 0.8798, a price the engine actually achieved in a sibling market the same day",
+   "label": "counterfactual, but priced at an achieved fill rather than a fitted number"
+  },
+  {
+   "rank": 3,
+   "discrepancy": "EXTEND NOT EXECUTED",
+   "demonstrated_realized_usd": "0.0000",
+   "category": [
+    "SAFETY_RESTRICTION",
+    "BEHAVIORAL_LOGIC"
+   ],
+   "mechanism": "108 of L5's 109 extends never executed: unmatched_usd_cap 62, entry_band_left 44, off_distribution_hold 1, 1 executed as complete",
+   "counterfactual_held_to_settlement_usd": "-90.7785",
+   "counterfactual_one_fill_per_run_usd": "-29.7706",
+   "counterfactual_paired_at_later_touch_usd": "11.6480",
+   "counterfactual_if_opposite_side_paid_usd": "141.2115",
+   "note": "largest behavioral divergence, zero demonstrated profit impact, negative on the held-to-settlement reading. The positive reading assumes a complement fill that never happened.",
+   "why_not_rank_1": "ranking by suppressed behaviour would put this first and would be wrong about profitability"
+  },
+  {
+   "rank": 4,
+   "discrepancy": "OPEN SUPPRESSION",
+   "demonstrated_realized_usd": "0.0000",
+   "category": [
+    "BEHAVIORAL_LOGIC"
+   ],
+   "mechanism": "23 of 37 L5 opens held by off_distribution_hold (62%), 315s of session time"
+  },
+  {
+   "rank": 5,
+   "discrepancy": "FILL RATE",
+   "demonstrated_realized_usd": "mechanism, not an independent line",
+   "category": [
+    "PMUS_EXECUTION_LIMITATION",
+    "BEHAVIORAL_LOGIC"
+   ],
+   "mechanism": "54 of 64 submitted orders never filled (15.6% fill rate). entry_band_left alone consumed 1524s, 35.7% of all live session time -- a larger time sink than the cap's 26%."
+  }
+ ],
+ "answer_to_q5": "The failure to complete the second leg. -1.9912 USD, which is 100% of realized losses in the sample. Our biggest behavioral gap (EXTEND) and our biggest economic problem (COMPLETION) are not the same thing.",
+ "cashflow_attribution": {
+  "available": false,
+  "checked": [
+   {
+    "surface": "/v1/account/balances",
+    "result": "point-in-time scalar only: currentBalance 243.11505, buyingPower and availableToWithdraw identical, unsettledFunds 0, pendingCredit 0, balanceReservation 0, pendingWithdrawals []. No transaction list and lastUpdated is null, so balance-differencing has no venue timestamp to anchor to."
+   },
+   {
+    "surface": "activity feed (the transaction feed)",
+    "result": "POSITION_RESOLUTION rows carry cashValue \"0\" and an EMPTY tradeId"
+   },
+   {
+    "surface": "/v1/settlements, /v1/prediction-markets/settlements, /v1/transfers",
+    "result": "present in this repo only as GEMINI candidates explicitly labelled speculative (gemini_settlement_probe.py, gemini_execution/rebate_probe.py). Not PMUS routes we hold."
+   }
+  ],
+  "what_the_balance_does_establish": "unsettledFunds 0 with currentBalance == availableToWithdraw means nothing is pending: settlements have cleared into withdrawable cash IN AGGREGATE. The -6.0334 is consistent with cleared cash but cannot be decomposed per market.",
+  "action_taken": "gap documented, behavioral analysis not blocked on it, as instructed"
+ },
+ "against_target": {
+  "target_usd_per_day": "480 confirmed realized net",
+  "this_sample_usd": "0.0043 settlement-implied across 3 markets, no attributed cashflow",
+  "note": "noise at a different order of magnitude. Not a scaling problem: a completion mechanism that loses its whole basis when it fails does not improve by running more often."
+ },
+ "constraints_respected": {
+  "acquisition_flag": "off",
+  "engine_patch": "unapplied",
+  "live_orders": 0,
+  "new_services": 0,
+  "new_strategies": 0,
+  "thresholds_fitted": 0,
+  "code_rerun": "none"
+ }
+}
