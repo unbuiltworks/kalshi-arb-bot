@@ -323,23 +323,48 @@ class HypoOrder:
             self._evaluate(t)
 
     def _evaluate(self, t: Optional[float]) -> None:
+        """Which scenarios this print satisfies.
+
+        A KNOWN queue is cleared by VOLUME and by nothing else. An earlier
+        version let a "sweep" -- a print strictly through our price --
+        satisfy BASE and CONSERVATIVE outright, on the reasoning that a
+        sweep takes the whole level including us. Live data killed that: a
+        print 12.02 shares deep went through a level with 9,586.35 shares
+        ahead of us and was scored a fill in all three scenarios. Twelve
+        shares cannot consume nine thousand. In a continuous book a print
+        below our bid with that little volume means the levels above
+        THINNED BY CANCELLATION, so crediting it is crediting a
+        cancellation ahead of us as queue advancement -- the one thing this
+        model must never do, and already has a test forbidding on the
+        volume path.
+
+        The sweep allowance therefore survives ONLY where it was needed:
+        an UNSERVED rung, whose queue is unknown and which volume can never
+        be shown to have cleared.
+
+        The three scenarios are also now MONOTONE by construction --
+        conservative implies base implies optimistic -- which the old
+        version violated: OPTIMISTIC fired only on sweeps and so could come
+        out BELOW conservative once queues were known.
+        """
         q = self.queue_ahead
         if q is not None:
+            # known queue: volume only, never a sweep
             if not self.filled[CONSERVATIVE] and self.cleared >= q + self.qty:
                 self.filled[CONSERVATIVE] = True
                 self.fill_t[CONSERVATIVE] = t
             if not self.filled[BASE] and self.cleared >= q:
                 self.filled[BASE] = True
                 self.fill_t[BASE] = t
-        if self.swept and not self.filled[OPTIMISTIC]:
+            # optimistic is at least base, and never less
+            if self.filled[BASE] and not self.filled[OPTIMISTIC]:
+                self.filled[OPTIMISTIC] = True
+                self.fill_t[OPTIMISTIC] = self.fill_t[BASE]
+        elif self.swept and not self.filled[OPTIMISTIC]:
+            # UNKNOWN queue: a sweep is the only evidence available, and it
+            # stays confined to the optimistic case.
             self.filled[OPTIMISTIC] = True
             self.fill_t[OPTIMISTIC] = t
-        # a sweep also satisfies the stricter cases when the queue is known
-        if self.swept and q is not None:
-            for s in (BASE, CONSERVATIVE):
-                if not self.filled[s]:
-                    self.filled[s] = True
-                    self.fill_t[s] = t
 
     def record(self) -> Dict[str, Any]:
         return {

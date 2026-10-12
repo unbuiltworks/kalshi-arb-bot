@@ -423,16 +423,22 @@ def test_a_full_open_then_complete_cycle_nets_the_pair_edge():
 
 def test_the_cursor_survives_the_recorders_rolling_500_cap():
     """An index cursor freezes once `trades` hits its 500-row cap,
-    dropping every later print. 1800z saw trades_seen 500."""
+    dropping every later print. 1800z saw trades_seen 500.
+
+    Asserted on the SESSION's prints_consumed rather than an order's
+    `cleared`: once an order fills in every scenario it is retired from
+    open_orders and correctly stops accumulating volume, so `cleared` is no
+    longer a measure of the cursor.
+    """
     s = _sess()
     s.place(M.UP, D("0.52"), D("5"), 1.0, D("0.53"), D("0.54"), "c1")
     tape = [pr("0.52", "1", "SELL", t=float(i)) for i in range(2, 502)]
     s.advance(tape)
-    assert s.orders[0].cleared == D("500")
+    assert s.prints_consumed == 500
     # the list is now capped: it stays length 500 while OLD rows fall off
     tape = tape[1:] + [pr("0.52", "1", "SELL", t=502.0)]
     s.advance(tape)
-    assert s.orders[0].cleared == D("501"), "a capped tape lost a print"
+    assert s.prints_consumed == 501, "a capped tape lost a print"
 
 
 def test_an_already_seen_print_is_not_recounted_across_batches():
@@ -738,3 +744,84 @@ def test_the_cap_cannot_create_a_fill():
     ra = a.close(up_won=False)["scenarios"][M.OPTIMISTIC]
     rb = b.close(up_won=False)["scenarios"][M.OPTIMISTIC]
     assert ra["modelled_fills"] <= rb["modelled_fills"]
+
+
+# ===================================================== the sweep shortcut
+# LIVE DATA killed the old shortcut: a print 12.02 shares deep went through
+# a level with 9,586.35 shares ahead of us and scored a fill in all three
+# scenarios. Twelve shares cannot consume nine thousand; in a continuous
+# book that means the levels above thinned by CANCELLATION, so crediting it
+# credits a cancellation ahead of us as queue advancement.
+
+def test_a_sweep_does_NOT_clear_a_KNOWN_queue():
+    """The exact production shape: queue 9586.35, volume 12.02, swept."""
+    L = M.Ladder()
+    L.ingest(_nested_marketdata(), 1.0)
+    o = M.HypoOrder(SLUG, M.UP, D("0.52"), D("5"), 1.0, ladder=L,
+                    bid=D("0.53"), ask=D("0.54"))
+    assert o.queue_ahead == D("800")
+    o.advance([pr("0.51", "12.02", "SELL", t=2.0)])     # through, tiny
+    assert o.swept is True
+    assert o.filled[M.CONSERVATIVE] is False
+    assert o.filled[M.BASE] is False
+    assert o.filled[M.OPTIMISTIC] is False, (
+        "a 12-share sweep cleared an 800-share queue")
+
+
+def test_a_known_queue_is_cleared_only_by_VOLUME():
+    L = M.Ladder()
+    L.ingest(_nested_marketdata(), 1.0)
+    o = M.HypoOrder(SLUG, M.UP, D("0.52"), D("5"), 1.0, ladder=L,
+                    bid=D("0.53"), ask=D("0.54"))
+    o.advance([pr("0.52", "800", "SELL", t=2.0)])
+    assert o.filled[M.BASE] is True
+    assert o.filled[M.CONSERVATIVE] is False
+    o.advance([pr("0.52", "5", "SELL", t=3.0)])
+    assert o.filled[M.CONSERVATIVE] is True
+
+
+def test_the_sweep_allowance_survives_only_for_an_UNKNOWN_queue():
+    """Where it was needed: an unserved rung volume can never be shown to
+    have cleared."""
+    L = M.Ladder()
+    L.ingest(_nested_marketdata(), 1.0)
+    o = M.HypoOrder(SLUG, M.UP, D("0.40"), D("5"), 1.0, ladder=L,
+                    bid=D("0.53"), ask=D("0.54"))
+    assert o.queue_ahead is None
+    o.advance([pr("0.39", "10", "SELL", t=2.0)])
+    assert o.filled[M.OPTIMISTIC] is True
+    assert o.filled[M.BASE] is False
+    assert o.filled[M.CONSERVATIVE] is False
+
+
+@pytest.mark.parametrize("vol,cons,base,opt", [
+    ("100", False, False, False),
+    ("800", False, True, True),
+    ("805", True, True, True),
+])
+def test_the_three_scenarios_are_MONOTONE(vol, cons, base, opt):
+    """conservative implies base implies optimistic. The old version broke
+    this: OPTIMISTIC fired only on sweeps and so could come out BELOW
+    conservative once queues were known."""
+    L = M.Ladder()
+    L.ingest(_nested_marketdata(), 1.0)
+    o = M.HypoOrder(SLUG, M.UP, D("0.52"), D("5"), 1.0, ladder=L,
+                    bid=D("0.53"), ask=D("0.54"))
+    o.advance([pr("0.52", vol, "SELL", t=2.0)])
+    assert (o.filled[M.CONSERVATIVE], o.filled[M.BASE],
+            o.filled[M.OPTIMISTIC]) == (cons, base, opt)
+    # the implication itself, independent of the table
+    assert not (o.filled[M.CONSERVATIVE] and not o.filled[M.BASE])
+    assert not (o.filled[M.BASE] and not o.filled[M.OPTIMISTIC])
+
+
+def test_a_window_cannot_report_more_conservative_fills_than_optimistic():
+    s = _sess()
+    for i, px in enumerate(("0.52", "0.52", "0.52")):
+        s.place(M.UP, D(px), D("1"), 1.0 + i, D("0.53"), D("0.54"))
+    s.advance([pr("0.52", "5000", "SELL", t=9.0)])
+    rep = s.close(up_won=True, wire_at_close=D("0.50"))
+    c = rep["scenarios"][M.CONSERVATIVE]["modelled_fills"]
+    b = rep["scenarios"][M.BASE]["modelled_fills"]
+    o = rep["scenarios"][M.OPTIMISTIC]["modelled_fills"]
+    assert c <= b <= o, "scenario ordering inverted: %s/%s/%s" % (c, b, o)

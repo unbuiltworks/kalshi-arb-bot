@@ -290,12 +290,20 @@ class Runner:
         # observer here is what gives a maker quote a queue position; it is
         # detached-by-default and feeds nothing but this model.
         if model_fills():
-            # the MODELLED book is held to the DEPLOYED residual cap, so a
-            # modelled sequence is one a bounded live test could actually
-            # run. 1845z modelled a -5.55 residual that RESIDUAL_ABOVE_CAP
-            # would have refused live.
+            # the MODELLED book is held to the EFFECTIVE BINDING live limit,
+            # which is the TIGHTER of the two independent constraints:
+            #
+            #   SafetyLimits.max_abs_residual          10  (PROBE_LIMITS)
+            #   ValidationGates.max_unmatched_contracts 5  (additive gate)
+            #
+            # ValidationGates is consulted AFTER SafetyLimits and can only
+            # ADD refusals, so live is bounded by min(10, 5) = 5. The first
+            # version passed SafetyLimits alone and so modelled sequences
+            # were LOOSER than live would permit -- the exact defect the cap
+            # was added to remove. Derived, never hardcoded, so it tracks
+            # either limit if either is reconfigured.
             self.model = FM.ModelSession(
-                slug, max_abs_residual=self.limits.max_abs_residual)
+                slug, max_abs_residual=self.effective_residual_cap())
             self.book.frame_observer = self.model.ingest_frame
         else:
             self.model = None
@@ -884,6 +892,27 @@ class Runner:
                    or (rec.get("row") or {}).get("side") or "").upper()
         return {"price": px, "qty": qty, "mode": "MAKER", "side": side,
                 "client_order_id": rec.get("action_key")}
+
+    def effective_residual_cap(self) -> Optional[D]:
+        """The tighter of the live residual constraints, or None if neither.
+
+        ValidationGates can only ADD refusals on top of SafetyLimits, so the
+        unmatched inventory a live run could actually reach is bounded by
+        whichever is smaller. Derived from both rather than hardcoded: if
+        either is reconfigured the model follows it without a code change.
+        """
+        caps: List[D] = []
+        lim = getattr(self.limits, "max_abs_residual", None)
+        if lim is not None:
+            caps.append(D(str(lim)))
+        vg = getattr(self.executor, "validation_gates", None) \
+            if self.executor is not None else None
+        if vg is None:
+            vg = validation_gates()
+        unmatched = getattr(vg, "max_unmatched_contracts", None)
+        if unmatched is not None:
+            caps.append(D(str(unmatched)))
+        return min(caps) if caps else None
 
     def model_place(self, intent: Optional[Mapping[str, Any]],
                     row: Mapping[str, Any], now: float,

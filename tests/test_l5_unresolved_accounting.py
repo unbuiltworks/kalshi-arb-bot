@@ -330,3 +330,124 @@ def test_the_real_ledger_is_never_touched_by_observation():
     for name in ("l5_maker_fill_model", "ModelSession", "HypoInventory",
                  "unresolved_accounting"):
         assert name not in src
+
+
+# ===================================================== effective residual cap
+# The model was wired to SafetyLimits.max_abs_residual (10) while the
+# BINDING live constraint is ValidationGates.max_unmatched_contracts (5),
+# because ValidationGates is consulted after SafetyLimits and can only ADD
+# refusals. Modelled sequences were therefore LOOSER than live would permit.
+
+class _Lim:
+    def __init__(self, residual):
+        self.max_abs_residual = residual
+
+
+class _VG:
+    def __init__(self, unmatched):
+        self.max_unmatched_contracts = unmatched
+
+
+class _Ex:
+    def __init__(self, vg):
+        self.validation_gates = vg
+
+
+class _CapRunner:
+    effective_residual_cap = RUN.Runner.effective_residual_cap
+
+    def __init__(self, residual=D("10"), unmatched=D("5")):
+        self.limits = _Lim(residual)
+        self.executor = _Ex(_VG(unmatched)) if unmatched is not None else None
+
+
+def test_the_model_takes_the_TIGHTER_of_the_two_limits():
+    assert _CapRunner(D("10"), D("5")).effective_residual_cap() == D("5")
+
+
+def test_it_still_takes_the_tighter_one_when_the_roles_reverse():
+    """Derived, not hardcoded: if SafetyLimits were the tighter one it must
+    win instead."""
+    assert _CapRunner(D("3"), D("5")).effective_residual_cap() == D("3")
+
+
+def test_it_is_not_hardcoded_to_five():
+    assert _CapRunner(D("8"), D("7")).effective_residual_cap() == D("7")
+    import inspect
+    src = inspect.getsource(RUN.Runner.effective_residual_cap)
+    assert 'D("5")' not in src and "min(caps)" in src
+
+
+def test_it_falls_back_to_the_configured_gates_without_an_executor():
+    r = _CapRunner(D("10"), None)
+    # no executor -> reads validation_gates(), whose default unmatched is 5
+    assert r.effective_residual_cap() == D("5")
+
+
+def test_the_runner_wires_the_derived_cap_not_safetylimits():
+    import inspect
+    src = inspect.getsource(RUN.Runner.roll)
+    assert "self.effective_residual_cap()" in src
+    assert "max_abs_residual=self.limits.max_abs_residual" not in src
+
+
+# ---- the model's own behaviour under the effective cap
+
+def _sess(cap="5"):
+    s = FM.ModelSession(OTHER, max_abs_residual=D(cap))
+    s.ingest_frame({"marketData": {
+        "marketSlug": OTHER,
+        "bids": [{"px": {"value": "0.0600"}, "qty": "500"}],
+        "offers": [{"px": {"value": "0.0700"}, "qty": "500"},
+                   {"px": {"value": "0.0800"}, "qty": "500"}]}}, 100.0)
+    return s
+
+
+def _sweep_fill(s, side, own_px, qty, t):
+    s.place(side, D(own_px), D(qty), t, D("0.06"), D("0.07"))
+    wire = D(own_px) if side == FM.UP else D(1) - D(own_px)
+    through = wire - D("0.01") if side == FM.UP else wire + D("0.01")
+    s.advance([{"px": str(through), "qty": "99999",
+                "dir": "SELL" if side == FM.UP else "BUY", "t": t + 1}])
+
+
+def test_modelled_inventory_cannot_exceed_the_cap_over_a_SEQUENCE():
+    s = _sess("5")
+    for i in range(6):
+        _sweep_fill(s, FM.DOWN, "0.92", "1.8", 10.0 + i * 10)
+    for sc in FM.SCENARIOS:
+        assert abs(s.inv[sc].residual(OTHER)) <= D("5"), (
+            "%s reached %s" % (sc, s.inv[sc].residual(OTHER)))
+
+
+def test_suppressed_fills_are_counted_and_reported():
+    s = _sess("5")
+    for i in range(6):
+        _sweep_fill(s, FM.DOWN, "0.92", "1.8", 10.0 + i * 10)
+    rep = s.close(up_won=False, wire_at_close=D("0.01"))
+    assert rep["max_abs_residual"] == "5"
+    assert s.suppressed_by_residual_cap[FM.OPTIMISTIC] >= 1
+    assert rep["scenarios"][FM.OPTIMISTIC]["suppressed_by_residual_cap"] >= 1
+
+
+def test_inventory_REDUCING_fills_remain_permitted_at_the_cap():
+    """The deployed rule exactly: a leg that shrinks |residual| is never
+    refused, at any depth -- otherwise a capped book could never unwind."""
+    s = _sess("2")
+    _sweep_fill(s, FM.DOWN, "0.92", "2.0", 10.0)
+    assert s.inv[FM.OPTIMISTIC].residual(OTHER) == D("-2.0")
+    before = s.suppressed_by_residual_cap[FM.OPTIMISTIC]
+    _sweep_fill(s, FM.UP, "0.06", "2.0", 30.0)      # closes the imbalance
+    assert s.inv[FM.OPTIMISTIC].residual(OTHER) == D("0")
+    assert s.suppressed_by_residual_cap[FM.OPTIMISTIC] == before
+
+
+def test_the_cap_can_only_suppress_never_create_a_fill():
+    tight, loose = _sess("5"), _sess("10")
+    for i in range(6):
+        _sweep_fill(tight, FM.DOWN, "0.92", "1.8", 10.0 + i * 10)
+        _sweep_fill(loose, FM.DOWN, "0.92", "1.8", 10.0 + i * 10)
+    a = tight.close(up_won=False)["scenarios"][FM.OPTIMISTIC]
+    b = loose.close(up_won=False)["scenarios"][FM.OPTIMISTIC]
+    assert a["modelled_fills"] <= b["modelled_fills"]
+    assert abs(tight.inv[FM.OPTIMISTIC].residual(OTHER)) <= D("5")
