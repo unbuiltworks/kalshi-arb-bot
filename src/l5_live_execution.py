@@ -2778,13 +2778,120 @@ def settle(records: Sequence[Mapping[str, Any]], *, market: str,
 
 def deadman(store: InventoryStore, transport: Any, *,
             reason: str) -> Dict[str, Any]:
-    """Cancel everything we believe is live. Safe when nothing is armed."""
-    out = {"reason": reason, "cancelled": [], "errors": []}
-    for coid in list((store.state.get("submitted") or {}).keys()):
+    """Cancel our RESTING orders by VENUE id, then prove it by reading them.
+
+    THREE DEFECTS THIS REPLACES, all in the four lines it used to be, none of
+    which would have shown up until a real order was resting:
+
+      1. it iterated `state["submitted"]` -- the permanent, never-pruned
+         submit log -- so every order this ledger has ever sent would be
+         cancelled again at every window end, forever;
+      2. it passed the CLIENT order id to `transport.cancel`, whose own
+         docstring says the venue cancels by its own id and "passing the
+         latter would silently cancel nothing";
+      3. it appended to `cancelled` on any non-raising return, so the record
+         claimed a cancellation the venue had never been asked for.
+
+    A CANCEL ACK IS NOT PROOF, so the ack decides nothing here. Every id is
+    re-read with `GET /v1/order/{id}` afterwards and classified by the
+    VENUE's own state. A cancel that raised but whose re-read comes back
+    terminal is cancelled; a cancel that returned 200 but whose re-read is
+    still working is `still_open`, which is the dangerous case and is never
+    reported as success.
+
+    FILLS FOUND WHILE CANCELLING ARE BOOKED, not discarded. The re-read goes
+    through `order_progress` into `apply_order_progress`, which books the
+    delta exactly once, so a partial filled between the decision and the
+    cancel arrives with its cost basis instead of becoming another
+    QUANTITY_WITHOUT_COST. That is the failure mode that cost this programme
+    the 1900z share.
+
+    FAIL CLOSED, ALWAYS. An order with no venue id cannot be cancelled by
+    this route at all; a re-read that raises leaves the order's fate unknown;
+    a re-read that says the order is still working means the cancel did not
+    take. All three mark the store UNCERTAIN, which is what stops the next
+    submission -- `SafetyLimits.refuse()` returns ORDER_STATE_UNCERTAIN
+    before every other check. Clearing it needs an authoritative read that
+    agrees, which is the point.
+
+    Safe when nothing is armed: with no live orders it reads nothing, sends
+    nothing and returns empty lists.
+    """
+    out: Dict[str, Any] = {
+        "reason": reason, "cancelled": [], "errors": [], "unverified": [],
+        "no_venue_id": [], "still_open": [], "filled": [],
+        "labels": ("cancelled means the VENUE reported a terminal state on "
+                   "re-read, never that a cancel call returned. still_open "
+                   "and unverified are failures and mark the book uncertain."),
+    }
+    # a snapshot: apply_order_progress mutates live_orders underneath us
+    for coid, row in sorted(store.live_orders().items()):
+        vid = str(row.get("venue_order_id") or "").strip()
+        market = str(row.get("market") or getattr(transport, "market_slug", "")
+                     or "")
+        side = str(row.get("side") or "")
+        if not vid:
+            # Never submitted-and-ACKed, or the ACK carried no id. There is
+            # nothing to name in a cancel, and if it did rest and fill the
+            # shares arrive without a cost basis -- so this is uncertainty,
+            # not a no-op.
+            out["no_venue_id"].append({"client_order_id": coid,
+                                       "market": market, "side": side})
+            store.mark_uncertain(
+                "deadman could not cancel %s: no venue order id" % coid)
+            continue
+        ack_error = None
         try:
-            transport.cancel(coid)
-            out["cancelled"].append(coid)
-        except Exception as exc:                               # noqa: BLE001
+            transport.cancel(vid)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # NOT a failure yet: a cancel can raise on an order the venue has
+            # already retired. The re-read decides.
+            ack_error = type(exc).__name__
+        try:
+            prog = order_progress(transport.order(vid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["unverified"].append({"client_order_id": coid,
+                                      "venue_order_id": vid,
+                                      "market": market,
+                                      "cancel_error": ack_error,
+                                      "verify_error": type(exc).__name__})
+            store.mark_uncertain(
+                "deadman could not verify the cancel of %s (%s)"
+                % (vid, type(exc).__name__))
+            continue
+        res = store.apply_order_progress(coid, prog, market=market, side=side)
+        booked = D(str(res.get("filled_delta") or res.get("delta") or 0))
+        if booked > 0:
+            out["filled"].append({"client_order_id": coid,
+                                  "venue_order_id": vid, "market": market,
+                                  "side": side, "qty": str(booked),
+                                  "avg_px": str(prog.get("avg_px")),
+                                  "commission": str(prog.get("commission")),
+                                  "labels": ("filled before the cancel took; "
+                                             "booked with its cost basis")})
+        rec = {"client_order_id": coid, "venue_order_id": vid,
+               "market": market, "side": side,
+               "venue_state": prog.get("state"),
+               "cum_qty": str(prog.get("cum_qty")),
+               "leaves_qty": str(prog.get("leaves_qty")),
+               "cancel_error": ack_error}
+        if prog.get("terminal"):
+            out["cancelled"].append(rec)
+        else:
+            # The order is STILL WORKING at the venue. This is the one state
+            # that must never read as success: an unmanaged resting order is
+            # exactly what a deadman exists to prevent.
+            out["still_open"].append(rec)
+            store.mark_uncertain(
+                "deadman cancelled %s but the venue still reports it live"
+                % vid)
+        if ack_error:
             out["errors"].append({"client_order_id": coid,
-                                  "error": type(exc).__name__})
+                                  "venue_order_id": vid, "error": ack_error,
+                                  "resolved_by_reread": bool(
+                                      prog.get("terminal"))})
     return out

@@ -1517,6 +1517,60 @@ ORPHAN_REPAIRS = [
 #: ledger still holds the broken state each entry describes.
 LEDGER_REPAIRS = [
     {
+        "id": "1900z-up-1.0-cost-from-attested-order-D294PDYNPZ7Z",
+        "market": "cpc-btc-updown-15m-2026-10-12-1900z",
+        "side": "UP",
+        # the venue's own order row: 1 UP bought at 0.1800, commission 0.0000
+        "qty": D("1.00"), "cost": D("0.18000"),
+        # what the broken book holds, and must still hold for this repair to
+        # be the right one: the quantity with no cost at all
+        "expect_qty": D("1.0000"), "expect_cost": D("0"),
+        "evidence": {
+            "source": ("/v1/portfolio/activities walk + /v1/order/{id}, read "
+                       "by the GET-only pmus-readonly-recovery image "
+                       "(post_blocked true), run 21:19:14Z-21:23:24Z"),
+            "orders": ["D294PDYNPZ7Z"],
+            "detail": ("D294PDYNPZ7Z marketSlug "
+                       "cpc-btc-updown-15m-2026-10-12-1900z, "
+                       "ORDER_SIDE_BUY OUTCOME_SIDE_YES "
+                       "ORDER_INTENT_BUY_LONG, ORDER_TYPE_LIMIT, "
+                       "limit_price 0.18, quantity 1, cumQuantity 1, "
+                       "leavesQuantity 0, state ORDER_STATE_FILLED, "
+                       "avgPx 0.1800, commission 0.0000, "
+                       "makerCommissionsBasisPoints 0, createTime "
+                       "2026-10-12T19:10:17.232593835Z, lastTransactTime "
+                       "2026-10-12T19:10:17.713864582Z (rested 0.481s), "
+                       "manualOrderIndicator MANUAL_ORDER_INDICATOR_MANUAL "
+                       "-- the executor never placed it, which is why no "
+                       "fill record and therefore no cost basis existed"),
+            "fill_role": ("trade D29DZRQ3RZ6Y, aggressor false, so the fill "
+                          "was PASSIVE: a real PMUS BTC15m MAKER fill at "
+                          "wire 0.1800 with commission 0.0000"),
+            "position_resolution": (
+                "beforePosition netPosition 1 qtyBought 1 cost 0.1800 "
+                "realized 0.0000 avgPx 0.1800; afterPosition netPosition 0 "
+                "qtyBought 1 qtySold 1 cost 0.0000 realized -0.1800 at "
+                "2026-10-12T19:15:15.201040938Z, side "
+                "POSITION_RESOLUTION_SIDE_SHORT. The venue's own realized "
+                "line agrees with cost 0.18 against a zero settlement."),
+            "settlement": ("/v1/markets/.../bbo settlementPx 0.0000, state "
+                           "MARKET_STATE_EXPIRED, openInterest 0: the 1.00 "
+                           "UP redeemed nothing, so settling this leg posts "
+                           "-0.18000"),
+            "not_used_as_evidence": (
+                "the account balance moving 243.15505 -> 242.97505. That "
+                "-0.18 is account-wide and merely CONSISTENT with this "
+                "cost; the cost comes from the order row's avgPx. Inferring "
+                "it from the balance was explicitly forbidden and would "
+                "have been unsound even though the numbers agree."),
+            "api_key_fingerprint": "d51b44a3fa83",
+            "what_went_wrong": ("a MANUAL order filled into a market the "
+                                "executor was reconciling, so venue "
+                                "reconciliation adopted the quantity while "
+                                "no fill record carried its price"),
+        },
+    },
+    {
         "id": "1300z-incoherent-resolver-zero-fill",
         "market": "cpc-btc-updown-15m-2026-09-27-1300z",
         "side": "UP",
@@ -1889,13 +1943,45 @@ UNRESOLVED_ACCOUNTING: List[Dict[str, Any]] = [
         "may_not": (
             "book a cost basis from the balance delta, or zero the "
             "venue-confirmed quantity. Either falsifies the record."),
+        #: RESOLVED 2026-10-12T21:23Z from the venue's own order row, which
+        #: is exactly the evidence `missing_evidence` above named. The record
+        #: is kept rather than deleted: how a possible loss was resolved is
+        #: audit trail, and a registry that forgets its closed cases cannot
+        #: be checked. `unresolved_accounting()` filters on this key, so the
+        #: arming block lifts for this entry and for no other reason.
+        "resolved_utc": "2026-10-12T21:23:24Z",
+        "resolved_evidence": (
+            "order D294PDYNPZ7Z, /v1/order: state ORDER_STATE_FILLED, "
+            "cumQuantity 1, avgPx 0.1800, commission 0.0000, PASSIVE fill "
+            "(trade D29DZRQ3RZ6Y, aggressor false). POSITION_RESOLUTION "
+            "afterPosition realized -0.1800 against settlementPx 0.0000. "
+            "Cost basis $0.18, realized loss -$0.18, booked by the repair "
+            "1900z-up-1.0-cost-from-attested-order-D294PDYNPZ7Z through "
+            "reconstruct_cost_basis, which records its source."),
+        "resolved_not_by": (
+            "the -0.18 account balance move, which was never used and is "
+            "only consistent with the answer"),
     },
 ]
 
 
 def unresolved_accounting() -> List[Dict[str, Any]]:
-    """Every unresolved-accounting record. Never empty while one stands."""
-    return [dict(r) for r in UNRESOLVED_ACCOUNTING]
+    """Every STANDING unresolved-accounting record.
+
+    A resolved entry keeps its row -- deleting the history of a possible
+    loss is the thing this registry exists to prevent -- but stops standing,
+    because `resolved_utc` names the authoritative evidence that answered
+    it. Nothing else lifts the block: there is no flag, no override and no
+    env var that makes an unresolved entry stop counting.
+    """
+    return [dict(r) for r in UNRESOLVED_ACCOUNTING
+            if not str(r.get("resolved_utc") or "").strip()]
+
+
+def resolved_accounting() -> List[Dict[str, Any]]:
+    """The closed cases, kept visible on purpose."""
+    return [dict(r) for r in UNRESOLVED_ACCOUNTING
+            if str(r.get("resolved_utc") or "").strip()]
 
 
 def unresolved_discrepancies(store: Any) -> List[Dict[str, Any]]:

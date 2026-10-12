@@ -46,6 +46,11 @@ class FakeTransport:
     def __init__(self, fill_qty="1", fill_price=None, reject_dupes=True,
                  fill_all=False):
         self.sent, self.cancelled = [], []
+        #: ids this venue has retired, so a re-read can answer
+        self.retired = set()
+        #: what each order's ACK said it filled, so the re-read agrees with
+        #: it. The venue is one witness, not two contradicting ones.
+        self.acked_fill = {}
         self.fill_qty, self.fill_price = fill_qty, fill_price
         self.reject_dupes = reject_dupes
         #: fill the WHOLE intent, so the order reaches a terminal state and
@@ -59,14 +64,38 @@ class FakeTransport:
                 for s in self.sent):
             raise RuntimeError("DUPLICATE_CLIENT_ORDER_ID")
         self.sent.append(dict(intent))
-        return {"order_id": "v%d" % len(self.sent),
-                "filled_qty": (str(intent["qty"]) if self.fill_all
-                               else self.fill_qty),
+        oid = "v%d" % len(self.sent)
+        self.acked_fill[oid] = (str(intent["qty"]) if self.fill_all
+                                else self.fill_qty)
+        return {"order_id": oid,
+                "filled_qty": self.acked_fill[oid],
                 "fill_price": self.fill_price or str(intent["price"])}
 
-    def cancel(self, coid):
-        self.cancelled.append(coid)
-        return {"cancelled": coid}
+    def cancel(self, order_id):
+        """The venue cancels by ITS id, so the double must demand one too."""
+        self.cancelled.append(order_id)
+        self.retired.add(order_id)
+        return {"cancelled": order_id}
+
+    def order(self, order_id):
+        """What a re-read says. A cancel ack is not proof; this is.
+
+        Added when `deadman` stopped trusting its own ack: a double with no
+        /v1/order route cannot express the contract under test.
+
+        It reports the SAME cumQuantity its own ACK reported. An earlier
+        version answered 0 for every order and the store rightly refused it
+        with CUM_QTY_WENT_BACKWARDS -- a venue cannot un-fill a fill, so a
+        double that says it did is modelling nothing real.
+        """
+        if order_id not in self.retired:
+            raise KeyError(order_id)
+        cum = self.acked_fill.get(order_id, "0")
+        return {"id": order_id, "state": "ORDER_STATE_CANCELED",
+                "cumQuantity": str(cum), "leavesQuantity": "0",
+                "avgPx": {"value": "0", "currency": "USD"},
+                "commissionNotionalTotalCollected": {"value": "0",
+                                                     "currency": "USD"}}
 
     def open_orders(self):
         return []
@@ -304,18 +333,39 @@ def test_unfilled_orders_never_reach_settlement():
 # --------------------------------------------------------------------- deadman
 
 def test_deadman_cancels_everything_it_believes_live(tmp_path):
+    """By the VENUE's id, and only once the venue's re-read agrees.
+
+    Rewritten with the fix: the old version passed when the deadman cancelled
+    by CLIENT order id, which the venue route ignores, and counted a
+    non-raising ack as a cancellation. Both are the defects, so the old
+    assertions could not be kept.
+    """
     st, t = store(tmp_path), FakeTransport()
     ex = E.FaithfulExecutor(st, limits(), transport=t, now_fn=NOW)
     ex.handle(row(), {}, market="m", window="16:15")
+    coid = next(iter(st.live_orders()))
+    vid = st.live_orders()[coid]["venue_order_id"]
     out = E.deadman(st, t, reason="TEST")
+    assert t.cancelled == [vid] and coid not in t.cancelled
     assert len(out["cancelled"]) == 1 and not out["errors"]
+    assert out["cancelled"][0]["venue_order_id"] == vid
+    assert not st.orders_uncertain()
 
 
 def test_deadman_is_safe_when_nothing_is_armed(tmp_path):
+    """And the submit LOG is not the cancel list.
+
+    The old test asserted the opposite -- that an entry in `submitted` with
+    no live order produced a cancel attempt and an error. That is the bug:
+    `submitted` is permanent history, so cancelling from it re-cancels every
+    order this ledger has ever sent, at every window end, forever.
+    """
     st = store(tmp_path)
-    st.state["submitted"] = {"x": {}}
+    st.state["submitted"] = {"x": {}}          # history, long since terminal
     out = E.deadman(st, E.NullTransport(), reason="TEST")
-    assert out["cancelled"] == [] and len(out["errors"]) == 1
+    assert out["cancelled"] == [] and out["errors"] == []
+    assert out["still_open"] == [] and out["no_venue_id"] == []
+    assert not st.orders_uncertain(), "history is not uncertainty"
 
 
 # -------------------------------------------------------------------- exposure

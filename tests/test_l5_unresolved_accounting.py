@@ -23,20 +23,87 @@ from src import l5_pmus_live_runner as RUN
 UNRESOLVED = "cpc-btc-updown-15m-2026-10-12-1900z"
 OTHER = "cpc-btc-updown-15m-2026-10-12-2000z"
 
+#: 1900z was RESOLVED at 21:23:24Z from order D294PDYNPZ7Z: avgPx 0.1800,
+#: cumQuantity 1, commission 0.0000, PASSIVE fill, and a POSITION_RESOLUTION
+#: whose own realized line is -0.1800. Its registry row is kept but no longer
+#: stands.
+#:
+#: THE PROTECTIONS STILL HAVE TO BE TESTED, so the tests that exercise them
+#: inject a STANDING entry of their own instead of leaning on 1900z. Deleting
+#: those tests along with the case they were written for would quietly retire
+#: the deletion hole, the empty-ledger hole and the unreadable-ledger hole --
+#: every one of which was found the hard way.
+STANDING = {
+    "id": "synthetic-standing-unresolved",
+    "market": UNRESOLVED,
+    "ledger": "l5-live-20261012z",
+    "side": "UP",
+    "qty": "1.0000",
+    "cost_basis": "UNKNOWN",
+    "discovered_utc": "2026-10-12T19:15:30Z",
+    "venue_confirmed_quantity": True,
+    "venue_evidence": "synthetic, for the protection tests",
+    "missing_evidence": ("the venue order id. /v1/orders is 501 and order "
+                         "detail exists only at /v1/order/{id}."),
+    "may_not": ("book a cost basis from the balance delta, or zero the "
+                "venue-confirmed quantity."),
+}
+
+
+@pytest.fixture
+def standing(monkeypatch):
+    """One STANDING unresolved entry, so the blocks stay under test."""
+    monkeypatch.setattr(RUN, "UNRESOLVED_ACCOUNTING", [dict(STANDING)])
+    return STANDING
+
 
 # ------------------------------------------------- it cannot be hidden
 
-def test_the_unresolved_record_exists_and_names_the_market():
-    recs = RUN.unresolved_accounting()
-    assert recs, "the unresolved record vanished"
-    r = [x for x in recs if x["market"] == UNRESOLVED]
-    assert len(r) == 1
-    assert r[0]["cost_basis"] == "UNKNOWN"
-    assert r[0]["qty"] == "1.0000"
-    assert r[0]["venue_confirmed_quantity"] is True
+def test_the_1900z_record_is_resolved_and_still_visible():
+    """Resolved by the evidence it itself named, and never deleted."""
+    assert [x for x in RUN.unresolved_accounting()
+            if x["market"] == UNRESOLVED] == [], (
+        "1900z no longer stands: the order row answered it")
+    r = [x for x in RUN.resolved_accounting() if x["market"] == UNRESOLVED]
+    assert len(r) == 1, "the closed case must stay on the books"
+    r = r[0]
+    assert r["cost_basis"] == "UNKNOWN", (
+        "the record of what was unknown AT THE TIME is not rewritten")
+    assert r["qty"] == "1.0000" and r["venue_confirmed_quantity"] is True
+    assert r["resolved_utc"] == "2026-10-12T21:23:24Z"
+    assert "D294PDYNPZ7Z" in r["resolved_evidence"]
+    assert "0.1800" in r["resolved_evidence"]
+    assert "balance" in r["resolved_not_by"]
 
 
-def test_it_states_the_missing_evidence_and_what_is_forbidden():
+def test_the_resolution_is_the_evidence_the_record_asked_for():
+    r = [x for x in RUN.resolved_accounting()
+         if x["market"] == UNRESOLVED][0]
+    assert "order id" in r["missing_evidence"], "what was missing"
+    assert "/v1/order" in r["resolved_evidence"], "what supplied it"
+    # and what was forbidden was still forbidden when it was answered
+    assert "balance delta" in r["may_not"] and "zero" in r["may_not"]
+
+
+def test_the_cost_is_booked_from_the_order_row_and_not_the_balance():
+    rep = [r for r in RUN.LEDGER_REPAIRS
+           if r["market"] == UNRESOLVED]
+    assert len(rep) == 1
+    rep = rep[0]
+    assert rep["qty"] == D("1.00") and rep["cost"] == D("0.18000")
+    assert rep["expect_cost"] == D("0"), "it repairs a cost of ZERO"
+    assert rep["expect_qty"] == D("1.0000")
+    ev = rep["evidence"]
+    assert ev["orders"] == ["D294PDYNPZ7Z"]
+    assert "avgPx 0.1800" in ev["detail"]
+    assert "ORDER_STATE_FILLED" in ev["detail"]
+    assert "aggressor false" in ev["fill_role"]
+    assert "settlementPx 0.0000" in ev["settlement"]
+    assert "balance" in ev["not_used_as_evidence"]
+
+
+def test_a_standing_entry_states_the_missing_evidence_and_the_forbidden(
+        standing):
     r = RUN.unresolved_accounting()[0]
     assert "order id" in r["missing_evidence"]
     assert "501" in r["missing_evidence"]
@@ -52,9 +119,17 @@ def test_it_is_declared_in_code_not_derived_from_state():
     assert "self" not in src and "state" not in src
 
 
-def test_a_caller_cannot_mutate_the_registry_through_the_accessor():
+def test_a_caller_cannot_mutate_the_registry_through_the_accessor(standing):
     RUN.unresolved_accounting()[0]["cost_basis"] = "0.18"
     assert RUN.unresolved_accounting()[0]["cost_basis"] == "UNKNOWN"
+
+
+def test_resolving_requires_a_timestamp_in_code_not_a_runtime_value():
+    """There is no flag, env var or state that lifts a standing entry."""
+    src = inspect.getsource(RUN.unresolved_accounting)
+    assert "resolved_utc" in src
+    for forbidden in ("os.getenv", "environ", "self", "store"):
+        assert forbidden not in src, forbidden
 
 
 def test_the_heartbeat_always_reports_it():
@@ -127,7 +202,7 @@ def test_the_primary_block_is_the_pre_existing_uncertainty_refusal():
     assert r.win["arm_refused_unresolved_accounting"] == 0
 
 
-def test_a_silently_cleared_unresolved_row_refuses_arming(monkeypatch):
+def test_a_silently_cleared_unresolved_row_refuses_arming(standing, monkeypatch):
     """The one case orders_uncertain cannot notice: the ledger still holds
     the market but has stopped reporting a violation, with no evidence
     supplied. That is a discrepancy, not an all-clear."""
@@ -165,7 +240,7 @@ def test_a_store_with_no_path_is_not_blocked():
 # ---- THE DELETION HOLE. Scoping to the row's PRESENCE meant deleting it
 # removed the protection. Scoping to the LEDGER closes that.
 
-def test_DELETING_the_unresolved_row_still_refuses_arming(monkeypatch):
+def test_DELETING_the_unresolved_row_still_refuses_arming(standing, monkeypatch):
     seen = []
     monkeypatch.setattr(RUN, "emit", lambda k, p: seen.append((k, p)))
     r = _Runner(_ArmStore(positions={}, violations={}, uncertain=None))
@@ -177,14 +252,14 @@ def test_DELETING_the_unresolved_row_still_refuses_arming(monkeypatch):
     assert "not evidence it was resolved" in d["labels"]
 
 
-def test_an_entirely_empty_ledger_still_refuses_arming():
+def test_an_entirely_empty_ledger_still_refuses_arming(standing):
     """Losing the whole ledger file must not read as all-clear."""
     r = _Runner(_ArmStore(positions={}))
     r.try_arm()
     assert r.transport.arms == 0
 
 
-def test_an_unreadable_named_ledger_fails_CLOSED(monkeypatch):
+def test_an_unreadable_named_ledger_fails_CLOSED(standing, monkeypatch):
     monkeypatch.setattr(RUN, "emit", lambda *a, **k: None)
 
     class Broken:
@@ -204,10 +279,14 @@ def test_an_unreadable_named_ledger_fails_CLOSED(monkeypatch):
     assert r.win["arm_refused_unresolved_accounting"] == 1
 
 
-def test_the_registry_is_visible_independently_of_the_ledger():
+def test_the_registry_is_visible_independently_of_the_ledger(standing):
     """It must be readable with no store at all."""
     assert RUN.unresolved_accounting()[0]["market"] == UNRESOLVED
     assert RUN.unresolved_accounting()[0]["ledger"] == "l5-live-20261012z"
+
+
+def test_the_closed_case_is_also_visible_with_no_store_at_all():
+    assert any(r["market"] == UNRESOLVED for r in RUN.resolved_accounting())
 
 
 def test_the_detector_is_a_module_function_not_a_runner_method():
