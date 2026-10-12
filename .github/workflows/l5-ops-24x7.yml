@@ -8,6 +8,15 @@ on:
     - cron: "*/5 * * * *"
     - cron: "17 3 * * *"
   workflow_dispatch:
+    inputs:
+      verify_settlements:
+        description: "Also run the Sep 24-25 settlement verification (read-only public GETs)"
+        required: false
+        default: "no"
+      verify_scope:
+        description: "unredeemed (114 markets, default) or all (521)"
+        required: false
+        default: "unredeemed"
 
 permissions:
   contents: write
@@ -119,3 +128,120 @@ jobs:
           fi
           git commit -m "l5-ops: daily regression $(date -u +%FT%TZ)"
           git push origin HEAD:l5-ops-data
+
+  # ---------------------------------------------------------------------
+  # ISOLATED, OPT-IN, READ-ONLY. Resolves the Sep 24-25 markets whose outcome
+  # the activity feed never recorded, from the venue's own public records.
+  #
+  # A SEPARATE JOB, not a step in collect-shadow: the 5-minute collector keeps
+  # its 10-minute timeout and its step list byte-for-byte, so no scheduled run
+  # can be slowed or failed by this.
+  #
+  # It does NOT restore the collector's durable state and does NOT write it.
+  # The verifier is hermetic -- it reads a committed manifest -- so this job
+  # never holds the collector's files and therefore cannot overwrite them even
+  # by accident. The collector keeps ownership of its own state.
+  #
+  # `needs: collect-shadow` serialises the two within a run. The workflow's
+  # `concurrency` group serialises runs OF THIS WORKFLOW, and nothing more:
+  # kalshi-l5-tape-5m.yml and any other writer can still push to
+  # l5-ops-data at any moment, which is why the persist step below takes the
+  # branch tip afresh on every attempt and retries rather than assuming it
+  # won the race.
+  #
+  # It can neither trade nor deploy: this workflow references no secret, holds
+  # no venue credential, installs no CLI, and the verifier issues GET only.
+  verify-settlements:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.verify_settlements == 'yes'
+    needs: collect-shadow
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout canonical L5 code
+        uses: actions/checkout@v4
+        with:
+          ref: feature/l5-canonical
+          path: code
+          fetch-depth: 1
+
+      - name: Checkout durable L5 ops state
+        uses: actions/checkout@v4
+        with:
+          ref: l5-ops-data
+          path: state
+          fetch-depth: 1
+
+      # Fails loudly rather than verifying nothing: both inputs must be on
+      # feature/l5-canonical, and the manifest must carry all 521 markets with
+      # L5's own outcomeIndex -> label mapping.
+      - name: Assert verifier and 521-market manifest are present
+        working-directory: code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/l5_verify_sep_settlements.py
+          test -f data/l5/ops/sep_heldout_condition_ids.json
+          sha256sum scripts/l5_verify_sep_settlements.py \
+                    data/l5/ops/sep_heldout_condition_ids.json \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 - <<'EOF'
+          import json
+          d = json.load(open("data/l5/ops/sep_heldout_condition_ids.json"))
+          m = d["markets"]
+          assert len(m) == 521, "manifest holds %d markets, expected 521" % len(m)
+          assert d["counts"] == {"total": 521, "redeem_confirmed": 407,
+                                 "unredeemed": 114}, d["counts"]
+          assert all(r.get("index_labels") for r in m.values()), \
+              "a market carries no L5 outcomeIndex -> label mapping"
+          print("manifest OK: 521 markets, 407 confirmed, 114 unredeemed")
+          EOF
+
+      - name: Verify settlements (GET only, no credentials)
+        working-directory: code
+        env:
+          VERIFY_SCOPE: ${{ github.event.inputs.verify_scope }}
+        run: python3 scripts/l5_verify_sep_settlements.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Persists EXACTLY ONE FILE and nothing else. Every attempt takes the
+      # branch tip afresh, applies only the settlement artifact on top of it,
+      # and pushes; a push that loses a race fails and the next attempt starts
+      # from the winner's tip. No `rm -rf`, no directory-wide copy, so a state
+      # file this job never saw cannot be deleted or reverted by it.
+      - name: Persist ONLY the settlement artifact (conflict-safe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ART=sep_settlements.json
+          test -f "code/data/l5/ops/$ART"
+          cd state
+          git config user.name "l5-ops-24x7"
+          git config user.email "l5-ops-24x7@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            git fetch --depth=1 origin l5-ops-data
+            git reset --hard FETCH_HEAD
+            mkdir -p data/l5/ops
+            cp "../code/data/l5/ops/$ART" "data/l5/ops/$ART"
+            git add -- "data/l5/ops/$ART"
+            if git diff --cached --quiet; then
+              echo "settlement artifact already current on l5-ops-data"
+              exit 0
+            fi
+            git commit -m "l5-ops: Sep settlement verification $(date -u +%FT%TZ)"
+            if git push origin HEAD:l5-ops-data; then
+              echo "pushed on attempt $attempt"
+              git rev-parse HEAD | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "push lost a race on attempt $attempt; retrying from the new tip"
+            sleep $((attempt * 5))
+          done
+          echo "could not persist after 5 attempts" >&2
+          exit 1
+
+      - name: Upload settlement artifact (audit copy)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sep-settlements
+          path: code/data/l5/ops/sep_settlements.json
+          if-no-files-found: warn
