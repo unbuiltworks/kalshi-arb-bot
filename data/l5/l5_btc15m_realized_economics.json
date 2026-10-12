@@ -1,0 +1,105 @@
+{
+  "corpus": {
+    "duplicates_dropped": 20773,
+    "foreign_wallet_rows": 0,
+    "other_series_rows": 77332,
+    "rows_seen": 784500,
+    "rows_unique": 763727,
+    "series_rows": 686395,
+    "type_census": {
+      "MAKER_REBATE": 111,
+      "REDEEM": 15727,
+      "REWARD": 20,
+      "TAKER_REBATE": 73,
+      "TRADE": 747796
+    }
+  },
+  "labels": {
+    "all_windows_worst_case": "every window with a buy; an unredeemed window is booked as a TOTAL LOSS of its spend. Bounds survivorship bias.",
+    "pnl": "redeem_in + sell_in - buy_out. Realized cashflow only.",
+    "rebates": "reported separately and NEVER in the headline P&L.",
+    "resolved_only": "windows with >=1 REDEEM row."
+  },
+  "result": {
+    "all_windows_worst_case": {
+      "flat": 0,
+      "losses": 1490,
+      "max": "1038.906572",
+      "mean": "62.30177458979444644789037144",
+      "median": "44.550756",
+      "min": "-751.730194",
+      "n": 5546,
+      "p05": "-88.301806",
+      "p95": "258.561582",
+      "return_on_deployed_cash_pct": "5.691981553759136762658279331",
+      "total": "345525.641875",
+      "wins": 4056
+    },
+    "counts": {
+      "resolved": 5533,
+      "touched": 5546,
+      "unresolved": 13,
+      "unresolved_pct": 0.23440317345834838
+    },
+    "denominators": {
+      "cash_deployed_all": "6070392.860757",
+      "cash_deployed_resolved": "6069977.859649",
+      "cash_deployed_unresolved": "415.001108"
+    },
+    "incentives_all_rows": {
+      "MAKER_REBATE": 111,
+      "REWARD": 20,
+      "TAKER_REBATE": 73
+    },
+    "incentives_series": {},
+    "legs": {
+      "flat": 0,
+      "losses": 0,
+      "max": "729",
+      "mean": "122.7353047241254958528669311",
+      "median": "107",
+      "min": "1",
+      "n": 5546,
+      "p05": "30",
+      "p95": "268",
+      "total": "680690",
+      "wins": 5546
+    },
+    "resolved_only": {
+      "flat": 0,
+      "losses": 1477,
+      "max": "1038.906572",
+      "mean": "62.52315976558828845111151274",
+      "median": "44.655775",
+      "min": "-751.730194",
+      "n": 5533,
+      "p05": "-88.301806",
+      "p95": "258.926012",
+      "return_on_deployed_cash_pct": "5.699207657456006254323810366",
+      "total": "345940.642983",
+      "wins": 4056
+    },
+    "sell_rows": [],
+    "span": {
+      "days": 165.51292824074073,
+      "t_max": 1788218236,
+      "t_min": 1773917919
+    },
+    "windows_per_day": 33.507956501943276
+  },
+  "series": "btc-updown-15m",
+  "sources": [
+    {
+      "bytes": 67641258,
+      "path": "data/l5/raw/activity.jsonl",
+      "sha256": "0444b27fe4cf488fac1e4d3f0d811886f28b8c5d7bc0b7d5e51436306b21958c"
+    },
+    {
+      "bytes": 40337179,
+      "path": "data/l5/raw/activity_gap.jsonl.gz",
+      "sha256": "b50692b65decd855b82e5c021ae474c8c3608f78be0d2523bc887c758599d88b"
+    }
+  ],
+  "wallet": "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68",
+  "what": "L5 BTC15m realized economics from raw Polygon activity"
+}
