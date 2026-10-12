@@ -404,3 +404,54 @@ and that the heartbeat refreshes.
 > afterwards.
 
 Nothing else changes: no limit, no taker, no concurrency, no second window.
+
+---
+
+# Production verification (deployment `37a88dca`, commit `eba1da0d`)
+
+**Regression gate, run strictly sequentially** (two earlier attempts were
+corrupted by my own concurrent pytest runs, which is why the numbers moved
+around): patched tree and baseline tree each report **72** failing/erroring
+items, and the two name-level lists are **identical** — `comm` finds nothing on
+either side. Totals `46 failed / 9,746 passed / 27 skipped / 1 xfailed / 26
+errors`; baseline passes `9,668`, so this work adds **78 passing tests and zero
+regressions**. The 46 failures and 26 errors are all pre-existing.
+
+The repair applied in production at **22:07:49Z**, replacing `{qty 1.0000, cost
+0}` with `{qty 1.00, cost 0.18000}` and logging the full order row and the
+`not_used_as_evidence` note. By 22:08:49Z:
+
+```
+armed false   preflight PASSED   owner_arm_token false   halt false
+unresolved_accounting  count 0   blocks_live_authorization false
+retired_markets        [... cpc-btc-updown-15m-2026-10-12-1900z]
+realized_attributed   -0.100000      realized_unattributed  0
+live_orders 0          available_cash 242.97505 (age_s 0.0)
+L5_LIVE_SETTLE_REFUSED  -- gone
+```
+
+So 1900z is **settled and retired**, the uncertainty that refused 221 actions a
+window is **cleared by evidence**, and no order was submitted.
+
+## A correction: the account figure is −$0.10, not −$0.14
+
+I predicted −$0.1400 and production reports **`realized_attributed
+-0.100000`**. The 1900z delta is exactly the −0.18 I predicted; what I got
+wrong was the base. I used the venue-attested G1 net of **+$0.0400**, but the
+ledger's `realized_attributed` held **+$0.0800**, and the difference is the
+$0.04 of nfl-bal-atl commissions — which this ledger deliberately keeps as a
+separate line, as its own label says: *"Fees, maker rebates and rewards are
+separate confirmed lines and are not in either."*
+
+Both numbers are therefore correct under their own labels:
+
+| line | value |
+|---|---|
+| `realized_attributed` — settlement P&L from filled inventory, **excluding** fees | **−$0.1000** |
+| the same, **including** the separately-kept $0.0400 commission line | **−$0.1400** |
+
+My test asserted −0.14 from a +0.04 base, so it tested the arithmetic correctly
+against the wrong base. The test is right about the mechanism and I was wrong
+about which of the two conventions production reports. Nothing about the repair
+changes: cost $0.18 from the order row, −$0.18 posted through the ordinary
+settlement path.
