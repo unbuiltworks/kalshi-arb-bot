@@ -50,6 +50,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from src import l5_faithful_translation as FT
 from src import l5_live_execution as LX
+from src import l5_maker_fill_model as FM
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
 from src import l5_pmus_transport as T
@@ -238,6 +239,9 @@ class Runner:
         #: no reading -- never unlimited.
         self.available_cash_usd = None
         self.available_cash_t = None
+        #: MODELLED maker-fill instrumentation. Read-only: it observes the
+        #: book and the executor's own intents and books NOTHING real.
+        self.model: Optional[FM.ModelSession] = None
         self.last_reconcile_t = 0.0
         self.last_progress_t = 0.0
         self.preflight_status = "NOT_RUN"
@@ -278,9 +282,19 @@ class Runner:
         if ws == self.ws:
             return
         if self.ws is not None:
+            self.model_close()
             self.close_window()
         self.ws = ws
         slug = AB.slug_for(ws)
+        # MODELLED fill session for this window. Attaching the ladder
+        # observer here is what gives a maker quote a queue position; it is
+        # detached-by-default and feeds nothing but this model.
+        if model_fills():
+            self.model = FM.ModelSession(slug)
+            self.book.frame_observer = self.model.ingest_frame
+        else:
+            self.model = None
+            self.book.frame_observer = None
         # THE SAME LIMITER, explicitly. PmusTransport would reach for the
         # process-wide one anyway; naming it here is the point -- this line
         # is where the old code silently created a fresh token bucket and a
@@ -792,6 +806,80 @@ class Runner:
                        "state", "error")} if order else None,
             "intent": order.get("intent"),
             "armed": bool(t and t.armed)})
+        # recv, not a fresh clock read: the placement time is when we
+        # OBSERVED the action, which is what the queue model must date.
+        self.model_place(order.get("intent"), row, recv)
+
+    def model_place(self, intent: Optional[Mapping[str, Any]],
+                    row: Mapping[str, Any], now: float) -> None:
+        """Record one MAKER intent as a MODELLED resting order.
+
+        MODELLED THROUGHOUT. The intent was already refused NOT_ARMED by the
+        shadow transport; this asks only what would have become of it had it
+        rested. Nothing here can submit, and a failure is counted rather
+        than raised, because the modelling must never disturb the executor.
+        """
+        m = self.model
+        if m is None or not intent:
+            return
+        if str(intent.get("mode") or "").upper() != "MAKER":
+            return                      # a taker intent never rests
+        try:
+            bbo = (row.get("pmus") or {}).get("bbo") or {}
+            side = str(intent.get("side") or "").upper()
+            if side not in (FM.UP, FM.DOWN):
+                return
+            rec = m.place(side, D(str(intent["price"])),
+                          D(str(intent["qty"])), now,
+                          FM._d(bbo.get("bid")), FM._d(bbo.get("ask")),
+                          coid=intent.get("client_order_id"))
+            emit("L5_MODEL_INTENT", rec)
+        except Exception as exc:                               # noqa: BLE001
+            self.stats["model_place_errors"] += 1
+            emit("L5_MODEL_ERROR", {"where": "place", "error": T.redact(
+                "%s: %s" % (type(exc).__name__, exc))})
+
+    def model_advance(self, now: float) -> None:
+        """Fold new trade prints into every MODELLED resting order."""
+        m = self.model
+        if m is None:
+            return
+        try:
+            for ev in m.advance(self.book.trades(m.slug)):
+                emit("L5_MODEL_FILL", ev)
+        except Exception as exc:                               # noqa: BLE001
+            self.stats["model_advance_errors"] += 1
+            emit("L5_MODEL_ERROR", {"where": "advance", "error": T.redact(
+                "%s: %s" % (type(exc).__name__, exc))})
+
+    def model_close(self) -> None:
+        """Window close: settle the MODELLED book and report it.
+
+        The outcome is taken from the venue's own last two-sided book: a
+        BTC15m market settles UP iff the wire closes above 0.5. When the
+        book is unreadable the outcome is left None and NOTHING is settled,
+        rather than guessed.
+        """
+        m = self.model
+        if m is None:
+            return
+        self.model = None
+        self.book.frame_observer = None
+        try:
+            snap = self.book.snapshot(m.slug) or {}
+            bid, ask = FM._d(snap.get("bid")), FM._d(snap.get("ask"))
+            wire = None if (bid is None or ask is None) else (bid + ask) / 2
+            up_won = None if wire is None else bool(wire > D("0.5"))
+            rep = m.close(up_won, wire)
+            rep["outcome_source"] = (
+                "last two-sided authenticated book mid; None means the "
+                "outcome was not established and nothing was settled")
+            rep["ladder"] = m.ladder.status()
+            emit("L5_MODEL_WINDOW", rep)
+        except Exception as exc:                               # noqa: BLE001
+            self.stats["model_close_errors"] += 1
+            emit("L5_MODEL_ERROR", {"where": "close", "error": T.redact(
+                "%s: %s" % (type(exc).__name__, exc))})
 
     def refresh_available_cash(self, t, now: float) -> None:
         """Feed the cash gate the venue's own buying power.
@@ -1077,6 +1165,13 @@ class Runner:
             emit("L5_LIVE_HALT", LX.deadman(self.store, self.transport,
                                             reason="operator_halt"))
             self.transport.disarm("operator_halt")
+        # MODELLED fills advance BEFORE the cool-off check, for the same
+        # reason the cool-off branch still calls poll(): this is local
+        # bookkeeping over the websocket feed and costs the venue nothing.
+        # Below the check it would stall during a cool-off, and the
+        # recorder's trade list is a rolling 500 -- a long enough stall
+        # drops prints the model never sees.
+        self.model_advance(now)
         # one question per tick instead of one per caller
         cooling = self.venue_cooling()
         if cooling > 0:
@@ -1619,6 +1714,19 @@ class ShadowOnlyTransport:
         if name in self.BLOCKED:                       # pragma: no cover
             raise AttributeError(name)
         return getattr(self._inner, name)
+
+
+MODEL_FILLS_ENV = "L5_MODEL_FILLS"
+
+
+def model_fills() -> bool:
+    """MODELLED maker-fill instrumentation, ON by default.
+
+    It cannot submit, cancel, arm, or alter any gate: it only reads the book
+    and the intents the executor already produces. Set L5_MODEL_FILLS=0 to
+    silence it.
+    """
+    return str(os.getenv(MODEL_FILLS_ENV, "1")).strip() != "0"
 
 
 def shadow_only() -> bool:

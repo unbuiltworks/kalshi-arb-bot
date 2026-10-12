@@ -129,6 +129,10 @@ class AuthBook:
         self._stop = False
 
     # ------------------------------------------------------------ fold
+        #: optional callable(raw_frame, now). See ingest().
+        self.frame_observer: Optional[Callable[[Any, float], None]] = None
+        self.observer_errors = 0
+
     @staticmethod
     def market_states(msg: Any, out: Optional[Dict[str, str]] = None
                       ) -> Dict[str, str]:
@@ -187,6 +191,19 @@ class AuthBook:
         with self.lock:
             self.last_frame_t = now
             R.apply_events(self.state, msg, now)
+            # FULL-LADDER OBSERVER, optional and additive. apply_events keeps
+            # only top of book, so the 35-40 rungs the venue sends are
+            # discarded here -- which is why a maker quote resting behind the
+            # touch could never be given a queue position. An observer, when
+            # one is attached, gets the raw frame before it is dropped. It
+            # must never raise into the feed: a modelling error cannot be
+            # allowed to take down the book that reconciliation depends on.
+            obs = self.frame_observer
+            if obs is not None:
+                try:
+                    obs(msg, now)
+                except Exception:                              # noqa: BLE001
+                    self.observer_errors += 1
             for sh in self.frame_shapes(msg):
                 slug = sh.pop("slug")
                 if sh.get("state"):
@@ -239,6 +256,17 @@ class AuthBook:
                     "book_updates": s.get("book_updates"),
                     "market_state": s.get("market_state"),
                     "source": "authenticated_ws"}
+
+    def trades(self, slug: str) -> List[dict]:
+        """A copy of the rolling trade prints for one slug.
+
+        A COPY, under the lock: the feed thread appends to this list and
+        trims it to the last 500, so handing out the live list would let a
+        reader iterate it while it is mutated.
+        """
+        with self.lock:
+            s = self.state.get(slug) or {}
+            return list(s.get("trades") or ())
 
     def window_report(self, slug: str) -> Dict[str, Any]:
         ws = slug_start(slug)
