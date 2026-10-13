@@ -1,0 +1,4930 @@
+{
+ "audit": "L5_SEP_HELDOUT_MANIFEST",
+ "counts": {
+  "redeem_confirmed": 407,
+  "total": 521,
+  "unredeemed": 114
+ },
+ "days": [
+  "2026-09-24",
+  "2026-09-25"
+ ],
+ "global_mapping_evidence": "12,913 trade rows over the held-out days, 0 markets with an inconsistent mapping",
+ "global_mapping_observed": {
+  "0": "Up",
+  "1": "Down"
+ },
+ "markets": {
+  "0x034042029dffd579c6a85482446a14dfc475337a92d20358b22dcda4084d5efd": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790341500",
+   "trades": 1
+  },
+  "0x03602355e658da963aecb858cef12a1ccea91bf0711bf81d6cdc41b629daf6fa": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790276400",
+   "trades": 1
+  },
+  "0x03ac4c88f9e7d7abc8a6f428c68c62936da5a2660d4906bc4952557ca3c2fc72": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790274600",
+   "trades": 119
+  },
+  "0x03eff944cb29e609f06baa78ceb9da89ff429c418a2a9f46f599b4d54d928551": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790329800",
+   "trades": 1
+  },
+  "0x04770595dc1812b7be94b4173dd5b8291612b3c378da95ea6f92f1a70d7a2cb5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790318400",
+   "trades": 1
+  },
+  "0x04bf5d27d0d65387bb3505cdd0ddd5ad034d925209b3081447ca024839d29770": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790283000",
+   "trades": 3
+  },
+  "0x04dc24a6e505fdbf077110eb9e851b69dacc20f53df5baa11c68130fd8aa1c1d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790312400",
+   "trades": 125
+  },
+  "0x04faea5adb418fbc98efa864370564663b58c5161bc107e0150b61fbbeba2f1f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790254200",
+   "trades": 2
+  },
+  "0x0581039ef19abe3b0baf506c3f7963db1ff6dfd2266ef212fb08cea1d499cb5b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790250900",
+   "trades": 2
+  },
+  "0x05eff609681d3f1f77f6d56f0e8c69eedfa8f56ad807c78b454d5263dea3191c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790328300",
+   "trades": 1
+  },
+  "0x0621e9a8bffdecf8e0ea3954a55f059b950a0864ddf67de03596d4e4afc20b25": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790270700",
+   "trades": 1
+  },
+  "0x064c435d84d24bca7e0b926d897cd025763b35cb27f75dfa5a3f4c6239373014": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790212500",
+   "trades": 16
+  },
+  "0x069934316e20c826471b0ba1211bb8269dcfc8562f86979ba8c273a238bd63dd": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790316900",
+   "trades": 2
+  },
+  "0x06fb249d000a806114a16116b76736e8233bf5444848718c172826b955f05cf1": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790268300",
+   "trades": 76
+  },
+  "0x07c56009a6b660b34619d93ff955d23ace66e788b4859e4ddd40437dd2ce78d5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790345100",
+   "trades": 1
+  },
+  "0x08b2155c146fc81a9910019b952c0b081635e3200123116d96a3c33cd3f8d750": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790212500",
+   "trades": 5
+  },
+  "0x093ba3645b6382cdd048152833b27a15dbade54885247a85b5cba063eabebbf9": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790295300",
+   "trades": 1
+  },
+  "0x0a269bdfd20c722eb556df31d10478585ed1266f620a655c10a53ef0617f1b16": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790303400",
+   "trades": 41
+  },
+  "0x0a337006e8a9fefa563e97e08690052f94e0ed58aaa461a90ef0d1a4c0252aaf": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790288100",
+   "trades": 1
+  },
+  "0x0b9aabdd3c2301c10e3ba49d6ed45a196b1ef68925742e1cdefbc1f809455170": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790296500",
+   "trades": 2
+  },
+  "0x0bbcef969f7380346d11874418602755f9683a56a49c0f96999dc3f4e67c485f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790210100",
+   "trades": 1
+  },
+  "0x0cb64da5375a6059c1a678e6457d8c4541e665e30ef7fc0d26e4727f02c24c43": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790254500",
+   "trades": 2
+  },
+  "0x0cd15678cdf309a39e5bb3bd15f8e18f1e8fdfd07842023a9f937228ddccb413": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790345100",
+   "trades": 3
+  },
+  "0x0d49dc2fbfd1f2274b95df1382516827af798e5a9400327deee795ffe8e37033": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790342100",
+   "trades": 1
+  },
+  "0x0dd80e09b281320bd4c7f29ab01f8a0bbb626f896aff368e586bdac4505cdbd0": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790297100",
+   "trades": 251
+  },
+  "0x0e02fb59ba8c9395133d75d310200e69e04b31154930f2559f49847e59010317": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790319600",
+   "trades": 4
+  },
+  "0x0e91834ee3d518c1284ea31bea157bfae0b3352c297ecdb9f33ed52a79983fc4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790254500",
+   "trades": 1
+  },
+  "0x0fc896b7a25a31b90c763b357095add815593937872baa7c3f783f8b8594f221": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790261100",
+   "trades": 30
+  },
+  "0x101debfbf8eba5c52f69d12a149e50fa2ae742d17d74433d4f8081b5f93456f9": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790307000",
+   "trades": 29
+  },
+  "0x108c80b1adc0a4d0acfd56405c988086809f897306f0e76e15c34a51599019d4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790284500",
+   "trades": 2
+  },
+  "0x10b8785291b4f7ac1eb56ba2199cff805bddcea671ff973ecf5d8ed4e02e3d1f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790295900",
+   "trades": 1
+  },
+  "0x111d86977f251aa70085fea3a1ae48d4c04d4d7af2ffa27629b136aa169f643f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790327700",
+   "trades": 59
+  },
+  "0x11407e8460579ab3a410af4d02434690dfbe151df950f2787e367566b6050ea5": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790208900",
+   "trades": 301
+  },
+  "0x1235bfc82ddc085f882f7fd39ea166f1d69c549194e9b58c51f4c1bf13804af5": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790236200",
+   "trades": 1
+  },
+  "0x12feff92fb1c0bb769aa0785240e64e577901a7920dc9e6c9bc8543a94a7f4f6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790302500",
+   "trades": 4
+  },
+  "0x13a6ac8eca7ef26c0c41966fb2a0bd761e0f566202afe887063e44dfb1f62f8d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790268300",
+   "trades": 2
+  },
+  "0x13b8646439ae7f235af7ab2b396ec3acebfdd9b2d250c05c3645049c6eec5d06": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790257200",
+   "trades": 1
+  },
+  "0x13b9b3e061fcfb6fe36fe4b08ce5f7af517ab51e387233da3e92538e6f583689": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790347500",
+   "trades": 70
+  },
+  "0x13e5eb9a581b84899a81f329d35b5c564ed5e400494e2c3210f2c2f9b20ea72f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790320500",
+   "trades": 39
+  },
+  "0x13e69253609a63d63d566526853b874b9d6c6f6830262473c1726eb84f49ee98": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790282700",
+   "trades": 2
+  },
+  "0x144a3652c5606d0923c849a97cddabd6c3276ca4ba3c0fedd301d2c36566a372": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790287800",
+   "trades": 1
+  },
+  "0x152ceb39bf957708776665ca5fb672982714e96660c733cd1ad7dfbca24dbbac": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790284800",
+   "trades": 4
+  },
+  "0x16447568e6a25ee11f6e190b94c4b80a9eb7a6f705c42720bc770bb489debba1": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790324400",
+   "trades": 1
+  },
+  "0x166f7cb5781032e051aae5688f22730ad863d7aa43d17c5df01cea965e82f01d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790292900",
+   "trades": 1
+  },
+  "0x16705aafedc2d048a040cf37916a0d39f52ef5b8718da2d833fa429a57009a61": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790349300",
+   "trades": 77
+  },
+  "0x16c3715bfd587abacca277df0fc2821b541f210e3e4ba185afcdd37df06400b0": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790277000",
+   "trades": 1
+  },
+  "0x1724dfbd0e30d63382fbce7b92000cbc6be3e78911ac06d4a3656d1e57b781b6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790346600",
+   "trades": 2
+  },
+  "0x172562d0ee7819ae06047cfb24ed1a260440f45376efcf0f21d9e5235a8ffa58": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790251200",
+   "trades": 1
+  },
+  "0x18479ff4526c0555e95ff155d42a3f45001d627aedab91e471bf47f8f5a09a01": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790338200",
+   "trades": 1
+  },
+  "0x18549505fbe42abacbfac083e64068bd04c8c61ebdd512cd6210bbe5fc07ad25": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790210700",
+   "trades": 245
+  },
+  "0x18567499a38946addf7bae0596b89c464b33918d9759da18e68eb39597cd8350": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790328000",
+   "trades": 1
+  },
+  "0x18a20f73b3aac634e66c4fc49637c4e10241dd45a5329efc82699874942f0bec": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790269200",
+   "trades": 52
+  },
+  "0x18fdcb09a7cf15288c8c555a1f7ceafa2943c2ecd145637a9203c5cf62549ca9": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790326800",
+   "trades": 1
+  },
+  "0x19c080c95961e20ca3a9d32ed9bf65ec94df4b078b579c81c0d2af49311f6d8a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790339700",
+   "trades": 1
+  },
+  "0x1a829942bc30cba89340c69089830be8b9fb96b85c0efb7a975f543a122e3029": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790240400",
+   "trades": 1
+  },
+  "0x1acb2ba49aec6f5074dfa337cf11f3b639fad49e421a170487766d606bf5781b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790274600",
+   "trades": 1
+  },
+  "0x1ae24890797244204ef449c6ab7d82b3f7187af20d2e5e1dd10bef5f3d1b9dfa": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790247300",
+   "trades": 2
+  },
+  "0x1ae36d6aae8225842939dfdc6248112c7b0bae1bfca79db864473c4e83fb515a": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790277300",
+   "trades": 1
+  },
+  "0x1b7b8e481808f2182e9a02f59231a01aa924ecd94ca53be43bf747750265f051": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790283600",
+   "trades": 1
+  },
+  "0x1ba0c5a513ce3fb16cf818e6c8aaf3cdbec9d790185ac592f4f0a7b17f041349": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790304600",
+   "trades": 1
+  },
+  "0x1c1cd328695b771a796d3e535666850e93b7d1f3483c8b64ea69b70d8f169cc3": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790300700",
+   "trades": 75
+  },
+  "0x1c4b3536bb339abb02954a8eeed9b962f5b9093fc61de20dd4562f1fd383d3a7": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790250300",
+   "trades": 59
+  },
+  "0x1d3dd3e422e3833ec8b795abbdd5ebd6aefd66e7d7d7966fd1d770e2a11f1d84": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790247600",
+   "trades": 100
+  },
+  "0x1d4051d8ae0829053f2de8c15dcf65ebcfef51ec740f27472a62626bfe6ece65": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790338500",
+   "trades": 1
+  },
+  "0x1d80359f6b6157014eb5fbdbe4590238415dd9b22bcd52241c0b1a9828c1fbd7": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790283600",
+   "trades": 91
+  },
+  "0x1dd6c79e14091ab4bbd2971c5718455c478fb43ed4f035977b605158633976b2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790250000",
+   "trades": 1
+  },
+  "0x1e137ba11010cb504f10eb6cca5c2b78bc6c1f36858a80021ddd2deb977f1677": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790347500",
+   "trades": 2
+  },
+  "0x1eb6b5b55bc85379fbf5f32bf084ea2e23b32b238a6e8ef14bbb21fd2bafa421": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790248500",
+   "trades": 2
+  },
+  "0x1ecde9ec55d852b7002c29cdbc2e2a24c2edc61bd945f9a2e54023c0ee56767d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790322300",
+   "trades": 75
+  },
+  "0x1ececd42ae4a5118d980b574c4ae754e1bcde467f1c242b94eee35b7295a0352": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790262600",
+   "trades": 5
+  },
+  "0x1ffb26ee5354b3afe593e0b3c7cc9d94176d2660d89c7dce95d3863650af2f78": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790247600",
+   "trades": 2
+  },
+  "0x2019a606645b42ffc7cfd8915af70fe03a37d85f3488f3e8fc1b81ae24e34884": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790250000",
+   "trades": 4
+  },
+  "0x20d639b2a6f1c591e9f7f92409bff83227d159f55c65c10ceb69316461f852a5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790322900",
+   "trades": 1
+  },
+  "0x20ec939ad58484633a89f3ec39dc7f36b5f49e41a48c8893cf7e3d3650d697af": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790293200",
+   "trades": 4
+  },
+  "0x21834928cce02080a6ef8c7fcd01d5fc44fdbc6a0afbc00ad4f0a54dc8bc3111": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790281800",
+   "trades": 53
+  },
+  "0x21dbb44fb897eaf5fb5c830daf8c79fdf0cf951eff59ca967bb1eb4fd3243001": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790296200",
+   "trades": 2
+  },
+  "0x2220883a028d850ed2a570a6368533bc56f734a341029e7886ad9bc1bb9a720f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790246700",
+   "trades": 2
+  },
+  "0x222d66655372cda9093f17564a567349844953b8c851886584e48ae2076140ff": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790306100",
+   "trades": 52
+  },
+  "0x224bce16bb8a5ad3df6cea92c4201d1fa0e9ea96750a63f10391de36887c1105": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790260200",
+   "trades": 2
+  },
+  "0x229043fe0b2b8d3114021e173e5ccd5f65f43c5876f1e3dceb5df2e0e2485d7b": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790300400",
+   "trades": 1
+  },
+  "0x2298ba2822e5405868c8d2ae87e56e5dfa9b04dff8780428d51067992f66621e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790239500",
+   "trades": 86
+  },
+  "0x237e1e12e4e2b488512cf670eeeaa84f0412f4d8188da83a00b3d5c27ccddf97": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790278200",
+   "trades": 65
+  },
+  "0x24bee6242c0af497386662a092e9cb2798b2c430262c371e3950a3d733a40050": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790265000",
+   "trades": 1
+  },
+  "0x24fcd71c9abaa49dc869e10b355a3b8b8e2f305f395ce6514b3013e0a0898bcf": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790351700",
+   "trades": 1
+  },
+  "0x2508605664aa296c65e9dcbb0d257d4e98afc82b5c16ddfdb2d2ed2456fd0770": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790297100",
+   "trades": 3
+  },
+  "0x2552b4f4b76d39adba11d50142779b532aa6725cc9b38d1c1ae90c5dca7de322": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790209200",
+   "trades": 1
+  },
+  "0x257cf3d6270cc9594df0522a81a82b4812e7dbb33e14b4983ed410d9a6f0a1d5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790305200",
+   "trades": 97
+  },
+  "0x25daa1e2de0089e7feaae7e1654c45cc9f613f8aaf17dc5983dc4e7b08084a55": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790311500",
+   "trades": 58
+  },
+  "0x26a1247e058fd51d31c205e326fc877b92c6664edc1ea10f456ffe695f6865a2": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790304000",
+   "trades": 2
+  },
+  "0x26aa2bf6e0ebf064e9e1c34e670d1921bf81f46216c8e0db7d050972a97711b6": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790274300",
+   "trades": 1
+  },
+  "0x26b475e5ba03113ccead3c1613e870d5b8a80b5fdcbd9cb4696eea7f3c86d25b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790286600",
+   "trades": 2
+  },
+  "0x27a136df2584f7348daeeaa8e017cf86ccb0080f187c523ffb79987d528b21d6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790334300",
+   "trades": 1
+  },
+  "0x27bfc538fd52d24093521090704b4ba5998075065a029fba17f30ea4b3e9a138": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790241600",
+   "trades": 3
+  },
+  "0x27cfaf5c07dedf32325ff6c0b4638178e5d816e36287317350fd9f082ff5f78b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790267400",
+   "trades": 177
+  },
+  "0x27da3cde843a92a91689f759dd03ea3330267aeaf7529eda36082e192fe76135": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790262000",
+   "trades": 54
+  },
+  "0x287f6df2c7a91cc711ab2f9b165bae0c2a816e5238d643a6beb5022f0113abe0": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790333700",
+   "trades": 3
+  },
+  "0x28d84549b98dd708659fdd119e791eec3c4bef8f5da8196e942e78d812f21e36": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790209800",
+   "trades": 438
+  },
+  "0x28e59fb8610ee14d024dba07152489cab8e6146102e6e4a15f241289ff0f9e19": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790275500",
+   "trades": 1
+  },
+  "0x2916ccf9f6b7b46f44a7acb2153b14d02188cc8f41c7e6e51c7af818bf5a72ca": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790346600",
+   "trades": 108
+  },
+  "0x29be01e709a816fadf82a19987150237f7116a6e597b6c7becaf75707fe2dc88": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790280000",
+   "trades": 1
+  },
+  "0x2aed31c6d07693a8127adec2a223a248d68d7dae836e8a203587a89d2b314899": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790317800",
+   "trades": 1
+  },
+  "0x2bfd23224c82c0173fa50210415a9322c567aa5f0f3455a128995841e60fe68f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790286000",
+   "trades": 3
+  },
+  "0x2c0319bfed11e9f474a2b0fecb36c3ad617193135a779b4e89166074595d8aef": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790329200",
+   "trades": 3
+  },
+  "0x2d29d22030732c193584c4187f656d92cad8299743a3850231a9c762b4759524": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790310000",
+   "trades": 1
+  },
+  "0x2d964b6894949e5e1d779105cb1e3a984095332b8d3ef8ab91eac77851fb8227": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790337900",
+   "trades": 3
+  },
+  "0x2d98d30ce5c2a879d033dfc04039b0b23fe8d0865cc4d3323dc93b56622d9fe9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790250600",
+   "trades": 2
+  },
+  "0x2d9e224fdf38bb7b30e50884903436bba50040334140cb273c7f05731e21c82f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790280900",
+   "trades": 2
+  },
+  "0x2e0284a0d07b9cd22bceeecd95f3511f09e8f461f8ce9b421d0b8e8f39017a0e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790315400",
+   "trades": 1
+  },
+  "0x2e54302ecf84002d2071392b1b48ead01665240d490a16c478ffcbce30b25bb4": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790338800",
+   "trades": 1
+  },
+  "0x2e6b99615f8593ea68ea871e68ef3a12c1f5ffce0f9bf06520300d90b384d38e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790262900",
+   "trades": 1
+  },
+  "0x2f3e178229ec186b57a7e7707f586efab98d95e679aa522644ce1a007cad71be": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790268000",
+   "trades": 1
+  },
+  "0x2fb804dedced41b51861423b438767dad70ff5eca0610c2618625d41d2ff5a63": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790351400",
+   "trades": 3
+  },
+  "0x305ffaf25694b8348b3c3bf35416401019162c7d455209d1685df520c5f53a7d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790249400",
+   "trades": 53
+  },
+  "0x307f53642fd92416c9938521432ae21ad76881ce1f9c2ed0bd5ecfbaa0d48619": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790333100",
+   "trades": 3
+  },
+  "0x31435270beec25bf373553c0110c892775d361c8210fa74fdefbda12945af381": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790242500",
+   "trades": 2
+  },
+  "0x3143963822975b5b80150491840ee0f0ca2e95ed7678306742f76a23943e4e78": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790325300",
+   "trades": 1
+  },
+  "0x34481e4456c624dc5275dfe1264c136a49f6444c113d395fda1210627b47aaba": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790321400",
+   "trades": 2
+  },
+  "0x34defe2463bf89e39cffdb38db55a4a8f1a4d136a0b5c412358120a02fceaf50": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790349300",
+   "trades": 1
+  },
+  "0x3613963cf067f8b4d768d36a4c3d37dd7fd14a297087bab29559b310d452c4d6": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790237700",
+   "trades": 1
+  },
+  "0x368e9f10d7d105abb4e07f59f399b319eb9aaffb4ca19eac2bab3a53dc0d3270": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790330400",
+   "trades": 1
+  },
+  "0x36f25363ac71b633ddc1a4e7a5c94a7ceedb573af44e729590400e3104d77fb0": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790316000",
+   "trades": 5
+  },
+  "0x38187f9c5c858f7903db469fd822e7037ce0decf01688c5db0d1e19c7a7d2e16": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790328900",
+   "trades": 1
+  },
+  "0x39278ac0da7b4f6f9e39e8f253f7a4ac2cb29e8681657f162a17d2c8c74e8229": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790285100",
+   "trades": 1
+  },
+  "0x39c15e04e24b5559e16a9399e27c4ab2743f0dbc3371e9e275319cd9483b9da0": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790251200",
+   "trades": 138
+  },
+  "0x3a24a6e6c507f9e54dc8cb63981dbda88fa30949574678e22309766f5f484bd2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790209500",
+   "trades": 1
+  },
+  "0x3a30b2dc780e0a4ad8217fb448da7c68d2e12b4ac51b2bace845247f18c78296": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790252700",
+   "trades": 1
+  },
+  "0x3a6bf58ff84ab493fd2b18f63716657a18d25fdc724585957316641f0a9b2bd5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790345700",
+   "trades": 3
+  },
+  "0x3aa969650ff7353d3183676ef17f479b6cfce51cfcf178e2fd9fe6c233e12147": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790316900",
+   "trades": 8
+  },
+  "0x3d3864a9b55ea007969fac6508f1321b0d3c328c5e48ed0d9c7c63c2cb644d09": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790269800",
+   "trades": 2
+  },
+  "0x3e1418d160452ecc0d117479e3117382116adfa9c9f1655d94b7dc8c389c3597": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790316900",
+   "trades": 2
+  },
+  "0x3e60e9782985faf25003fa04626c6f7f836bcc9423fecfc2d6817cb3dd179e4a": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790288400",
+   "trades": 1
+  },
+  "0x3f07a0f12c9d3da69fecebe81fa5d34b605e961d46eb8f91a688ffd2a53e4dd3": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790266500",
+   "trades": 41
+  },
+  "0x3f8dd58bf61bf0b405cd5cd04572bc496ed5382b16080d3a0d0311bf491bca89": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790268900",
+   "trades": 1
+  },
+  "0x3fa4699619408c7ee4fe957cb0e69c5a8a6e1676c234045e7a7f54a566127db6": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790257500",
+   "trades": 29
+  },
+  "0x3fb9f4ab3c2aa6e586bcb6da122cf1341f87dd903a3b9e52031f30cd93f7d82e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790317500",
+   "trades": 1
+  },
+  "0x409916153a5c8fda427721fd8aa0203c346622f428d05ac78db780183d92ca68": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790310600",
+   "trades": 1
+  },
+  "0x40edc3238de0c8e3a22f19d2cec02428c7bb475d288da41860e0adbd2f3cfa4d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790286300",
+   "trades": 2
+  },
+  "0x412abfad4abd56f620771f6cfe9ad72a5c345b8fe9c9c41f4490b8473924ac46": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790331300",
+   "trades": 57
+  },
+  "0x417c4382e64c77dee16288dfc7c8898435186668c7dfa0b85794f40151825b37": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790307900",
+   "trades": 2
+  },
+  "0x41b3dc64f92a93f40d077f498512b2d34848254d7a1c1d7d642b2f2d3c97a29f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790237100",
+   "trades": 3
+  },
+  "0x41b5b12b3bc65619490beab628d43b027fbd3560ee4809176618e2f91be80e32": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790344800",
+   "trades": 1
+  },
+  "0x41dc771926cb2d33866acb031ed2d396463b94b6a74dfdcf22fe197487c1731b": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790298900",
+   "trades": 2
+  },
+  "0x426acc9f9b71a3264204d1958e40c203748ff6bc56273a0c95d21b281d7679fd": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790280900",
+   "trades": 111
+  },
+  "0x42d25382a1a709eb7cb557e02bd54e18cb014c0a4baaa595427fd5f8602e7eda": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790301000",
+   "trades": 3
+  },
+  "0x42e518f878b07cca0e96a63791268cb40adce110cc09a4360209204375d5f951": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790287200",
+   "trades": 117
+  },
+  "0x4381b40e23fcefef80ba30f4f72fe41bf7ea171780df670de7210fa9358201c5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790314500",
+   "trades": 1
+  },
+  "0x43e3e558722c393cc08f4aecdf6971f8a6557c5cca18d077b3070ae97c75ae06": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790276700",
+   "trades": 2
+  },
+  "0x4447e6cc9715848ccf5dcb6038db50909bac4e1bf5e39dc50ec7fffce5b0ef7f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790327400",
+   "trades": 3
+  },
+  "0x45077ce167b2ba96bd0db210126def1acbc4311cce60dea980fd0f8af8cf98a4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790293800",
+   "trades": 2
+  },
+  "0x452e6eee990527f08277e55063e4160675d0ec02d7b4bad0d2bce07f87523d5c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790325900",
+   "trades": 34
+  },
+  "0x459cdcafb652c8debfaae19dfbbc5a1fb65e7fc8a3451f761f4d370cd225f74e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790269200",
+   "trades": 1
+  },
+  "0x45a51756a1ae904da00fc345bcdc1401a2da4eb82f35c1c5a7cf260f485e7f99": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790268300",
+   "trades": 1
+  },
+  "0x45ff94b54a5502fc56697f9543c79b6942ce165ba3237245a2ffa2d296ecccae": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790316300",
+   "trades": 1
+  },
+  "0x46331ae9a1b4ff2d72e0bf0e79fbe5fd47c6932e3c7d5cb6e5f2498140f6780c": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790266500",
+   "trades": 1
+  },
+  "0x465948870e4dca88b7b10e2f85f81864d6ac7a1300c437c26d835609d5ac5996": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790287200",
+   "trades": 1
+  },
+  "0x470be08e83838b503584e51a82a071ac3f15b3c8159566030c4d773d45ea926d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790335500",
+   "trades": 4
+  },
+  "0x4745cba7130f449d161987025e969e08d93b9eec53aa7206d03dbb81fc090f9d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790262600",
+   "trades": 2
+  },
+  "0x47fb95810f4178cd7782a0d6d991ea830c4dc78991a61c5c433c14ea0461073d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790238600",
+   "trades": 1
+  },
+  "0x48a4fc0b465b8aa05fba2b17404ab3924eb266e10e93744f6302d6123fe8eeb2": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790295300",
+   "trades": 1
+  },
+  "0x4922e1992f3287613a3a7153c86561abf37bfa7359ad42ac1780c55622c6b2ab": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790292600",
+   "trades": 3
+  },
+  "0x4bdaba07351567ba770195ed0098c18c4940736abf9d0d24607363e5f2684352": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790209800",
+   "trades": 1
+  },
+  "0x4be39681423f571f0048bbeb1f88fccc51b38d7a382d72a041ba39c6ea72bd76": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790313300",
+   "trades": 142
+  },
+  "0x4cdd2c95c481f6cf20b20692d24e9239dfba10080c2d9b1de796fdfc81f36f23": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790285700",
+   "trades": 2
+  },
+  "0x4da121367b035b8e5bdf1d9753dc4d216ae74e1b5a4496f0ed6da9967d54ee74": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790263800",
+   "trades": 1
+  },
+  "0x4ef142e280ce0caa1e620eb6021e3f25a636f552e605c25c3d9fb8939dbce013": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790243100",
+   "trades": 67
+  },
+  "0x4f6dc59e06b15251aaeb7d5114a1bb2ac93ea6b8450890d78869b16934b7e691": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790251500",
+   "trades": 1
+  },
+  "0x4fa3a692c5a73e60d8092014315c2c53e0c4c6c5508ffb9280dedbac16cf1a2b": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790345700",
+   "trades": 2
+  },
+  "0x50f75385ccc0d77aea86e03e0141ea9aa3fb3511d566a2e5e5aaec7b21e56568": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790320200",
+   "trades": 3
+  },
+  "0x51683ffbb9899dbc66c5e6d6d087e3e3b2981d1cc75a1615af3ea68e558916d9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790270100",
+   "trades": 76
+  },
+  "0x517c1571cca2266d40cfdb44f7e10345e01c25ae1c2231edaa9bb0cfd77a8dcd": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790253600",
+   "trades": 2
+  },
+  "0x525777e6d10c5755932bf582c99aba411878c59e272c762120d0f864105f3c38": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790300700",
+   "trades": 3
+  },
+  "0x52a9fc9bb53b8af94bdf663881b80f875d38f87ea9bab6b217d5254836766960": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790252100",
+   "trades": 4
+  },
+  "0x53c3beddfaa0bf59568df1cdf6b0dc6f770115331844b1053cf4a6f11ce73dbe": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790350200",
+   "trades": 1
+  },
+  "0x53e4af8f23a105282112343a544e4ba4b5b5742e1f3870160ad850c38f13b0e9": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790299800",
+   "trades": 3
+  },
+  "0x53f28ed527d6d3dd95eda9f6ca2eaecdb985c50acf66e644c68ecc953080de9f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790294400",
+   "trades": 116
+  },
+  "0x55361775a5bdb0abe5038f3d1df86fa5b4d54a486438ac357fd85742c070b1e1": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790312100",
+   "trades": 6
+  },
+  "0x55429d1686c6099fd822b161161cd04a20132305f201351057ae8724163624a2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790251200",
+   "trades": 1
+  },
+  "0x55b0fb8a45f26a3d1d742432bbac5ca44e5e9fa00d1d52ec84ab8d7b26d9c14a": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790283300",
+   "trades": 4
+  },
+  "0x562551d988224fe12f079841b445bb941613d0e40f8070dfff4869409a5ebaa3": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790275200",
+   "trades": 1
+  },
+  "0x562c285f9b3c3bbcebcb9cc434ad0dca351635c1ee573fba449ccd2c9d8802f2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790262300",
+   "trades": 1
+  },
+  "0x5780b97eaf25bc439e802ca68f7d226de3ebf3de6794c1e7e0c7d645face0ea0": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790322600",
+   "trades": 1
+  },
+  "0x580c9135dda0ab55d5f8c510e4ce37bdb6a51f0038aed6fc9561c36fc94459b7": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790325000",
+   "trades": 4
+  },
+  "0x58bd7b2a623a66ec43437dee46758b3c2b91972d2da011b291e99e8c805904ff": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790280600",
+   "trades": 2
+  },
+  "0x598b78479ba76f5939f9947c78d8cb0e359474d251e2e617120fdb2e83c26ce5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790338500",
+   "trades": 2
+  },
+  "0x5b160a0a90174d2a2814601638e89aaf485b761c9655b1c4519dc87f9807afb9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790258400",
+   "trades": 59
+  },
+  "0x5b1972163b0d9f00d8913f205853f782eadfc4063b4e1416ae7e02cd7e37dcca": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790312400",
+   "trades": 1
+  },
+  "0x5c600c83db9840bf975d16fc080c63d34289d946966040202569c1f597a6f1af": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790337000",
+   "trades": 3
+  },
+  "0x5cc7575cf9cb9ab523528acfe0b6f1d3200d3971464caf87db021026f529b677": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790239800",
+   "trades": 5
+  },
+  "0x5d250211c52970280f3cd65d440a5c47509bb9deaaa77cd702ce74637ea5d38e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790291700",
+   "trades": 1
+  },
+  "0x5e21f5e8422679ded7dfc7faa2fb405d25f2837254bf7caa4938454ea00f3376": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790278200",
+   "trades": 1
+  },
+  "0x5e5acfa40d2b1215a9f48e5ea91e649ceb086d709d42991baf554d76b1ac827b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790245500",
+   "trades": 1
+  },
+  "0x5e671fde12f7ef2aa8188c0245ddb0995aaeb485b7a4294ba4e738eba490d69c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790312700",
+   "trades": 1
+  },
+  "0x5eba5fe7a77b7a36cf0f9c3f554819905d35c9e4e937879fe43d3a1e63273872": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790299800",
+   "trades": 108
+  },
+  "0x5eeb519b5a05d3a7b209764b942a4eb7f3b771648efd3003e9f6330e900665ad": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790279700",
+   "trades": 2
+  },
+  "0x5f2663d6a6296c4883d054c1ed9e69ad911efb1b6b6dcaf3dbb60a8df3db5d1f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790305500",
+   "trades": 1
+  },
+  "0x5fc38baaff21de8fd169d2cae6309e213b8765bc02cbcc447126f10b61032919": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790298900",
+   "trades": 1
+  },
+  "0x5fcd5b798cbd6e55a9896c20b8572bed3f3629881e37ac0f5357e4701ec74259": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790264400",
+   "trades": 1
+  },
+  "0x5ff2e31dc09b83f1c1a9c79c96873db3abc307ecf2d39c040b4cf58a854a3bda": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790284500",
+   "trades": 85
+  },
+  "0x60292576f23d12de4d18c88af7700f7e157cc87c0ba2ae2a8f34285e9f68940a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790350200",
+   "trades": 80
+  },
+  "0x60434c5f77ee1a91699db2e6630dd4ef90d457242d2d56e4605cba58696c61fa": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790211600",
+   "trades": 3
+  },
+  "0x6067f69d72ee495ead73c125400e2b25cb7ee8d1f9c1ba7e0202c80bbfc19fc9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790272800",
+   "trades": 98
+  },
+  "0x60701da1b255c3fc8f2f019e2d117e1f8b825abc7e20eb5ca583b216cff45fd0": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790290500",
+   "trades": 3
+  },
+  "0x60996d2a922cb4430035aa62a1fbc8cf98e2c450b54b408ef9008846c3453b80": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790283000",
+   "trades": 1
+  },
+  "0x609a31924d5984871e0ede0eaec93d4333d34ef5535f75a4de9d59aec10cf509": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790255100",
+   "trades": 3
+  },
+  "0x60d8e8b951ea31a08666ab0eee081a3dc471afa752b006c62a85c9ed4c80e0ae": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790339100",
+   "trades": 1
+  },
+  "0x60ef1fd76c75369998bfcfda7d0085673b830a6f1e8a7796f52aea1d8944583e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790301600",
+   "trades": 28
+  },
+  "0x623fd1484e3057e08ab97c3fbac4fb172ffde73942dcc8929e28f6e042086a8d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790314200",
+   "trades": 66
+  },
+  "0x624a383a367280d0d66d330021a1ebae0ab96266b528233c84cdb3878b47904d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790333100",
+   "trades": 1
+  },
+  "0x625c26fc8e5dd2e7307066d149927fc12b8e3824cd37ab8a54d89a42167cacb6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790350200",
+   "trades": 2
+  },
+  "0x62e4071ef5950ab8b65c503b2d79deae6bc25fad027bdcb37c7be7f0ddd06853": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790236800",
+   "trades": 7
+  },
+  "0x631348b3aff987bda321a5882a84debe6b86322dea7798d6038da277151ba7ba": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790283300",
+   "trades": 1
+  },
+  "0x63756dfe967fa463cbd32704b663793b53792d26214d4c6c9615d859cf157110": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790286000",
+   "trades": 1
+  },
+  "0x63f55bec305ea979b073126e7fb7fb68c2fc14a83570d37fe55443ca6cccf312": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790210400",
+   "trades": 1
+  },
+  "0x647f3748dbdca316568115ea8703c2f38b13fb7477d79e069dd4e007e8732727": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790275200",
+   "trades": 1
+  },
+  "0x647f8c276cd64ac651edbdd1099c35594ed4a79418e9036b8a245af218786570": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790290800",
+   "trades": 1
+  },
+  "0x64dcf338f3345e20ae38719de44308bca263e4e4da3ca516f84acc68a47a9c3c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790329800",
+   "trades": 4
+  },
+  "0x655dad301709d69267f9b7238b9a2ff399fd9026e6b86dd1b19960ec2324eb31": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790344800",
+   "trades": 44
+  },
+  "0x65cdd1826b267ba1aa7518eae08411bcf0fcd0f8d636e3b65a5e73c4ce3d90c9": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790346900",
+   "trades": 3
+  },
+  "0x661f10f2cdf2f0c937ad4d504a047d9db91ade4a6f9e4115ea43910e8c9f0d96": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790290200",
+   "trades": 2
+  },
+  "0x665d4e605eb327ed4605a98954fd9fbbce8cb0359d2e4263f91a848095572c01": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790330400",
+   "trades": 39
+  },
+  "0x671aa9ae050c39e9c1abf3e3d18536c10095107ae72b016df964cc79ab0c2cb9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790235900",
+   "trades": 49
+  },
+  "0x672e28f01436f7bc0687188995b243d4b21c44dab83354b638f0a70f55226360": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790299200",
+   "trades": 1
+  },
+  "0x6862ae73029d63f0bf2499d9e22b108735c3bd974e966d8c5a2c0a6f1bd00236": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790329500",
+   "trades": 4
+  },
+  "0x687f2519dd0cf791e74b15ccf9cb9ecab35f0a0fcf7e8d2a5237ab446fcca544": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790322000",
+   "trades": 1
+  },
+  "0x68a5e5c48abda6dc015cc680cc34e3741caa8a6077a88f9b607257e24700fbcf": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790273700",
+   "trades": 69
+  },
+  "0x696481cf03153d78615546ee78d4576c8c1fa3b82b9ee7110628f862b4ebeeff": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790242500",
+   "trades": 2
+  },
+  "0x6a17213923ac2216f1d5f556a394b3d91d7a1c0cd59bb74535210ead3d9159b9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790266500",
+   "trades": 2
+  },
+  "0x6b85292679c66c43f04d9c322ab12a52581cb3f4c39e979dd7fcb7bc5a8ca983": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790315100",
+   "trades": 1
+  },
+  "0x6bb395c888eafa97a8f7520bf82957803834ccc59d8c233e0f07338002d25b74": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790265600",
+   "trades": 53
+  },
+  "0x6c30481754da1e597e6f3029c672a42da8d606c406cd04456840fd39feb4153f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790266800",
+   "trades": 1
+  },
+  "0x6cf6c5f0ba325175568aac2a92e6c340a2b8f8bd302fffd34acfef5e478b3729": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790343600",
+   "trades": 1
+  },
+  "0x6d079d27561024f4e3568f0cc3b9bc9e2452adff13bbc1866ffba01183e5e5d4": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790349600",
+   "trades": 3
+  },
+  "0x6e74b0c5f88750ac3fee4c7fc7b4c0b26c2095ede9b7edbb7dbb19643e4bdf8d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790324700",
+   "trades": 2
+  },
+  "0x6ea469ec579dba0a7dbaba099ad9ecf339dec6dcca3697d19ceb35dada0ab722": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790209500",
+   "trades": 2
+  },
+  "0x6ff8824b7a1ff5e0e4750059dc09bf0f96e7e1d9d896cf7ec093a3f38f42eaac": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790306100",
+   "trades": 5
+  },
+  "0x70bb35774f194a50b9a166785d7fa303bc3a59759a38176280069a15fc8e009a": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790263800",
+   "trades": 50
+  },
+  "0x715366024dfb6b677b68fa7670a7061ee5c0b221dcc0a8ed9586b5785e541da3": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790276400",
+   "trades": 129
+  },
+  "0x715f5d7cfecab62245ce8fba5f77054903663786012728b57842ee1c5dc90acf": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790335800",
+   "trades": 81
+  },
+  "0x7198705bb6de660de02b7b538180ed9cbd55f32632f028faf5fc7636130f91b6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790342700",
+   "trades": 1
+  },
+  "0x728483e786666ce791446bb68b839da5ffa0a34de6d02b01b3e5278a73d7d00b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790239200",
+   "trades": 1
+  },
+  "0x73168d87f7413eee4bd515e148da811838b67d2ac3365f7cb04e9e0c854a20a4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790252700",
+   "trades": 1
+  },
+  "0x73d27279aeabafd820137ece2c596e7ad155ff5ef90cf2e31370d438e2c025c6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790294700",
+   "trades": 1
+  },
+  "0x73d3d3a15108fc883ac0d0a7804f374581cd45a0ff9f0597fc0b2fcace2f87d0": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790342100",
+   "trades": 56
+  },
+  "0x74ecddbdf866c4e6fcd130fbbb28343d8419f69f2047d933632c00bae909b02e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790322900",
+   "trades": 1
+  },
+  "0x763800f8608515719cf926e39f15dcf0a33cc9d047ef5dca1f832f74fea72b61": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790319600",
+   "trades": 1
+  },
+  "0x76aae78f05854eb414b9076f11a99a2c65a9f2fefa212e9a0a3b82b626c6ae44": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790317800",
+   "trades": 1
+  },
+  "0x772b40dbc3a49e27b6dabb856d229fa3e244c2bfa1a3902061647dae514a7ab4": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790313300",
+   "trades": 1
+  },
+  "0x77513bf18cb2a834c0a280f1b01b43cec10c189bfc17fe12b03cf774ef06264b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790272500",
+   "trades": 1
+  },
+  "0x7879d64d6e5b8adce2ac1e631c6e12940f849fb0930c4bd3c6c3327c6b279d2d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790289000",
+   "trades": 1
+  },
+  "0x78daffe17db91d398acf0ef00f93f23a31b27f30e9a531ba31180c461e8d1b4c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790350800",
+   "trades": 3
+  },
+  "0x7902764897b07a118fd2340ae05810d6181d787a1a701b5172ab5096fbb91fd8": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790338500",
+   "trades": 114
+  },
+  "0x79a2887ce8b8e742aa94ed407edb5ea0671fd2066c2011e98447f411607fbb64": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790285400",
+   "trades": 2
+  },
+  "0x79b353befc5364ec2d240f7c4ca77a7b7f2685463e47287bf2b90a081e34a263": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790257800",
+   "trades": 3
+  },
+  "0x79bd2d2d5938c03c5e79194230c6ea3209e0a8e4f3b2f6e263c502375cb62b0b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790246700",
+   "trades": 1
+  },
+  "0x79ccafafff1149d7ea2e9c673989017257c84f1213cad89413ff25cbcb18a9db": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790287200",
+   "trades": 1
+  },
+  "0x79da0c7b32eeaa71b0caf0a9ba54a5880b7e5d9c785c20e35263b4ab94fb3048": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790236500",
+   "trades": 2
+  },
+  "0x7a15735746d60d34c01446c7d901a046920961f0614c3f92571c505ac2c275d2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790289000",
+   "trades": 2
+  },
+  "0x7a2974b02f514f0f18faa55cb724af44b5f64da3228977b3613a2988f296f80d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790323800",
+   "trades": 3
+  },
+  "0x7a82e33a8aaf51863a9a705dbec9618a7787da911fbc013a1605a212dc450295": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790270700",
+   "trades": 1
+  },
+  "0x7b30c9f42982465b578acc1a6c75d6dcd7cca5a106a41b887daa2fb707987397": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790254800",
+   "trades": 80
+  },
+  "0x7b4644042a447565b7855366ad090546b55fefc4a1a9d6c73a44cefdbf6956f2": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790318700",
+   "trades": 1
+  },
+  "0x7b80daf688d021e529f096bfc1989d8826d2a04a47c7ec7b220d84ba0e1507c8": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790242200",
+   "trades": 2
+  },
+  "0x7b92b9e5e7dcfa068e2561039ab22fd056fe3112c9a3244b97f21d3411aeee05": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790326800",
+   "trades": 43
+  },
+  "0x7ba1b9d8e16304ea681eaa39d67eaa5eeff4bfafbb463d3fc3f3ae293310739f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790348700",
+   "trades": 1
+  },
+  "0x7badada12334c4f004bbab6c794e3dbaebcc9cfd89e5d887bab7df4dba02fc72": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790259000",
+   "trades": 1
+  },
+  "0x7c2a03ed05dca3326ae2e396849c4193d144ece8d48c6a143a2eff2966f553d2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790244900",
+   "trades": 1
+  },
+  "0x7ca1515a63c745a0862423d1af22e64ac9eba0ce724b5df919586cccc8464e09": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790337600",
+   "trades": 2
+  },
+  "0x7cd9538bad48db7a3a801882a66d95bdb477f69c7248122d6b375c0714e6d13e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790304300",
+   "trades": 48
+  },
+  "0x7dac24cb5767e4b5d83c38c69c2a723054e13b2ba8fd06ae717cf768f432e888": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790237100",
+   "trades": 1
+  },
+  "0x7dd92305f6b505b3a50089442eac7590aeee6f6a6b0fbbd1e2c7d2cfb7d9ccd8": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790248200",
+   "trades": 3
+  },
+  "0x7e0177dcddb49a03ba8ba206607ebc49776111c5ac8b7c353ed1db936fc973cf": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790296200",
+   "trades": 198
+  },
+  "0x7e2ecda7bab7be7303012bb64da74e1a563e3fee248d7e4d1e405080d75aab83": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790333400",
+   "trades": 2
+  },
+  "0x7e6f54296fa6cdac631b4a4f827f83803885099be0aa698ae147107b7c9b42ea": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790341200",
+   "trades": 66
+  },
+  "0x7ecf5639a4f935e4d0306978c8c31e8296bac5f14be009cc86eedb4b429c3ce5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790314200",
+   "trades": 4
+  },
+  "0x7fe5b6842ec88316eb7a3b8431d7b5256f2363bce54fa49c76f63ab51dc8a026": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790313900",
+   "trades": 1
+  },
+  "0x8009883cd04de393602bb8c80644684f8f9fc3fc375cde1915aef48f19d9c091": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790316900",
+   "trades": 47
+  },
+  "0x8018baee76fd50b9ed8bff916652cb6f8236aeed14e286a51ac706806cf608f1": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790277300",
+   "trades": 108
+  },
+  "0x80e3bb9ed45841d2c33b5737ac761ff01072b8db4b9a09bb64cf41d07a1b2ffd": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790305200",
+   "trades": 1
+  },
+  "0x811b845a750c5e195e58e2b1ef769054099cc7bdbeef9c651d5f9a02630a249a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790337300",
+   "trades": 1
+  },
+  "0x818036ddcc38c94a77432ce313ac9b37225687ae8b0073715208ce605b56ff30": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790315100",
+   "trades": 98
+  },
+  "0x8226664192c272d7d7d56ee86d79bc9ef1abb637001906ca83cd5d93682a9d28": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790266500",
+   "trades": 2
+  },
+  "0x8244134bd18b431e612e211ba6be45ffd58822d228f9835700951ee7f338c295": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790337600",
+   "trades": 1
+  },
+  "0x825caafbf15a6a55cd5fb7c088280b70cd291742282c374f8fedd2b43da89ed4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790260200",
+   "trades": 1
+  },
+  "0x82b393b445c53d51a483be52d5fedccf0d6318c2474d71932ed2ab3223b5cf57": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790288100",
+   "trades": 76
+  },
+  "0x843b5a467f6d74acdac1e1c18e1faa519722b71d62ead09a53e7d241b35564ad": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790315100",
+   "trades": 1
+  },
+  "0x844e48902b7c5d2a7b1ec23ec3ab66f664fda496e7d48f3d7f324439306801f7": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790256300",
+   "trades": 1
+  },
+  "0x848f46d48116d78ff2b1f6d7c2389af4a757792a4036bccd8d4b35ea9bcde6ae": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790303400",
+   "trades": 1
+  },
+  "0x854c6732753d459c58ace99a82ace923cca7afad7bfcce928c938ab86752f736": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790349600",
+   "trades": 1
+  },
+  "0x855db91a8b5e52240b991c25171484ab8f2434788cce3535385dfd2c7817e615": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790328900",
+   "trades": 1
+  },
+  "0x86253ba801163df011953081237b34907faa936f8e3d3a7a76e1d4bcbd3f0acb": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790210400",
+   "trades": 2
+  },
+  "0x8665c0b349afc3928d28ffb308baff13970e2386b87512bdcef216c01470fd75": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790312400",
+   "trades": 3
+  },
+  "0x868268343abb33ae0ddfc32f1f8b450545380c430380e73fc922646b964ba227": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790248500",
+   "trades": 2
+  },
+  "0x86e2eeb6bc9f5649d5e27340ccf29ac6dce48286a980110810519bf18eaeab0b": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790329500",
+   "trades": 2
+  },
+  "0x8774b67a822a2e11925086b09bacc67d7bb07063d509d43335ce158875f60c09": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790315700",
+   "trades": 1
+  },
+  "0x877c7e3509825cab911c4d336805ea1fc807108e1800aa53a255f943da2ad019": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790241300",
+   "trades": 46
+  },
+  "0x87d4217f3a74306ad967a4a2d2806348406f350c000930bfa1ca7f8cc5252d0e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790270100",
+   "trades": 1
+  },
+  "0x88795283c2f091366e108373b5e4bba36fa3c410d34ce4084728061d1d64b254": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790318700",
+   "trades": 1
+  },
+  "0x889a6647c51dcce127887723206db873073126cc40a8522296288ca23f06afdc": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790211600",
+   "trades": 1
+  },
+  "0x88cbd644799f51de050a4d0936c2de135080f8e51dc82bfa719d04a9b08ea316": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790320200",
+   "trades": 2
+  },
+  "0x8902e27db70f95f45bb20e02c15cdabe8255877ffab25ea81de03d23ce912c5c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790306100",
+   "trades": 4
+  },
+  "0x89ceebb6bcdcc75600127a5516e319b32d7e3b6468c01dcefb89256f19d87a48": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790280600",
+   "trades": 1
+  },
+  "0x8aaf26d779ece097cc218d167425b12db55ce076852af30e5e2c72b3a843baa7": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790278200",
+   "trades": 2
+  },
+  "0x8abd7eabb95c06fa402c16701673401e8c9885711ad417b25053dfaade6d7d30": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790244900",
+   "trades": 4
+  },
+  "0x8c09029a157e9dbddd51f3f22443cc910e7dedb7ee17bdbf349afc7ab56b40ce": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790336100",
+   "trades": 2
+  },
+  "0x8d43e537cd02db4bcb45a12705c1d05a2594c8b675e0ca189e804d4a82e1104e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790256300",
+   "trades": 3
+  },
+  "0x8d6637fde9ab6328ed8de3a51c129526c95c3387a0ba131e3f2738d2dd291c66": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790289900",
+   "trades": 226
+  },
+  "0x8dad4004c7d9ae8f115cfd8f1182655ee26affa1a5b80729e8d13139692a202e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790280000",
+   "trades": 62
+  },
+  "0x8dcfe22ecfee5511b23d2784389b456b61b63db25315e16c3be747366a3d5380": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790279400",
+   "trades": 2
+  },
+  "0x8e3d64fd078cb2aed53b5b985212f8cc9bd39cc64ea610c7ed719e55b3a9f1ac": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790298000",
+   "trades": 70
+  },
+  "0x8f4a83578985d87f7d4ea2c53f194900f1499e7da7353d9472616e33cca6add4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790264400",
+   "trades": 1
+  },
+  "0x9004e4ff4f572506f5bf35218ed3815071166a4e8d9cff722fc7dd675a666ca1": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790316600",
+   "trades": 1
+  },
+  "0x901589721d696f9532f860479cfc9f1058a312b2a8f9297fa3ebed15f86ab885": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790333100",
+   "trades": 103
+  },
+  "0x90b00387616e43386aa26b1e9231572dac228a5800b19a8a66d9e861dbd3a1fc": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790238300",
+   "trades": 2
+  },
+  "0x918c81fba2e4e462ed87156149412f83197a47a8cb7491e6b5c6458b0332e371": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790339400",
+   "trades": 2
+  },
+  "0x919257a93b1846e9322f8a5b5cd0c59c5ef72c2061ca708fa1b182c33d2faa42": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790244900",
+   "trades": 113
+  },
+  "0x92366dba079f4a039dabd91fdd186a353d92bd63895cfdc5be37027b37002785": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790238600",
+   "trades": 104
+  },
+  "0x924f20b4ae4389efaba06a2e47cd972b14a80afae477e07646d8c400f054ada3": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790282100",
+   "trades": 1
+  },
+  "0x93427adb011dd8455e6c2ac8b3e2aeb7891ea8b9e683bbca8828d4b4ce6a45b8": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790311200",
+   "trades": 1
+  },
+  "0x9399152eecdb5c757cca2173113c66539be1fccfd5abdbe2c05fb831342e07d5": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790208600",
+   "trades": 2
+  },
+  "0x95877342912c94ea14d2d0915e71097d280e6d1f00c437e807969d90091b9094": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790311800",
+   "trades": 1
+  },
+  "0x9671203490e65aacd00e54cf695aacfa16b9cdb6371f71fbd70ea73ec3ec8006": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790208300",
+   "trades": 2
+  },
+  "0x96df2277aaa207025a09edbd1f8619af9a891212f31809728d87f4bc4a04c1d8": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790280900",
+   "trades": 3
+  },
+  "0x983d8061157b83f99a9e851ddb132cf8ce16f8e3be85a64d794bad8f4a549226": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790306700",
+   "trades": 2
+  },
+  "0x984925f0f84fd43676f3e23365db2b359686b4596ae7c37ff3bcf721b472e7dd": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790211900",
+   "trades": 1
+  },
+  "0x988d03e4b260076d4bc2156fe82c0df199c7ef21caaf5295d81ee5c01bef06fc": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790241900",
+   "trades": 1
+  },
+  "0x9ad3ad42bac6d8bbdf1547457db7828998a5206b8d0ddae498311faabb021985": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790250900",
+   "trades": 5
+  },
+  "0x9ad6db069b372845547770781c164aef6880958703ab4b8b8c5c68c3cac76496": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790290800",
+   "trades": 147
+  },
+  "0x9bed3e63e2b0cb8a1ab19a5cb069eed33072077d848af9a7e8c3d8e05719dbec": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790321400",
+   "trades": 23
+  },
+  "0x9c198bd9b12ec541cad8cddc7645f6023af1236c8493595d29d57693aae3feb2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790282700",
+   "trades": 91
+  },
+  "0x9cf17b5270942e179f4ba1bf1854b1f24a2c95683602c843e3f69ca11b5163e3": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790278500",
+   "trades": 1
+  },
+  "0x9d7ec13a6ebb99d804a01b1ca7798e41f207621cd84696913971abd77d97ea09": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790333400",
+   "trades": 3
+  },
+  "0x9dac9dbd5a2868bd46dd270ab4b72f6281c81023e76a473a21e43c909875337c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790313300",
+   "trades": 1
+  },
+  "0x9dfdb88865353d15413992e8b8d7d8601dbd3c70d3fe4541233d48a2f0714769": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790296200",
+   "trades": 6
+  },
+  "0x9e5eaa0a79f29c0878c9c898e4c1942289c7312dab30e105c5ba070b3f7f5f20": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790255700",
+   "trades": 75
+  },
+  "0x9f159e58c14d3480da6437413252fb858c984cdcf5ab44abfac79141a38863b7": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790271900",
+   "trades": 1
+  },
+  "0x9f62d2cf71f62482ccd113e7118df7f711dd815f87c5566005f651a72c2436d8": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790303400",
+   "trades": 2
+  },
+  "0x9fcb8932adee576b11912fe98f3e60ae3e1cd8097a41b84bf5ded29adf454d34": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790320800",
+   "trades": 1
+  },
+  "0x9fd701b05d304123b5dff6f259b1372710407425a11e97bbe7cd4e9bbbad1c51": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790331600",
+   "trades": 1
+  },
+  "0xa019808cd385ea39574eee28278c8d77dc3e3fce84fd2fa9a3b4419c38e90158": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790296500",
+   "trades": 2
+  },
+  "0xa01b62692802d15afdafd1bb1a0d6fb166ae910c22557f03f8524c47f4e16994": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790246700",
+   "trades": 2
+  },
+  "0xa03151f2018dcb39430b1d3dd486bbd4c4a379799102ea59fe3d8dcbf78d4dcb": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790236800",
+   "trades": 61
+  },
+  "0xa03265d72662accb3f8a185533da2036fba33663c74cd0afdfa6f6cae4491010": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790327700",
+   "trades": 5
+  },
+  "0xa0b20c378bbd720d581f006c61bdcf48b9fd46af57e5f491b5f3c19c71c58244": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790332200",
+   "trades": 2
+  },
+  "0xa0b5497054da3a4f74448d16fed72387075cc66cb05d4ec5c7c7277a65da5668": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790343000",
+   "trades": 1
+  },
+  "0xa0d5aeb43214cc61a62e2119e39a6d105170991779d5cfdfc688141e6246476f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790316000",
+   "trades": 2
+  },
+  "0xa17b5f6874cbe29f29151d813fc63c32958f1a80aa60d1755cf12139769d12d6": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790280000",
+   "trades": 2
+  },
+  "0xa1fe7d52e4637031cf877f68786b6e6450de47aecb28b13f17d7fb2a0151dfb6": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790272200",
+   "trades": 1
+  },
+  "0xa27e57b635732f75ddf79684d03467918b78aeb9721651264665c10663da4c98": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790298300",
+   "trades": 1
+  },
+  "0xa3756b32ff6de37f0c846859382253f818ac3b7efb130db5b6b55b2dc0c4b83a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790343900",
+   "trades": 86
+  },
+  "0xa4141b9e3fdf46e7a9e111a48722d874c5df98d5fd6ef955f1a1cb12c52dcf59": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790264700",
+   "trades": 65
+  },
+  "0xa46cde2b80421cd826d78f0849e49228cc1f17ed719e754c701ba9c1397722ac": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790308200",
+   "trades": 2
+  },
+  "0xa4dede3c433a9e3052640d72b846556fab30bff67a4794b950e6c7acd32a5f1b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790264700",
+   "trades": 1
+  },
+  "0xa4f6cafecda23ed3b811c017a2898b80884f3c7430078ff6100f0bafdb30a016": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790324100",
+   "trades": 52
+  },
+  "0xa50b1a2fba1838312615a7787ccdfca051f79cc323215e579d9186479ba74c11": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790340000",
+   "trades": 1
+  },
+  "0xa515a3a9f1286e9a132d21a7b508ae347a72a716e97fbe03bd04f29b4bb01f18": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790340300",
+   "trades": 1
+  },
+  "0xa6f7f87d11c1671e7ad0f4d712abebacecb6804e156490dc2bb7a792474a2313": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790244000",
+   "trades": 74
+  },
+  "0xa7195eaff1ddcf685082250fa6f79165f2e9257d4c5db93d7e4a344204da5f3b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790283600",
+   "trades": 2
+  },
+  "0xa7480344ad27676dac9df78abaf0d76208259569a419468d60163416197de185": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790348400",
+   "trades": 128
+  },
+  "0xa799ac49554342eee5dc4119ae594cddcf3629db779bc341bbdbadc1491ddec7": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790341200",
+   "trades": 1
+  },
+  "0xa8060942014bffae71ab6816e648559d0ce4089e74bf047629b6f84984cff74d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790317200",
+   "trades": 1
+  },
+  "0xa827b943cd79f4bb16eaf44741daca12f02b574c9bcf3dd4e3d7122a83ef8b37": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790304900",
+   "trades": 3
+  },
+  "0xa94dafd5a04275db54c90f614f760df0773a5ad48b19f6c8c045f95bb8dc9246": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790250600",
+   "trades": 2
+  },
+  "0xaa20259964dcd109ac25ea4b816d2211af2500e0082cd707745d76f8930c1389": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790336700",
+   "trades": 68
+  },
+  "0xaa789025d557115f235ae2ef621bd7a1bf777e9eea505cfe6640346c7a498aaa": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790209800",
+   "trades": 2
+  },
+  "0xab61dffcca5e6e3f702160389065b438d4f98c60b00d4671464bbc14d40d50a2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790245800",
+   "trades": 7
+  },
+  "0xabc9372b64480ff6ebef404ac6c4baf1d1b710b94378e26f341ef971069d869c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790340300",
+   "trades": 78
+  },
+  "0xabdf30f0e47de6acca802162a94cf3304c272da6e00529dc66bfb63f64868ce6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790299800",
+   "trades": 1
+  },
+  "0xacb7b0e38127d59479441dd92324f26a9f6b58df62fe27db3443e3b91a5d8313": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790245200",
+   "trades": 6
+  },
+  "0xad1e453c22cf29ec59a3bcff198d3b2cac11d45bca3f769a3d8072397d2ad78e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790328600",
+   "trades": 50
+  },
+  "0xade455539ae9db93168fb5119f7e6d451b89002893e4d93eefc7be429eda12d8": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790298600",
+   "trades": 5
+  },
+  "0xadf7fdff0bb061e74fbd7e0155e136e6eeeb30875ad31428b0ebf4b0ab423900": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790235000",
+   "trades": 71
+  },
+  "0xae298a67b0c49c57676f3b23ef3575fd245c4c5f6acbf0f96550ed11f3340b1f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790322600",
+   "trades": 2
+  },
+  "0xae3cf571f2d8657c9b4de057adf7eb3170ab77f15538d054b2ddf226db0c55d8": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790334900",
+   "trades": 52
+  },
+  "0xae7114a2e1495afe29429bca26215644565087640fa3f5f73b73ccc9747e6de5": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790291700",
+   "trades": 164
+  },
+  "0xae7abbca29e6b94dac17ae3a75fea10bb69914c6b89d84cdda8fb0b6dee4a3da": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790330100",
+   "trades": 2
+  },
+  "0xaf926c2c84bf508bd24d7056c4b25bed8abdf6a9f4745935260aa0611b39fd62": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790271000",
+   "trades": 94
+  },
+  "0xb01717de4b2680eed132e5f753cc3c6b773d58fa4c4c48c3108188929391dd02": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790292600",
+   "trades": 1
+  },
+  "0xb0a2bf950d55846204c1589ccb4daf45330c20148cb55ffa0fa858dd7fd56e4b": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790309100",
+   "trades": 1
+  },
+  "0xb225865d9b7f8f35cdd7451ec442c0d319cdb015327078a796cae504795a283b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790271900",
+   "trades": 84
+  },
+  "0xb2cd6c200e4d8685ad28a8753218c7e26baeeff81b86c3346f2f82a1227f980b": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790317800",
+   "trades": 1
+  },
+  "0xb2e49ba6a6e9de919fc62406bed38139277ab9047aabba80b9f54ccc1b360da6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790332200",
+   "trades": 53
+  },
+  "0xb45765991f3081da7c86fd4b5f4ecfac4cc59ce1b0e0968b986cd1f7751c7658": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790344800",
+   "trades": 2
+  },
+  "0xb4a889ac565cd66d49c0c52588faedd67f833f5f24eb116bfdc990383ba5680c": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790241300",
+   "trades": 1
+  },
+  "0xb58ed01cf859625e3fed51a8f5f6bdaae2587be11038c307ae76ecc6241c0d3a": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790275800",
+   "trades": 3
+  },
+  "0xb5ecb6c70fc15252bb168759e2826f34f4205a1e52a6d9dbb4cda8d0fbd1015d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790267400",
+   "trades": 1
+  },
+  "0xb60245041066f68c5d19543be38205a50710c42b35de11fcc09b00bff3ee90a9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790272800",
+   "trades": 1
+  },
+  "0xb651dc2ce5aad2cf4f3422c9480d72d29d65edf600cd0a572758ed9769869f38": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790271000",
+   "trades": 1
+  },
+  "0xb653967b370a472f2e791d2c4988f281a209ba24e5a660a7de87758a95f04f48": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790242200",
+   "trades": 106
+  },
+  "0xb8ee7bbf1930eebad046a39db84d5dd6eabcf34a63e0d9e3c97d02d0d2467ec6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790350500",
+   "trades": 1
+  },
+  "0xb91528272417c5bd8987222d3e2c36576a35bdb9cc8e8fedbbb9da5f7ed6b26a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790298900",
+   "trades": 2
+  },
+  "0xb99bacd2200483984bd559d38bac6c217fe38839f759593c2cec348a4149038c": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790262900",
+   "trades": 53
+  },
+  "0xbcabebfb4939defb59c03e4ad33745426f5cf297c01672871a1c64a6f8188f64": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790251800",
+   "trades": 1
+  },
+  "0xbcdb90e0418b00545cb4a018cfc6117534550abd1fc1c6d14a7b6b090018ace7": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790265300",
+   "trades": 1
+  },
+  "0xbd0c544f63365492171b4e205430d4f9b9731d4cdede19212589fabeb5cc5fdf": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790318700",
+   "trades": 88
+  },
+  "0xbd23e9e04deea0215186e9655436f72fa2f0c7a07dbb221b1a82acb878142392": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790302500",
+   "trades": 1
+  },
+  "0xbd5ffc71b5712371891fc757ad3bc319aaf8abb2732dc9569dd3df49594ef00a": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790238900",
+   "trades": 2
+  },
+  "0xbdc4d36e9508baae4e4796888dc3d26f5ba2071afa7cd6e654626c60b2b6b8af": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790310600",
+   "trades": 1
+  },
+  "0xbe5855e82b9c55289e4ee9a9d1293822c254312cea4c248746c2595f0cdde1f8": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790298600",
+   "trades": 1
+  },
+  "0xbec89cebb25836b0c445ae155b0e7d3ae00a922202cadddb67f2892a2d07a8a0": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790246700",
+   "trades": 90
+  },
+  "0xbee722ffb30577c371e0a191a2a15d3863d3beafdadf92a0a3ac2b950725f96f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790302500",
+   "trades": 23
+  },
+  "0xbf2fe04c8bc34cbc649489b5b14bd9247e506c87da365c96303550bdda665a9e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790274000",
+   "trades": 2
+  },
+  "0xbf66d1fd82e2a2581088ba1230379c9e8d245a68c77d19f17c210ea0a59b8591": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790292600",
+   "trades": 295
+  },
+  "0xbfbc1b571c8bb0ddd463326657ea4ad51d149ef0fba40546c3ec6b7d618b4ae3": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790288700",
+   "trades": 1
+  },
+  "0xbfca5f92206900f792059baf6b66d632e0c2770796fd02dc5ea05759a5f6a7af": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790276700",
+   "trades": 1
+  },
+  "0xbfe91b3ffabebc4a3c02ce2cf88bbda820ac0d3b94237db8a29d4d1faf199d2b": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790316600",
+   "trades": 3
+  },
+  "0xc009ecfa79003dbd4f632653b59c65da5fb466b17a6ed9177ee1f4a8b4d10f3a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790336700",
+   "trades": 1
+  },
+  "0xc086aacdfe78672dbd73ecd396e06ced631fadd751a30baee9c555ba6ae3791d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790251800",
+   "trades": 1
+  },
+  "0xc08b76f56c85158a702e36dce8cd0bdbb7828ddecdde69460805d3260c72f1ad": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790337600",
+   "trades": 67
+  },
+  "0xc16d51db3070498f7c4190969d4bc213f9f163d6cc95050ea398593fe7272800": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790319600",
+   "trades": 46
+  },
+  "0xc1d32a593ef946687c4d3b4b63a8761388653038c7e85e40b4ca9d1f3382d2cd": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790348400",
+   "trades": 4
+  },
+  "0xc37a75c3ae2a77c26eea8e3990cf73981442ef28c771f9e966d8edc664d5b0c4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790280300",
+   "trades": 5
+  },
+  "0xc4be763d4704f8d21c506912dab0b690d4f205c95a1abc4aae55df7685607edd": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790325900",
+   "trades": 3
+  },
+  "0xc56eec2555b3d4206da786938877c46fb8c8d3a624ba9b0a6c1d93931410f5aa": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790302500",
+   "trades": 1
+  },
+  "0xc5f8f877346210e912c1576b42ce0ba37d2cfdfde0b568d0e0bf7d6738964113": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790270100",
+   "trades": 1
+  },
+  "0xc652f7218b66dc5b04ebe2e3cd6c9343c23c1c32d47ef4aaa34ec58b4b20c3f8": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790298300",
+   "trades": 5
+  },
+  "0xc72c7b6773482a384f563d9fa8c5ea653fe4107bde8ed636ee64217c78f2b298": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790310600",
+   "trades": 41
+  },
+  "0xc78456fec6bfd3a55d51e71fb23acd780ba1747d3d077bc503fbcb1a988f310a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790339400",
+   "trades": 130
+  },
+  "0xc8547525eaa1047c10ec85ef7001d5db0122abc9bbb3cf25ea30cab60ffa8f8c": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790285400",
+   "trades": 155
+  },
+  "0xcad30a806f6fd4056acda51494f4d719da1fa0f4d112aa01aa5f4ffe4e6b634c": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790259300",
+   "trades": 2
+  },
+  "0xcad6017e20ae3be39f2a45c7f2b9cdf0cb41c25893683b9aa519bad8b65a72c3": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790316000",
+   "trades": 72
+  },
+  "0xcbc5bb139b54e0cee31fb0e5fbed7f249e861b0f263f65d8879d13ab59321840": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790336400",
+   "trades": 1
+  },
+  "0xcc24be3b87545f3ed56842a4ce01f37b7b03be87df7696451a97d84eff4dc484": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790340600",
+   "trades": 2
+  },
+  "0xcc4b3aee9a01d0593889be66231f7cfd0c3d5bbf0d7a30236bcb6fa461e5f150": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790320800",
+   "trades": 1
+  },
+  "0xcc9b0f350c443a56b0c94a152d3d01b5b0857173474d3ea2e01ebc4770337ebd": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790211600",
+   "trades": 177
+  },
+  "0xcd8ad714692e764396abebac7eb9011a56c79c44a6f88b7e746df3aacbe5353a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790326500",
+   "trades": 1
+  },
+  "0xcec3baa828c6c40adb1a833a6f590ade35278f8b7674903104687bb34fd77afd": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790325000",
+   "trades": 48
+  },
+  "0xcf83ec84ff7b9448d77cda765ae656ea4b120fc1464dc14632478863f5c3973a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790349000",
+   "trades": 3
+  },
+  "0xcf92f3f48b277e1675eb040f3ac467d14b24edeacf18b8c1b448f3932195bb10": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790345700",
+   "trades": 90
+  },
+  "0xd12fc7e4abf45df2621226f726a0477e45467aa4fcd408243a91fab92568775c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790342700",
+   "trades": 2
+  },
+  "0xd16695bd8fd15928fcb2005de8ff324ab6260acac73ac41acd0ddf6a8efdab66": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790273400",
+   "trades": 2
+  },
+  "0xd176a4d5615ad78b9b9579fb23835287033864501a9a870710e91cfcc9ea8fa0": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790309700",
+   "trades": 68
+  },
+  "0xd2611d72ed0abe092abb652461aabf370f3447ebde5ad1494be68fb282bdab58": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790351700",
+   "trades": 2
+  },
+  "0xd2a240befe4552a3c949a97ec29773257eadae5cbf70691d615c21d1a5e2eb63": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790271000",
+   "trades": 2
+  },
+  "0xd48537da71e91308768223a1bbec03d6592a0f457795a8e110046a2952575ec7": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790243400",
+   "trades": 1
+  },
+  "0xd51247cc40a1fccc5b2b2b369b2ec72f4364d69f25a97edcf01dfa9c12572b6e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790250300",
+   "trades": 2
+  },
+  "0xd5bfbe7989b7afcb9a8a20d67f32d72e3a82be386ae51c391747ffccca502157": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790287800",
+   "trades": 2
+  },
+  "0xd619d294e56255003cc12fd722c786c2b0bf0a07bd062f05d4547c7d88fd0d41": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790211000",
+   "trades": 1
+  },
+  "0xd6231a900d2c288d7ebe1a18210c3d7abcce42d01227fb074250ec590b275aa5": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790307900",
+   "trades": 1
+  },
+  "0xd74c14bc30efd8bf404692370f36f42d236d75b80da735a87cf98ea3a9615295": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790279400",
+   "trades": 4
+  },
+  "0xd77517347ed8d56ef6964385c733b7b3f7ea5bef2cc1a6d6c37d16f714e67dea": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790281800",
+   "trades": 1
+  },
+  "0xd7852b4ebe1eafcba27d29278588002bf392e710ef50dd0ad9f61e7e13ba60aa": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790335800",
+   "trades": 1
+  },
+  "0xd80b8c765dee9207307fc70fa2ba5d5a3695fdf90a09eb3ef5393c2e2793f3fd": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790265900",
+   "trades": 3
+  },
+  "0xd859ceea3207559f55c1704a8c63d3aee9f969fe75b29503bc56f3f2695946b2": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790323200",
+   "trades": 109
+  },
+  "0xd873b604956e46e5749705cade49e480a65ae8b8cfe9c2c92e8c3965975b3a2f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790253000",
+   "trades": 98
+  },
+  "0xd8dd3a10c2094a72443d7d0acc2d1075d1019e837d1a7ed60d34e26b67e991c0": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790245500",
+   "trades": 2
+  },
+  "0xd9dabe618cb1d4023c8161c3f83150e60aaf85e2dc39c37b7d1a0eb2a8d906df": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790317800",
+   "trades": 66
+  },
+  "0xda2403742bfd52125fa131c9f100f6c6c4844536c80abee01973c4fa042d0e29": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790318700",
+   "trades": 4
+  },
+  "0xdac334f3655b2b3798ee52451e31f184dc048ccc8c9f4fdab996a3aad3574f4d": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790330700",
+   "trades": 4
+  },
+  "0xdb9a63deb1aa4dd7ab5297e8ccccb1d28ad0f99988de13024d2bb343a34db817": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790239500",
+   "trades": 1
+  },
+  "0xdc64662ac604ec9a9379e444516e2ce09ea9269a4cae2c20530c198ac546b8dc": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790244600",
+   "trades": 2
+  },
+  "0xdcbde44da93ab74f1420d82972f17cbe67047f78595b08d9e3a49427b6b85015": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790351400",
+   "trades": 1
+  },
+  "0xdd6dfa26323915783e08787469cc07e2d9a36031256f5850991b3096bb6f11b5": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790240400",
+   "trades": 108
+  },
+  "0xde1c2c30f1d55e30f796c1ac754e965e1d239291bc197c7ad2be247be7dd33b2": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790340300",
+   "trades": 6
+  },
+  "0xdfbd0452993b92053b449a8dce82748bd46885aecb952a3c8810bd533bcf0f65": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790328000",
+   "trades": 6
+  },
+  "0xe07833ba93bba4e299ae84624904417bc97ce9d6cc690734356db3545e66ac7e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790253900",
+   "trades": 41
+  },
+  "0xe126eb6c2fa526380018b529276088ed719394202326e24b26de7d60ed2ce4ff": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790235600",
+   "trades": 1
+  },
+  "0xe13eaf341e0e1c7e43b78af4104014639490a540648c2eef589747f82b629d7b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790277900",
+   "trades": 1
+  },
+  "0xe1648bc0c286911bcb5fc228972268d3ca413aa4a6b4a6b03b8c983ba706f957": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790307600",
+   "trades": 1
+  },
+  "0xe1ab88add4a65bd774b87220e120b165dfb182f98f83c424c98be62423354719": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790253300",
+   "trades": 2
+  },
+  "0xe1b4f97dc0046e22304b09c66072e3f97317eb6e3f180f1ab9750ae1a1f59515": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790237700",
+   "trades": 25
+  },
+  "0xe1f73319b9f9a2d0665c3f9378467b8a3ff6afa01f0ee1a5a7d1a8484e1348ce": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790323500",
+   "trades": 2
+  },
+  "0xe26274e5aa75783178839cfb691a81e06e8bb739bfa4212e00b2e28c8abc770a": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790297100",
+   "trades": 1
+  },
+  "0xe2dcc50d21686cdfbf35a46cd8ecd4ed5d580773041acb967b137057c042382c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790343000",
+   "trades": 69
+  },
+  "0xe407d2371f1c7bb9d5cf222eed68b0fbe00d052ab92a678df9ec549009cc699e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790297400",
+   "trades": 2
+  },
+  "0xe438033e2fb56a8baf95aed9d6d681587dff3ce49d4c181d5774f63b9c301315": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790297400",
+   "trades": 2
+  },
+  "0xe44c6fcb5a0c74cf0b7dd51031afb530050f8437aa44f4d782e748c24b63c137": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790249700",
+   "trades": 1
+  },
+  "0xe506c7bfc43b0c86c1fee2aa17086520db09dc5b2ff941186cb0e8e5360568b4": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790307900",
+   "trades": 121
+  },
+  "0xe541ad96ea8e63347c2efb2a197e799ee6c2a9b3f615b84ddd1330f3bec81719": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790286300",
+   "trades": 67
+  },
+  "0xe58b43bbed24408525f7bfde4f28e864b7111ffa2f40da9858ec42860423c169": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790252100",
+   "trades": 119
+  },
+  "0xe5b6b689e80c01cd5d2e162cb445bbc4ad6a4fe76afe49253164892725281d32": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790248500",
+   "trades": 3
+  },
+  "0xe5bdffbb2b3db958f4927bdf35cd9b5f1bc9f7970997bfabe61d533be3397d1f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790334000",
+   "trades": 51
+  },
+  "0xe5d82fbfd2ed4b962fa1f5d22a87813de490dcd68989d49b12268dc8d39577d7": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790300100",
+   "trades": 4
+  },
+  "0xe676c81e939bbaf4fb5b30979f56a606a77c5036b155ccb706ec05a16503f2b2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790255700",
+   "trades": 1
+  },
+  "0xe7a747e98719a136e0470868e7b4819104b19078f29b7ca1959831f0f2419446": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790275500",
+   "trades": 74
+  },
+  "0xe8268b536d97f5d91f51807dc7458b97e912298fb453b4cb9698a41b26375d67": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790247000",
+   "trades": 1
+  },
+  "0xe86b1ce17f3965b967bcf8fc48492315be7d56a6d56eff855b19d17c6957e71c": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790260200",
+   "trades": 60
+  },
+  "0xe939c4b20cd211fb7937f5c7969660a5ccffc7e0a1acd98b96e315deb8813976": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790282700",
+   "trades": 2
+  },
+  "0xe98f074c12bf51e55344bf2e3ba00dfaf1328d0c74e4b4679c77c1c78b68752e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790308800",
+   "trades": 86
+  },
+  "0xe9b9d23c18c227a0c6758cabc6259fdc5aab93fd3b174c819fae974b3773dac1": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790262000",
+   "trades": 1
+  },
+  "0xeba83be1c47400ceeb55782419671dbb36bd3359d9b50c37d339b49db737c230": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790238900",
+   "trades": 1
+  },
+  "0xec243cd07f9dcf1cf24551919ae6861875f0a7fd44e18d6b43b70f387fe2c727": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790343900",
+   "trades": 1
+  },
+  "0xec9cd589d55832092f34607145eeae320f3ca204523b3e4d4469193e419581d5": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790252100",
+   "trades": 3
+  },
+  "0xeca99b31e908255da1e9e5cc0d274d89e6436d7b1df9cc3c4d3101c3d02aba90": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790305200",
+   "trades": 2
+  },
+  "0xed17fc030feca5ca20985fe826aed1a0b6850c3955d86c226829fd341dbe5561": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790275500",
+   "trades": 2
+  },
+  "0xed865891a06f02401636270e4264966bf5e7fe0b6f8de874391c16f7da49ed7c": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790332200",
+   "trades": 6
+  },
+  "0xee3b384cdf8b1019f1534dc52f58b627330302450183387799f7605b2d121a77": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790285100",
+   "trades": 3
+  },
+  "0xee72028f3fe5896223ce256a614f89ec44d1fbd0d2aa5fb6270601c87d4e90fa": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790301900",
+   "trades": 4
+  },
+  "0xef0c47a5973cd530b3a73720507483ccde499bb688f4979af137944ac103a575": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790298900",
+   "trades": 27
+  },
+  "0xef417b8adc60fb57f2c19d91f57aae909e288f7ff2ccff5694aacc27c19abdf1": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790291700",
+   "trades": 2
+  },
+  "0xef8f388cce52a7fe3a5fe92289f19ac646bfd488475623869f6fba96122b8865": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790351100",
+   "trades": 2
+  },
+  "0xefa98f4202e44e464cd733f4ffad5d51fb68dce4f8d41d5d3744005207a96ed5": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790248500",
+   "trades": 57
+  },
+  "0xf284e3945530b130f3ace2032a76a6d347d5f803d51ffec5b4e1c53ed5547dd8": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790289000",
+   "trades": 136
+  },
+  "0xf2978e561fb2b4d994c5cedb94fb71679c0fb267ff79b56e6d366a6982613c32": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790210700",
+   "trades": 2
+  },
+  "0xf3b9ced9729bea23f25f5ccdf1e35255890d173a72e84993c772497df05f5ddc": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790289600",
+   "trades": 1
+  },
+  "0xf4f96eafc352876fe681d1c10ffa70b30b25d59a07dddc85dd4bc854d7675619": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790252100",
+   "trades": 4
+  },
+  "0xf628b8ee41f5ea82ac6da214aa28659e669c285cb881f611f424f0a42f4295a9": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790288700",
+   "trades": 2
+  },
+  "0xf649c3fcfde1cf8a2a5861f20a8e43f05df39934acec54c26c91c65136de9aec": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790321700",
+   "trades": 1
+  },
+  "0xf69c35bfe1c3e4345fcd7ce5689481d458688e37b038745454750991d2391ef2": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790281800",
+   "trades": 2
+  },
+  "0xf751c3649492abce8d40105c7eb1629555fa22c562f3eaf1c3b58f7462cf5d30": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790235300",
+   "trades": 3
+  },
+  "0xf7fa154de733582b788e5c41b3fd9cf5843eabd574204f0c3d6e2adbb2537531": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790247600",
+   "trades": 1
+  },
+  "0xf82195bab1727441b68fee3666bf2637d76b7df2a53f21e6daa4297ba9401b4e": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790287500",
+   "trades": 3
+  },
+  "0xf8486b52264c149c521a0e00d92005bf6f4d05a03a4c0b60f7eff8beed54808f": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790313000",
+   "trades": 3
+  },
+  "0xf871db70243e9f664e7d334517dad3109d947e7d96a0f17b5ffb5697336642a4": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790259300",
+   "trades": 66
+  },
+  "0xf8a5f297990c1c2b3bb0677d6bd2399b297726c55c9057b0221820b068885441": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790345400",
+   "trades": 1
+  },
+  "0xf918cb91d0675f0855017e945c581813da3e178db77a8b75df2bdc0c9c266b34": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-5m-1790295900",
+   "trades": 3
+  },
+  "0xf91f4d6d87e2c65b64b673949014ae98cd9e90613eacb2dce521257824f1f59e": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790346300",
+   "trades": 1
+  },
+  "0xf9356ee124d742380856b6bde71b4fd25c1f0d6d2b7fcd8e22d8ad5e8c86c950": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790326200",
+   "trades": 3
+  },
+  "0xfa951f2b1e9b39b3bdb6edca73a489acfa5a7f5da94130ae510aa37fbb5782e6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790329500",
+   "trades": 103
+  },
+  "0xfab5234333fe68b9e9b9cb9dd1a9376fd41b1bbd81ad96774eb00ae467348cb8": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790279100",
+   "trades": 118
+  },
+  "0xfb276d0dc1cd42d4cc8ff832aa454b04df34f25e52d46e9196591d6047d0941b": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790291400",
+   "trades": 2
+  },
+  "0xfb4441bd0c10741c5db20406a3a6994a1d0d535bfaad41dd31b959df0887c154": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790336700",
+   "trades": 1
+  },
+  "0xfbf4d66d25d078219f8d78c6e985f0b7360fddbfc812478c387633999164cc8c": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790256600",
+   "trades": 75
+  },
+  "0xfc22c9d7456172e78b4aac213b0e25467193761f475b29737046bcf44130bf33": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up",
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-15m-1790295300",
+   "trades": 240
+  },
+  "0xfd627848b41f9477911d0c6bf5211392c2c64c6d5ccce3144e3d313892936a70": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790319300",
+   "trades": 4
+  },
+  "0xfd80df9febdedf2ad581540479beae49c0d5719692f25f371f6554a4e58ddef6": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790301600",
+   "trades": 1
+  },
+  "0xfdbfe7cd00458a965773cbe93509e439233d383975665751e66355ae0dcb61df": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790320500",
+   "trades": 1
+  },
+  "0xfde1ad3d5795d70803ca8862b9882b023f88215f7be8e32ce8472bb020dae104": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "eth-updown-15m-1790311500",
+   "trades": 1
+  },
+  "0xfe1687e91671ee881ece9b9b8e148cb7592d97e4293a13fc9ef58d4899f5d236": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790284200",
+   "trades": 1
+  },
+  "0xfe2feb8b7f10c724f1c69f7096b94e8534554aef38b13d242ff0d14603d0ff5d": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790260500",
+   "trades": 1
+  },
+  "0xfec00392fce9cf6217756fc2dba6d462332799739629f729c8271b19198e4315": {
+   "day": "2026-09-25",
+   "index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": true,
+   "slug": "btc-updown-5m-1790343300",
+   "trades": 2
+  },
+  "0xfeca47f85cd02dfa07061004ae50c1961da65937e400df2b946dc757d46b849f": {
+   "day": "2026-09-24",
+   "index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790269500",
+   "trades": 3
+  }
+ },
+ "note": "The 521 held-out conditionIds. index_labels is L5's OWN outcomeIndex -> outcome label mapping, taken from his trade rows for that market, which carry both fields. It is recorded per market rather than assumed, because array position is not a shared identity across gamma, CLOB and the activity feed.",
+ "source_file": "data/l5/raw/sep/l5_sep23_25_daily.json"
+}
