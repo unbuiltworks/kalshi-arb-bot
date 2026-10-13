@@ -1,0 +1,5263 @@
+{
+ "audit": "L5_SEP_SETTLEMENT_VERIFY",
+ "days": [
+  "2026-09-24",
+  "2026-09-25"
+ ],
+ "finished_utc": "2026-10-13T00:06:16Z",
+ "markets": {
+  "0x10b8785291b4f7ac1eb56ba2199cff805bddcea671ff973ecf5d8ed4e02e3d1f": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:41Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790295900",
+     "question_id": "0x790d193a9ee3696096c052284e4b3cd27e44d820cdc03a2c4d8a6158bf61d4d5"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x10b8785291b4f7ac1eb56ba2199cff805bddcea671ff973ecf5d8ed4e02e3d1f",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:40Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x10b8785291b4f7ac1eb56ba2199cff805bddcea671ff973ecf5d8ed4e02e3d1f&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790295900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x1235bfc82ddc085f882f7fd39ea166f1d69c549194e9b58c51f4c1bf13804af5": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:42Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790236200",
+     "question_id": "0xeef27c2951421de8c25ac563985505164aa99cd028fe4c96985cf133db87b160"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x1235bfc82ddc085f882f7fd39ea166f1d69c549194e9b58c51f4c1bf13804af5",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:41Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x1235bfc82ddc085f882f7fd39ea166f1d69c549194e9b58c51f4c1bf13804af5&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790236200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x144a3652c5606d0923c849a97cddabd6c3276ca4ba3c0fedd301d2c36566a372": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:42Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790287800",
+     "question_id": "0x2d86a0ce3404214217aa24530b7e1699f92e8d26b64b627526d48c56a4d2299e"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x144a3652c5606d0923c849a97cddabd6c3276ca4ba3c0fedd301d2c36566a372",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:42Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x144a3652c5606d0923c849a97cddabd6c3276ca4ba3c0fedd301d2c36566a372&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790287800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x16447568e6a25ee11f6e190b94c4b80a9eb7a6f705c42720bc770bb489debba1": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:43Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790324400",
+     "question_id": "0x7859edde9e97063e8530c915b493ad676cc99d5636761148f1816f82d53d80aa"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x16447568e6a25ee11f6e190b94c4b80a9eb7a6f705c42720bc770bb489debba1",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:43Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x16447568e6a25ee11f6e190b94c4b80a9eb7a6f705c42720bc770bb489debba1&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790324400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x166f7cb5781032e051aae5688f22730ad863d7aa43d17c5df01cea965e82f01d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:44Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790292900",
+     "question_id": "0x6f693ba61e5e990336435b08920f0af168717c9f2f39f02b2df266b7f8fec411"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x166f7cb5781032e051aae5688f22730ad863d7aa43d17c5df01cea965e82f01d",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:44Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x166f7cb5781032e051aae5688f22730ad863d7aa43d17c5df01cea965e82f01d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790292900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x18567499a38946addf7bae0596b89c464b33918d9759da18e68eb39597cd8350": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:45Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790328000",
+     "question_id": "0x697861ac2e963d3999d9339cad788e5b6bc056ea0655ab5f85c47a0cc3f566ba"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x18567499a38946addf7bae0596b89c464b33918d9759da18e68eb39597cd8350",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:44Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x18567499a38946addf7bae0596b89c464b33918d9759da18e68eb39597cd8350&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790328000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x19c080c95961e20ca3a9d32ed9bf65ec94df4b078b579c81c0d2af49311f6d8a": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:46Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790339700",
+     "question_id": "0x34a5d9e2e6a67b1ca942a6b8c043376d1d0257fd18b8d57b8ef45ce23d1e5d3d"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x19c080c95961e20ca3a9d32ed9bf65ec94df4b078b579c81c0d2af49311f6d8a",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:45Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x19c080c95961e20ca3a9d32ed9bf65ec94df4b078b579c81c0d2af49311f6d8a&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790339700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x1a829942bc30cba89340c69089830be8b9fb96b85c0efb7a975f543a122e3029": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:47Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790240400",
+     "question_id": "0xb33c4d4d2f8b6b1539c679e4f4705ce9405bf098388d36c12cb1518c489bec09"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x1a829942bc30cba89340c69089830be8b9fb96b85c0efb7a975f543a122e3029",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:46Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x1a829942bc30cba89340c69089830be8b9fb96b85c0efb7a975f543a122e3029&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790240400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x20d639b2a6f1c591e9f7f92409bff83227d159f55c65c10ceb69316461f852a5": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:47Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790322900",
+     "question_id": "0x7f4d588f2588a7863ade35b420e9dd9c16d6b3716a10c8d3c0b9e55d47e7c3cc"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x20d639b2a6f1c591e9f7f92409bff83227d159f55c65c10ceb69316461f852a5",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:47Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x20d639b2a6f1c591e9f7f92409bff83227d159f55c65c10ceb69316461f852a5&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790322900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x229043fe0b2b8d3114021e173e5ccd5f65f43c5876f1e3dceb5df2e0e2485d7b": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:48Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790300400",
+     "question_id": "0x41759af268aea22f06063ee198cb0e408d6ce40a37c0bada4325261717425560"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x229043fe0b2b8d3114021e173e5ccd5f65f43c5876f1e3dceb5df2e0e2485d7b",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:48Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x229043fe0b2b8d3114021e173e5ccd5f65f43c5876f1e3dceb5df2e0e2485d7b&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790300400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x24bee6242c0af497386662a092e9cb2798b2c430262c371e3950a3d733a40050": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:49Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790265000",
+     "question_id": "0xedbae0c2d449c0bfb41bde94296a185d2add29027e9eb14c47a54d2beb68cbbe"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x24bee6242c0af497386662a092e9cb2798b2c430262c371e3950a3d733a40050",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:49Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x24bee6242c0af497386662a092e9cb2798b2c430262c371e3950a3d733a40050&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790265000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x24fcd71c9abaa49dc869e10b355a3b8b8e2f305f395ce6514b3013e0a0898bcf": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:50Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790351700",
+     "question_id": "0x3ce46bb04e79ed38ea14859748700b0b9c3db45d4924cf9d5aa02ef6e5e90997"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x24fcd71c9abaa49dc869e10b355a3b8b8e2f305f395ce6514b3013e0a0898bcf",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:50Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x24fcd71c9abaa49dc869e10b355a3b8b8e2f305f395ce6514b3013e0a0898bcf&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790351700",
+   "trades": 1,
+   "verdict": "VERIFIED_SINGLE_SOURCE",
+   "winner_index": 0,
+   "winner_label": "Up"
+  },
+  "0x27a136df2584f7348daeeaa8e017cf86ccb0080f187c523ffb79987d528b21d6": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:51Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790334300",
+     "question_id": "0x27b2366b572ab5c28fdc7f109539c89b16ac01cd515754bf67135d3a3774c4a6"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x27a136df2584f7348daeeaa8e017cf86ccb0080f187c523ffb79987d528b21d6",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:50Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x27a136df2584f7348daeeaa8e017cf86ccb0080f187c523ffb79987d528b21d6&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790334300",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x27bfc538fd52d24093521090704b4ba5998075065a029fba17f30ea4b3e9a138": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:52Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790241600",
+     "question_id": "0x6293ecbafa12a78ba5e8feb8be38e8414be2fe67cd5d5894e1b0a5032bd3a0a0"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x27bfc538fd52d24093521090704b4ba5998075065a029fba17f30ea4b3e9a138",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:51Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x27bfc538fd52d24093521090704b4ba5998075065a029fba17f30ea4b3e9a138&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790241600",
+   "trades": 3,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x2aed31c6d07693a8127adec2a223a248d68d7dae836e8a203587a89d2b314899": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:52Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790317800",
+     "question_id": "0x3f31a33dba4325878f8300ad576fd6645aa59984131ce0f10d7b01c02ed1ed40"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x2aed31c6d07693a8127adec2a223a248d68d7dae836e8a203587a89d2b314899",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:52Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x2aed31c6d07693a8127adec2a223a248d68d7dae836e8a203587a89d2b314899&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790317800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x2d29d22030732c193584c4187f656d92cad8299743a3850231a9c762b4759524": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:53Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790310000",
+     "question_id": "0x3082f835ddaa2c494b4f4a78e87bfb3f10bad5e4d7ce312de82a52d08610f302"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x2d29d22030732c193584c4187f656d92cad8299743a3850231a9c762b4759524",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:53Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x2d29d22030732c193584c4187f656d92cad8299743a3850231a9c762b4759524&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790310000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x2d98d30ce5c2a879d033dfc04039b0b23fe8d0865cc4d3323dc93b56622d9fe9": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:54Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790250600",
+     "question_id": "0x27857d1f3502eaf64cca3c99098cbed0cc1e91a8a3b0e802c03250c5a92161f7"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x2d98d30ce5c2a879d033dfc04039b0b23fe8d0865cc4d3323dc93b56622d9fe9",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:54Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x2d98d30ce5c2a879d033dfc04039b0b23fe8d0865cc4d3323dc93b56622d9fe9&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790250600",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x2e0284a0d07b9cd22bceeecd95f3511f09e8f461f8ce9b421d0b8e8f39017a0e": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:55Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790315400",
+     "question_id": "0x13ad874d4a4c3e2c58cddde27c41050cfa2e8ff9c468df8ba2b2af463a55ef80"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x2e0284a0d07b9cd22bceeecd95f3511f09e8f461f8ce9b421d0b8e8f39017a0e",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:55Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x2e0284a0d07b9cd22bceeecd95f3511f09e8f461f8ce9b421d0b8e8f39017a0e&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790315400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x2e6b99615f8593ea68ea871e68ef3a12c1f5ffce0f9bf06520300d90b384d38e": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:56Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790262900",
+     "question_id": "0xd37bbcf4516a44d7e1dc48825f048bdca3e6803d5fd43ee97556a5095da27c3d"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x2e6b99615f8593ea68ea871e68ef3a12c1f5ffce0f9bf06520300d90b384d38e",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:55Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x2e6b99615f8593ea68ea871e68ef3a12c1f5ffce0f9bf06520300d90b384d38e&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790262900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x2f3e178229ec186b57a7e7707f586efab98d95e679aa522644ce1a007cad71be": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:57Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790268000",
+     "question_id": "0xbe963f108774fbeaaab7b5bc3921fd6c9e96af757dc9577874290a3e3ae14c37"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x2f3e178229ec186b57a7e7707f586efab98d95e679aa522644ce1a007cad71be",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:56Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x2f3e178229ec186b57a7e7707f586efab98d95e679aa522644ce1a007cad71be&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790268000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x31435270beec25bf373553c0110c892775d361c8210fa74fdefbda12945af381": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:57Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790242500",
+     "question_id": "0x7adb51e22775f84da1838c1a849876437cb005ac8c027a284f59861a71841cf3"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x31435270beec25bf373553c0110c892775d361c8210fa74fdefbda12945af381",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:57Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x31435270beec25bf373553c0110c892775d361c8210fa74fdefbda12945af381&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790242500",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x3613963cf067f8b4d768d36a4c3d37dd7fd14a297087bab29559b310d452c4d6": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:58Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790237700",
+     "question_id": "0x1e47cbc320aee65b256f5699f7a025e83b8e90f237b574b84af1baa627f9c917"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x3613963cf067f8b4d768d36a4c3d37dd7fd14a297087bab29559b310d452c4d6",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:58Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x3613963cf067f8b4d768d36a4c3d37dd7fd14a297087bab29559b310d452c4d6&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790237700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x3a24a6e6c507f9e54dc8cb63981dbda88fa30949574678e22309766f5f484bd2": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:59Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790209500",
+     "question_id": "0xd0da1e0e1cf51d2dd66161b6a1345c4177916d467ed6f1ce65b49153d290c952"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x3a24a6e6c507f9e54dc8cb63981dbda88fa30949574678e22309766f5f484bd2",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:59Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x3a24a6e6c507f9e54dc8cb63981dbda88fa30949574678e22309766f5f484bd2&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790209500",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x3e60e9782985faf25003fa04626c6f7f836bcc9423fecfc2d6817cb3dd179e4a": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:00Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790288400",
+     "question_id": "0xebaae2d6575a2bdf3ff46115596041fc7fb37a1df73dc812bcfbe594bb9012d7"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x3e60e9782985faf25003fa04626c6f7f836bcc9423fecfc2d6817cb3dd179e4a",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:04:59Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x3e60e9782985faf25003fa04626c6f7f836bcc9423fecfc2d6817cb3dd179e4a&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790288400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x40edc3238de0c8e3a22f19d2cec02428c7bb475d288da41860e0adbd2f3cfa4d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:01Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790286300",
+     "question_id": "0xea9d011d05cbb14b9fad2454dc226592408cc5c4cdc4c434e74e8ed27315d268"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x40edc3238de0c8e3a22f19d2cec02428c7bb475d288da41860e0adbd2f3cfa4d",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:00Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x40edc3238de0c8e3a22f19d2cec02428c7bb475d288da41860e0adbd2f3cfa4d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790286300",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x41dc771926cb2d33866acb031ed2d396463b94b6a74dfdcf22fe197487c1731b": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:02Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790298900",
+     "question_id": "0x3b1bd345664e04993f596b0ca56f3adfa9b269c0d262ab3a59adb2bc43189ada"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x41dc771926cb2d33866acb031ed2d396463b94b6a74dfdcf22fe197487c1731b",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:01Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x41dc771926cb2d33866acb031ed2d396463b94b6a74dfdcf22fe197487c1731b&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790298900",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x42d25382a1a709eb7cb557e02bd54e18cb014c0a4baaa595427fd5f8602e7eda": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:02Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790301000",
+     "question_id": "0x052270a2fd4ad13c089e17ac4f0c0ba8b830b914bb0e2f171fe6a68fd6ff531f"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x42d25382a1a709eb7cb557e02bd54e18cb014c0a4baaa595427fd5f8602e7eda",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:02Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x42d25382a1a709eb7cb557e02bd54e18cb014c0a4baaa595427fd5f8602e7eda&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790301000",
+   "trades": 3,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x45077ce167b2ba96bd0db210126def1acbc4311cce60dea980fd0f8af8cf98a4": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:03Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790293800",
+     "question_id": "0x3de77e36eddd6c163552d9d690462bbd0c441c0fb22684da407906309db940da"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x45077ce167b2ba96bd0db210126def1acbc4311cce60dea980fd0f8af8cf98a4",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:03Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x45077ce167b2ba96bd0db210126def1acbc4311cce60dea980fd0f8af8cf98a4&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790293800",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x45ff94b54a5502fc56697f9543c79b6942ce165ba3237245a2ffa2d296ecccae": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:04Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790316300",
+     "question_id": "0x4decb3101f4df411c70657c9cf62f31519967fb10fea31a10e5db992b202a34f"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x45ff94b54a5502fc56697f9543c79b6942ce165ba3237245a2ffa2d296ecccae",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:04Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x45ff94b54a5502fc56697f9543c79b6942ce165ba3237245a2ffa2d296ecccae&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790316300",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x465948870e4dca88b7b10e2f85f81864d6ac7a1300c437c26d835609d5ac5996": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:05Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790287200",
+     "question_id": "0x4ddb58251d12a6ae1b95e7144ae54de2cca439b370e698070f12764bbdc6c7d0"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x465948870e4dca88b7b10e2f85f81864d6ac7a1300c437c26d835609d5ac5996",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:05Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x465948870e4dca88b7b10e2f85f81864d6ac7a1300c437c26d835609d5ac5996&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790287200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x4745cba7130f449d161987025e969e08d93b9eec53aa7206d03dbb81fc090f9d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:06Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790262600",
+     "question_id": "0x30dc32866d6355741dbc25630f4fb8a53f9b01e1e2fe768f87e64f52faa0f3b2"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x4745cba7130f449d161987025e969e08d93b9eec53aa7206d03dbb81fc090f9d",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:05Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x4745cba7130f449d161987025e969e08d93b9eec53aa7206d03dbb81fc090f9d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790262600",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x47fb95810f4178cd7782a0d6d991ea830c4dc78991a61c5c433c14ea0461073d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:07Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790238600",
+     "question_id": "0xa9467d0e9f7fb1728f584b3f56a686bbb0238f5750e9f28a5b7ef300b69ea9bc"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x47fb95810f4178cd7782a0d6d991ea830c4dc78991a61c5c433c14ea0461073d",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:06Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x47fb95810f4178cd7782a0d6d991ea830c4dc78991a61c5c433c14ea0461073d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790238600",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x52a9fc9bb53b8af94bdf663881b80f875d38f87ea9bab6b217d5254836766960": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:08Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790252100",
+     "question_id": "0xf627a206b0240733e5daa65aa3669dadcbf80b06190c937a004cf55513bf9904"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x52a9fc9bb53b8af94bdf663881b80f875d38f87ea9bab6b217d5254836766960",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:07Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x52a9fc9bb53b8af94bdf663881b80f875d38f87ea9bab6b217d5254836766960&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790252100",
+   "trades": 4,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x53c3beddfaa0bf59568df1cdf6b0dc6f770115331844b1053cf4a6f11ce73dbe": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:09Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790350200",
+     "question_id": "0x718b94b1ab41eee3a5e5e51b7ba12e56edd7ad7d9a594cdeb6bbd27fa56914b6"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x53c3beddfaa0bf59568df1cdf6b0dc6f770115331844b1053cf4a6f11ce73dbe",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:08Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x53c3beddfaa0bf59568df1cdf6b0dc6f770115331844b1053cf4a6f11ce73dbe&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790350200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x5b1972163b0d9f00d8913f205853f782eadfc4063b4e1416ae7e02cd7e37dcca": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:09Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790312400",
+     "question_id": "0xf19314451733050fe5d5ee8e2de14385fbc00fe419156e81fa546ee759555a5d"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x5b1972163b0d9f00d8913f205853f782eadfc4063b4e1416ae7e02cd7e37dcca",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:09Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x5b1972163b0d9f00d8913f205853f782eadfc4063b4e1416ae7e02cd7e37dcca&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790312400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x5c600c83db9840bf975d16fc080c63d34289d946966040202569c1f597a6f1af": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:10Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790337000",
+     "question_id": "0x0293c577fe81274d5a0395b2288c0f1fc17bc792af1f400e229e16b17ed817ac"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x5c600c83db9840bf975d16fc080c63d34289d946966040202569c1f597a6f1af",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:10Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x5c600c83db9840bf975d16fc080c63d34289d946966040202569c1f597a6f1af&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790337000",
+   "trades": 3,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x5d250211c52970280f3cd65d440a5c47509bb9deaaa77cd702ce74637ea5d38e": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:11Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790291700",
+     "question_id": "0xb9d15385950a1c555fd72cf1275120078a4b7c2d377d62d13f02b2923fde5ee8"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x5d250211c52970280f3cd65d440a5c47509bb9deaaa77cd702ce74637ea5d38e",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:11Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x5d250211c52970280f3cd65d440a5c47509bb9deaaa77cd702ce74637ea5d38e&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790291700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x5e21f5e8422679ded7dfc7faa2fb405d25f2837254bf7caa4938454ea00f3376": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:12Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790278200",
+     "question_id": "0x330eae004ae29ee07e65b0e69095a1f9f666cf5c3d8a55b7618fb26bca943c54"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x5e21f5e8422679ded7dfc7faa2fb405d25f2837254bf7caa4938454ea00f3376",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:11Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x5e21f5e8422679ded7dfc7faa2fb405d25f2837254bf7caa4938454ea00f3376&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790278200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x5fc38baaff21de8fd169d2cae6309e213b8765bc02cbcc447126f10b61032919": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:13Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790298900",
+     "question_id": "0xcddedc77e9ff827a704f3e326a99232333c36046b2306c4e76bfdfefc22188b0"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x5fc38baaff21de8fd169d2cae6309e213b8765bc02cbcc447126f10b61032919",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:12Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x5fc38baaff21de8fd169d2cae6309e213b8765bc02cbcc447126f10b61032919&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790298900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x5fcd5b798cbd6e55a9896c20b8572bed3f3629881e37ac0f5357e4701ec74259": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:13Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790264400",
+     "question_id": "0xc779d4125a4d32b36704f99911d683960445c1dd4b281d9ff3b1b302051593aa"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x5fcd5b798cbd6e55a9896c20b8572bed3f3629881e37ac0f5357e4701ec74259",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:13Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x5fcd5b798cbd6e55a9896c20b8572bed3f3629881e37ac0f5357e4701ec74259&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790264400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x60996d2a922cb4430035aa62a1fbc8cf98e2c450b54b408ef9008846c3453b80": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:14Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790283000",
+     "question_id": "0x7c5c4379508af6180a2b2c8f057f64cfcd31f4ff3a02e21c07afee6500214a9a"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x60996d2a922cb4430035aa62a1fbc8cf98e2c450b54b408ef9008846c3453b80",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:14Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x60996d2a922cb4430035aa62a1fbc8cf98e2c450b54b408ef9008846c3453b80&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790283000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x631348b3aff987bda321a5882a84debe6b86322dea7798d6038da277151ba7ba": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:15Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790283300",
+     "question_id": "0xaa25481b6e3e00189d67f63d1d9a77e8e8bd5c99fd8a1299343756fad5619ce6"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x631348b3aff987bda321a5882a84debe6b86322dea7798d6038da277151ba7ba",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:15Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x631348b3aff987bda321a5882a84debe6b86322dea7798d6038da277151ba7ba&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790283300",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x63f55bec305ea979b073126e7fb7fb68c2fc14a83570d37fe55443ca6cccf312": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:16Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790210400",
+     "question_id": "0xcf6717ded9161414ec2e2102a9c75ee0dd133ac0a0e9771319adbd3c8b25a8e1"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x63f55bec305ea979b073126e7fb7fb68c2fc14a83570d37fe55443ca6cccf312",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:16Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x63f55bec305ea979b073126e7fb7fb68c2fc14a83570d37fe55443ca6cccf312&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790210400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x661f10f2cdf2f0c937ad4d504a047d9db91ade4a6f9e4115ea43910e8c9f0d96": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:17Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790290200",
+     "question_id": "0x3561b7231e25df665dd327638c1d00bca43b346d316c68d7df673ad3edca33df"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x661f10f2cdf2f0c937ad4d504a047d9db91ade4a6f9e4115ea43910e8c9f0d96",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:16Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x661f10f2cdf2f0c937ad4d504a047d9db91ade4a6f9e4115ea43910e8c9f0d96&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790290200",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x672e28f01436f7bc0687188995b243d4b21c44dab83354b638f0a70f55226360": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:18Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790299200",
+     "question_id": "0x9db6fd6517b5029ad327934c69d48e7c071d8dd749d33d2473d7f09856647605"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x672e28f01436f7bc0687188995b243d4b21c44dab83354b638f0a70f55226360",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:17Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x672e28f01436f7bc0687188995b243d4b21c44dab83354b638f0a70f55226360&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790299200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x6862ae73029d63f0bf2499d9e22b108735c3bd974e966d8c5a2c0a6f1bd00236": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:18Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790329500",
+     "question_id": "0x88753a15385def004d06f02f6c3b8fb1772894d7944012246165aea5f543fcb0"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x6862ae73029d63f0bf2499d9e22b108735c3bd974e966d8c5a2c0a6f1bd00236",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:18Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x6862ae73029d63f0bf2499d9e22b108735c3bd974e966d8c5a2c0a6f1bd00236&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790329500",
+   "trades": 4,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x6ff8824b7a1ff5e0e4750059dc09bf0f96e7e1d9d896cf7ec093a3f38f42eaac": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:19Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790306100",
+     "question_id": "0xb0eb0ef98100d0a32b01c61bb138752c38ec38ba6d4ea0e246d20036b7ad0cb1"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x6ff8824b7a1ff5e0e4750059dc09bf0f96e7e1d9d896cf7ec093a3f38f42eaac",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:19Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x6ff8824b7a1ff5e0e4750059dc09bf0f96e7e1d9d896cf7ec093a3f38f42eaac&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790306100",
+   "trades": 5,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x728483e786666ce791446bb68b839da5ffa0a34de6d02b01b3e5278a73d7d00b": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:20Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790239200",
+     "question_id": "0x1ebbe3c6e97ffa2c3ebe2da0ba5fb028a6e7815e070cfcea231445844cf23c75"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x728483e786666ce791446bb68b839da5ffa0a34de6d02b01b3e5278a73d7d00b",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:20Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x728483e786666ce791446bb68b839da5ffa0a34de6d02b01b3e5278a73d7d00b&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790239200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x73d27279aeabafd820137ece2c596e7ad155ff5ef90cf2e31370d438e2c025c6": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:21Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790294700",
+     "question_id": "0xc09f6dcc91dd5840de9bde14ebd65fe6b24266b7b62b0dc33b8ab703d3f8a533"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x73d27279aeabafd820137ece2c596e7ad155ff5ef90cf2e31370d438e2c025c6",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:20Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x73d27279aeabafd820137ece2c596e7ad155ff5ef90cf2e31370d438e2c025c6&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790294700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x76aae78f05854eb414b9076f11a99a2c65a9f2fefa212e9a0a3b82b626c6ae44": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:22Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790317800",
+     "question_id": "0xfe1803f8ec79a038fc7ad904577f34d42ca833766fa5e9ad35b90079264b7789"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x76aae78f05854eb414b9076f11a99a2c65a9f2fefa212e9a0a3b82b626c6ae44",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:21Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x76aae78f05854eb414b9076f11a99a2c65a9f2fefa212e9a0a3b82b626c6ae44&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790317800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x79ccafafff1149d7ea2e9c673989017257c84f1213cad89413ff25cbcb18a9db": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:23Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790287200",
+     "question_id": "0x57a272fd9a484163753512dc3329b9036433d2863c7c2cf03b55d4922ca0242c"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x79ccafafff1149d7ea2e9c673989017257c84f1213cad89413ff25cbcb18a9db",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:22Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x79ccafafff1149d7ea2e9c673989017257c84f1213cad89413ff25cbcb18a9db&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790287200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x7a2974b02f514f0f18faa55cb724af44b5f64da3228977b3613a2988f296f80d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:23Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790323800",
+     "question_id": "0x4d3e8b62b70b72706bc13ac8d28024cc0d9cc3444805a622e3415b18060fc4c6"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x7a2974b02f514f0f18faa55cb724af44b5f64da3228977b3613a2988f296f80d",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:23Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x7a2974b02f514f0f18faa55cb724af44b5f64da3228977b3613a2988f296f80d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790323800",
+   "trades": 3,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x7b4644042a447565b7855366ad090546b55fefc4a1a9d6c73a44cefdbf6956f2": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:24Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790318700",
+     "question_id": "0x49dedab021b54c7011d120ea8477f2ce9709cc050c0fc929aaddbeb253063412"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x7b4644042a447565b7855366ad090546b55fefc4a1a9d6c73a44cefdbf6956f2",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:24Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x7b4644042a447565b7855366ad090546b55fefc4a1a9d6c73a44cefdbf6956f2&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790318700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x7b80daf688d021e529f096bfc1989d8826d2a04a47c7ec7b220d84ba0e1507c8": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:25Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790242200",
+     "question_id": "0xeffbc1e4a49ac800d8597a3d0c6e218d6e2b7c6f171bf094ab973ed4a21c9994"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x7b80daf688d021e529f096bfc1989d8826d2a04a47c7ec7b220d84ba0e1507c8",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:25Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x7b80daf688d021e529f096bfc1989d8826d2a04a47c7ec7b220d84ba0e1507c8&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790242200",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x7badada12334c4f004bbab6c794e3dbaebcc9cfd89e5d887bab7df4dba02fc72": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:26Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790259000",
+     "question_id": "0x58afffcccfefdc8138c9659d9ea6ea3e36955132c07f103967cd627efda5e4aa"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x7badada12334c4f004bbab6c794e3dbaebcc9cfd89e5d887bab7df4dba02fc72",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:26Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x7badada12334c4f004bbab6c794e3dbaebcc9cfd89e5d887bab7df4dba02fc72&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790259000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x7c2a03ed05dca3326ae2e396849c4193d144ece8d48c6a143a2eff2966f553d2": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:27Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790244900",
+     "question_id": "0x45406fe1804fd8c37c4919c6fdf67b3873f0301ea2bc3412328a5a1281970ea3"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x7c2a03ed05dca3326ae2e396849c4193d144ece8d48c6a143a2eff2966f553d2",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:26Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x7c2a03ed05dca3326ae2e396849c4193d144ece8d48c6a143a2eff2966f553d2&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790244900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x7ca1515a63c745a0862423d1af22e64ac9eba0ce724b5df919586cccc8464e09": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:28Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790337600",
+     "question_id": "0x7850fd0185e6f15270eaa5cb0cdf2491417a8d10861740a8929f48d16398e7da"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x7ca1515a63c745a0862423d1af22e64ac9eba0ce724b5df919586cccc8464e09",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:27Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x7ca1515a63c745a0862423d1af22e64ac9eba0ce724b5df919586cccc8464e09&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790337600",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x7dac24cb5767e4b5d83c38c69c2a723054e13b2ba8fd06ae717cf768f432e888": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:28Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790237100",
+     "question_id": "0xee4bd93f75a2bac512466f1a8d8c6f6618a125505550a918bfcef6f9213b47dd"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x7dac24cb5767e4b5d83c38c69c2a723054e13b2ba8fd06ae717cf768f432e888",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:28Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x7dac24cb5767e4b5d83c38c69c2a723054e13b2ba8fd06ae717cf768f432e888&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790237100",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x80e3bb9ed45841d2c33b5737ac761ff01072b8db4b9a09bb64cf41d07a1b2ffd": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:29Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790305200",
+     "question_id": "0x2ed0c18622f7641f914ae1b19cc7a288535abd077ad38b85217e17585edcee11"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x80e3bb9ed45841d2c33b5737ac761ff01072b8db4b9a09bb64cf41d07a1b2ffd",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:29Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x80e3bb9ed45841d2c33b5737ac761ff01072b8db4b9a09bb64cf41d07a1b2ffd&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790305200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x825caafbf15a6a55cd5fb7c088280b70cd291742282c374f8fedd2b43da89ed4": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:30Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790260200",
+     "question_id": "0x1037e7ce933eada697ef4649181b5bd21a8b5e730ee6ec2ba03f0cc34f5e8600"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x825caafbf15a6a55cd5fb7c088280b70cd291742282c374f8fedd2b43da89ed4",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:30Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x825caafbf15a6a55cd5fb7c088280b70cd291742282c374f8fedd2b43da89ed4&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790260200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x843b5a467f6d74acdac1e1c18e1faa519722b71d62ead09a53e7d241b35564ad": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:31Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790315100",
+     "question_id": "0xa72a2002405f2d9fd86f4b95332d6eb0e16321c8ba4efce82f91b09a31c4f622"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x843b5a467f6d74acdac1e1c18e1faa519722b71d62ead09a53e7d241b35564ad",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:30Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x843b5a467f6d74acdac1e1c18e1faa519722b71d62ead09a53e7d241b35564ad&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790315100",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x844e48902b7c5d2a7b1ec23ec3ab66f664fda496e7d48f3d7f324439306801f7": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:32Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790256300",
+     "question_id": "0x6ec7fb7452fe88c25fa618b55a817bc04b66ba83b9098dd46f0a760cdd8416a8"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x844e48902b7c5d2a7b1ec23ec3ab66f664fda496e7d48f3d7f324439306801f7",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:31Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x844e48902b7c5d2a7b1ec23ec3ab66f664fda496e7d48f3d7f324439306801f7&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790256300",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x8774b67a822a2e11925086b09bacc67d7bb07063d509d43335ce158875f60c09": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:33Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790315700",
+     "question_id": "0x1357f563aae815506c6187a06dde9add17e461cf5f47e48430d0eed5f8734435"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x8774b67a822a2e11925086b09bacc67d7bb07063d509d43335ce158875f60c09",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:32Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x8774b67a822a2e11925086b09bacc67d7bb07063d509d43335ce158875f60c09&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790315700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x87d4217f3a74306ad967a4a2d2806348406f350c000930bfa1ca7f8cc5252d0e": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:33Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790270100",
+     "question_id": "0x72d6e1138294adff85dc2286e7bdd8aa6a0896683128cd55bdafad49784d977c"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x87d4217f3a74306ad967a4a2d2806348406f350c000930bfa1ca7f8cc5252d0e",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:33Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x87d4217f3a74306ad967a4a2d2806348406f350c000930bfa1ca7f8cc5252d0e&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790270100",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x8f4a83578985d87f7d4ea2c53f194900f1499e7da7353d9472616e33cca6add4": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:34Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790264400",
+     "question_id": "0x097ff6b7bab1b57c68e71c25c1847c758749a8037551879a348438e63fb09134"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x8f4a83578985d87f7d4ea2c53f194900f1499e7da7353d9472616e33cca6add4",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:34Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x8f4a83578985d87f7d4ea2c53f194900f1499e7da7353d9472616e33cca6add4&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790264400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x93427adb011dd8455e6c2ac8b3e2aeb7891ea8b9e683bbca8828d4b4ce6a45b8": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:35Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790311200",
+     "question_id": "0xf048d68d6d90939bdd44b6844eb637131a1a3a3475f4d9152cddcad39a878c7e"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x93427adb011dd8455e6c2ac8b3e2aeb7891ea8b9e683bbca8828d4b4ce6a45b8",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:35Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x93427adb011dd8455e6c2ac8b3e2aeb7891ea8b9e683bbca8828d4b4ce6a45b8&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790311200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x95877342912c94ea14d2d0915e71097d280e6d1f00c437e807969d90091b9094": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:36Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790311800",
+     "question_id": "0xfd0e1ef011a3f4afb29afea1e5912e3da8c11b493e17268d4e3717bf911c2b4c"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x95877342912c94ea14d2d0915e71097d280e6d1f00c437e807969d90091b9094",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:36Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x95877342912c94ea14d2d0915e71097d280e6d1f00c437e807969d90091b9094&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790311800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x988d03e4b260076d4bc2156fe82c0df199c7ef21caaf5295d81ee5c01bef06fc": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:37Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790241900",
+     "question_id": "0x952f27471790aa19bcf412fa10bf33514617365cd37816b885c60bc61ba434c7"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x988d03e4b260076d4bc2156fe82c0df199c7ef21caaf5295d81ee5c01bef06fc",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:36Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x988d03e4b260076d4bc2156fe82c0df199c7ef21caaf5295d81ee5c01bef06fc&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790241900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0x9dac9dbd5a2868bd46dd270ab4b72f6281c81023e76a473a21e43c909875337c": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:38Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790313300",
+     "question_id": "0x0a8a9bbf4a73b877fa1f7e522c0c33862c69f777d38d04d61e37ed284494240a"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x9dac9dbd5a2868bd46dd270ab4b72f6281c81023e76a473a21e43c909875337c",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:37Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x9dac9dbd5a2868bd46dd270ab4b72f6281c81023e76a473a21e43c909875337c&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790313300",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x9f159e58c14d3480da6437413252fb858c984cdcf5ab44abfac79141a38863b7": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:39Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790271900",
+     "question_id": "0x5d860b16218bb52ebc45511f1e7fb4cd9d08d8ca724c7f28d531d3605d1b5286"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x9f159e58c14d3480da6437413252fb858c984cdcf5ab44abfac79141a38863b7",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:38Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x9f159e58c14d3480da6437413252fb858c984cdcf5ab44abfac79141a38863b7&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790271900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0x9f62d2cf71f62482ccd113e7118df7f711dd815f87c5566005f651a72c2436d8": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:39Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790303400",
+     "question_id": "0x3957b08b52bcfe9f0ce35ba3e32f4e00da65592dc3d9a85c96546e630f599b6d"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0x9f62d2cf71f62482ccd113e7118df7f711dd815f87c5566005f651a72c2436d8",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:39Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0x9f62d2cf71f62482ccd113e7118df7f711dd815f87c5566005f651a72c2436d8&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790303400",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xa01b62692802d15afdafd1bb1a0d6fb166ae910c22557f03f8524c47f4e16994": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:40Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790246700",
+     "question_id": "0xf27a632e390dc30d077da907e9ddadcd049005c4064ec505e21eef0388f664b8"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa01b62692802d15afdafd1bb1a0d6fb166ae910c22557f03f8524c47f4e16994",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:40Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa01b62692802d15afdafd1bb1a0d6fb166ae910c22557f03f8524c47f4e16994&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790246700",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xa03265d72662accb3f8a185533da2036fba33663c74cd0afdfa6f6cae4491010": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:41Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790327700",
+     "question_id": "0x02375f49a6ba7dbc83b4ea0969beeb12923689e4b114584f91d4a18ab57c6b21"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa03265d72662accb3f8a185533da2036fba33663c74cd0afdfa6f6cae4491010",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:41Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa03265d72662accb3f8a185533da2036fba33663c74cd0afdfa6f6cae4491010&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790327700",
+   "trades": 5,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xa17b5f6874cbe29f29151d813fc63c32958f1a80aa60d1755cf12139769d12d6": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:42Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790280000",
+     "question_id": "0x96bd4ce7b4ab60e73ef381b90dfd238e8db2f6a5c4e5381358fb39dafddd6e5b"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa17b5f6874cbe29f29151d813fc63c32958f1a80aa60d1755cf12139769d12d6",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:41Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa17b5f6874cbe29f29151d813fc63c32958f1a80aa60d1755cf12139769d12d6&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790280000",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xa1fe7d52e4637031cf877f68786b6e6450de47aecb28b13f17d7fb2a0151dfb6": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:43Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790272200",
+     "question_id": "0xdf4e4005ef84bcc756d31516c4d08df0b0055b731a25ac88058899ae58bfb2a3"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa1fe7d52e4637031cf877f68786b6e6450de47aecb28b13f17d7fb2a0151dfb6",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:42Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa1fe7d52e4637031cf877f68786b6e6450de47aecb28b13f17d7fb2a0151dfb6&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790272200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xa4dede3c433a9e3052640d72b846556fab30bff67a4794b950e6c7acd32a5f1b": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:44Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790264700",
+     "question_id": "0x8cca05e318e184c89461d774d5c34239ab2f2522e33a6b54c8939dfc4666c7f7"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa4dede3c433a9e3052640d72b846556fab30bff67a4794b950e6c7acd32a5f1b",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:43Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa4dede3c433a9e3052640d72b846556fab30bff67a4794b950e6c7acd32a5f1b&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790264700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xa50b1a2fba1838312615a7787ccdfca051f79cc323215e579d9186479ba74c11": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:45Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790340000",
+     "question_id": "0x394073e87551296c931e52bdd4017fd20bb7d0dedbb423d0ef74f5ec676db7a6"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa50b1a2fba1838312615a7787ccdfca051f79cc323215e579d9186479ba74c11",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:44Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa50b1a2fba1838312615a7787ccdfca051f79cc323215e579d9186479ba74c11&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790340000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xa799ac49554342eee5dc4119ae594cddcf3629db779bc341bbdbadc1491ddec7": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:45Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790341200",
+     "question_id": "0x8b55526bddbb7a77df5d466750f9baaeb22b7e353d140ad14c881bddb0c588ca"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa799ac49554342eee5dc4119ae594cddcf3629db779bc341bbdbadc1491ddec7",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:45Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa799ac49554342eee5dc4119ae594cddcf3629db779bc341bbdbadc1491ddec7&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790341200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xa8060942014bffae71ab6816e648559d0ce4089e74bf047629b6f84984cff74d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:46Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790317200",
+     "question_id": "0x375ecadaeb7e79fdded4f4ebc8271f7803e6d49ad3a10088e70a51c1c957dfb0"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa8060942014bffae71ab6816e648559d0ce4089e74bf047629b6f84984cff74d",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:46Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa8060942014bffae71ab6816e648559d0ce4089e74bf047629b6f84984cff74d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790317200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xa827b943cd79f4bb16eaf44741daca12f02b574c9bcf3dd4e3d7122a83ef8b37": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:47Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790304900",
+     "question_id": "0xe3cf384adf8dad263b6465204c59ef9c3a721e09345f66499c38968362afae2a"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xa827b943cd79f4bb16eaf44741daca12f02b574c9bcf3dd4e3d7122a83ef8b37",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:47Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xa827b943cd79f4bb16eaf44741daca12f02b574c9bcf3dd4e3d7122a83ef8b37&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790304900",
+   "trades": 3,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xaa789025d557115f235ae2ef621bd7a1bf777e9eea505cfe6640346c7a498aaa": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:48Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790209800",
+     "question_id": "0xd4620a98860e05ea2e6a44e25d74ef7a0fb57acce7cba18538bdf23ec7e3e878"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xaa789025d557115f235ae2ef621bd7a1bf777e9eea505cfe6640346c7a498aaa",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:47Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xaa789025d557115f235ae2ef621bd7a1bf777e9eea505cfe6640346c7a498aaa&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790209800",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xabdf30f0e47de6acca802162a94cf3304c272da6e00529dc66bfb63f64868ce6": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:49Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790299800",
+     "question_id": "0xc4ffe3d2c3dc280b777ac506b2c3f357c4e200fdf2ea6c6d36b57f9521eb2fbf"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xabdf30f0e47de6acca802162a94cf3304c272da6e00529dc66bfb63f64868ce6",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:48Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xabdf30f0e47de6acca802162a94cf3304c272da6e00529dc66bfb63f64868ce6&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790299800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xae298a67b0c49c57676f3b23ef3575fd245c4c5f6acbf0f96550ed11f3340b1f": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:50Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790322600",
+     "question_id": "0xf8b347c6503d007db7fd0516c32dea4a7b26eaa4b5773e98a43c6466d526f232"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xae298a67b0c49c57676f3b23ef3575fd245c4c5f6acbf0f96550ed11f3340b1f",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:49Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xae298a67b0c49c57676f3b23ef3575fd245c4c5f6acbf0f96550ed11f3340b1f&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790322600",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xb5ecb6c70fc15252bb168759e2826f34f4205a1e52a6d9dbb4cda8d0fbd1015d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:50Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790267400",
+     "question_id": "0x39dbba86d7571d862e6339922ffd753c3ba8e51f3128cc05a0afcc33d2aff7c1"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xb5ecb6c70fc15252bb168759e2826f34f4205a1e52a6d9dbb4cda8d0fbd1015d",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:50Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xb5ecb6c70fc15252bb168759e2826f34f4205a1e52a6d9dbb4cda8d0fbd1015d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790267400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xb91528272417c5bd8987222d3e2c36576a35bdb9cc8e8fedbbb9da5f7ed6b26a": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:51Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790298900",
+     "question_id": "0x077087459c47bcd165872670c97120e20857937779f780c475954da0c61f246f"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xb91528272417c5bd8987222d3e2c36576a35bdb9cc8e8fedbbb9da5f7ed6b26a",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:51Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xb91528272417c5bd8987222d3e2c36576a35bdb9cc8e8fedbbb9da5f7ed6b26a&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790298900",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xbcdb90e0418b00545cb4a018cfc6117534550abd1fc1c6d14a7b6b090018ace7": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:52Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790265300",
+     "question_id": "0xec0fa9142b7036f122466ce8e0835e2552c4a93606f3c0fa956ed3e8a15533d3"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xbcdb90e0418b00545cb4a018cfc6117534550abd1fc1c6d14a7b6b090018ace7",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:52Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xbcdb90e0418b00545cb4a018cfc6117534550abd1fc1c6d14a7b6b090018ace7&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790265300",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xbe5855e82b9c55289e4ee9a9d1293822c254312cea4c248746c2595f0cdde1f8": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:53Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790298600",
+     "question_id": "0x95f52b80646845fb5c6ba26d91597c4caa3b4f5200fd436016b267bbaae85762"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xbe5855e82b9c55289e4ee9a9d1293822c254312cea4c248746c2595f0cdde1f8",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:52Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xbe5855e82b9c55289e4ee9a9d1293822c254312cea4c248746c2595f0cdde1f8&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790298600",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xbf2fe04c8bc34cbc649489b5b14bd9247e506c87da365c96303550bdda665a9e": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:54Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790274000",
+     "question_id": "0x022322e684224ba1cc2d2330477933865231731ee9b3eb30525f61989cb9ca31"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xbf2fe04c8bc34cbc649489b5b14bd9247e506c87da365c96303550bdda665a9e",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:53Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xbf2fe04c8bc34cbc649489b5b14bd9247e506c87da365c96303550bdda665a9e&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790274000",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xc009ecfa79003dbd4f632653b59c65da5fb466b17a6ed9177ee1f4a8b4d10f3a": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:54Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790336700",
+     "question_id": "0xba65ce78876bf3490681f7275ea5a439dcb6910f0792bc4dc432b4419d0b0676"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xc009ecfa79003dbd4f632653b59c65da5fb466b17a6ed9177ee1f4a8b4d10f3a",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:54Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xc009ecfa79003dbd4f632653b59c65da5fb466b17a6ed9177ee1f4a8b4d10f3a&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790336700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xc086aacdfe78672dbd73ecd396e06ced631fadd751a30baee9c555ba6ae3791d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:55Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790251800",
+     "question_id": "0xe0762550d4e0662f8e6b3d28f54c35dfdbdd2055f577e8c2afef34244a597600"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xc086aacdfe78672dbd73ecd396e06ced631fadd751a30baee9c555ba6ae3791d",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:55Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xc086aacdfe78672dbd73ecd396e06ced631fadd751a30baee9c555ba6ae3791d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790251800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xcc24be3b87545f3ed56842a4ce01f37b7b03be87df7696451a97d84eff4dc484": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:56Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790340600",
+     "question_id": "0xf8aa36799bee4807a4eeecf320eb0b458a96838a20a08ed49b89c3f50b117951"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xcc24be3b87545f3ed56842a4ce01f37b7b03be87df7696451a97d84eff4dc484",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:56Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xcc24be3b87545f3ed56842a4ce01f37b7b03be87df7696451a97d84eff4dc484&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790340600",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xd2611d72ed0abe092abb652461aabf370f3447ebde5ad1494be68fb282bdab58": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:57Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790351700",
+     "question_id": "0xa201d0c755a234d9a1623706910a82c175f81d9223f4093818c716d0f4396a2e"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xd2611d72ed0abe092abb652461aabf370f3447ebde5ad1494be68fb282bdab58",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:57Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xd2611d72ed0abe092abb652461aabf370f3447ebde5ad1494be68fb282bdab58&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790351700",
+   "trades": 2,
+   "verdict": "VERIFIED_SINGLE_SOURCE",
+   "winner_index": 0,
+   "winner_label": "Up"
+  },
+  "0xd51247cc40a1fccc5b2b2b369b2ec72f4364d69f25a97edcf01dfa9c12572b6e": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:58Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790250300",
+     "question_id": "0xc93b4b38f3ac636d03aeeacb053105c10e795197643fd86f154bbea7e6b311a3"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xd51247cc40a1fccc5b2b2b369b2ec72f4364d69f25a97edcf01dfa9c12572b6e",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:58Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xd51247cc40a1fccc5b2b2b369b2ec72f4364d69f25a97edcf01dfa9c12572b6e&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790250300",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xd619d294e56255003cc12fd722c786c2b0bf0a07bd062f05d4547c7d88fd0d41": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:59Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790211000",
+     "question_id": "0x17128729d9078a3d6e6cb47ceff8e3571b2928b8881afc084d3a96081d5d531f"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xd619d294e56255003cc12fd722c786c2b0bf0a07bd062f05d4547c7d88fd0d41",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:58Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xd619d294e56255003cc12fd722c786c2b0bf0a07bd062f05d4547c7d88fd0d41&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790211000",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xd77517347ed8d56ef6964385c733b7b3f7ea5bef2cc1a6d6c37d16f714e67dea": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:00Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790281800",
+     "question_id": "0x5eb39a7d3266553d604812fe1edd3d6662efb32aa53f96b79cddfb15bdb2ec28"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xd77517347ed8d56ef6964385c733b7b3f7ea5bef2cc1a6d6c37d16f714e67dea",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:05:59Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xd77517347ed8d56ef6964385c733b7b3f7ea5bef2cc1a6d6c37d16f714e67dea&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790281800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xd7852b4ebe1eafcba27d29278588002bf392e710ef50dd0ad9f61e7e13ba60aa": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:01Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790335800",
+     "question_id": "0xf8a4817c54b1595f03d1cdec8ccd48011d304a342a45212bdc97f9e88d1b3709"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xd7852b4ebe1eafcba27d29278588002bf392e710ef50dd0ad9f61e7e13ba60aa",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:00Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xd7852b4ebe1eafcba27d29278588002bf392e710ef50dd0ad9f61e7e13ba60aa&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790335800",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xd8dd3a10c2094a72443d7d0acc2d1075d1019e837d1a7ed60d34e26b67e991c0": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:01Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790245500",
+     "question_id": "0x4c36766f79358e471c679b5c033d624b0d74956fe68874a0634746644df900f4"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xd8dd3a10c2094a72443d7d0acc2d1075d1019e837d1a7ed60d34e26b67e991c0",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:01Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xd8dd3a10c2094a72443d7d0acc2d1075d1019e837d1a7ed60d34e26b67e991c0&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790245500",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xdb9a63deb1aa4dd7ab5297e8ccccb1d28ad0f99988de13024d2bb343a34db817": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:02Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790239500",
+     "question_id": "0x3fcc81b51610672310a7ffecd6eae4b48125874b711f18b11e763ba553b1f6f0"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xdb9a63deb1aa4dd7ab5297e8ccccb1d28ad0f99988de13024d2bb343a34db817",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:02Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xdb9a63deb1aa4dd7ab5297e8ccccb1d28ad0f99988de13024d2bb343a34db817&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790239500",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xdc64662ac604ec9a9379e444516e2ce09ea9269a4cae2c20530c198ac546b8dc": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:03Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790244600",
+     "question_id": "0xd2af7282d2e02ceddcde3d1c706c45cc071483333c217f77225a36310e7e4efc"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xdc64662ac604ec9a9379e444516e2ce09ea9269a4cae2c20530c198ac546b8dc",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:03Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xdc64662ac604ec9a9379e444516e2ce09ea9269a4cae2c20530c198ac546b8dc&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790244600",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xdcbde44da93ab74f1420d82972f17cbe67047f78595b08d9e3a49427b6b85015": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:04Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790351400",
+     "question_id": "0x55451251d5f67591de73368d2c557a3cef4fda8fb0e9302fe54a8b5dc93c7132"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xdcbde44da93ab74f1420d82972f17cbe67047f78595b08d9e3a49427b6b85015",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:03Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xdcbde44da93ab74f1420d82972f17cbe67047f78595b08d9e3a49427b6b85015&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790351400",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xe126eb6c2fa526380018b529276088ed719394202326e24b26de7d60ed2ce4ff": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:05Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-5m-1790235600",
+     "question_id": "0x8534a097b96be77c86b00981722efd6ff3e76ed3544f05dcbcff7055b2515936"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xe126eb6c2fa526380018b529276088ed719394202326e24b26de7d60ed2ce4ff",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:04Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xe126eb6c2fa526380018b529276088ed719394202326e24b26de7d60ed2ce4ff&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-5m-1790235600",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xe1648bc0c286911bcb5fc228972268d3ca413aa4a6b4a6b03b8c983ba706f957": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:06Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790307600",
+     "question_id": "0x20ccacde9b959a5f31ec4f7511523a1637a630ccedaf7da9a1bfda24d3a085d7"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xe1648bc0c286911bcb5fc228972268d3ca413aa4a6b4a6b03b8c983ba706f957",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:05Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xe1648bc0c286911bcb5fc228972268d3ca413aa4a6b4a6b03b8c983ba706f957&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790307600",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xe1ab88add4a65bd774b87220e120b165dfb182f98f83c424c98be62423354719": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:06Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790253300",
+     "question_id": "0x98a11d639039cceaf044eb6c244f5c130344a71bfa4d58ebe17eab8f78b61a5b"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xe1ab88add4a65bd774b87220e120b165dfb182f98f83c424c98be62423354719",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:06Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xe1ab88add4a65bd774b87220e120b165dfb182f98f83c424c98be62423354719&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790253300",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xe44c6fcb5a0c74cf0b7dd51031afb530050f8437aa44f4d782e748c24b63c137": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:07Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790249700",
+     "question_id": "0x32d03cbe4683fa089d5db7e55bffc4ac81043e8644efdf87d8b0b751320fdc11"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xe44c6fcb5a0c74cf0b7dd51031afb530050f8437aa44f4d782e748c24b63c137",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:07Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xe44c6fcb5a0c74cf0b7dd51031afb530050f8437aa44f4d782e748c24b63c137&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790249700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xec243cd07f9dcf1cf24551919ae6861875f0a7fd44e18d6b43b70f387fe2c727": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:08Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790343900",
+     "question_id": "0x5d9f8acb5c0d81783502897ebd571063bfd842d04f0cb8ee3952038589674d7b"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xec243cd07f9dcf1cf24551919ae6861875f0a7fd44e18d6b43b70f387fe2c727",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:08Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xec243cd07f9dcf1cf24551919ae6861875f0a7fd44e18d6b43b70f387fe2c727&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790343900",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xeca99b31e908255da1e9e5cc0d274d89e6436d7b1df9cc3c4d3101c3d02aba90": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:09Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790305200",
+     "question_id": "0x93e58788a5d978424fee9affe1115d6536b204994be8e4b169130d1e20cf03ad"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xeca99b31e908255da1e9e5cc0d274d89e6436d7b1df9cc3c4d3101c3d02aba90",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:09Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xeca99b31e908255da1e9e5cc0d274d89e6436d7b1df9cc3c4d3101c3d02aba90&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790305200",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xf649c3fcfde1cf8a2a5861f20a8e43f05df39934acec54c26c91c65136de9aec": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:10Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790321700",
+     "question_id": "0x5e70abd277322824642d63ec66fe85a913327acc1db51263f533950786fa9ec7"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xf649c3fcfde1cf8a2a5861f20a8e43f05df39934acec54c26c91c65136de9aec",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:09Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xf649c3fcfde1cf8a2a5861f20a8e43f05df39934acec54c26c91c65136de9aec&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790321700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xf69c35bfe1c3e4345fcd7ce5689481d458688e37b038745454750991d2391ef2": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:11Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "eth-updown-15m-1790281800",
+     "question_id": "0x1b6b9dea89819e2a3e16d9843ba9448c8f29f63ccb8cdf15cb45200b03b44ffd"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xf69c35bfe1c3e4345fcd7ce5689481d458688e37b038745454750991d2391ef2",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:10Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xf69c35bfe1c3e4345fcd7ce5689481d458688e37b038745454750991d2391ef2&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "eth-updown-15m-1790281800",
+   "trades": 2,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xf8486b52264c149c521a0e00d92005bf6f4d05a03a4c0b60f7eff8beed54808f": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:11Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790313000",
+     "question_id": "0x511f09ce7bdda99dff71ba294f3131a999990c4fb34f5ebc50116237d1f97186"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xf8486b52264c149c521a0e00d92005bf6f4d05a03a4c0b60f7eff8beed54808f",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:11Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xf8486b52264c149c521a0e00d92005bf6f4d05a03a4c0b60f7eff8beed54808f&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790313000",
+   "trades": 3,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xf91f4d6d87e2c65b64b673949014ae98cd9e90613eacb2dce521257824f1f59e": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:12Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790346300",
+     "question_id": "0x880689692ba190cedcfa5cda1e63b6304826774f5fe60bba79478259b72f1294"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xf91f4d6d87e2c65b64b673949014ae98cd9e90613eacb2dce521257824f1f59e",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:12Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xf91f4d6d87e2c65b64b673949014ae98cd9e90613eacb2dce521257824f1f59e&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790346300",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  },
+  "0xfb4441bd0c10741c5db20406a3a6994a1d0d535bfaad41dd31b959df0887c154": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:13Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-25T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790336700",
+     "question_id": "0x51f83f3b416099539301ec8ed80edf3a39f454a074f71d2f9afabb2eb99d6f92"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xfb4441bd0c10741c5db20406a3a6994a1d0d535bfaad41dd31b959df0887c154",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-25",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:13Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xfb4441bd0c10741c5db20406a3a6994a1d0d535bfaad41dd31b959df0887c154&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790336700",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xfe1687e91671ee881ece9b9b8e148cb7592d97e4293a13fc9ef58d4899f5d236": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:14Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790284200",
+     "question_id": "0x00f131195200e61d48236c9887f5a9f62ee814aae5d1ae8adbfa0f73a28ca69f"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xfe1687e91671ee881ece9b9b8e148cb7592d97e4293a13fc9ef58d4899f5d236",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:13Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xfe1687e91671ee881ece9b9b8e148cb7592d97e4293a13fc9ef58d4899f5d236&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790284200",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xfe2feb8b7f10c724f1c69f7096b94e8534554aef38b13d242ff0d14603d0ff5d": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:15Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790260500",
+     "question_id": "0xa0352c391b5611e9e854966f1337fbe9713c3224246af146487f98652689a986"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": false
+     },
+     {
+      "outcome": "Down",
+      "winner": true
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xfe2feb8b7f10c724f1c69f7096b94e8534554aef38b13d242ff0d14603d0ff5d",
+    "winner_label": "Down"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:14Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xfe2feb8b7f10c724f1c69f7096b94e8534554aef38b13d242ff0d14603d0ff5d&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "0": "Up"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790260500",
+   "trades": 1,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Down"
+  },
+  "0xfeca47f85cd02dfa07061004ae50c1961da65937e400df2b946dc757d46b849f": {
+   "clob": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:16Z",
+    "raw": {
+     "active": true,
+     "closed": true,
+     "end_date_iso": "2026-09-24T00:00:00Z",
+     "market_slug": "btc-updown-5m-1790269500",
+     "question_id": "0xb8f096adaf0e4bf19a41f64afb4cde6de54ab0e839e9b3dfa272518465ef4a74"
+    },
+    "source": "clob",
+    "status": 200,
+    "tokens": [
+     {
+      "outcome": "Up",
+      "winner": true
+     },
+     {
+      "outcome": "Down",
+      "winner": false
+     }
+    ],
+    "url": "https://clob.polymarket.com/markets/0xfeca47f85cd02dfa07061004ae50c1961da65937e400df2b946dc757d46b849f",
+    "winner_label": "Up"
+   },
+   "day": "2026-09-24",
+   "gamma": {
+    "error": null,
+    "fetched_at": "2026-10-13T00:06:15Z",
+    "raw": null,
+    "source": "gamma",
+    "status": 200,
+    "url": "https://gamma-api.polymarket.com/markets?condition_ids=0xfeca47f85cd02dfa07061004ae50c1961da65937e400df2b946dc757d46b849f&limit=5",
+    "winner_label": null
+   },
+   "l5_index_labels": {
+    "1": "Down"
+   },
+   "redeemed_in_corpus": false,
+   "slug": "btc-updown-5m-1790269500",
+   "trades": 3,
+   "verdict": "LABEL_NOT_IN_L5_TRADES",
+   "winner_index": null,
+   "winner_label": "Up"
+  }
+ },
+ "method": "GET only, two independent public sources, agreement required where both answer. No winner is ever inferred from missing REDEEM activity.",
+ "source_file": "data/l5/raw/sep/l5_sep23_25_daily.json",
+ "started_utc": "2026-10-13T00:04:40Z",
+ "summary": {
+  "LABEL_NOT_IN_L5_TRADES": 112,
+  "VERIFIED_SINGLE_SOURCE": 2,
+  "not_redeemed": 114,
+  "verified_among_the_inferred": 2
+ }
+}
