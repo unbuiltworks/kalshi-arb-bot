@@ -90,6 +90,16 @@ KNOWN_IDS_ENV = "E1_MONITOR_KNOWN_ORDER_IDS"
 HANDOVER_ENV = "E1_MONITOR_HANDOVER_UNIX"
 DEADLINE_ENV = "E1_MONITOR_EXECUTOR_DEADLINE_UNIX"
 WEBHOOK_ENV = "E1_MONITOR_ALERT_WEBHOOK"
+
+#: Every domain the alert sink must never be able to reach. Derived
+#: from AUTH.API so it tracks a venue move, plus the venue hosts this
+#: account touches that are NOT api.* -- the gateway above all.
+VENUE_DOMAINS = tuple(sorted({
+    ".".join(AUTH.API.split("//")[-1].split("/")[0]
+             .lower().split(".")[-2:]),
+    "polymarket.us", "polymarket.com", "kalshi.com",
+    "elections.kalshi.com", "gemini.com",
+}))
 POLL_ENV = "E1_MONITOR_POLL_S"
 RUNTIME_ENV = "E1_MONITOR_MAX_RUNTIME_S"
 SELFTEST_ENV = "E1_MONITOR_SELF_TEST"
@@ -159,10 +169,26 @@ class AlertSink(object):
             if not url.startswith("https://"):
                 raise SystemExit(
                     "REFUSED: %s must be an https:// URL" % WEBHOOK_ENV)
-            if AUTH.API.split("//")[-1].split("/")[0] in url:
-                raise SystemExit(
-                    "REFUSED: %s names the venue host. The alert path must "
-                    "never be able to become a venue path." % WEBHOOK_ENV)
+            # THE WHOLE VENUE DOMAIN, not one host. This used to test only
+            # `AUTH.API`'s host -- api.polymarket.us -- so
+            # https://gateway.polymarket.us/... was ACCEPTED as an alert
+            # sink, and that is the host the collector and every public book
+            # read actually use. The docstring above promises the alert path
+            # can never become a venue path; against one hostname it was not
+            # true. Matching the registrable domain on a host-component
+            # boundary, so "notpolymarket.us" does not collide with
+            # "polymarket.us". Note what this does NOT do: an attacker host
+            # such as "polymarket.us.attacker.net" is ACCEPTED, and that is
+            # correct -- this check's job is that the alert path can never
+            # become a VENUE path, not that the sink is trustworthy. Whether
+            # the owner's URL is one they control is theirs to know.
+            host = url.split("/")[2].split("@")[-1].split(":")[0].lower()
+            for domain in VENUE_DOMAINS:
+                if host == domain or host.endswith("." + domain):
+                    raise SystemExit(
+                        "REFUSED: %s names the venue domain %s (host %s). "
+                        "The alert path must never be able to become a "
+                        "venue path." % (WEBHOOK_ENV, domain, host))
         self.url = url or None
         self.deliveries: List[Dict[str, Any]] = []
 
