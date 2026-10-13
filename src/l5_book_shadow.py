@@ -99,7 +99,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
+from typing import Iterator, Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 SCHEMA_VERSION = "l5_book_shadow/1"
 
@@ -305,7 +305,7 @@ class TapeWriter:
 
     def __init__(self, root: str | Path, stream: str = "tape") -> None:
         self.root = Path(root)
-        self.stream = stream
+        self.stream_name = stream
         self.raw_dir = self.root / "raw"
         self.derived_dir = self.root / "derived"
         self.raw_dir.mkdir(parents=True, exist_ok=True)
@@ -315,7 +315,7 @@ class TapeWriter:
     def part_path(self, when: Optional[datetime] = None) -> Path:
         when = when or datetime.now(timezone.utc)
         return self.raw_dir / ("%s_%s.jsonl" % (
-            self.stream, when.strftime("%Y%m%dT%HZ")))
+            self.stream_name, when.strftime("%Y%m%dT%HZ")))
 
     def write(self, row: Mapping[str, Any]) -> Path:
         path = self.part_path()
@@ -326,10 +326,31 @@ class TapeWriter:
         self.rows_written += 1
         return path
 
+    def stream(self) -> "Iterator[dict]":
+        """Raw tape, chronological, ONE ROW AT A TIME. Reads only.
+
+        `read_all` materialises the whole tape as Python dicts. At 2.78 GB of
+        JSONL that peaked this container at 25.5 GB against a 32 GB limit,
+        and the peak grows with the tape, so it was roughly 1.7 days from an
+        OOM that would have stopped COLLECTION. Callers that only iterate
+        should use this; `read_all` is kept for the ones that genuinely need
+        a list.
+        """
+        for path in sorted(self.raw_dir.glob("%s_*.jsonl" % self.stream_name)):
+            with open(path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except ValueError:
+                        continue
+
     def read_all(self) -> List[dict]:
         """Raw tape, chronological by part then by line. Reads only."""
         out: List[dict] = []
-        for path in sorted(self.raw_dir.glob("%s_*.jsonl" % self.stream)):
+        for path in sorted(self.raw_dir.glob("%s_*.jsonl" % self.stream_name)):
             with open(path, "r", encoding="utf-8") as fh:
                 for line in fh:
                     line = line.strip()
@@ -854,12 +875,21 @@ def activity_join_proof(rows: Iterable[Mapping[str, Any]],
     whose token we never polled is honestly reported as unjoined rather
     than silently dropped.
     """
+    #: SINGLE PASS. This used to iterate `rows` twice, which a streaming
+    #: reader cannot do -- the second loop would see an exhausted iterator
+    #: and report ZERO activity rows, silently. Activity rows are held back
+    #: and resolved at the end, so a row that arrives before the book row
+    #: for its token still joins, exactly as the two-pass version did.
     book_tokens: Dict[str, str] = {}
+    pending: List[Mapping[str, Any]] = []
     for r in rows:
         if r.get("kind") == "book" or r.get("feed") == "clob_rest_book":
             tok = r.get("token")
             if isinstance(tok, str) and tok:
                 book_tokens[tok] = str(r.get("market") or "")
+        elif r.get("kind") == "l5_activity":
+            pending.append(r)
+    rows = pending
     joined: List[dict] = []
     unjoined = 0
     total = 0
@@ -990,7 +1020,7 @@ class BookShadowCollector:
         chain of restarts still yields ONE interval, not several.
         """
         since: Optional[float] = None
-        for row in self.tape.read_all():
+        for row in self.tape.stream():
             if row.get("kind") != "activity_availability":
                 continue
             if row.get("edge") == "CLOSE":
@@ -1181,13 +1211,13 @@ class BookShadowCollector:
                              else round(self.http.observed_rpm(), 1)),
             "requests_issued": self.http.requests,
             "activity_windows": activity_windows(
-                self.tape.read_all())["intervals"],
+                self.tape.stream())["intervals"],
             #: Proof item: a real L5 activity row joined to a book we
             #: actually recorded. Surfaced in the log because a proof that
             #: only exists on an unreadable volume proves nothing.
             "activity_join": {
                 k: v for k, v in
-                activity_join_proof(self.tape.read_all()).items()
+                activity_join_proof(self.tape.stream()).items()
                 if k in ("activity_rows", "joined_any",
                          "activity_rows_without_a_recorded_book")},
             "credentials_present": credential_presence(),
@@ -1209,15 +1239,15 @@ class BookShadowCollector:
     def write_coverage_view(self) -> Path:
         """A DERIVED view, in its own file, computed from the raw tape. The
         raw parts are never touched."""
-        rows = self.tape.read_all()
+        #: each view gets its OWN stream: one pass each, never a list
         #: Two derived views, both computed FROM the raw tape, both in
         #: their own file. Nothing in raw/ is read for anything but reading.
         self.tape.write_derived("activity_join_proof.json",
-                                activity_join_proof(rows))
+                                activity_join_proof(self.tape.stream()))
         self.tape.write_derived("activity_windows.json",
-                                activity_windows(rows))
+                                activity_windows(self.tape.stream()))
         return self.tape.write_derived(
-            "token_coverage.json", verify_both_tokens(rows))
+            "token_coverage.json", verify_both_tokens(self.tape.stream()))
 
     # -- run ------------------------------------------------------------
     def run(self, minutes: float = 0.0,
