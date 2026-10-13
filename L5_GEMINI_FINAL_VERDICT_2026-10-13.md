@@ -123,3 +123,33 @@ Three transferable lessons, which I will apply there from the start rather than 
 ## Handoff to the L5 replication session (informational only; no change requested)
 
 Gemini has accessible official settlement evidence (`resolutionSide`, `settlementValue`, `resolvedAt`; ticker mapping `GEMI-<EVENT>-UP` → `<EVENT>`). Its apparent maker profitability is **highly concentrated and does not survive removing one market**, and **buy-side adverse selection is now observed in three independent datasets** (Polymarket residual ~−12¢/share; Gemini buy-only median −20.00¢; the withdrawn round-2 proxy, same sign). Gemini prediction markets are buy-the-outcome with explicit `outcome ∈ {UP, DOWN}` and separate per-outcome inventories — relevant if replication ever models a short leg. No execution change is requested.
+
+---
+
+# AMENDMENT (round-6 review accepted) — verdict reclassified
+
+The decision to stop is unchanged. Three claims above were overstated and are corrected here; where they conflict with the text above, **this amendment governs**.
+
+## Reclassification
+
+**`STOP FOR RESOURCE ALLOCATION`** — executable profitability not demonstrated, insufficient reliable capacity evidence, and other markets now have higher research priority. **Not** "proven unprofitable."
+
+## 1. "Capacity bounded at ≤ $0/day" — withdrawn
+
+A negative sample mean does not establish a bound. The cluster bootstrap 95% CI is **[−59.69¢, +49.11¢]**, which includes substantial positive expectancy; `P(true mean ≤ 0) = 52.1%` is a coin flip, not a ceiling.
+
+Worse, the arithmetic I used was invalid in a second way: **daily profitability cannot be obtained by scaling a sample mean by an assumed fill rate**, because proxy fills are *adversely selected* rather than randomly drawn — we are filled precisely when someone wanted to trade through our level. Multiplying a mean built from such fills by a fill rate compounds that selection. The correct statement is that **no capacity figure, positive or negative, is supportable from this sample.**
+
+## 2. "SELL is not executable" → **unverified, not disproven**
+
+What is established: the schema is `{side, outcome}` with `outcome ∈ {UP, DOWN}`, inventories are tracked per outcome, the live canary used `SIDE_BUY`, and all 2,692 harvested symbols were `-UP`.
+
+What is **not** established: that a realistically resting **BUY of DOWN** could not capture equivalent economics. The native schema supports it; we simply never observed the DOWN book and never checked venue permission. The complement path remains **open and untested**, not closed.
+
+## 3. Adverse-selection evidence: **two observations, not three**
+
+The round-2 markout was withdrawn as biased (its settlement proxy was a mid-window price). An invalidated measurement cannot serve as corroboration. The defensible count is **two**: the Polymarket unpaired-residual decomposition (~−12¢/share, itself an accounting attribution) and the Gemini buy-only median (−20.00¢). Both are suggestive; neither is decision-grade.
+
+## Preservation
+
+Collector, settlement records (201 resolved event tickers), the ticker mapping, and the frozen estimator `a163c201` are preserved as independently useful. **No further Gemini engineering unless materially new evidence changes the economics** — specifically: verified DOWN-side executability, or a materially larger settled sample.
