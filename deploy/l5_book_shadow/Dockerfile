@@ -19,6 +19,20 @@ WORKDIR /app
 
 COPY src/l5_book_shadow.py src/l5_book_shadow.py
 COPY scripts/l5_book_shadow_run.py scripts/l5_book_shadow_run.py
+
+# The maker-engine LIVE SHADOW. Read-only, like everything else here: it makes
+# no network request, holds no credential, and tails the tape this collector
+# has already written. Its own boot gate refuses to start if any order-capable
+# module turns out to be importable in this image, which is the same rule the
+# comment above states for the collector.
+#
+# These three modules are the WHOLE dependency set, and none of them imports
+# numpy -- this image is python:3.11-slim with no pip install, and `fee_safe`
+# was moved into l5_maker_engine precisely so that stays true.
+COPY src/l5_maker_shadow_runner.py src/l5_maker_shadow_runner.py
+COPY src/l5_maker_engine.py        src/l5_maker_engine.py
+COPY src/l5_behavior_state.py      src/l5_behavior_state.py
+COPY deploy/l5_book_shadow/start.sh deploy/l5_book_shadow/start.sh
 RUN touch src/__init__.py scripts/__init__.py
 
 ENV PYTHONUNBUFFERED=1
