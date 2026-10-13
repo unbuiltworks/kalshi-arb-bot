@@ -52,6 +52,7 @@ from decimal import ROUND_FLOOR, Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_fees as fees
+from src import l5_phantom_inventory_guard as _PG
 from src import l5_faithful_translation as FT
 
 #: the pipeline, in order. A record names the furthest stage it reached.
@@ -1485,9 +1486,104 @@ class InventoryStore:
             self.save()
         return {"moved": moved, "unmapped": sorted(unmapped)}
 
+    #: Reservation-style fields that must read zero wherever they appear --
+    #: inside a `reservations` mapping or at the anchor's top level. BOTH
+    #: spellings are listed because both are in use: the production anchor in
+    #: ACCOUNTING_REBASES says `unsettled_funds`, the recovery service's
+    #: balances row says `unsettledFunds`.
+    FLAT_ANCHOR_RESERVATIONS = (
+        "balanceReservation", "balance_reservation",
+        "depositReservation", "deposit_reservation",
+        "bonusHold", "bonus_hold",
+        "marginRequirement", "margin_requirement",
+        "unsettledFunds", "unsettled_funds",
+        "openOrders",
+    )
+
+    @staticmethod
+    def _anchor_is_empty(v: Any) -> bool:
+        """Does this field positively say "nothing"?
+
+        Both shapes are in use and both are accepted: the production anchor
+        writes `open_orders: 0` as a COUNT, the recovery service's read gives
+        `open_orders: []` as the list itself. A value we cannot read as
+        "nothing" is not nothing.
+        """
+        if v is None:
+            return False
+        if isinstance(v, (list, tuple, dict, set, str)):
+            return len(v) == 0
+        try:
+            return D(str(v)) == 0
+        except (InvalidOperation, TypeError, ValueError):
+            return False
+
+    @classmethod
+    def flat_anchor_refusal(cls, anchor: Mapping[str, Any]) -> Optional[str]:
+        """Why this anchor may NOT be used to wipe the book, or None.
+
+        WHY THIS EXISTS. `adopt_flat_account` deletes positions, leg_cost,
+        fill_count, committed and live_orders outright and posts no P&L. Its
+        own docstring says "using it when the account is NOT flat would
+        silently delete live exposure, so the anchor must say so" -- and
+        nothing enforced that. The anchor was recorded verbatim and otherwise
+        trusted. The more destructive of the two sanctioned exits was the
+        less guarded one: `repair_orphaned_market_key` has always refused
+        without stated evidence.
+
+        WHAT IT CHECKS, AND WHAT IT DELIBERATELY DOES NOT. It checks the two
+        fields that ARE the exposure -- open orders and positions -- plus a
+        timestamp, plus that every reservation it can read is zero. A first
+        version demanded one exact spelling of each field and REFUSED the
+        anchor this codebase actually ships in ACCOUNTING_REBASES, breaking
+        three existing tests. Those tests were right: the job is to validate
+        FLATNESS, not a field spelling. So both spellings are accepted and
+        the check is on substance.
+
+        It FAILS CLOSED on substance: a field absent, unreadable, or
+        non-zero refuses. A false refusal costs a message; a false
+        acceptance deletes live exposure.
+        """
+        if not isinstance(anchor, Mapping):
+            return "anchor is not a mapping"
+        when = anchor.get("as_of_utc") or anchor.get("utc")
+        if not str(when or "").strip():
+            return ("anchor carries no as_of_utc/utc: an undated read cannot "
+                    "speak to the account's state now")
+        for field in ("open_orders", "positions"):
+            if field not in anchor:
+                return "anchor does not report %s" % field
+            if not cls._anchor_is_empty(anchor.get(field)):
+                return ("anchor reports %s=%r, which is not flat"
+                        % (field, anchor.get(field)))
+        # every reservation we can see, wherever it is written
+        seen = 0
+        pools = [anchor]
+        res = anchor.get("reservations")
+        if isinstance(res, Mapping):
+            pools.append(res)
+        bal = anchor.get("balances")
+        if isinstance(bal, Mapping):
+            pools.append(bal)
+        for pool in pools:
+            for name in cls.FLAT_ANCHOR_RESERVATIONS:
+                if name not in pool:
+                    continue
+                seen += 1
+                if not cls._anchor_is_empty(pool[name]):
+                    return ("reservation %r is %r, which is not flat"
+                            % (name, pool[name]))
+        if seen == 0:
+            return ("anchor attests no reservation at all; at least one "
+                    "(e.g. unsettled_funds) must be stated zero")
+        return None
+
     def adopt_flat_account(self, *, anchor: Mapping[str, Any], reason: str
                            ) -> Dict[str, Any]:
         """Close every market in the book against an authoritative FLAT read.
+
+        REFUSES unless `anchor` positively attests a flat account; see
+        `flat_anchor_refusal`.
 
         NO P&L IS POSTED. This is not a settlement -- it is the statement
         that the venue holds nothing, owes nothing and has nothing
@@ -1501,6 +1597,11 @@ class InventoryStore:
         markets looking open, and the next sweep would settle them a second
         time on top of a rebase that has already accounted for them.
         """
+        refusal = self.flat_anchor_refusal(anchor)
+        if refusal:
+            raise ValueError("refusing to adopt a flat account: " + refusal)
+        if not str(reason or "").strip():
+            raise ValueError("adopt_flat_account requires a stated reason")
         closed = sorted(self.markets_with_exposure())
         for name in ("positions", "leg_cost", "fill_count",
                      "venue_side_raw"):
@@ -1978,7 +2079,8 @@ class InventoryStore:
         }
 
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
-                             open_orders: Sequence[Mapping[str, Any]]
+                             open_orders: Sequence[Mapping[str, Any]],
+                             *, venue_flat_attested: bool = False
                              ) -> Dict[str, Any]:
         """The venue overwrites us. Divergence is REPORTED, never averaged.
 
@@ -1989,9 +2091,13 @@ class InventoryStore:
         """
         before = dict(self.state["positions"])
         after: Dict[str, str] = {}
+        venue_rows_by_key: Dict[str, Any] = {}
         for p in positions:
             row = position_row(p)          # raises UnrecognizedVenueShape
             after["%s|%s" % (row["market"], row["side"])] = row["qty"]
+            # provenance for the guard: the row that produced this key, so a
+            # refusal or a drop can name its cause from the state file alone
+            venue_rows_by_key["%s|%s" % (row["market"], row["side"])] = dict(p)
         drift = {k: {"ours": before.get(k, "0"), "venue": after.get(k, "0")}
                  for k in set(before) | set(after)
                  if str(before.get(k, "0")) != str(after.get(k, "0"))}
@@ -2036,12 +2142,65 @@ class InventoryStore:
             m = k.rsplit("|", 1)[0]
             if m in agrees:
                 continue
-            # a market the venue holds and we have never booked: record the
-            # quantity so risk can see the shares, and mark it uncertain
-            # because we have NO cost basis for them at all.
+            # a market the venue holds and we have never booked.
+            #
+            # PHANTOM GUARD, invariant 1 (l5_phantom_inventory_guard). This
+            # branch wrote the 0.1300 DOWN phantom in
+            # cpc-btc-updown-15m-2026-10-10-1345z: the venue's own record for
+            # order D0VC6VJDMZ7J says cumQuantity 0 and avgPx 0.0000, so
+            # nothing of ours ever filled there, and the quantity still
+            # landed in `positions` on the OPPOSITE side with no cost basis.
+            #
+            # THE WRITE STAYS. I first made it refuse, and four existing
+            # tests failed -- test_reconcile_books_the_venue_position_under_
+            # our_own_key among them. They are right: a position the venue
+            # reports must stay VISIBLE TO RISK even when we cannot cost it,
+            # or a refusal hides live exposure, which is a worse failure than
+            # an incoherent book. What was actually missing is recorded here
+            # and in invariant 3 below: the row that CAUSED the write (only
+            # the resulting drift was logged, so the cause was
+            # unreconstructable), and a terminal transition for it.
+            fc = int((self.state.get("fill_count") or {}).get(k, 0) or 0)
+            if fc == 0 and k not in (self.state.get("leg_cost") or {}):
+                self.state.setdefault("cost_less_adoptions", []).append(
+                    dict(_PG.adoption_provenance(m, k.rsplit("|", 1)[-1], v,
+                                                 venue_rows_by_key.get(k, {})),
+                         fill_count=fc,
+                         t=dt.datetime.now(dt.timezone.utc).isoformat()))
             self.state["positions"][k] = v
             if k not in (self.state.get("leg_cost") or {}):
                 disputed.append(m)
+        # PHANTOM GUARD, invariant 3. A cost-less quantity with no booked
+        # fill had NO terminal transition: venue silence is correctly not
+        # treated as divergence, so the sweep below never reached it and the
+        # book stayed incoherent forever -- which is what kept 1345z failing
+        # every settlement and every submission closed.
+        #
+        # THE ATTESTATION IS THE WHOLE SAFETY PROPERTY. An earlier attempt
+        # inferred "flat" from an empty `after`, and three existing tests
+        # failed -- test_reconciliation_survives_the_populated_mapping and
+        # the positions_reconciled preflight gate among them. They are
+        # right: an empty response covers an authoritative flat account AND
+        # an unparseable or partial one, and deleting the book on the second
+        # turns a reconciliation defect into a silent loss of live exposure.
+        # So the caller must ATTEST that it just completed a fresh,
+        # authoritative, complete read; the default is False and every
+        # existing caller therefore behaves exactly as before.
+        if venue_flat_attested and not after:
+            for k in list(self.state["positions"]):
+                fc = int((self.state.get("fill_count") or {}).get(k, 0) or 0)
+                lc = (self.state.get("leg_cost") or {}).get(k, 0)
+                if _PG.may_drop_cost_less(qty=self.state["positions"][k],
+                                          fill_count=fc, leg_cost=lc,
+                                          venue_flat=True):
+                    rec = _PG.drop_record(
+                        k.rsplit("|", 1)[0], k.rsplit("|", 1)[-1],
+                        self.state["positions"].pop(k),
+                        {"venue_flat_attested": True,
+                         "positions_rows": 0,
+                         "open_orders_rows": len(open_orders or ())})
+                    rec["t"] = dt.datetime.now(dt.timezone.utc).isoformat()
+                    self.state.setdefault("cost_less_drops", []).append(rec)
         for k in list(self.state["positions"]):
             m = k.rsplit("|", 1)[0]
             if m not in agrees and k not in after:

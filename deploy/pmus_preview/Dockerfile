@@ -18,6 +18,12 @@ COPY src/pmus_fees.py src/pmus_fees.py
 COPY src/l5_preview_session.py src/l5_preview_session.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_probe_manifest.py src/l5_probe_manifest.py
+# l5_phantom_inventory_guard: the provenance/refusal helpers that
+# InventoryStore.reconcile_from_venue now imports at module scope. Without
+# this line the image cannot import its own execution path and the service
+# never starts -- tests/test_l5_live_probe_image_closure.py is the guard
+# that says so, and it caught exactly this.
+COPY src/l5_phantom_inventory_guard.py src/l5_phantom_inventory_guard.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
 # the frozen engine, needed only because the probe envelope imports through
 # it. Pure decision code: no transport, no endpoint, no credential.
