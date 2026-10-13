@@ -193,6 +193,13 @@ class MarketShadow:
         self.n_fills = 0
         self.l5_fills = 0
         self.last_seen = 0.0
+        #: L5's OWN book in this market, built from his prints, so the
+        #: window summary can put his acquisition beside ours on the same
+        #: convention (each side's own basis, summed) rather than comparing
+        #: our pair cost against an average of his.
+        self.l5_st = L5State()
+        self.first_seen = 0.0
+        self.summarised = False
 
 
 def fee_maker(price: float, qty: float) -> float:
@@ -224,6 +231,10 @@ def run(root: Path, out_dir: Path, *, cfg: Dict[str, Any],
     cycles = 0
     rows_seen = 0
     evicted = 0
+    retired: Dict[str, float] = {
+        "orders_intended": 0.0, "cancels_intended": 0.0,
+        "modelled_fills_written": 0.0, "l5_fills_observed": 0.0,
+        "price_eligible": 0.0, "queue_possible": 0.0, "modelled_fill": 0.0}
     max_markets = int(cfg.get("max_markets", DEFAULT_MAX_MARKETS))
     max_rss = float(cfg.get("max_rss_mb", DEFAULT_MAX_RSS_MB))
     hb_every = float(cfg.get("heartbeat_s", DEFAULT_HEARTBEAT_S))
@@ -233,13 +244,27 @@ def run(root: Path, out_dir: Path, *, cfg: Dict[str, Any],
         for row in tailer.poll():
             rows_seen += 1
             _absorb(row, shadows, cfg, out_dir, emit, now())
-        evicted += _evict(shadows, max_markets)
+        # retire markets that have gone quiet, so a completed window is
+        # summarised when it ENDS rather than whenever LRU pressure arrives
+        quiet = float(cfg.get("retire_idle_s", 180.0))
+        tnow = now()
+        for slug in [k for k, v in shadows.items()
+                     if v.last_seen and (tnow - v.last_seen) > quiet]:
+            sh = shadows.pop(slug)
+            _retire(sh, out_dir, emit)
+            retired["orders_intended"] += sh.eng.places
+            retired["cancels_intended"] += sh.eng.cancels
+            retired["modelled_fills_written"] += sh.n_fills
+            retired["l5_fills_observed"] += sh.l5_fills
+            for k in ("price_eligible", "queue_possible", "modelled_fill"):
+                retired[k] += sh.tiers[k]
+        evicted += _evict(shadows, max_markets, retired, out_dir, emit)
         # the collector must never die because we grew. Exiting lets the
         # supervising loop restart us clean; it cannot touch collection.
         rss = rss_mb()
         if max_rss > 0 and rss > max_rss:
             _heartbeat(shadows, cycles, rows_seen, out_dir, emit, now,
-                       cfg.get("gate"), evicted, rss)
+                       cfg.get("gate"), evicted, rss, retired)
             emit("MAKER_SHADOW_EXIT_RSS " + json.dumps(
                 {"rss_mb": round(rss, 1), "limit_mb": max_rss,
                  "why": "exiting so the supervisor restarts us clean; "
@@ -248,21 +273,42 @@ def run(root: Path, out_dir: Path, *, cfg: Dict[str, Any],
         t = now()
         if once or (t - last_hb) >= hb_every:
             _heartbeat(shadows, cycles, rows_seen, out_dir, emit, now,
-                       cfg.get("gate"), evicted, rss)
+                       cfg.get("gate"), evicted, rss, retired)
             last_hb = t
         if once:
             return 0
         time.sleep(float(cfg.get("poll_s", 2.0)))
 
 
-def _evict(shadows: Dict[str, "MarketShadow"], cap: int) -> int:
-    """Drop the least recently seen markets once over the cap."""
+def _evict(shadows: Dict[str, "MarketShadow"], cap: int,
+           retired: Optional[Dict[str, float]] = None,
+           out_dir_: Optional[Path] = None, emit_fn=None) -> int:
+    """Drop the least recently seen markets once over the cap.
+
+    An evicted market's counters are ROLLED UP into `retired` first. Without
+    that the heartbeat's totals -- which sum over live markets -- go DOWN when
+    a market is evicted, and a counter that can decrease is worse than no
+    counter: a reader would see activity apparently undone. Observed in
+    production at 21:06Z, orders_intended 1234 -> 1232 while markets_evicted
+    rose 2029 -> 2032. The durable JSONL on the volume was never affected --
+    it is append-only and every intent and modelled fill is in it -- so this
+    was a telemetry defect, not data loss.
+    """
     if len(shadows) <= cap:
         return 0
     order = sorted(shadows.items(), key=lambda kv: kv[1].last_seen)
     drop = len(shadows) - cap
     for slug, _ in order[:drop]:
-        shadows.pop(slug, None)
+        sh = shadows.pop(slug, None)
+        if sh is not None and emit_fn is not None:
+            _retire(sh, out_dir_, emit_fn)
+        if sh is not None and retired is not None:
+            retired["orders_intended"] += sh.eng.places
+            retired["cancels_intended"] += sh.eng.cancels
+            retired["modelled_fills_written"] += sh.n_fills
+            retired["l5_fills_observed"] += sh.l5_fills
+            for k in ("price_eligible", "queue_possible", "modelled_fill"):
+                retired[k] += sh.tiers[k]
     return drop
 
 
@@ -295,6 +341,8 @@ def _absorb(row, shadows, cfg, out_dir, emit, seen_at=0.0) -> None:
             size_skew=float(cfg.get("size_skew", 1.1413)),
             reprice_ticks=float(cfg.get("reprice_ticks", 1.0)),
             queue_participation=float(cfg.get("queue", 0.5))))
+    if not sh.first_seen:
+        sh.first_seen = seen_at
     sh.last_seen = seen_at
     if kind == "book":
         book = row.get("book")
@@ -342,6 +390,7 @@ def _on_print(sh: MarketShadow, raw, side, recv, out_dir, emit) -> None:
     size, price = _num(raw.get("size")) or 0.0, _num(raw.get("price")) or 0.0
     if size <= 0 or not (0.0 < price < 1.0):
         return
+    sh.l5_st.apply([{"side": side, "qty": size, "price": price}], sh.bin)
     before = sh.eng.booked_qty
     fills = sh.eng.match(sh.bin, {side: (size, price)})
     sh.bin += 1
@@ -368,6 +417,54 @@ def _on_print(sh: MarketShadow, raw, side, recv, out_dir, emit) -> None:
         pass
 
 
+def window_summary(sh: "MarketShadow") -> Dict[str, Any]:
+    """L5's acquisition in this market beside ours, same convention.
+
+    Combined pair cost is each side's OWN volume-weighted basis, summed --
+    the convention analysis/l5/sequential_pair_economics.json uses for his
+    165-day tape, so the two numbers are directly comparable. `null` where a
+    side was never acquired, because a one-sided book has no pair cost and
+    reporting 0 there would read as free.
+    """
+    def book(st):
+        bu, bd = st.basis(UP), st.basis(DOWN)
+        return {
+            "qty_up": round(st.qty[UP], 4), "qty_down": round(st.qty[DOWN], 4),
+            "basis_up": round(bu, 5) if bu is not None else None,
+            "basis_down": round(bd, 5) if bd is not None else None,
+            "pair_cost": round(bu + bd, 5)
+            if (bu is not None and bd is not None) else None,
+            "matched": round(st.matched, 4),
+            "residual": round(st.residual, 4),
+            "cost_total": round(st.cost_total, 4),
+        }
+    l5, ours = book(sh.l5_st), book(sh.st)
+    return {
+        "schema": SCHEMA, "slug": sh.slug,
+        "secs_observed": round(sh.last_seen - sh.first_seen, 1),
+        "L5": dict(l5, fills=sh.l5_fills),
+        "OURS": dict(ours, orders_intended=sh.eng.places,
+                     cancels_intended=sh.eng.cancels,
+                     modelled_fills=sh.n_fills),
+        "TIERS_contracts": {k: round(v, 3) for k, v in sh.tiers.items()},
+        "pair_cost_gap": (round(ours["pair_cost"] - l5["pair_cost"], 5)
+                          if (ours["pair_cost"] is not None
+                              and l5["pair_cost"] is not None) else None),
+        "LABEL": "MODELLED -- our side is intents and modelled fills, "
+                 "never executions",
+    }
+
+
+def _retire(sh: "MarketShadow", out_dir: Path, emit) -> None:
+    """Emit one market's comparison, once, when it stops producing rows."""
+    if sh.summarised:
+        return
+    sh.summarised = True
+    rec = window_summary(sh)
+    _write(out_dir, "window_summaries", rec)
+    emit("MAKER_SHADOW_WINDOW " + json.dumps(rec, sort_keys=True))
+
+
 def _write(out_dir: Path, stream: str, obj) -> None:
     d = out_dir / stream
     d.mkdir(parents=True, exist_ok=True)
@@ -377,8 +474,10 @@ def _write(out_dir: Path, stream: str, obj) -> None:
 
 
 def _heartbeat(shadows, cycles, rows_seen, out_dir, emit, now,
-               cfg_gate=None, evicted=0, rss=0.0) -> None:
-    tot = {"price_eligible": 0.0, "queue_possible": 0.0, "modelled_fill": 0.0}
+               cfg_gate=None, evicted=0, rss=0.0, retired=None) -> None:
+    retired = retired or {}
+    tot = {k: float(retired.get(k, 0.0))
+           for k in ("price_eligible", "queue_possible", "modelled_fill")}
     for sh in shadows.values():
         for k in tot:
             tot[k] += sh.tiers[k]
@@ -387,13 +486,18 @@ def _heartbeat(shadows, cycles, rows_seen, out_dir, emit, now,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now())),
         "cycles": cycles, "tape_rows_consumed": rows_seen,
         "markets_tracked": len(shadows),
-        "l5_fills_observed": sum(s.l5_fills for s in shadows.values()),
+        "l5_fills_observed": int(retired.get("l5_fills_observed", 0)
+                                 + sum(s.l5_fills for s in shadows.values())),
         "EXECUTION_TIERS_contracts": {k: round(v, 3) for k, v in tot.items()},
-        "orders_intended": sum(s.eng.places for s in shadows.values()),
-        "modelled_fills_written": sum(s.n_fills for s in shadows.values()),
+        "orders_intended": int(retired.get("orders_intended", 0)
+                               + sum(s.eng.places for s in shadows.values())),
+        "modelled_fills_written": int(
+            retired.get("modelled_fills_written", 0)
+            + sum(s.n_fills for s in shadows.values())),
         "markets_evicted": evicted,
         "rss_mb": round(rss, 1),
-        "cancels_intended": sum(s.eng.cancels for s in shadows.values()),
+        "cancels_intended": int(retired.get("cancels_intended", 0)
+                                + sum(s.eng.cancels for s in shadows.values())),
         "network_requests_issued": 0,
         "orders_submitted": 0,
         "LABEL": "SHADOW_ONLY -- modelled fills are not executions",
@@ -424,6 +528,8 @@ def main(argv=None) -> int:
         "heartbeat_s": float(os.environ.get(ENV_HB, DEFAULT_HEARTBEAT_S)),
         "max_markets": int(os.environ.get(ENV_MAXMK, DEFAULT_MAX_MARKETS)),
         "max_rss_mb": float(os.environ.get(ENV_MAXRSS, DEFAULT_MAX_RSS_MB)),
+        "retire_idle_s": float(os.environ.get(
+            "MAKER_SHADOW_RETIRE_IDLE_S", "180")),
     }
     return run(root, out, cfg=cfg, once=a.once,
                gate_advisory=a.gate_advisory)
