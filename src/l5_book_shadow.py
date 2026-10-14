@@ -692,6 +692,13 @@ class PolymarketVenue:
         # overlap test is what makes it terminate early anyway.
         if not known:
             pages = 1
+            # ...and the OLD page size too. Bounding pages alone was not
+            # enough: raising the default limit to 500 made a cold start
+            # re-emit 489 already-seen rows onto the append-only tape at
+            # 00:08:35Z, and the shadow applied L5's inventory for all of
+            # them. Observed in production on deployment 588b6e48. A restart
+            # must cost exactly what it cost before this change.
+            limit = min(int(limit), 100)
         pages = max(1, min(int(pages), self.MAX_ACTIVITY_PAGES))
         out: List[dict] = []
         for page in range(pages):

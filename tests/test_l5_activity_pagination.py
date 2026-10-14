@@ -51,7 +51,10 @@ def test_a_cold_start_takes_ONE_page_exactly_as_before_this_change():
         v, f = venue(100000)
         rows = v.l5_activity(limit=500, pages=4, known=known)
         assert len(f.calls) == 1
-        assert len(rows) == 500
+        # one page AND the old page size: bounding pages alone still let a
+        # cold start re-emit 489 rows in production (deployment 588b6e48)
+        assert f.calls[0]["limit"] == 100
+        assert len(rows) == 100
 
 
 def test_no_configuration_can_walk_the_whole_history():
@@ -146,7 +149,13 @@ def test_a_feed_that_always_overlaps_costs_exactly_one_request():
 def test_a_restart_with_an_empty_seen_set_still_terminates():
     v, f = venue(100000)
     rows = v.l5_activity(limit=500, pages=4, known=set())
-    assert len(f.calls) == 1 and len(rows) == 500
+    assert len(f.calls) == 1 and len(rows) == 100
+
+
+def test_a_warm_poll_keeps_the_large_page():
+    v, f = venue(100000)
+    v.l5_activity(limit=500, pages=4, known={"never-seen"})
+    assert all(c["limit"] == 500 for c in f.calls)
 
 
 def test_known_may_be_None_and_paging_still_terminates():
