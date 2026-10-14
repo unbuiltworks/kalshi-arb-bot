@@ -1382,7 +1382,19 @@ class InventoryStore:
         at_zero = -up_c + (dn_q - dn_c)
         at_one = (up_q - up_c) - dn_c
         worst = max(-at_zero, -at_one)
-        return worst if worst > 0 else D(0)
+        worst = worst if worst > 0 else D(0)
+        # NEVER BELOW THE FLOOR. Where the venue's position was adopted over
+        # ours, adopt_venue_position pinned the worse of the two worst cases.
+        # The computed number is still used when it is LARGER -- the floor is
+        # a lower bound on the bound, never a replacement for it, so a
+        # proposed `extra_*` leg still makes this grow as it should.
+        floor = (self.state.get("risk_floor_usd") or {}).get(market)
+        if floor is not None:
+            try:
+                worst = max(worst, D(str(floor)))
+            except (TypeError, ValueError, ArithmeticError):
+                pass
+        return worst
 
     def applied_fill_qty(self, coid: str) -> D:
         """How much of this order we have already booked. Idempotency key."""
@@ -1977,6 +1989,93 @@ class InventoryStore:
                        "settlement_pnl."),
         }
 
+    def adopt_venue_position(self, market: str,
+                             rows: Mapping[str, Any], *, why: str) -> None:
+        """Make the VENUE's rows the position of record for one market.
+
+        WHY THIS EXISTS. `reconcile_from_venue`'s own contract said "where
+        they disagree the venue's net becomes the position of record", and it
+        did not do that: it named the market in `gross_detail_lost` and left
+        our book alone. Measured 2026-10-14: our book 7.00 UP against a venue
+        row of 10.34 UP left `positions` reading 7.00, and `positions` is what
+        `risk_exposure_usd` -- and therefore the $5 gate -- reads. We were
+        understating venue-confirmed exposure by 3.34 shares, in the one
+        direction that lets the gate under-bind.
+
+        THREE THINGS HAPPEN HERE, and the order matters.
+
+        1. THE PRIOR DETAIL IS QUARANTINED, NOT DELETED. A matched pair is a
+           locked economic result, so the gross book and its cost basis are
+           moved to `gross_quarantine` verbatim before anything is replaced.
+           Nothing is lost; it stops being the position of record.
+
+        2. THE UNKNOWN COST BASIS IS BOOKED AT ITS UPPER BOUND. We cannot
+           decompose a net into a gross book and we do not try. But leaving
+           the basis absent makes the book INCOHERENT -- `QUANTITY_WITHOUT_COST`
+           -- and `risk_exposure_usd` then RAISES instead of returning a
+           number, which is fail-closed for new orders and useless for the
+           risk-reducing actions that must stay available. So the basis is
+           recorded at UNKNOWN_PRICE_WORST_CASE, $1 a share: the most a share
+           can cost and the most it can lose. That is the conservative bound
+           the module already uses for an unreadable order price, not an
+           invented favourable detail, and the keys are listed in
+           `leg_cost_basis_unknown` so no later reader mistakes it for an
+           observed cost.
+
+        3. A RISK FLOOR IS RECORDED. The swap must never be able to REDUCE
+           measured exposure, including when the venue's net is smaller than
+           our gross -- a net of 2.81 is consistent with 2.47 UP + 5.28 DOWN,
+           and the pair's own legs can lose more than the net suggests. So
+           the worse of the two worst cases is pinned as a floor and
+           `risk_exposure_usd` never returns less than it while the market
+           is uncertain.
+
+        The market stays named to the caller so it is marked uncertain, which
+        is what refuses new exposure. Cancellation and risk-reducing paths are
+        untouched: they do not go through the submission gate.
+        """
+        market = canonical_market(market, doing="adopting a venue position")
+        prior_risk: Optional[D] = None
+        try:
+            prior_risk = self.risk_exposure_usd(market)
+        except BaseException:                                  # noqa: BLE001
+            prior_risk = None          # an incoherent prior book bounds nothing
+        pos = self.state.setdefault("positions", {})
+        lc = self.state.setdefault("leg_cost", {})
+        quarantine = self.state.setdefault("gross_quarantine", {})
+        keys = [k for k in pos if k.rsplit("|", 1)[0] == market]
+        quarantine[market] = {
+            "why": str(why),
+            "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "positions": {k: str(pos.get(k)) for k in keys},
+            "leg_cost": {k: str(lc.get(k)) for k in keys if k in lc},
+            "fill_count": {k: self.fill_count(market, k.rsplit("|", 1)[1])
+                           for k in keys},
+            "note": ("the gross book that was the position of record before "
+                     "the venue contradicted it. Preserved verbatim: a "
+                     "matched pair is a locked economic result and deleting "
+                     "it silently deletes that result."),
+        }
+        for k in keys:
+            pos.pop(k, None)
+            lc.pop(k, None)
+        unknown = self.state.setdefault("leg_cost_basis_unknown", [])
+        for k, v in rows.items():
+            if k.rsplit("|", 1)[0] != market:
+                continue
+            pos[k] = str(v)
+            lc[k] = str(D(str(v)) * UNKNOWN_PRICE_WORST_CASE)
+            if k not in unknown:
+                unknown.append(k)
+        new_risk: Optional[D] = None
+        try:
+            new_risk = self.risk_exposure_usd(market)
+        except BaseException:                                  # noqa: BLE001
+            new_risk = None
+        floor = max([r for r in (prior_risk, new_risk) if r is not None]
+                    or [D(0)])
+        self.state.setdefault("risk_floor_usd", {})[market] = str(floor)
+
     def reconcile_from_venue(self, positions: Sequence[Mapping[str, Any]],
                              open_orders: Sequence[Mapping[str, Any]]
                              ) -> Dict[str, Any]:
@@ -2032,15 +2131,23 @@ class InventoryStore:
         # settled window.
         disputed = sorted(m for m, ok in agrees.items()
                           if not ok and m in net)
+        # THE VENUE'S ROWS BECOME THE POSITION OF RECORD. This is the line the
+        # docstring always promised and did not do; see adopt_venue_position
+        # for what is preserved and what is bounded.
+        for m in list(disputed):
+            self.adopt_venue_position(
+                m, after, why="venue net contradicts our gross")
         for k, v in after.items():
             m = k.rsplit("|", 1)[0]
             if m in agrees:
                 continue
-            # a market the venue holds and we have never booked: record the
-            # quantity so risk can see the shares, and mark it uncertain
-            # because we have NO cost basis for them at all.
-            self.state["positions"][k] = v
-            if k not in (self.state.get("leg_cost") or {}):
+            # a market the venue holds and we have never booked: adopt it the
+            # same way, so risk sees the shares AND can price them, rather
+            # than holding a quantity whose missing basis makes the book
+            # incoherent and risk pricing raise.
+            if m not in disputed:
+                self.adopt_venue_position(
+                    m, after, why="venue holds a market we never booked")
                 disputed.append(m)
         for k in list(self.state["positions"]):
             m = k.rsplit("|", 1)[0]
@@ -2205,6 +2312,13 @@ class InventoryStore:
                 incoherent[m] = bad
         pending = sorted(self.state.get("pending_terminal") or {})
         quarantine = sorted(self.state.get("quarantine") or {})
+        # A FLOOR OUTLIVES ONLY ITS UNCERTAINTY. Once a market is no longer
+        # disputed its own book is authoritative again, so a stale floor
+        # would over-bound it forever.
+        floors = self.state.setdefault("risk_floor_usd", {})
+        for m in list(floors):
+            if m not in disputed:
+                floors.pop(m, None)
         if disputed or incoherent or pending or quarantine:
             self.state["orders_uncertain"] = (
                 "gross/net divergence %s; incoherent book %s; "
@@ -2245,6 +2359,25 @@ class InventoryStore:
                     "is released instead; if it did fill, the shares arrive "
                     "without a cost basis and the book fails closed."),
                 "quarantined": quarantine,
+                "gross_quarantine": {
+                    m: d for m, d in
+                    (self.state.get("gross_quarantine") or {}).items()
+                    if m in disputed},
+                "risk_floor_usd": {
+                    m: v for m, v in
+                    (self.state.get("risk_floor_usd") or {}).items()},
+                "leg_cost_basis_unknown": list(
+                    self.state.get("leg_cost_basis_unknown") or []),
+                "ALERT": (
+                    "VENUE POSITION ADOPTED OVER OUR BOOK for %s. The gross "
+                    "detail and its cost basis are preserved in "
+                    "gross_quarantine; the adopted shares are priced at the "
+                    "$1 upper bound because their basis is unknown; a risk "
+                    "floor pins the worse of the two worst cases. NEW "
+                    "exposure is refused while this market is uncertain. "
+                    "Resolve by reading /v1/order for the fills that built "
+                    "the venue's number." % sorted(set(disputed))
+                ) if disputed else None,
                 "uncertainty_cleared": not (disputed or incoherent
                                             or pending or quarantine),
                 "authority": "VENUE"}

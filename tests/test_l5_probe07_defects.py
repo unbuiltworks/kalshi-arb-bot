@@ -116,35 +116,50 @@ def test_the_matched_pair_is_reported_not_merely_implied():
     assert g["net"] == "-2.81"
 
 
-def test_a_net_that_contradicts_our_gross_is_reported_and_fails_closed():
-    """SUPERSEDED CONTRACT, deliberately reversed on 2026-09-26.
+def test_a_net_that_contradicts_our_gross_takes_over_and_preserves_it():
+    """REVERSED AGAIN 2026-10-14 by owner authorization. The 2026-09-26
+    reasoning is kept because it names the real mechanism, and that mechanism
+    is now closed by construction rather than by declining to adopt.
 
-    This used to let the venue's net TAKE OVER: positions became {UP: 9} and
-    `leg_cost` was left holding the cost of both original legs. That is how
-    1815z came to settle 1.81 UP shares against $4.3425 -- $2.40 a share for
-    a contract paying at most $1 -- and post -4.3425 when the truth was
-    +1.3875.
+    WHAT WENT WRONG AT 1815z, in that test's own words: the venue's net took
+    over, "positions became {UP: 9} and `leg_cost` was left holding the cost
+    of BOTH original legs" -- so 1.81 UP shares settled against $4.3425,
+    $2.40 a share for a contract paying at most $1.
 
-    A single net cannot be decomposed into a gross book, and overwriting one
-    with it manufactures a cost basis for shares whose composition we cannot
-    see. So the divergence is NAMED and the book goes uncertain, which fails
-    every submission closed until it is resolved. Our gross is left as it
-    was -- not because it is trusted, but because inventing a replacement is
-    the error this test now guards.
+    It is the second half that caused the loss, not the first.
+    `adopt_venue_position` does not leave either leg's cost behind: both are
+    moved verbatim into `gross_quarantine`, and the adopted shares are booked
+    at the $1 ceiling and listed in `leg_cost_basis_unknown`. Nothing is
+    decomposed and no basis is invented.
+
+    What declining to adopt cost instead: `positions` is what
+    `risk_exposure_usd` and the $5 gate read, so our gross sat below the
+    venue's own record and the gate under-bound by the difference.
+
+    The divergence is still NAMED and the book still goes uncertain, which
+    fails every submission closed until it is resolved.
     """
     st = store()
     st.state["positions"] = {"%s|UP" % MARKET: "2.47",
                              "%s|DOWN" % MARKET: "5.28"}   # net -2.81
+    st.state["leg_cost"] = {"%s|UP" % MARKET: "1.00",
+                            "%s|DOWN" % MARKET: "2.00"}
     out = st.reconcile_from_venue(
         [{"marketSlug": MARKET, "qtyBoughtDecimal": "9",
           "qtySoldDecimal": "0", "netPositionDecimal": "9"}], [])
     assert out["gross_net_agrees"][MARKET] is False
     assert out["gross_detail_lost"] == [MARKET]
-    # our gross is NOT replaced by the venue's net
-    assert st.state["positions"] == {"%s|UP" % MARKET: "2.47",
-                                     "%s|DOWN" % MARKET: "5.28"}
+    assert st.state["positions"] == {"%s|UP" % MARKET: "9"}
+    # NEITHER leg's cost survives on the live book -- the 1815z mechanism
+    q = st.state["gross_quarantine"][MARKET]
+    assert q["positions"] == {"%s|UP" % MARKET: "2.47",
+                              "%s|DOWN" % MARKET: "5.28"}
+    assert q["leg_cost"] == {"%s|UP" % MARKET: "1.00",
+                             "%s|DOWN" % MARKET: "2.00"}
+    assert st.leg_cost(MARKET)["DOWN"] == D(0)
+    assert st.leg_cost(MARKET)["UP"] == D("9")      # the $1 ceiling, flagged
+    assert "%s|UP" % MARKET in st.state["leg_cost_basis_unknown"]
     assert st.orders_uncertain() is not None
-
 
 def test_a_flat_venue_against_a_matched_book_is_a_contradiction():
     """0/0 and 5/5 have the same net. They are not the same position, and a

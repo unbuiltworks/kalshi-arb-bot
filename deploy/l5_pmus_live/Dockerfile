@@ -49,6 +49,11 @@ COPY src/__init__.py src/__init__.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# The shared arming boundary. The runner now imports it at module scope, so
+# an image without it cannot boot -- the same incomplete-closure defect that
+# bit the preflight and live-probe images. test_the_image_copies_every_module
+# _the_entrypoint_can_reach caught this before it ever ran.
+COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py
 # Disarmed-shadow validation additions. This image COPYs an explicit file
 # list, so a module missing here is an ImportError at runtime, which would

@@ -117,17 +117,46 @@ def test_matched_and_residual_still_separate(store):
 
 # ------------------------------------- reconcile must not invent gross:net
 
-def test_a_disagreeing_net_never_overwrites_our_gross(store):
-    """The venue reports ONE number. A gross book cannot be recovered from
-    it, so a disagreement is NOT KNOWN rather than resolved in its favour."""
+def test_a_disagreeing_net_is_adopted_without_lowering_the_bound(store):
+    """REVERSED 2026-10-14 by owner authorization, measured on THIS book.
+
+    The prior contract was "a disagreement is NOT KNOWN rather than resolved
+    in the venue's favour", and it kept our gross. That is the safest answer
+    to the question it was asking and the wrong answer to the question that
+    matters: `positions` is what `risk_exposure_usd` and the $5 gate read, so
+    keeping our gross let the gate bound a book the venue did not confirm.
+
+    What the 1815z incident actually required is that adopting must not
+    manufacture a cost basis and must not lower the bound. Both hold here,
+    measured rather than argued:
+
+      before          UP 0.49 / DOWN 5.73, leg_cost 0.0931 / 4.2494, risk 3.8525
+      venue says      DOWN 1.81 (sold 1.81, bought 0)
+      adopted         DOWN 1.81 at the $1 ceiling, both old costs quarantined
+      computed risk   1.81   <- would have DROPPED
+      reported risk   3.8525 <- the floor holds it at the prior worst case
+
+    So the bound is unchanged, no cost is carried onto shares that did not
+    have it, and the book still fails closed.
+    """
     book_1815z(store)
-    before = (store.position("1815z", "UP"), store.position("1815z", "DOWN"))
+    before_risk = store.risk_exposure_usd("1815z")
+    before_cost = dict(store.state.get("leg_cost") or {})
     # a venue row proves its own side by bought-minus-sold, never a bare net
     store.reconcile_from_venue(
         [{"marketSlug": "1815z", "qtyBoughtDecimal": "0",
           "qtySoldDecimal": "1.81", "netPositionDecimal": "-1.81"}], [])
-    assert (store.position("1815z", "UP"),
-            store.position("1815z", "DOWN")) == before
+    # the venue is the authority on what exists
+    assert store.position("1815z", "DOWN") == D("1.81")
+    assert store.position("1815z", "UP") == D(0)
+    # the bound never falls, which is the property the old contract protected
+    assert store.risk_exposure_usd("1815z") >= before_risk
+    # and no cost basis was manufactured: both legs' costs are preserved
+    # as evidence, not carried onto the adopted shares
+    q = store.state["gross_quarantine"]["1815z"]["leg_cost"]
+    assert q == {k: v for k, v in before_cost.items()
+                 if k.startswith("1815z|")}
+    assert "1815z|DOWN" in store.state["leg_cost_basis_unknown"]
     assert store.orders_uncertain() is not None     # fails closed
 
 

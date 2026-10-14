@@ -170,15 +170,33 @@ class Probe:
         return self.preflight
 
     def arm(self) -> Dict[str, Any]:
-        """Both conditions, or nothing that can POST is ever constructed."""
-        if (self.preflight or {}).get("preflight") != "PASSED":
-            raise AUTH.Refused("PREFLIGHT_NOT_PASSED",
-                               {"preflight": (self.preflight or {})
-                                .get("preflight", "NOT_RUN")})
+        """ONE SHARED BOUNDARY, not this path's own shorter list.
+
+        This used to check preflight alone and then arm. The continuous
+        runner checked four things this did not -- the halt latch, unresolved
+        accounting, venue reconciliation and uncertain orders -- so the path
+        the arming invariant blessed was the WEAKER of the two. Both now ask
+        `authorize_arming`, which is the union, and which is the only thing
+        that takes the durable single-use claim.
+
+        `self.auth` is still the object the trading loop checks per order via
+        `check_market`; the boundary fills in its claim so that contract is
+        unchanged.
+        """
         self.stage = "arming"
+        claim = AUTH.authorize_arming(
+            market=self.market, preflight=self.preflight, store=self.store,
+            halted=bool(getattr(self, "halted", False)),
+            reconciled=bool(getattr(self, "reconciled", True)),
+            unresolved=getattr(self, "unresolved", ()),
+            limits=self.limits,
+            shadow_locked=bool(getattr(self, "shadow_locked", False)),
+            auth=self.auth)
+        self.arm_claim = claim
         out = self.tp.arm()          # itself re-checks preflight AND the token
         self.armed = True
-        self.journal.write("armed", {"market": self.market, "detail": out})
+        self.journal.write("armed", {"market": self.market, "detail": out,
+                                     "claim": claim})
         return out
 
     # -------------------------------------------------------------- trading

@@ -147,18 +147,37 @@ def test_reconcile_books_the_venue_position_under_our_own_key(tmp_path):
         "cpc-btc-updown-15m-2026-09-25-1500z|UP": "10.34"}
 
 
-def test_reconcile_reports_drift_without_averaging_or_adopting_it(tmp_path):
-    """Drift is still REPORTED exactly. What changed on 2026-09-26 is that
-    it is no longer silently resolved in the venue's favour: taking 10.34
-    while holding a cost basis for 7.00 manufactures a cost for 3.34 shares.
-    The difference is named and the book fails closed instead."""
-    st = store(tmp_path, positions={
-        "cpc-btc-updown-15m-2026-09-25-1500z|UP": "7.00"})
+def test_reconcile_reports_drift_and_adopts_the_venue_position(tmp_path):
+    """REVERSED 2026-10-14 by owner authorization, and the 2026-09-26
+    objection is ANSWERED rather than overruled.
+
+    That objection was exactly right: "taking 10.34 while holding a cost
+    basis for 7.00 manufactures a cost for 3.34 shares". Declining to adopt
+    avoided it -- and cost more than it saved, because `positions` is what
+    `risk_exposure_usd` and the $5 gate read, so our book sat BELOW what the
+    venue said we held. Measured: 3.34 shares of venue-confirmed exposure
+    invisible to the gate.
+
+    `adopt_venue_position` manufactures nothing. The 7.00 basis is
+    QUARANTINED, not carried onto 10.34 shares, and the adopted shares are
+    booked at the $1 upper bound and flagged in `leg_cost_basis_unknown`.
+    This test now asserts that property directly, which is what the
+    2026-09-26 reversal was protecting.
+
+    Fail-closed is unchanged.
+    """
+    K = "cpc-btc-updown-15m-2026-09-25-1500z|UP"
+    st = store(tmp_path, positions={K: "7.00"}, leg_cost={K: "2.10"})
     out = st.reconcile_from_venue([venue_row()], [])
-    assert out["drift"] == {"cpc-btc-updown-15m-2026-09-25-1500z|UP":
-                            {"ours": "7.00", "venue": "10.34"}}
-    assert st.state["positions"][
-        "cpc-btc-updown-15m-2026-09-25-1500z|UP"] == "7.00"
+    assert out["drift"] == {K: {"ours": "7.00", "venue": "10.34"}}
+    assert st.state["positions"][K] == "10.34"
+    # no cost was manufactured for the 3.34 extra shares: the old basis is
+    # preserved as evidence and the adopted shares carry the $1 ceiling
+    assert st.state["gross_quarantine"][
+        "cpc-btc-updown-15m-2026-09-25-1500z"]["leg_cost"] == {K: "2.10"}
+    assert K in st.state["leg_cost_basis_unknown"]
+    assert st.risk_exposure_usd(
+        "cpc-btc-updown-15m-2026-09-25-1500z") >= D("10.34")
     assert st.orders_uncertain() is not None
 
 

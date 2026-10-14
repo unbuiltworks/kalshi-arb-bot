@@ -49,6 +49,7 @@ from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional
 
 from src import l5_faithful_translation as FT
+from src import l5_live_authorization as AUTH
 from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
 from src import l5_pmus_auth_book as AB
@@ -730,16 +731,59 @@ class Runner:
         if not self.reconciled:
             self.win["arm_refused_unreconciled"] += 1
             return
-        if self.store.orders_uncertain():
-            self.win["arm_refused_orders_uncertain"] += 1
-            if self.win["arm_refused_orders_uncertain"] == 1:
+        # ONE SHARED AUTHORIZATION BOUNDARY. The checks above are kept
+        # because they are cheap, they produce this service's own named
+        # counters, and a refusal here should name the local reason. But the
+        # DECISION is no longer taken here: authorize_arming is the union of
+        # this path's preconditions and the one-shot probe's, so neither can
+        # be weaker than the other, and it is the only thing that claims the
+        # durable single-use authorization. This path previously claimed
+        # nothing at all, which on a continuous ALWAYS-restart service is a
+        # standing licence to arm every window.
+        #
+        # shadow_only() is passed in rather than inferred: while the lock is
+        # on -- which is the DEFAULT -- the boundary refuses by name, so the
+        # logs say why this service is not live instead of going quiet.
+        try:
+            claim = AUTH.authorize_arming(
+                market=t.market_slug,
+                # getattr: a caller without a recorded preflight has not
+                # passed one, and the boundary must refuse that rather than
+                # raise out of the arming path.
+                preflight=getattr(self, "preflight_status", None),
+                store=self.store, halted=self.halted(),
+                reconciled=self.reconciled,
+                unresolved=unresolved_discrepancies(self.store),
+                # getattr on SELF too: a runner without an executor has no
+                # capital envelope at all, and the boundary must refuse that
+                # with CAPITAL_SCOPE_UNKNOWN rather than raise out of the
+                # arming path.
+                limits=getattr(getattr(self, "executor", None),
+                               "limits", None),
+                shadow_locked=shadow_only())
+        except AUTH.Refused as exc:
+            # THE HISTORICAL COUNTER NAMES SURVIVE. These are operator-facing
+            # signals -- the heartbeat publishes them and this branch's own
+            # commit history cites "arm_refused_orders_uncertain hit 221 in
+            # 1715z" -- so moving the decision into the shared boundary must
+            # not silently rename them out from under whoever reads the logs.
+            key = {
+                "ORDER_STATE_UNCERTAIN": "arm_refused_orders_uncertain",
+                "NOT_RECONCILED": "arm_refused_unreconciled",
+                "UNRESOLVED_ACCOUNTING": "arm_refused_unresolved_accounting",
+            }.get(str(exc.reason),
+                  "arm_refused_%s" % str(exc.reason).lower())
+            self.win[key] += 1
+            if self.win[key] == 1:
                 emit("L5_LIVE_DISARMED",
-                     {"market": t.market_slug,
-                      "why": "orders in an UNCERTAIN state; refusing to arm"})
+                     {"market": t.market_slug, "why": exc.reason,
+                      "detail": exc.detail,
+                      "boundary": "l5_live_authorization.authorize_arming"})
             return
         try:
             res = t.arm()
-            emit("L5_LIVE_ARMED", res)
+            self.arm_claim = claim
+            emit("L5_LIVE_ARMED", dict(res, claim=claim))
         except LX.NotArmed as exc:
             self.win["arm_refused"] += 1
             if self.win["arm_refused"] == 1:

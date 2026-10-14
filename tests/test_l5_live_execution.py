@@ -278,13 +278,31 @@ def test_the_behaviour_our_old_heuristics_disliked_is_not_suppressed(tmp_path):
 # -------------------------------------------------------------- reconciliation
 
 def test_the_venue_contradicting_our_file_is_reported_and_fails_closed(tmp_path):
-    """SUPERSEDED CONTRACT, reversed 2026-09-26. The venue is still the
-    authority on what EXISTS, but its net is not a gross book and adopting
-    it leaves `leg_cost` describing shares that are gone -- which is how
-    1815z settled 1.81 shares against $4.3425. The drift is reported and the
-    book fails closed; nothing is silently replaced."""
+    """REVERSED AGAIN, 2026-10-14, by owner authorization of Priority A.
+
+    THE HISTORY MATTERS, so it is kept. On 2026-09-26 this contract was
+    reversed to "nothing is silently replaced", because adopting the venue's
+    net left `leg_cost` describing shares that were gone -- which is how
+    1815z settled 1.81 shares against $4.3425 of cost, $2.40 a share for a
+    contract that pays at most $1. That reasoning was correct about the harm
+    and wrong about the remedy: keeping our book meant `positions` -- what
+    `risk_exposure_usd` and the $5 gate read -- could sit BELOW what the
+    venue said we held. Measured 2026-10-14: our 7.00 UP against a venue row
+    of 10.34 UP understated exposure by 3.34 shares.
+
+    So the venue is the position of record again, and the 1815z harm is
+    prevented structurally rather than by declining to adopt:
+    `adopt_venue_position` quarantines the displaced gross book AND its cost
+    basis, then re-books the adopted shares at the $1 upper bound. No
+    `leg_cost` entry survives describing shares that are gone -- which this
+    test now asserts directly, because that is the property the 2026-09-26
+    reversal actually wanted.
+
+    Fail-closed is unchanged: the drift is reported and the book is uncertain.
+    """
     st = store(tmp_path)
     st.state["positions"] = {"m|UP": "5"}
+    st.state["leg_cost"] = {"m|UP": "4.3425"}      # the 1815z shape
     # the venue's real row: keyed by slug, no side field, direction in the
     # sign of the net with the unsigned halves beside it to prove it
     out = st.reconcile_from_venue(
@@ -292,7 +310,15 @@ def test_the_venue_contradicting_our_file_is_reported_and_fails_closed(tmp_path)
           "netPositionDecimal": "3"}], [])
     assert out["authority"] == "VENUE"
     assert out["drift"]["m|UP"] == {"ours": "5", "venue": "3"}
-    assert st.position("m", "UP") == D("5")
+    # the venue is the authority on what exists
+    assert st.position("m", "UP") == D("3")
+    # and the 1815z failure cannot recur: the stale basis is gone from the
+    # live book, preserved as evidence, and the adopted shares are bounded
+    assert st.state["gross_quarantine"]["m"]["leg_cost"] == {"m|UP": "4.3425"}
+    assert st.leg_cost("m")["UP"] == D("3")        # 3 shares at the $1 bound
+    assert "m|UP" in st.state["leg_cost_basis_unknown"]
+    # never below what we already believed we could lose
+    assert st.risk_exposure_usd("m") >= D("4.3425")
     assert st.orders_uncertain() is not None
 
 

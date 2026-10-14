@@ -169,6 +169,45 @@ class _ArmStore:
         return self._v.get(m)
 
 
+@pytest.fixture(autouse=True)
+def _boundary_satisfied(monkeypatch, tmp_path, request):
+    """Satisfy the shared arming boundary for the tests that actually arm.
+
+    NOT applied to the meta-tests that assert the shadow lock's own default
+    and the graft closure: setting L5_SHADOW_ONLY=0 here broke
+    `test_the_shadow_lock_is_untouched`, which exists precisely to pin that
+    the lock defaults ON. A fixture that silently defeats the assertion it is
+    sharing a file with is worse than no fixture.
+    """
+    if request.node.name in ("test_the_shadow_lock_is_untouched",
+                             "test_no_gate_value_changed",
+                             "test_try_arm_reads_the_module_level_helper"):
+        return
+    from src import l5_live_authorization as AUTH
+    from src import pmus_auth as Q1
+    sid = "unresolved-accounting-session"
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, sid)
+    monkeypatch.setenv(Q1.ARM_ENV, sid)
+    monkeypatch.setenv("L5_SHADOW_ONLY", "0")
+    monkeypatch.setenv(AUTH.LEDGER_ENV, str(tmp_path / "auth.jsonl"))
+    monkeypatch.delenv(AUTH.MARKET_ENV, raising=False)
+    monkeypatch.delenv(AUTH.NOT_AFTER_ENV, raising=False)
+    monkeypatch.setenv(AUTH.OWNER_ROLE_ENV, "test-auth-holder")
+    monkeypatch.setenv(AUTH.SERVICE_ROLE_ENV, "test-auth-holder")
+    monkeypatch.setattr(AUTH, "durability_refusal", lambda p: None)
+
+
+class _Limits:
+    def as_dict(self):
+        return {"max_usd_per_market": "5", "max_total_exposure_usd": "5",
+                "daily_realized_loss_halt_usd": "5"}
+
+
+class _Executor:
+    limits = _Limits()
+
+
 class _Runner:
     try_arm = RUN.Runner.try_arm
 
@@ -178,6 +217,13 @@ class _Runner:
         self.win = collections.Counter()
         self.reconciled = True
         self.store = store
+        # `try_arm` now goes through the one shared arming boundary, which
+        # needs a recorded preflight and a capital envelope. This file pins
+        # down the UNRESOLVED-ACCOUNTING registry, not authorization, so the
+        # stub satisfies the rest; the boundary's own refusals are covered in
+        # tests/test_l5_arming_boundary.py.
+        self.preflight_status = "PASSED"
+        self.executor = _Executor()
 
     def halted(self):
         return False

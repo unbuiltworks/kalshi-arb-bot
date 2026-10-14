@@ -16,8 +16,44 @@ A refusal that clears on its own must not cost a whole market window.
 from __future__ import annotations
 
 import collections
+import pathlib
+import tempfile
 
+import pytest
+
+from src import l5_live_authorization as AUTH
 from src import l5_pmus_live_runner as R
+from src import pmus_auth as Q1
+
+
+@pytest.fixture(autouse=True)
+def _arming_boundary_satisfied(monkeypatch, tmp_path):
+    """These tests are about RETRY REACHABILITY, not about authorization.
+
+    `try_arm` now goes through `l5_live_authorization.authorize_arming`, the
+    one shared boundary, which refuses without owner authorization, a capital
+    envelope, a writable ledger, and with the shadow lock on -- and the lock
+    is ON by default. None of that is what this file pins down, so the
+    fixture satisfies the boundary and leaves the retry property under test.
+
+    Nothing here is weakened: the boundary's own refusals are covered in
+    tests/test_l5_arming_boundary.py, including that the shadow lock refuses
+    first and by name.
+    """
+    sid = "arm-retry-session"
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, sid)
+    monkeypatch.setenv(Q1.ARM_ENV, sid)
+    monkeypatch.setenv("L5_SHADOW_ONLY", "0")
+    monkeypatch.setenv(AUTH.LEDGER_ENV, str(tmp_path / "auth.jsonl"))
+    monkeypatch.delenv(AUTH.MARKET_ENV, raising=False)
+    monkeypatch.delenv(AUTH.NOT_AFTER_ENV, raising=False)
+    monkeypatch.setenv(AUTH.OWNER_ROLE_ENV, "test-auth-holder")
+    monkeypatch.setenv(AUTH.SERVICE_ROLE_ENV, "test-auth-holder")
+    # a pytest tmp_path is on the container root, which the durability
+    # precondition REFUSES by design. That precondition has its own tests in
+    # tests/test_l5_arming_boundary.py, including that its default is strict.
+    monkeypatch.setattr(AUTH, "durability_refusal", lambda p: None)
 
 
 class _Transport:
@@ -41,6 +77,18 @@ class _Store:
         return self._uncertain
 
 
+class _Limits:
+    """The capital envelope the boundary records into the claim."""
+
+    def as_dict(self):
+        return {"max_usd_per_market": "5", "max_total_exposure_usd": "5",
+                "daily_realized_loss_halt_usd": "5"}
+
+
+class _Executor:
+    limits = _Limits()
+
+
 class _Runner:
     """Duck-typed stand-in carrying only what these two methods touch.
 
@@ -54,6 +102,7 @@ class _Runner:
     def __init__(self, *, uncertain=None) -> None:
         self.transport = _Transport()
         self.store = _Store(uncertain)
+        self.executor = _Executor()
         self.preflight_status = "PASSED"
         self.preflight_attempts = 1
         self.last_preflight_t = 0.0

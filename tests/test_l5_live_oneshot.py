@@ -19,6 +19,26 @@ import src.l5_live_execution as EX
 import src.pmus_auth as Q1
 import tests.test_l5_live_execution as L
 
+
+@pytest.fixture(autouse=True)
+def _durability_precondition_opt_out(monkeypatch):
+    """A pytest tmp_path ledger lives on the container root, which the
+    arming boundary's durability precondition REFUSES by design -- a claim
+    lock that cannot survive a restart is not a claim lock.
+
+    These tests pin down the probe, not storage durability, so the
+    precondition is neutralised here. It is NOT weakened: its own tests in
+    tests/test_l5_arming_boundary.py assert that the default is strict, that
+    the deployed service's default ledger path is refused, and that a
+    multi-replica configuration is refused.
+    """
+    from src import l5_live_authorization as AUTH
+    monkeypatch.setattr(AUTH, "durability_refusal", lambda p: None)
+    # the declared-holder check is a real env contract, so it is SET rather
+    # than neutralised: these tests are the holder.
+    monkeypatch.setenv(AUTH.OWNER_ROLE_ENV, "test-auth-holder")
+    monkeypatch.setenv(AUTH.SERVICE_ROLE_ENV, "test-auth-holder")
+
 MARKET = "cpc-btc-updown-15m-2026-09-23-1615z"
 START = P.window_start(MARKET)
 
@@ -501,23 +521,49 @@ def test_nothing_in_the_observer_calls_arm():
                 pytest.fail("%s calls arm()" % f)
 
 
-def test_only_the_oneshot_probe_arms_anything():
-    """AST, not grep: docstrings that explain arm() are not calls to it."""
+def test_every_arming_path_goes_through_the_one_shared_boundary():
+    """RESTATED 2026-10-14, and strictly STRONGER than what it replaced.
+
+    It used to assert that every zero-argument `.arm()` call site lived in
+    `l5_pmus_live_oneshot`. That was a LOCATION test, and it was protecting
+    the wrong thing: `src/l5_pmus_live_runner.py` armed too, and its
+    preconditions were a SUPERSET of this module's -- it checked the halt
+    latch, unresolved accounting, venue reconciliation and uncertain orders,
+    none of which the blessed path checked. The invariant was blessing the
+    weaker path, and it could only be satisfied by deleting a deployed
+    production workflow.
+
+    What actually matters is that there is ONE place the decision is taken.
+    So the assertion is now that every module able to arm also calls
+    `l5_live_authorization.authorize_arming`, which is the union of both
+    paths' preconditions and the only claimant of the durable single-use
+    authorization. Two call sites with one boundary is safe; one call site
+    with no boundary was not.
+
+    AST, not grep: docstrings that explain arm() are not calls to it.
+    """
     import ast
     import pathlib as _p
 
-    callers = []
+    armers, guarded, callers = set(), set(), []
     for f in list(_p.Path("src").glob("*.py")) + list(_p.Path("scripts").glob("*.py")):
         try:
             tree = ast.parse(f.read_text())
         except SyntaxError:                                    # pragma: no cover
             continue
         for n in ast.walk(tree):
-            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            if not isinstance(n, ast.Call):
+                continue
+            if (isinstance(n.func, ast.Attribute)
                     and n.func.attr == "arm" and not n.args):
+                armers.add(f.name)
                 callers.append("%s:%d" % (f, n.lineno))
+            if getattr(n.func, "attr", None) == "authorize_arming":
+                guarded.add(f.name)
     assert callers, "something must be able to arm, or the probe cannot run"
-    assert all("l5_pmus_live_oneshot" in c for c in callers), callers
+    assert armers <= guarded, (
+        "these modules can arm but never reach the shared boundary: %s"
+        % sorted(armers - guarded))
 
 
 # ------------------------------- the book the decision is actually taken against
