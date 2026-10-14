@@ -1702,6 +1702,79 @@ class Runner:
         self.poll(now)
 
 
+#: THE STAGE A SETTLEMENT CORRECTION. PREPARED, NOT WIRED.
+#:
+#: `apply_settlement_corrections` below is called by NOTHING -- not by main(),
+#: not by boot, not by the tick. It runs only when an explicit owner-approved
+#: call site is added. Until then this constant is evidence and a test
+#: fixture, and the live ledger keeps the contaminated figure beside no
+#: correction at all.
+#:
+#: The evidence. The executor's own L5_LIVE_SETTLED at 2026-10-14T22:45:31Z
+#: retired 2230z against yes_value 0.0100 -- the price the EXPIRED BOOK still
+#: carried, not a resolution. 2.90 UP shares "redeemed" 0.029000 that no
+#: cashflow corresponds to. Both /v1/account/balances reads are flat (zero
+#: positions, zero open orders, zero unsettled):
+#:     22:30:07Z pre-arm   242.97505
+#:     23:35:56Z post-settle 242.38505
+#:     delta -0.59000, which equals the five fills' acquisition cost exactly
+#:     and leaves nothing for a settlement payout. UP settled worthless: 0.
+SETTLEMENT_CORRECTIONS = [
+    {
+        "id": "stage-a-2230z-book-price-as-settlement",
+        "market": "cpc-btc-updown-15m-2026-10-14-2230z",
+        # the row must STILL read exactly this, or the correction refuses
+        "expect": {"yes_value": "0.0100", "settlement_pnl": "-0.561000",
+                   "up_qty": "2.90", "dn_qty": "0",
+                   "cost_total": "0.590000"},
+        "corrected_yes_value": D("0"),
+        "evidence": {
+            "defect": ("the venue's expired book price 0.0100 was passed as "
+                       "yes_value and the [0,1] range guard admitted it; "
+                       "2.90 x 0.0100 = 0.029000 of redemption nobody paid"),
+            "venue_state": "MARKET_STATE_EXPIRED",
+            "settlement_record": ("UP settled worthless. The binary guard "
+                                  "shipped in fd8ca2a4 now refuses 0.0100 "
+                                  "as SETTLEMENT_NOT_BINARY"),
+            "cash_anchor": {
+                "pre_arm_utc": "2026-10-14T22:30:07Z",
+                "pre_arm_balance": "242.97505",
+                "post_settlement_utc": "2026-10-14T23:35:56Z",
+                "post_settlement_balance": "242.38505",
+                "delta": "-0.59000",
+                "flat_at_each_read": ("zero positions, zero open orders, "
+                                      "zero unsettled, armed false"),
+                "source": "/v1/account/balances via transport.account()",
+            },
+            "fills": ("five maker fills, 2.90 UP, 0.590000 total, "
+                      "commission 0.0000 on every row"),
+            "rebates_confirmed": ("none. A zero commission is not a rebate "
+                                  "and nothing was credited as one."),
+            "excluded": ("the pre-existing 2026-10-12 drift of -0.100000 is "
+                         "a separate line and is not touched"),
+        },
+    },
+]
+
+
+def apply_settlement_corrections(store) -> List[Dict[str, Any]]:
+    """Apply every prepared settlement correction. NO CALLER BY DESIGN.
+
+    Deliberately unreferenced: adding the call site is the owner's decision,
+    and the decision is about moving a number the daily loss halt reads.
+    """
+    out = []
+    for spec in SETTLEMENT_CORRECTIONS:
+        res = store.correct_settled_market(
+            spec["market"], correction_id=spec["id"], expect=spec["expect"],
+            corrected_yes_value=spec["corrected_yes_value"],
+            evidence=spec["evidence"])
+        emit("L5_LIVE_SETTLEMENT_CORRECTED" if res.get("corrected")
+             else "L5_LIVE_SETTLEMENT_CORRECTION_REFUSED", res)
+        out.append(res)
+    return out
+
+
 #: Known contaminated realized totals and what the authoritative evidence
 #: says they should have been. Each applies AT MOST ONCE, keyed by id, and
 #: only when the stored total still matches the contaminated figure.

@@ -1217,6 +1217,105 @@ class InventoryStore:
         self.save()
         return dict(self.realized_lines(), rebases=len(hist), prior=prior)
 
+    def correct_settled_market(self, market: str, *, correction_id: str,
+                               expect: Mapping[str, Any],
+                               corrected_yes_value: D,
+                               evidence: Mapping[str, Any]
+                               ) -> Dict[str, Any]:
+        """Restate ONE already-retired market's settlement, auditably.
+
+        WHY NOT `rebase_session_accounting`. That method sets
+        `realized_unattributed = cash_delta - attributed`, so it is only
+        correct when the cash anchor spans the WHOLE attributed line. Stage
+        A's anchor spans Stage A alone while the attributed line also carries
+        the 2026-10-12 windows, so rebasing with it would post a +0.100000
+        unattributed credit that is a span artifact and would make realized
+        LESS negative -- loosening the very halt this is meant to tighten.
+        This restates the one market instead, and leaves `unattributed`
+        alone.
+
+        NOTHING IS OVERWRITTEN. The original retirement record is copied
+        verbatim into `superseded` on the same row and never edited, so the
+        contaminated number stays readable beside the corrected one.
+
+        IDEMPOTENT THREE WAYS. By `correction_id` in
+        `settlement_corrections`; by refusing unless the stored row still
+        matches `expect` field for field (a row already corrected no longer
+        does); and by refusing a correction that would move realized toward
+        zero, so this can never be used to relax the daily loss halt.
+        """
+        market = canonical_market(market, doing="correcting a settlement")
+        done = {r.get("id") for r in
+                (self.state.get("settlement_corrections") or [])}
+        if correction_id in done:
+            return {"corrected": False, "market": market,
+                    "reason": "CORRECTION_ALREADY_APPLIED",
+                    "correction_id": correction_id}
+        row = (self.state.get("retired_markets") or {}).get(market)
+        if not row:
+            return {"corrected": False, "market": market,
+                    "reason": "MARKET_NOT_RETIRED"}
+        if row.get("superseded"):
+            return {"corrected": False, "market": market,
+                    "reason": "ALREADY_CORRECTED"}
+        mismatch = {k: {"expected": str(v), "found": str(row.get(k))}
+                    for k, v in dict(expect).items()
+                    if str(row.get(k)) != str(v)}
+        if mismatch:
+            # the ledger does not hold what the evidence describes. Repairing
+            # it blind is how a correct number gets overwritten by a stale one.
+            return {"corrected": False, "market": market,
+                    "reason": "LEDGER_DOES_NOT_MATCH_EVIDENCE",
+                    "mismatch": mismatch}
+        verdict = binary_settlement(corrected_yes_value)
+        if verdict.get("reason"):
+            return {"corrected": False, "market": market,
+                    "reason": verdict["reason"]}
+        v = verdict["value"]
+        up = D(str(row.get("up_qty") or 0))
+        dn = D(str(row.get("dn_qty") or 0))
+        cost = D(str(row.get("cost_total") or 0))
+        redeem = up * v + dn * (D(1) - v)
+        pnl = redeem - cost
+        was_pnl = D(str(row.get("settlement_pnl") or 0))
+        delta = pnl - was_pnl
+        if delta > 0:
+            # A correction that IMPROVES realized would move the account away
+            # from DAILY_REALIZED_LOSS_HALT. That direction needs its own
+            # evidence and its own decision; it is not available here.
+            return {"corrected": False, "market": market,
+                    "reason": "CORRECTION_WOULD_RELAX_LOSS_HALT",
+                    "delta": str(delta)}
+        before = self.realized_lines()
+        self.state["realized_attributed"] = str(
+            D(str(self.state.get("realized_attributed") or 0)) + delta)
+        self.state["realized_today"] = str(
+            D(str(self.state.get("realized_today") or 0)) + delta)
+        # `realized_unattributed` IS NOT TOUCHED. Stage A's cash is fully
+        # attributed; inventing an unattributed line here would be the
+        # phantom credit again in another column.
+        row["superseded"] = dict(row)            # verbatim, never edited
+        row.update({
+            "yes_value": str(v), "settlement_pnl": str(pnl),
+            "redemption_total": str(redeem),
+            "corrected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "correction_id": correction_id,
+        })
+        self.state.setdefault("settlement_corrections", []).append({
+            "id": correction_id, "market": market,
+            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "was_yes_value": str(expect.get("yes_value")),
+            "now_yes_value": str(v),
+            "was_settlement_pnl": str(was_pnl), "now_settlement_pnl": str(pnl),
+            "delta": str(delta), "evidence": dict(evidence),
+        })
+        self.save()
+        return {"corrected": True, "market": market,
+                "correction_id": correction_id,
+                "delta": str(delta),
+                "realized_before": before,
+                "realized_after": self.realized_lines()}
+
     def already_submitted(self, coid: str) -> bool:
         return coid in (self.state.get("submitted") or {})
 
