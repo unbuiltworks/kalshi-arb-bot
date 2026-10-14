@@ -15,3 +15,4 @@
 # does not match the session id. This deployment adds refusals and no
 # capability. Nothing is armed and no order can be submitted.
 deploy: 2026-10-14T17:40Z shadow-only
+deploy: 2026-10-14T19:05Z shadow-only — L5_MAX_LIVE_ORDERS, pilot default 1
