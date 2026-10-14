@@ -621,7 +621,8 @@ def qty_evidence(trade_info: Mapping[str, Any], limit: int = 12) -> dict:
 
 
 def traded_qty_with_evidence(slug: str, t: Optional[q1.Transport] = None,
-                             limit: int = 12) -> dict:
+                             limit: int = 12,
+                             walk: Optional[Mapping[str, Any]] = None) -> dict:
     """The venue's traded quantity AND the per-trade evidence behind it, in
     ONE walk of the activity pages.
 
@@ -630,7 +631,20 @@ def traded_qty_with_evidence(slug: str, t: Optional[q1.Transport] = None,
     which the caller must treat as unknown, never as 'nothing traded'."""
     try:
         t = t or q1.Transport()
-        walk = activity_pages(t, since=first_fill_time(slug))
+        since = first_fill_time(slug)
+        # A CALLER AUDITING MANY MARKETS FETCHES THE FEED ONCE. Same contract
+        # as audit_market: a supplied walk is used AS IS and never refetched,
+        # because /v1/portfolio/activities is ACCOUNT-scoped and re-reading it
+        # per market is what produced the 429 storm.
+        walk = dict(walk) if walk is not None else activity_pages(t, since=since)
+        # AND A SHORT WALK IS UNKNOWN, NEVER ZERO. Without this the filter
+        # below silently UNDERCOUNTS: the venue looks like it holds less than
+        # it does, on the money path, which is the worst failure available
+        # here. It is the same rule venue_qty_total_for_slug already applies.
+        if not walk_covers(walk, since):
+            return {"qty": None, "evidence": None,
+                    "error": "activity_walk_short_of_since:ended=%s;oldest=%s"
+                             % (walk.get("ended"), walk.get("oldest_time"))}
         trades = [r for r in walk["rows"]
                   if r.get("type") == "ACTIVITY_TYPE_TRADE"
                   and isinstance(r.get("trade"), Mapping)

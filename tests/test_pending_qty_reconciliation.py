@@ -125,7 +125,7 @@ def test_the_settle_pass_carries_it_and_survives_its_failure(monkeypatch):
     monkeypatch.setattr(C, "unsettled_slugs", lambda: ["cricket"])
     monkeypatch.setattr(C.base.q1, "has_credentials", lambda: True)
     monkeypatch.setattr(C, "settle_held",
-                        lambda t, slug: {"settled": False, "status": "PENDING"})
+                        lambda t, slug, walk=None: {"settled": False, "status": "PENDING"})
 
     def boom(*a, **kw):
         raise RuntimeError("nope")

@@ -1636,7 +1636,8 @@ def _pair_invariant_enforced() -> bool:
     return open_extend and complete
 
 
-def pending_qty_reconciliation(slugs, t=None, limit: int = 8) -> list:
+def pending_qty_reconciliation(slugs, t=None, limit: int = 8,
+                               walk=None) -> list:
     """For each still-pending market, the venue's traded quantity against BOTH
     ledger measures, with the per-trade evidence.
 
@@ -1662,7 +1663,7 @@ def pending_qty_reconciliation(slugs, t=None, limit: int = 8) -> list:
     for slug in list(slugs or [])[:limit]:
         row: dict = {"slug": slug}
         try:
-            got = sa.traded_qty_with_evidence(slug, t)
+            got = sa.traded_qty_with_evidence(slug, t, walk=walk)
             venue = got.get("qty")
             row["venue_qty_total"] = venue
             row["ledger_qty_filled_total"] = sa.ledger_qty_total(slug)
@@ -1788,10 +1789,60 @@ def shutdown_settle_pass(t=None) -> dict:
     out["batch"] = list(batch)
     out["cursor"] = cursor
     out["next_cursor"] = next_cursor
+    # ONE BOUNDED WALK PER CYCLE, REUSED BY EVERY MARKET IN THE BATCH.
+    # /v1/portfolio/activities is ACCOUNT-scoped, so each market's audit was
+    # re-reading the SAME feed: this loop called settle_held() with no `walk`,
+    # so every market fetched its own. The continuation preflight has done it
+    # the right way since the 429 storm -- `audit_market` already takes a
+    # caller-supplied walk and uses it AS IS, never refetching -- and this
+    # path simply never passed one. LIVE 2026-10-13/14: 173 consecutive
+    # cycles, 5 markets each, 573 HTTP 429 and zero settlements.
+    #
+    # Bounded by the EARLIEST first-fill in the batch, so the one walk reaches
+    # back at least as far as any single market's own `since`; a market the
+    # walk does not cover still raises activity_walk_short_of_since inside
+    # audit_market and stays PENDING, now at NO additional request cost.
+    #
+    # A failure here leaves shared_walk None, which restores the previous
+    # per-market behaviour rather than skipping the audit: degrading to the
+    # old cost is acceptable, silently auditing nothing is not.
+    shared_walk = None
+    try:
+        from src import pmus_settlement_auditor as _auditor
+        _sinces = [x for x in (_auditor.first_fill_time(s) for s in batch) if x]
+        _since = min(_sinces) if _sinces else None
+        # BOUNDED AT ONE MARKET'S OWN CAP, NOT THE DEEP PREFLIGHT CAP.
+        # Measured: the per-market walks this replaces used the
+        # ACTIVITY_MAX_PAGES default (25), so a 400-page shared walk would
+        # cost MORE than the five 25-page walks it removes -- 400 against
+        # 125 -- and the saving would be imaginary. Depth buys nothing here
+        # either: the 96 markets in this set are dated 09-06..09-15 and 400
+        # pages reaches only 09-26, so no reachable cap settles them. 25
+        # pages serves any market that genuinely can settle, and one walk
+        # then serves the whole batch: 25 against 125 per cycle, and one
+        # walk against 96 across a full pass.
+        shared_walk = _auditor.activity_pages(
+            t, since=_since, max_pages=_auditor.ACTIVITY_MAX_PAGES)
+        out["shared_walk"] = {
+            "used": True, "since": _since,
+            "pages": shared_walk.get("pages"),
+            "rows": len(shared_walk.get("rows") or []),
+            "ended": shared_walk.get("ended"),
+            "oldest_time": shared_walk.get("oldest_time"),
+            "truncated_by_page_cap": shared_walk.get("truncated_by_page_cap"),
+            "truncated_by_error": shared_walk.get("truncated_by_error"),
+            "labels": ("one walk served every market in this batch; "
+                       "per-market reads are positions only"),
+        }
+    except Exception as exc:            # noqa: BLE001
+        shared_walk = None
+        out["shared_walk"] = {
+            "used": False, "error": f"{type(exc).__name__}: {str(exc)[:120]}",
+            "labels": "fell back to one walk per market, as before"}
     for slug in batch:
         t0 = time.time()
         try:
-            rep = settle_held(t, slug)  # read-only; documented never to raise
+            rep = settle_held(t, slug, walk=shared_walk)
         except Exception as exc:        # noqa: BLE001
             # ...but if it ever does, ONE market must not take the cycle down.
             # The market stays pending -- it is NOT dropped, because a failed
@@ -1837,7 +1888,7 @@ def shutdown_settle_pass(t=None) -> dict:
     # for a session_end it will never reach.
     try:
         out["qty_reconciliation"] = pending_qty_reconciliation(
-            [r["slug"] for r in out["still_pending"]], t)
+            [r["slug"] for r in out["still_pending"]], t, walk=shared_walk)
     except Exception as exc:            # noqa: BLE001
         out["errors"].append(f"qty_reconciliation:{type(exc).__name__}")
     return out

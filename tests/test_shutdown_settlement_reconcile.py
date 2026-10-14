@@ -79,7 +79,7 @@ def _pending(monkeypatch, slugs, results):
     seq = iter(results)
     monkeypatch.setattr(cont, "unsettled_slugs", lambda: list(slugs))
     monkeypatch.setattr(cont.base.q1, "has_credentials", lambda: True)
-    monkeypatch.setattr(cont, "settle_held", lambda t, s: next(seq))
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: next(seq))
     # Pin the round-robin cursor. The settle pass is now BOUNDED and rotates,
     # and that cursor is durable, so without pinning it these tests inherit a
     # start offset from whatever ran before and the result sequence lands on
@@ -146,7 +146,7 @@ def test_the_budget_is_recomputed_after_settling_not_before(monkeypatch):
     monkeypatch.setattr(cont, "unsettled_slugs", _slugs)
     monkeypatch.setattr(cont.base.q1, "has_credentials", lambda: True)
     monkeypatch.setattr(cont, "settle_held",
-                        lambda t, s: {"status": "SETTLED", "settled": True,
+                        lambda t, s, walk=None: {"status": "SETTLED", "settled": True,
                                       "realized_confirmed": True,
                                       "realized_usd": "-6.52"})
     monkeypatch.setattr(cont.base.q1, "realized_today", lambda: D("-6.52"))
