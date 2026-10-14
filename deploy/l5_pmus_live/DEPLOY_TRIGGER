@@ -1,0 +1,17 @@
+# The explicit deployment trigger for l5-pmus-live.
+#
+# `watchPatterns` on this service is exactly ["deploy/l5_pmus_live/DEPLOY_TRIGGER"],
+# so pushing code to the branch does NOT deploy it. Changing this file does.
+# That is the whole point: the money-capable service is isolated from ordinary
+# branch pushes and deploys only when someone deliberately says so here.
+#
+# 2026-10-14 — owner-authorized SHADOW-ONLY deployment of the three ported
+# safety fixes (aggregate account-wide cash cap with BOOK_UNCERTAIN,
+# independent halt -> exact-order cancellation, immutable halt latch under an
+# unreadable read), the seven-label action outcomes, the executor image-closure
+# test, and the authorization-ledger durability diagnostic.
+#
+# BOTH TRADING LOCKS STAY ON: L5_SHADOW_ONLY is set and the owner arm token
+# does not match the session id. This deployment adds refusals and no
+# capability. Nothing is armed and no order can be submitted.
+deploy: 2026-10-14T17:40Z shadow-only

@@ -2407,9 +2407,44 @@ def main() -> int:
         stop["now"] = True
     signal.signal(signal.SIGTERM, _sig)
     signal.signal(signal.SIGINT, _sig)
+    # AUTHORIZATION-LEDGER DURABILITY, REPORTED AT BOOT AND NOT BEFORE NOW.
+    # `authorize_arming` checks this at step 10, which is unreachable while
+    # either trading lock is engaged -- SHADOW_ONLY_LOCK is step 1 and owner
+    # authorization is step 2 -- so the one fact that decides whether a claim
+    # could survive a restart was unobservable from outside the container
+    # without lifting a lock. It is observable here, at startup, with both
+    # locks on.
+    #
+    # THE MOUNT, NOT THE PATH, AND NEVER THE CONTENTS. What matters is
+    # whether the ledger sits on a mounted volume; the directory name is
+    # reported because it is needed to act on a failure, and nothing inside
+    # the ledger -- no session id, no claim, no authorization value -- is
+    # read or emitted. This is a diagnostic: it decides nothing and gates
+    # nothing, and `durability_refusal` still refuses at step 10 regardless.
+    try:
+        _auth_path = AUTH.ledger_path()
+        _auth_mount = AUTH.nearest_mount(_auth_path)
+        _auth_durable = AUTH.durability_refusal(_auth_path) is None
+        _auth_dir = os.path.dirname(_auth_path) or "/"
+    except BaseException as exc:                               # noqa: BLE001
+        _auth_path = _auth_mount = _auth_dir = None
+        _auth_durable = None
+        emit("L5_LIVE_ALARM", {"kind": "auth_ledger_unreadable",
+                               "error": type(exc).__name__})
     emit("L5_LIVE_START", {"utc": now_utc().isoformat(), "root": root,
                            "credentials_present": Q1.has_credentials(),
                            "owner_arm_token": Q1.armed(),
+                           "auth_ledger": {
+                               "dir": _auth_dir,
+                               "nearest_mount": _auth_mount,
+                               "durable": _auth_durable,
+                               "env": AUTH.LEDGER_ENV,
+                               "labels": ("durable means the claim lock can "
+                                          "survive a restart. The ledger's "
+                                          "CONTENTS are never read or "
+                                          "emitted. Diagnostic only: "
+                                          "durability_refusal still decides "
+                                          "at authorize_arming step 10.")},
                            "lambda": str(lam), "limits": runner.limits.as_dict(),
                            "worst_case_usd": str(runner.limits.worst_case_loss_usd()),
                            "frozen_rule": "030d8bf"})
