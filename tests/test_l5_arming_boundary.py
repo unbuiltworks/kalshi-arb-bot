@@ -45,6 +45,26 @@ def owner_authorized(monkeypatch, sid=SID):
     monkeypatch.setenv(Q1.LIVE_ENV, "YES")
     monkeypatch.setenv(Q1.SID_ENV, sid)
     monkeypatch.setenv(Q1.ARM_ENV, sid)
+    # the holder identity is part of a legitimate arming environment: an
+    # actor that cannot say which deployment it is cannot be distinguished
+    # from one overlapping it, and the boundary refuses that case by name
+    # (DEPLOYMENT_IDENTITY_UNKNOWN). Its own tests set it absent on purpose.
+    monkeypatch.setenv("RAILWAY_DEPLOYMENT_ID", "dep-test")
+
+
+def live_window(now=None):
+    """A venue-confirmed window that is open RIGHT NOW.
+
+    The boundary refuses an authorization it cannot bound by the venue's own
+    close (WINDOW_BOUNDS_UNKNOWN), so every request here carries one. Built
+    around the real clock because these tests do not freeze it: five minutes
+    in, ten to go, which is outside the sixty-second pre-close margin.
+    """
+    import datetime as _dt
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    start = now - _dt.timedelta(seconds=300)
+    return {"source": AUTH.WINDOW_SOURCE_VENUE, "start": start.isoformat(),
+            "end": (start + _dt.timedelta(seconds=900)).isoformat()}
 
 
 def ok(**over):
@@ -54,7 +74,8 @@ def ok(**over):
     kw = dict(market=MARKET, preflight={"preflight": "PASSED"},
               store=Store(), halted=False, halt_gate_present=True,
               reconciled=True, unresolved=(),
-              limits=LIMITS, shadow_locked=False, require_durable=False)
+              limits=LIMITS, shadow_locked=False, require_durable=False,
+              window_bounds=live_window(), nominal_window_s=900.0)
     kw.update(over)
     return kw
 
@@ -105,6 +126,7 @@ def test_the_claim_survives_a_process_restart(monkeypatch, ledger):
     AUTH.authorize_arming(path=ledger, **ok())
     prog = (
         "import sys,os;sys.path.insert(0,%r);"
+        "import datetime as _d;_s=_d.datetime.now(_d.timezone.utc)-_d.timedelta(seconds=300);_w={'source':'VENUE','start':_s.isoformat(),'end':(_s+_d.timedelta(seconds=900)).isoformat()}\n"
         "from src import l5_live_authorization as A;"
         "from src import pmus_auth as Q;"
         "import json\n"
@@ -112,6 +134,7 @@ def test_the_claim_survives_a_process_restart(monkeypatch, ledger):
         "    A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
         "store=None,halted=False,halt_gate_present=True,"
         "reconciled=True,unresolved=(),"
+        "window_bounds=_w,nominal_window_s=900.0,"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r)\n"
         "    print('CLAIMED_AGAIN')\n"
         "except A.Refused as e:\n"
@@ -130,11 +153,13 @@ def test_concurrent_processes_cannot_both_claim(monkeypatch, ledger):
     owner_authorized(monkeypatch)
     prog = (
         "import sys;sys.path.insert(0,%r);"
+        "import datetime as _d;_s=_d.datetime.now(_d.timezone.utc)-_d.timedelta(seconds=300);_w={'source':'VENUE','start':_s.isoformat(),'end':(_s+_d.timedelta(seconds=900)).isoformat()}\n"
         "from src import l5_live_authorization as A\n"
         "try:\n"
         "    A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
         "store=None,halted=False,halt_gate_present=True,"
         "reconciled=True,unresolved=(),"
+        "window_bounds=_w,nominal_window_s=900.0,"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r);print('WON')\n"
         "except A.Refused as e:\n    print('LOST '+e.reason)\n"
         % (str(ROOT), MARKET, LIMITS, ledger))
@@ -344,7 +369,7 @@ def test_a_claim_this_process_already_holds_is_scoped_not_retaken(monkeypatch,
     boundary recognises the existing claim and scopes it."""
     owner_authorized(monkeypatch)
     auth = AUTH.Authorization(ledger)
-    first = auth.claim(MARKET)
+    first = auth.claim(MARKET, limits=LIMITS)
     assert first["event"] == "CLAIMED"
     scoped = AUTH.authorize_arming(path=ledger, auth=auth, **ok())
     assert scoped["event"] == "SCOPED"
@@ -358,7 +383,7 @@ def test_an_existing_claim_for_another_market_is_refused_not_reused(
         monkeypatch, ledger):
     owner_authorized(monkeypatch)
     auth = AUTH.Authorization(ledger)
-    auth.claim(MARKET)
+    auth.claim(MARKET, limits=LIMITS)
     with pytest.raises(AUTH.Refused) as e:
         AUTH.authorize_arming(path=ledger, auth=auth,
                               **ok(market=MARKET[:-5] + "0430z"))
@@ -370,7 +395,7 @@ def test_scoping_an_existing_claim_still_runs_every_precondition(monkeypatch,
     """Holding a claim is not a licence: the boundary's checks still apply."""
     owner_authorized(monkeypatch)
     auth = AUTH.Authorization(ledger)
-    auth.claim(MARKET)
+    auth.claim(MARKET, limits=LIMITS)
     for over, reason in ((dict(halted=True), "HALTED"),
                          (dict(reconciled=False), "NOT_RECONCILED"),
                          (dict(store=Store(uncertain="divergence")),
@@ -388,7 +413,7 @@ def test_a_second_process_is_still_refused_after_a_scoped_claim(monkeypatch,
     """The lock is what makes it single-use, so scoping cannot reopen it."""
     owner_authorized(monkeypatch)
     auth = AUTH.Authorization(ledger)
-    auth.claim(MARKET)
+    auth.claim(MARKET, limits=LIMITS)
     AUTH.authorize_arming(path=ledger, auth=auth, **ok())
     # a peer with no in-process claim must lose
     with pytest.raises(AUTH.Refused) as e:
@@ -460,10 +485,12 @@ def test_death_right_after_the_claim_does_not_release_it(monkeypatch, ledger):
     owner_authorized(monkeypatch)
     prog = (
         "import sys,os;sys.path.insert(0,%r);"
+        "import datetime as _d;_s=_d.datetime.now(_d.timezone.utc)-_d.timedelta(seconds=300);_w={'source':'VENUE','start':_s.isoformat(),'end':(_s+_d.timedelta(seconds=900)).isoformat()}\n"
         "from src import l5_live_authorization as A\n"
         "A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
         "store=None,halted=False,halt_gate_present=True,"
         "reconciled=True,unresolved=(),"
+        "window_bounds=_w,nominal_window_s=900.0,"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r)\n"
         "os._exit(9)\n"                       # die hard, no cleanup at all
         % (str(ROOT), MARKET, LIMITS, ledger))
@@ -499,10 +526,11 @@ def test_another_process_cannot_pose_as_the_holder_of_the_claim(monkeypatch,
     Authorization object of ours, so it meets the lock instead."""
     owner_authorized(monkeypatch)
     auth = AUTH.Authorization(ledger)
-    auth.claim(MARKET)
+    auth.claim(MARKET, limits=LIMITS)
     AUTH.authorize_arming(path=ledger, auth=auth, **ok())      # SCOPED
     prog = (
         "import sys;sys.path.insert(0,%r);"
+        "import datetime as _d;_s=_d.datetime.now(_d.timezone.utc)-_d.timedelta(seconds=300);_w={'source':'VENUE','start':_s.isoformat(),'end':(_s+_d.timedelta(seconds=900)).isoformat()}\n"
         "from src import l5_live_authorization as A\n"
         "a=A.Authorization(%r)\n"
         "a.sid,a.market,a.claimed='%s',%r,True\n"   # forge the holder state
@@ -510,20 +538,31 @@ def test_another_process_cannot_pose_as_the_holder_of_the_claim(monkeypatch,
         "    A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
         "store=None,halted=False,halt_gate_present=True,"
         "reconciled=True,unresolved=(),"
+        "window_bounds=_w,nominal_window_s=900.0,"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r,auth=a)\n"
         "    print('SPOOFED')\n"
         "except A.Refused as e:\n    print('REFUSED '+e.reason)\n"
         % (str(ROOT), ledger, SID, MARKET, MARKET, LIMITS, ledger))
     env = dict(os.environ)
-    env.update({Q1.LIVE_ENV: "YES", Q1.SID_ENV: SID, Q1.ARM_ENV: SID})
+    env.update({Q1.LIVE_ENV: "YES", Q1.SID_ENV: SID, Q1.ARM_ENV: SID,
+                # the SAME deployment as the real holder, so what the peer is
+                # refused for is its own identity rather than an unknown one
+                "RAILWAY_DEPLOYMENT_ID": "dep-test"})
     r = subprocess.run([sys.executable, "-c", prog], env=env, cwd=str(ROOT),
                        capture_output=True, text=True)
-    # The forged holder is REFUSED, not merely harmless: the scoped path
-    # re-checks the exclusive lock rather than trusting the object it was
-    # handed. (The lock exists here and belongs to the real holder, so what
-    # the peer lacks is not the file but any way to have created it -- see
-    # the no-lock case below, which is the forgery that would otherwise pass.)
-    assert "SPOOFED" in r.stdout, r.stdout + r.stderr
+    # The forged holder is REFUSED BY NAME. This used to end in SPOOFED: the
+    # scoped path re-checked that the exclusive lock EXISTS, and the lock does
+    # exist here and belongs to the real holder, so what the peer lacked was
+    # not the file but any way to have created it. A harmless outcome, but a
+    # weaker property than a refusal.
+    #
+    # The claim now records WHO took it, and the peer's own identity is
+    # compared against that record: same container, same deployment, a
+    # different pid, so it is not the holder and is refused. A restarted
+    # executor lands on the same refusal, which is the point.
+    assert "REFUSED MANDATE_HOLDER_MISMATCH" in r.stdout, (
+        r.stdout + r.stderr)
+    assert "SPOOFED" not in r.stdout
     events = [json.loads(l)["event"] for l in open(ledger) if l.strip()]
     assert events.count("CLAIMED") == 1, (
         "a forged holder must not produce a second CLAIMED row: %s" % events)

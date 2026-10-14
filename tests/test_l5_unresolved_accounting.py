@@ -216,6 +216,18 @@ class _Executor:
 class _Runner:
     try_arm = RUN.Runner.try_arm
 
+    # the arming boundary refuses an authorization it cannot bound by the
+    # venue's own close, so the stub supplies a confirmed window the way the
+    # real runner does. Fixed offsets around the real clock: five minutes in,
+    # ten to go, outside the sixty-second pre-close margin.
+    def venue_window_bounds(self):
+        import datetime as _d
+        base = _d.datetime.fromtimestamp(getattr(self, "now_t", 0.0) or 0.0,
+                                         _d.timezone.utc)
+        s = base - _d.timedelta(seconds=300)
+        return {"source": "VENUE", "start": s.isoformat(),
+                "end": (s + _d.timedelta(seconds=900)).isoformat()}
+
     def __init__(self, store):
         self.transport = _T()
         self.now_t = 1000.0

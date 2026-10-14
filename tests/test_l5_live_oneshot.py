@@ -5,6 +5,22 @@ service instead of being switched on inside the 24/7 observer.
 """
 from __future__ import annotations
 
+def venue_window(slug):
+    """The venue-confirmed bounds for the window this slug names.
+
+    The arming boundary refuses an authorization it cannot bound by the
+    venue's own close, so every probe run here carries one instead of
+    reaching a gateway.
+    """
+    import datetime as _d
+    from src import l5_pmus_auth_book as _AB
+    ws = _AB.slug_start(slug)
+    s = _d.datetime.fromtimestamp(ws, _d.timezone.utc)
+    return {"source": "VENUE", "start": s.isoformat(),
+            "end": (s + _d.timedelta(seconds=_AB.WINDOW_S)).isoformat()}
+
+
+
 import datetime as dt
 import json
 import pathlib
@@ -52,6 +68,10 @@ def authorize(monkeypatch, sid="sess-001"):
     # these tests exercise the REAL wiring; HttpHaltStore performs no I/O at
     # construction, and the gate is only read on the submit path.
     monkeypatch.setenv("L5_HALT_URL", "http://halt.invalid:8080")
+    # And the holder identity: the boundary refuses an actor that cannot name
+    # its own deployment (DEPLOYMENT_IDENTITY_UNKNOWN), because such an actor
+    # cannot be distinguished from one overlapping it.
+    monkeypatch.setenv("RAILWAY_DEPLOYMENT_ID", "dep-test")
 
 
 def deauthorize(monkeypatch):
@@ -206,7 +226,7 @@ def drive(tmp_path, monkeypatch, *, venue=None, actions=None, ledger=None,
                  for i, r in enumerate(rows)], True)
 
     monkeypatch.setattr(P, "new_l5_actions", once)
-    rep = P.run(clock=clock, sleep=sleep,
+    rep = P.run(window_bounds=venue_window(MARKET), clock=clock, sleep=sleep,
                 transport_factory=lambda slug: venue,
                 book_feed=Feed(clock, books),
                 state_path=str(tmp_path / "inv.json"),
@@ -470,7 +490,12 @@ def test_the_authorization_is_consumed_on_every_path(tmp_path, monkeypatch):
     assert rep["authorization"]["consumed"] is True
     led = pathlib.Path(str(tmp_path / "auth.jsonl")).read_text().splitlines()
     events = [json.loads(x)["event"] for x in led]
-    assert events == ["CLAIMED", "CONSUMED"]
+    # CLAIMED by `auth.claim` before any POST-capable object exists, SCOPED
+    # by the arming boundary with its expiry and capital envelope, CONSUMED
+    # at the end. The SCOPED row used to be absent here, and that absence was
+    # the symptom of a real defect: the boundary was called without `path`, so
+    # it read and wrote the DEFAULT ledger while the claim lived in this one.
+    assert events == ["CLAIMED", "SCOPED", "CONSUMED"]
 
 
 def test_nothing_is_reported_as_realized(tmp_path, monkeypatch):
@@ -623,7 +648,7 @@ def test_the_probe_refuses_to_arm_without_an_authenticated_book(
                         lambda slug, seen, act=None, health=None: ([], True))
     monkeypatch.setattr(P.FEED, "AuthenticatedBookFeed",
                         lambda market, clock=None: Dead(lambda: t["now"]))
-    rep = P.run(clock=lambda: t["now"],
+    rep = P.run(window_bounds=venue_window(MARKET), clock=lambda: t["now"],
                 sleep=lambda s: t.__setitem__("now", t["now"] + s),
                 transport_factory=lambda slug: venue,
                 state_path=str(tmp_path / "inv.json"),
@@ -768,7 +793,7 @@ def test_a_readable_action_reaches_a_decision_in_the_probe(
         return real(slug, set(), activity=lambda limit=100: [raw_at(ws + 10)])
 
     monkeypatch.setattr(P, "new_l5_actions", once)
-    rep = P.run(clock=lambda: t["now"],
+    rep = P.run(window_bounds=venue_window(MARKET), clock=lambda: t["now"],
                 sleep=lambda s: t.__setitem__("now", t["now"] + s),
                 transport_factory=lambda slug: venue,
                 book_feed=Feed(lambda: t["now"]),
@@ -796,7 +821,7 @@ def test_a_probe_error_reaches_stdout(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(P, "new_l5_actions", boom)
     t = {"now": START + P.PREFLIGHT_AT_S}
-    P.run(clock=lambda: t["now"],
+    P.run(window_bounds=venue_window(MARKET), clock=lambda: t["now"],
           sleep=lambda s: t.__setitem__("now", t["now"] + s),
           transport_factory=lambda slug: Venue(),
           book_feed=Feed(lambda: t["now"]),
@@ -825,7 +850,7 @@ def test_a_probe_error_carries_no_credential(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(P, "new_l5_actions", boom)
     t = {"now": START + P.PREFLIGHT_AT_S}
-    P.run(clock=lambda: t["now"],
+    P.run(window_bounds=venue_window(MARKET), clock=lambda: t["now"],
           sleep=lambda s: t.__setitem__("now", t["now"] + s),
           transport_factory=lambda slug: Venue(),
           book_feed=Feed(lambda: t["now"]),

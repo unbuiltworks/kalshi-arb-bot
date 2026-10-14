@@ -213,6 +213,34 @@ def pmus_slug_for(window_start: int) -> str:
         d.strftime("%Y-%m-%d"), d.hour, d.minute)
 
 
+def venue_window_bounds(window_start: int, window_s: int = 900,
+                        verify=None) -> Optional[Dict[str, Any]]:
+    """A window's bounds AS THE VENUE STATES THEM, or None.
+
+    Both order-capable paths build their slug from a 900-second clock grid, so
+    the window they believe they are trading is OUR convention and not the
+    venue's statement. The two agree until they do not, and that is the case a
+    pre-close margin exists for. `verify_alignment` above already reads the
+    venue's own `startTime` back for a window; this wraps it in the shape the
+    arming boundary takes.
+
+    None means UNCONFIRMED, which the boundary refuses by name
+    (WINDOW_BOUNDS_UNCONFIRMED) rather than falling back to the clock. It
+    lives here, beside the read it depends on, because both the continuous
+    runner and the one-shot probe need it and this module is in both images.
+    """
+    verify = verify or verify_alignment
+    rep = verify(int(window_start)) or {}
+    if rep.get("aligned") is not True or not rep.get("pmus_start_utc"):
+        return None
+    start = dt.datetime.fromisoformat(str(rep["pmus_start_utc"]))
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=dt.timezone.utc)
+    return {"source": "VENUE", "start": start.isoformat(),
+            "end": (start + dt.timedelta(seconds=int(window_s))).isoformat(),
+            "confirmed_by": "verify_alignment"}
+
+
 def verify_alignment(window_start: int) -> Dict[str, Any]:
     """Prove the two venues mean the same fifteen minutes.
 

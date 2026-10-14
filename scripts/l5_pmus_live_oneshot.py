@@ -43,7 +43,9 @@ import time
 from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
+import datetime as _dt
 from src import l5_live_authorization as AUTH
+from src import l5_pmus_realtime_observer as OBS
 from src import l5_live_book_feed as FEED
 from src import l5_live_execution as EX
 from src import l5_maker_execution as MK
@@ -117,7 +119,7 @@ class Probe:
     def __init__(self, *, market: str, store: EX.InventoryStore,
                  journal: JN.Journal, auth: AUTH.Authorization,
                  transport, book_feed, clock=time.time, sleep=time.sleep,
-                 activity=None) -> None:
+                 activity=None, window_bounds=None) -> None:
         self.market = market
         self.feed = book_feed
         self.store = store
@@ -128,6 +130,12 @@ class Probe:
         self.sleep = sleep
         self.activity = activity
         self.limits = PM.probe_limits()
+        #: this window's bounds AS THE VENUE STATES THEM. The arming boundary
+        #: refuses an authorization it cannot bound by the venue's own close,
+        #: so this is established rather than assumed; None means unconfirmed
+        #: and the refusal is WINDOW_BOUNDS_UNCONFIRMED by name. Settable so
+        #: a test can supply a window without a gateway read.
+        self.window_bounds = window_bounds
         # THE SAME INDEPENDENT HALT THE CONTINUOUS RUNNER READS. This probe
         # is money-capable too, so it must be governed by the same latch;
         # without this, `halt_gate_present` would be False forever and the
@@ -184,6 +192,26 @@ class Probe:
                                          "report": self.preflight})
         return self.preflight
 
+    def venue_window_bounds(self) -> Optional[Dict[str, Any]]:
+        """The venue's own bounds for this market's window, or None.
+
+        Read once and cached on the instance: this is a one-shot probe, so
+        there is exactly one window. An unconfirmed window is cached as None
+        and refuses arming rather than being retried into confirmation.
+        """
+        if self.window_bounds is not None:
+            return self.window_bounds
+        ws = window_start(self.market)
+        if ws is None:
+            return None
+        try:
+            self.window_bounds = OBS.venue_window_bounds(int(ws), WINDOW_S)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.window_bounds = None
+        return self.window_bounds
+
     def arm(self) -> Dict[str, Any]:
         """ONE SHARED BOUNDARY, not this path's own shorter list.
 
@@ -207,6 +235,19 @@ class Probe:
             unresolved=getattr(self, "unresolved", ()),
             limits=self.limits,
             shadow_locked=bool(getattr(self, "shadow_locked", False)),
+            window_bounds=self.venue_window_bounds(),
+            nominal_window_s=float(WINDOW_S),
+            # THIS PROBE'S CLOCK, not the wall clock. The boundary bounds the
+            # claim by the window, so it has to be asked at the same instant
+            # the probe believes it is: defaulting to wall time would place
+            # the decision in a different window from the one being traded.
+            now=_dt.datetime.fromtimestamp(self.clock(), _dt.timezone.utc),
+            # THE SAME LEDGER THE CLAIM WAS WRITTEN TO. This call omitted
+            # `path`, so the boundary read `ledger_path()` -- the env default
+            # -- while `auth.claim` had written to the ledger this probe was
+            # actually given. The scoped path then verified a DIFFERENT
+            # file's lock, and a stale lock at the default path satisfied it.
+            path=self.auth.path,
             auth=self.auth)
         self.arm_claim = claim
         out = self.tp.arm()          # itself re-checks preflight AND the token
@@ -494,6 +535,7 @@ class Probe:
 
 
 def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
+        window_bounds=None,
         activity=None, state_path=None, journal_path=None,
         ledger_path=None, book_feed=None) -> Dict[str, Any]:
     """The whole probe. Returns its report; never runs a second market."""
@@ -510,7 +552,10 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
 
     # 1. authorization FIRST. Without it nothing that can POST is built.
     try:
-        claim = auth.claim(market)
+        # the SAME limits object the arming boundary will be given, so
+        # the scope digest recorded in the exclusive claim matches the
+        # one verified there.
+        claim = auth.claim(market, limits=PM.probe_limits())
     except AUTH.Refused as exc:
         out = {"LABEL": "LIVE_BOUNDED_PROBE", "market": market,
                "refused": exc.reason, "detail": exc.detail,
@@ -527,7 +572,8 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
     feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
     probe = Probe(market=market, store=store, journal=journal, auth=auth,
                   transport=transport_factory(market), book_feed=feed,
-                  clock=clock, sleep=sleep, activity=activity)
+                  clock=clock, sleep=sleep, activity=activity,
+                  window_bounds=window_bounds)
 
     start = window_start(market)
     if start is None:

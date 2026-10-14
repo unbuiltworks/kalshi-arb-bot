@@ -235,6 +235,10 @@ class Runner:
         os.makedirs(root, exist_ok=True)
         self.book = book
         self.http = http
+        #: venue-confirmed bounds per window start. None means the venue
+        #: did not confirm, which refuses arming rather than falling back.
+        self.window_bounds: Dict[int, Optional[Dict[str, Any]]] = {}
+        self.arm_claim: Optional[Dict[str, Any]] = None
         self.feed = feed
         self.clock = clock
         self.store = LX.InventoryStore(os.path.join(root, "inventory.json"))
@@ -330,6 +334,8 @@ class Runner:
         if self.ws is not None:
             self.model_close()
             self.close_window()
+        # a claim is for ONE window; it does not carry into the next one.
+        self.arm_claim = None
         self.ws = ws
         slug = AB.slug_for(ws)
         # MODELLED fill session for this window. Attaching the ladder
@@ -788,6 +794,14 @@ class Runner:
                 # arming path.
                 limits=getattr(getattr(self, "executor", None),
                                "limits", None),
+                # the venue's own window, passed in as a FACT. None here is
+                # a refusal (WINDOW_BOUNDS_UNKNOWN /
+                # WINDOW_BOUNDS_UNCONFIRMED), never a fallback to our clock.
+                window_bounds=self.venue_window_bounds(),
+                nominal_window_s=float(AB.WINDOW_S),
+                # THIS RUNNER'S CLOCK, so the window the claim is bounded by
+                # is the window the tick is deciding in.
+                now=dt.datetime.fromtimestamp(self.now_t, dt.timezone.utc),
                 shadow_locked=shadow_only())
         except AUTH.Refused as exc:
             # THE HISTORICAL COUNTER NAMES SURVIVE. These are operator-facing
@@ -1395,6 +1409,83 @@ class Runner:
     #: it only needs asking while something is resting.
     HALT_SWEEP_EVERY_S = 10.0
 
+    def venue_window_bounds(self) -> Optional[Dict[str, Any]]:
+        """This window's bounds AS THE VENUE STATES THEM, or None.
+
+        Our slug is built from a 900-second clock grid (`AB.slug_for`), so the
+        window we think we are trading is OUR convention, not the venue's
+        statement. The two agree until they do not, and the case where they
+        disagree is exactly the one a pre-close margin exists for. So the
+        venue's own `startTime` is read back for this slug and the bounds are
+        only offered when it CONFIRMS -- `OBS.verify_alignment` is the
+        existing, tested read that does it, and it is reused rather than
+        reimplemented.
+
+        Cached per window: one confirmation per fifteen minutes, not one per
+        tick. A failure caches as None for this window, so arming refuses
+        WINDOW_BOUNDS_UNCONFIRMED by name instead of silently falling back to
+        the clock-derived window.
+        """
+        ws = self.ws
+        if ws is None:
+            return None
+        if ws in self.window_bounds:
+            return self.window_bounds[ws]
+        out: Optional[Dict[str, Any]] = None
+        try:
+            out = OBS.venue_window_bounds(int(ws), AB.WINDOW_S)
+            if out is None:
+                emit("L5_LIVE_WINDOW_UNCONFIRMED",
+                     {"market": AB.slug_for(int(ws)),
+                      "labels": ("the venue did not confirm this window's "
+                                 "start, so no venue-bounded authorization "
+                                 "can be issued for it")})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out = None
+            emit("L5_LIVE_WINDOW_UNCONFIRMED",
+                 {"market": AB.slug_for(int(ws)),
+                  "why": "%s" % type(exc).__name__})
+        # cached either way: an unconfirmed window must not be re-read on
+        # every tick, and must not become confirmed by retrying.
+        self.window_bounds[ws] = out
+        return out
+
+    def maybe_expire_authorization(self, now: float) -> Optional[Dict[str, Any]]:
+        """A CLAIM THAT HAS EXPIRED MUST ALSO CANCEL, not merely stop arming.
+
+        The claim's expiry is now the EARLIER of its TTL and the venue's close
+        less the margin, so this is what makes the pre-close margin mean
+        something: at that instant any resting order is cancelled by VENUE id
+        and proved terminal by re-reading it. `deadman` is reused exactly as
+        the halt path reuses it, so `still_open` and `unverified` mark the
+        store UNCERTAIN -- which `authorize_arming` then refuses on -- instead
+        of being reported as success.
+        """
+        t = self.transport
+        claim = getattr(self, "arm_claim", None)
+        if t is None or not t.armed or not claim:
+            return None
+        why = AUTH.still_valid(
+            claim, limits=getattr(getattr(self, "executor", None),
+                                  "limits", None))
+        if not why:
+            return None
+        rec = LX.deadman(self.store, t, reason="authorization_expired:%s" % why)
+        emit("L5_LIVE_HALT", dict(
+            rec, source="AUTHORIZATION_EXPIRY", why=why,
+            expires_utc=claim.get("expires_utc"),
+            window=claim.get("window"),
+            labels=("the authorization no longer covers this instant, so "
+                    "resting orders were cancelled by VENUE id and the "
+                    "transport disarmed. `cancelled` means the venue "
+                    "reported terminal on re-read; anything else marks the "
+                    "store UNCERTAIN rather than claiming success.")))
+        t.disarm("authorization_expired")
+        self.arm_claim = None
+        return rec
+
     def maybe_halt_deadman(self, now: float) -> Optional[Dict[str, Any]]:
         """A LATCHED HALT MUST ALSO CANCEL, not merely stop submitting.
 
@@ -1472,6 +1563,8 @@ class Runner:
         # the INDEPENDENT latch, which the env var above is not: it is
         # written by a process we do not control and survives our restart.
         self.maybe_halt_deadman(now)
+        # and the claim's own venue-bounded expiry, same cancellation route
+        self.maybe_expire_authorization(now)
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.
@@ -2461,6 +2554,17 @@ def main() -> int:
                                           "emitted. Diagnostic only: "
                                           "durability_refusal still decides "
                                           "at authorize_arming step 10.")},
+                           # WHETHER THE HOLDER CAN BE IDENTIFIED AT ALL.
+                           # PRESENCE ONLY, never the values: an executor
+                           # that cannot name its deployment or read its
+                           # boot id refuses to arm
+                           # (DEPLOYMENT_IDENTITY_UNKNOWN), and that must be
+                           # visible from the logs before a pilot rather
+                           # than discovered at the arming attempt.
+                           "holder_identity": {
+                               k: bool(v) for k, v in
+                               sorted(AUTH.holder_identity().items())},
+                           "close_margin_s": AUTH.close_margin_s(),
                            "lambda": str(lam), "limits": runner.limits.as_dict(),
                            "worst_case_usd": str(runner.limits.worst_case_loss_usd()),
                            "frozen_rule": "030d8bf"})

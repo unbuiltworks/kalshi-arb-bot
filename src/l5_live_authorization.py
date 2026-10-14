@@ -35,6 +35,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import hashlib
 import pathlib
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -123,7 +124,9 @@ class Authorization:
 
     # ------------------------------------------------------------ claiming
 
-    def claim(self, market: str) -> Dict[str, Any]:
+    def claim(self, market: str, *, limits: Any = None,
+              series: Optional[str] = None,
+              max_windows: int = 1) -> Dict[str, Any]:
         """Spend the authorization on THIS market, or refuse.
 
         Written before the caller is allowed to arm anything, so the record
@@ -153,8 +156,19 @@ class Authorization:
                            "note": "one authorization trades one market; "
                                    "a new probe needs a new session id"})
 
+        # THE APPROVED ENVELOPE AND THE ACTOR GO IN THE ORIGINAL PAYLOAD.
+        # This is the call that creates the exclusive file, and nothing
+        # rewrites it afterwards, so this is the only moment at which either
+        # can be recorded immutably. `authorize_arming` later verifies both
+        # against the running configuration and refuses any difference, which
+        # is why the caller must pass the SAME limits object here that it will
+        # pass there.
+        scope = mandate_scope(market=market, limits=limits, series=series,
+                              max_windows=max_windows)
         rec = {"event": "CLAIMED", "session_id": sid, "market": market,
                "utc": self._now().isoformat(),
+               "scope": scope, "scope_digest": scope_digest(scope),
+               "holder": holder_identity(),
                "note": "written BEFORE arming, so a crash spends it too"}
         # ATOMIC, not just logged. The `spent()` read above cannot exclude a
         # concurrent peer: between its answer and this write a second process
@@ -309,6 +323,240 @@ def _looser(now_s: Mapping[str, str], approved: Mapping[str, str]) -> List[str]:
     return bad
 
 
+#: the pre-close margin. An authorization may not reach the venue's own
+#: close: a resting maker order at the close is exactly the orphan risk the
+#: owner has left open, so the claim expires before it.
+CLOSE_MARGIN_ENV = "L5_LIVE_AUTH_CLOSE_MARGIN_S"
+DEFAULT_CLOSE_MARGIN_S = 60.0
+
+#: bounds are only accepted when the CALLER states they came from the venue.
+#: Our own slug convention derives a window from a 900-second clock grid, and
+#: a clock-derived window is not a venue-confirmed one -- the two agree until
+#: the venue reschedules, and that is the case the margin exists for.
+WINDOW_SOURCE_VENUE = "VENUE"
+
+#: the series' nominal window length, checked against the bounds so a
+#: fourteen-day contract expiry cannot be mistaken for a fifteen-minute
+#: window. `src/pmus_event_progress.py` measured exactly that on PMUS sports.
+NOMINAL_WINDOW_TOLERANCE_S = 1.0
+
+
+def close_margin_s() -> float:
+    """The effective pre-close margin. It can be widened, never narrowed."""
+    raw = (os.getenv(CLOSE_MARGIN_ENV) or "").strip()
+    try:
+        v = float(raw) if raw else DEFAULT_CLOSE_MARGIN_S
+    except ValueError:
+        v = DEFAULT_CLOSE_MARGIN_S          # unreadable is not permission
+    return max(DEFAULT_CLOSE_MARGIN_S, v)
+
+
+def _ts(value: Any) -> Optional[dt.datetime]:
+    if isinstance(value, dt.datetime):
+        return value if value.tzinfo else value.replace(tzinfo=dt.timezone.utc)
+    if isinstance(value, (int, float)):
+        try:
+            return dt.datetime.fromtimestamp(float(value), dt.timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        d = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=dt.timezone.utc)
+
+
+def window_expiry(bounds: Optional[Mapping[str, Any]], *,
+                  now: dt.datetime, ttl_s: float,
+                  nominal_s: Optional[float] = None) -> Dict[str, Any]:
+    """The venue-bound expiry for one window, or a refusal.
+
+    A TTL measured from arming time is not a window bound: arm forty seconds
+    before the close and a 900-second TTL authorizes fourteen minutes of
+    trading into a market that no longer exists. So the expiry is the EARLIER
+    of the TTL and the venue's own close less the margin.
+    """
+    if not bounds:
+        raise ArmingRefusal("WINDOW_BOUNDS_UNKNOWN",
+                            {"note": "no venue window bounds were supplied, "
+                                     "so the close is unknown and the claim "
+                                     "cannot be bounded by it"})
+    src = str(bounds.get("source") or "").strip().upper()
+    if src != WINDOW_SOURCE_VENUE:
+        raise ArmingRefusal("WINDOW_BOUNDS_UNCONFIRMED",
+                            {"source": src or None,
+                             "needs": WINDOW_SOURCE_VENUE,
+                             "note": "a window derived from our own clock "
+                                     "grid is not a venue-confirmed window"})
+    start, end = _ts(bounds.get("start")), _ts(bounds.get("end"))
+    if start is None or end is None:
+        raise ArmingRefusal("WINDOW_BOUNDS_UNREADABLE",
+                            {"start": str(bounds.get("start"))[:40],
+                             "end": str(bounds.get("end"))[:40]})
+    if end <= start:
+        raise ArmingRefusal("WINDOW_BOUNDS_IMPLAUSIBLE",
+                            {"start": start.isoformat(),
+                             "end": end.isoformat(),
+                             "note": "the close is not after the open"})
+    span = (end - start).total_seconds()
+    if nominal_s is not None and abs(span - float(nominal_s)) > (
+            NOMINAL_WINDOW_TOLERANCE_S):
+        raise ArmingRefusal("WINDOW_BOUNDS_IMPLAUSIBLE",
+                            {"span_s": span, "nominal_s": float(nominal_s),
+                             "note": "the bounds are not this series' "
+                                     "window; a contract expiry is not a "
+                                     "window close"})
+    margin = close_margin_s()
+    last = end - dt.timedelta(seconds=margin)
+    if now < start:
+        raise ArmingRefusal("WINDOW_NOT_OPEN",
+                            {"start": start.isoformat(), "now": now.isoformat()})
+    if now >= last:
+        raise ArmingRefusal("WINDOW_CLOSING",
+                            {"end": end.isoformat(), "margin_s": margin,
+                             "now": now.isoformat(),
+                             "note": "inside the pre-close margin; no new "
+                                     "authorization is issued here"})
+    ttl_expiry = now + dt.timedelta(seconds=float(ttl_s))
+    expires = min(ttl_expiry, last)
+    return {"expires_utc": expires.isoformat(),
+            "window_start_utc": start.isoformat(),
+            "window_end_utc": end.isoformat(),
+            "close_margin_s": margin,
+            "bounded_by": ("TTL" if ttl_expiry <= last else "VENUE_CLOSE"),
+            "source": WINDOW_SOURCE_VENUE}
+
+
+# ===================================================================== the
+# MANDATE SCOPE AND ITS HOLDER
+# =====================================================================
+#
+# Both are written INSIDE the O_EXCL claim payload and the claim file is never
+# modified afterwards. That matters: the ledger is append-only, so a later row
+# cannot erase an earlier one but can be added to; the claim file is created
+# once by the filesystem and no code path here rewrites or removes it. So the
+# approved scope and the identity that may act on it are immutable by
+# construction rather than by convention.
+
+#: every field of the approved envelope, in a fixed order so the digest is
+#: stable. Adding a field here changes the digest, which is correct: a
+#: mandate approved before the field existed did not approve it.
+SCOPE_FIELDS = ("session_id", "market", "series", "max_windows", "not_after",
+                "execution_mode", "close_margin_s", "max_usd_per_market",
+                "max_total_exposure_usd", "daily_realized_loss_halt_usd",
+                "max_live_orders", "max_cash_deployed_usd")
+
+MAX_CASH_ENV = "L5_MAX_CASH_DEPLOYED_USD"
+EXECUTION_MODE = "MAKER_ONLY"
+
+
+def mandate_scope(*, market: str, limits: Any = None,
+                  series: Optional[str] = None,
+                  max_windows: int = 1) -> Dict[str, Any]:
+    """The exact envelope being approved, as plain strings."""
+    d: Dict[str, Any] = {}
+    try:
+        d = dict(limits.as_dict()) if hasattr(limits, "as_dict") else dict(
+            limits or {})
+    except BaseException:                                      # noqa: BLE001
+        d = {}
+    scope = {
+        "session_id": session_id(),
+        "market": market or "",
+        "series": series or "",
+        "max_windows": str(int(max_windows)),
+        "not_after": (os.getenv(NOT_AFTER_ENV) or "").strip(),
+        "execution_mode": EXECUTION_MODE,
+        "close_margin_s": str(close_margin_s()),
+        "max_live_orders": str(d.get("max_live_orders", "")),
+        "max_cash_deployed_usd": (os.getenv(MAX_CASH_ENV) or "").strip(),
+    }
+    for k in SCOPED_LIMIT_FIELDS:
+        scope[k] = str(d.get(k, ""))
+    return {k: scope.get(k, "") for k in SCOPE_FIELDS}
+
+
+def scope_digest(scope: Mapping[str, Any]) -> str:
+    canon = json.dumps({k: str(scope.get(k, "")) for k in SCOPE_FIELDS},
+                       sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def _boot_id() -> Optional[str]:
+    try:
+        return pathlib.Path(
+            "/proc/sys/kernel/random/boot_id").read_text().strip() or None
+    except OSError:
+        return None
+
+
+def holder_identity() -> Dict[str, Any]:
+    """Who is acting. Every field that distinguishes one actor from another."""
+    return {"deployment_id": (os.getenv("RAILWAY_DEPLOYMENT_ID") or "").strip()
+            or None,
+            "replica_id": (os.getenv("RAILWAY_REPLICA_ID") or "").strip()
+            or None,
+            "service_role": (os.getenv(SERVICE_ROLE_ENV) or "").strip() or None,
+            "boot_id": _boot_id(), "pid": os.getpid()}
+
+
+def holder_refusal(claimed: Mapping[str, Any],
+                   mine: Optional[Mapping[str, Any]] = None
+                   ) -> Optional[Dict[str, Any]]:
+    """None when I am the recorded holder of this claim.
+
+    RAILWAY'S SINGLE WRITER IS AN ASSUMPTION, NOT A FENCE. A volume attaches
+    to one service and a service cannot have two deployments active and
+    mounted, so in practice one process tree writes this volume -- but that
+    is the platform's behaviour, not a guarantee this code can check, and an
+    overlap during a deployment would not announce itself. So the assumption
+    is VERIFIED here instead of relied upon: the claim records who took it,
+    and anybody else is refused.
+
+    A RESTART IS REFUSED TOO, deliberately. A restarted executor has a new
+    pid, boot id and deployment id, so it cannot continue on the old claim.
+    That is the point: a restart must never silently resume trading.
+    """
+    mine = dict(mine or holder_identity())
+    if not claimed:
+        return {"reason": "MANDATE_HOLDER_UNREADABLE",
+                "detail": {"note": "the claim records no holder, so the "
+                                   "actor cannot be verified"}}
+    # an actor that cannot identify its own deployment cannot be distinguished
+    # from an overlapping one, which is the uncertain case and so refuses.
+    if not mine.get("deployment_id") or not mine.get("boot_id"):
+        return {"reason": "DEPLOYMENT_IDENTITY_UNKNOWN",
+                "detail": {"have": sorted(k for k, v in mine.items() if v),
+                           "note": "RAILWAY_DEPLOYMENT_ID and the boot id "
+                                   "are what distinguish one executor from "
+                                   "an overlapping one"}}
+    differs = [k for k in ("deployment_id", "replica_id", "service_role",
+                           "boot_id", "pid")
+               if str(claimed.get(k)) != str(mine.get(k))]
+    if differs:
+        return {"reason": "MANDATE_HOLDER_MISMATCH",
+                "detail": {"differs": differs,
+                           "note": "this process is not the one the claim "
+                                   "was taken by. A restart lands here too, "
+                                   "and ends the mandate rather than "
+                                   "resuming it."}}
+    return None
+
+
+def read_claim_payload(path: str, sid: str) -> Optional[Dict[str, Any]]:
+    """What the exclusive claim file actually records, or None if absent."""
+    lock = _lock_path(path, sid)
+    if not lock.exists():
+        return None
+    try:
+        return json.loads(lock.read_text(errors="replace") or "{}")
+    except (OSError, ValueError):
+        return {"unreadable": True}
+
+
 class ArmingRefusal(Refused):
     """Refused at the shared arming boundary."""
 
@@ -318,6 +566,10 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                      halt_gate_present: bool = False,
                      unresolved: Any = (), limits: Any = None,
                      shadow_locked: bool = False,
+                     window_bounds: Optional[Mapping[str, Any]] = None,
+                     nominal_window_s: Optional[float] = None,
+                     series: Optional[str] = None,
+                     max_windows: int = 1,
                      auth: Optional["Authorization"] = None,
                      path: Optional[str] = None,
                      require_durable: bool = True,
@@ -415,31 +667,52 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                              "note": "an authorization with no capital scope "
                                      "is unbounded, which is not an "
                                      "authorization"})
-    # 10. and only now, the atomic single-use claim
-    try:
-        ttl = float(os.getenv(TTL_ENV, "").strip() or DEFAULT_TTL_S)
-    except ValueError:
-        ttl = DEFAULT_TTL_S
-    expires = now + dt.timedelta(seconds=ttl)
-    claim = {"event": "CLAIMED", "session_id": sid, "market": market,
-             "utc": now.isoformat(), "expires_utc": expires.isoformat(),
-             "ttl_s": ttl, "approved_limits": approved,
-             "boundary": "authorize_arming",
-             "note": "written BEFORE arming, so a crash spends it too"}
+    # 9b. WHICH MARKET, before anything about its window. An unauthorized
+    #     market is refused whatever its clock says, and the refusal names
+    #     the outermost reason.
     want = os.getenv(MARKET_ENV, "").strip()
     if want and want != market:
         raise ArmingRefusal("AUTHORIZATION_BOUND_TO_MARKET",
                             {"authorized": want, "attempted": market})
     if not market:
         raise ArmingRefusal("NO_MARKET", {"note": "a claim names one market"})
-    # 10b. THE CLAIM MUST BE ABLE TO SURVIVE. Checked before the claim is
-    #      taken, because a claim written where it cannot persist is worse
-    #      than no claim: it reports success and protects nothing.
+    # 10. THE CLAIM MUST BE ABLE TO SURVIVE, and this process must be the
+    #     declared holder. Both are properties of the process and its
+    #     storage, so they are structurally outside anything about the
+    #     window: a claim written where it cannot persist is worse than no
+    #     claim, because it reports success and protects nothing.
     if require_durable:
         bad = role_refusal() or durability_refusal(path)
         if bad:
             raise ArmingRefusal(bad["reason"], bad["detail"])
-
+    # 10b. THE VENUE'S OWN WINDOW BOUNDS THE CLAIM. A TTL measured from
+    #      arming time does not: arm forty seconds before the close with a
+    #      900-second TTL and fourteen minutes of trading are authorized into
+    #      a market that has gone. Bounds are passed in as a FACT, like
+    #      `reconciled` and `halted`, so a caller that cannot establish them
+    #      has to say so and be refused rather than omit them and silently
+    #      inherit a clock-derived window.
+    try:
+        ttl = float(os.getenv(TTL_ENV, "").strip() or DEFAULT_TTL_S)
+    except ValueError:
+        ttl = DEFAULT_TTL_S
+    window = window_expiry(window_bounds, now=now, ttl_s=ttl,
+                           nominal_s=nominal_window_s)
+    # 10c. the approved envelope and the actor, both of which go INSIDE the
+    #      payload claim_once writes with O_EXCL. The claim file is never
+    #      modified afterwards, so neither can be edited into something else
+    #      later.
+    scope = mandate_scope(market=market, limits=limits, series=series,
+                          max_windows=max_windows)
+    digest = scope_digest(scope)
+    holder = holder_identity()
+    claim = {"event": "CLAIMED", "session_id": sid, "market": market,
+             "utc": now.isoformat(), "expires_utc": window["expires_utc"],
+             "ttl_s": ttl, "approved_limits": approved,
+             "window": window, "scope": scope, "scope_digest": digest,
+             "holder": holder,
+             "boundary": "authorize_arming",
+             "note": "written BEFORE arming, so a crash spends it too"}
     # 11. THE CLAIM ITSELF -- taken here unless THIS process already holds it.
     #
     # The one-shot probe claims BEFORE it builds a transport, on purpose:
@@ -481,6 +754,43 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                                  "note": "an in-process claim is asserted but "
                                          "no exclusive claim lock exists for "
                                          "it; the holder cannot be verified"})
+        # AND THE RECORDED CLAIM MUST STILL MEAN WHAT IT MEANT. Existence of
+        # the lock proved only that somebody won it. Two things are checked
+        # against what is INSIDE it:
+        #
+        #   the scope digest -- an existing claim must never authorize a
+        #   MODIFIED scope, so any difference refuses. Equality, not
+        #   looseness: a tightened envelope is a different mandate from the
+        #   one approved, and inheriting it silently is the same defect as
+        #   inheriting a widened one.
+        #
+        #   the holder -- see holder_refusal. A restart is refused here.
+        recorded = read_claim_payload(path, sid) or {}
+        if recorded.get("unreadable"):
+            raise ArmingRefusal("MANDATE_SCOPE_UNREADABLE",
+                                {"lock": str(lock),
+                                 "note": "the claim payload cannot be read, "
+                                         "so neither the approved scope nor "
+                                         "the holder can be verified"})
+        was = str(recorded.get("scope_digest") or "")
+        if not was:
+            raise ArmingRefusal("MANDATE_SCOPE_UNRECORDED",
+                                {"lock": str(lock),
+                                 "note": "this claim predates scope "
+                                         "recording; it cannot be verified "
+                                         "and so cannot be scoped"})
+        if was != digest:
+            changed = [k for k in SCOPE_FIELDS
+                       if str((recorded.get("scope") or {}).get(k, ""))
+                       != str(scope.get(k, ""))]
+            raise ArmingRefusal("MANDATE_SCOPE_CHANGED",
+                                {"fields": changed or ["<digest only>"],
+                                 "note": "the running configuration is not "
+                                         "the one this claim was approved "
+                                         "for"})
+        bad_holder = holder_refusal(recorded.get("holder") or {}, holder)
+        if bad_holder:
+            raise ArmingRefusal(bad_holder["reason"], bad_holder["detail"])
         claim["event"] = "SCOPED"
         claim["note"] = ("the claim was taken by this process before any "
                          "POST-capable object existed; the boundary scoped "
