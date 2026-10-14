@@ -118,6 +118,85 @@ class IncoherentOrderRow(ValueError):
 QUANTITY_COHERENCE_TOLERANCE = D("0.0001")
 
 
+#: What a binary prediction-market contract may settle at. NOTHING ELSE.
+#: Not 0.01, not 0.99, not a mid, not a mark. A value between the two is a
+#: PRICE, and a price is what a market was willing to pay a moment before it
+#: resolved -- never what it paid out.
+BINARY_SETTLEMENT_VALUES = (D(0), D(1))
+
+#: Sources entitled to declare a settlement. Each names a venue record that
+#: resolves the market itself. A book/quote route is deliberately absent:
+#: `settlementPx` read off a quote route is admissible only because that
+#: route reports the venue's own resolution field, and it arrives tagged
+#: VENUE_SETTLEMENT_PX -- a last price, a mid or a mark has no tag here and
+#: therefore no way in.
+AUTHORITATIVE_SETTLEMENT_SOURCES = ("POSITION_RESOLUTION",
+                                    "VENUE_SETTLEMENT_PX",
+                                    "VENUE_MARKET_RESOLUTION")
+
+
+def binary_settlement(yes_value: Any) -> Dict[str, Any]:
+    """Read a settlement value, admitting ONLY exactly 0 or exactly 1.
+
+    Returns {"value": D} when admissible, else {"reason": ..., "yes_value":
+    ...}. It refuses rather than raises because its one caller must leave an
+    unsettleable market OPEN and uncertain, not crash the sweep.
+    """
+    if yes_value is None:
+        return {"reason": "SETTLEMENT_ABSENT", "yes_value": None}
+    raw = yes_value
+    if isinstance(raw, Mapping):                 # {"value": ..., "currency"}
+        raw = raw.get("value")
+        if raw is None:
+            return {"reason": "SETTLEMENT_ABSENT", "yes_value": None}
+    try:
+        v = D(str(raw))
+    except (InvalidOperation, ValueError, TypeError):
+        return {"reason": "SETTLEMENT_UNREADABLE", "yes_value": str(raw)[:40]}
+    if v not in BINARY_SETTLEMENT_VALUES:
+        # covers BOTH the Stage A defect (0.01, in range) and an out-of-range
+        # value (-1, 2). One refusal, because the fault is identical: that is
+        # not a settlement.
+        return {"reason": "SETTLEMENT_NOT_BINARY", "yes_value": str(v)}
+    return {"value": v}
+
+
+def resolution_refusal(market: str, resolution: Optional[Mapping[str, Any]],
+                       value: D) -> Optional[Dict[str, Any]]:
+    """Why this resolution record may not settle `market`, or None.
+
+    A record is OPTIONAL for callers that already hold the venue's own
+    resolution by construction (the ledger repairs, which replay recorded
+    venue documents). When one IS supplied it is checked, and a supplied
+    record that is wrong refuses -- a mismatch is worse evidence than none.
+    """
+    if resolution is None:
+        return None
+    if not isinstance(resolution, Mapping):
+        return {"reason": "RESOLUTION_UNREADABLE"}
+    src = str(resolution.get("source") or "").strip()
+    if src not in AUTHORITATIVE_SETTLEMENT_SOURCES:
+        return {"reason": "RESOLUTION_NOT_AUTHORITATIVE",
+                "resolution_source": src or None}
+    named = resolution.get("market")
+    if named is None or str(named).strip() == "":
+        return {"reason": "RESOLUTION_MARKET_UNNAMED"}
+    try:
+        same = canonical_market(named, doing="matching a resolution") == market
+    except UnknownMarket:
+        same = False
+    if not same:
+        return {"reason": "RESOLUTION_MARKET_MISMATCH",
+                "resolution_market": str(named)[:80]}
+    stated = resolution.get("yes_value")
+    if stated is not None:
+        got = binary_settlement(stated)
+        if got.get("reason") or got["value"] != value:
+            return {"reason": "RESOLUTION_VALUE_DISAGREES",
+                    "resolution_yes_value": str(stated)[:40]}
+    return None
+
+
 def order_progress(row: Mapping[str, Any]) -> Dict[str, Any]:
     """What the venue says about one order, in the terms the store needs.
 
@@ -1927,7 +2006,8 @@ class InventoryStore:
         # and never re-read from the venue.
         return sorted(out - set(self.state.get("retired_markets") or {}))
 
-    def retire_settled_market(self, market: str, *, yes_value: D
+    def retire_settled_market(self, market: str, *, yes_value: D,
+                              resolution: Optional[Mapping[str, Any]] = None
                               ) -> Dict[str, Any]:
         """Close a settled market's book and release what it was holding.
 
@@ -1988,10 +2068,27 @@ class InventoryStore:
                     "reason": "UNBOOKED_TERMINAL_ORDERS",
                     "pending_terminal": sorted(pending)}
         self.require_coherent_book(market, doing="settling")
-        v = D(str(yes_value))
-        if not (D(0) <= v <= D(1)):
+        # STAGE A, 2026-10-13. `yes_value` arrived as 0.01 -- the last BOOK
+        # PRICE the expired market happened to carry -- and the old guard
+        # here accepted it because 0.01 is inside [0, 1]. 2.90 UP shares were
+        # then redeemed at 0.01 for a PHANTOM $0.029 credit and realized was
+        # booked -0.561000 when the true realized result was -0.590000. A
+        # binary contract settles at exactly 0 or exactly 1; every other
+        # value, in range or not, is a mark and a mark is not cash.
+        verdict = binary_settlement(yes_value)
+        if verdict.get("reason"):
             return {"retired": False, "market": market,
-                    "reason": "SETTLEMENT_OUT_OF_RANGE", "yes_value": str(v)}
+                    "reason": verdict["reason"],
+                    "yes_value": verdict["yes_value"]}
+        v = verdict["value"]
+        # AUTHORITATIVE AND MARKET-MATCHED. A settlement price is only
+        # realized cash if it came from the venue's own final resolution of
+        # THIS market. A record from another market, from a route that does
+        # not carry a resolution, or one that disagrees with the value being
+        # booked, settles nothing.
+        bad = resolution_refusal(market, resolution, v)
+        if bad:
+            return dict(bad, retired=False, market=market, yes_value=str(v))
 
         up = self.position(market, "UP")
         dn = self.position(market, "DOWN")
@@ -2037,12 +2134,18 @@ class InventoryStore:
         self.state.setdefault("retired_markets", {})[market] = {
             "t": dt.datetime.now(dt.timezone.utc).isoformat(),
             "yes_value": str(v), "settlement_pnl": str(pnl),
+            "resolution_source": (dict(resolution).get("source")
+                                  if isinstance(resolution, Mapping)
+                                  else None),
             "up_qty": str(up), "dn_qty": str(dn),
             "cost_total": str(cost), "redemption_total": str(redeem),
         }
         self.save()
         return {
             "retired": True, "market": market, "yes_value": str(v),
+            "resolution_source": (dict(resolution).get("source")
+                                  if isinstance(resolution, Mapping)
+                                  else None),
             "up_qty": str(up), "dn_qty": str(dn),
             "up_cost": str(cost_up), "dn_cost": str(cost_dn),
             "matched_qty": str(matched), "matched_cost": str(matched_cost),

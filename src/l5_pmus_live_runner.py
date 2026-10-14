@@ -531,10 +531,18 @@ class Runner:
                 continue
             if not rep.get("terminal"):
                 self.stats["awaiting_settlement"] += 1
+                # a non-binary settlementPx is not merely "not yet": it is a
+                # BOOK PRICE on an expired market, which is exactly what
+                # Stage A booked as a payout. Name it so it is visible
+                # rather than indistinguishable from waiting.
+                why = rep.get("not_terminal_reason")
+                if why and why != "STATE_NOT_TERMINAL":
+                    self.stats["awaiting_settlement:%s" % why] += 1
                 continue
             try:
                 out = self.store.retire_settled_market(
-                    market, yes_value=rep["settlement_px"])
+                    market, yes_value=rep["settlement_px"],
+                    resolution=rep.get("resolution"))
             except LX.IncoherentBook as exc:
                 # the book cannot be settled because it is not a book a
                 # trade could have produced -- quantity with no cost, or

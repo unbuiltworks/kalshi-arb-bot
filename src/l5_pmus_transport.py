@@ -574,9 +574,40 @@ class PmusTransport:
         md = r.get("marketData") or r
         state = str((md or {}).get("state") or "")
         px = settlement_decimal((md or {}).get("settlementPx"))
+        # ONLY the venue's own `settlementPx` field. The last price, the bid,
+        # the ask and the mid are all on this same document and none of them
+        # is a settlement: Stage A booked a phantom credit because 0.01 --
+        # the price the expired book still carried -- reached the ledger as
+        # if it were a payout. A binary contract pays 0 or 1, so a
+        # `settlementPx` that is neither is not final, whatever the state
+        # says, and this reports it as NOT terminal.
+        binary = px is not None and px in (D(0), D(1))
+        named = None
+        for key in ("slug", "ticker", "marketSlug", "market"):
+            v = (md or {}).get(key) or r.get(key)
+            if isinstance(v, str) and v.strip():
+                named = v.strip()
+                break
+        matched = named is None or named == slug
+        reason = None
+        if state not in TERMINAL_MARKET_STATES:
+            reason = "STATE_NOT_TERMINAL"
+        elif px is None:
+            reason = "SETTLEMENT_ABSENT"
+        elif not binary:
+            reason = "SETTLEMENT_NOT_BINARY"
+        elif not matched:
+            reason = "RESOLUTION_MARKET_MISMATCH"
         return {"market": slug, "state": state,
                 "settlement_px": px,
-                "terminal": state in TERMINAL_MARKET_STATES and px is not None}
+                "not_terminal_reason": reason,
+                "resolution": {"source": "VENUE_SETTLEMENT_PX",
+                               "market": named or slug,
+                               "market_named": named,
+                               "state": state,
+                               "yes_value": (str(px) if px is not None
+                                             else None)},
+                "terminal": reason is None}
 
     #: endpoints that could carry a stable account identifier. Probed
     #: read-only and in order; the FIRST that yields one wins. This list is
