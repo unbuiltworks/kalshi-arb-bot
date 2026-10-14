@@ -42,13 +42,35 @@ def apply(store):
         evidence=SPEC["evidence"])
 
 
-def test_the_prepared_correction_is_wired_to_nothing():
-    """It runs when an owner-approved call site is added, and not before."""
+def test_there_is_exactly_one_call_site_and_it_is_boot_only():
+    """Owner-approved for ONE market, ONCE. Not a tick, not a migration."""
     import inspect
-    for mod in (R,):
-        src = inspect.getsource(mod)
-        # the only occurrences are the def and its own docstring reference
-        assert src.count("apply_settlement_corrections(") == 1
+    src = inspect.getsource(R)
+    calls = [ln.strip() for ln in src.splitlines()
+             if "apply_settlement_corrections(" in ln
+             and not ln.lstrip().startswith("def ")]
+    assert calls == ["apply_settlement_corrections(self.store)"]
+    # and it is in __init__, not in tick/poll/sweep
+    init = inspect.getsource(R.Runner.__init__)
+    assert "apply_settlement_corrections(self.store)" in init
+    assert "apply_settlement_corrections" not in inspect.getsource(R.Runner.tick)
+
+
+def test_the_list_holds_exactly_the_one_approved_market():
+    assert len(R.SETTLEMENT_CORRECTIONS) == 1
+    assert SPEC["market"] == "cpc-btc-updown-15m-2026-10-14-2230z"
+
+
+def test_a_second_boot_over_the_same_ledger_changes_nothing(store):
+    """The boot call is safe to repeat: this is what every restart does."""
+    first = R.apply_settlement_corrections(store)
+    assert first[0]["corrected"] is True
+    reopened = LX.InventoryStore(store.path)
+    again = R.apply_settlement_corrections(reopened)
+    assert again[0]["corrected"] is False
+    assert again[0]["reason"] == "CORRECTION_ALREADY_APPLIED"
+    assert reopened.realized_today() == D("-0.690000")
+    assert len(reopened.state["settlement_corrections"]) == 1
 
 
 def test_before_and_after_are_exactly_the_published_figures(store):

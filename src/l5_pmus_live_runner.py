@@ -249,6 +249,13 @@ class Runner:
         # the repair above because it must never re-settle a market.
         apply_ledger_adjustments(self.store)
         rebase_contaminated_accounting(self.store)
+        # ONE MARKET, ONCE. Not a migration and not a recurring rebase: the
+        # list below holds exactly one entry, it is keyed by correction_id in
+        # `settlement_corrections`, it refuses unless the stored row still
+        # matches that entry's expected contents field for field, and it
+        # refuses any delta that would move realized toward zero. Every boot
+        # after the first therefore logs a refusal and changes nothing.
+        apply_settlement_corrections(self.store)
         # OWNERSHIP, PUBLISHED READ-ONLY. The watchdog cannot cancel one of
         # our orders without a durable record that it is ours -- account-wide
         # open orders say what is resting, not whose it is, and this account
@@ -1702,13 +1709,12 @@ class Runner:
         self.poll(now)
 
 
-#: THE STAGE A SETTLEMENT CORRECTION. PREPARED, NOT WIRED.
+#: THE STAGE A SETTLEMENT CORRECTION. ONE ENTRY, ONE MARKET, ONCE.
 #:
-#: `apply_settlement_corrections` below is called by NOTHING -- not by main(),
-#: not by boot, not by the tick. It runs only when an explicit owner-approved
-#: call site is added. Until then this constant is evidence and a test
-#: fixture, and the live ledger keeps the contaminated figure beside no
-#: correction at all.
+#: Owner-approved 2026-10-15 for this market alone. This list is NOT a
+#: migration framework: nothing may be added to it without the same explicit
+#: approval, and the application is idempotent three ways so a restart
+#: re-reads it, refuses, and changes nothing.
 #:
 #: The evidence. The executor's own L5_LIVE_SETTLED at 2026-10-14T22:45:31Z
 #: retired 2230z against yes_value 0.0100 -- the price the EXPIRED BOOK still
@@ -1758,10 +1764,14 @@ SETTLEMENT_CORRECTIONS = [
 
 
 def apply_settlement_corrections(store) -> List[Dict[str, Any]]:
-    """Apply every prepared settlement correction. NO CALLER BY DESIGN.
+    """Apply the prepared settlement correction. Owner-approved call site.
 
-    Deliberately unreferenced: adding the call site is the owner's decision,
-    and the decision is about moving a number the daily loss halt reads.
+    Called once from Runner.__init__, beside the other one-time repairs. It is
+    SAFE to call on every boot and is NOT a recurring rebase: the correction
+    applies at most once in the life of the ledger (by correction_id, by the
+    expected-contents match, and by the superseded marker on the row), and a
+    correction that would IMPROVE realized is refused outright, so this call
+    site can never relax the daily loss halt.
     """
     out = []
     for spec in SETTLEMENT_CORRECTIONS:
