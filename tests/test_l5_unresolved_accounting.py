@@ -206,6 +206,11 @@ class _Limits:
 
 class _Executor:
     limits = _Limits()
+    #: these tests are about the UNRESOLVED_ACCOUNTING refusal, which orders
+    #: after HALT_GATE_ABSENT. Without a gate here every one of them would
+    #: refuse for the wrong reason, so the stub states the fact -- the same
+    #: way it already states `limits`.
+    halt_gate = object()
 
 
 class _Runner:

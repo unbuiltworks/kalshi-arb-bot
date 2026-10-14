@@ -47,6 +47,11 @@ def authorize(monkeypatch, sid="sess-001"):
     monkeypatch.setenv(Q1.LIVE_ENV, "YES")
     monkeypatch.setenv(Q1.SID_ENV, sid)
     monkeypatch.setenv(Q1.ARM_ENV, sid)
+    # The boundary refuses HALT_GATE_ABSENT when no independent halt is
+    # configured, and this probe builds its gate from L5_HALT_URL. Set it so
+    # these tests exercise the REAL wiring; HttpHaltStore performs no I/O at
+    # construction, and the gate is only read on the submit path.
+    monkeypatch.setenv("L5_HALT_URL", "http://halt.invalid:8080")
 
 
 def deauthorize(monkeypatch):

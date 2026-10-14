@@ -752,6 +752,14 @@ class Runner:
                 # raise out of the arming path.
                 preflight=getattr(self, "preflight_status", None),
                 store=self.store, halted=self.halted(),
+                # getattr, and `is not None`: a runner with no executor, or
+                # an executor whose halt_gate was never built because
+                # L5_HALT_URL is unset, has NO independent halt -- and the
+                # boundary must refuse that by name rather than arm a process
+                # nothing outside it could stop.
+                halt_gate_present=getattr(
+                    getattr(self, "executor", None), "halt_gate", None)
+                is not None,
                 reconciled=self.reconciled,
                 unresolved=unresolved_discrepancies(self.store),
                 # getattr on SELF too: a runner without an executor has no

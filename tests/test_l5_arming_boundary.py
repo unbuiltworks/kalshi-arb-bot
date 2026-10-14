@@ -52,7 +52,8 @@ def ok(**over):
     # root, which production must REFUSE. The durability precondition has its
     # own tests below, including that its default is True.
     kw = dict(market=MARKET, preflight={"preflight": "PASSED"},
-              store=Store(), halted=False, reconciled=True, unresolved=(),
+              store=Store(), halted=False, halt_gate_present=True,
+              reconciled=True, unresolved=(),
               limits=LIMITS, shadow_locked=False, require_durable=False)
     kw.update(over)
     return kw
@@ -109,7 +110,8 @@ def test_the_claim_survives_a_process_restart(monkeypatch, ledger):
         "import json\n"
         "try:\n"
         "    A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
-        "store=None,halted=False,reconciled=True,unresolved=(),"
+        "store=None,halted=False,halt_gate_present=True,"
+        "reconciled=True,unresolved=(),"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r)\n"
         "    print('CLAIMED_AGAIN')\n"
         "except A.Refused as e:\n"
@@ -131,7 +133,8 @@ def test_concurrent_processes_cannot_both_claim(monkeypatch, ledger):
         "from src import l5_live_authorization as A\n"
         "try:\n"
         "    A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
-        "store=None,halted=False,reconciled=True,unresolved=(),"
+        "store=None,halted=False,halt_gate_present=True,"
+        "reconciled=True,unresolved=(),"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r);print('WON')\n"
         "except A.Refused as e:\n    print('LOST '+e.reason)\n"
         % (str(ROOT), MARKET, LIMITS, ledger))
@@ -417,7 +420,8 @@ def test_durability_is_required_by_default(monkeypatch, tmp_path):
     monkeypatch.setenv(AUTH.SERVICE_ROLE_ENV, "l5-pmus-live")
     ledger = str(tmp_path / "auth.jsonl")          # on the container root
     kw = dict(market=MARKET, preflight={"preflight": "PASSED"},
-              store=Store(), halted=False, reconciled=True, unresolved=(),
+              store=Store(), halted=False, halt_gate_present=True,
+              reconciled=True, unresolved=(),
               limits=LIMITS, shadow_locked=False)
     with pytest.raises(AUTH.Refused) as e:
         AUTH.authorize_arming(path=ledger, **kw)
@@ -458,7 +462,8 @@ def test_death_right_after_the_claim_does_not_release_it(monkeypatch, ledger):
         "import sys,os;sys.path.insert(0,%r);"
         "from src import l5_live_authorization as A\n"
         "A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
-        "store=None,halted=False,reconciled=True,unresolved=(),"
+        "store=None,halted=False,halt_gate_present=True,"
+        "reconciled=True,unresolved=(),"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r)\n"
         "os._exit(9)\n"                       # die hard, no cleanup at all
         % (str(ROOT), MARKET, LIMITS, ledger))
@@ -503,7 +508,8 @@ def test_another_process_cannot_pose_as_the_holder_of_the_claim(monkeypatch,
         "a.sid,a.market,a.claimed='%s',%r,True\n"   # forge the holder state
         "try:\n"
         "    A.authorize_arming(market=%r,preflight={'preflight':'PASSED'},"
-        "store=None,halted=False,reconciled=True,unresolved=(),"
+        "store=None,halted=False,halt_gate_present=True,"
+        "reconciled=True,unresolved=(),"
         "limits=%r,shadow_locked=False,require_durable=False,path=%r,auth=a)\n"
         "    print('SPOOFED')\n"
         "except A.Refused as e:\n    print('REFUSED '+e.reason)\n"
@@ -576,8 +582,66 @@ def test_the_role_check_runs_before_durability(monkeypatch, tmp_path):
     owner_authorized(monkeypatch)
     monkeypatch.delenv(AUTH.OWNER_ROLE_ENV, raising=False)
     kw = dict(market=MARKET, preflight={"preflight": "PASSED"},
-              store=Store(), halted=False, reconciled=True, unresolved=(),
+              store=Store(), halted=False, halt_gate_present=True,
+              reconciled=True, unresolved=(),
               limits=LIMITS, shadow_locked=False)
     with pytest.raises(AUTH.Refused) as e:
         AUTH.authorize_arming(path=str(tmp_path / "a.jsonl"), **kw)
     assert e.value.reason == "AUTH_OWNER_ROLE_NOT_DECLARED"
+
+
+# --------------------------------------------------------------------------
+# HALT_GATE_ABSENT. An independent halt that can be switched off by
+# forgetting an environment variable is not an independent halt.
+# --------------------------------------------------------------------------
+
+def test_an_absent_halt_gate_refuses_arming(ledger, monkeypatch):
+    """`halt_gate()` returns None when L5_HALT_URL is unset, and the submit
+    path then SKIPS its halt block entirely -- so unconfigured read as
+    PERMISSION. This is the check that closes it."""
+    owner_authorized(monkeypatch)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.authorize_arming(path=ledger, **ok(halt_gate_present=False))
+    assert e.value.reason == "HALT_GATE_ABSENT"
+    assert "L5_HALT_URL" in str(e.value.detail.get("needs"))
+
+
+def test_the_absent_gate_is_refused_even_with_everything_else_perfect(
+        ledger, monkeypatch):
+    owner_authorized(monkeypatch)
+    kw = ok(halt_gate_present=False, halted=False, reconciled=True,
+            preflight={"preflight": "PASSED"})
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.authorize_arming(path=ledger, **kw)
+    assert e.value.reason == "HALT_GATE_ABSENT"
+
+
+def test_an_asserted_halt_still_outranks_an_absent_gate(ledger, monkeypatch):
+    """Ordering matters for the operator's log: a latched halt is the more
+    specific fact and must be the reason reported."""
+    owner_authorized(monkeypatch)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.authorize_arming(path=ledger,
+                              **ok(halted=True, halt_gate_present=False))
+    assert e.value.reason == "HALTED"
+
+
+def test_the_default_is_absent_so_a_caller_must_state_it(ledger, monkeypatch):
+    """A caller that cannot establish the gate must not get arming by
+    omission -- the same rule `halted` and `reconciled` already follow."""
+    owner_authorized(monkeypatch)
+    kw = ok()
+    kw.pop("halt_gate_present")
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.authorize_arming(path=ledger, **kw)
+    assert e.value.reason == "HALT_GATE_ABSENT"
+
+
+def test_the_shadow_lock_still_outranks_the_halt_gate_check(ledger,
+                                                            monkeypatch):
+    owner_authorized(monkeypatch)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.authorize_arming(path=ledger,
+                              **ok(shadow_locked=True,
+                                   halt_gate_present=False))
+    assert e.value.reason == "SHADOW_ONLY_LOCK"

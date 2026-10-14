@@ -128,6 +128,21 @@ class Probe:
         self.sleep = sleep
         self.activity = activity
         self.limits = PM.probe_limits()
+        # THE SAME INDEPENDENT HALT THE CONTINUOUS RUNNER READS. This probe
+        # is money-capable too, so it must be governed by the same latch;
+        # without this, `halt_gate_present` would be False forever and the
+        # boundary would refuse it by name rather than let it arm unwatched.
+        # Unset L5_HALT_URL leaves it None, which the boundary refuses --
+        # deliberately: an order-capable path with no independent halt is the
+        # thing this check exists to stop.
+        self.halt_gate = None
+        _halt_url = str(os.getenv("L5_HALT_URL", "")).strip()
+        if _halt_url:
+            try:
+                from src import l5_halt_gate as _HG
+                self.halt_gate = _HG.HaltGate(_HG.HttpHaltStore(_halt_url))
+            except Exception:                              # noqa: BLE001
+                self.halt_gate = None
         #: where the probe got to, so an exception can name its stage
         #: instead of disappearing into the volume.
         self.stage = "constructed"
@@ -187,6 +202,7 @@ class Probe:
         claim = AUTH.authorize_arming(
             market=self.market, preflight=self.preflight, store=self.store,
             halted=bool(getattr(self, "halted", False)),
+            halt_gate_present=getattr(self, "halt_gate", None) is not None,
             reconciled=bool(getattr(self, "reconciled", True)),
             unresolved=getattr(self, "unresolved", ()),
             limits=self.limits,

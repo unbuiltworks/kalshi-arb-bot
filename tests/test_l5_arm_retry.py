@@ -87,6 +87,10 @@ class _Limits:
 
 class _Executor:
     limits = _Limits()
+    #: these tests drive arm RETRY, not the halt gate. The boundary refuses
+    #: HALT_GATE_ABSENT when no independent halt is configured, so the stub
+    #: has to carry one or every test here would refuse for the wrong reason.
+    halt_gate = object()
 
 
 class _Runner:

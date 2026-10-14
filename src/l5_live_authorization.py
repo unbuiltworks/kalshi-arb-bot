@@ -315,6 +315,7 @@ class ArmingRefusal(Refused):
 
 def authorize_arming(*, market: str, preflight: Any, store: Any,
                      halted: bool, reconciled: bool,
+                     halt_gate_present: bool = False,
                      unresolved: Any = (), limits: Any = None,
                      shadow_locked: bool = False,
                      auth: Optional["Authorization"] = None,
@@ -353,6 +354,20 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     # 3. the halt latch
     if halted:
         raise ArmingRefusal("HALTED", {"note": "halt latch is set"})
+    # 3b. THE LATCH MUST EXIST, not merely read "no halt". `halt_gate()`
+    #     returns None when L5_HALT_URL is unconfigured, and the submit path
+    #     then skips its halt block ENTIRELY -- so an absent latch reads as
+    #     PERMISSION. Configured-but-unreachable already refuses correctly
+    #     (HttpHaltStore maps every failure to unavailable and HaltGate turns
+    #     unavailable into not-permitted); unconfigured was the hole. An
+    #     independent halt that can be switched off by forgetting a variable
+    #     is not an independent halt.
+    if not halt_gate_present:
+        raise ArmingRefusal("HALT_GATE_ABSENT",
+                            {"needs": ["L5_HALT_URL"],
+                             "note": "no independent halt is configured, so "
+                                     "nothing outside this process could "
+                                     "stop it"})
     # 4. a CURRENT, PASSED preflight in this process
     pf = (preflight or {}).get("preflight") if isinstance(
         preflight, Mapping) else preflight
