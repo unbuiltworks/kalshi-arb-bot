@@ -99,7 +99,8 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator, Any, Callable, Dict, Iterable, List, Mapping, Optional
+from typing import (AbstractSet, Iterator, Any, Callable, Dict, Iterable,
+                    List, Mapping, Optional)
 
 SCHEMA_VERSION = "l5_book_shadow/1"
 
@@ -634,6 +635,19 @@ def poly_tokens(market: Mapping[str, Any]) -> List[dict]:
     return out
 
 
+def activity_key(action: Mapping[str, Any]) -> str:
+    """The one dedup identity for an activity row.
+
+    Hoisted out of `_emit_activity` so the PAGER can ask "have we already got
+    this?" with exactly the identity the EMITTER will use. Two definitions of
+    the same key is how a pager silently fails to stop.
+    """
+    return "%s|%s|%s|%s" % (action.get("transactionHash") or "",
+                            action.get("timestamp") or "",
+                            action.get("asset") or "",
+                            action.get("size") or "")
+
+
 class PolymarketVenue:
     """L5's venue. Both outcome tokens are independently quoted CLOB books
     (`clob.polymarket.com/book?token_id=`), which is what makes the
@@ -649,12 +663,53 @@ class PolymarketVenue:
         self.l5_address = l5_address
 
     # -- discovery ------------------------------------------------------
-    def l5_activity(self, limit: int = 100) -> List[dict]:
-        rows = self.http.get("%s/activity" % POLY_DATA,
-                             {"user": self.l5_address, "limit": limit,
-                              "type": "TRADE"})
-        return [r for r in rows if isinstance(r, Mapping)] \
-            if isinstance(rows, list) else []
+    #: pages are BOUNDED. A cold start must not walk the whole history, and a
+    #: feed that never returns a row we already hold must not loop forever.
+    MAX_ACTIVITY_PAGES = 4
+
+    def l5_activity(self, limit: int = 500, *, pages: int = 1,
+                    known: Optional[AbstractSet[str]] = None) -> List[dict]:
+        """Newest TRADE rows, paged until the page overlaps what we hold.
+
+        WHY THIS IS NOT ONE PAGE ANY MORE. A single `limit=100` page drops
+        every fill beyond the newest 100 since the previous poll, permanently,
+        because page 2 was never requested. The poll does not run at its
+        nominal 2 s either: measured from this service's own heartbeat, 86
+        cycles over 7664.7 s is 89.1 s per cycle, and discovery suppressed the
+        poll on half of them. At that cadence 7.09% of intervals produce more
+        than 100 of L5's fills (max observed 374), and the overflow was lost.
+
+        `known` is the caller's seen-key set. Once a page contains a key we
+        already hold, every older row is already on the tape and paging stops.
+        A short page also stops it. `pages` is clamped to MAX_ACTIVITY_PAGES
+        so neither a cold start nor a misbehaving feed can run away.
+        """
+        # RESTART SAFETY. `seen_activity` is in-memory and empty after a
+        # restart, so with no overlap to find, deep paging would re-emit up to
+        # pages*limit rows onto an append-only tape and the shadow would apply
+        # L5's inventory twice. With nothing known we take ONE page, exactly
+        # as before this change; deep paging is for steady state, where the
+        # overlap test is what makes it terminate early anyway.
+        if not known:
+            pages = 1
+        pages = max(1, min(int(pages), self.MAX_ACTIVITY_PAGES))
+        out: List[dict] = []
+        for page in range(pages):
+            params: Dict[str, Any] = {"user": self.l5_address,
+                                      "limit": limit, "type": "TRADE"}
+            if page:
+                params["offset"] = page * limit
+            rows = self.http.get("%s/activity" % POLY_DATA, params)
+            if not isinstance(rows, list) or not rows:
+                break
+            batch = [r for r in rows if isinstance(r, Mapping)]
+            out.extend(batch)
+            if known is not None and any(activity_key(r) in known
+                                         for r in batch):
+                break                  # overlap: older rows are already held
+            if len(batch) < limit:
+                break                  # short page: the feed has no more
+        return out
 
     def market_by_slug(self, slug: str) -> Optional[dict]:
         rows = self.http.get("%s/markets" % POLY_GAMMA, {"slug": slug})
@@ -1118,10 +1173,7 @@ class BookShadowCollector:
         the same receive clock as the books -- which is the only way the two
         can be ordered against each other at all."""
         for action in actions:
-            key = str(action.get("transactionHash") or "") + "|" + \
-                str(action.get("timestamp") or "") + "|" + \
-                str(action.get("asset") or "") + "|" + \
-                str(action.get("size") or "")
+            key = activity_key(action)
             if key in self.seen_activity:
                 continue
             self.seen_activity.add(key)
@@ -1271,12 +1323,16 @@ class BookShadowCollector:
                 if now - last_discovery >= self.discovery_interval_s:
                     self.discover()
                     last_discovery = now
-                    last_activity = now
-                elif (self.poly is not None
-                      and SELECTOR_L5_ACTIVE in self.selectors
-                      and now - last_activity >= self.activity_interval_s):
+                # NOT an elif, and discovery no longer resets last_activity.
+                # It used to do both, so every discovery cycle skipped the
+                # activity poll entirely and doubled the effective interval.
+                if (self.poly is not None
+                        and SELECTOR_L5_ACTIVE in self.selectors
+                        and now - last_activity >= self.activity_interval_s):
                     try:
-                        self._emit_activity(self.poly.l5_activity())
+                        self._emit_activity(self.poly.l5_activity(
+                            pages=PolymarketVenue.MAX_ACTIVITY_PAGES,
+                            known=self.seen_activity))
                         if self._activity_down_since is not None:
                             self._emit_activity_window("CLOSE")
                             self._activity_down_since = None
