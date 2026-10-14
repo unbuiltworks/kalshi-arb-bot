@@ -367,6 +367,12 @@ class Runner:
         # fresh 429 cool-off every fifteen minutes.
         self.transport = T.PmusTransport(
             market_slug=slug, http=self.http, limiter=T.shared_limiter())
+        # OWNERSHIP FOR CANCELLATION, from the durable ledger. Installed here,
+        # before the transport is given to anything, so cancel can establish
+        # that an order is ours whether or not this process is armed -- which
+        # is the state every orphan path runs in. Without it the transport
+        # refuses to cancel at all: absent is not permission.
+        self.transport.cancel_owner_oracle = self.store.owns_venue_order_id
         # STRUCTURAL DISARM, applied before the executor is given the
         # transport, so there is no window in which it holds a
         # submit-capable object.

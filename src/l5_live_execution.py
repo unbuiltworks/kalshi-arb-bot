@@ -1005,6 +1005,36 @@ class InventoryStore:
         self.state["orders_uncertain"] = str(why)
         self.save()
 
+    def owns_venue_order_id(self, venue_order_id: Any) -> bool:
+        """Did THIS ledger put that venue order id on the book?
+
+        WHY THE LEDGER AND NOT THE TRANSPORT ANSWERS THIS. Ownership has to
+        survive a restart: the orphan case is precisely a fresh transport that
+        never submitted the order it now has to withdraw, so a transport-local
+        set of "ids I submitted" is empty exactly when the question matters.
+        The ledger is on the durable volume and remembers.
+
+        Every place an id of ours can be recorded is consulted -- live orders,
+        orders pending a terminal read, quarantined orders, and the permanent
+        submit log -- because an id that has moved between those is still
+        ours. An id we never recorded is NOT ours: a manual order the owner
+        placed by hand must never be cancellable by this process.
+        """
+        vid = str(venue_order_id or "").strip()
+        if not vid:
+            return False
+        buckets = ("live_orders", "pending_terminal", "quarantine", "submitted")
+        for name in buckets:
+            rows = self.state.get(name) or {}
+            if isinstance(rows, dict):
+                rows = rows.values()
+            for row in (rows or ()):
+                if not isinstance(row, Mapping):
+                    continue
+                if str(row.get("venue_order_id") or "").strip() == vid:
+                    return True
+        return False
+
     def attach_venue_id(self, coid: str, venue_order_id: Any) -> None:
         """Record the id the VENUE gave this order.
 

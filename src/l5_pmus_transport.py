@@ -330,6 +330,15 @@ class PreflightFailed(RuntimeError):
     pass
 
 
+class CancelRefused(RuntimeError):
+    """A cancel this transport will not send.
+
+    Deliberately NOT NotArmed: arming is about submitting, and conflating the
+    two is what left a resting order unwithdrawable. A CancelRefused means we
+    did not ask the venue; it says nothing about what the venue would answer.
+    """
+
+
 class _SignedHTTP:
     """Signed GET and POST. Constructed ONLY by arm().
 
@@ -484,6 +493,9 @@ class PmusTransport:
     def __init__(self, *, market_slug: str, http: Optional[Any] = None,
                  now_fn=None, limiter: Optional["RateLimiter"] = None) -> None:
         self.market_slug = market_slug
+        #: the durable ledger's ownership test, installed by the runner.
+        #: None means ownership cannot be established and cancel refuses.
+        self.cancel_owner_oracle = None
         self._injected = http is not None
         self.http = http or Q1.ReadOnlyTransport()
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
@@ -1116,6 +1128,62 @@ class PmusTransport:
         is the venue's own order id returned by submit, not our deterministic
         client order id -- passing the latter would silently cancel nothing.
         """
-        self._require_armed()
+        # CANCEL DOES NOT REQUIRE ARMING, AND THAT IS THE WHOLE POINT.
+        #
+        # THE DEFECT THIS REPLACES, observed live on 2026-10-14 at the 2230z
+        # window. `_require_armed()` stood here, so cancel raised NotArmed on
+        # a DISARMED transport -- and disarmed is exactly the state every
+        # orphan path runs in. The authorization expiry cancelled while armed
+        # and the venue refused with HTTPError; the transport then disarmed;
+        # and the three unarmed orphan sweeps that followed could not even
+        # ASK, each failing `cancel_error: NotArmed` on a real resting order
+        # with $0.2744 of exposure. What finally cleared it was the venue
+        # expiring the order at market close, which our re-read observed --
+        # not any withdrawal of ours.
+        #
+        # Both locks exist to gate SUBMISSION. `ShadowOnlyTransport` already
+        # says so in its own docstring: "CANCEL IS DELIBERATELY NOT BLOCKED.
+        # Cancelling only ever reduces exposure, and a lock that prevented it
+        # could strand a resting order." That principle was true at the proxy
+        # and false one layer below it.
+        #
+        # OWNERSHIP IS STILL STRICT, and is enforced here rather than trusted
+        # of the caller. `cancel_owner_oracle` is the durable ledger's
+        # `owns_venue_order_id`: an id this book never recorded is refused, so
+        # a manual order the owner placed by hand can never be cancelled by
+        # this process, armed or not. With no oracle installed the transport
+        # cannot establish ownership and refuses -- absent is not permission.
+        oid = str(order_id or "").strip()
+        if not oid:
+            raise CancelRefused("NO_VENUE_ORDER_ID")
+        if not Q1.has_credentials():
+            raise CancelRefused("NO_CREDENTIALS")
+        own = getattr(self, "cancel_owner_oracle", None)
+        if own is None:
+            # NO ORACLE. An ARMED transport cancels as it always did: it has
+            # already proved preflight and the owner token, this is the
+            # status quo, and REFUSING to cancel is itself the failure this
+            # whole change exists to prevent -- a path that merely forgot the
+            # wiring must not lose the ability to withdraw an order.
+            #
+            # A DISARMED transport is the new capability, so it is the one
+            # that must prove ownership. Without an oracle it cannot, and
+            # there it refuses: absent is not permission for a NEW power.
+            if self.armed:
+                return self._request(
+                    "POST", "/v1/order/%s/cancel" % oid, {}, Q1.API) or {}
+            raise CancelRefused(
+                "OWNERSHIP_UNESTABLISHED: this transport is disarmed and no "
+                "ledger oracle is installed, so it cannot prove the order is "
+                "ours")
+        try:
+            ours = bool(own(oid))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise CancelRefused(
+                "OWNERSHIP_UNREADABLE:%s" % type(exc).__name__)
+        if not ours:
+            raise CancelRefused("NOT_OUR_ORDER:%s" % oid[:40])
         return self._request(
-            "POST", "/v1/order/%s/cancel" % order_id, {}, Q1.API) or {}
+            "POST", "/v1/order/%s/cancel" % oid, {}, Q1.API) or {}

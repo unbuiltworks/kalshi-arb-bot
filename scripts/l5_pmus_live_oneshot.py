@@ -569,9 +569,16 @@ def run(*, clock=time.time, sleep=time.sleep, transport_factory=None,
         def transport_factory(slug):                           # noqa: E306
             from src import l5_pmus_transport as TP
             return TP.PmusTransport(market_slug=slug)
+    _tp = transport_factory(market)
+    # the same ledger ownership test the continuous runner installs, so a
+    # cancel here can also be proved ours while disarmed.
+    try:
+        _tp.cancel_owner_oracle = store.owns_venue_order_id
+    except Exception:                                          # noqa: BLE001
+        pass
     feed = book_feed or FEED.AuthenticatedBookFeed(market, clock=clock)
     probe = Probe(market=market, store=store, journal=journal, auth=auth,
-                  transport=transport_factory(market), book_feed=feed,
+                  transport=_tp, book_feed=feed,
                   clock=clock, sleep=sleep, activity=activity,
                   window_bounds=window_bounds)
 

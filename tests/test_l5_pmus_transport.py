@@ -74,7 +74,13 @@ def test_it_starts_disarmed_and_refuses(creds):
     with pytest.raises(NotArmed):
         t.submit({"client_order_id": "x", "side": "UP", "price": D("0.5"),
                   "qty": D("1"), "mode": "MAKER"})
-    with pytest.raises(NotArmed):
+    # CANCEL IS NO LONGER REFUSED FOR WANT OF ARMING. That was the live
+    # defect of 2026-10-14: three orphan sweeps could not even ask the venue
+    # to withdraw a real resting order, each failing NotArmed, because
+    # cancel shared submit's guard. A fresh transport still refuses -- it
+    # cannot prove the order is ours without the ledger's oracle -- but the
+    # refusal is CancelRefused, about OWNERSHIP, not about arming.
+    with pytest.raises(T.CancelRefused):
         t.cancel("x")
 
 
