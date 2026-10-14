@@ -2449,6 +2449,56 @@ class FaithfulExecutor:
             return None
         return (self._now() - t).total_seconds()
 
+    # ---- the book, in the shape ValidationGates reads ----------------
+    # Two adapters, not a change to either side: the store speaks in
+    # per-market committed notional and live order rows, the gates speak in
+    # legs and outstanding obligations. Both are ACCOUNT-WIDE on purpose --
+    # `max_cash_deployed_usd` is a run-scoped total, not a per-market one,
+    # and this account is SHARED, so exposure adopted from the venue counts
+    # too. Counting it makes the gate refuse EARLIER; excluding it would let
+    # an automated dollar sit on top of exposure we did not create.
+
+    def cash_legs_for_gates(self) -> List[Dict[str, Any]]:
+        """Filled notional as unreleased cash, one leg per market.
+
+        `settled` is False for every leg, which is the conservative reading
+        and the one NO_RECYCLING already encodes: cash is released by a
+        confirmed settlement, and this executor's ledger does not mark one
+        here. Reading it as settled would hand the gate headroom it has no
+        evidence for.
+        """
+        legs: List[Dict[str, Any]] = []
+        for mkt, usd in sorted(self.store.committed().items()):
+            legs.append({"market": mkt, "cash_out": usd, "settled": False,
+                         "closing": False})
+        return legs
+
+    def outstanding_for_gates(self) -> List[Dict[str, Any]]:
+        """Every live order's still-fillable obligation, account-wide.
+
+        A price we cannot read is priced at the worst it could be, exactly as
+        `risk_exposure_usd` does: a resting order read as free is how an
+        envelope gets spent without the gate seeing it. An unreadable side is
+        charged as a short, whose worst case is $1 a share.
+        """
+        out: List[Dict[str, Any]] = []
+        for coid, o in sorted(self.store.live_orders().items()):
+            rem = venue_decimal(o.get("remaining")) or D(0)
+            if rem <= 0:
+                continue
+            px = venue_decimal(o.get("price"))
+            if px is None:
+                px = UNKNOWN_PRICE_WORST_CASE
+            try:
+                is_up = canonical_side(
+                    o.get("side"), doing="pricing an outstanding order") == UP
+            except UnknownSide:
+                is_up = False
+            out.append({"coid": coid, "qty": rem, "price": px,
+                        "intent": ("ORDER_INTENT_BUY_LONG" if is_up
+                                   else "ORDER_INTENT_BUY_SHORT")})
+        return out
+
     def handle(self, row: Mapping[str, Any],
                authenticated: Mapping[str, Any],
                *, market: str, window: str,
@@ -2617,11 +2667,35 @@ class FaithfulExecutor:
         vg = self.validation_gates
         if vg is not None:
             try:
+                # THE BOOK IS PASSED IN, and that is the whole point of the
+                # cash gate. This call used to omit both `filled_legs` and
+                # `outstanding`, which default to `()`, so the committed
+                # figure was `cash_committed(()) + pending_obligation(()) +
+                # this_order` -- just the proposed order's notional.
+                # `max_cash_deployed_usd` therefore bounded a SINGLE CLIP and
+                # not the account: a $1 ceiling permitted an unbounded series
+                # of $0.95 orders, each passing on its own. The $5
+                # SafetyLimits envelope still bound the total, so this was
+                # never unbounded exposure -- but it was not the $1 the
+                # variable claims, and L5_MAX_CASH_DEPLOYED_USD is set on
+                # this service.
+                #
+                # AND IT FAILS CLOSED ON AN UNSETTLED BOOK. The cash figure
+                # is computed FROM the ledger, so a ledger the venue has not
+                # confirmed produces a number with no authority behind it.
+                # `orders_uncertain` already refuses one layer down, in
+                # SafetyLimits -- but that is AFTER this gate has already
+                # computed and passed a cash total from the same untrusted
+                # book, and a gate that approves on bad data and is saved by
+                # the next one is not the gate it looks like.
                 vreason = vg.refuse(
                     order_qty=tr["qty"], order_price=tr["price"],
                     order_intent=("ORDER_INTENT_BUY_SHORT"
                                   if str(dec.get("side")).upper() == "DOWN"
                                   else "ORDER_INTENT_BUY_LONG"),
+                    filled_legs=self.cash_legs_for_gates(),
+                    outstanding=self.outstanding_for_gates(),
+                    book_uncertain=self.store.orders_uncertain(),
                     unmatched_after=self.store.residual(market),
                     cumulative_realized=self.store.realized_today(),
                     available_cash_usd=self.available_cash_usd)

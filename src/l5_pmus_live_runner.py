@@ -298,6 +298,10 @@ class Runner:
         self.last_pending_resolve_t = 0.0
         #: preflight's escalating retry index, reset on every window roll
         self.preflight_attempts = 0
+        #: last time the independent latch was consulted for the
+        #: CANCEL decision. 0.0, so the first tick with exposure
+        #: always asks.
+        self.last_halt_sweep_t = 0.0
 
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
@@ -1369,6 +1373,79 @@ class Runner:
         m = lim.metrics()
         return float(m["cooloff_remaining_s"]) if m.get("in_cooloff") else 0.0
 
+    #: how often the independent latch is consulted for the CANCEL decision.
+    #: The submission path reads it on every action already; this is the
+    #: separate question of whether orders ALREADY RESTING must come in, and
+    #: it only needs asking while something is resting.
+    HALT_SWEEP_EVERY_S = 10.0
+
+    def maybe_halt_deadman(self, now: float) -> Optional[Dict[str, Any]]:
+        """A LATCHED HALT MUST ALSO CANCEL, not merely stop submitting.
+
+        `authorize_arming`'s HALT_GATE_ABSENT stops this process ARMING
+        without an independent halt, and the gate in
+        `FaithfulExecutor.handle` stops the NEXT order once one is latched.
+        Neither does anything about an order already resting at the venue --
+        and a halt that leaves live exposure unattended is most of the way to
+        being no halt at all, because the watchdog latches precisely when it
+        believes nobody is managing that order.
+
+        The watchdog cannot cancel it: its image holds no credentials and no
+        signing module by design (57d02628). So the cancellation belongs
+        here, under this process's own authorization, and this is the line
+        that connects the two. `deadman` cancels by VENUE id and proves it by
+        re-reading, so an unconfirmed cancel marks the store UNCERTAIN rather
+        than reporting success.
+
+        FAIL CLOSED, DELIBERATELY: an unreachable or stale latch cancels and
+        disarms, exactly as it refuses a submission. A transient network
+        failure therefore ends the bounded session rather than risking an
+        unmanaged resting order.
+        """
+        hg = getattr(self.executor, "halt_gate", None)
+        if hg is None or self.transport is None or not self.transport.armed:
+            return None
+        # Nothing resting means nothing to cancel. Asking anyway would put an
+        # HTTP read in front of every tick of an idle session for no
+        # decision -- and the submission path is already gated.
+        if self.store.live_order_count() <= 0:
+            return None
+        if (now - getattr(self, "last_halt_sweep_t", 0.0)
+                < self.HALT_SWEEP_EVERY_S):
+            return None
+        self.last_halt_sweep_t = now
+        try:
+            # ONE read, not two: `submissions_permitted()` and
+            # `refuse_reason()` each perform their own GET, so asking both
+            # doubles the request rate against the latch endpoint for a
+            # single decision.
+            if hasattr(hg, "state"):
+                snap = hg.state() or {}
+                permitted = bool(snap.get("permitted"))
+                why = None if permitted else str(snap.get("why"))
+            else:
+                permitted = bool(hg.submissions_permitted())
+                why = hg.refuse_reason()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            permitted = False
+            why = "HALT_GATE_UNREADABLE:%s" % type(exc).__name__
+        if permitted:
+            return None
+        reason = "independent_halt:%s" % why
+        rec = LX.deadman(self.store, self.transport, reason=reason)
+        emit("L5_LIVE_HALT", dict(
+            rec, source="HALT_GATE", halt_reason=why,
+            labels=("the independent latch is asserted, stale or "
+                    "unreachable, so resting orders were cancelled by "
+                    "VENUE id and the transport disarmed. `cancelled` "
+                    "means the venue reported terminal on re-read; "
+                    "`still_open` and `unverified` mark the store "
+                    "UNCERTAIN instead of claiming success.")))
+        self.transport.disarm(reason)
+        return rec
+
     def tick(self, now: float) -> None:
         self.now_t = now
         self.roll(now)
@@ -1376,6 +1453,9 @@ class Runner:
             emit("L5_LIVE_HALT", LX.deadman(self.store, self.transport,
                                             reason="operator_halt"))
             self.transport.disarm("operator_halt")
+        # the INDEPENDENT latch, which the env var above is not: it is
+        # written by a process we do not control and survives our restart.
+        self.maybe_halt_deadman(now)
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.

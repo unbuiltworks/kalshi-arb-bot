@@ -81,6 +81,12 @@ class ValidationGates:
                 "max_cumulative_loss_usd": str(self.max_cumulative_loss_usd),
                 "cash_policy": self.cash_policy,
                 "max_windows": self.max_windows,
+                "cash_basis": ("filled (unreleased) + still-fillable "
+                               "outstanding + the proposed order, "
+                               "ACCOUNT-WIDE. Exposure adopted from the "
+                               "venue counts: the account is shared and the "
+                               "safe direction is to count it."),
+                "fails_closed_on": "an unconfirmed or disputed ledger",
                 "labels": ("ADDITIVE to the deployed SafetyLimits. These can "
                            "only refuse; they never raise an existing limit.")}
 
@@ -137,10 +143,21 @@ class ValidationGates:
                cumulative_realized: D = D(0),
                cumulative_unrealized_loss: D = D(0),
                windows_used: int = 0,
+               book_uncertain: Optional[str] = None,
                available_cash_usd: Optional[D] = None) -> Optional[str]:
         """None to allow, else the reason. Never raises on ordinary input."""
         q = _d(order_qty)
         px = _d(order_price)
+
+        # 0. THE BOOK ITSELF, BEFORE ANY FIGURE COMPUTED FROM IT. Every cash
+        #    and inventory number below is read out of the ledger, so a
+        #    ledger the venue has not confirmed makes all of them
+        #    unauthoritative. Refusing here rather than relying on the
+        #    deployed ORDER_STATE_UNCERTAIN one layer down keeps this gate
+        #    honest about its own inputs: an incomplete or disputed
+        #    reconciliation is not a small cash figure, it is an unknown one.
+        if book_uncertain:
+            return "BOOK_UNCERTAIN:%s" % str(book_uncertain)[:160]
 
         # 1. unmatched directional inventory
         if abs(_d(unmatched_after)) > self.max_unmatched_contracts:

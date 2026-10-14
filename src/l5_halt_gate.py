@@ -49,8 +49,29 @@ HALT_KEY = "l5/halt.json"
 DEFAULT_MAX_AGE_S = 900.0
 
 
+class HaltReadUnavailable(RuntimeError):
+    """`get` could not establish whether the object exists.
+
+    THE DISTINCTION IS LOAD-BEARING and this type is how a store states it.
+    Returning None for a failed read says "there is no halt", which is a
+    permissive answer; `HaltAsserter.heartbeat_no_halt` acts on it and would
+    write `halt: false` over a latch it never saw. So a store returns None
+    ONLY for a positive absence -- a 404, a missing file -- and raises this
+    for everything else: a timeout, a 500, DNS failure, a signing error.
+
+    The gate is unaffected either way: `_classify` turns both ABSENT and
+    UNREADABLE into a refusal.
+    """
+
+
 class ObjectStore(Protocol):
-    """The three verbs. Deliberately not a Railway or S3 type."""
+    """The three verbs. Deliberately not a Railway or S3 type.
+
+    `get` CONTRACT: return the bytes, return None only when the object is
+    positively absent, and raise (ideally `HaltReadUnavailable`) when the
+    answer could not be established. A store that collapses those last two
+    cannot safely back a `HaltAsserter`.
+    """
 
     def get(self, key: str) -> Optional[bytes]: ...
     def put(self, key: str, body: bytes) -> Any: ...
@@ -95,9 +116,22 @@ class HaltAsserter:
         This is the ONLY way the gate ever returns True, and it is still not a
         clear: writing `halt: false` over an EXISTING halt is refused below, so
         a watchdog cannot undo its own latch.
+
+        AN UNREADABLE RECORD IS NOT AN ABSENT ONE. The first version read the
+        record through `_read`, which collapses "no object" and "I could not
+        find out" into the same None -- so a transient GET failure, a 500, or
+        a torn JSON document in front of a LATCHED halt let this method write
+        `halt: false` straight over it. The heartbeat is the one operation
+        that moves the system toward trading, so it is the one operation that
+        may not proceed on an unestablished state.
         """
-        cur = _read(self.store)
-        if cur is not None and cur.get("halt") is True:
+        kind, cur = _classify(self.store)
+        if kind == UNREADABLE:
+            raise PermissionError(
+                "refusing to attest 'no halt' over a halt state that could "
+                "not be established: an unreadable record may be a latched "
+                "HALT, and overwriting it would clear it")
+        if kind == PRESENT and cur is not None and cur.get("halt") is not False:
             raise PermissionError(
                 "refusing to overwrite a latched HALT: clearing is an owner "
                 "action, not an automated one")
@@ -106,19 +140,46 @@ class HaltAsserter:
         return rec
 
 
-def _read(store: ObjectStore) -> Optional[dict]:
-    """None means 'could not be established', which the gate treats as halt."""
+#: the three outcomes of a halt read, kept apart because the asserter and
+#: the gate need DIFFERENT things from them. The gate may treat ABSENT and
+#: UNREADABLE alike -- both refuse -- but the asserter may not: writing over
+#: an UNREADABLE record can clear a latch, while writing over an ABSENT one
+#: cannot.
+ABSENT = "ABSENT"
+PRESENT = "PRESENT"
+UNREADABLE = "UNREADABLE"
+
+
+def _classify(store: ObjectStore) -> tuple:
+    """(kind, record). Only PRESENT carries a record."""
     try:
         raw = store.get(HALT_KEY)
     except BaseException:                                      # noqa: BLE001
-        return None
+        return (UNREADABLE, None)
     if raw is None:
-        return None
+        # a store that cannot distinguish "no object" from "read failed"
+        # must report the failure as UNREADABLE, not as None -- see
+        # FileStore.get, which narrows its except to FileNotFoundError for
+        # exactly this reason.
+        return (ABSENT, None)
     try:
         rec = json.loads(raw)
     except BaseException:                                      # noqa: BLE001
-        return None
-    return rec if isinstance(rec, dict) else None
+        return (UNREADABLE, None)
+    if not isinstance(rec, dict):
+        return (UNREADABLE, None)
+    return (PRESENT, rec)
+
+
+def _read(store: ObjectStore) -> Optional[dict]:
+    """None means 'could not be established', which the gate treats as halt.
+
+    The gate's view, deliberately lossy: ABSENT and UNREADABLE both refuse,
+    so collapsing them here changes no decision the gate makes. The asserter
+    uses `_classify` instead, where the distinction is load-bearing.
+    """
+    kind, rec = _classify(store)
+    return rec if kind == PRESENT else None
 
 
 class HaltGate:
@@ -246,17 +307,31 @@ class HttpHaltStore:
         import urllib.request
 
         url = "%s/%s" % (self.url, str(key).lstrip("/"))
+        # 404 is the ONE answer that means "there is no halt record". Every
+        # other outcome is "I could not find out", and the two must not
+        # arrive as the same None -- see HaltReadUnavailable. The gate's
+        # behaviour is identical either way; what changes is that an asserter
+        # over a store of this shape can no longer mistake a dead endpoint
+        # for a clean one.
         try:
             if self._opener is not None:
                 return self._opener(url, self.timeout_s)
             with urllib.request.urlopen(url, timeout=self.timeout_s) as r:
-                if getattr(r, "status", 200) != 200:
+                status = getattr(r, "status", 200)
+                if status == 404:
                     return None
+                if status != 200:
+                    raise HaltReadUnavailable("halt GET status %s" % status)
                 return r.read()
+        except HaltReadUnavailable:
+            raise
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
-            return None
+            if getattr(exc, "code", None) == 404:       # urllib HTTPError
+                return None
+            raise HaltReadUnavailable(
+                "halt GET failed: %s" % type(exc).__name__) from exc
 
     def put(self, key: str, body: bytes) -> Any:
         # The executor holds this object. It must not be able to write the
