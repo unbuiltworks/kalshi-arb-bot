@@ -231,6 +231,27 @@ class Authorization:
 TTL_ENV = "L5_LIVE_AUTH_TTL_S"
 DEFAULT_TTL_S = 900.0
 
+#: THE MANDATE. One owner approval covering CONSECUTIVE windows of one
+#: series, instead of one window. Default 1, which is Stage A exactly: with a
+#: budget of one window nothing below changes behaviour at all.
+#:
+#: WHY A SECOND LEVEL RATHER THAN A LOOSER CLAIM. `claim_once` writes one lock
+#: per key and never clears it, so a single key spends on the first window and
+#: a mandate is impossible without either resetting the lock (which defeats
+#: single-use) or minting a token per window (a standing licence in all but
+#: name). So the key gains a window component and claim_once is untouched: the
+#: MANDATE claim stays keyed on the session id and the WINDOW claim is keyed on
+#: mandate-plus-market, decided by the same O_EXCL call.
+MAX_WINDOWS_ENV = "L5_LIVE_AUTH_MAX_WINDOWS"
+
+#: the series a mandate covers, as an exact ticker prefix. Unset means no
+#: mandate may span markets, so a budget above one still trades one ticker.
+#: BTC15m only for now: `src/pmus_event_progress.py` measured PMUS sports
+#: serving `endDate` as gameStartTime + 14 days, so `endDate` is a window
+#: close only where that has been confirmed from venue data, and
+#: WINDOW_BOUNDS_IMPLAUSIBLE is what enforces it rather than trust.
+SERIES_ENV = "L5_LIVE_AUTH_MARKET_SERIES"
+
 #: an absolute owner deadline, optional. ISO-8601. Belt and braces with the
 #: TTL: the TTL bounds how long a claim lives, this bounds when one may be
 #: made at all.
@@ -242,6 +263,69 @@ NOT_AFTER_ENV = "L5_LIVE_AUTH_NOT_AFTER"
 #: silently inheriting it.
 SCOPED_LIMIT_FIELDS = ("max_usd_per_market", "max_total_exposure_usd",
                        "daily_realized_loss_halt_usd")
+
+
+def max_windows_env() -> int:
+    """The approved window budget. Unreadable is the tightest value."""
+    raw = (os.getenv(MAX_WINDOWS_ENV) or "").strip()
+    try:
+        n = int(raw) if raw else 1
+    except ValueError:
+        n = 1                      # an unreadable budget is one window
+    return max(1, n)               # zero or negative would mean "no windows"
+
+
+def series_prefix() -> str:
+    return (os.getenv(SERIES_ENV) or "").strip()
+
+
+def mandate_mode() -> bool:
+    """True when one approval covers more than one window."""
+    return max_windows_env() > 1
+
+
+#: the key separator for a window claim. A dot, because `_lock_path` keeps
+#: `[A-Za-z0-9_.-]` and rewrites everything else to an underscore -- a
+#: separator that got rewritten could not be told apart from a session id that
+#: happened to contain the replacement.
+WINDOW_KEY_SEP = ".w."
+
+#: `_lock_path` truncates its key, and a truncated window key could merge two
+#: DIFFERENT windows into one lock -- which would hand a spent window back. So
+#: the market is hashed to a fixed width and an over-long composite is
+#: refused rather than truncated.
+WINDOW_KEY_MAX = 110
+
+
+def window_key(sid: str, market: str) -> str:
+    """The claim key for ONE window of a mandate."""
+    h = hashlib.sha256(str(market).encode("utf-8")).hexdigest()[:16]
+    key = "%s%s%s" % (sid, WINDOW_KEY_SEP, h)
+    if len(key) > WINDOW_KEY_MAX:
+        raise ArmingRefusal("WINDOW_KEY_TOO_LONG",
+                            {"len": len(key), "max": WINDOW_KEY_MAX,
+                             "note": "the claim key would be truncated, and "
+                                     "a truncated key could merge two "
+                                     "windows into one claim"})
+    return key
+
+
+def windows_spent(path: str, sid: str) -> List[str]:
+    """The window claims this mandate has already taken, from the volume.
+
+    COUNTED FROM THE LOCK FILES, not from the ledger. The lock is created
+    before the ledger row is appended -- deliberately, so a crash in between
+    spends the window rather than releasing it -- so the ledger can be short
+    by one and the locks cannot. Counting the ledger would let a crash at that
+    exact point buy an extra window.
+    """
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", sid)[:120]
+    d = pathlib.Path(path).parent
+    if not d.is_dir():
+        return []
+    pre = "l5_auth_claim_%s%s" % (safe, WINDOW_KEY_SEP)
+    return sorted(p.name for p in d.glob("l5_auth_claim_*.lock")
+                  if p.name.startswith(pre))
 
 
 def _lock_path(path: str, sid: str) -> pathlib.Path:
@@ -676,6 +760,22 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                             {"authorized": want, "attempted": market})
     if not market:
         raise ArmingRefusal("NO_MARKET", {"note": "a claim names one market"})
+    # a MANDATE names a series, and nothing outside it. The exact-market
+    # binding above still wins when both are set, so a single-market mandate
+    # stays expressible.
+    pre = series or series_prefix()
+    if mandate_mode() and not want:
+        if not pre:
+            raise ArmingRefusal("MANDATE_SERIES_NOT_DECLARED",
+                                {"env": SERIES_ENV,
+                                 "note": "a budget above one window with no "
+                                         "series named is a licence to trade "
+                                         "any market; name the series or set "
+                                         "the exact market"})
+        if not market.startswith(pre):
+            raise ArmingRefusal("AUTHORIZATION_BOUND_TO_MARKET",
+                                {"authorized_series": pre,
+                                 "attempted": market})
     # 10. THE CLAIM MUST BE ABLE TO SURVIVE, and this process must be the
     #     declared holder. Both are properties of the process and its
     #     storage, so they are structurally outside anything about the
@@ -702,8 +802,16 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #      payload claim_once writes with O_EXCL. The claim file is never
     #      modified afterwards, so neither can be edited into something else
     #      later.
-    scope = mandate_scope(market=market, limits=limits, series=series,
-                          max_windows=max_windows)
+    # the scope records the budget and series ACTUALLY IN FORCE, so changing
+    # either after approval invalidates the mandate rather than extending it.
+    # THE ENVIRONMENT IS THE AUTHORITY on the budget, not the caller: a
+    # caller that could widen it by argument would be a second way to
+    # authorize windows, and the whole point of this module is that there is
+    # one. `max_windows` survives in the signature only for the scope a
+    # pre-boundary `Authorization.claim` records.
+    mw = max_windows_env()
+    scope = mandate_scope(market=("" if mw > 1 else market), limits=limits,
+                          series=pre, max_windows=mw)
     digest = scope_digest(scope)
     holder = holder_identity()
     claim = {"event": "CLAIMED", "session_id": sid, "market": market,
@@ -713,6 +821,88 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
              "holder": holder,
              "boundary": "authorize_arming",
              "note": "written BEFORE arming, so a crash spends it too"}
+    # 10d. A MANDATE: ONE APPROVAL, CONSECUTIVE WINDOWS, TWO LEVELS OF CLAIM.
+    #
+    #      Level 1, the MANDATE claim, is keyed on the session id exactly as a
+    #      Stage A claim is, and carries the scope digest and the holder. It is
+    #      taken once and never cleared, so one owner approval stays
+    #      single-use: a second mandate needs a new session id.
+    #
+    #      Level 2, the WINDOW claim, is keyed on mandate-plus-market through
+    #      the SAME `claim_once`, so the filesystem decides one winner per
+    #      window and a spent window stays spent forever. The market ticker is
+    #      the window identity -- BTC15m tickers are unique per window -- so
+    #      there is no counter or clock to drift or replay.
+    #
+    #      Nothing here relaxes a Stage A check: every one above has already
+    #      run for THIS window, including venue reconciliation, the halt gate,
+    #      uncertain orders and the capital envelope. A mandate only lets the
+    #      next window ASK.
+    if mw > 1:
+        if not os.getenv(NOT_AFTER_ENV, "").strip():
+            raise ArmingRefusal("MANDATE_HAS_NO_DEADLINE",
+                                {"env": NOT_AFTER_ENV,
+                                 "note": "a budget above one window with no "
+                                         "absolute deadline expires only when "
+                                         "the budget runs out, which is not a "
+                                         "bounded session"})
+        recorded = read_claim_payload(path, sid)
+        if recorded is None:
+            # the mandate itself, taken once
+            mandate = dict(claim, event="MANDATE", window=None,
+                           note=("the mandate, taken once; each window takes "
+                                 "its own claim under it"))
+            claim_once(path, sid, mandate)
+            _append(path, mandate)
+        else:
+            # EVERY WINDOW RE-PROVES THE MANDATE IT IS ACTING UNDER.
+            if recorded.get("unreadable"):
+                raise ArmingRefusal("MANDATE_SCOPE_UNREADABLE",
+                                    {"note": "the mandate payload cannot be "
+                                             "read, so neither its scope nor "
+                                             "its holder can be verified"})
+            was = str(recorded.get("scope_digest") or "")
+            if not was:
+                raise ArmingRefusal("MANDATE_SCOPE_UNRECORDED",
+                                    {"note": "this claim predates scope "
+                                             "recording and cannot be "
+                                             "verified"})
+            if was != digest:
+                changed = [k for k in SCOPE_FIELDS
+                           if str((recorded.get("scope") or {}).get(k, ""))
+                           != str(scope.get(k, ""))]
+                raise ArmingRefusal("MANDATE_SCOPE_CHANGED",
+                                    {"fields": changed or ["<digest only>"],
+                                     "note": "the running configuration is "
+                                             "not the one this mandate was "
+                                             "approved for"})
+            bad = holder_refusal(recorded.get("holder") or {}, holder)
+            if bad:
+                raise ArmingRefusal(bad["reason"], bad["detail"])
+        # THE BUDGET, counted from the locks on the volume rather than from
+        # memory, so a restart cannot buy another window.
+        wkey = window_key(sid, market)
+        spent = windows_spent(path, sid)
+        mine = _lock_path(path, wkey).name
+        if mine not in spent and len(spent) >= mw:
+            raise ArmingRefusal("MANDATE_WINDOW_BUDGET_SPENT",
+                                {"spent": len(spent), "budget": mw,
+                                 "note": "every window of this mandate has "
+                                         "been used; a further window needs a "
+                                         "new owner approval"})
+        wclaim = dict(claim, event="WINDOW",
+                      mandate_session_id=sid, window_key=wkey,
+                      windows_spent=len(spent), window_budget=mw,
+                      note=("one window of a mandate; the claim is spent on "
+                            "this market and is never cleared"))
+        # a window already spent is refused here, by the same O_EXCL call that
+        # refuses a second Stage A claim: AUTHORIZATION_ALREADY_USED.
+        claim_once(path, wkey, wclaim)
+        _append(path, wclaim)
+        if auth is not None:
+            auth.sid, auth.market, auth.claimed = sid, market, True
+        return dict(wclaim)
+
     # 11. THE CLAIM ITSELF -- taken here unless THIS process already holds it.
     #
     # The one-shot probe claims BEFORE it builds a transport, on purpose:
