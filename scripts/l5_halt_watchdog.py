@@ -29,7 +29,13 @@ import time
 from src import l5_halt_gate as HG
 from src import l5_halt_server as SRV
 from src import l5_watchdog as W
-from src import pmus_auth as A
+
+# OPTIONAL, AND ABSENT IN THE CREDENTIAL-FREE IMAGE. This entrypoint must boot
+# without any signing code; `A is None` is the normal case now, not an error.
+try:
+    from src import pmus_auth as A              # type: ignore
+except Exception:                               # noqa: BLE001
+    A = None                                    # type: ignore
 
 
 def emit(tag: str, payload) -> None:
@@ -48,19 +54,24 @@ def main() -> int:
         "state_dir": root, "port": port, "poll_s": poll_s,
         "max_order_age_s": wd.max_order_age_s,
         "cancel_enabled": wd.cancel_enabled,
-        "credentials": A.has_credentials(),
+        "credential_free": A is None,
+        "credentials": (A.has_credentials() if A is not None else False),
+        "order_source": getattr(wd.t, "name", "?"),
         "serves": "/" + HG.HALT_KEY,
         "labels": ("GET-only server; the only mutating route this process "
                    "can build is POST /v1/order/{id}/cancel"),
     })
-    if not A.has_credentials():
-        # Cannot see the venue, so cannot attest. Serving the latch and
-        # attesting nothing is the fail-closed shape: the executor stops.
+    # CREDENTIAL-FREE IS NOT AN ALARM. It is the configured shape: the
+    # watchdog judges the executor from the executor's own GET-only report and
+    # never reads the venue. Only a watchdog that has NEITHER a credential NOR
+    # a registry to read is blind, and that one cannot attest at all.
+    if A is None and not os.getenv("L5_ORDER_REGISTRY_URL", "").strip():
         emit("L5_WATCHDOG_ALARM", {
-            "kind": "no_credentials",
-            "labels": ("serving the latch read-only and attesting nothing; "
-                       "the executor will fail closed when the record "
-                       "goes stale")})
+            "kind": "no_order_source",
+            "labels": ("no credentials and no L5_ORDER_REGISTRY_URL, so "
+                       "there is nothing to judge the executor from; serving "
+                       "the latch and attesting nothing, which fails the "
+                       "executor closed when the record goes stale")})
     while True:
         try:
             emit("L5_WATCHDOG_SWEEP", wd.sweep())

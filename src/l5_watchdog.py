@@ -51,7 +51,15 @@ import os
 import re
 from typing import Any, Dict, List, Mapping, Optional
 
-from src import pmus_auth as A
+# THE SIGNING MODULE IS OPTIONAL ON PURPOSE. The credential-free watchdog
+# image omits src/pmus_auth.py entirely, so this module must import without
+# it. CancelOnlyTransport is the only thing that needs it and refuses to be
+# constructed when it is absent -- which is the point: an image with no
+# signing code cannot reach the venue however it is configured.
+try:
+    from src import pmus_auth as A              # type: ignore
+except Exception:                               # noqa: BLE001
+    A = None                                    # type: ignore
 
 #: the only mutating route this watchdog may ever use.
 CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel$")
@@ -103,11 +111,27 @@ class CancelOnlyTransport:
 
     def __init__(self, opener=None) -> None:
         #: injected in tests; production goes through pmus_auth
+        if A is None and opener is None:
+            raise RuntimeError(
+                "CancelOnlyTransport is unavailable: src/pmus_auth.py is not "
+                "in this image, so no request can be signed. A credential-"
+                "free watchdog cancels nothing; cancellation belongs to the "
+                "executor under its own credentials.")
         self._opener = opener
 
     def request(self, method: str, path: str,
                 body: Optional[Mapping[str, Any]] = None,
-                base: str = A.API) -> Any:
+                base: Optional[str] = None) -> Any:
+        # `base` is resolved HERE, not in the signature. As a default argument
+        # `A.API` is evaluated at class-definition time, so this module could
+        # not even be IMPORTED without the signing code -- which defeats the
+        # credential-free image entirely. Found by
+        # test_the_entrypoint_boots_with_the_image_closure_only.
+        if base is None:
+            if A is None:
+                raise MutationRefused(
+                    "no venue base: this image carries no signing code")
+            base = A.API
         m = str(method).upper()
         if m == "GET":
             return self._send("GET", path, None, base)
@@ -123,7 +147,8 @@ class CancelOnlyTransport:
         import ssl
         import urllib.request
         data = None if body is None else json.dumps(body).encode()
-        headers = A.signed_headers(method, path, body) if base == A.API \
+        headers = A.signed_headers(method, path, body) \
+            if (A is not None and base == A.API) \
             else {"User-Agent": "l5-watchdog"}
         req = urllib.request.Request(base + path, data=data, headers=headers,
                                      method=method)
@@ -167,6 +192,106 @@ def order_age_s(row: Mapping[str, Any], *, now: Optional[dt.datetime] = None
     if t is None:
         return None
     return ((now or _utc()) - t).total_seconds()
+
+
+#: a report older than this means the executor has stopped publishing, which
+#: is the wedged signal itself. Deliberately a small multiple of the sweep
+#: interval: the executor republishes on every heartbeat.
+DEFAULT_REPORT_MAX_AGE_S = 120.0
+
+
+class RegistryOrderSource:
+    """The executor's own GET-only report, shaped like `open_orders()`.
+
+    WHY THIS EXISTS, AND WHAT IT COSTS. The ONLY reason this watchdog ever
+    needed venue credentials was to read `/v1/orders/open` and judge the
+    executor from the authority. Removing that one input removes the
+    credential entirely -- the latch, the GET-only server and the attestation
+    touch no venue at all -- so the image can carry no request-signing code.
+    That is permission-level isolation achieved by holding no credential to
+    scope, which is stronger than any route restriction.
+
+    WHAT IS GIVEN UP, STATED PLAINLY: independent verification. This watchdog
+    believes the executor's own report, so it is a LIVENESS detector, not an
+    auditor. An executor that is alive and wrong is believed. The venue-side
+    audit stays with the services that are structurally read-only and already
+    hold credentials.
+
+    A STALE REPORT IS THE STRONGER SIGNAL. An executor that has stopped
+    publishing has stopped managing, whatever its last orders looked like --
+    and that is detectable without seeing the venue. `readable: false` is the
+    same: the executor says its own ledger is unreadable, which is not a
+    state to keep trading through.
+
+    There is NO cancel method here, by construction, and no `request()`:
+    cancellation belongs to the executor under its own credentials.
+    """
+
+    DEFAULT_TIMEOUT_S = 3.0
+    name = "REGISTRY_READ_ONLY"
+
+    def __init__(self, url: str, *, timeout_s: float = DEFAULT_TIMEOUT_S,
+                 opener=None) -> None:
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("RegistryOrderSource needs a url")
+        self.url = url.strip().rstrip("/")
+        self.timeout_s = float(timeout_s)
+        self._opener = opener
+        self._last: Optional[Dict[str, Any]] = None
+
+    def fetch(self) -> Dict[str, Any]:
+        """The report, or RAISE. A failure must reach the sweep's read_error
+        path rather than become an empty list -- an unreadable report is not
+        evidence of an empty book."""
+        import urllib.request
+        from src import l5_order_registry_server as REG
+        url = "%s/%s" % (self.url, REG.REGISTRY_KEY.lstrip("/"))
+        if self._opener is not None:
+            raw = self._opener(url, self.timeout_s)
+        else:
+            with urllib.request.urlopen(url, timeout=self.timeout_s) as r:
+                if getattr(r, "status", 200) != 200:
+                    raise RuntimeError("registry_http_%s" % getattr(r, "status", "?"))
+                raw = r.read()
+        rec = json.loads(raw)
+        if not isinstance(rec, Mapping):
+            raise RuntimeError("registry_malformed")
+        if rec.get("readable") is not True:
+            # the executor itself says its ledger is unknown
+            raise RuntimeError("registry_not_readable")
+        self._last = dict(rec)
+        return self._last
+
+    def open_orders(self) -> List[Dict[str, Any]]:
+        """Rows in the shape `sweep()` already consumes.
+
+        `t` is the ACK time the executor recorded, mapped onto `createTime`
+        so `order_age_s` needs no special case. `leavesQuantity` is
+        deliberately ABSENT rather than invented: the registry publishes only
+        orders its ledger still believes live, and `is_terminal` then falls
+        through to the state hint, which is also absent -- so every published
+        row is treated as working, which is the conservative reading.
+        """
+        rec = self.fetch()
+        out: List[Dict[str, Any]] = []
+        for r in (rec.get("orders") or []):
+            if not isinstance(r, Mapping):
+                continue
+            out.append({"id": str(r.get("venue_order_id") or ""),
+                        "marketSlug": str(r.get("market") or ""),
+                        "createTime": str(r.get("t") or "") or None,
+                        "session_id": str(r.get("session_id") or "")})
+        return out
+
+    def report_age_s(self, *, now: Optional[dt.datetime] = None
+                     ) -> Optional[float]:
+        """Age of the LAST fetched report. None means not establishable,
+        which the caller must treat as stale, never as fresh."""
+        rec = self._last or {}
+        t = _parse_t(rec.get("as_of_utc"))
+        if t is None:
+            return None
+        return ((now or _utc()) - t).total_seconds()
 
 
 AUTOMATIC = "MANUAL_ORDER_INDICATOR_AUTOMATIC"
@@ -246,11 +371,13 @@ class Watchdog:
 
     def __init__(self, transport: Any, asserter: Any, *,
                  max_order_age_s: float = DEFAULT_MAX_ORDER_AGE_S,
+                 report_max_age_s: float = DEFAULT_REPORT_MAX_AGE_S,
                  cancel_enabled: bool = False, who: str = "l5-watchdog",
                  oracle: Any = None) -> None:
         self.t = transport
         self.asserter = asserter
         self.max_order_age_s = float(max_order_age_s)
+        self.report_max_age_s = float(report_max_age_s)
         self.who = str(who)
         self.oracle = oracle
         #: NO ORACLE, NO CANCEL -- and not as a default that a flag can
@@ -287,6 +414,29 @@ class Watchdog:
             out["read_error"] = type(exc).__name__
             return out
         out["open_orders"] = len(rows)
+        # A STALE REPORT IS THE WEDGED SIGNAL, and a stronger one than any
+        # order's age: an executor that has stopped publishing has stopped
+        # managing, whatever its last orders looked like. Only a source that
+        # reports its own age is checked, so the venue-reading transport is
+        # unaffected. None means not establishable, which is stale.
+        _age_of = getattr(self.t, "report_age_s", None)
+        if callable(_age_of):
+            try:
+                ra = _age_of(now=now)
+            except BaseException:                              # noqa: BLE001
+                ra = None
+            out["report_age_s"] = ra
+            out["report_max_age_s"] = self.report_max_age_s
+            if ra is None or ra > self.report_max_age_s:
+                out["halted"] = self.asserter.assert_halt(
+                    reason="EXECUTOR_REPORT_STALE",
+                    evidence={"report_age_s": ra,
+                              "report_max_age_s": self.report_max_age_s,
+                              "source": getattr(self.t, "name", "?"),
+                              "note": ("the executor stopped publishing its "
+                                       "own order report; it is not managing "
+                                       "whatever it still has resting")})
+                return out
         overdue = []
         for r in rows:
             if is_terminal(r):
@@ -431,6 +581,27 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
     from src import l5_halt_gate as HG
     st = store if store is not None else HG.FileStore(
         os.getenv("L5_WATCHDOG_STATE_DIR", "/data"))
+    # CREDENTIAL-FREE MODE, and it is the default when configured. Reading the
+    # executor's own report needs no venue access, so this process holds no
+    # credentials and its image carries no signing code. Cancel is then
+    # unavailable by construction -- there is nothing to cancel WITH -- and
+    # cancellation stays with the executor under its own credentials.
+    reg = str(os.getenv("L5_ORDER_REGISTRY_URL", "")).strip()
+    # ...and ONLY when the venue is genuinely unreachable from here. With a
+    # signing module and credentials present, the previous venue-reading
+    # behaviour is preserved exactly: this must not silently take the cancel
+    # path away from a deployment that was configured for it.
+    _blind = A is None or not A.has_credentials()
+    if transport is None and reg and _blind:
+        return Watchdog(
+            RegistryOrderSource(reg),
+            asserter_for(st, who=os.getenv("L5_WATCHDOG_WHO", "l5-watchdog")),
+            max_order_age_s=float(os.getenv("L5_WATCHDOG_MAX_ORDER_AGE_S",
+                                            str(DEFAULT_MAX_ORDER_AGE_S))),
+            report_max_age_s=float(os.getenv("L5_WATCHDOG_REPORT_MAX_AGE_S",
+                                             str(DEFAULT_REPORT_MAX_AGE_S))),
+            cancel_enabled=False,
+            oracle=None)
     return Watchdog(
         transport if transport is not None else CancelOnlyTransport(),
         asserter_for(st, who=os.getenv("L5_WATCHDOG_WHO", "l5-watchdog")),

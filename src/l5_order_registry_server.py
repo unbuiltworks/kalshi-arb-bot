@@ -34,6 +34,7 @@ window.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import threading
@@ -74,6 +75,12 @@ def registry(store: Any) -> Dict[str, Any]:
                      "session_id": str(row.get("session_id") or ""),
                      "t": str(row.get("t") or "")})
     return {"readable": True, "orders": rows,
+            # THE REPORT'S OWN AGE, so a credential-free watchdog can tell a
+            # STALE report from a fresh empty one. Those are opposite facts:
+            # "the executor publishes nothing because it owns nothing" is
+            # safe, and "the executor has stopped publishing" is the wedged
+            # signal. Without this field they are indistinguishable.
+            "as_of_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
             "labels": ("venue order ids this executor ACKed and still "
                        "believes live. A claim here is NECESSARY and NOT "
                        "SUFFICIENT: the watchdog also requires the venue's "
