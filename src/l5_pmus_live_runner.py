@@ -239,6 +239,7 @@ class Runner:
         #: did not confirm, which refuses arming rather than falling back.
         self.window_bounds: Dict[int, Optional[Dict[str, Any]]] = {}
         self.arm_claim: Optional[Dict[str, Any]] = None
+        self.last_orphan_sweep_t = 0.0
         self.feed = feed
         self.clock = clock
         self.store = LX.InventoryStore(os.path.join(root, "inventory.json"))
@@ -1486,6 +1487,78 @@ class Runner:
         self.arm_claim = None
         return rec
 
+    #: how often an UNARMED process re-attempts to withdraw an order it owns.
+    #: Longer than the halt sweep: this is a recovery path, not a hot path.
+    ORPHAN_SWEEP_EVERY_S = 30.0
+
+    def maybe_cancel_orphans(self, now: float) -> Optional[Dict[str, Any]]:
+        """WITHDRAW AN ORDER WE OWN BUT CAN NO LONGER MANAGE.
+
+        THE DEFECT THIS EXISTS FOR. Every cancellation path in this runner was
+        gated on `transport.armed`: the window-end deadman, the authorization
+        expiry, the halt sweep and the operator halt all return early when the
+        transport is not armed. That is correct for an orderly session -- but
+        the dangerous case is the DISORDERLY one. If this process dies with an
+        order resting, the restarted process cannot arm (a new pid is not the
+        recorded holder, and the shadow lock refuses first anyway), so NOTHING
+        cancelled it. Reconciliation adopted the order and marked the book
+        uncertain, which correctly stopped all further trading -- and left the
+        order resting at the venue until the venue itself expired it, which is
+        exactly the orphan risk, and venue-side expiry is UNKNOWN.
+        Independent monitoring cannot close it either: the watchdog holds no
+        credentials by design, so it can latch a halt but cannot withdraw
+        anything.
+
+        CANCELLATION DOES NOT NEED AUTHORIZATION, and that is the whole
+        resolution. Both locks gate SUBMISSION: `ShadowOnlyTransport` blocks
+        `submit` alone and says so ("CANCEL IS DELIBERATELY NOT BLOCKED.
+        Cancelling only ever reduces exposure, and a lock that prevented it
+        could strand a resting order"), and the owner token gates arming.
+        Withdrawing an order we already own only ever reduces exposure, so an
+        unarmed process may -- and must -- do it.
+
+        ONLY OUR OWN ORDERS. `deadman` iterates this ledger's `live_orders`
+        and cancels by VENUE id, so an order we never recorded is untouched: a
+        manual order placed by the owner is not in this book and is never
+        cancelled by this path.
+
+        PROOF, NOT ACKNOWLEDGEMENT. `deadman` re-reads every id afterwards and
+        classifies by the venue's own state, so `cancelled` means terminal on
+        re-read; `still_open`, `unverified` and `no_venue_id` mark the store
+        UNCERTAIN and are retried on the next sweep rather than reported as
+        success.
+        """
+        t = self.transport
+        if t is None or t.armed:
+            return None                 # the armed paths own this
+        if self.store.live_order_count() <= 0:
+            return None
+        # NEVER on a book the venue has not confirmed: cancelling by an id we
+        # are not sure is current is how a fill gets lost.
+        if not self.reconciled:
+            return None
+        if (now - getattr(self, "last_orphan_sweep_t", 0.0)
+                < self.ORPHAN_SWEEP_EVERY_S):
+            return None
+        self.last_orphan_sweep_t = now
+        # a final progress read first, so an order that filled since the last
+        # poll is booked as a fill rather than disappearing into a cancel.
+        progress = self.poll_orders()
+        if self.store.live_order_count() <= 0:
+            return None
+        rec = LX.deadman(self.store, t, reason="orphan_unarmed")
+        emit("L5_LIVE_ORPHAN_CANCEL", dict(
+            rec, final_progress=len(progress or []),
+            labels=("an order this ledger owns was resting while this process "
+                    "was NOT armed, which is the state a crash leaves behind. "
+                    "Cancellation needs no authorization -- both locks gate "
+                    "submission -- so it was withdrawn by VENUE id and proved "
+                    "by re-reading. Only orders in this ledger are touched; a "
+                    "manual order is never one of them. `cancelled` means the "
+                    "venue reported terminal; anything else marks the store "
+                    "UNCERTAIN and is retried on the next sweep.")))
+        return rec
+
     def maybe_halt_deadman(self, now: float) -> Optional[Dict[str, Any]]:
         """A LATCHED HALT MUST ALSO CANCEL, not merely stop submitting.
 
@@ -1565,6 +1638,9 @@ class Runner:
         self.maybe_halt_deadman(now)
         # and the claim's own venue-bounded expiry, same cancellation route
         self.maybe_expire_authorization(now)
+        # and, when NOT armed, withdraw anything this ledger still owns: a
+        # crash leaves exactly that state and no other path covers it.
+        self.maybe_cancel_orphans(now)
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.
