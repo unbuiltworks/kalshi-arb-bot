@@ -64,9 +64,25 @@ ROLE_ENV = "PMUS_SERVICE_ROLE"
 MANIFEST_LAMBDA = D("0.04518752824220514525")
 
 #: P38 manifest limits -- account protection only
+#: ONE OUTSTANDING ORDER, and it is now configurable because it had to be.
+#: This was hardcoded at 8, so the bounded pilot's "one outstanding order"
+#: restriction was not enforceable at all: the $1 cash cap bounds DOLLARS, so
+#: at a 3c quote eight clips could rest at once and still total under a
+#: dollar. The dollar bound was never the problem; the count bound did not
+#: exist. The pilot default is 1; a deployment that wants the old behaviour
+#: must say 8 out loud.
+def max_live_orders() -> int:
+    raw = (os.getenv("L5_MAX_LIVE_ORDERS") or "").strip()
+    try:
+        n = int(raw) if raw else 1
+    except ValueError:
+        n = 1                      # an unreadable limit is the tightest one
+    return max(1, n)               # zero or negative would refuse everything
+
+
 PROBE_LIMITS = dict(max_usd_per_market=D("5"), max_abs_residual=D("10"),
                     max_total_exposure_usd=D("5"), max_concurrent_markets=1,
-                    max_live_orders=8,
+                    max_live_orders=max_live_orders(),
                     daily_realized_loss_halt_usd=D("5"))
 
 #: retried quickly: until it passes, an armed runner cannot act on the

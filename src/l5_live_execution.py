@@ -301,6 +301,12 @@ class NullTransport:
         return []
 
 
+#: what an uncountable book reports as its live-order count. Deliberately far
+#: above any sane `max_live_orders`, so "I could not count" is always at the
+#: limit rather than below it.
+AT_LIMIT_WHEN_UNCOUNTABLE = 1_000_000
+
+
 def client_order_id(action_key: str, attempt: int = 0) -> str:
     """DERIVED, never random: the same action always yields the same id.
 
@@ -921,6 +927,45 @@ class InventoryStore:
 
     def live_order_count(self) -> int:
         return len(self.state.get("live_orders") or {})
+
+    def still_fillable_order_count(self) -> int:
+        """Orders that could still take money at the venue, right now.
+
+        `live_order_count` is `len(live_orders)`, which counts a fully-filled
+        row the same as a resting one -- so it is neither a count of exposure
+        nor a count of slots. A one-order limit enforced on it would both
+        refuse on a dead row and, worse, MISS an order the venue may still
+        hold. This is the count the limit must bind on, and it is union of
+        everything that might still be live:
+
+          - a live order with `remaining > 0` and no terminal state hint;
+          - a live order whose `remaining` cannot be READ, charged as live,
+            because an unreadable row is not an absent one. This is the same
+            worst-case convention `outstanding_by_market` and
+            `risk_exposure_usd` use for an unreadable price;
+          - every parked `pending_terminal` entry. Absent from the venue's
+            open orders is terminal THERE, which includes FILLED -- but until
+            an authoritative `/v1/order` read books its final cumQuantity we
+            cannot say the order is gone, and a cancel we could not verify
+            lands here;
+          - every `quarantine` entry, for the same reason.
+
+        An order whose cancel came back `still_open` or `unverified` stays in
+        `live_orders` with its remaining intact, so it is counted by the first
+        rule -- which is the case that matters most, because that is the
+        unmanaged resting order a one-order pilot must never sit on top of.
+        """
+        n = 0
+        for o in (self.state.get("live_orders") or {}).values():
+            state = str(o.get("state") or "")
+            if any(h in state.upper() for h in TERMINAL_HINTS):
+                continue
+            rem = venue_decimal(o.get("remaining"))
+            if rem is None or rem > 0:
+                n += 1
+        n += len(self.state.get("pending_terminal") or {})
+        n += len(self.state.get("quarantine") or {})
+        return n
 
     def outstanding_by_market(self) -> Dict[str, D]:
         """Still-fillable notional per market, at the price we offered."""
@@ -2458,6 +2503,19 @@ class FaithfulExecutor:
     # too. Counting it makes the gate refuse EARLIER; excluding it would let
     # an automated dollar sit on top of exposure we did not create.
 
+    def _still_fillable_or_at_limit(self) -> int:
+        """The still-fillable count, or a value that is certainly at the
+        limit. Never raises into the order path and never reads as zero."""
+        try:
+            return int(self.store.still_fillable_order_count())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # A number we could not establish must refuse. `max_live_orders`
+            # is a small positive integer, so any large value is at or past
+            # it whatever it is configured to.
+            return AT_LIMIT_WHEN_UNCOUNTABLE
+
     def cash_legs_for_gates(self) -> List[Dict[str, Any]]:
         """Filled notional as unreleased cash, one leg per market.
 
@@ -2717,7 +2775,13 @@ class FaithfulExecutor:
             realized_today=self.store.realized_today(),
             open_markets=open_markets,
             outstanding_by_market=outstanding,
-            live_order_count=self.store.live_order_count(),
+            # THE COUNT THAT BINDS THE ONE-ORDER LIMIT, and it fails closed.
+            # `live_order_count` counts rows; this counts orders that could
+            # still take money, including a cancel we could not verify and
+            # every parked or quarantined order. A count we cannot compute is
+            # reported as at the limit rather than as zero: the alternative
+            # is a limit that disappears exactly when the book is confusing.
+            live_order_count=self._still_fillable_or_at_limit(),
             outstanding_residual=self.store.outstanding_residual(market),
             orders_uncertain=self.store.orders_uncertain(),
             # the corrected metric: worst-case loss over both settlements,

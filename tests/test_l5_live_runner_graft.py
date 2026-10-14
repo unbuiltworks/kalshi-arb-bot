@@ -51,15 +51,37 @@ def _kwargs(call):
 # --------------------------------------------------------------- the bounds
 
 def test_the_runner_carries_exactly_the_authorized_bounds():
+    """MAX_LIVE_ORDERS MOVED FROM 8 TO 1, by owner authorization on
+    2026-10-14, and it is now the only bound that is configurable.
+
+    It was hardcoded at 8, which meant the bounded pilot's "one outstanding
+    order" restriction was not enforceable at all: the $1 cash cap bounds
+    DOLLARS, so at a 3c quote eight clips could rest at once and still total
+    under a dollar. The dollar bound was never the problem; the count bound
+    did not exist.
+
+    Every other bound stays pinned to its literal, so this test still fails
+    on any drift it was written to catch. The live-order bound is asserted
+    against `max_live_orders()` rather than a literal because it is now
+    deployment configuration -- and the default is pinned separately below,
+    so a change to THAT does not slip through either.
+    """
     from src import l5_pmus_live_runner as R
     assert {k: str(v) for k, v in R.PROBE_LIMITS.items()} == {
         "max_usd_per_market": "5",
         "max_abs_residual": "10",
         "max_total_exposure_usd": "5",
         "max_concurrent_markets": "1",
-        "max_live_orders": "8",
+        "max_live_orders": str(R.max_live_orders()),
         "daily_realized_loss_halt_usd": "5",
     }
+
+
+def test_the_authorized_live_order_default_is_one(monkeypatch):
+    """The pilot default, pinned on its own. Raising it must be deliberate."""
+    from src import l5_pmus_live_runner as R
+    monkeypatch.delenv("L5_MAX_LIVE_ORDERS", raising=False)
+    assert R.max_live_orders() == 1
 
 
 def test_the_bounds_are_accepted_by_the_canonical_limits_object():
@@ -67,7 +89,8 @@ def test_the_bounds_are_accepted_by_the_canonical_limits_object():
     from src import l5_live_execution as LX
     from src import l5_pmus_live_runner as R
     lim = LX.SafetyLimits(**R.PROBE_LIMITS)
-    assert lim.max_live_orders == 8
+    assert lim.max_live_orders == R.max_live_orders()
+    assert lim.max_live_orders >= 1       # zero would refuse the first order
     assert str(lim.max_total_exposure_usd) == "5"
     assert str(lim.max_abs_residual) == "10"
     assert str(lim.daily_realized_loss_halt_usd) == "5"
