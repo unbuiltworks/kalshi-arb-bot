@@ -2771,6 +2771,23 @@ class FaithfulExecutor:
             # it whatever it is configured to.
             return AT_LIMIT_WHEN_UNCOUNTABLE
 
+    def inventory_for_gates(self, market: str) -> Dict[str, Any]:
+        """Confirmed per-side quantity and ACTUAL acquisition cost.
+
+        Both come from the ledger the venue has reconciled, never from a
+        quote: `leg_cost` is what fills actually charged us, and a leg whose
+        basis was adopted rather than attested already carries the $1-a-share
+        worst case, which is the conservative direction. A side present with
+        no cost is passed through as-is so the gate refuses it as an
+        incoherent book instead of reading it as free inventory.
+        """
+        lc = self.store.leg_cost(market)
+        return {"market": market,
+                "up_qty": self.store.position(market, UP),
+                "dn_qty": self.store.position(market, DOWN),
+                "up_cost": lc.get("UP", D(0)),
+                "dn_cost": lc.get("DOWN", D(0))}
+
     def cash_legs_for_gates(self) -> List[Dict[str, Any]]:
         """Filled notional as unreleased cash, one leg per market.
 
@@ -3011,7 +3028,8 @@ class FaithfulExecutor:
                     book_uncertain=self.store.orders_uncertain(),
                     unmatched_after=self.store.residual(market),
                     cumulative_realized=self.store.realized_today(),
-                    available_cash_usd=self.available_cash_usd)
+                    available_cash_usd=self.available_cash_usd,
+                    inventory=self.inventory_for_gates(market))
             except Exception as exc:                       # noqa: BLE001
                 # a gate that cannot evaluate refuses. Failing open here
                 # would silently remove the protection it exists to be.
@@ -3175,9 +3193,17 @@ class FaithfulExecutor:
                 return prov.refuse("QUEUE_MEASUREMENT",
                                    str(built.get("reason"))[:120])
             mi = built["intent"]
+            # MODE IS WHAT REACHES THE WIRE. l5_order_body.from_intent
+            # derives participateDontInitiate from `mode == "MAKER"` and
+            # ignores `post_only` entirely, and the maker_only overlay
+            # compares against FT.MAKER as well -- so the descriptive string
+            # that used to sit here would have been sent NOT post-only, and
+            # refused MAKER_ONLY_NO_TAKER on the way out. The measurement's
+            # own label is preserved as `qm_mode` for the record.
             intent = {"client_order_id": coid, "market": market,
                       "side": mi["side"], "price": mi["price"],
-                      "qty": mi["qty"], "mode": mi["mode"],
+                      "qty": mi["qty"], "mode": FT.MAKER,
+                      "qm_mode": mi["mode"],
                       "action_key": key, "post_only": True}
             prov.stage("QUEUE_MEASUREMENT", dict(mi, replaced_l5_intent={
                 "side": str(dec["side"]), "price": str(tr["price"]),

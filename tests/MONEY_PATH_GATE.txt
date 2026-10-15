@@ -75,3 +75,9 @@ tests/test_l5_watchdog_halt_end_to_end.py
 # 8. THE IMAGE ACTUALLY SHIPS WHAT THE TESTS TESTED
 tests/test_l5_pmus_live_image_closure.py
 tests/test_l5_pmus_live_wiring.py
+
+9. WORST-CASE SETTLEMENT DEFICIT (default disabled; fail-closed when set)
+   tests/test_l5_worst_case_deficit.py
+   deficit = cost - min(up, dn), maximised over which outstanding orders
+   fill. Below zero the book pays out on BOTH settlement outcomes. No order
+   is exempt: a completing order is priced exactly like an opening one.

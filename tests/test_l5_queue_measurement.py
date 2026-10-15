@@ -11,6 +11,8 @@ from decimal import Decimal as D
 
 import pytest
 
+from src import l5_faithful_translation as FT
+from src import l5_order_body as OB
 from src import l5_queue_measurement as QM
 
 
@@ -376,7 +378,14 @@ def test_the_measurement_order_is_what_reaches_the_transport(e2e, tmp_path):
     assert sent["side"] == "UP"
     assert sent["price"] == "0.60"
     assert sent["post_only"] is True
-    assert sent["mode"] == "MAKER_JOIN_BEST_BID"
+    # MODE IS WHAT REACHES THE WIRE. l5_order_body derives
+    # participateDontInitiate from `mode == "MAKER"` and ignores post_only,
+    # so the mode must be exactly MAKER or the order rests NOT post-only --
+    # and the maker_only overlay would refuse it first. The descriptive
+    # label is kept alongside, where it cannot affect the body.
+    assert sent["mode"] == FT.MAKER
+    assert sent["qm_mode"] == "MAKER_JOIN_BEST_BID"
+    assert OB.from_intent(sent, "m")["participateDontInitiate"] is True
     # fee-inclusive $1: 1.62 contracts at 0.60 is $0.972 cash, $0.999 all-in
     qty = D(sent["qty"])
     assert qty == D("1.62")

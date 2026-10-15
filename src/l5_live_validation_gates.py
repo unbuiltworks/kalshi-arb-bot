@@ -62,7 +62,9 @@ class ValidationGates:
                  max_unmatched_contracts: D = D("5"),
                  max_cumulative_loss_usd: D = D("20"),
                  cash_policy: str = NO_RECYCLING,
-                 max_windows: int = 20) -> None:
+                 max_windows: int = 20,
+                 max_worst_case_deficit_usd: Optional[D] = None,
+                 fee_theta_worst: D = D("0.0695")) -> None:
         if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
             raise ValueError("unknown cash policy: %r" % cash_policy)
         if cash_policy == RECYCLE_ON_COMPLETE:
@@ -74,6 +76,16 @@ class ValidationGates:
         self.max_cumulative_loss_usd = _d(max_cumulative_loss_usd)
         self.cash_policy = cash_policy
         self.max_windows = int(max_windows)
+        # DEFAULT DISABLED. None means the gate is not configured and never
+        # refuses, so adding it changes no existing behaviour until an owner
+        # sets a number.
+        self.max_worst_case_deficit_usd = (
+            None if max_worst_case_deficit_usd is None
+            else _d(max_worst_case_deficit_usd))
+        # the TAKER coefficient, always. The maker rebate is a credit this
+        # accounting has never been entitled to assume, so the worst case is
+        # priced as if every leg paid the taker fee.
+        self.fee_theta_worst = _d(fee_theta_worst)
 
     def as_dict(self) -> Dict[str, Any]:
         return {"max_cash_deployed_usd": str(self.max_cash_deployed_usd),
@@ -81,6 +93,16 @@ class ValidationGates:
                 "max_cumulative_loss_usd": str(self.max_cumulative_loss_usd),
                 "cash_policy": self.cash_policy,
                 "max_windows": self.max_windows,
+                "max_worst_case_deficit_usd": (
+                    None if self.max_worst_case_deficit_usd is None
+                    else str(self.max_worst_case_deficit_usd)),
+                "fee_theta_worst": str(self.fee_theta_worst),
+                "worst_case_deficit_basis": (
+                    "C - min(up_qty, dn_qty), where C is confirmed "
+                    "acquisition cost plus this order plus the worst "
+                    "subset of still-fillable outstanding orders, with "
+                    "the TAKER fee charged on every leg. Below zero the "
+                    "book pays out on BOTH settlement outcomes."),
                 "cash_basis": ("filled (unreleased) + still-fillable "
                                "outstanding + the proposed order, "
                                "ACCOUNT-WIDE. Exposure adopted from the "
@@ -131,6 +153,124 @@ class ValidationGates:
                 total += qty * px
         return total
 
+    # ------------------------------------------- worst-case settlement
+
+    #: an unreadable price is charged at the most a share can cost
+    UNKNOWN_PRICE_WORST_CASE = D("1")
+
+    def fee_worst(self, qty: D, price: D) -> D:
+        """Conservative fee on one leg: Theta * C * p * (1-p), TAKER Theta.
+
+        The maker rebate is NEVER netted here. A credit we are not
+        guaranteed, applied to a worst case, is not a worst case.
+        """
+        q = _d(qty); p = _d(price)
+        if p < 0 or p > 1:
+            p = self.UNKNOWN_PRICE_WORST_CASE
+        return self.fee_theta_worst * q * p * (D(1) - p)
+
+    def worst_case_deficit(self, *,
+                           up_qty: Any, dn_qty: Any,
+                           up_cost: Any, dn_cost: Any,
+                           order_side: str,
+                           order_qty: Any, order_price: Any,
+                           outstanding: Sequence[Mapping[str, Any]] = (),
+                           ) -> Dict[str, Any]:
+        """`C - min(up, dn)` for the book this order would create, maximised
+        over which outstanding orders fill.
+
+        WHY THIS QUANTITY. A book holding `a` UP and `b` DOWN for total
+        executed cost `C` pays `a` if UP settles and `b` if DOWN settles, so
+        its worst outcome is `min(a, b) - C`. The deficit is the negative of
+        that. Strictly below zero, the book is profitable on BOTH outcomes
+        and carries no directional risk at all; at `x` above zero, `x` is the
+        most the book can lose however the window resolves.
+
+        THE PROPOSED ORDER IS ASSUMED TO FILL. That is the question being
+        asked -- what would this order leave us holding -- so a completing
+        order is NOT exempt and is not special-cased: it is priced exactly
+        like an opening one and simply happens to reduce the deficit.
+
+        OUTSTANDING ORDERS ARE AN ADVERSARY, NOT AN ASSUMPTION. Each may or
+        may not fill. Filling adds its cost AND its quantity, so it raises
+        the deficit when its side is not the binding minimum and lowers it
+        when it is. Within one side the choice is all-or-nothing -- adding
+        more of a side that does not lift the minimum only ever costs -- so
+        the maximum over every subset is attained at one of four corners:
+        nothing fills, only UP fills, only DOWN fills, everything fills.
+        All four are evaluated and the WORST is returned, which is exact
+        rather than merely conservative.
+
+        Returns {'ok': bool, 'deficit': D, 'scenario': str, 'scenarios': ...}
+        or {'ok': False, 'reason': ...} when the state cannot be read. An
+        unreadable input is never silently treated as zero.
+        """
+        side = str(order_side or "").upper()
+        if side not in ("UP", "DOWN"):
+            return {"ok": False, "reason": "DEFICIT_ORDER_SIDE_UNKNOWN"}
+        try:
+            a0 = _d(up_qty); b0 = _d(dn_qty)
+            cu = _d(up_cost); cd = _d(dn_cost)
+            oq = _d(order_qty); op = _d(order_price)
+        except Exception:                                  # noqa: BLE001
+            return {"ok": False, "reason": "DEFICIT_INVENTORY_UNREADABLE"}
+        if a0 < 0 or b0 < 0 or cu < 0 or cd < 0 or oq <= 0:
+            return {"ok": False, "reason": "DEFICIT_INVENTORY_IMPLAUSIBLE"}
+        # QUANTITY WITHOUT COST is an incoherent book, not a free position.
+        if (a0 > 0 and cu <= 0) or (b0 > 0 and cd <= 0):
+            return {"ok": False, "reason": "DEFICIT_QUANTITY_WITHOUT_COST"}
+        if op <= 0 or op > 1:
+            op = self.UNKNOWN_PRICE_WORST_CASE
+
+        # the book this order would create, before any outstanding order
+        base_a = a0 + (oq if side == "UP" else D(0))
+        base_b = b0 + (oq if side == "DOWN" else D(0))
+        base_c = cu + cd + oq * op + self.fee_worst(oq, op)
+
+        # each outstanding leg, bucketed by side; an unreadable one fails closed
+        add = {"UP": [D(0), D(0)], "DOWN": [D(0), D(0)]}   # qty, cost
+        for o in outstanding:
+            q = _d(o.get("qty"))
+            if q <= 0:
+                continue
+            px = o.get("price")
+            px = self.UNKNOWN_PRICE_WORST_CASE if px is None else _d(px)
+            if px <= 0 or px > 1:
+                px = self.UNKNOWN_PRICE_WORST_CASE
+            intent = str(o.get("intent") or o.get("side") or "").upper()
+            if intent.endswith("BUY_SHORT") or intent == "DOWN":
+                s2 = "DOWN"
+            elif intent.endswith("BUY_LONG") or intent == "UP":
+                s2 = "UP"
+            else:
+                return {"ok": False, "reason": "DEFICIT_OUTSTANDING_SIDE_UNKNOWN"}
+            add[s2][0] += q
+            add[s2][1] += q * px + self.fee_worst(q, px)
+
+        corners = {
+            "none": (D(0), D(0), D(0), D(0)),
+            "up_only": (add["UP"][0], add["UP"][1], D(0), D(0)),
+            "dn_only": (D(0), D(0), add["DOWN"][0], add["DOWN"][1]),
+            "all": (add["UP"][0], add["UP"][1],
+                    add["DOWN"][0], add["DOWN"][1]),
+        }
+        out: Dict[str, str] = {}
+        worst = None; worst_name = ""
+        for name, (ua, uc, da, dc) in corners.items():
+            a = base_a + ua; b = base_b + da
+            c = base_c + uc + dc
+            d = c - min(a, b)
+            out[name] = str(d)
+            if worst is None or d > worst:
+                worst = d; worst_name = name
+        return {"ok": True, "deficit": worst, "scenario": worst_name,
+                "scenarios": out,
+                "book": {"up_qty": str(base_a), "dn_qty": str(base_b),
+                         "cost": str(base_c)},
+                "labels": ("deficit = cost - min(up, dn), maximised over "
+                           "which outstanding orders fill. Negative means "
+                           "the book pays on BOTH outcomes.")}
+
     # -------------------------------------------------------- refusal
 
     def refuse(self, *,
@@ -144,7 +284,9 @@ class ValidationGates:
                cumulative_unrealized_loss: D = D(0),
                windows_used: int = 0,
                book_uncertain: Optional[str] = None,
-               available_cash_usd: Optional[D] = None) -> Optional[str]:
+               available_cash_usd: Optional[D] = None,
+               inventory: Optional[Mapping[str, Any]] = None
+               ) -> Optional[str]:
         """None to allow, else the reason. Never raises on ordinary input."""
         q = _d(order_qty)
         px = _d(order_price)
@@ -180,6 +322,31 @@ class ValidationGates:
         if committed > self.max_cash_deployed_usd:
             return ("CASH_COMMITMENT:%s>%s"
                     % (committed, self.max_cash_deployed_usd))
+        # 4. WORST-CASE SETTLEMENT DEFICIT. Default disabled; when an owner
+        #    configures it, no order may leave the book able to lose more
+        #    than the bound on EITHER outcome. This is the only gate that
+        #    knows a two-sided book can be safe at a cost the cash gate
+        #    would otherwise treat as pure exposure.
+        if self.max_worst_case_deficit_usd is not None:
+            if not isinstance(inventory, Mapping):
+                # FAIL CLOSED. Configured and un-evaluable is a refusal: the
+                # bound exists precisely for the states we cannot see.
+                return "WORST_CASE_DEFICIT_NO_INVENTORY"
+            wc = self.worst_case_deficit(
+                up_qty=inventory.get("up_qty"),
+                dn_qty=inventory.get("dn_qty"),
+                up_cost=inventory.get("up_cost"),
+                dn_cost=inventory.get("dn_cost"),
+                order_side=("DOWN" if str(order_intent or "").upper()
+                            .endswith("BUY_SHORT") else "UP"),
+                order_qty=q, order_price=px, outstanding=outstanding)
+            if not wc.get("ok"):
+                return "WORST_CASE_DEFICIT:%s" % wc.get("reason")
+            if _d(wc["deficit"]) > self.max_worst_case_deficit_usd:
+                return ("WORST_CASE_DEFICIT:%s>%s:%s"
+                        % (wc["deficit"], self.max_worst_case_deficit_usd,
+                           wc["scenario"]))
+
         # an authoritative balance, when we have one, binds too. Absent is
         # NOT treated as unlimited -- see require_cash_evidence().
         if available_cash_usd is not None and committed > _d(
