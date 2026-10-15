@@ -208,8 +208,49 @@ def _require_unconsumed(store: Any, rid: str) -> List[Dict[str, Any]]:
     return prior
 
 
-def venue_evidence(transport: Any) -> Dict[str, Any]:
-    """Gate 4(a) and 4(b), from the VENUE itself. Raises ResetRefused."""
+def venue_evidence(transport: Any, *,
+                   claimed: Optional[Mapping[str, Any]] = None
+                   ) -> Dict[str, Any]:
+    """Gate 4(a): no UNRESOLVED L5-OWNED order, on a SHARED account.
+
+    THE PRECONDITION THIS REPLACES, and why it was wrong. It required the
+    whole account to be FLAT -- zero open orders anywhere and no non-zero
+    position. On an account where the owner trades manually alongside L5 that
+    is PERMANENTLY UNSATISFIABLE: any manual position or resting manual order
+    would block every future reset, so the administrative procedure would
+    have been unusable exactly when it was needed. A manual trade is normal
+    activity, not a hazard.
+
+    WHAT IS CHECKED NOW -- ownership, not emptiness. Each WORKING order at the
+    venue is classified, and only some classes block:
+
+      * in our durable ownership registry            -> L5_OWNED, BLOCKS.
+        This is the original hazard: an L5 order still resting means the
+        executor is not managing it, which is what latched the halt.
+      * not in the registry, venue says MANUAL       -> attributed manual,
+        reported and ALLOWED. Positively attributed by the venue's own
+        manualOrderIndicator, not inferred from our silence.
+      * not in the registry, venue says AUTOMATIC    -> BLOCKS. An automated
+        order we hold no record of may be OURS and unrecorded, which is
+        precisely the unmanaged-resting-order hazard. Never guessed away.
+      * indicator missing or unreadable              -> BLOCKS.
+
+    That last pair is requirement 6 in code: uncertain ownership fails
+    closed. "Not in our registry" alone is NOT taken as "not ours" here --
+    the watchdog may safely read it that way before CANCELLING (cancelling a
+    stranger's order is the worse error), but for CLEARING A HALT the safe
+    reading is the opposite, and the two must not be confused.
+
+    POSITIONS ARE RISK CONTEXT, NOT A GATE. They are read and reported so
+    account-wide exposure is visible to the approver, and they no longer
+    block: a manual position is not evidence of an executor malfunction. An
+    unreadable positions read is still reported as unreadable rather than as
+    flat.
+    """
+    if claimed is None:
+        raise ResetRefused(
+            "OWNERSHIP_UNAVAILABLE: ownership must be established before any "
+            "order can be classified. Guessing is refused.")
     try:
         # a plain signed GET, so a READ-ONLY transport satisfies this. The
         # reset must never need a transport that can cancel.
@@ -220,26 +261,47 @@ def venue_evidence(transport: Any) -> Dict[str, Any]:
         raise ResetRefused(
             "VENUE_OPEN_ORDERS_UNREADABLE: %s -- an unread venue is never "
             "taken as flat" % type(exc).__name__)
-    if not isinstance(rows, list):
-        raise ResetRefused("VENUE_OPEN_ORDERS_MALFORMED")
     from src import l5_watchdog as W
     working = [r for r in rows if not W.is_terminal(r)]
-    if working:
+    l5_owned, manual, unattributed = [], [], []
+    for r in working:
+        oid = str(r.get("id") or "").strip()
+        ind = str(r.get("manualOrderIndicator") or "")
+        if oid and oid in claimed:
+            l5_owned.append({"id": oid, "market": str(r.get("marketSlug")
+                                                      or "")})
+        elif ind == W.AUTOMATIC or not ind:
+            unattributed.append({"id": oid or None, "indicator": ind or None,
+                                 "market": str(r.get("marketSlug") or "")})
+        else:
+            manual.append({"id": oid or None, "indicator": ind,
+                           "market": str(r.get("marketSlug") or "")})
+    if l5_owned:
         raise ResetRefused(
-            "VENUE_STILL_HAS_OPEN_ORDERS: %d working order(s) %r -- the "
-            "condition that latched the halt has NOT gone"
-            % (len(working), [str(r.get("id") or "") for r in working][:8]))
+            "L5_OWNED_ORDERS_STILL_OPEN: %d order(s) %r are in our own "
+            "ownership registry and still working. The hazard that latched "
+            "the halt has NOT gone."
+            % (len(l5_owned), [o["id"] for o in l5_owned][:8]))
+    if unattributed:
+        raise ResetRefused(
+            "UNATTRIBUTED_AUTOMATED_ORDERS: %d working order(s) %r are not "
+            "in our registry and the venue does not call them MANUAL. An "
+            "automated order we hold no record of may be ours and "
+            "unrecorded, so this fails closed rather than guessing."
+            % (len(unattributed), [o["id"] for o in unattributed][:8]))
     positions, pos_err = _positions(transport)
-    if pos_err is not None:
-        raise ResetRefused(
-            "VENUE_POSITIONS_UNREADABLE: %s -- flatness must be established, "
-            "never assumed" % pos_err)
-    if positions:
-        raise ResetRefused(
-            "VENUE_NOT_FLAT: non-zero position(s) %r" % (positions[:8],))
-    return {"venue_open_orders": 0, "venue_open_rows_seen": len(rows),
-            "venue_non_zero_positions": 0,
-            "source": "/v1/orders/open and /v1/portfolio/positions, signed"}
+    return {"l5_owned_working_orders": 0,
+            "venue_working_orders_seen": len(working),
+            "owner_manual_orders_allowed": manual,
+            "account_positions": positions if pos_err is None else None,
+            "account_positions_error": pos_err,
+            "source": "/v1/orders/open and /v1/portfolio/positions, signed",
+            "labels": ("ownership-based, NOT account-flatness. Manual orders "
+                       "and positions are attributed and reported as "
+                       "account-wide risk context; only an L5-owned or "
+                       "unattributed-automated working order blocks. "
+                       "Positions do not block and are never taken as flat "
+                       "when unreadable.")}
 
 
 def _positions(transport: Any) -> Tuple[List[Dict[str, Any]], Optional[str]]:
@@ -279,6 +341,35 @@ def _positions(transport: Any) -> Tuple[List[Dict[str, Any]], Optional[str]]:
             out.append({"market": str(r.get("market") or ""),
                         "quantity": "UNREADABLE:%r" % (qty,)})
     return (out, None)
+
+
+def ownership(url: str, *, opener=None) -> Dict[str, Any]:
+    """The ids L5 durably claims, or REFUSE. Requirement 6 in code.
+
+    OwnershipOracle.claimed() returns {} on any doubt -- an unreachable
+    registry, an unparseable body, a report saying readable: false. For the
+    WATCHDOG that empty answer is safe, because it means "cancel nothing".
+    Here it is the opposite: an empty answer would make every working order
+    look unowned, and the reset would wave through an L5 order still resting.
+    So an empty claim set is only accepted when the registry itself is
+    positively readable, which registry_evidence establishes separately; a
+    claim set we could not read at all refuses here.
+    """
+    if not url:
+        raise ResetRefused(
+            "NO_REGISTRY_URL: %s must name the executor's GET-only report. "
+            "Ownership cannot be established without it, and ownership is "
+            "what distinguishes an L5 order from the owner's manual one."
+            % REGISTRY_ENV)
+    from src import l5_watchdog as W
+    try:
+        oracle = W.OwnershipOracle(url, opener=opener) if opener is not None \
+            else W.OwnershipOracle(url)
+        return dict(oracle.claimed())
+    except BaseException as exc:                               # noqa: BLE001
+        raise ResetRefused(
+            "OWNERSHIP_UNREADABLE: %s -- ownership must be established, "
+            "never guessed" % type(exc).__name__)
 
 
 def registry_evidence(url: str, *, opener=None) -> Dict[str, Any]:
@@ -341,13 +432,23 @@ def inspect(*, store: Any, transport: Optional[Any], registry_url: str,
         "labels": ("READ-ONLY. Nothing was written. Pass the sha256 above as "
                    "%s to clear THIS latch and no other." % EXPECT_ENV),
     }
+    claimed = None
+    claimed_error = None
+    try:
+        claimed = ownership(registry_url, opener=registry_opener)
+    except ResetRefused as exc:
+        claimed_error = str(exc)
+    out["l5_claimed_order_ids"] = (None if claimed is None
+                                   else sorted(claimed.keys()))
+    out["ownership_error"] = claimed_error
+
     def _venue():
         if transport is None:
             raise ResetRefused(
                 "NO_VENUE_CREDENTIALS: this boot cannot perform the "
                 "authenticated venue checks. The latch digest and registry "
                 "evidence below are still valid.")
-        return venue_evidence(transport)
+        return venue_evidence(transport, claimed=claimed)
 
     for name, fn in (("venue", _venue),
                      ("registry", lambda: registry_evidence(
@@ -401,7 +502,8 @@ def perform_reset(*, store: Any, transport: Any, registry_url: str,
             "NO_ATTESTATION: %s must name the watchdog-health and "
             "no-open-alarm evidence you checked. It is recorded as an "
             "operator attestation, not as a machine check." % ATTEST_ENV)
-    venue = venue_evidence(transport)
+    claimed = ownership(registry_url, opener=registry_opener)
+    venue = venue_evidence(transport, claimed=claimed)
     registry = registry_evidence(registry_url, opener=registry_opener)
     t = (now or _utc()).isoformat()
     entry = {

@@ -413,7 +413,7 @@ def test_the_happy_path_clears_the_latch_and_writes_one_audit_entry():
     assert entry["confirmed_reason"] == "UNMANAGED_RESTING_ORDER"
     assert entry["prior_latch"]["reason"] == "UNMANAGED_RESTING_ORDER"
     assert entry["prior_latch_sha256"] == d
-    assert entry["machine_verified"]["venue"]["venue_open_orders"] == 0
+    assert entry["machine_verified"]["venue"]["l5_owned_working_orders"] == 0
     assert entry["operator_attested"]["text"] == "sweeps 20s, no alarm"
 
 
@@ -524,13 +524,52 @@ def test_you_cannot_clear_a_latch_you_did_not_review():
 # --------------------------------------------------------------------------
 # P0.4 -- the triggering condition must actually be gone
 # --------------------------------------------------------------------------
-def test_a_working_order_at_the_venue_refuses_the_reset():
+def test_an_l5_owned_working_order_refuses_the_reset():
+    """The original hazard: our own order still resting."""
     store = FakeStore()
     d = latch(store)
     t = FakeTransport(open_rows=[{"id": "A1", "state": "OPEN",
-                                  "leavesQuantity": "1"}])
-    with pytest.raises(R.ResetRefused, match="VENUE_STILL_HAS_OPEN_ORDERS"):
-        run(store, t, d)
+                                  "leavesQuantity": "1",
+                                  "manualOrderIndicator": AUTOMATIC,
+                                  "marketSlug": "m1"}])
+    with pytest.raises(R.ResetRefused, match="L5_OWNED_ORDERS_STILL_OPEN"):
+        run(store, t, d,
+            registry_rows=[{"venue_order_id": "A1", "market": "m1",
+                            "t": R._utc().isoformat()}])
+    assert store.puts == []
+
+
+def test_an_owner_manual_working_order_does_not_block_the_reset():
+    """THE SHARED-ACCOUNT REQUIREMENT. Manual activity is normal, and
+    requiring the whole account flat made the procedure unusable."""
+    store = FakeStore()
+    d = latch(store)
+    t = FakeTransport(open_rows=[{"id": "MANUAL1", "state": "OPEN",
+                                  "leavesQuantity": "3",
+                                  "manualOrderIndicator": "MANUAL",
+                                  "marketSlug": "cpceth-eth-updown-15m-x"}])
+    out = run(store, t, d)
+    assert out["ok"] is True
+    assert json.loads(store.obj[HG.HALT_KEY])["halt"] is False
+    ev = out["entry"]["machine_verified"]["venue"]
+    assert ev["l5_owned_working_orders"] == 0
+    assert ev["owner_manual_orders_allowed"][0]["id"] == "MANUAL1"
+    assert ev["venue_working_orders_seen"] == 1
+
+
+def test_an_unattributed_automated_order_fails_closed():
+    """Not in our registry AND the venue does not call it manual: it may be
+    ours and unrecorded, which is the hazard itself."""
+    store = FakeStore()
+    d = latch(store)
+    for ind in (AUTOMATIC, "", None):
+        row = {"id": "X9", "state": "OPEN", "leavesQuantity": "1",
+               "marketSlug": "m1"}
+        if ind is not None:
+            row["manualOrderIndicator"] = ind
+        with pytest.raises(R.ResetRefused,
+                           match="UNATTRIBUTED_AUTOMATED_ORDERS"):
+            run(store, FakeTransport(open_rows=[row]), d)
     assert store.puts == []
 
 
@@ -542,35 +581,55 @@ def test_a_terminal_row_in_the_open_list_does_not_block_the_reset():
     assert run(store, t, d)["ok"] is True
 
 
+def test_manual_positions_are_reported_as_risk_context_and_never_block():
+    """A manual position is not evidence of an executor malfunction."""
+    store = FakeStore()
+    d = latch(store)
+    t = FakeTransport(positions={
+        "cpceth-eth-updown-15m-x": {"quantity": "1.53"},
+        "cpcsol-sol-updown-15m-x": {"quantity": "1.55"}})
+    out = run(store, t, d)
+    assert out["ok"] is True
+    pos = out["entry"]["machine_verified"]["venue"]["account_positions"]
+    assert sorted(p["market"] for p in pos) == [
+        "cpceth-eth-updown-15m-x", "cpcsol-sol-updown-15m-x"]
+
+
 def test_an_unreadable_venue_is_never_taken_as_flat():
     store = FakeStore()
     d = latch(store)
     with pytest.raises(R.ResetRefused, match="VENUE_OPEN_ORDERS_UNREADABLE"):
         run(store, FakeTransport(raise_open=True), d)
-    with pytest.raises(R.ResetRefused, match="VENUE_POSITIONS_UNREADABLE"):
-        run(store, FakeTransport(raise_pos=True), d)
     assert store.puts == []
 
 
-def test_a_non_zero_position_refuses_in_both_venue_shapes():
+def test_unreadable_positions_are_reported_not_treated_as_flat():
     store = FakeStore()
     d = latch(store)
-    # the OBJECT-keyed-by-slug shape
-    t = FakeTransport(positions={"m1": {"quantity": "2"}})
-    with pytest.raises(R.ResetRefused, match="VENUE_NOT_FLAT"):
-        run(store, t, d)
-    # and an unreadable quantity is not a zero
-    t = FakeTransport(positions={"m1": {"quantity": "weird"}})
-    with pytest.raises(R.ResetRefused, match="VENUE_NOT_FLAT"):
-        run(store, t, d)
+    out = run(store, FakeTransport(raise_pos=True), d)
+    ev = out["entry"]["machine_verified"]["venue"]
+    assert ev["account_positions"] is None
+    assert ev["account_positions_error"] is not None
+
+
+def test_ownership_that_cannot_be_read_fails_closed():
+    """Requirement 6: never guess that an order belongs to L5."""
+    store = FakeStore()
+    d = latch(store)
+    e = env(**{R.EXPECT_ENV: d})
+    saved = {k: os.environ.get(k) for k in e}
+    os.environ.update(e)
+    try:
+        with pytest.raises(R.ResetRefused, match="NO_REGISTRY_URL"):
+            R.perform_reset(store=store, transport=FakeTransport(),
+                            registry_url="")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
     assert store.puts == []
-
-
-def test_a_zero_position_row_does_not_block_the_reset():
-    store = FakeStore()
-    d = latch(store)
-    t = FakeTransport(positions={"m1": {"quantity": "0"}})
-    assert run(store, t, d)["ok"] is True
 
 
 def test_an_executor_still_claiming_a_live_order_refuses():
@@ -622,27 +681,6 @@ def test_an_unreadable_registry_refuses():
     assert store.puts == []
 
 
-def test_no_registry_url_refuses():
-    store = FakeStore()
-    d = latch(store)
-    e = env(**{R.EXPECT_ENV: d})
-    saved = {k: os.environ.get(k) for k in e}
-    os.environ.update(e)
-    try:
-        with pytest.raises(R.ResetRefused, match="NO_REGISTRY_URL"):
-            R.perform_reset(store=store, transport=FakeTransport(),
-                            registry_url="")
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-
-
-# --------------------------------------------------------------------------
-# latch-state edge cases
-# --------------------------------------------------------------------------
 def test_an_absent_latch_is_not_something_to_reset():
     store = FakeStore()
     with pytest.raises(R.ResetRefused, match="NO_LATCH_PRESENT"):
@@ -710,14 +748,15 @@ def test_inspect_reports_each_failing_precondition_without_refusing():
     latch(store)
     out = R.inspect(
         store=store,
-        transport=FakeTransport(open_rows=[{"id": "A1", "state": "OPEN",
-                                            "leavesQuantity": "1"}]),
+        transport=FakeTransport(open_rows=[
+            {"id": "A1", "state": "OPEN", "leavesQuantity": "1",
+             "manualOrderIndicator": AUTOMATIC, "marketSlug": "m"}]),
         registry_url="http://registry.local",
         registry_opener=fresh_registry(
             [{"venue_order_id": "A1", "market": "m", "t": "x"}]))
     assert out["would_clear"] is False
     assert out["preconditions"]["venue"]["ok"] is False
-    assert "VENUE_STILL_HAS_OPEN_ORDERS" in \
+    assert "L5_OWNED_ORDERS_STILL_OPEN" in \
         out["preconditions"]["venue"]["refused"]
     assert out["preconditions"]["registry"]["ok"] is False
     assert store.puts == []
