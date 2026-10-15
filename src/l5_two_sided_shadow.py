@@ -44,6 +44,9 @@ every resting modelled order on both sides.
 """
 from __future__ import annotations
 
+import json
+import os
+
 from decimal import Decimal as D, ROUND_FLOOR
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -362,3 +365,154 @@ class TwoSidedShadow:
                            "acceptable loss; thresholds are frozen and are "
                            "not fitted to these windows."),
         }
+
+
+# ---------------------------------------------------------------- scoring
+#: a parked window's lifecycle, reported explicitly so a window that has not
+#: settled is never mistaken for one that settled flat.
+PENDING, FINALIZED, ERROR = "PENDING", "FINALIZED", "ERROR"
+
+#: how long a parked window may wait for an authoritative settlement before it
+#: is reported ERROR. Generous: BTC15m settles within minutes, and a window
+#: that takes longer than this is evidence of something wrong, not of patience.
+SETTLE_DEADLINE_S = 3600.0
+
+
+def score_report(report: Mapping[str, Any], settle_up: bool) -> Dict[str, Any]:
+    """Score a parked window's report against an authoritative outcome.
+
+    A PURE FUNCTION of (report, outcome), which is what makes restart-safety
+    testable: the parked report carries everything scoring needs, so a process
+    that dies between parking and settling loses nothing but the wait.
+
+    The residual's basis is recovered as `residual_cost / |residual_shares|`,
+    which is exactly how it was accumulated. A matched pair redeems $1.00
+    whichever way the market settles, so `matched_pnl_modelled` is unchanged
+    by the outcome and is not recomputed here.
+    """
+    out = dict(report)
+    cells = []
+    for c in report.get("cells") or ():
+        c = dict(c)
+        resid = D(str(c.get("residual_shares") or 0))
+        rcost = D(str(c.get("residual_cost") or 0))
+        mp = D(str(c.get("matched_pnl_modelled") or 0))
+        if resid == 0:
+            rp = D(0)
+        else:
+            basis = rcost / abs(resid)
+            if resid > 0:          # long UP
+                rp = resid * ((D(1) if settle_up else D(0)) - basis)
+            else:                  # long DOWN
+                rp = -resid * ((D(0) if settle_up else D(1)) - basis)
+        c["residual_pnl_modelled"] = str(rp)
+        c["net_pnl_modelled"] = str(mp + rp)
+        c["state"] = FINALIZED
+        cells.append(c)
+    out["cells"] = cells
+    out["state"] = FINALIZED
+    out["settlement_known"] = True
+    out["settled_up"] = bool(settle_up)
+    return out
+
+
+def pending_report(report: Mapping[str, Any], *, reason: str = "",
+                   state: str = PENDING) -> Dict[str, Any]:
+    """Mark a window that has NOT been scored. Never zero-filled.
+
+    `net_pnl_modelled` stays None on every cell. A pending window contributes
+    nothing to any total and must never be counted as a flat result.
+    """
+    out = dict(report)
+    out["cells"] = [dict(c, state=state, net_pnl_modelled=None,
+                         residual_pnl_modelled=None)
+                    for c in (report.get("cells") or ())]
+    out["state"] = state
+    out["settlement_known"] = False
+    if reason:
+        out["state_reason"] = reason
+    return out
+
+
+class ShadowLedger:
+    """Durable, shadow-only record of parked and finalized windows.
+
+    SEPARATE FROM THE INVENTORY LEDGER ON PURPOSE. Nothing here is read by any
+    gate, any limit or any accounting path; it exists so that scoring survives
+    a restart and so that a window cannot be scored twice. It holds modelled
+    numbers only.
+    """
+
+    def __init__(self, path: str, *, max_pending: int = 16):
+        self.path = path
+        self.max_pending = int(max_pending)
+        self.state: Dict[str, Any] = {"pending": {}, "finalized": {}}
+        self.load()
+
+    def load(self) -> None:
+        try:
+            with open(self.path, "r") as fh:
+                got = json.load(fh)
+            if isinstance(got, Mapping):
+                self.state = {"pending": dict(got.get("pending") or {}),
+                              "finalized": dict(got.get("finalized") or {})}
+        except FileNotFoundError:
+            pass
+        except Exception:                                      # noqa: BLE001
+            # a corrupt shadow sidecar must never stop the executor; it is
+            # modelled data, and starting empty loses evidence, not money.
+            self.state = {"pending": {}, "finalized": {}}
+
+    def save(self) -> None:
+        tmp = self.path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(self.state, fh)
+        os.replace(tmp, self.path)
+
+    # ------------------------------------------------------------ parking
+    def park(self, report: Mapping[str, Any], *, now: float) -> Dict[str, Any]:
+        slug = str(report.get("market") or "")
+        if not slug or slug in self.state["finalized"]:
+            return pending_report(report, reason="ALREADY_FINALIZED",
+                                  state=FINALIZED)
+        rec = pending_report(report)
+        rec["parked_at"] = now
+        self.state["pending"][slug] = rec
+        # oldest first out, so a stuck window cannot starve new ones
+        while len(self.state["pending"]) > self.max_pending:
+            oldest = min(self.state["pending"].items(),
+                         key=lambda kv: kv[1].get("parked_at") or 0)[0]
+            self.state["pending"].pop(oldest, None)
+        self.save()
+        return rec
+
+    def pending_slugs(self) -> List[str]:
+        return sorted(self.state["pending"])
+
+    # ------------------------------------------------------------ scoring
+    def finalize(self, slug: str, settle_up: bool) -> Optional[Dict[str, Any]]:
+        """Score a parked window ONCE. Returns None if there is nothing to do."""
+        if slug in self.state["finalized"]:
+            return None                       # idempotent, across restarts
+        rec = self.state["pending"].pop(slug, None)
+        if rec is None:
+            return None
+        scored = score_report(rec, settle_up)
+        self.state["finalized"][slug] = scored
+        self.save()
+        return scored
+
+    def expire(self, now: float) -> List[Dict[str, Any]]:
+        """Windows that waited too long for a settlement become ERROR, not 0."""
+        out = []
+        for slug, rec in list(self.state["pending"].items()):
+            if now - float(rec.get("parked_at") or now) < SETTLE_DEADLINE_S:
+                continue
+            self.state["pending"].pop(slug, None)
+            bad = pending_report(rec, reason="SETTLEMENT_NOT_OBSERVED",
+                                 state=ERROR)
+            self.state["finalized"][slug] = bad
+            out.append(bad)
+        if out:
+            self.save()
+        return out

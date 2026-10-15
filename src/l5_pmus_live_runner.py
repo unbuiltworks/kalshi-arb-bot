@@ -336,8 +336,13 @@ class Runner:
         #: to score their residual. Reads the book and the trade prints;
         #: touches no store, no transport, no limit and no gate.
         self.two_sided: Optional[TS.TwoSidedShadow] = None
-        self.two_sided_pending: Dict[str, TS.TwoSidedShadow] = {}
         self.last_two_sided_report_t = 0.0
+        self.last_two_sided_settle_t = 0.0
+        #: DURABLE and shadow-only. Scoring a parked window must not depend on
+        #: the live ledger having exposure in it -- in shadow it never does --
+        #: and must survive a restart without scoring anything twice.
+        self.two_sided_ledger = TS.ShadowLedger(
+            os.path.join(root, "two_sided_shadow.json"))
 
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
@@ -577,7 +582,6 @@ class Runner:
                               "the loss halt with it")})
                 continue
             if out.get("retired"):
-                self.two_sided_score(market, D(str(out["yes_value"])))
                 emit("L5_LIVE_SETTLED", dict(
                     out, venue_state=rep["state"],
                     cash_deployed=self.store.cash_deployed_usd(market)))
@@ -1151,19 +1155,54 @@ class Runner:
         self.two_sided = None
         if ev is None:
             return
-        emit("L5_TWO_SIDED_SHADOW", dict(ev.report(None), interim=False,
-                                         awaiting_settlement=True))
-        if len(self.two_sided_pending) < 8:
-            self.two_sided_pending[ev.slug] = ev
+        emit("L5_TWO_SIDED_SHADOW",
+             dict(self.two_sided_ledger.park(ev.report(None), now=self.now_t),
+                  interim=False))
 
-    def two_sided_score(self, market: str, yes_value: D) -> None:
-        """Score a parked window's residual against the venue's resolution."""
-        ev = self.two_sided_pending.pop(market, None)
-        if ev is None:
+    def two_sided_settle(self, now: float) -> None:
+        """Finalize parked shadow windows from the venue's own resolution.
+
+        INDEPENDENT OF LIVE EXPOSURE, which is the defect this replaces. The
+        first version hung scoring off `sweep_settlements`, and that only ever
+        runs for markets the REAL ledger holds inventory in -- in shadow it
+        holds none, so a window carrying residual would have waited for a
+        settlement that was never read. The 0130z window hid it: its residual
+        was zero, so the unscored net happened to equal the scored one.
+
+        The read is the same GET-only `transport.settlement`, which is already
+        binary-guarded: it reports terminal only for a terminal state with a
+        settlement price of exactly 0 or 1. A window that cannot be settled
+        stays PENDING and contributes nothing; one that waits past the deadline
+        becomes ERROR. Neither is ever counted as a flat result.
+        """
+        t = self.transport
+        if t is None or now - self.last_two_sided_settle_t < SETTLEMENT_POLL_S:
             return
-        emit("L5_TWO_SIDED_SHADOW", dict(ev.report(yes_value == D(1)),
-                                         interim=False, settled=True,
-                                         yes_value=str(yes_value)))
+        self.last_two_sided_settle_t = now
+        for bad in self.two_sided_ledger.expire(now):
+            self.stats["two_sided_settle_expired"] += 1
+            emit("L5_TWO_SIDED_SHADOW", bad)
+        for slug in self.two_sided_ledger.pending_slugs():
+            if slug == getattr(t, "market_slug", None) and self.two_sided:
+                continue                     # still being collected
+            try:
+                rep = t.settlement(slug)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["two_sided_settle_read_error"] += 1
+                continue
+            if not rep.get("terminal"):
+                self.stats["two_sided_awaiting_settlement"] += 1
+                why = rep.get("not_terminal_reason")
+                if why and why != "STATE_NOT_TERMINAL":
+                    self.stats["two_sided_awaiting:%s" % why] += 1
+                continue
+            px = rep.get("settlement_px")
+            scored = self.two_sided_ledger.finalize(slug, px == D(1))
+            if scored is not None:
+                emit("L5_TWO_SIDED_SHADOW", dict(scored, yes_value=str(px),
+                                                 venue_state=rep.get("state")))
 
     def model_close(self) -> None:
         """Window close: settle the MODELLED book and report it.
@@ -1733,6 +1772,7 @@ class Runner:
         # drops prints the model never sees.
         self.model_advance(now)
         self.two_sided_advance(now)
+        self.two_sided_settle(now)
         # one question per tick instead of one per caller
         cooling = self.venue_cooling()
         if cooling > 0:

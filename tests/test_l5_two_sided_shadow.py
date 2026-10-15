@@ -256,3 +256,155 @@ def test_a_rolled_buffer_is_counted_as_a_coverage_gap():
     e.step(snap("0.49", "0.50"), [prt("0.49", "1", "sell", 1.0)], 1.0)
     e.step(snap("0.49", "0.50"), [prt("0.49", "1", "sell", 99.0)], 2.0)
     assert e.coverage_gaps == 1
+
+
+# ============================================================ P0: scoring
+# The 0130z defect: scoring hung off sweep_settlements, which only fires for
+# markets the REAL ledger holds exposure in. In shadow it holds none, so a
+# window with residual would never be scored. These pin the replacement.
+
+import os
+import tempfile
+
+from decimal import Decimal as D
+
+
+def window(up, dn, up_cost, dn_cost, slug="cpc-btc-updown-15m-2026-10-15-0200z"):
+    """An unscored parked report with one cell carrying known inventory."""
+    up, dn = D(str(up)), D(str(dn))
+    uc, dc = D(str(up_cost)), D(str(dn_cost))
+    m = min(up, dn)
+    bu = (uc / up) if up else D(0)
+    bd = (dc / dn) if dn else D(0)
+    resid = up - dn
+    rcost = (resid * bu) if resid > 0 else (-resid * bd)
+    return {
+        "LABEL": "L5_TWO_SIDED_SHADOW", "market": slug,
+        "cells": [{
+            "threshold": "0.99", "envelope": "100",
+            "up": str(up), "dn": str(dn),
+            "matched_shares": str(m),
+            "matched_cost": str(m * (bu + bd)),
+            "matched_pnl_modelled": str(m * D(1) - m * (bu + bd)),
+            "residual_shares": str(resid), "residual_cost": str(rcost),
+            "residual_pnl_modelled": None, "net_pnl_modelled": None,
+        }],
+    }
+
+
+def only(rep):
+    return rep["cells"][0]
+
+
+def ledger():
+    d = tempfile.mkdtemp()
+    return TS.ShadowLedger(os.path.join(d, "two_sided_shadow.json"))
+
+
+def test_a_losing_one_sided_fill_is_scored_as_a_loss():
+    """10 UP at 0.59, DOWN settles. Stage A's shape exactly."""
+    rep = TS.score_report(window(10, 0, "5.90", "0"), settle_up=False)
+    c = only(rep)
+    assert D(c["residual_pnl_modelled"]) == D("-5.90")
+    assert D(c["net_pnl_modelled"]) == D("-5.90")
+    assert c["state"] == TS.FINALIZED
+
+
+def test_a_winning_one_sided_fill_is_scored_as_a_gain():
+    rep = TS.score_report(window(10, 0, "5.90", "0"), settle_up=True)
+    c = only(rep)
+    assert D(c["residual_pnl_modelled"]) == D("4.10")      # 10 x (1 - 0.59)
+    assert D(c["net_pnl_modelled"]) == D("4.10")
+
+
+def test_a_one_sided_DOWN_fill_is_scored_from_its_own_side():
+    rep = TS.score_report(window(0, 10, "0", "4.00"), settle_up=False)
+    c = only(rep)
+    assert D(c["residual_pnl_modelled"]) == D("6.00")      # DOWN won: 10 - 4.00
+    rep2 = TS.score_report(window(0, 10, "0", "4.00"), settle_up=True)
+    assert D(only(rep2)["residual_pnl_modelled"]) == D("-4.00")
+
+
+def test_a_completed_matched_pair_settles_the_same_either_way():
+    for up_won in (True, False):
+        rep = TS.score_report(window(10, 10, "4.90", "4.90"), settle_up=up_won)
+        c = only(rep)
+        assert D(c["residual_pnl_modelled"]) == D(0)
+        assert D(c["net_pnl_modelled"]) == D("0.20")       # 10 x (1 - 0.98)
+
+
+def test_missing_settlement_leaves_the_window_pending_and_never_zero():
+    led = ledger()
+    rec = led.park(window(10, 0, "5.90", "0"), now=1000.0)
+    assert rec["state"] == TS.PENDING
+    assert only(rec)["net_pnl_modelled"] is None
+    assert only(rec)["residual_pnl_modelled"] is None
+    assert led.pending_slugs() == ["cpc-btc-updown-15m-2026-10-15-0200z"]
+    # nothing was finalized, so nothing contributes to a total
+    assert led.state["finalized"] == {}
+
+
+def test_a_window_that_never_settles_becomes_ERROR_not_zero():
+    led = ledger()
+    led.park(window(10, 0, "5.90", "0"), now=1000.0)
+    assert led.expire(1000.0 + TS.SETTLE_DEADLINE_S - 1) == []
+    out = led.expire(1000.0 + TS.SETTLE_DEADLINE_S + 1)
+    assert len(out) == 1
+    assert out[0]["state"] == TS.ERROR
+    assert out[0]["state_reason"] == "SETTLEMENT_NOT_OBSERVED"
+    assert only(out[0])["net_pnl_modelled"] is None
+    assert led.pending_slugs() == []
+
+
+def test_scoring_is_idempotent_and_survives_a_restart():
+    led = ledger()
+    slug = "cpc-btc-updown-15m-2026-10-15-0200z"
+    led.park(window(10, 0, "5.90", "0"), now=1000.0)
+    first = led.finalize(slug, settle_up=False)
+    assert D(only(first)["net_pnl_modelled"]) == D("-5.90")
+    assert led.finalize(slug, settle_up=False) is None        # same process
+    reopened = TS.ShadowLedger(led.path)                      # restart
+    assert reopened.pending_slugs() == []
+    assert reopened.finalize(slug, settle_up=False) is None   # across restart
+    assert reopened.finalize(slug, settle_up=True) is None    # even flipped
+    assert D(only(reopened.state["finalized"][slug])["net_pnl_modelled"]) == D("-5.90")
+
+
+def test_re_parking_a_finalized_window_does_not_reopen_it():
+    led = ledger()
+    slug = "cpc-btc-updown-15m-2026-10-15-0200z"
+    led.park(window(10, 0, "5.90", "0"), now=1000.0)
+    led.finalize(slug, settle_up=False)
+    again = led.park(window(99, 0, "50", "0"), now=2000.0)
+    assert again["state"] == TS.FINALIZED
+    assert led.pending_slugs() == []
+    assert D(only(led.state["finalized"][slug])["net_pnl_modelled"]) == D("-5.90")
+
+
+def test_a_corrupt_sidecar_starts_empty_rather_than_raising():
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, "two_sided_shadow.json")
+    with open(path, "w") as fh:
+        fh.write("{not json")
+    led = TS.ShadowLedger(path)
+    assert led.pending_slugs() == [] and led.state["finalized"] == {}
+
+
+def test_the_pending_map_is_bounded_oldest_first():
+    led = ledger()
+    for i in range(led.max_pending + 3):
+        led.park(window(1, 0, "0.5", "0", slug="m%02d" % i), now=1000.0 + i)
+    assert len(led.pending_slugs()) == led.max_pending
+    assert "m00" not in led.pending_slugs()
+    assert "m%02d" % (led.max_pending + 2) in led.pending_slugs()
+
+
+def test_the_runner_settles_without_any_live_exposure():
+    """The defect in one line: scoring must not be reachable only through
+    the real ledger's settlement sweep."""
+    import inspect
+    src = code_only(inspect.getsource(R.Runner.two_sided_settle))
+    assert "transport" in src or "self.transport" in src
+    assert "sweep_settlements" not in src
+    sweep = code_only(inspect.getsource(R.Runner.sweep_settlements))
+    assert "two_sided" not in sweep
