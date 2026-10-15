@@ -1932,6 +1932,45 @@ class Runner:
             self._qm_store = st
         return st
 
+    def maybe_ts_deadline(self, now: float) -> Optional[Dict[str, Any]]:
+        """Cancel the two-sided probe's resting legs at the TERMINAL deadline.
+
+        WHY THIS EXISTS. The probe module defined cancel_cutoff(),
+        place_cutoff() and may_place() and NOTHING CALLED THEM -- an audit
+        found three constants and no enforcement, which is worse than no
+        deadline at all because it reads like one. This is the call site.
+
+        It is inert unless the probe's experiment AND its market are both
+        named, it fires on the WINDOW (not on any order's age), so a startup
+        delay, a restart or a stalled transport cannot postpone it, and it
+        cancels by VENUE id through the existing deadman with proof by
+        re-read. A one-sided fill is exactly the case it must handle: the
+        unfilled leg is withdrawn and the filled one is left to settle,
+        which is the bounded outcome the risk envelope already prices.
+        """
+        from src import l5_two_sided_probe as TSP
+        t = self.transport
+        if t is None:
+            return None
+        slug = getattr(t, "market_slug", None)
+        if not slug or not TSP.active(slug):
+            return None
+        ws = AB.slug_start(slug)
+        if ws is None:
+            # UNKNOWN WINDOW TIMING IS ALREADY OVERDUE. A deadline we cannot
+            # compute is not a deadline, so the legs come in.
+            out = {"reason": "TS_WINDOW_UNKNOWN", "cancelled": True}
+        elif now <= TSP.cancel_cutoff(float(ws)):
+            return None
+        else:
+            out = {"reason": "TS_TERMINAL_DEADLINE",
+                   "cutoff": TSP.cancel_cutoff(float(ws))}
+        if not (self.store.live_orders() or {}):
+            return None
+        res = LX.deadman(self.store, t, reason="ts_terminal_deadline")
+        emit("L5_TS_DEADLINE", dict(out, slug=slug, now=now, result=res))
+        return res
+
     def maybe_qm_deadline(self, now: float) -> Optional[Dict[str, Any]]:
         """Cancel the measurement order at min(T_ack + 120s, T_end - 180s).
 
@@ -2013,6 +2052,7 @@ class Runner:
         # the queue measurement's own per-order deadline. Inert unless an
         # experiment AND its market are both named -- see maybe_qm_deadline.
         self.maybe_qm_deadline(now)
+        self.maybe_ts_deadline(now)
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.

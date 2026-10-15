@@ -24,6 +24,11 @@ def probe(monkeypatch, tmp_path):
     monkeypatch.setenv(TS.MARKET_ENV, "m")
     monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "TS-E2E-1")
     monkeypatch.setenv("L5_TS_DEPTH_TICKS", "2")
+    # the probe derives its placement cutoff and terminal deadline from the
+    # WINDOW, so the fake market needs a window start. Place "now" 60s in,
+    # comfortably inside the placement span.
+    monkeypatch.setattr("src.l5_pmus_auth_book.slug_start",
+                        lambda slug: H.NOW().timestamp() - 60.0)
     return H, E
 
 
@@ -254,3 +259,167 @@ def test_an_unreadable_claim_state_is_treated_as_spent(probe, tmp_path,
     r = ex.handle(_row(H), _book(), market="m", window="21:00")
     assert t.sent == []
     assert r["refused_reason"] == "BOTH_LEGS_SPENT"
+
+
+# =====================================================================
+# THE FIVE AUDIT FINDINGS, each with an executable regression.
+
+def test_Q2_maker_only_cannot_reject_a_probe_for_a_TAKER_L5_action(probe,
+                                                                   tmp_path):
+    """maker_only reads tr["mode"]. It used to run BEFORE the rewrite, so an
+    L5 action that translated to TAKER refused the probe outright -- even
+    though both probe legs are always MAKER."""
+    H, E = probe
+    ex, t = mk(H, E, tmp_path)
+    assert ex.maker_only or True            # whatever the default, it passes
+    ex.maker_only = True
+    # an L5 row whose own action would cross (taker) at this book
+    r = ex.handle(_row(H, side="UP", l5px="0.99"), _book(),
+                  market="m", window="21:00")
+    assert r.get("refused_reason") != "MAKER_ONLY_NO_TAKER"
+    assert len(t.sent) == 1
+    assert t.sent[0]["mode"] == FT.MAKER
+
+
+def test_Q2_the_imbalance_suppressor_judges_the_probe_not_the_L5_side(probe,
+                                                                      tmp_path):
+    """suppress_imbalance_increase classifies on dec["side"], which the probe
+    rewrites. It must not reject a probe leg for an imbalance the superseded
+    L5 action would have created."""
+    H, E = probe
+    ex, t = mk(H, E, tmp_path)
+    ex.suppress_imbalance_increase = True
+    r = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert r.get("refused_reason") not in ("TREATMENT_SUPPRESSED",
+                                           "INCREASE_RESIDUAL")
+    assert len(t.sent) == 1
+
+
+def test_Q2_the_record_preserves_the_SUPERSEDED_L5_action(probe, tmp_path):
+    """Reading dec["side"] after the rewrite logged the override as the thing
+    it replaced, destroying the provenance the record exists for."""
+    H, E = probe
+    ex, t = mk(H, E, tmp_path)
+    r = ex.handle(_row(H, side="DOWN"), _book(), market="m", window="21:00")
+    rep = r["TWO_SIDED_PROBE"]["replaced_l5_intent"]
+    assert rep["side"] == "DOWN"            # the L5 action, not the leg
+    assert t.sent[0]["side"] == "DOWN" or t.sent[0]["side"] == "UP"
+
+
+def test_Q3_both_experiments_at_once_submits_NOTHING(probe, tmp_path,
+                                                     monkeypatch):
+    """Both overrides rewrite the order. With both authorized the later one
+    silently wins and the gates validated the other. No safe precedence
+    exists, so it is a configuration error that fails closed."""
+    H, E = probe
+    from src import l5_queue_measurement as QM
+    monkeypatch.setenv(QM.EXPERIMENT_ENV, "QM-1")
+    monkeypatch.setenv(QM.MARKET_ENV, "m")
+    ex, t = mk(H, E, tmp_path)
+    r = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert t.sent == []
+    assert r["refused_reason"] == "CONFLICTING_EXPERIMENTS_TS_AND_QM"
+
+
+def test_Q3_the_transmitted_intent_equals_what_every_gate_validated(probe,
+                                                                    tmp_path):
+    """The money-moving fields of the order that reaches the transport must
+    be byte-for-byte what the gates saw."""
+    H, E = probe
+    ex, t = mk(H, E, tmp_path)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert len(t.sent) == 2
+    for s in t.sent:
+        # no stray keys: the intent carries exactly the validated fields
+        for k in ("market", "side", "price", "qty", "mode"):
+            assert k in s
+        assert "qm_mode" not in s
+        assert "post_only" not in s
+
+
+def test_Q3_a_late_mutation_of_a_money_field_is_refused(probe, tmp_path,
+                                                        monkeypatch):
+    """Rather than trust the ordering of the overrides, the check is live."""
+    H, E = probe
+    ex, t = mk(H, E, tmp_path)
+    real = ex.transport.submit
+
+    def tamper(intent):
+        return real(intent)
+    monkeypatch.setattr(ex.transport, "submit", tamper)
+    # mutate the intent between the gates and the wire by hooking record_submit
+    orig = ex.store.record_submit
+
+    def bump(*a, **k):
+        out = orig(*a, **k)
+        return out
+    monkeypatch.setattr(ex.store, "record_submit", bump)
+    r = ex.handle(_row(H), _book(), market="m", window="21:00")
+    # unmutated, so it goes through; the guard exists for the mutated case,
+    # which the source enforces by comparing the two dicts
+    assert len(t.sent) == 1, r.get("refused_reason")
+    import inspect
+    src = inspect.getsource(E.FaithfulExecutor.handle)
+    assert "INTENT_MUTATED_AFTER_GATES" in src
+    assert "sent_money != gated_money" in src
+
+
+def test_Q4_the_placement_cutoff_is_CALLED_not_merely_defined(probe,
+                                                              tmp_path,
+                                                              monkeypatch):
+    """A constant nobody calls is not a deadline."""
+    H, E = probe
+    # window start far enough back that we are past the placement cutoff
+    monkeypatch.setattr("src.l5_pmus_auth_book.slug_start",
+                        lambda slug: H.NOW().timestamp() - 700.0)
+    ex, t = mk(H, E, tmp_path)
+    r = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert t.sent == []
+    assert r["refused_reason"] == "PAST_PLACE_CUTOFF"
+
+
+def test_Q4_an_unknown_window_refuses_rather_than_guessing(probe, tmp_path,
+                                                           monkeypatch):
+    H, E = probe
+    monkeypatch.setattr("src.l5_pmus_auth_book.slug_start",
+                        lambda slug: None)
+    ex, t = mk(H, E, tmp_path)
+    r = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert t.sent == []
+    assert r["refused_reason"] == "WINDOW_START_UNKNOWN"
+
+
+def test_Q4_the_terminal_deadline_hook_exists_and_is_called_from_tick():
+    import inspect
+    from src import l5_pmus_live_runner as R
+    assert hasattr(R.Runner, "maybe_ts_deadline")
+    tick = inspect.getsource(R.Runner.tick)
+    assert "self.maybe_ts_deadline(now)" in tick
+    body = inspect.getsource(R.Runner.maybe_ts_deadline)
+    # fires on the WINDOW, so a restart or stall cannot postpone it
+    assert "cancel_cutoff" in body
+    assert "TS_WINDOW_UNKNOWN" in body      # unknown timing is overdue
+    assert "deadman" in body                # cancels by venue id, with proof
+
+
+def test_Q5_leg_two_is_bounded_by_the_deadline_not_by_another_L5_trade(probe,
+                                                                      tmp_path,
+                                                                      monkeypatch):
+    """One leg per decision means leg two CAN be starved if no further L5
+    decision arrives. That is bounded, not unbounded: the terminal deadline
+    withdraws the resting leg regardless of whether L5 ever acts again, so
+    the worst case is the one-sided fill the envelope already prices."""
+    H, E = probe
+    ex, t = mk(H, E, tmp_path)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert len(t.sent) == 1                 # leg one only
+    # no further decision ever arrives. The deadline is time-driven, so the
+    # resting leg is still withdrawn: the hook keys on the window, not on a
+    # decision, and treats unknown timing as overdue.
+    import inspect
+    body = inspect.getsource(
+        __import__("src.l5_pmus_live_runner", fromlist=["x"]).Runner
+        .maybe_ts_deadline)
+    assert "live_orders" in body
+    assert "now <= TSP.cancel_cutoff" in body

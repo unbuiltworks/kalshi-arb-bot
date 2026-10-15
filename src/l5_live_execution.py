@@ -3096,46 +3096,25 @@ class FaithfulExecutor:
         # Probe 07 is a test of the MAKER mechanism. A crossing order would
         # contaminate the endpoint it exists to measure, so there is no taker
         # fallback and the refusal says which rule declined it.
-        if self.maker_only and str(tr.get("mode") or "").upper() != FT.MAKER:
-            return prov.refuse("SAFETY_OVERLAY", "MAKER_ONLY_NO_TAKER")
-
-        # An armed transport has passed preflight, and preflight does not pass
-        # without quantity_constraint_known -- so an unknown grid here means
-        # something is wrong with what we believe about this market, and the
-        # answer is to send nothing.
-        if inc is None and bool(getattr(self.transport, "armed", False)):
-            return prov.refuse("SAFETY_OVERLAY", "QUANTITY_INCREMENT_UNKNOWN")
-        if inc is not None and executable <= 0:
-            return prov.refuse("SAFETY_OVERLAY",
-                               "QUANTITY_BELOW_MIN_INCREMENT:%s<%s"
-                               % (desired, inc))
-        tr = dict(tr, qty=executable)
-
-        resid_before = self.store.residual(market)
-        klass = inventory_class(resid_before, dec["side"])
-        prov.note("INVENTORY_CLASS", {
-            "inventory_class": klass,
-            "residual_before": str(resid_before),
-            "side": dec["side"],
-            "treatment_active": bool(self.suppress_imbalance_increase),
-            "residual_cap_k": (None if self.residual_cap_k is None
-                               else str(self.residual_cap_k)),
-            "basis": "REALIZED residual; outstanding orders are not counted"})
-        if self.suppress_imbalance_increase and klass == INCREASE_RESIDUAL:
-            return prov.refuse("SAFETY_OVERLAY", "IMBALANCE_INCREASE_SUPPRESSED")
-
-        # RUN-SCOPED VALIDATION GATES, additive and refuse-only. They are
-        # consulted AFTER every pre-existing limit, so a deployed refusal is
-        # never masked by one of these, and they can only ever turn an
-        # allowed action into a refused one -- never the reverse.
-        # THE TWO-SIDED PROBE REPLACES THE ORDER *BEFORE* THE GATES.
+        # THE TWO-SIDED PROBE REPLACES THE ORDER BEFORE *EVERY* GATE.
         #
-        # THE BUG THIS POSITION FIXES. Placed after the validation gates, the
-        # probe's order would never be gated at all: the gates would evaluate
-        # the ordinary lambda intent and the probe's own side, price and
-        # quantity would reach the venue ungated. So the replacement happens
-        # here, upstream of every gate, the residual cap and the intent
-        # construction, and each of them then sees exactly what will be sent.
+        # THE BUGS THIS POSITION FIXES. Two, found by audit.
+        #
+        # (a) Placed after the validation gates, the probe's order would never
+        #     be gated at all: the gates would evaluate the ordinary lambda
+        #     intent while the probe's own side, price and quantity reached
+        #     the venue ungated.
+        # (b) Placed after `maker_only` and `suppress_imbalance_increase`,
+        #     those two would judge the SUPERSEDED L5 action. maker_only reads
+        #     tr["mode"], so an L5 action that translated to TAKER refused the
+        #     probe outright even though both probe legs are always MAKER; and
+        #     suppress_imbalance_increase classifies on dec["side"], so it
+        #     could reject a probe leg for an imbalance the probe does not
+        #     create. Both now run on the probe's own order.
+        #
+        # So this sits upstream of EVERY gate -- maker_only, the imbalance
+        # suppressor, the validation gates, the residual cap -- and the intent
+        # construction, and each of them sees exactly what will be sent.
         #
         # Both legs are priced and gated TOGETHER, then placed on successive
         # decision ticks through this same path: the existing claim,
@@ -3145,7 +3124,43 @@ class FaithfulExecutor:
         # NO FALLBACK. A refusal anywhere here is terminal: falling back to
         # `tr` would submit an ordinary L5 trade under an authorization
         # granted for a two-sided probe.
+        # THE SUPERSEDED L5 ACTION, captured BEFORE any override mutates it.
+        # Reading dec["side"] afterwards records the override as the thing it
+        # replaced, which destroys the provenance the record exists for.
+        superseded_l5 = {"side": str(dec.get("side")),
+                         "price": str(tr.get("price")),
+                         "qty": str(tr.get("qty")),
+                         "mode": str(tr.get("mode") or "")}
+
+        # MUTUALLY EXCLUSIVE EXPERIMENTS, FAILING CLOSED. Both overrides
+        # rewrite the order that reaches the venue. If both were authorized at
+        # once the later one would silently win, and the gates would have
+        # validated the other one. There is no safe precedence here, so both
+        # being named is a configuration error and nothing is submitted.
+        if TS.active(market) and QM.active(market):
+            return prov.refuse("SAFETY_OVERLAY",
+                               "CONFLICTING_EXPERIMENTS_TS_AND_QM")
+
         if TS.active(market):
+            # THE PLACEMENT CUTOFF, ACTUALLY ENFORCED. may_place() existed
+            # and had no call site; an audit is right that a constant nobody
+            # calls is not a deadline. A leg placed too late cannot be
+            # completed OR withdrawn in time, so past the cutoff nothing new
+            # is placed -- and because the cutoff is derived from the WINDOW,
+            # a late start or a restart cannot extend it.
+            ws = None
+            try:
+                from src import l5_pmus_auth_book as _AB
+                ws = _AB.slug_start(market)
+            except BaseException:                              # noqa: BLE001
+                ws = None
+            if ws is None:
+                return prov.refuse("TWO_SIDED_PROBE", "WINDOW_START_UNKNOWN")
+            late = TS.may_place(float(self._now().timestamp()),
+                                float(ws), float(ws) + TS.WINDOW_S)
+            if late:
+                return prov.refuse("TWO_SIDED_PROBE", late)
+
             # SIZE DOWN UNTIL THE GATES ACCEPT THE PAIR. The module sizes
             # from the cash and loss inputs it is given, but the gates own
             # the final word -- the deficit gate adds the other leg's cost
@@ -3201,15 +3216,98 @@ class FaithfulExecutor:
             # reads dec["side"] for the order intent and the residual
             # direction, and tr for price and quantity.
             dec["side"] = leg["side"]
+            # `executable` IS RE-STAMPED ONTO tr FURTHER DOWN
+            # (tr = dict(tr, qty=executable)), so overriding tr alone is not
+            # enough: the lambda quantity would come back and the override
+            # would silently become a lambda-sized order. Found by the
+            # money-field integrity check. Both are set here.
+            executable = D(leg["qty"])
             tr = dict(tr, ok=True, mode=FT.MAKER,
-                      price=D(leg["price"]), qty=D(leg["qty"]))
+                      price=D(leg["price"]), qty=executable)
             prov.stage("TWO_SIDED_PROBE", dict(
                 plan, leg_to_place=nxt, legs_claimed=claimed,
-                replaced_l5_intent={"side": str(dec.get("side")),
-                                    "price": str(leg["price"]),
-                                    "qty": str(leg["qty"])}))
+                replaced_l5_intent=dict(superseded_l5)))
             self._probe_leg_pending = nxt
 
+        if QM.active(market):
+            built = QM.build_order(
+                market=market,
+                bid=authenticated.get("bid"), ask=authenticated.get("ask"),
+                bid_depth=authenticated.get("bid_shares"),
+                tick=getattr(self.transport, "tick_size", None),
+                min_qty=getattr(self.transport, "quantity_increment", None),
+                qty_increment=getattr(self.transport, "quantity_increment",
+                                      None),
+                book_age_s=authenticated.get("stream_age_s"),
+                gap_suspected=bool(authenticated.get("gap_suspected")))
+            if not built.get("ok"):
+                prov.stage("ORDER", {
+                    "submitted": False,
+                    "reason": "QUEUE_MEASUREMENT",
+                    "detail": str(built.get("reason"))[:120],
+                    "labels": ("the authorized queue measurement could not "
+                               "be constructed from this book, so NOTHING is "
+                               "submitted. There is deliberately no fallback "
+                               "to lambda-based L5 sizing.")})
+                return prov.refuse("QUEUE_MEASUREMENT",
+                                   str(built.get("reason"))[:120])
+            mi = built["intent"]
+            # MODE IS WHAT REACHES THE WIRE. l5_order_body.from_intent
+            # derives participateDontInitiate from `mode == "MAKER"` and
+            # ignores `post_only` entirely, and the maker_only overlay
+            # compares against FT.MAKER as well -- so the descriptive string
+            # that used to sit here would have been sent NOT post-only, and
+            # refused MAKER_ONLY_NO_TAKER on the way out. The measurement's
+            # own label is preserved as `qm_mode` for the record.
+            # REWRITE THE DECISION, NOT A LATE INTENT. Built after the
+            # gates, this block mutated a money-moving field behind them --
+            # the gates validated the lambda order and the venue received
+            # the measurement. Found by the intent-integrity check below.
+            # Now it rewrites dec and tr upstream, so maker_only, the
+            # imbalance suppressor, the validation gates and the residual
+            # cap all evaluate the measurement itself.
+            dec["side"] = mi["side"]
+            # see the two-sided note above: `executable` is re-stamped onto
+            # tr further down, so it must be overridden too.
+            executable = D(str(mi["qty"]))
+            tr = dict(tr, ok=True, mode=FT.MAKER,
+                      price=D(str(mi["price"])), qty=executable)
+            self._qm_mode = mi["mode"]
+            prov.stage("QUEUE_MEASUREMENT",
+                       dict(mi, replaced_l5_intent=dict(superseded_l5)))
+
+        if self.maker_only and str(tr.get("mode") or "").upper() != FT.MAKER:
+            return prov.refuse("SAFETY_OVERLAY", "MAKER_ONLY_NO_TAKER")
+
+        # An armed transport has passed preflight, and preflight does not pass
+        # without quantity_constraint_known -- so an unknown grid here means
+        # something is wrong with what we believe about this market, and the
+        # answer is to send nothing.
+        if inc is None and bool(getattr(self.transport, "armed", False)):
+            return prov.refuse("SAFETY_OVERLAY", "QUANTITY_INCREMENT_UNKNOWN")
+        if inc is not None and executable <= 0:
+            return prov.refuse("SAFETY_OVERLAY",
+                               "QUANTITY_BELOW_MIN_INCREMENT:%s<%s"
+                               % (desired, inc))
+        tr = dict(tr, qty=executable)
+
+        resid_before = self.store.residual(market)
+        klass = inventory_class(resid_before, dec["side"])
+        prov.note("INVENTORY_CLASS", {
+            "inventory_class": klass,
+            "residual_before": str(resid_before),
+            "side": dec["side"],
+            "treatment_active": bool(self.suppress_imbalance_increase),
+            "residual_cap_k": (None if self.residual_cap_k is None
+                               else str(self.residual_cap_k)),
+            "basis": "REALIZED residual; outstanding orders are not counted"})
+        if self.suppress_imbalance_increase and klass == INCREASE_RESIDUAL:
+            return prov.refuse("SAFETY_OVERLAY", "IMBALANCE_INCREASE_SUPPRESSED")
+
+        # RUN-SCOPED VALIDATION GATES, additive and refuse-only. They are
+        # consulted AFTER every pre-existing limit, so a deployed refusal is
+        # never masked by one of these, and they can only ever turn an
+        # allowed action into a refused one -- never the reverse.
         vg = self.validation_gates
         if vg is not None:
             try:
@@ -3388,44 +3486,14 @@ class FaithfulExecutor:
         # from the measurement; a refusal is terminal for this decision. There
         # is no fallback to `tr`, because falling back would submit a trade
         # under an authorization granted for a measurement.
-        if QM.active(market):
-            built = QM.build_order(
-                market=market,
-                bid=authenticated.get("bid"), ask=authenticated.get("ask"),
-                bid_depth=authenticated.get("bid_shares"),
-                tick=getattr(self.transport, "tick_size", None),
-                min_qty=getattr(self.transport, "quantity_increment", None),
-                qty_increment=getattr(self.transport, "quantity_increment",
-                                      None),
-                book_age_s=authenticated.get("stream_age_s"),
-                gap_suspected=bool(authenticated.get("gap_suspected")))
-            if not built.get("ok"):
-                prov.stage("ORDER", {
-                    "client_order_id": coid, "submitted": False,
-                    "reason": "QUEUE_MEASUREMENT",
-                    "detail": str(built.get("reason"))[:120],
-                    "labels": ("the authorized queue measurement could not "
-                               "be constructed from this book, so NOTHING is "
-                               "submitted. There is deliberately no fallback "
-                               "to lambda-based L5 sizing.")})
-                return prov.refuse("QUEUE_MEASUREMENT",
-                                   str(built.get("reason"))[:120])
-            mi = built["intent"]
-            # MODE IS WHAT REACHES THE WIRE. l5_order_body.from_intent
-            # derives participateDontInitiate from `mode == "MAKER"` and
-            # ignores `post_only` entirely, and the maker_only overlay
-            # compares against FT.MAKER as well -- so the descriptive string
-            # that used to sit here would have been sent NOT post-only, and
-            # refused MAKER_ONLY_NO_TAKER on the way out. The measurement's
-            # own label is preserved as `qm_mode` for the record.
-            intent = {"client_order_id": coid, "market": market,
-                      "side": mi["side"], "price": mi["price"],
-                      "qty": mi["qty"], "mode": FT.MAKER,
-                      "qm_mode": mi["mode"],
-                      "action_key": key, "post_only": True}
-            prov.stage("QUEUE_MEASUREMENT", dict(mi, replaced_l5_intent={
-                "side": str(dec["side"]), "price": str(tr["price"]),
-                "qty": str(tr["qty"]), "mode": str(tr.get("mode") or "")}))
+        # WHAT THE GATES VALIDATED, in the only fields that move money. Any
+        # later override must not change these behind the gates' back; the
+        # equality check immediately before the wire enforces that.
+        gated_money = {"market": str(market),
+                       "side": str(dec.get("side")),
+                       "price": str(tr.get("price")),
+                       "qty": str(tr.get("qty")),
+                       "mode": str(tr.get("mode") or "")}
 
         # THE ONE-SUBMISSION CLAIM, and it is the LAST gate before the wire.
         #
@@ -3492,6 +3560,25 @@ class FaithfulExecutor:
             session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,
             mode=str(tr.get("mode") or ""))
         try:
+            # BYTE-FOR-BYTE ON THE MONEY FIELDS. The queue-measurement
+            # override runs after the gates, so without this an unvalidated
+            # order could reach the venue. Rather than trust the ordering,
+            # the intent about to be sent is compared with what the gates
+            # saw, and a mismatch refuses.
+            sent_money = {"market": str(intent.get("market")),
+                          "side": str(intent.get("side")),
+                          "price": str(intent.get("price")),
+                          "qty": str(intent.get("qty")),
+                          "mode": str(intent.get("mode") or "")}
+            if sent_money != gated_money:
+                prov.stage("INTENT_INTEGRITY", {
+                    "gated": gated_money, "to_send": sent_money,
+                    "why": ("an override changed a money-moving field after "
+                            "the safety gates ran, so the gates validated an "
+                            "order that is not this one")})
+                self.store.mark_uncertain("intent mutated after the gates")
+                return prov.refuse("SAFETY_OVERLAY",
+                                   "INTENT_MUTATED_AFTER_GATES")
             self._probe_leg_pending = None
             ack = self.transport.submit(intent)
         except NotArmed as exc:

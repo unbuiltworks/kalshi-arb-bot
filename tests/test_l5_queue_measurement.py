@@ -376,15 +376,18 @@ def test_the_measurement_order_is_what_reaches_the_transport(e2e, tmp_path):
     # the MEASUREMENT order, not the L5 decision: side is UP even though the
     # L5 row said DOWN, and the price is the best bid, not the L5 price.
     assert sent["side"] == "UP"
-    assert sent["price"] == "0.60"
-    assert sent["post_only"] is True
+    assert D(str(sent["price"])) == D("0.60")
     # MODE IS WHAT REACHES THE WIRE. l5_order_body derives
     # participateDontInitiate from `mode == "MAKER"` and ignores post_only,
     # so the mode must be exactly MAKER or the order rests NOT post-only --
     # and the maker_only overlay would refuse it first. The descriptive
     # label is kept alongside, where it cannot affect the body.
     assert sent["mode"] == FT.MAKER
-    assert sent["qm_mode"] == "MAKER_JOIN_BEST_BID"
+    # the descriptive label now lives on the executor, not on the intent:
+    # every money-moving field of the intent must equal what the gates
+    # validated, so the intent carries no extra keys of its own.
+    assert "qm_mode" not in sent
+    assert rec["QUEUE_MEASUREMENT"]["mode"] == "MAKER_JOIN_BEST_BID"
     assert OB.from_intent(sent, "m")["participateDontInitiate"] is True
     # fee-inclusive $1: 1.62 contracts at 0.60 is $0.972 cash, $0.999 all-in
     qty = D(sent["qty"])
