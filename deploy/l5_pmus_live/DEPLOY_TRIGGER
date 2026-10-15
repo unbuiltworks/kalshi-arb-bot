@@ -61,3 +61,32 @@ durable one-submission claim, shadow-locked PENDING-OWNER-APPROVAL
 # Rollback: Railway rollback to deployment 9b9a690b, the verified safe build
 # of 49f8d34e. A rollback restores the container, not the volume.
 queue measurement wired, shadow-locked 2026-10-15T16:32:46Z
+
+# OWNER-APPROVED DISARMED promotion of 4e009e82: the two-sided probe wired
+# into the canonical executor, and the maker-aware fee floor.
+#
+# BOTH TRADING LOCKS STAY ON. L5_SHADOW_ONLY is set, the watchdog HALT is
+# latched, and L5_TS_EXPERIMENT_ID and L5_TS_MARKET are deliberately NOT set
+# on this service -- so TS.active() is false and the entire probe branch (the
+# plan, the pair pre-check, the per-leg claims, both intents) is unreachable.
+# This deployment adds refusals and no capability.
+#
+# Runtime files changing, all COPYed into this image:
+#   src/l5_live_execution.py        -- the probe replaces the order UPSTREAM
+#                                      of every gate; the pair is gated
+#                                      before either leg is claimed
+#   src/l5_live_authorization.py    -- per-leg one-shot claims, claim_held
+#   src/l5_two_sided_probe.py       -- maker-aware fee floor from the actual
+#                                      quote prices; net_if_taker always
+#                                      reported
+#   src/l5_two_sided_shadow.py      -- additive read-only trade-through
+#                                      observer; existing collector untouched
+#   src/l5_live_validation_gates.py -- worst-case deficit gate, default
+#                                      DISABLED (bound unset)
+#   src/l5_pmus_live_runner.py      -- fail-closed parse of the deficit bound
+#
+# Money-path gate 1152 passed. Full suite 26 failed / 14 errors: the
+# established baseline exactly.
+#
+# Rollback: Railway rollback to deployment d17928bc, the verified safe build.
+two-sided probe wired + maker-aware fee floor, shadow-locked 2026-10-15T20:00:50Z
