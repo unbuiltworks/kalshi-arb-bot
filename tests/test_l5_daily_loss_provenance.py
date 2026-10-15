@@ -44,7 +44,7 @@ def test_retirement_preserves_unknown_basis_provenance_in_source():
     source = inspect.getsource(InventoryStore.retire_settled_market)
     assert 'unknown_basis_at_settlement' in source
     assert '"unverified_cost_basis_keys": unknown_basis_at_settlement' in source
-    assert '"l5_owner_attribution_verified": False' in source
+    assert '"l5_owner_attribution_verified": verified_l5' in source
     assert '"pnl_provenance"' in source
 
 def test_provenance_for_l5_fill_and_unowned_fill(tmp_path):
