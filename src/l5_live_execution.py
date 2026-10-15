@@ -2222,6 +2222,12 @@ class InventoryStore:
         if bad:
             return dict(bad, retired=False, market=market, yes_value=str(v))
 
+        # Snapshot unknown cost provenance BEFORE retiring the book. A venue
+        # position adopted at the $1/share upper bound is NOT an observed fill
+        # cost and must not disappear into an apparently verified P&L line.
+        unknown_basis_at_settlement = sorted(str(k) for k in
+            (self.state.get("leg_cost_basis_unknown") or [])
+            if str(k).rsplit("|", 1)[0] == market)
         up = self.position(market, "UP")
         dn = self.position(market, "DOWN")
         lc = self.leg_cost(market)
@@ -2271,6 +2277,11 @@ class InventoryStore:
                                   else None),
             "up_qty": str(up), "dn_qty": str(dn),
             "cost_total": str(cost), "redemption_total": str(redeem),
+            "unverified_cost_basis_keys": unknown_basis_at_settlement,
+            "l5_owner_attribution_verified": False,
+            "pnl_provenance": ("UNKNOWN_COST_UPPER_BOUND" if
+                               unknown_basis_at_settlement else
+                               "OWNERSHIP_NOT_ATTESTED"),
         }
         self.save()
         return {
