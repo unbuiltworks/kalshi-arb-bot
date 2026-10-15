@@ -30,3 +30,12 @@ disarmed cancellation fix, shadow-locked 2026-10-14T23:09:10Z
 2026-10-15T02:44:10Z
 
 measurement-readiness telemetry (P0-P3), shadow-locked 2026-10-15T12:12:39Z
+
+# PREPARED, NOT APPROVED. Promotes eda16d74 (durable one-submission claim).
+# DISARMED promotion: L5_SHADOW_ONLY stays set and the watchdog HALT stays
+# latched, so the new code path -- which sits behind `if transport.armed` --
+# cannot execute. Two runtime files change and both are already COPYed into
+# this image: src/l5_live_authorization.py, src/l5_live_execution.py.
+# PREREQUISITE: set L5_EXPERIMENT_ID on this service at or before this
+# deploy, or a future armed submit refuses SUBMISSION_CLAIM_NO_EXPERIMENT.
+durable one-submission claim, shadow-locked PENDING-OWNER-APPROVAL
