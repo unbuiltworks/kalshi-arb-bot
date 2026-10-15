@@ -86,6 +86,7 @@ COPY src/l5_session_journal.py src/l5_session_journal.py
 COPY src/l5_session_integrity.py src/l5_session_integrity.py
 COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
+COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 
 COPY scripts/__init__.py scripts/__init__.py
 COPY scripts/l5_pmus_live_oneshot.py scripts/l5_pmus_live_oneshot.py

@@ -409,6 +409,65 @@ def submission_sid(experiment: str) -> str:
     return "sub1.%s" % (experiment,)
 
 
+#: the two-sided probe needs EXACTLY TWO submissions under one
+#: authorization, which `submission_sid` deliberately forbids. Two named
+#: slots give each leg its own one-shot claim instead of loosening the
+#: single-submission rule for everything else.
+PROBE_LEGS = ("UP", "DOWN")
+
+
+def probe_leg_sid(experiment: str, leg: str) -> str:
+    return "ts1.%s.%s" % (experiment, leg)
+
+
+def claim_probe_leg(leg: str, payload: Mapping[str, Any],
+                    path: Optional[str] = None) -> Dict[str, Any]:
+    """Consume ONE two-sided probe leg's claim, or raise. Never auto-resets.
+
+    Each leg is claimed once, durably, on the same volume as the ledger. A
+    cancel, partial fill, reconnect, restart or ambiguous acknowledgment
+    never returns a leg's claim, so the probe can place at most one UP and
+    one DOWN order for the whole authorization -- and `max_live_orders`
+    still bounds how many rest at once.
+    """
+    exp = experiment_id()
+    if not exp:
+        raise Refused("PROBE_CLAIM_NO_EXPERIMENT")
+    side = str(leg or "").upper()
+    if side not in PROBE_LEGS:
+        raise Refused("PROBE_CLAIM_BAD_LEG", side)
+    sid = probe_leg_sid(exp, side)
+    rec = {"kind": "probe_leg_claim", "experiment": exp, "leg": side,
+           "sid": sid, "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+           **dict(payload)}
+    try:
+        claim_once(path or ledger_path(), sid, rec)
+    except Refused:
+        raise
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise Refused("PROBE_CLAIM_UNAVAILABLE",
+                      {"sid": sid, "leg": side,
+                       "error": "%s: %s" % (type(exc).__name__,
+                                            str(exc)[:200]),
+                       "note": "the claim could not be persisted, so it is "
+                               "not held. Refusing rather than submitting "
+                               "on an unproven claim."})
+    return rec
+
+
+def claim_held(sid: str, path: Optional[str] = None) -> bool:
+    """Is this claim already spent? Read from DISK, failing closed.
+
+    Used for restart recovery: the lock's presence is the durable record
+    that a leg was submitted. An unreadable answer is reported as HELD by
+    the caller, because re-placing a leg we cannot rule out is the only
+    truly unsafe reading.
+    """
+    return _lock_path(path or ledger_path(), str(sid)).exists()
+
+
 def claim_submission(market: str, payload: Mapping[str, Any],
                      path: Optional[str] = None) -> Dict[str, Any]:
     """Consume THE one submission claim, or raise. Never auto-resets.

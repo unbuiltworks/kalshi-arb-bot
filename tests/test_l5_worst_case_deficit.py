@@ -416,18 +416,27 @@ def test_exactly_one_gated_submission_path_and_the_gate_precedes_the_wire():
                if "self.transport.submit(" in ln and "def " not in ln]
     gates = [i for i, ln in enumerate(lines, 1) if "vg.refuse(" in ln]
     assert len(submits) == 1, submits
-    assert len(gates) == 1, gates
-    assert gates[0] < submits[0], "the gate must run BEFORE the wire"
+    # TWO gate sites now: the ordinary per-order call, and the two-sided
+    # probe's pair pre-check which gates BOTH legs before either is claimed.
+    # Both must precede the single wire.
+    assert len(gates) == 2, gates
+    assert max(gates) < submits[0], "every gate must run BEFORE the wire"
 
 
 def test_the_gate_call_site_supplies_inventory_and_unrealized_exposure():
     """Both were defaulted before; a silent omission is what this pins."""
     import pathlib
     src = pathlib.Path("src/l5_live_execution.py").read_text()
-    call = src[src.index("vg.refuse("):]
+    # the ORDINARY per-order call is the last of the two
+    call = src[src.rindex("vg.refuse("):]
     call = call[:call.index(")\n")]
     assert "inventory=self.inventory_for_gates(market)" in call
     assert "cumulative_unrealized_loss=" in call
+    # and the probe's pre-check supplies both as well
+    pre = src[src.index("def probe_precheck"):]
+    pre = pre[:pre.index("\n    def ")]
+    assert "inventory=inv" in pre
+    assert "cumulative_unrealized_loss=unreal" in pre
 
 
 def test_inventory_and_exposure_are_read_from_the_durable_store():

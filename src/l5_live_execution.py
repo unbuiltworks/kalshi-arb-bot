@@ -54,6 +54,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from src import pmus_fees as fees
 from src import l5_faithful_translation as FT
 from src import l5_queue_measurement as QM
+from src import l5_two_sided_probe as TS
 
 #: the pipeline, in order. A record names the furthest stage it reached.
 STAGES = ("L5_NATIVE", "PMUS_TRANSLATION", "SAFETY_OVERLAY", "ORDER",
@@ -2798,6 +2799,112 @@ class FaithfulExecutor:
                 return None            # incoherent or unreadable: fail closed
         return total
 
+    def probe_plan(self, market: str,
+                   authenticated: Mapping[str, Any],
+                   loss_ceiling: Optional[D] = None) -> Dict[str, Any]:
+        """Both probe legs, priced once from the authenticated book."""
+        return TS.build_orders(
+            market=market,
+            bid=authenticated.get("bid"), ask=authenticated.get("ask"),
+            bid_depth=authenticated.get("bid_shares"),
+            ask_depth=authenticated.get("ask_shares"),
+            tick=getattr(self.transport, "tick_size", None),
+            min_qty=getattr(self.transport, "quantity_increment", None),
+            depth_ticks=int(os.getenv("L5_TS_DEPTH_TICKS", "2")),
+            cash_envelope=self.probe_cash_envelope(),
+            max_worst_case_loss=(self.probe_loss_ceiling()
+                                 if loss_ceiling is None else loss_ceiling),
+            book_age_s=authenticated.get("stream_age_s"),
+            gap_suspected=bool(authenticated.get("gap_suspected")))
+
+    def probe_cash_envelope(self) -> Optional[D]:
+        vg = self.validation_gates
+        return None if vg is None else vg.max_cash_deployed_usd
+
+    def probe_loss_ceiling(self) -> Optional[D]:
+        vg = self.validation_gates
+        if vg is None:
+            return None
+        # the DEFICIT bound is the per-window worst case; the cumulative
+        # ceiling is run-scoped. The smaller one binds the sizing.
+        d = vg.max_worst_case_deficit_usd
+        c = vg.max_cumulative_loss_usd
+        return c if d is None else min(d, c)
+
+    def probe_plan_key(self, market: str) -> str:
+        from src import l5_live_authorization as AUTH
+        return "%s|%s" % (AUTH.experiment_id(), market)
+
+    def probe_stored_plan(self, market: str) -> Optional[Dict[str, Any]]:
+        """The frozen plan for this experiment and market, or None."""
+        p = (self.store.state.get("probe_plans") or {}).get(
+            self.probe_plan_key(market))
+        return dict(p) if isinstance(p, Mapping) else None
+
+    def probe_store_plan(self, market: str, plan: Mapping[str, Any]) -> None:
+        """Freeze it durably, so leg two matches leg one across a restart."""
+        plans = self.store.state.setdefault("probe_plans", {})
+        plans[self.probe_plan_key(market)] = dict(plan)
+        self.store.save()
+
+    def probe_legs_claimed(self) -> Dict[str, bool]:
+        """Which legs this authorization has already spent, from DISK.
+
+        The claim file is the restart record: its presence means the leg was
+        submitted, so a restarted process cannot re-place a leg whatever its
+        in-memory state says.
+        """
+        from src import l5_live_authorization as AUTH
+        out = {}
+        for leg in AUTH.PROBE_LEGS:
+            try:
+                out[leg] = AUTH.claim_held(
+                    AUTH.probe_leg_sid(AUTH.experiment_id(), leg))
+            except BaseException:                              # noqa: BLE001
+                out[leg] = True        # unreadable = treat as spent
+        return out
+
+    def probe_precheck(self, market: str, plan: Mapping[str, Any]
+                       ) -> Optional[str]:
+        """Gate the WHOLE PAIR before either leg is claimed.
+
+        ITEM 5, AND IT IS THE REASON THIS IS NOT TWO INDEPENDENT ORDERS. If
+        leg one were gated alone it could spend the cash and the deficit
+        headroom the second leg needs, leaving a single unpaired order that
+        the gates would then refuse to complete -- the exact state the probe
+        exists to avoid. So both legs are priced as if BOTH were already
+        resting, and if that combined book fails any gate NEITHER is placed.
+        """
+        vg = self.validation_gates
+        if vg is None:
+            return None
+        legs = list(plan.get("legs") or ())
+        if len(legs) != 2:
+            return "PROBE_PLAN_NOT_TWO_LEGS"
+        both = [{"qty": D(l["qty"]), "price": D(l["price"]),
+                 "intent": ("ORDER_INTENT_BUY_SHORT" if l["side"] == DOWN
+                            else "ORDER_INTENT_BUY_LONG")}
+                for l in legs]
+        inv = self.inventory_for_gates(market)
+        unreal = self.unrealized_loss_for_gates()
+        for i, leg in enumerate(legs):
+            # each leg evaluated with the OTHER already outstanding
+            other = [both[1 - i]]
+            reason = vg.refuse(
+                order_qty=D(leg["qty"]), order_price=D(leg["price"]),
+                order_intent=both[i]["intent"],
+                filled_legs=self.cash_legs_for_gates(),
+                outstanding=self.outstanding_for_gates() + other,
+                book_uncertain=self.store.orders_uncertain(),
+                unmatched_after=self.store.residual(market),
+                cumulative_realized=self.store.realized_today(),
+                cumulative_unrealized_loss=unreal,
+                available_cash_usd=self.available_cash_usd,
+                inventory=inv)
+            if reason:
+                return "PAIR_%s:%s" % (leg["side"], reason)
+        return None
+
     def inventory_for_gates(self, market: str) -> Dict[str, Any]:
         """Confirmed per-side quantity and ACTUAL acquisition cost.
 
@@ -3021,6 +3128,88 @@ class FaithfulExecutor:
         # consulted AFTER every pre-existing limit, so a deployed refusal is
         # never masked by one of these, and they can only ever turn an
         # allowed action into a refused one -- never the reverse.
+        # THE TWO-SIDED PROBE REPLACES THE ORDER *BEFORE* THE GATES.
+        #
+        # THE BUG THIS POSITION FIXES. Placed after the validation gates, the
+        # probe's order would never be gated at all: the gates would evaluate
+        # the ordinary lambda intent and the probe's own side, price and
+        # quantity would reach the venue ungated. So the replacement happens
+        # here, upstream of every gate, the residual cap and the intent
+        # construction, and each of them then sees exactly what will be sent.
+        #
+        # Both legs are priced and gated TOGETHER, then placed on successive
+        # decision ticks through this same path: the existing claim,
+        # record_submit, transport, durable ledger, reconciliation and
+        # per-order cancellation. Nothing new carries money.
+        #
+        # NO FALLBACK. A refusal anywhere here is terminal: falling back to
+        # `tr` would submit an ordinary L5 trade under an authorization
+        # granted for a two-sided probe.
+        if TS.active(market):
+            # SIZE DOWN UNTIL THE GATES ACCEPT THE PAIR. The module sizes
+            # from the cash and loss inputs it is given, but the gates own
+            # the final word -- the deficit gate adds the other leg's cost
+            # and its rounding slack, which the module does not model. So
+            # the ceiling is walked down until the gated pair fits, and the
+            # gate stays authoritative instead of being second-guessed.
+            # THE PLAN IS FROZEN ONCE AND PERSISTED. Re-planning on each
+            # tick produced legs of DIFFERENT sizes as the book moved -- 1.89
+            # against 0.98 in test -- which is not a matched pair at all. The
+            # first tick fixes both prices and the common quantity, the
+            # second reuses them, and the store makes that survive a restart.
+            plan = self.probe_stored_plan(market)
+            bad = None
+            if plan is None:
+                bad = "PROBE_NOT_SIZED"
+                ceiling = self.probe_loss_ceiling()
+                last = None
+                for _ in range(12):
+                    plan = self.probe_plan(market, authenticated,
+                                           loss_ceiling=ceiling)
+                    if not plan.get("ok"):
+                        # a gate reason already seen outranks the module's
+                        # downstream complaint about the shrunken size
+                        return prov.refuse(
+                            "TWO_SIDED_PROBE",
+                            str(last or plan.get("reason"))[:120])
+                    bad = self.probe_precheck(market, plan)
+                    if not bad:
+                        break
+                    last = bad
+                    if ceiling is None:
+                        break
+                    ceiling = ceiling * D("0.85")
+                if not bad:
+                    self.probe_store_plan(market, plan)
+            if bad:
+                prov.stage("TWO_SIDED_PROBE", {
+                    "refused": bad, "pair_cost": plan.get("pair_cost"),
+                    "labels": ("the PAIR was gated as if BOTH legs were "
+                               "already resting, so neither is placed. Leg "
+                               "one can never spend leg two's headroom.")})
+                return prov.refuse("TWO_SIDED_PROBE", bad[:120])
+            claimed = self.probe_legs_claimed()
+            legs = {l["side"]: l for l in plan["legs"]}
+            # deterministic: the CHEAPER leg first, because a cheap leg
+            # filling alone is the smaller worst case.
+            order = sorted(legs, key=lambda k: D(legs[k]["price"]))
+            nxt = next((k for k in order if not claimed.get(k)), None)
+            if nxt is None:
+                return prov.refuse("TWO_SIDED_PROBE", "BOTH_LEGS_SPENT")
+            leg = legs[nxt]
+            # rewrite BOTH the decision and the translation: downstream code
+            # reads dec["side"] for the order intent and the residual
+            # direction, and tr for price and quantity.
+            dec["side"] = leg["side"]
+            tr = dict(tr, ok=True, mode=FT.MAKER,
+                      price=D(leg["price"]), qty=D(leg["qty"]))
+            prov.stage("TWO_SIDED_PROBE", dict(
+                plan, leg_to_place=nxt, legs_claimed=claimed,
+                replaced_l5_intent={"side": str(dec.get("side")),
+                                    "price": str(leg["price"]),
+                                    "qty": str(leg["qty"])}))
+            self._probe_leg_pending = nxt
+
         vg = self.validation_gates
         if vg is not None:
             try:
@@ -3261,11 +3450,21 @@ class FaithfulExecutor:
         # bounds submissions per AUTHORIZATION. This does.
         if getattr(self.transport, "armed", False):
             from src import l5_live_authorization as AUTH
+            payload = {
+                "client_order_id": coid, "action_key": key,
+                "side": str(dec["side"]), "price": str(tr["price"]),
+                "qty": str(tr["qty"]), "mode": str(tr.get("mode") or "")}
             try:
-                claim = AUTH.claim_submission(market, {
-                    "client_order_id": coid, "action_key": key,
-                    "side": str(dec["side"]), "price": str(tr["price"]),
-                    "qty": str(tr["qty"]), "mode": str(tr.get("mode") or "")})
+                # THE PROBE NEEDS EXACTLY TWO SUBMISSIONS, so it claims a
+                # NAMED LEG rather than loosening the single-submission rule
+                # for everything else. Each leg is still one-shot and
+                # durable, and max_live_orders still bounds concurrency.
+                leg_pending = getattr(self, "_probe_leg_pending", None)
+                if TS.active(market) and leg_pending:
+                    claim = AUTH.claim_probe_leg(
+                        leg_pending, dict(payload, market=market))
+                else:
+                    claim = AUTH.claim_submission(market, payload)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
@@ -3293,6 +3492,7 @@ class FaithfulExecutor:
             session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,
             mode=str(tr.get("mode") or ""))
         try:
+            self._probe_leg_pending = None
             ack = self.transport.submit(intent)
         except NotArmed as exc:
             # DISARMED never reached the venue, so the reservation is undone.

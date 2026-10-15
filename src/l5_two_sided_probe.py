@@ -266,7 +266,14 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     # the gross cash must stay inside the envelope. The dearer leg binds.
     dear = max(up_px, dn_px)
     by_loss = cap / dear
-    by_cash = env / pair
+    # SIZE AGAINST THE GATE'S OWN CASH BASIS, not the pair cost. The cash
+    # gate prices a resting DOWN leg (a BUY_SHORT) at a DOLLAR A SHARE, not
+    # at its limit price, because a short owes $1 if YES settles 1. Sizing on
+    # `pair` would therefore build a plan the gate then refuses -- which is
+    # exactly what happened the first time this was wired. The conservative
+    # accounting is preserved and respected, not worked around.
+    oblig_per_contract = D(1) + up_px
+    by_cash = env / oblig_per_contract
     qty = min(by_loss, by_cash)
     # quantise DOWN to the venue grid, never up
     qty = (qty / mq).to_integral_value(rounding="ROUND_FLOOR") * mq
@@ -278,8 +285,7 @@ def build_orders(*, market: str, bid: Any, ask: Any,
         if qty < mq:
             break
         if (qty * dear + worst_fee(qty, dear) <= cap
-                and qty * pair + worst_fee(qty, up_px)
-                + worst_fee(qty, dn_px) <= env):
+                and qty * oblig_per_contract <= env):
             break
         qty -= mq
     if qty < mq:
@@ -308,6 +314,11 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             "pair_cost": str(pair), "edge_per_contract": str(edge),
             "qty_per_leg": str(qty),
             "gross_cash_usd": str(econ["cost"]),
+            "cash_gate_obligation_usd": str(qty * oblig_per_contract),
+            "cash_basis": ("a resting DOWN leg is a BUY_SHORT and the cash "
+                           "gate charges it a dollar a share; sizing uses "
+                           "that basis so the plan the gate sees is the "
+                           "plan this built"),
             "up_pnl": str(econ["up_pnl"]), "dn_pnl": str(econ["dn_pnl"]),
             "worst_single_leg_loss_usd": str(
                 -(qty * dear + worst_fee(qty, dear))),

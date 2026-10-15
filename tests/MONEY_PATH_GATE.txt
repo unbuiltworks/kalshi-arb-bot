@@ -95,3 +95,10 @@ tests/test_l5_pmus_live_wiring.py
     timestamps, queue-ahead bands and the cancellation deadline. A touch is
     never a fill and trade-through is never a confirmed fill. The existing
     two-sided collector's API and outputs are untouched.
+
+12. TWO-SIDED PROBE WIRING (experiment-gated; inert by default)
+    tests/test_l5_two_sided_wiring.py
+    Both legs reach the transport through the ordinary path with
+    participateDontInitiate true, the PAIR is gated before either leg is
+    claimed, each leg holds its own one-shot durable claim, and a refusal
+    anywhere submits nothing rather than falling back to the L5 intent.
