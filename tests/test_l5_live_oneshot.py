@@ -359,6 +359,7 @@ def test_main_runs_the_probe_once(monkeypatch):
 
 # 5 --------------------- concurrent live orders / $5 reservation via partials
 
+@pytest.mark.multi_submission
 def test_a_partial_fill_keeps_consuming_the_envelope(tmp_path, monkeypatch):
     """What this has always been about: a partial keeps counting.
 

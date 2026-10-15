@@ -297,6 +297,7 @@ class NeverFills:
         return {"order_id": "v%d" % len(self.sent), "filled_qty": "0"}
 
 
+@pytest.mark.multi_submission
 def test_rapid_l5_decisions_are_bounded_by_the_dollars(tmp_path, monkeypatch):
     """The 1630z shape: many decisions, no acknowledgement, one envelope.
 

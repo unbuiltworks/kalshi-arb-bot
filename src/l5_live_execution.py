@@ -3115,6 +3115,53 @@ class FaithfulExecutor:
         intent = {"client_order_id": coid, "market": market,
                   "side": dec["side"], "price": tr["price"], "qty": tr["qty"],
                   "mode": tr["mode"], "action_key": key}
+
+        # THE ONE-SUBMISSION CLAIM, and it is the LAST gate before the wire.
+        #
+        # ONLY WHEN ARMED. A disarmed or shadow-locked transport cannot reach
+        # the venue -- `submit` raises NotArmed -- so a claim taken on that
+        # path would burn the owner's authorization on an order that never
+        # existed, and in shadow mode would burn it on the first decision of
+        # the day. The claim is therefore taken exactly where a submission
+        # CAN reach the venue and nowhere else.
+        #
+        # BEFORE THE WIRE, DELIBERATELY. The claim is fsynced before
+        # `transport.submit` is called, so a process that dies between the
+        # two has already spent it. That is the conservative direction: the
+        # order may be live at the venue, and a second attempt is exactly
+        # what must not happen.
+        #
+        # WHAT THIS CATCHES THAT NOTHING ELSE DID. `max_live_orders` bounds
+        # CONCURRENCY, so a cancellation returns the count to zero and lets
+        # another order through; the cash gate hands back the unfilled
+        # headroom after a partial fill; and the ARMING claim resets per
+        # window, so a restart can re-arm the same window. None of those
+        # bounds submissions per AUTHORIZATION. This does.
+        if getattr(self.transport, "armed", False):
+            from src import l5_live_authorization as AUTH
+            try:
+                claim = AUTH.claim_submission(market, {
+                    "client_order_id": coid, "action_key": key,
+                    "side": str(dec["side"]), "price": str(tr["price"]),
+                    "qty": str(tr["qty"]), "mode": str(tr.get("mode") or "")})
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                args = getattr(exc, "args", None) or ("SUBMISSION_CLAIM",)
+                why = str(args[0])[:120]
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "SUBMISSION_CLAIM", "detail": why,
+                    "labels": ("the one-submission claim for this experiment "
+                               "and market was refused. A spent claim is "
+                               "NEVER reset automatically -- not by a "
+                               "cancellation, a partial or zero fill, a "
+                               "reconnect, a restart, or a rejected or "
+                               "ambiguous acknowledgement. Clearing it is an "
+                               "owner action with the credentials.")})
+                return prov.refuse("SUBMISSION_CLAIM", why)
+            prov.stage("SUBMISSION_CLAIM", dict(claim, consumed=True))
+
         # Reserve the envelope BEFORE the wire. If the process dies between
         # the send and the ack, the order may still be live at the venue, and
         # a store that never recorded it would hand the whole envelope to the

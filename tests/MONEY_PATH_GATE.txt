@@ -1,0 +1,76 @@
+# THE MONEY-PATH GATE. Existing tests only, grouped by the seven things that
+# must hold before one real order rests at the venue. No new test
+# infrastructure: this file names what already exists so the gate is runnable
+# and reviewable as one command rather than remembered.
+#
+#   python3 -m pytest $(grep -v '^#' tests/MONEY_PATH_GATE.txt) -q
+#
+# A failure here is a live-safety question. A failure elsewhere in the suite is
+# not necessarily one -- see MONEY_PATH_GATE.md for the 46 known-failing
+# selections that predate this work.
+
+# 1. SUBMISSION AUTHORIZATION
+tests/test_l5_live_validation_gates.py
+tests/test_l5_window_bound_authorization.py
+tests/test_l5_arming_boundary.py
+tests/test_l5_arm_retry.py
+tests/test_l5_outside_claim_adjudication.py
+tests/test_live_mandate_adversarial.py
+tests/test_live_mandate_deployment.py
+tests/test_l5_stage_b_mandate.py
+tests/test_authenticated_book_submission_gate.py
+tests/test_l5_one_order_limit.py
+tests/test_l5_one_submission_claim.py
+tests/test_l5_concurrency_gate.py
+
+# 2. EFFECTIVE CASH LIMITS
+tests/test_l5_available_cash_wiring.py
+tests/test_combined_loss_gate_wiring.py
+tests/test_pmus_matched_pair_ceiling_halt.py
+tests/test_l5_measurement_readiness.py
+
+# 3. EXACT-ORDER CANCELLATION WHILE DISARMED
+tests/test_l5_disarmed_cancellation.py
+tests/test_l5_deadman_exact_cancel.py
+tests/test_l5_orphan_cancellation.py
+tests/test_l5_disarmed_shadow_integration.py
+tests/test_gemini_cancel_order_id_type.py
+tests/test_gemini_cancel_seam_real_shapes.py
+tests/test_spring_cancel_race.py
+tests/test_l5_watchdog_ownership.py
+
+# 4. PARTIAL FILLS
+tests/test_pending_qty_reconciliation.py
+tests/test_fill_reconciliation.py
+tests/test_l5_order_lifecycle.py
+tests/test_gemini_order_lifecycle.py
+tests/test_working_order_age.py
+tests/test_l5_order_identity.py
+tests/test_order_provenance.py
+tests/test_l5_incoherent_order_row.py
+
+# 5. RESTART RECOVERY
+tests/test_gemini_outstanding_ledger_restart.py
+tests/test_l5_authoritative_ledger_repair.py
+tests/test_l5_recovery_mode.py
+tests/test_l5_uncertainty_recovery.py
+tests/test_shutdown_settlement_reconcile.py
+
+# 6. RECONCILIATION AND SETTLEMENT TRUTH
+tests/test_canonical_terminal_reconciliation.py
+tests/test_reconciliation_scope.py
+tests/test_l5_venue_position_authority.py
+tests/test_l5_binary_settlement.py
+tests/test_l5_settlement_retirement.py
+tests/test_l5_stage_a_settlement_correction.py
+tests/test_l5_two_sided_shadow.py
+
+# 7. WATCHDOG HALT ENFORCEMENT
+tests/test_l5_halt_gate.py
+tests/test_l5_watchdog.py
+tests/test_l5_watchdog_credential_free.py
+tests/test_l5_watchdog_halt_end_to_end.py
+
+# 8. THE IMAGE ACTUALLY SHIPS WHAT THE TESTS TESTED
+tests/test_l5_pmus_live_image_closure.py
+tests/test_l5_pmus_live_wiring.py

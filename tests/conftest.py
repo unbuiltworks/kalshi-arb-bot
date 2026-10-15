@@ -28,6 +28,48 @@ def pytest_configure(config):
         "markers",
         "real_mandate_env: do NOT inject the permissive suite mandate; the "
         "test supplies its own (for tests of the mandate itself)")
+    config.addinivalue_line(
+        "markers",
+        "multi_submission: the test drives SEVERAL armed submissions, each "
+        "standing for a separate authorization, so the one-submission "
+        "claim's experiment id rotates per call")
+
+
+@pytest.fixture(autouse=True)
+def _submission_claim_scope(monkeypatch, tmp_path, request):
+    """Give every test its OWN experiment id and authorization ledger.
+
+    The one-submission claim is now the last gate before the wire, so any
+    test that drives an ARMED submit has to hold a claim. Two things would go
+    wrong without this: the claim would be written to the production
+    `DEFAULT_LEDGER` path, and a shared experiment id would make the SECOND
+    armed submit anywhere in the suite refuse -- tests would start depending
+    on each other's order.
+
+    A unique id per test keeps each one's claim its own, which is exactly the
+    production semantics (one authorization, one submission) applied per
+    test. A test about the claim itself overrides both values.
+    """
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER",
+                       str(tmp_path / "auth_ledger.jsonl"))
+    monkeypatch.setenv("L5_EXPERIMENT_ID",
+                       "SUITE-%s" % abs(hash(request.node.nodeid)))
+    if request.node.get_closest_marker("multi_submission"):
+        # THESE TESTS PREDATE THE ONE-SUBMISSION CLAIM and exercise the
+        # engine's MULTI-ORDER behaviour -- duplicate-id protection, the
+        # absence of behavioural suppression, envelope counting across
+        # partials. Each of their submissions stands for a SEPARATE
+        # authorization, so the experiment id rotates per call rather than
+        # the claim gate being switched off. The production gate is
+        # untouched; only the identity it is keyed to varies here.
+        from src import l5_live_authorization as _AUTH
+        seq = {"n": 0}
+
+        def _rotating() -> str:
+            seq["n"] += 1
+            return "SUITE-%s-%d" % (abs(hash(request.node.nodeid)), seq["n"])
+
+        monkeypatch.setattr(_AUTH, "experiment_id", _rotating)
 
 
 @pytest.fixture(autouse=True)

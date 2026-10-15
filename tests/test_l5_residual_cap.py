@@ -295,6 +295,7 @@ def test_an_envelope_refusal_keeps_its_own_reason(tmp_path):
     assert note(rec) is None, "the cap was evaluated on an already-refused action"
 
 
+@pytest.mark.multi_submission
 def test_every_action_the_cap_refuses_was_permitted_by_the_frozen_path(tmp_path):
     """Run the same actions twice, cap off and cap on. The capped run's
     refusals must be a strict SUBSET of the frozen run's submissions."""
@@ -327,6 +328,7 @@ def rest_order(store, coid, side, qty, price="0.10"):
                                "qty": str(qty), "price": price})
 
 
+@pytest.mark.multi_submission
 def test_1_four_same_side_opens_cannot_each_claim_flat(tmp_path):
     """THE 1130z FAILURE, as a test. Realized residual is 0 throughout --
     nothing has filled -- so under a realized-only gate every one of these is

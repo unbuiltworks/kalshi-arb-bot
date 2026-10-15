@@ -167,6 +167,7 @@ def test_a_replayed_action_does_not_double_the_position(tmp_path):
     assert len(t.sent) == 1
 
 
+@pytest.mark.multi_submission
 def test_a_crash_between_submit_and_save_still_cannot_double(tmp_path):
     # the id is derived from the action, so even a store that lost the record
     # produces the same id and the VENUE rejects the duplicate. The rejection
@@ -254,6 +255,7 @@ def test_no_price_band_is_imposed_by_default(tmp_path):
     assert rec["ORDER"]["submitted"] is True
 
 
+@pytest.mark.multi_submission
 def test_the_behaviour_our_old_heuristics_disliked_is_not_suppressed(tmp_path):
     # repeated same side, then the opposite, then a >$1 combined cost
     # each order fills completely, so the one-live-order slot is free for the

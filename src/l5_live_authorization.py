@@ -377,6 +377,102 @@ def claim_once(path: str, sid: str, payload: Mapping[str, Any]) -> None:
         raise
 
 
+#: THE EXPERIMENT. One authorized measurement, named explicitly by the owner.
+#: Unset is not a default -- an armed submission with no named experiment is
+#: refused, because a claim that is not tied to an authorization cannot be
+#: single-use with respect to it.
+EXPERIMENT_ENV = "L5_EXPERIMENT_ID"
+
+
+def experiment_id() -> str:
+    return (os.getenv(EXPERIMENT_ENV) or "").strip()
+
+
+def submission_sid(experiment: str) -> str:
+    """The claim id for THE one submission of one experiment. ONE, total.
+
+    THE MARKET IS DELIBERATELY NOT IN THE ID. An earlier version keyed it on
+    experiment AND market, which gave one authorization one submission *per
+    market* -- so a single $1 experiment could legitimately have placed an
+    order in every 15-minute window of the day, each one passing its own
+    fresh claim. A single-market authorization has to be single across the
+    WHOLE experiment, and the only way the lock can enforce that is to be
+    keyed on the experiment alone: the first submission in any market
+    consumes it, and a different market then has nothing left to claim.
+
+    The market is still recorded in the claim payload, so the audit record
+    says which market spent it; it just cannot widen the authorization.
+
+    The `sub1.` prefix keeps this in its own namespace, distinct from the
+    ARMING claim that `claim_once` takes on the session id.
+    """
+    return "sub1.%s" % (experiment,)
+
+
+def claim_submission(market: str, payload: Mapping[str, Any],
+                     path: Optional[str] = None) -> Dict[str, Any]:
+    """Consume THE one submission claim, or raise. Never auto-resets.
+
+    WHY THIS EXISTS, AND WHY max_live_orders DID NOT COVER IT.
+    `max_live_orders` is checked as `live_order_count >= max_live_orders`,
+    which bounds CONCURRENCY. After a cancellation the count returns to zero
+    and the check passes again; after a partial fill the cash gate hands back
+    the unfilled headroom; and the ARMING claim is reset per window, so a
+    restart can re-arm the same window. One order per *authorization* was
+    therefore a property of the written specification and not of the engine.
+    This makes it a property of the filesystem.
+
+    ATOMIC, AND BEFORE THE WIRE. `claim_once` takes the lock with
+    `os.open(O_CREAT|O_EXCL)` and fsyncs it, so exactly one caller wins and
+    the record is durable before this returns. The caller must invoke this
+    BEFORE the submit, so a process that dies between the two has already
+    spent the claim.
+
+    NEVER RESET AUTOMATICALLY. Nothing here or anywhere else removes the
+    lock -- not a cancellation, not a partial or zero fill, not a reconnect,
+    not a restart, and not a rejected or ambiguous submission. An attempt
+    that the venue refused, or whose acknowledgement we could not read, has
+    still spent the authorization: the alternative is retrying into a venue
+    that may already hold the order. Clearing it is an owner action with the
+    credentials directly, exactly like the halt latch.
+
+    FAIL CLOSED. An unnamed experiment, an unwritable directory, or any other
+    persistence failure raises `Refused` rather than returning. A claim we
+    cannot prove we hold is not a claim.
+    """
+    exp = experiment_id()
+    if not exp:
+        raise Refused("SUBMISSION_CLAIM_NO_EXPERIMENT",
+                      {"env": EXPERIMENT_ENV,
+                       "note": "no named experiment, so a single-use claim "
+                               "cannot be bound to an authorization. Unset "
+                               "is never a default."})
+    mkt = str(market or "").strip()
+    if not mkt:
+        raise Refused("SUBMISSION_CLAIM_NO_MARKET",
+                      {"note": "the claim is per experiment AND market."})
+    sid = submission_sid(exp)
+    rec = {"kind": "submission_claim", "experiment": exp, "market": mkt,
+           "sid": sid,
+           "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+           **dict(payload)}
+    try:
+        claim_once(path or ledger_path(), sid, rec)
+    except Refused:
+        raise
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise Refused("SUBMISSION_CLAIM_UNAVAILABLE",
+                      {"sid": sid, "experiment": exp, "market": mkt,
+                       "error": "%s: %s" % (type(exc).__name__,
+                                            str(exc)[:200]),
+                       "note": "the claim could not be persisted, so it is "
+                               "not held. Refusing rather than submitting on "
+                               "an unproven claim."})
+    return rec
+
+
 def scoped_limits(limits: Any) -> Dict[str, str]:
     """The capital envelope being approved, as strings for the record."""
     out: Dict[str, str] = {}
