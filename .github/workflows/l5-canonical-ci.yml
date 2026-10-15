@@ -2,14 +2,14 @@
 #
 # Exists so the test suite is INDEPENDENTLY run by GitHub Actions on this
 # branch, not only locally. No secrets, no deploys, no writes; push-scoped
-# to feature/l5-canonical only, so it never runs for main or any other
-# branch and cannot interact with the Railway deploy workflow.
+# to the canonical research and active L5 implementation branches; this
+# runs tests only, with read-only token permissions and no Railway access.
 
 name: l5-canonical-ci
 
 on:
   push:
-    branches: [feature/l5-canonical]
+    branches: [feature/l5-canonical, claude/gemini-btc-economic-viability-h3u7zl]
   workflow_dispatch:
 
 permissions:
