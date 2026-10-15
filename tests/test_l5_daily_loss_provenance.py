@@ -46,3 +46,35 @@ def test_retirement_preserves_unknown_basis_provenance_in_source():
     assert '"unverified_cost_basis_keys": unknown_basis_at_settlement' in source
     assert '"l5_owner_attribution_verified": False' in source
     assert '"pnl_provenance"' in source
+
+def test_provenance_for_l5_fill_and_unowned_fill(tmp_path):
+    from src.l5_live_execution import OWN
+    market = "cpc-btc-updown-15m-2026-10-15-2345z"
+    s = InventoryStore(str(tmp_path / "new.json"))
+    s.record_submit("l5-001", {
+        "market": market, "side": "UP", "price": "0.25", "qty": "1"
+    }, session_id="single-use-owner-approved-session", mode="LIVE")
+    s.apply_fill(market, "UP", D("1"), D("0.25"),
+                 coid="l5-001", basis=OWN)
+    s.apply_fill(market, "DOWN", D("1"), D("0.20"),
+                 coid=None, basis=OWN)
+    proof = s.state["fill_provenance"][market]
+    assert proof["legs"]["UP"]["verified_qty"] == "1"
+    assert D(proof["legs"]["UP"]["verified_cost"]) == D("0.25")
+    assert proof["entries"][0]["l5_owner_verified"] is True
+    assert proof["entries"][1]["l5_owner_verified"] is False
+    assert proof["legs"]["DOWN"]["total_qty"] == "1"
+
+
+def test_unattested_fill_does_not_become_verified_l5_settlement(tmp_path):
+    from src.l5_live_execution import OWN
+    market = "cpc-btc-updown-15m-2026-10-15-2345z"
+    s = InventoryStore(str(tmp_path / "manual.json"))
+    s.apply_fill(market, "DOWN", D("2"), D("0.30"),
+                 coid=None, basis=OWN)
+    out = s.retire_settled_market(market, yes_value=D("1"))
+    assert out["retired"] is True
+    rec = s.state["retired_markets"][market]
+    assert rec["l5_owner_attribution_verified"] is False
+    assert rec["pnl_provenance"] == "OWNERSHIP_NOT_ATTESTED"
+    assert "verified_l5_settlement_gross" not in s.state
