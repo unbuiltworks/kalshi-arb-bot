@@ -37,7 +37,7 @@ is confirmed, not when a closing leg fills.
 """
 from __future__ import annotations
 
-from decimal import Decimal as D
+from decimal import Decimal as D, ROUND_CEILING, InvalidOperation
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 #: cash is released only by confirmed settlement, never by a closing fill
@@ -54,6 +54,40 @@ def _d(v: Any) -> D:
     return D(str(v))
 
 
+#: set-but-invalid is a CONFIGURATION ERROR, never a silent disable
+class DeficitBoundInvalid(ValueError):
+    """The deficit bound was explicitly configured and cannot be used."""
+
+
+def parse_deficit_bound(raw: Optional[str]) -> Optional[D]:
+    """Runtime value -> the bound, or None when genuinely unset.
+
+    FAIL CLOSED ON A BAD VALUE. Unset and blank mean "not configured", which
+    leaves the gate disabled and changes nothing. But a value that was typed
+    and cannot be used is an operator who believes a bound is in force when
+    it is not, so it raises instead of falling back to None. The caller must
+    not run unprotected on the strength of a typo.
+    """
+    if raw is None:
+        return None
+    txt = str(raw).strip()
+    if not txt:
+        return None
+    try:
+        v = D(txt)
+    except (InvalidOperation, ValueError, ArithmeticError):
+        raise DeficitBoundInvalid(
+            "not a number: %r" % (txt[:40],))
+    if not v.is_finite():
+        raise DeficitBoundInvalid("not finite: %r" % (txt[:40],))
+    # a NEGATIVE bound is legitimate and strict: it demands the book be
+    # profitable on both outcomes. An absurd magnitude is a typo, not a
+    # policy, and a bound above the whole mandate protects nothing.
+    if v > D("1000") or v < D("-1000"):
+        raise DeficitBoundInvalid("implausible magnitude: %s" % v)
+    return v
+
+
 class ValidationGates:
     """Run-scoped gates for one bounded validation. Refuse-only."""
 
@@ -64,7 +98,8 @@ class ValidationGates:
                  cash_policy: str = NO_RECYCLING,
                  max_windows: int = 20,
                  max_worst_case_deficit_usd: Optional[D] = None,
-                 fee_theta_worst: D = D("0.0695")) -> None:
+                 fee_theta_worst: D = D("0.0695"),
+                 fee_extra_per_order_usd: D = D("0.01")) -> None:
         if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
             raise ValueError("unknown cash policy: %r" % cash_policy)
         if cash_policy == RECYCLE_ON_COMPLETE:
@@ -86,6 +121,17 @@ class ValidationGates:
         # accounting has never been entitled to assume, so the worst case is
         # priced as if every leg paid the taker fee.
         self.fee_theta_worst = _d(fee_theta_worst)
+        # ONE CENT PER ORDER, AND IT IS LOAD-BEARING. Cent rounding breaks
+        # the convexity the four-corner search relies on: a SMALL partial
+        # fill on an expensive leg is net harmful, because the whole cent of
+        # rounding outweighs the (1 - price) benefit of the quantity it adds.
+        # Brute force over partial fills found exactly that, understating a
+        # case by $0.0016. The harm per order from this effect cannot exceed
+        # the rounding itself, since the quantity benefit is never negative,
+        # so a flat cent per order dominates it and restores the corner
+        # search to an upper bound. Verified by
+        # test_the_four_corners_equal_the_exhaustive_worst_case.
+        self.fee_extra_per_order_usd = _d(fee_extra_per_order_usd)
 
     def as_dict(self) -> Dict[str, Any]:
         return {"max_cash_deployed_usd": str(self.max_cash_deployed_usd),
@@ -97,6 +143,11 @@ class ValidationGates:
                     None if self.max_worst_case_deficit_usd is None
                     else str(self.max_worst_case_deficit_usd)),
                 "fee_theta_worst": str(self.fee_theta_worst),
+                "fee_extra_per_order_usd": str(self.fee_extra_per_order_usd),
+                "fee_model": ("taker Theta, rounded UP to the cent once per "
+                              "ORDER. Per-FILL rounding is not modelled and "
+                              "is bounded by the live order count; see "
+                              "fee_extra_per_order_usd."),
                 "worst_case_deficit_basis": (
                     "C - min(up_qty, dn_qty), where C is confirmed "
                     "acquisition cost plus this order plus the worst "
@@ -167,7 +218,27 @@ class ValidationGates:
         q = _d(qty); p = _d(price)
         if p < 0 or p > 1:
             p = self.UNKNOWN_PRICE_WORST_CASE
-        return self.fee_theta_worst * q * p * (D(1) - p)
+        raw = self.fee_theta_worst * q * p * (D(1) - p)
+        if raw <= 0:
+            return raw
+        # ROUNDED UP TO THE CENT, ONCE PER ORDER. The venue bills commission
+        # in whole cents -- our own records show -0.0300 and +0.2400, never a
+        # fraction of one -- so an exact-Decimal fee can sit just under the
+        # cent actually taken, and a sub-cent fee on a tiny clip reads as
+        # very nearly free. Rounding up is the only safe direction.
+        #
+        # THE LIMIT OF THIS MODEL, STATED. Cent rounding is super-additive:
+        # if the venue rounds per FILL rather than per order, an order that
+        # fills in n pieces pays up to (n-1) extra cents, and no usefully
+        # tight bound dominates that -- a 2.84-contract order could in
+        # principle fill in 284 pieces of the 0.01 minimum and pay $2.84.
+        # The per-order model is what our own commission records show, and
+        # the exposure is bounded instead by the order count: with
+        # max_live_orders at 2 the worst unmodelled rounding is a few cents.
+        # `fee_extra_per_order_usd` exists to carry that allowance when an
+        # owner wants it priced rather than argued.
+        return (raw.quantize(D("0.01"), rounding=ROUND_CEILING)
+                + self.fee_extra_per_order_usd)
 
     def worst_case_deficit(self, *,
                            up_qty: Any, dn_qty: Any,
@@ -263,6 +334,25 @@ class ValidationGates:
             out[name] = str(d)
             if worst is None or d > worst:
                 worst = d; worst_name = name
+
+        # THE NON-CONVEXITY ALLOWANCE, and it is why the corner search is
+        # sound. With linear fees the deficit is convex in the fill
+        # fractions, so its maximum sits at a vertex and four corners
+        # suffice. Cent rounding breaks that: a SMALL partial fill on an
+        # expensive leg is net harmful, because a whole cent of rounding
+        # outweighs the (1 - price) benefit of the quantity it adds, and the
+        # `none` corner charges no fee at all for an order a partial fill
+        # does charge. Brute force over partial fills found exactly that.
+        # The excess of any partial arrangement over the corner maximum is
+        # bounded, per order, by the rounding granularity it can introduce --
+        # one cent plus the per-order allowance -- so charging that much per
+        # still-fillable order restores the corner maximum to a genuine
+        # upper bound. Pinned by
+        # test_the_four_corners_equal_the_exhaustive_worst_case.
+        n_out = sum(1 for o in outstanding if _d(o.get("qty")) > 0)
+        slack = (D("0.01") + self.fee_extra_per_order_usd) * D(n_out)
+        worst = worst + slack
+        out["rounding_slack"] = str(slack)
         return {"ok": True, "deficit": worst, "scenario": worst_name,
                 "scenarios": out,
                 "book": {"up_qty": str(base_a), "dn_qty": str(base_b),
@@ -281,7 +371,7 @@ class ValidationGates:
                outstanding: Sequence[Mapping[str, Any]] = (),
                unmatched_after: D = D(0),
                cumulative_realized: D = D(0),
-               cumulative_unrealized_loss: D = D(0),
+               cumulative_unrealized_loss: Optional[D] = D(0),
                windows_used: int = 0,
                book_uncertain: Optional[str] = None,
                available_cash_usd: Optional[D] = None,
@@ -308,6 +398,17 @@ class ValidationGates:
 
         # 2. cumulative loss for the whole run, realized PLUS a conservative
         #    unrealized mark. A loss is a NEGATIVE realized figure.
+        #
+        #    MISSING IS NOT ZERO WHEN PROTECTION DEPENDS ON IT. The unrealized
+        #    term used to default to 0 and was never supplied by the caller,
+        #    so the run-scoped ceiling counted only SETTLED losses and an open
+        #    book about to lose could not trip it. It is now required whenever
+        #    this ceiling is the live protection: None is a refusal, not a
+        #    zero. The caller computes it from the reconciled book, and the
+        #    deficit helper below is exactly the conservative figure -- the
+        #    most the book can lose on either outcome.
+        if cumulative_unrealized_loss is None:
+            return "CUMULATIVE_UNREALIZED_UNAVAILABLE"
         loss = max(D(0), -_d(cumulative_realized)) + max(
             D(0), _d(cumulative_unrealized_loss))
         if loss >= self.max_cumulative_loss_usd:

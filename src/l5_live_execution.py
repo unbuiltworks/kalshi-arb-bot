@@ -2771,6 +2771,33 @@ class FaithfulExecutor:
             # it whatever it is configured to.
             return AT_LIMIT_WHEN_UNCOUNTABLE
 
+    def unrealized_loss_for_gates(self) -> Optional[D]:
+        """Conservative open-book loss, account-wide, or None if unknowable.
+
+        `risk_exposure_usd` is already the figure the run-scoped ceiling
+        needs: the worst cash loss in a market over BOTH settlements, with
+        every unfilled order priced as though it fills in full and an
+        unreadable price charged at a dollar a share. Summing it over every
+        market still carrying exposure gives the most the open book can lose
+        before anything settles.
+
+        None, NEVER ZERO, when it cannot be computed. An incoherent book
+        makes `risk_exposure_usd` raise by design, and a run-scoped loss
+        ceiling fed a zero in that state would be reporting safety it has
+        not established. The gate turns None into a refusal.
+        """
+        total = D(0)
+        try:
+            markets = self.store.markets_with_exposure()
+        except BaseException:                                  # noqa: BLE001
+            return None
+        for m in markets:
+            try:
+                total += self.store.risk_exposure_usd(m)
+            except BaseException:                              # noqa: BLE001
+                return None            # incoherent or unreadable: fail closed
+        return total
+
     def inventory_for_gates(self, market: str) -> Dict[str, Any]:
         """Confirmed per-side quantity and ACTUAL acquisition cost.
 
@@ -3028,6 +3055,8 @@ class FaithfulExecutor:
                     book_uncertain=self.store.orders_uncertain(),
                     unmatched_after=self.store.residual(market),
                     cumulative_realized=self.store.realized_today(),
+                    cumulative_unrealized_loss=(
+                        self.unrealized_loss_for_gates()),
                     available_cash_usd=self.available_cash_usd,
                     inventory=self.inventory_for_gates(market))
             except Exception as exc:                       # noqa: BLE001

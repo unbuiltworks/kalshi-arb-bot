@@ -2862,12 +2862,26 @@ HALT_URL_ENV = "L5_HALT_URL"
 GATES_ENV = "L5_VALIDATION_GATES"
 
 
+#: the worst-case settlement deficit bound. Unset or blank = gate disabled.
+DEFICIT_ENV = "L5_MAX_WORST_CASE_DEFICIT_USD"
+
+
 def validation_gates():
-    """The run-scoped additive gates, or None when explicitly disabled."""
+    """The run-scoped additive gates, or None when explicitly disabled.
+
+    A MISCONFIGURED DEFICIT BOUND IS FATAL, NOT A FALLBACK. Everything else
+    here degrades to None on error, which is correct for a gate that was
+    never requested -- the pre-existing limits still stand. But a deficit
+    bound someone TYPED and we cannot parse is the opposite case: returning
+    None would drop every additive gate while the operator believes a bound
+    is in force. So that one error is re-raised.
+    """
     if str(os.getenv(GATES_ENV, "1")).strip() == "0":
         return None
+    from src import l5_live_validation_gates as VG
+    # parsed FIRST and outside the swallow below, so it cannot be absorbed
+    deficit = VG.parse_deficit_bound(os.getenv(DEFICIT_ENV))
     try:
-        from src import l5_live_validation_gates as VG
         return VG.ValidationGates(
             max_cash_deployed_usd=D(str(os.getenv(
                 "L5_MAX_CASH_DEPLOYED_USD", "10"))),
@@ -2875,6 +2889,7 @@ def validation_gates():
                 "L5_MAX_UNMATCHED_CONTRACTS", "5"))),
             max_cumulative_loss_usd=D(str(os.getenv(
                 "L5_MAX_CUMULATIVE_LOSS_USD", "20"))),
+            max_worst_case_deficit_usd=deficit,
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
         # a gate we cannot build is announced, never silently skipped
