@@ -30,7 +30,7 @@ def test_legacy_attributed_is_not_verified_l5_net(tmp_path):
     ]
     report = store.realized_lines()
     assert report["realized_attributed"] == "-4.15"
-    assert report["realized_total"] == D("-4.15")
+    assert D(report["realized_total"]) == D("-4.15")
     assert report["verified_l5_realized_net"] is None
     assert report["verified_l5_status"] == "UNPROVEN_LEGACY_ATTRIBUTION"
     assert report["unknown_basis_keys"] == [
