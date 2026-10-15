@@ -55,6 +55,7 @@ COPY src/l5_live_execution.py src/l5_live_execution.py
 # _the_entrypoint_can_reach caught this before it ever ran.
 COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py
+COPY src/l5_two_sided_shadow.py src/l5_two_sided_shadow.py
 # Disarmed-shadow validation additions. This image COPYs an explicit file
 # list, so a module missing here is an ImportError at runtime, which would
 # leave the protection ABSENT while the operator believed it was on.
