@@ -67,6 +67,9 @@ WHO_ENV = "L5_HALT_RESET_WHO"
 ID_ENV = "L5_HALT_RESET_ID"
 EXPECT_ENV = "L5_HALT_RESET_EXPECT"
 ATTEST_ENV = "L5_HALT_RESET_ATTEST"
+#: the latch's OWN reason, retyped by the owner from the inspect output. The
+#: digest can be copy-pasted without reading anything; this cannot.
+REASON_ENV = "L5_HALT_RESET_CONFIRM_REASON"
 #: read-only dry run: print the latch, its digest and every precondition,
 #: and write NOTHING. This is how the operator obtains the digest that gate 2
 #: requires, and it is what makes "the latch you reviewed" a real review
@@ -173,21 +176,46 @@ def audit_entries(store: Any) -> List[Dict[str, Any]]:
 
 
 def _require_unconsumed(store: Any, rid: str) -> List[Dict[str, Any]]:
-    """Gate 3."""
+    """Gate 3, keyed on the ID ALONE.
+
+    THE DEFECT THIS REPLACES. The guard used to refuse only when a prior
+    entry had `cleared is True`, and the entry was written cleared=True
+    BEFORE the latch write. So an entry asserted a clear that had not
+    happened (a failed latch write left the log claiming one forever), and
+    the guard could not coexist with honest recording: the moment an
+    interrupted attempt was recorded truthfully as cleared=False, that
+    reset_id became REPLAYABLE. "One-time" held only because the record lied.
+
+    The id is now spent by the ATTEMPT, not by its outcome. An interrupted
+    reset is recorded CLEAR_ATTEMPTED and its id is spent; the operator
+    re-inspects to learn whether the latch moved, then mints a NEW id. Never
+    re-running a clear whose effect is unknown is the fail-closed direction.
+
+    WHAT ONE-TIME MEANS: each reset_id is usable exactly once, which is what
+    makes an admin start command left in place harmless on restart. It does
+    NOT prevent a deliberate new reset with a new id, and must not -- a later
+    genuine halt has to be clearable.
+    """
     prior = audit_entries(store)
     for rec in prior:
-        if str(rec.get("reset_id") or "") == rid and rec.get("cleared") is True:
+        if str(rec.get("reset_id") or "") == rid:
             raise ResetRefused(
-                "RESET_ID_ALREADY_CONSUMED: %r cleared a latch at %s. This "
-                "is the guard that makes an admin start command left in "
-                "place harmless on restart." % (rid, rec.get("t")))
+                "RESET_ID_ALREADY_CONSUMED: %r was used at %s with outcome "
+                "%r. The id is spent by the ATTEMPT, not by its success. If "
+                "that attempt was interrupted, re-run INSPECT to establish "
+                "whether the latch moved, then use a NEW id."
+                % (rid, rec.get("t"), rec.get("outcome")))
     return prior
 
 
 def venue_evidence(transport: Any) -> Dict[str, Any]:
     """Gate 4(a) and 4(b), from the VENUE itself. Raises ResetRefused."""
     try:
-        rows = transport.open_orders()
+        # a plain signed GET, so a READ-ONLY transport satisfies this. The
+        # reset must never need a transport that can cancel.
+        body = transport.request("GET", "/v1/orders/open") or {}
+        rows = body.get("orders") if isinstance(body, Mapping) else None
+        rows = [r for r in (rows or []) if isinstance(r, Mapping)]
     except BaseException as exc:                               # noqa: BLE001
         raise ResetRefused(
             "VENUE_OPEN_ORDERS_UNREADABLE: %s -- an unread venue is never "
@@ -298,7 +326,7 @@ def _append_audit(store: Any, prior: List[Dict[str, Any]],
     store.put(AUDIT_KEY, ("\n".join(lines) + "\n").encode())
 
 
-def inspect(*, store: Any, transport: Any, registry_url: str,
+def inspect(*, store: Any, transport: Optional[Any], registry_url: str,
             registry_opener=None) -> Dict[str, Any]:
     """READ-ONLY. Never writes, never clears, and never raises ResetRefused
     for a failed precondition -- it REPORTS each one so the operator sees the
@@ -307,12 +335,21 @@ def inspect(*, store: Any, transport: Any, registry_url: str,
     raw, rec, digest = read_latch(store)
     out: Dict[str, Any] = {
         "latch": rec, "sha256": digest,
-        "set_this_as": {EXPECT_ENV: digest},
+        "set_this_as": {EXPECT_ENV: digest,
+                        REASON_ENV: str(rec.get("reason") or "")},
         "preconditions": {},
         "labels": ("READ-ONLY. Nothing was written. Pass the sha256 above as "
                    "%s to clear THIS latch and no other." % EXPECT_ENV),
     }
-    for name, fn in (("venue", lambda: venue_evidence(transport)),
+    def _venue():
+        if transport is None:
+            raise ResetRefused(
+                "NO_VENUE_CREDENTIALS: this boot cannot perform the "
+                "authenticated venue checks. The latch digest and registry "
+                "evidence below are still valid.")
+        return venue_evidence(transport)
+
+    for name, fn in (("venue", _venue),
                      ("registry", lambda: registry_evidence(
                          registry_url, opener=registry_opener))):
         try:
@@ -336,6 +373,11 @@ def perform_reset(*, store: Any, transport: Any, registry_url: str,
                   registry_opener=None) -> Dict[str, Any]:
     """All four gates, then audit, then clear. Raises ResetRefused."""
     who, rid, expect, attest = _require_intent()
+    # GATE 3 FIRST, before the latch is read. A spent id must refuse
+    # identically whatever the latch is doing: if an earlier attempt already
+    # cleared it, read_latch would answer NOT_LATCHED and hide the fact that
+    # this id spent itself.
+    prior = _require_unconsumed(store, rid)
     raw, rec, digest = read_latch(store)
     if digest != expect:
         raise ResetRefused(
@@ -343,7 +385,17 @@ def perform_reset(*, store: Any, transport: Any, registry_url: str,
             "The watchdog may have re-latched for a DIFFERENT reason (%r). "
             "Re-read the latch and review it again."
             % (digest, expect, rec.get("reason")))
-    prior = _require_unconsumed(store, rid)
+    # The owner confirms WHAT is being cleared, not just a hash.
+    want_reason = _env(REASON_ENV)
+    have_reason = str(rec.get("reason") or "")
+    if not want_reason:
+        raise ResetRefused(
+            "NO_CONFIRMED_REASON: %s must repeat the latch's own reason "
+            "(this latch says %r)." % (REASON_ENV, have_reason))
+    if want_reason != have_reason:
+        raise ResetRefused(
+            "CONFIRMED_REASON_MISMATCH: you confirmed %r but the latch says "
+            "%r" % (want_reason, have_reason))
     if not attest:
         raise ResetRefused(
             "NO_ATTESTATION: %s must name the watchdog-health and "
@@ -353,8 +405,11 @@ def perform_reset(*, store: Any, transport: Any, registry_url: str,
     registry = registry_evidence(registry_url, opener=registry_opener)
     t = (now or _utc()).isoformat()
     entry = {
-        "t": t, "reset_id": rid, "who": who, "cleared": True,
+        # the honest pre-write state: an ATTEMPT, not an accomplished clear
+        "t": t, "reset_id": rid, "who": who,
+        "outcome": "CLEAR_ATTEMPTED", "cleared": False,
         "prior_latch": rec, "prior_latch_sha256": digest,
+        "confirmed_reason": have_reason,
         "machine_verified": {"venue": venue, "registry": registry},
         "operator_attested": {
             "text": attest,
@@ -373,21 +428,55 @@ def perform_reset(*, store: Any, transport: Any, registry_url: str,
                "labels": ("written by the one-time owner reset. The "
                           "watchdog's heartbeat keeps it fresh from here.")}
     store.put(HG.HALT_KEY, json.dumps(cleared, sort_keys=True).encode())
-    return {"ok": True, "entry": entry, "record": cleared}
+    # PHASE 2: only now is the clear a fact, so only now is it recorded as
+    # one. If THIS write fails the latch is open while the log still reads
+    # CLEAR_ATTEMPTED: the id stays spent so nothing replays, and INSPECT
+    # shows the true state. The log understates, never overstates.
+    done = dict(entry, outcome="CLEARED", cleared=True,
+                cleared_at=_utc().isoformat())
+    _append_audit(store, prior, done)
+    return {"ok": True, "entry": done, "record": cleared}
+
+
+def read_only_transport():
+    """A GET-ONLY signed transport, and nothing else.
+
+    THE BLOCKER THIS FIXES. main() used to construct
+    l5_watchdog.CancelOnlyTransport, which (a) refuses to exist without
+    pmus_auth and so could not run in the credential-free watchdog image at
+    all, and (b) carried a cancel verb the reset has no business holding.
+    pmus_auth.ReadOnlyTransport raises PermissionError on any method but GET,
+    so this entrypoint cannot mutate anything at the venue even by mistake.
+    Its only write is the halt object on the volume.
+    """
+    from src import pmus_auth as A
+    if not A.has_credentials():
+        raise ResetRefused(
+            "NO_VENUE_CREDENTIALS: the authenticated read-only venue checks "
+            "cannot run. This entrypoint runs only from the one-shot admin "
+            "image with TEMPORARY credentials; the ordinary credential-free "
+            "watchdog image cannot and must not run it.")
+    return A.ReadOnlyTransport()
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     from src import l5_halt_gate as HG
-    from src import l5_watchdog as W
     store = HG.FileStore(os.getenv(STATE_ENV, "/data"))
     out: Dict[str, Any]
+    inspecting = _env(INSPECT_ENV).upper() == "YES"
     try:
-        transport = W.CancelOnlyTransport()
-        if _env(INSPECT_ENV).upper() == "YES":
+        if inspecting:
+            # READ-ONLY, so a missing credential must not hide the digest:
+            # obtaining it is the whole reason the inspect phase exists.
+            try:
+                transport = read_only_transport()
+            except ResetRefused:
+                transport = None
             out = inspect(store=store, transport=transport,
                           registry_url=_env(REGISTRY_ENV))
             print("L5_HALT_RESET_INSPECT " + json.dumps(out, sort_keys=True))
             return 0
+        transport = read_only_transport()
         out = perform_reset(store=store, transport=transport,
                             registry_url=_env(REGISTRY_ENV))
         print("L5_HALT_RESET " + json.dumps(out, sort_keys=True))

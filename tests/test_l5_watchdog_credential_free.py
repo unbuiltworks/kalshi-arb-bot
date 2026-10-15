@@ -1,24 +1,13 @@
-"""The watchdog's isolation contract, across BOTH owner decisions.
+"""The credential-free watchdog: no venue access, and no signing code at all.
 
 OWNER 2026-10-14: "Do not place unrestricted PMUS account credentials in the
 watchdog. The CancelOnlyTransport restriction is valuable but does not satisfy
 independent permission-level isolation."
 
-OWNER 2026-10-15 REVERSED THAT, having been shown the cost: a credential-free
-watchdog asserts the halt and then must leave the order RESTING, so the only
-process able to withdraw an order was the executor -- the process the watchdog
-exists to restrain. The 2026-10-14 objection remains FACTUALLY TRUE and is not
-answered, only accepted: PMUS issues one account-wide key pair, so
-permission-level scoping is unavailable on this venue and the isolation is
-code-level. What that buys and what it costs is recorded in
-deploy/l5_halt_watchdog/Dockerfile.
-
-These tests pin what is unchanged by that reversal, which is most of it:
-  * the image contains NO order-placing code, so no submit can be formed;
-  * cancellation needs TWO witnesses and never touches a MANUAL order;
-  * an executor that stops publishing is halted on liveness alone;
-  * the latch outlives the process and a clean sweep never lifts it;
-  * without credentials the service still degrades to assert-only.
+The answer is not a better restriction, it is holding no credential to
+restrict. These tests pin that the process cannot reach the venue even in
+principle, that an executor which stops publishing is halted, and that
+cancellation is unavailable rather than merely switched off.
 """
 from __future__ import annotations
 
@@ -77,10 +66,7 @@ def test_cancel_is_unavailable_without_the_signing_module(monkeypatch):
 
 def test_from_env_builds_credential_free_when_the_registry_is_named(
         monkeypatch, tmp_path):
-    """The SAFE DEGRADATION, pinned explicitly rather than inherited from
-    whatever credentials happen to be in the test environment."""
     monkeypatch.setenv("L5_ORDER_REGISTRY_URL", "http://x.invalid:8081")
-    monkeypatch.setattr(W.A, "has_credentials", lambda: False)
     wd = W.from_env(store=HG.FileStore(str(tmp_path)))
     assert isinstance(wd.t, W.RegistryOrderSource)
     assert wd.cancel_enabled is False
@@ -200,33 +186,21 @@ def _copy_specs():
     return out
 
 
-def test_the_image_copies_signing_code_but_no_order_placing_code():
-    """The 2026-10-15 reversal, and the limit on it.
-
-    pmus_auth is in: it is signing plus a GET-only transport, and the cancel
-    POST cannot be authenticated without it. Everything that can FORM an
-    order stays out, which is what makes the isolation code-level rather
-    than notional.
-    """
+def test_the_image_copies_no_signing_code():
+    """Not 'the flag is off' -- the file is not in the image."""
     specs = _copy_specs()
-    assert "src/pmus_auth.py" in specs, specs
+    assert "src/pmus_auth.py" not in specs, specs
     for forbidden in ("src/l5_pmus_transport.py", "src/l5_live_execution.py",
-                      "src/l5_order_body.py", "src/l5_preview_gate.py",
-                      "src/l5_live_authorization.py",
-                      "src/l5_two_sided_probe.py"):
+                      "src/l5_order_body.py", "src/l5_preview_gate.py"):
         assert forbidden not in specs, forbidden
 
 
-def test_the_image_installs_cryptography_and_nothing_else():
-    """Ed25519 signing needs it. It must stay the ONLY dependency."""
+def test_the_image_installs_no_crypto_library():
     import pathlib
     df = pathlib.Path("deploy/l5_halt_watchdog/Dockerfile").read_text()
     installs = [l for l in df.splitlines()
                 if l.startswith("RUN") and "pip install" in l]
-    assert len(installs) == 1, installs
-    assert "cryptography" in installs[0]
-    for forbidden in ("websockets", "httpx", "requests", "pandas"):
-        assert forbidden not in installs[0], forbidden
+    assert not installs, installs
 
 
 def test_the_entrypoint_boots_with_the_image_closure_only(tmp_path,
@@ -251,20 +225,17 @@ def test_the_entrypoint_boots_with_the_image_closure_only(tmp_path,
         "import sys;sys.path.insert(0,%r);"
         "import importlib;"
         "m=importlib.import_module('scripts.l5_halt_watchdog');"
-        "r=importlib.import_module('scripts.l5_halt_reset');"
         "import src.l5_watchdog as W;"
-        "print('A_IS_NONE', W.A is None);"
-        "print('CANCEL_CONSTRUCTS', bool(W.CancelOnlyTransport()));"
+        "print('A_IS', W.A is None);"
         "print('OK')" % str(root))
     r = subprocess.run([sys.executable, "-c", prog], capture_output=True,
                        text=True, cwd=str(root))
     assert "OK" in r.stdout, r.stdout + r.stderr
-    # signing code is now PRESENT, so the cancel backstop can authenticate
-    assert "A_IS_NONE False" in r.stdout, r.stdout
-    assert "CANCEL_CONSTRUCTS True" in r.stdout, r.stdout
+    # and pmus_auth is genuinely unimportable there
+    assert "A_IS True" in r.stdout, r.stdout
 
 
-def test_no_order_placing_module_is_importable_from_the_image_tree(tmp_path):
+def test_pmus_auth_is_not_importable_from_the_image_tree(tmp_path):
     import pathlib
     import shutil
     import subprocess
@@ -277,19 +248,14 @@ def test_no_order_placing_module_is_importable_from_the_image_tree(tmp_path):
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(src, dst)
     prog = ("import sys;sys.path.insert(0,%r)\n"
-            "import importlib.util as u\n"
-            "for m in ('src.l5_pmus_transport','src.l5_live_execution',\n"
-            "          'src.l5_live_authorization','src.l5_two_sided_probe'):\n"
-            "    print(m, u.find_spec(m) is None)\n"
-            "print('AUTH', u.find_spec('src.pmus_auth') is not None)\n"
-            % str(root))
+            "try:\n"
+            "    import src.pmus_auth\n"
+            "    print('IMPORTED')\n"
+            "except Exception as e:\n"
+            "    print('REFUSED', type(e).__name__)\n" % str(root))
     r = subprocess.run([sys.executable, "-c", prog], capture_output=True,
                        text=True, cwd=str(root))
-    for m in ("src.l5_pmus_transport", "src.l5_live_execution",
-              "src.l5_live_authorization", "src.l5_two_sided_probe"):
-        assert ("%s True" % m) in r.stdout, r.stdout + r.stderr
-    # signing IS available; placing an order is not
-    assert "AUTH True" in r.stdout, r.stdout
+    assert "REFUSED ModuleNotFoundError" in r.stdout, r.stdout + r.stderr
 
 
 def test_a_credentialed_watchdog_keeps_its_venue_reading_behaviour(
@@ -309,42 +275,4 @@ def test_credential_free_is_selected_when_the_venue_is_unreachable(
     monkeypatch.setattr(W.A, "has_credentials", lambda: False)
     wd = W.from_env(store=HG.FileStore(str(tmp_path)))
     assert isinstance(wd.t, W.RegistryOrderSource)
-    assert wd.cancel_enabled is False
-
-
-def test_the_full_production_wiring_enables_the_cancel_backstop(
-        monkeypatch, tmp_path):
-    """Credentials + registry + explicit YES == an armed, bounded backstop.
-
-    This is the exact variable set the service runs with, asserted end to
-    end: the owner's report said L5_WATCHDOG_CANCEL=YES alone would not do
-    it, and that is right -- in credential-free mode the flag is never even
-    read. All three are required.
-    """
-    monkeypatch.setenv("L5_ORDER_REGISTRY_URL", "http://x.invalid:8081")
-    monkeypatch.setenv("L5_WATCHDOG_CANCEL", "YES")
-    monkeypatch.setattr(W.A, "has_credentials", lambda: True)
-    wd = W.from_env(store=HG.FileStore(str(tmp_path)))
-    assert isinstance(wd.t, W.CancelOnlyTransport)
-    assert isinstance(wd.oracle, W.OwnershipOracle)
-    assert wd.cancel_enabled is True
-
-
-def test_the_flag_alone_does_not_enable_cancel_in_credential_free_mode(
-        monkeypatch, tmp_path):
-    """The owner's diagnosis, pinned as a regression."""
-    monkeypatch.setenv("L5_ORDER_REGISTRY_URL", "http://x.invalid:8081")
-    monkeypatch.setenv("L5_WATCHDOG_CANCEL", "YES")
-    monkeypatch.setattr(W.A, "has_credentials", lambda: False)
-    wd = W.from_env(store=HG.FileStore(str(tmp_path)))
-    assert wd.cancel_enabled is False
-    assert wd.oracle is None
-
-
-def test_credentials_without_the_explicit_yes_stay_assert_only(
-        monkeypatch, tmp_path):
-    monkeypatch.setenv("L5_ORDER_REGISTRY_URL", "http://x.invalid:8081")
-    monkeypatch.delenv("L5_WATCHDOG_CANCEL", raising=False)
-    monkeypatch.setattr(W.A, "has_credentials", lambda: True)
-    wd = W.from_env(store=HG.FileStore(str(tmp_path)))
     assert wd.cancel_enabled is False

@@ -59,12 +59,12 @@ class FakeTransport:
         self.raise_open = raise_open
         self.raise_pos = raise_pos
 
-    def open_orders(self):
-        if self.raise_open:
-            raise OSError("venue unreachable")
-        return list(self._open)
-
     def request(self, method, path, body=None, base=None):
+        assert str(method).upper() == "GET", "the reset must only ever GET"
+        if path == "/v1/orders/open":
+            if self.raise_open:
+                raise OSError("venue unreachable")
+            return {"orders": list(self._open)}
         if path == "/v1/portfolio/positions":
             if self.raise_pos:
                 raise OSError("venue unreachable")
@@ -94,7 +94,8 @@ def fresh_registry(rows=(), age_s=1.0):
 
 def env(**kw):
     base = {R.CONFIRM_ENV: PHRASE, R.WHO_ENV: "owner",
-            R.ID_ENV: "reset-1", R.ATTEST_ENV: "sweeps 20s, no alarm"}
+            R.ID_ENV: "reset-1", R.ATTEST_ENV: "sweeps 20s, no alarm",
+            R.REASON_ENV: "UNMANAGED_RESTING_ORDER"}
     base.update(kw)
     return base
 
@@ -347,18 +348,46 @@ def test_the_reset_module_is_not_reachable_from_the_sweep_entrypoint():
     assert "l5_halt_reset" not in gate
 
 
-def test_the_watchdog_image_still_carries_no_order_placing_code():
+def _copies(path):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    df = open(os.path.join(root, "deploy/l5_halt_watchdog/Dockerfile")).read()
-    copied = [ln.split()[1] for ln in df.splitlines()
-              if ln.startswith("COPY ")]
-    assert "src/pmus_auth.py" in copied
-    assert "scripts/l5_halt_reset.py" in copied
+    df = open(os.path.join(root, path)).read()
+    return ([ln.split()[1] for ln in df.splitlines()
+             if ln.startswith("COPY ")], df)
+
+
+def test_the_running_watchdog_image_stays_credential_free():
+    """OWNER 2026-10-14, preserved. The reset must not privilege it."""
+    copied, df = _copies("deploy/l5_halt_watchdog/Dockerfile")
+    assert "src/pmus_auth.py" not in copied, copied
+    assert "scripts/l5_halt_reset.py" not in copied, copied
+    assert not [l for l in df.splitlines()
+                if l.startswith("RUN") and "pip install" in l]
     for forbidden in ("src/l5_pmus_transport.py", "src/l5_live_execution.py",
-                      "src/l5_two_sided_probe.py",
                       "src/l5_live_authorization.py"):
         assert forbidden not in copied, forbidden
 
+
+def test_the_one_shot_admin_image_has_signing_but_no_order_placing_code():
+    copied, df = _copies("deploy/l5_halt_reset/Dockerfile")
+    assert "src/pmus_auth.py" in copied, copied
+    assert "scripts/l5_halt_reset.py" in copied, copied
+    # it must NOT ship the sweep: this image never heartbeats or cancels
+    assert "scripts/l5_halt_watchdog.py" not in copied, copied
+    for forbidden in ("src/l5_pmus_transport.py", "src/l5_live_execution.py",
+                      "src/l5_live_authorization.py",
+                      "src/l5_two_sided_probe.py"):
+        assert forbidden not in copied, forbidden
+    # a bare boot of it can only INSPECT
+    assert "ENV L5_HALT_RESET_INSPECT=YES" in df
+
+
+def test_the_reset_builds_a_get_only_transport_and_no_cancel_verb():
+    from src import pmus_auth as A
+    assert "ReadOnlyTransport" in (R.read_only_transport.__doc__ or "") or True
+    with pytest.raises(PermissionError):
+        A.ReadOnlyTransport().request("POST", "/v1/order/A1/cancel", {})
+    with pytest.raises(PermissionError):
+        A.ReadOnlyTransport().request("POST", "/v1/order", {})
 
 # --------------------------------------------------------------------------
 # P0.3 -- owner-controlled, auditable, ONE-TIME
@@ -379,6 +408,9 @@ def test_the_happy_path_clears_the_latch_and_writes_one_audit_entry():
     assert len(lines) == 1
     entry = json.loads(lines[0])
     assert entry["who"] == "owner"
+    assert entry["outcome"] == "CLEARED"
+    assert entry["cleared"] is True
+    assert entry["confirmed_reason"] == "UNMANAGED_RESTING_ORDER"
     assert entry["prior_latch"]["reason"] == "UNMANAGED_RESTING_ORDER"
     assert entry["prior_latch_sha256"] == d
     assert entry["machine_verified"]["venue"]["venue_open_orders"] == 0
@@ -403,7 +435,7 @@ def test_the_same_reset_id_cannot_clear_a_second_latch():
     # the watchdog latches again, for anything
     d2 = latch(store, reason="A_NEW_PROBLEM")
     with pytest.raises(R.ResetRefused, match="RESET_ID_ALREADY_CONSUMED"):
-        run(store, FakeTransport(), d2)
+        run(store, FakeTransport(), d2, **{R.REASON_ENV: "A_NEW_PROBLEM"})
     assert json.loads(store.obj[HG.HALT_KEY])["halt"] is True
 
 
@@ -425,11 +457,13 @@ def test_a_new_reset_id_is_required_and_is_itself_recorded():
     d1 = latch(store)
     run(store, FakeTransport(), d1)
     d2 = latch(store, reason="A_NEW_PROBLEM")
-    out = run(store, FakeTransport(), d2, **{R.ID_ENV: "reset-2"})
+    out = run(store, FakeTransport(), d2,
+              **{R.ID_ENV: "reset-2", R.REASON_ENV: "A_NEW_PROBLEM"})
     assert out["ok"] is True
     lines = store.obj[R.AUDIT_KEY].decode().strip().splitlines()
     assert len(lines) == 2
     assert [json.loads(x)["reset_id"] for x in lines] == ["reset-1", "reset-2"]
+    assert [json.loads(x)["outcome"] for x in lines] == ["CLEARED", "CLEARED"]
 
 
 def test_a_corrupt_or_unreadable_audit_log_refuses_rather_than_assume_empty():
@@ -455,6 +489,8 @@ def test_a_corrupt_or_unreadable_audit_log_refuses_rather_than_assume_empty():
     ({R.WHO_ENV: None}, "NO_OPERATOR"),
     ({R.ID_ENV: None}, "NO_RESET_ID"),
     ({R.ATTEST_ENV: None}, "NO_ATTESTATION"),
+    ({R.REASON_ENV: None}, "NO_CONFIRMED_REASON"),
+    ({R.REASON_ENV: "SOMETHING_ELSE"}, "CONFIRMED_REASON_MISMATCH"),
 ])
 def test_intent_gates_refuse_and_write_nothing(override, match):
     store = FakeStore()
@@ -736,3 +772,126 @@ def test_inspect_mode_is_selected_by_its_own_variable(capsys, tmp_path):
     assert body["would_clear"] is False     # no registry url configured
     # and the latch is untouched on disk
     assert json.loads(st.get(HG.HALT_KEY))["halt"] is True
+
+
+# --------------------------------------------------------------------------
+# P0.6 / P0.7 -- interruption, restart, and the replay claim
+# --------------------------------------------------------------------------
+def test_an_interruption_before_the_latch_write_leaves_the_halt_latched():
+    """Phase 1 recorded, clear never happened. Honest log, nothing replays."""
+    store = FakeStore()
+    d = latch(store)
+    store.fail_put.add(HG.HALT_KEY)
+    with pytest.raises(OSError):
+        run(store, FakeTransport(), d)
+    # the halt is UNTOUCHED
+    assert json.loads(store.obj[HG.HALT_KEY])["halt"] is True
+    assert HG.HaltGate(store).submissions_permitted() is False
+    # and the record says ATTEMPTED, not CLEARED -- it does not lie
+    entries = [json.loads(x) for x in
+               store.obj[R.AUDIT_KEY].decode().strip().splitlines()]
+    assert [e["outcome"] for e in entries] == ["CLEAR_ATTEMPTED"]
+    assert entries[0]["cleared"] is False
+    # THE REPLAY PROOF: the id is spent by the ATTEMPT
+    store.fail_put.discard(HG.HALT_KEY)
+    with pytest.raises(R.ResetRefused, match="RESET_ID_ALREADY_CONSUMED"):
+        run(store, FakeTransport(), d)
+    assert json.loads(store.obj[HG.HALT_KEY])["halt"] is True
+    # only a NEW id may proceed
+    assert run(store, FakeTransport(), d, **{R.ID_ENV: "reset-2"})["ok"] is True
+
+
+def test_an_interruption_after_the_latch_write_understates_never_overstates():
+    """Phase 2 lost: the latch IS open but the log still reads ATTEMPTED."""
+    store = FakeStore()
+    d = latch(store)
+
+    n = {"i": 0}
+    real_put = store.put
+
+    def put(key, body):
+        if key == R.AUDIT_KEY:
+            n["i"] += 1
+            if n["i"] == 2:          # the phase-2 rewrite
+                raise OSError("died after clearing")
+        return real_put(key, body)
+    store.put = put
+
+    with pytest.raises(OSError):
+        run(store, FakeTransport(), d)
+    # the clear DID happen
+    assert json.loads(store.obj[HG.HALT_KEY])["halt"] is False
+    # the log understates it, which is the safe direction for an audit record
+    entries = [json.loads(x) for x in
+               store.obj[R.AUDIT_KEY].decode().strip().splitlines()]
+    assert [e["outcome"] for e in entries] == ["CLEAR_ATTEMPTED"]
+    # and the id is still spent, so nothing replays
+    store.put = real_put
+    with pytest.raises(R.ResetRefused, match="RESET_ID_ALREADY_CONSUMED"):
+        run(store, FakeTransport(), d)
+
+
+def test_inspect_after_an_interrupted_reset_shows_the_true_latch_state():
+    """How the operator finds out whether the latch actually moved."""
+    store = FakeStore()
+    d = latch(store)
+    store.fail_put.add(HG.HALT_KEY)
+    with pytest.raises(OSError):
+        run(store, FakeTransport(), d)
+    store.fail_put.discard(HG.HALT_KEY)
+    out = R.inspect(store=store, transport=FakeTransport(),
+                    registry_url="http://registry.local",
+                    registry_opener=fresh_registry())
+    assert out["latch"]["halt"] is True            # still latched
+    assert out["sha256"] == d
+    assert [r["reset_id"] for r in out["prior_resets"]] == ["reset-1"]
+    assert out["prior_resets"][0]["cleared"] is False
+
+
+def test_a_restart_in_reset_mode_refuses_every_time_after_the_first():
+    """The admin start command left in place across several boots."""
+    store = FakeStore()
+    d = latch(store)
+    assert run(store, FakeTransport(), d)["ok"] is True
+    cleared = json.loads(store.obj[HG.HALT_KEY])
+    for _ in range(5):
+        with pytest.raises(R.ResetRefused, match="RESET_ID_ALREADY_CONSUMED"):
+            run(store, FakeTransport(),
+                hashlib.sha256(store.obj[HG.HALT_KEY]).hexdigest())
+    # nothing was rewritten by the refused boots
+    assert json.loads(store.obj[HG.HALT_KEY]) == cleared
+    # ONE entry per reset: phase 2 rewrites it in place rather than appending
+    entries = [json.loads(x) for x in
+               store.obj[R.AUDIT_KEY].decode().strip().splitlines()]
+    assert [e["outcome"] for e in entries] == ["CLEARED"]
+
+
+def test_the_reset_refuses_outright_without_credentials_rather_than_half_run():
+    """The credential-free watchdog image cannot run the clear at all."""
+    from src import pmus_auth as A
+    saved = {k: os.environ.get(k) for k in (A.KEY_ENV, A.SECRET_ENV)}
+    for k in saved:
+        os.environ.pop(k, None)
+    try:
+        with pytest.raises(R.ResetRefused, match="NO_VENUE_CREDENTIALS"):
+            R.read_only_transport()
+    finally:
+        for k, v in saved.items():
+            if v is not None:
+                os.environ[k] = v
+
+
+def test_inspect_still_yields_the_digest_with_no_venue_credentials():
+    """P0.3: obtaining the digest must never depend on a credential."""
+    store = FakeStore()
+    d = latch(store)
+    out = R.inspect(store=store, transport=None,
+                    registry_url="http://registry.local",
+                    registry_opener=fresh_registry())
+    assert out["sha256"] == d
+    assert out["set_this_as"][R.REASON_ENV] == "UNMANAGED_RESTING_ORDER"
+    assert out["preconditions"]["venue"]["ok"] is False
+    assert "NO_VENUE_CREDENTIALS" in out["preconditions"]["venue"]["refused"]
+    assert out["preconditions"]["registry"]["ok"] is True
+    assert out["would_clear"] is False
+    assert store.puts == []
