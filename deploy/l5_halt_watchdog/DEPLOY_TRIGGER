@@ -1,0 +1,23 @@
+# The explicit deployment trigger for l5-halt-watchdog.
+#
+# `watchPatterns` on this service is exactly
+# ["deploy/l5_halt_watchdog/DEPLOY_TRIGGER"], so pushing code to the branch
+# does NOT deploy it. Changing this file does.
+#
+# WHY THE WATCHDOG NEEDS THIS AND NOT JUST THE EXECUTOR. The executor has
+# been isolated behind its own trigger for a while; the watchdog was not
+# isolated at all, so every ordinary push redeployed BOTH. The point of an
+# independent watchdog is that it is still watching when the executor is
+# restarted, crashed or wedged -- and a supervisor that restarts in the same
+# second as the process it supervises provides none of that. Measured on
+# 2026-10-15: executor deployment 4f3d3df6 and watchdog deployment ce8e2b6e
+# were both created at 12:13:04Z from commit 669fb3ac, and the previous
+# watchdog instance was removed at 12:14:27Z.
+#
+# THE LATCH IS NOT IN THIS IMAGE. It lives on the volume at /data, so it
+# survives every deployment here. A deploy that fails leaves the executor
+# unable to read the latch, which `l5_halt_gate` treats as
+# `halt_state_unavailable` and therefore HALTED -- the safe direction.
+#
+# Nothing here arms anything, clears a halt, or changes a capital limit.
+pin watchdog deploy isolation, shadow-locked 2026-10-15T13:20Z

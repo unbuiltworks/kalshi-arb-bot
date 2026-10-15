@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_halt_watchdog/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_halt_watchdog/DEPLOY_TRIGGER"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m scripts.l5_halt_watchdog",
+    "restartPolicyType": "ALWAYS"
+  },
+  "_status": "THE INDEPENDENT WATCHDOG. Credential-free: this image holds no request-signing code, so it cannot reach the venue however it is configured. It can assert the halt latch and never clear it. WATCH PATTERN IS A SAFETY PROPERTY, NOT A BUILD PREFERENCE: with no watchPatterns this service redeployed on EVERY push to the branch, which on 2026-10-15T12:13:04Z restarted it in the same second as the executor (executor 4f3d3df6, watchdog ce8e2b6e, both commit 669fb3ac) and left a gap with nothing watching. A supervisor that restarts whenever the supervised process does is not independent. It now deploys only when DEPLOY_TRIGGER changes, exactly as the executor does."
+}
