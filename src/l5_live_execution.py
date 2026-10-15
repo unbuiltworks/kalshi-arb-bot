@@ -1197,6 +1197,15 @@ class InventoryStore:
             "cash_anchor": dict(self.state.get("cash_anchor") or {}),
             "legacy_realized_today": str(
                 D(str(self.state.get("realized_today") or 0))),
+            # Existing retired-market rows do not persist complete order-owner,
+            # cost-basis provenance or fee/rebate evidence. In particular,
+            # venue-adopted positions use a $1/share loss upper bound, and
+            # manual positions can share this account. NEVER call the legacy
+            # attributed total verified L5-only net profit or loss.
+            "verified_l5_realized_net": None,
+            "verified_l5_status": "UNPROVEN_LEGACY_ATTRIBUTION",
+            "unknown_basis_keys": sorted(set(str(k) for k in
+                (self.state.get("leg_cost_basis_unknown") or []))),
             "labels": ("attributed is settlement P&L from filled inventory "
                        "in own-outcome terms; unattributed is the explicit "
                        "difference against an authoritative cash anchor and "
