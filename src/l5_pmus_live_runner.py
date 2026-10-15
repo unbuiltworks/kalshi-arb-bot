@@ -81,10 +81,24 @@ def max_live_orders() -> int:
     return max(1, n)               # zero or negative would refuse everything
 
 
+# An explicit owner-set ceiling, not a new authorization to trade. The
+# production default remains $5 until the ledger's verified L5-only basis is
+# established. Invalid or out-of-range values fail back to the tighter $5.
+def daily_realized_loss_halt() -> D:
+    raw = (os.getenv("L5_DAILY_REALIZED_LOSS_HALT_USD") or "").strip()
+    try:
+        value = D(raw) if raw else D("5")
+        if not value.is_finite() or value < D("5") or value > D("50"):
+            return D("5")
+        return value
+    except (ValueError, ArithmeticError):
+        return D("5")
+
+
 PROBE_LIMITS = dict(max_usd_per_market=D("5"), max_abs_residual=D("10"),
                     max_total_exposure_usd=D("5"), max_concurrent_markets=1,
                     max_live_orders=max_live_orders(),
-                    daily_realized_loss_halt_usd=D("5"))
+                    daily_realized_loss_halt_usd=daily_realized_loss_halt())
 
 #: retried quickly: until it passes, an armed runner cannot act on the
 #: window, and L5 opens within seconds (0045z: first action at +7.0s).
