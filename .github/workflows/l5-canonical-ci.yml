@@ -26,6 +26,8 @@ jobs:
           python-version: "3.11"
       - name: Install deps
         run: pip install --quiet -r requirements.txt
+      - name: Verify L5 loss-limit and provenance regressions
+        run: python3 -m pytest tests/test_l5_daily_loss_provenance.py -q
       - name: Run test suite
         run: python3 -m pytest tests/ -q
       - name: Ops-layer smoke (offline pieces)
