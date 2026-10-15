@@ -36,3 +36,13 @@ def test_legacy_attributed_is_not_verified_l5_net(tmp_path):
     assert report["unknown_basis_keys"] == [
         "cpc-btc-updown-15m-2026-10-15-1945z|DOWN"
     ]
+
+def test_retirement_preserves_unknown_basis_provenance_in_source():
+    """Guard against silently dropping the provenance at settlement."""
+    import inspect
+    from src.l5_live_execution import InventoryStore
+    source = inspect.getsource(InventoryStore.retire_settled_market)
+    assert 'unknown_basis_at_settlement' in source
+    assert '"unverified_cost_basis_keys": unknown_basis_at_settlement' in source
+    assert '"l5_owner_attribution_verified": False' in source
+    assert '"pnl_provenance"' in source
