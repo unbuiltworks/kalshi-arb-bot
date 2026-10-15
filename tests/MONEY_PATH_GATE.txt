@@ -102,3 +102,10 @@ tests/test_l5_pmus_live_wiring.py
     participateDontInitiate true, the PAIR is gated before either leg is
     claimed, each leg holds its own one-shot durable claim, and a refusal
     anywhere submits nothing rather than falling back to the L5 intent.
+
+13. PROBE TERMINAL DEADLINE BOUNDARIES (real runner method)
+    tests/test_l5_ts_deadline_boundaries.py
+    cancel_cutoff takes the window END and slug_start gives the START.
+    Passing the start gave start-180: a deadline expired before the window
+    opened. Boundaries at +0/+300/+719/+720/+721s, cancellation by exact
+    venue id proved by re-read, and a caller audit for the whole class.

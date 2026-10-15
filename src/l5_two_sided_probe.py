@@ -144,6 +144,26 @@ def cancel_cutoff(t_end: float) -> float:
     return float(t_end) - CANCEL_MARGIN_S
 
 
+def window_end(t_start: float) -> float:
+    """Window END from its START. BTC15m slugs name the start."""
+    return float(t_start) + WINDOW_S
+
+
+def cancel_cutoff_from_start(t_start: float) -> float:
+    """The terminal deadline, taken from the WINDOW START.
+
+    WHY THIS EXISTS RATHER THAN CALLERS DOING THE ARITHMETIC. `cancel_cutoff`
+    takes the window END, but every slug and every book row names the window
+    START, so a caller who passes what it has gets `start - 180` -- a
+    deadline 180 seconds BEFORE the window opens, i.e. already expired on the
+    first tick, which cancels the probe's legs the moment they rest. That is
+    exactly the bug an independent review found in Runner.maybe_ts_deadline.
+    Callers that hold a start must use this and never do the addition
+    themselves.
+    """
+    return cancel_cutoff(window_end(t_start))
+
+
 def place_cutoff(t_start: float, t_end: float) -> float:
     return min(float(t_start) + PLACE_OFFSET_S,
                cancel_cutoff(t_end) - MIN_REST_S)

@@ -1960,11 +1960,18 @@ class Runner:
             # UNKNOWN WINDOW TIMING IS ALREADY OVERDUE. A deadline we cannot
             # compute is not a deadline, so the legs come in.
             out = {"reason": "TS_WINDOW_UNKNOWN", "cancelled": True}
-        elif now <= TSP.cancel_cutoff(float(ws)):
+        elif now <= TSP.cancel_cutoff_from_start(float(ws)):
             return None
         else:
+            # FROM THE START, NOT THE END. AB.slug_start names the window
+            # START; cancel_cutoff takes the END. Passing the start gave
+            # start - 180, a deadline already expired before the window
+            # opened, which cancelled the legs on the first tick. Found by
+            # independent review; the helper now owns the arithmetic.
             out = {"reason": "TS_TERMINAL_DEADLINE",
-                   "cutoff": TSP.cancel_cutoff(float(ws))}
+                   "window_start": float(ws),
+                   "window_end": TSP.window_end(float(ws)),
+                   "cutoff": TSP.cancel_cutoff_from_start(float(ws))}
         if not (self.store.live_orders() or {}):
             return None
         res = LX.deadman(self.store, t, reason="ts_terminal_deadline")
