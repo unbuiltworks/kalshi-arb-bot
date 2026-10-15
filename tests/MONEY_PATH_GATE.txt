@@ -88,3 +88,10 @@ tests/test_l5_pmus_live_wiring.py
     transport, ledger, cancellation or gate. Refuses a pair whose edge does
     not clear the worst-case fee on both legs, which is what resting AT the
     touch on a one-tick book always is.
+
+11. TRADE-THROUGH OBSERVER (additive, read-only, not a fill model)
+    tests/test_l5_trade_through_observer.py
+    Records never_reached / touched / traded_through per leg with
+    timestamps, queue-ahead bands and the cancellation deadline. A touch is
+    never a fill and trade-through is never a confirmed fill. The existing
+    two-sided collector's API and outputs are untouched.

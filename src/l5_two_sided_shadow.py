@@ -47,7 +47,7 @@ from __future__ import annotations
 import json
 import os
 
-from decimal import Decimal as D, ROUND_FLOOR
+from decimal import Decimal as D, ROUND_FLOOR, ROUND_CEILING
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import l5_maker_fill_model as FM
@@ -656,3 +656,377 @@ class ShadowLedger:
         if out:
             self.save()
         return out
+
+
+# =====================================================================
+# TRADE-THROUGH OBSERVER -- additive, read-only, and deliberately NOT a
+# fill model.
+#
+# WHY IT IS SEPARATE FROM EVERYTHING ABOVE. The Config cells model FILLS:
+# they carry queue-ahead, partial consumption and a conservative band, and
+# they quote AT THE TOUCH, where the pair costs `1 - spread`. On a one-tick
+# BTC15m book that is 0.99, whose one cent of gross edge is less than the
+# 3.44-cent worst-case taker fee at p~0.45 -- so the touch baseline cannot
+# be profitable however well it fills, and its modelled fills are not
+# executable profits. The economically viable quote rests BEHIND the touch,
+# and nothing above measures that.
+#
+# This observer answers the one question that decides the strategy: at a
+# depth whose economics work, how often does the market actually TRADE
+# THROUGH both resting prices inside one window? It records observations,
+# not conclusions, and it never claims a fill:
+#
+#   never_reached  -- no print on the wrong side of our price
+#   touched        -- a print AT our price; queue-dependent, NOT a fill
+#   traded_through -- a print strictly through our price, which is the
+#                     NECESSARY condition for a maker fill and never the
+#                     sufficient one, because queue-ahead is unmeasured
+#
+# Queue-ahead is carried as the displayed size at placement and reported as
+# a band: conservative puts all of it ahead of us, optimistic none. Both
+# bounds are emitted and neither is called a fill.
+#
+# It owns no transport, no ledger, no limit and no gate, and the existing
+# collector's outputs are untouched -- it emits its own record.
+
+#: tick depths observed in parallel. 0 is the existing touch baseline,
+#: kept only for comparison; 2 is the first depth that clears the fee floor.
+TT_DEPTHS = (0, 2)
+
+NEVER = "never_reached"
+TOUCHED = "touched"
+THROUGH = "traded_through"
+
+
+class TradeThroughLeg:
+    """One hypothetical resting price, and what the tape did to it."""
+
+    def __init__(self, side: str, own_px: D, yes_px: D, qty: D,
+                 queue_ahead: Optional[D], placed_t: float) -> None:
+        self.side = side
+        self.own_px = own_px          # cost in this side's own terms
+        self.yes_px = yes_px          # the YES price the tape is quoted in
+        self.qty = qty
+        self.queue_ahead = queue_ahead
+        self.placed_t = placed_t
+        self.state = NEVER
+        self.first_touch_t: Optional[float] = None
+        self.first_through_t: Optional[float] = None
+        self.through_vol = D(0)
+        self.touch_vol = D(0)
+
+    def consume(self, px: D, qty: D, direction: str, t: float) -> None:
+        """One print. UP rests on the bid and is hit by a SELL aggressor;
+        DOWN rests as a YES ask and is lifted by a BUY aggressor."""
+        if self.side == FM.UP:
+            if direction != "sell":
+                return
+            through, at = px < self.yes_px, px == self.yes_px
+        else:
+            if direction != "buy":
+                return
+            through, at = px > self.yes_px, px == self.yes_px
+        if through:
+            self.through_vol += qty
+            if self.first_through_t is None:
+                self.first_through_t = t
+            self.state = THROUGH
+        elif at:
+            self.touch_vol += qty
+            if self.first_touch_t is None:
+                self.first_touch_t = t
+            if self.state == NEVER:
+                self.state = TOUCHED
+
+    def bounds(self) -> Dict[str, str]:
+        """Conservative and optimistic filled quantity. NEITHER is a fill."""
+        qa = self.queue_ahead
+        opt = min(self.qty, self.through_vol)
+        if qa is None:
+            cons = D(0)               # unknown queue never fills
+        else:
+            cons = min(self.qty, max(D(0), self.through_vol - qa))
+        return {"filled_optimistic": str(opt), "filled_conservative": str(cons),
+                "queue_ahead_at_placement": (
+                    None if qa is None else str(qa)),
+                "labels": ("optimistic assumes we were first in the queue, "
+                           "conservative assumes the whole displayed size "
+                           "was ahead of us. An unknown queue never fills. "
+                           "Neither bound is a confirmed fill.")}
+
+    def row(self) -> Dict[str, Any]:
+        return dict({"side": self.side, "own_price": str(self.own_px),
+                     "yes_price": str(self.yes_px), "qty": str(self.qty),
+                     "state": self.state,
+                     "placed_t": self.placed_t,
+                     "first_touch_t": self.first_touch_t,
+                     "first_through_t": self.first_through_t,
+                     "through_volume": str(self.through_vol),
+                     "touch_volume": str(self.touch_vol),
+                     "seconds_to_through": (
+                         None if self.first_through_t is None
+                         else round(self.first_through_t - self.placed_t, 3))},
+                    **self.bounds())
+
+
+class TradeThroughObserver:
+    """One window, one depth: both legs priced once, then the tape applied.
+
+    Prices are frozen at placement and never re-quoted: a moving quote
+    measures a different experiment every tick.
+    """
+
+    TICK = D("0.01")
+    #: the probe's own terminal deadline; nothing is counted past it
+    CANCEL_MARGIN_S = 180.0
+    #: worst-case fee coefficient. The maker rebate is never assumed.
+    THETA = D("0.0695")
+    #: the pair must clear the worst-case fee on both legs
+    MIN_EDGE = D("0.04")
+
+    def __init__(self, slug: str, depth_ticks: int, qty: D,
+                 window_start: Optional[float] = None,
+                 window_s: int = 900) -> None:
+        self.slug = slug
+        self.depth_ticks = int(depth_ticks)
+        self.qty = D(str(qty))
+        self.window_start = window_start
+        self.window_s = int(window_s)
+        self.legs: Dict[str, TradeThroughLeg] = {}
+        self.placed_t: Optional[float] = None
+        self.pair_cost: Optional[D] = None
+        self.spread_at_placement: Optional[D] = None
+        self.bid_at_placement: Optional[D] = None
+        self.refusal: Optional[str] = None
+        self.prints = 0
+        self._seen: set = set()
+
+    # ------------------------------------------------------------ timing
+    def deadline(self) -> Optional[float]:
+        if self.window_start is None:
+            return None
+        return self.window_start + self.window_s - self.CANCEL_MARGIN_S
+
+    def past_deadline(self, now: float) -> bool:
+        d = self.deadline()
+        return d is not None and now > d
+
+    # ------------------------------------------------------------ pricing
+    def place(self, bid: D, ask: D, bid_sh: Optional[D],
+              ask_sh: Optional[D], now: float) -> Optional[str]:
+        """Freeze both prices once. Returns a refusal reason, or None."""
+        if self.legs or self.refusal:
+            return self.refusal
+        if bid is None or ask is None or bid <= 0 or ask <= 0 or ask <= bid:
+            self.refusal = "BOOK_NOT_TWO_SIDED"
+            return self.refusal
+        off = D(self.depth_ticks) * self.TICK
+        up_own = bid - off                  # UP cost, rests at this YES bid
+        dn_own = (D(1) - ask) - off         # DOWN cost
+        dn_yes = D(1) - dn_own              # the YES ask it is equivalent to
+        if up_own <= 0 or dn_own <= 0 or up_own >= 1 or dn_own >= 1:
+            self.refusal = "PRICE_OUT_OF_BAND"
+            return self.refusal
+        self.pair_cost = up_own + dn_own
+        self.spread_at_placement = ask - bid
+        self.bid_at_placement = bid
+        self.placed_t = now
+        self.legs = {
+            FM.UP: TradeThroughLeg(FM.UP, up_own, up_own, self.qty,
+                                   bid_sh, now),
+            FM.DOWN: TradeThroughLeg(FM.DOWN, dn_own, dn_yes, self.qty,
+                                     ask_sh, now),
+        }
+        return None
+
+    # ------------------------------------------------------------ the tape
+    def consume(self, prints: Sequence[Mapping[str, Any]], now: float) -> None:
+        if not self.legs or self.past_deadline(now):
+            return
+        for p in prints or ():
+            key = (p.get("t"), p.get("px"), p.get("qty"), p.get("dir"))
+            if key in self._seen:
+                continue
+            self._seen.add(key)
+            t = p.get("t")
+            if t is None or self.placed_t is None or t <= self.placed_t:
+                continue
+            d = self.deadline()
+            if d is not None and t > d:
+                continue
+            px = _d(p.get("px")); q = _d(p.get("qty")) or D(0)
+            if px is None:
+                continue
+            direction = str(p.get("dir") or "").lower()
+            self.prints += 1
+            for leg in self.legs.values():
+                leg.consume(px, q, direction, t)
+
+    # --------------------------------------------------------- economics
+    def fee(self, qty: D, price: D) -> D:
+        raw = self.THETA * qty * price * (D(1) - price)
+        return (raw.quantize(D("0.01"), rounding=ROUND_CEILING)
+                if raw > 0 else D(0))
+
+    def settlement(self, settle_up: Optional[bool]) -> Dict[str, Any]:
+        """Both outcomes, using the FROZEN recorded prices and taker fees.
+
+        The one-sided case is settled, not marked: if only one leg was
+        traded through, the position is that leg alone and it either
+        redeems or expires worthless.
+        """
+        if not self.legs:
+            return {"evaluable": False, "reason": self.refusal or "NOT_PLACED"}
+        up, dn = self.legs[FM.UP], self.legs[FM.DOWN]
+        both = up.state == THROUGH and dn.state == THROUGH
+        one = (up.state == THROUGH) != (dn.state == THROUGH)
+        out: Dict[str, Any] = {
+            "evaluable": True, "both_through": both, "one_through": one,
+            "neither_through": not both and not one,
+            "pair_cost": str(self.pair_cost),
+            "edge_per_contract": str(D(1) - self.pair_cost),
+            "clears_fee_floor": bool((D(1) - self.pair_cost) >= self.MIN_EDGE),
+        }
+        if both:
+            cost = (self.qty * up.own_px + self.qty * dn.own_px
+                    + self.fee(self.qty, up.own_px)
+                    + self.fee(self.qty, dn.own_px))
+            out["cost_if_both_filled"] = str(cost)
+            out["pnl_if_up_settles"] = str(self.qty - cost)
+            out["pnl_if_dn_settles"] = str(self.qty - cost)
+            out["both_outcomes_positive"] = bool(self.qty - cost > 0)
+        elif one:
+            leg = up if up.state == THROUGH else dn
+            cost = self.qty * leg.own_px + self.fee(self.qty, leg.own_px)
+            out["one_sided_side"] = leg.side
+            out["cost_if_one_filled"] = str(cost)
+            if settle_up is None:
+                out["one_sided_pnl"] = None
+                out["one_sided_pnl_note"] = (
+                    "unscored: needs the venue's own binary resolution")
+            else:
+                wins = (leg.side == FM.UP) == bool(settle_up)
+                out["one_sided_pnl"] = str(
+                    (self.qty if wins else D(0)) - cost)
+                out["one_sided_won"] = bool(wins)
+        return out
+
+    def report(self, settle_up: Optional[bool] = None) -> Dict[str, Any]:
+        gap = None
+        if self.legs:
+            a = self.legs[FM.UP].first_through_t
+            b = self.legs[FM.DOWN].first_through_t
+            if a is not None and b is not None:
+                gap = round(abs(a - b), 3)
+        first = None
+        if self.legs:
+            a = self.legs[FM.UP].first_through_t
+            b = self.legs[FM.DOWN].first_through_t
+            if a is not None and (b is None or a <= b):
+                first = FM.UP
+            elif b is not None:
+                first = FM.DOWN
+        return {"LABEL": "L5_TRADE_THROUGH", "slug": self.slug,
+                "depth_ticks": self.depth_ticks,
+                "qty_per_leg": str(self.qty),
+                "window_start": self.window_start,
+                "cancellation_deadline": self.deadline(),
+                "placed_t": self.placed_t,
+                "bid_at_placement": (None if self.bid_at_placement is None
+                                     else str(self.bid_at_placement)),
+                "spread_at_placement": (
+                    None if self.spread_at_placement is None
+                    else str(self.spread_at_placement)),
+                "refusal": self.refusal,
+                "prints_consumed": self.prints,
+                "legs": ([l.row() for l in self.legs.values()]
+                         if self.legs else []),
+                "first_leg_through": first,
+                "seconds_between_legs": gap,
+                "settlement": self.settlement(settle_up),
+                "labels": ("OBSERVED trade-through, never a fill. A print AT "
+                           "our price is `touched` and stays queue-dependent; "
+                           "only a print strictly THROUGH it is the necessary "
+                           "condition for a maker fill, and queue-ahead "
+                           "unmeasured means it is never the sufficient one. "
+                           "The touch baseline (depth 0) is kept for "
+                           "comparison and its modelled fills are NOT "
+                           "executable profits.")}
+
+
+def wilson_interval(k: int, n: int, z: D = D("1.96")) -> Dict[str, Any]:
+    """95% confidence interval for a proportion, small-sample safe.
+
+    Reported because 5/8 and 500/800 are the same point estimate and
+    completely different evidence.
+    """
+    if n <= 0:
+        return {"k": k, "n": n, "p": None, "lo": None, "hi": None}
+    from decimal import getcontext
+    getcontext().prec = 28
+    p = D(k) / D(n); nn = D(n); z2 = z * z
+    denom = D(1) + z2 / nn
+    centre = (p + z2 / (D(2) * nn)) / denom
+    inner = (p * (D(1) - p) / nn + z2 / (D(4) * nn * nn))
+    rad = (z * inner.sqrt()) / denom
+    lo = max(D(0), centre - rad); hi = min(D(1), centre + rad)
+    return {"k": k, "n": n, "p": str(round(p, 4)),
+            "lo": str(round(lo, 4)), "hi": str(round(hi, 4)),
+            "method": "Wilson score, z=1.96"}
+
+
+def aggregate(reports: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Per-depth frequencies WITH the market-level rows preserved.
+
+    THRESHOLDS ARE NOT FITTED HERE. This counts; it does not choose a depth,
+    a spread band or a time of day. Anything selected on these windows must
+    be validated on different ones.
+    """
+    by_depth: Dict[int, Dict[str, Any]] = {}
+    for r in reports:
+        d = int(r.get("depth_ticks", -1))
+        s = r.get("settlement") or {}
+        cell = by_depth.setdefault(d, {"n": 0, "both": 0, "one": 0,
+                                       "neither": 0, "gaps": [],
+                                       "spreads": {}, "markets": []})
+        if not s.get("evaluable"):
+            continue
+        cell["n"] += 1
+        if s.get("both_through"):
+            cell["both"] += 1
+        elif s.get("one_through"):
+            cell["one"] += 1
+        else:
+            cell["neither"] += 1
+        g = r.get("seconds_between_legs")
+        if g is not None:
+            cell["gaps"].append(g)
+        sp = r.get("spread_at_placement")
+        if sp is not None:
+            cell["spreads"][sp] = cell["spreads"].get(sp, 0) + 1
+        cell["markets"].append({
+            "slug": r.get("slug"), "spread": sp,
+            "both": bool(s.get("both_through")),
+            "one": bool(s.get("one_through")),
+            "first_leg": r.get("first_leg_through"),
+            "gap_s": g, "pair_cost": s.get("pair_cost"),
+            "clears_fee_floor": s.get("clears_fee_floor"),
+            "one_sided_pnl": s.get("one_sided_pnl")})
+    out: Dict[str, Any] = {"LABEL": "L5_TRADE_THROUGH_SUMMARY", "depths": {}}
+    for d, c in sorted(by_depth.items()):
+        gaps = sorted(c["gaps"])
+        out["depths"][str(d)] = {
+            "n_windows": c["n"],
+            "both_through": wilson_interval(c["both"], c["n"]),
+            "one_through": wilson_interval(c["one"], c["n"]),
+            "neither_through": wilson_interval(c["neither"], c["n"]),
+            "seconds_between_legs": {
+                "n": len(gaps),
+                "min": (gaps[0] if gaps else None),
+                "median": (gaps[len(gaps) // 2] if gaps else None),
+                "max": (gaps[-1] if gaps else None)},
+            "spread_regimes": c["spreads"],
+            "markets": c["markets"]}
+    out["labels"] = ("counts only; no threshold, depth or regime is selected "
+                     "here. Trade-through is never a confirmed fill.")
+    return out
