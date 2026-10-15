@@ -90,3 +90,26 @@ queue measurement wired, shadow-locked 2026-10-15T16:32:46Z
 #
 # Rollback: Railway rollback to deployment d17928bc, the verified safe build.
 two-sided probe wired + maker-aware fee floor, shadow-locked 2026-10-15T20:00:50Z
+
+# OWNER-APPROVED DISARMED promotion of fee9dac2 (owner independently
+# verified the SHA and its four changed files).
+#
+# SUPERSEDES THE PENDING 4e009e82/895c953c LINE. 895c953c carried a real
+# defect found by independent review: Runner.maybe_ts_deadline passed the
+# window START to cancel_cutoff, which takes the window END, giving a
+# deadline of start-180 -- already expired on the first tick, so the sweep
+# would have cancelled the probe's legs the moment they rested. fee9dac2
+# fixes it via cancel_cutoff_from_start() and pins the whole class with a
+# caller audit test. DO NOT deploy 895c953c.
+#
+# BOTH TRADING LOCKS STAY ON. L5_SHADOW_ONLY set, watchdog HALT latched, and
+# L5_TS_EXPERIMENT_ID / L5_TS_MARKET / L5_MAX_WORST_CASE_DEFICIT_USD all
+# deliberately UNSET -- so TS.active() is false, QM.active() is false, the
+# deficit gate is inert, and every experiment branch is unreachable. This
+# deployment adds refusals and no capability.
+#
+# Money-path gate 1182 passed. Full suite 26 failed / 14 errors: baseline.
+#
+# Rollback: Railway rollback to deployment 8bf8062d (the running build of
+# 5dd24f3e), or d17928bc before it.
+probe deadline corrected, shadow-locked 2026-10-15T20:50:55Z
