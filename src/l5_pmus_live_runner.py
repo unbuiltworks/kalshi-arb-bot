@@ -52,6 +52,7 @@ from src import l5_faithful_translation as FT
 from src import l5_live_authorization as AUTH
 from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
+from src import l5_two_sided_shadow as TS
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
 from src import l5_pmus_transport as T
@@ -330,6 +331,13 @@ class Runner:
         #: CANCEL decision. 0.0, so the first tick with exposure
         #: always asks.
         self.last_halt_sweep_t = 0.0
+        #: SHADOW-ONLY two-sided completion evaluator for this window, and
+        #: the finished ones still waiting for an authoritative settlement
+        #: to score their residual. Reads the book and the trade prints;
+        #: touches no store, no transport, no limit and no gate.
+        self.two_sided: Optional[TS.TwoSidedShadow] = None
+        self.two_sided_pending: Dict[str, TS.TwoSidedShadow] = {}
+        self.last_two_sided_report_t = 0.0
 
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
@@ -346,6 +354,8 @@ class Runner:
         self.arm_claim = None
         self.ws = ws
         slug = AB.slug_for(ws)
+        self.two_sided_close()
+        self.two_sided = TS.TwoSidedShadow(slug, window_start=float(ws))
         # MODELLED fill session for this window. Attaching the ladder
         # observer here is what gives a maker quote a queue position; it is
         # detached-by-default and feeds nothing but this model.
@@ -567,6 +577,7 @@ class Runner:
                               "the loss halt with it")})
                 continue
             if out.get("retired"):
+                self.two_sided_score(market, D(str(out["yes_value"])))
                 emit("L5_LIVE_SETTLED", dict(
                     out, venue_state=rep["state"],
                     cash_deployed=self.store.cash_deployed_usd(market)))
@@ -1106,6 +1117,54 @@ class Runner:
             emit("L5_MODEL_ERROR", {"where": "advance", "error": T.redact(
                 "%s: %s" % (type(exc).__name__, exc))})
 
+    def two_sided_advance(self, now: float) -> None:
+        """Step the SHADOW two-sided evaluator. Nothing here can submit.
+
+        It is given the same authenticated snapshot and the same rolling
+        trade list the modelled fill path already consumes, so it adds no
+        venue request and no new data source.
+        """
+        ev = self.two_sided
+        if ev is None:
+            return
+        try:
+            ev.step(self.book.snapshot(ev.slug), self.book.trades(ev.slug), now)
+        except Exception as exc:                               # noqa: BLE001
+            self.stats["two_sided_errors"] += 1
+            emit("L5_TWO_SIDED_ERROR", {"where": "step", "error": T.redact(
+                "%s: %s" % (type(exc).__name__, exc))})
+            return
+        if now - self.last_two_sided_report_t >= self.TWO_SIDED_REPORT_S:
+            self.last_two_sided_report_t = now
+            emit("L5_TWO_SIDED_SHADOW", dict(ev.report(None), interim=True))
+
+    def two_sided_close(self) -> None:
+        """Window roll: emit the window's unscored report and hold it.
+
+        The residual is NOT scored here. Scoring it needs the venue's own
+        binary resolution, and this programme has already booked one phantom
+        credit from a book price standing in for a settlement. The evaluator
+        is parked until `sweep_settlements` retires the market against an
+        authoritative 0 or 1, and scored then.
+        """
+        ev = self.two_sided
+        self.two_sided = None
+        if ev is None:
+            return
+        emit("L5_TWO_SIDED_SHADOW", dict(ev.report(None), interim=False,
+                                         awaiting_settlement=True))
+        if len(self.two_sided_pending) < 8:
+            self.two_sided_pending[ev.slug] = ev
+
+    def two_sided_score(self, market: str, yes_value: D) -> None:
+        """Score a parked window's residual against the venue's resolution."""
+        ev = self.two_sided_pending.pop(market, None)
+        if ev is None:
+            return
+        emit("L5_TWO_SIDED_SHADOW", dict(ev.report(yes_value == D(1)),
+                                         interim=False, settled=True,
+                                         yes_value=str(yes_value)))
+
     def model_close(self) -> None:
         """Window close: settle the MODELLED book and report it.
 
@@ -1512,6 +1571,10 @@ class Runner:
     #: Longer than the halt sweep: this is a recovery path, not a hot path.
     ORPHAN_SWEEP_EVERY_S = 30.0
 
+    #: how often the SHADOW two-sided evaluator prints an interim row. Low
+    #: enough to see a window develop, high enough not to bury the heartbeat.
+    TWO_SIDED_REPORT_S = 180.0
+
     def maybe_cancel_orphans(self, now: float) -> Optional[Dict[str, Any]]:
         """WITHDRAW AN ORDER WE OWN BUT CAN NO LONGER MANAGE.
 
@@ -1669,6 +1732,7 @@ class Runner:
         # recorder's trade list is a rolling 500 -- a long enough stall
         # drops prints the model never sees.
         self.model_advance(now)
+        self.two_sided_advance(now)
         # one question per tick instead of one per caller
         cooling = self.venue_cooling()
         if cooling > 0:
