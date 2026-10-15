@@ -179,3 +179,8 @@ before k is ever set.
   is otherwise unchanged.
 - Only then, with explicit authorization, an authoritative preflight PASS and
   a matching arm token.
+
+<!-- 2026-10-15: watchdog deploy isolation pinned (watchPatterns ->
+     deploy/l5_halt_watchdog/DEPLOY_TRIGGER, builder DOCKERFILE, start
+     command pinned). This line exists to prove the isolation: it is an
+     unrelated file, so pushing it must NOT redeploy the watchdog. -->
