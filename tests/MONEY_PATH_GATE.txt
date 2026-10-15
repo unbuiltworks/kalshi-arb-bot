@@ -81,3 +81,10 @@ tests/test_l5_pmus_live_wiring.py
    deficit = cost - min(up, dn), maximised over which outstanding orders
    fill. Below zero the book pays out on BOTH settlement outcomes. No order
    is exempt: a completing order is priced exactly like an opening one.
+
+10. TWO-SIDED ONE-WINDOW PROBE (experiment-gated; inert by default)
+    tests/test_l5_two_sided_probe.py
+    Generates exactly two post-only intents or a terminal refusal. Owns no
+    transport, ledger, cancellation or gate. Refuses a pair whose edge does
+    not clear the worst-case fee on both legs, which is what resting AT the
+    touch on a one-tick book always is.
