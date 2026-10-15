@@ -66,6 +66,16 @@ TICK = D("0.01")
 COMPLEMENT_ONLY = "COMPLEMENT_ONLY"
 SKEWED = "SKEWED"
 
+#: SKEWED's policy version. v1 retained every resting leg UNCONDITIONALLY --
+#: no distance test, no re-check of the pair economics after placement -- which
+#: the 0215z audit showed is not the hypothesis at all: poly-maker's reconciler
+#: keeps an order only while it still matches the CURRENT target. v2 revalidates
+#: every retained leg each tick and cancels the ones that no longer qualify.
+#: The tag travels on every cell so a pre-fix sample can never be averaged with
+#: a post-fix one.
+SKEW_VERSION = "v2-revalidated"
+SKEW_VERSION_V1 = "v1-unconditional-retention"
+
 #: bounds on the taper. The adding leg never vanishes and never grows; the
 #: reducing leg never more than doubles. Both are clamps, not parameters to
 #: tune, and they exist so one window cannot produce an unbounded clip.
@@ -132,6 +142,7 @@ class Config:
         self.policy = policy
         self.retained_legs = 0
         self.replaced_legs = 0
+        self.revalidation_cancels: Dict[str, int] = {}
         self.qty = {FM.UP: D(0), FM.DOWN: D(0)}
         self.cost = {FM.UP: D(0), FM.DOWN: D(0)}
         self.qty_opt = {FM.UP: D(0), FM.DOWN: D(0)}
@@ -165,6 +176,56 @@ class Config:
     def basis(self, side: str) -> Optional[D]:
         q = self.qty[side]
         return (self.cost[side] / q) if q else None
+
+    def stale_reason(self, leg: "Leg", side: str, bid: D, ask: D
+                     ) -> Optional[str]:
+        """Why a retained leg no longer qualifies, or None to keep it.
+
+        EVERY TEST REUSES A CHECK THIS MODULE ALREADY MAKES. No new threshold is
+        introduced and nothing is tuned to the window that exposed the defect:
+
+          PRICE_THROUGH_THE_MARKET -- a resting BUY priced better than the
+            current touch on its own side is alone at the top of the book. It
+            is not a deeper rung waiting its turn; it is a bid above the market
+            that anything coming down will hit. Parameter-free: it is a sign
+            test against the current touch, not a tick tolerance.
+          PAIR_NO_LONGER_ECONOMIC -- the SAME frozen gate that admitted the
+            quote, re-applied at the CURRENT complement price. A leg whose pair
+            would not be admitted now is not admitted to stay.
+          INVENTORY_FULL -- the taper's own u, unchanged: at u >= 1 the adding
+            side is already at a full flat clip and must not grow.
+          OVER_ENVELOPE -- the same exposure definition used everywhere here.
+        """
+        own_now = bid if side == FM.UP else (D(1) - ask)
+        # 1. priced through the market on our own side
+        if side == FM.UP and leg.book_px > bid:
+            return "PRICE_THROUGH_THE_MARKET"
+        if side == FM.DOWN and leg.book_px < ask:
+            return "PRICE_THROUGH_THE_MARKET"
+        # 2. the gate, re-applied now
+        resid = self.residual()
+        other = FM.DOWN if side == FM.UP else FM.UP
+        if resid != 0 and ((resid > 0) != (side == FM.UP)):
+            # this leg reduces inventory: score it against the held basis
+            held = FM.UP if resid > 0 else FM.DOWN
+            b = self.basis(held)
+            if b is not None and b + leg.own_px > self.thresh:
+                return "PAIR_NO_LONGER_ECONOMIC"
+        else:
+            complement_now = (D(1) - ask) if side == FM.UP else bid
+            if leg.own_px + complement_now > self.thresh:
+                return "PAIR_NO_LONGER_ECONOMIC"
+        # 3. inventory, by the taper's own measure
+        if resid != 0 and ((resid > 0) == (side == FM.UP)):
+            pair_now = bid + (D(1) - ask)
+            flat_clip = ((self.envelope / pair_now).quantize(
+                TICK, rounding=ROUND_FLOOR)) if pair_now > 0 else D(0)
+            if flat_clip <= 0 or abs(resid) >= flat_clip:
+                return "INVENTORY_FULL"
+        # 4. capital
+        if self.exposure() > self.envelope:
+            return "OVER_ENVELOPE"
+        return None
 
     # ----------------------------------------------------------- tick
     def step(self, bid: D, ask: D, bid_sh: Optional[D], ask_sh: Optional[D],
@@ -204,7 +265,17 @@ class Config:
             if leg.book_px == ref:
                 continue
             if self.policy == SKEWED:
-                self.retained_legs += 1
+                why = self.stale_reason(leg, side, bid, ask)
+                if why is None:
+                    self.retained_legs += 1
+                    continue
+                # a leg that no longer qualifies is withdrawn, exactly as
+                # COMPLEMENT_ONLY would withdraw it. What already filled stays.
+                self.rest.pop(side, None)
+                self.cancels += 1
+                self.replaced_legs += 1
+                self.revalidation_cancels[why] = \
+                    self.revalidation_cancels.get(why, 0) + 1
                 continue
             self.rest.pop(side, None)
             self.cancels += 1
@@ -308,6 +379,8 @@ class Config:
             "policy": self.policy,
             "legs_retained_through_a_touch_move": self.retained_legs,
             "legs_replaced_on_a_touch_move": self.replaced_legs,
+            "policy_version": (SKEW_VERSION if self.policy == SKEWED else None),
+            "revalidation_cancels": dict(self.revalidation_cancels),
             "eligible_ticks": self.eligible,
             "flat_quotes": self.flat_quotes,
             "complement_quotes": self.complement_quotes,
@@ -421,6 +494,7 @@ class TwoSidedShadow:
             "coverage_gaps": self.coverage_gaps,
             "spread_histogram": dict(sorted(self.spreads.items())),
             "settlement_known": settle_up is not None,
+            "skew_policy_version": SKEW_VERSION,
             "cells": [c.report(settle_up) for c in self.configs],
             "discipline": ("queue-ahead frozen at placement from the "
                            "displayed top-of-book size and never re-read; "

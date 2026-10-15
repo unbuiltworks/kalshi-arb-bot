@@ -441,11 +441,13 @@ def test_complement_only_still_refuses_the_adding_leg():
     assert c["legs_retained_through_a_touch_move"] == 0
 
 
-def test_skewed_retains_a_valid_resting_leg_instead_of_cancelling_it():
+def test_skewed_retains_what_is_still_valid_and_withdraws_what_is_not():
+    """v2. A two-sided quote sits AT the touch, so any move leaves exactly one
+    leg as a deeper rung and the other priced through the market. Retention is
+    now selective: the deeper rung keeps its queue, the other is withdrawn."""
     c = cellp(one_sided(ev()).report(None), TS.SKEWED)
     assert c["legs_retained_through_a_touch_move"] >= 1
-    assert c["legs_replaced_on_a_touch_move"] == 0
-    assert c["cancels"] == 0
+    assert c["revalidation_cancels"].get("PRICE_THROUGH_THE_MARKET", 0) >= 1
 
 
 def test_skewed_adds_a_tapered_leg_where_complement_only_refuses():
@@ -486,3 +488,148 @@ def test_capital_queue_fees_and_settlement_are_identical_across_policies():
     assert "ahead" in code_only(inspect.getsource(TS.Leg.__init__))
     # settlement is scored by one shared function for both policies
     assert "policy" not in code_only(inspect.getsource(TS.score_report))
+
+
+# ================================ v2: revalidation of retained legs (the fix)
+# 0215z showed SKEWED v1 retained every leg unconditionally: a BUY UP at 0.88
+# sat above a falling market for an entire window and filled at the stale price.
+# v2 revalidates every retained leg each tick against the current target, the
+# pair economics, inventory and committed capital.
+
+def sk(rep, env="100"):
+    return cellp(rep, TS.SKEWED, env=env)
+
+
+def test_every_skewed_cell_carries_the_policy_version():
+    rep = ev().report(None)
+    assert rep["skew_policy_version"] == TS.SKEW_VERSION
+    for c in rep["cells"]:
+        if c["policy"] == TS.SKEWED:
+            assert c["policy_version"] == TS.SKEW_VERSION
+        else:
+            assert c["policy_version"] is None
+
+
+def test_a_stale_buy_bid_is_cancelled_not_retained():
+    """0215z in one test: our bid ends up ABOVE the falling market."""
+    e = ev()
+    e.step(snap("0.49", "0.50"), [], 1.0)
+    e.step(snap("0.49", "0.50"), [prt("0.49", "500", "sell", 2.0)], 2.0)
+    e.step(snap("0.40", "0.41"), [], 3.0)
+    c = sk(e.report(None))
+    assert c["revalidation_cancels"].get("PRICE_THROUGH_THE_MARKET", 0) >= 1
+    assert c["legs_replaced_on_a_touch_move"] >= 1
+
+
+def test_a_valid_deeper_rung_keeps_its_queue_position():
+    """The UP bid at 0.49 is BELOW a risen touch: a deeper rung waiting its
+    turn, still economic, retained with its queue intact. The DOWN leg of the
+    same pair is now offering through the market and is withdrawn -- which is
+    the point of selective retention."""
+    e = ev()
+    e.step(snap("0.49", "0.50"), [], 1.0)
+    e.step(snap("0.52", "0.53"), [], 2.0)
+    c = sk(e.report(None))
+    assert c["legs_retained_through_a_touch_move"] >= 1   # the UP rung
+    assert list(c["revalidation_cancels"]) == ["PRICE_THROUGH_THE_MARKET"]
+
+
+def test_at_the_0_99_gate_a_non_stale_opening_leg_is_always_still_economic():
+    """A structural property worth pinning, not a behaviour to tune.
+
+    For an opening BUY UP at p with the complement at the current touch, the
+    pair is p + (1 - ask). The price test already requires p <= bid, so the
+    pair is at most 1 - (ask - bid) = 1 - spread, and the spread is at least
+    one tick. At a 0.99 gate the pair test can therefore never bind on a leg
+    the price test has already cleared: at that gate PRICE_THROUGH_THE_MARKET
+    subsumes PAIR_NO_LONGER_ECONOMIC for opening legs."""
+    cfg = TS.Config("m", D("0.99"), D("100"), TS.SKEWED)
+    cfg.step(D("0.49"), D("0.50"), D("10"), D("10"), [], 1.0, 0.0)
+    leg = cfg.rest[FM.UP]
+    assert cfg.stale_reason(leg, FM.UP, D("0.49"), D("0.50")) is None
+    for bid, ask in ((D("0.60"), D("0.61")), (D("0.80"), D("0.95"))):
+        assert cfg.stale_reason(leg, FM.UP, bid, ask) != "PAIR_NO_LONGER_ECONOMIC"
+
+
+def test_a_leg_whose_complement_is_no_longer_economic_is_cancelled():
+    """The same frozen gate, re-applied now. Shown at a tighter gate, where it
+    can bind on an opening leg (see the structural test above)."""
+    cfg = TS.Config("m", D("0.96"), D("100"), TS.SKEWED)
+    cfg.step(D("0.40"), D("0.44"), D("10"), D("10"), [], 1.0, 0.0)
+    leg = cfg.rest[FM.UP]                       # own price 0.40, pair 0.96
+    assert cfg.stale_reason(leg, FM.UP, D("0.40"), D("0.44")) is None
+    # the spread narrows: the complement is dearer and the pair exceeds 0.96
+    assert cfg.stale_reason(leg, FM.UP, D("0.42"), D("0.43")) == \
+        "PAIR_NO_LONGER_ECONOMIC"
+
+
+def test_inventory_becoming_binding_cancels_the_adding_leg():
+    e = ev()
+    e.step(snap("0.49", "0.50", "100000", "100000"), [], 1.0)
+    # fill the UP side to a full flat clip, then move the touch
+    e.step(snap("0.49", "0.50", "100000", "100000"),
+           [prt("0.49", "1000000", "sell", 2.0)], 2.0)
+    e.step(snap("0.49", "0.51", "100000", "100000"), [], 3.0)
+    c = sk(e.report(None))
+    why = c["revalidation_cancels"]
+    assert why, "a full book must retire something"
+    assert set(why) <= {"INVENTORY_FULL", "PAIR_NO_LONGER_ECONOMIC",
+                        "PRICE_THROUGH_THE_MARKET", "OVER_ENVELOPE"}
+
+
+def test_capital_never_exceeds_the_envelope_under_revalidation():
+    e = ev()
+    e.step(snap("0.49", "0.50", "100000", "100000"), [], 1.0)
+    e.step(snap("0.49", "0.50", "100000", "100000"),
+           [prt("0.49", "1000000", "sell", 2.0)], 2.0)
+    for i in range(5):
+        e.step(snap("0.45", "0.46", "100000", "100000"), [], 3.0 + i)
+    for env in ("1", "100", "500"):
+        c = sk(e.report(None), env=env)
+        assert D(c["peak_exposure"]) <= D(env)
+
+
+def test_a_partially_filled_leg_keeps_its_fill_when_revalidation_cancels_it():
+    e = ev()
+    e.step(snap("0.49", "0.50", "10", "10"), [], 1.0)
+    e.step(snap("0.49", "0.50", "10", "10"), [prt("0.49", "10.4", "sell", 2.0)], 2.0)
+    before = D(sk(e.report(None))["up"])
+    assert before > 0                                  # a partial, not a full
+    e.step(snap("0.40", "0.41", "10", "10"), [], 3.0)  # stale -> cancelled
+    c = sk(e.report(None))
+    assert D(c["up"]) == before                        # the fill survives
+    assert c["revalidation_cancels"].get("PRICE_THROUGH_THE_MARKET", 0) >= 1
+
+
+def test_revalidation_cancels_are_scored_and_restart_safe():
+    """A cancelled leg leaves inventory that still settles, and the parked
+    report round-trips through the durable ledger unchanged."""
+    e = ev()
+    e.step(snap("0.49", "0.50", "10", "10"), [], 1.0)
+    e.step(snap("0.49", "0.50", "10", "10"), [prt("0.49", "500", "sell", 2.0)], 2.0)
+    e.step(snap("0.40", "0.41", "10", "10"), [], 3.0)
+    led = ledger()
+    rec = led.park(e.report(None), now=1000.0)
+    assert rec["state"] == TS.PENDING
+    slug = rec["market"]
+    scored = led.finalize(slug, settle_up=False)
+    cell = [c for c in scored["cells"]
+            if c["policy"] == TS.SKEWED and c["envelope"] == "100"][0]
+    assert D(cell["residual_pnl_modelled"]) < 0        # UP bought, DOWN settled
+    assert cell["policy_version"] == TS.SKEW_VERSION
+    reopened = TS.ShadowLedger(led.path)
+    assert reopened.finalize(slug, settle_up=True) is None
+
+
+def test_complement_only_is_untouched_by_the_fix():
+    e = ev()
+    e.step(snap("0.49", "0.50"), [], 1.0)
+    e.step(snap("0.40", "0.41"), [], 2.0)
+    c = cellp(e.report(None), TS.COMPLEMENT_ONLY)
+    assert c["legs_retained_through_a_touch_move"] == 0
+    assert c["revalidation_cancels"] == {}
+    assert c["policy_version"] is None
+
+
+def test_the_taper_itself_is_unchanged():
+    assert TS.SKEW_ADD_FLOOR == D("0.25") and TS.SKEW_REDUCE_CEIL == D("2")
