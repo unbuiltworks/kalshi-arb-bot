@@ -39,3 +39,25 @@ measurement-readiness telemetry (P0-P3), shadow-locked 2026-10-15T12:12:39Z
 # PREREQUISITE: set L5_EXPERIMENT_ID on this service at or before this
 # deploy, or a future armed submit refuses SUBMISSION_CLAIM_NO_EXPERIMENT.
 durable one-submission claim, shadow-locked PENDING-OWNER-APPROVAL
+
+# OWNER-APPROVED DISARMED promotion of cb4db66c: the queue-measurement order
+# is now actually constructed by l5_queue_measurement.build_order() on the
+# production submission path, and an acknowledgment without a venue order id
+# fails closed instead of leaving an untracked resting order.
+#
+# BOTH TRADING LOCKS STAY ON. L5_SHADOW_ONLY is set and the watchdog HALT is
+# latched. L5_EXPERIMENT_ID and L5_QM_MARKET are deliberately NOT set on this
+# service, so QM.active() is false and the entire measurement branch -- the
+# order construction, the ack persistence and the cancellation deadline -- is
+# unreachable. This deployment adds refusals and no capability.
+#
+# Three runtime files change and all three are COPYed into this image:
+#   src/l5_live_execution.py      -- measurement intent replacement, ack
+#                                    fail-closed, deadline persistence
+#   src/l5_pmus_live_runner.py    -- maybe_qm_deadline sweep (returns at once
+#                                    unless the experiment is active)
+#   src/l5_queue_measurement.py   -- NEW; COPY added at Dockerfile line 57
+#
+# Rollback: Railway rollback to deployment 9b9a690b, the verified safe build
+# of 49f8d34e. A rollback restores the container, not the volume.
+queue measurement wired, shadow-locked 2026-10-15T16:32:46Z
