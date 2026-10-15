@@ -53,6 +53,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_fees as fees
 from src import l5_faithful_translation as FT
+from src import l5_queue_measurement as QM
 
 #: the pipeline, in order. A record names the furthest stage it reached.
 STAGES = ("L5_NATIVE", "PMUS_TRANSLATION", "SAFETY_OVERLAY", "ORDER",
@@ -553,6 +554,28 @@ def inventory_class(residual: D, side: str) -> str:
         return FLAT_OPEN
     return INCREASE_RESIDUAL if ((residual > 0) == up) else REDUCE_RESIDUAL
 
+
+
+def _ack_epoch(ack: Mapping[str, Any]) -> float:
+    """The venue's acknowledgement time, or our receipt as the fallback.
+
+    A missing venue timestamp is NOT fatal -- our receipt bounds the ack from
+    above, so a deadline computed from it can only be EARLIER than the truth,
+    which is the safe direction. A deadline we could not compute at all is
+    fatal, and `DeadlineStore.record_ack` refuses that case.
+    """
+    for k in ("ack_time", "transact_time", "transactTime", "createdAt",
+              "created_at"):
+        v = ack.get(k)
+        if v is None:
+            continue
+        try:
+            return float(v) if not isinstance(v, str) else (
+                dt.datetime.fromisoformat(v.replace("Z", "+00:00"))
+                .timestamp())
+        except Exception:                                      # noqa: BLE001
+            continue
+    return dt.datetime.now(dt.timezone.utc).timestamp()
 
 class Provenance:
     """One record per L5 action, carrying the whole chain."""
@@ -3116,6 +3139,50 @@ class FaithfulExecutor:
                   "side": dec["side"], "price": tr["price"], "qty": tr["qty"],
                   "mode": tr["mode"], "action_key": key}
 
+        # THE QUEUE MEASUREMENT REPLACES THE INTENT ENTIRELY.
+        #
+        # THE GAP THIS CLOSES. `build_order` existed and was tested, but
+        # nothing called it: when an experiment was active this path still
+        # submitted the ordinary lambda-sized L5 decision, which is a
+        # behavioural order and not the measurement. Implementing the
+        # constructor is not the same as wiring it, and only the wiring makes
+        # the authorized experiment the thing that actually reaches the venue.
+        #
+        # IT REPLACES, NEVER ADJUSTS. Side, price, quantity and mode all come
+        # from the measurement; a refusal is terminal for this decision. There
+        # is no fallback to `tr`, because falling back would submit a trade
+        # under an authorization granted for a measurement.
+        if QM.active(market):
+            built = QM.build_order(
+                market=market,
+                bid=authenticated.get("bid"), ask=authenticated.get("ask"),
+                bid_depth=authenticated.get("bid_shares"),
+                tick=getattr(self.transport, "tick_size", None),
+                min_qty=getattr(self.transport, "quantity_increment", None),
+                qty_increment=getattr(self.transport, "quantity_increment",
+                                      None),
+                book_age_s=authenticated.get("stream_age_s"),
+                gap_suspected=bool(authenticated.get("gap_suspected")))
+            if not built.get("ok"):
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "QUEUE_MEASUREMENT",
+                    "detail": str(built.get("reason"))[:120],
+                    "labels": ("the authorized queue measurement could not "
+                               "be constructed from this book, so NOTHING is "
+                               "submitted. There is deliberately no fallback "
+                               "to lambda-based L5 sizing.")})
+                return prov.refuse("QUEUE_MEASUREMENT",
+                                   str(built.get("reason"))[:120])
+            mi = built["intent"]
+            intent = {"client_order_id": coid, "market": market,
+                      "side": mi["side"], "price": mi["price"],
+                      "qty": mi["qty"], "mode": mi["mode"],
+                      "action_key": key, "post_only": True}
+            prov.stage("QUEUE_MEASUREMENT", dict(mi, replaced_l5_intent={
+                "side": str(dec["side"]), "price": str(tr["price"]),
+                "qty": str(tr["qty"]), "mode": str(tr.get("mode") or "")}))
+
         # THE ONE-SUBMISSION CLAIM, and it is the LAST gate before the wire.
         #
         # ONLY WHEN ARMED. A disarmed or shadow-locked transport cannot reach
@@ -3222,8 +3289,53 @@ class FaithfulExecutor:
                                           "otherwise")})
             return prov.refuse("SAFETY_OVERLAY", "SUBMIT_OUTCOME_UNKNOWN")
 
-        self.store.attach_venue_id(coid, ack.get("order_id")
-                                   or ack.get("orderId") or ack.get("id"))
+        vid = (ack.get("order_id") or ack.get("orderId") or ack.get("id"))
+        self.store.attach_venue_id(coid, vid)
+        # AN ACK THAT DOES NOT NAME THE ORDER IS NOT AN ACK WE CAN ACT ON.
+        #
+        # `attach_venue_id` silently does nothing when the id is falsy, so an
+        # order could be recorded LIVE with no venue id -- and a cancel has
+        # nothing to name. `deadman` would catch it as `no_venue_id` on a
+        # later sweep, but for the measurement that is too late and too
+        # indirect: the deadline is evaluated against a named order. So the
+        # book is marked UNCERTAIN here, at the moment the ambiguity appears,
+        # which refuses every further submission until the venue answers
+        # authoritatively. Never assume the order does not exist.
+        if not str(vid or "").strip():
+            self.store.mark_uncertain(
+                "ack without a venue order id for %s" % coid)
+            prov.stage("ORDER", {
+                "client_order_id": coid, "submitted": True,
+                "venue_order_id": None, "reason": "ACK_WITHOUT_VENUE_ID",
+                "labels": ("the venue acknowledged but did not name the "
+                           "order, so it may be resting and we cannot cancel "
+                           "it by id. The book is UNCERTAIN and reconciles "
+                           "against the venue; nothing further is submitted "
+                           "and the order is NOT assumed cancelled.")})
+            return prov.refuse("SAFETY_OVERLAY", "ACK_WITHOUT_VENUE_ID")
+        if QM.active(market):
+            # DURABLE BEFORE THE DEADLINE IS USED. The ack time and the exact
+            # venue id are fsynced to the volume now, so a restart recovers
+            # the deadline instead of guessing it.
+            try:
+                QM.record_ack_for(
+                    self.store, market=market, venue_order_id=vid,
+                    t_ack=_ack_epoch(ack), price=str(intent["price"]),
+                    qty=str(intent["qty"]))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.store.mark_uncertain(
+                    "measurement ack not persisted: %s" % type(exc).__name__)
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": True,
+                    "venue_order_id": str(vid),
+                    "reason": "ACK_NOT_PERSISTED",
+                    "detail": str(exc)[:120],
+                    "labels": ("the order is live but its deadline record "
+                               "could not be persisted, so a restart could "
+                               "not time it. UNCERTAIN and reconciling.")})
+                return prov.refuse("SAFETY_OVERLAY", "ACK_NOT_PERSISTED")
         prov.stage("ORDER", {"client_order_id": coid, "submitted": True,
                              "venue_order_id": ack.get("order_id"),
                              "transport": getattr(self.transport, "name", "?")})

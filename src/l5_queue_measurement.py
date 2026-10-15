@@ -363,3 +363,39 @@ def recovery_refusal(store: "DeadlineStore") -> Optional[Dict[str, Any]]:
             "t_cancel": rec.get("t_cancel"),
             "note": ("the order must be cancelled by venue id and proved by "
                      "re-read before any further activity")}
+
+
+def store_for(inventory_store: Any) -> "DeadlineStore":
+    """The DeadlineStore beside a given inventory store, cached on it.
+
+    The inventory store already knows the durable root it was opened at, so
+    the deadline record lands on the same mounted volume without the caller
+    having to know a path.
+    """
+    st = getattr(inventory_store, "_qm_deadline_store", None)
+    if st is None:
+        root = os.path.dirname(str(getattr(inventory_store, "path", "")
+                                   or "")) or "."
+        st = DeadlineStore(os.path.join(root, "queue_measurement.json"))
+        try:
+            setattr(inventory_store, "_qm_deadline_store", st)
+        except Exception:                                      # noqa: BLE001
+            pass
+    return st
+
+
+def record_ack_for(inventory_store: Any, *, market: str, venue_order_id: str,
+                   t_ack: float, price: str, qty: str) -> Dict[str, Any]:
+    """Persist the measurement ack, deriving T_end from the market's window.
+
+    Raises rather than returning on an unusable identity or time, so the
+    caller fails closed instead of holding a deadline it cannot enforce.
+    """
+    from src import l5_pmus_auth_book as AB
+    ws = AB.slug_start(market)
+    if ws is None:
+        raise ValueError("WINDOW_UNKNOWN_FOR_MARKET")
+    return store_for(inventory_store).record_ack(
+        experiment=experiment_id(), market=market,
+        venue_order_id=venue_order_id, t_ack=t_ack,
+        t_end=float(ws) + WINDOW_S, price=price, qty=qty)

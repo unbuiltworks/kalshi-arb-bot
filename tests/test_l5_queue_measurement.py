@@ -320,3 +320,194 @@ def test_the_deadline_hook_is_called_from_the_tick():
     from src import l5_pmus_live_runner as RUN
     src = inspect.getsource(RUN.Runner.tick)
     assert "maybe_qm_deadline" in src
+
+
+# ============================ END TO END, through the real executor ========
+#
+# THE GAP THESE PIN. `build_order` existed and passed 34 tests while NOTHING
+# CALLED IT: with an experiment active, the production path still submitted
+# the ordinary lambda-sized L5 decision. Implementing a constructor is not
+# wiring it, so these drive the REAL FaithfulExecutor and assert on what
+# actually reached the transport.
+
+@pytest.fixture()
+def e2e(monkeypatch, tmp_path):
+    """A real executor, armed, with the measurement authorized."""
+    import tests.test_l5_live_execution as H
+    from src import l5_live_execution as E
+
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path / "auth.jsonl"))
+    monkeypatch.setenv(QM.EXPERIMENT_ENV, "QM-E2E-1")
+    monkeypatch.setenv(QM.MARKET_ENV, "m")        # H.row() uses market "m"
+    monkeypatch.setattr("src.l5_pmus_auth_book.slug_start", lambda s: T_START)
+    return H, E
+
+
+def _row(H, **over):
+    """An L5 row whose own bbo agrees with the authenticated book, so the
+    frozen rule evaluates and execution reaches the measurement."""
+    # side DOWN on purpose: the frozen rule evaluates it against this
+    # book, and the measurement must then override it to BUY UP.
+    kw = dict(bid="0.60", ask="0.61", l5px="0.60", side="DOWN")
+    kw.update(over)
+    return H.row(**kw)
+
+
+def _book(**over):
+    b = {"bid": "0.60", "ask": "0.61", "bid_shares": "1000",
+         "ask_shares": "1000", "stream_age_s": "0.05"}
+    b.update(over)
+    return b
+
+
+def test_the_measurement_order_is_what_reaches_the_transport(e2e, tmp_path):
+    H, E = e2e
+    t = H.FakeTransport(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    ex = E.FaithfulExecutor(H.store(tmp_path), H.limits(), transport=t,
+                            now_fn=H.NOW)
+    rec = ex.handle(_row(H), _book(),
+                    market="m", window="21:00")
+
+    assert len(t.sent) == 1, rec.get("refused_reason")
+    sent = t.sent[0]
+    # the MEASUREMENT order, not the L5 decision: side is UP even though the
+    # L5 row said DOWN, and the price is the best bid, not the L5 price.
+    assert sent["side"] == "UP"
+    assert sent["price"] == "0.60"
+    assert sent["post_only"] is True
+    assert sent["mode"] == "MAKER_JOIN_BEST_BID"
+    # fee-inclusive $1: 1.62 contracts at 0.60 is $0.972 cash, $0.999 all-in
+    qty = D(sent["qty"])
+    assert qty == D("1.62")
+    assert QM.all_in_cost(qty, D("0.60")) <= QM.ALL_IN_CAP
+    # and the record says what it replaced
+    assert rec["QUEUE_MEASUREMENT"]["replaced_l5_intent"]["side"] == "DOWN"
+
+
+def test_it_never_crosses_and_never_exceeds_the_cap_end_to_end(e2e, tmp_path):
+    H, E = e2e
+    for bid, ask in (("0.60", "0.60"), ("0.95", "0.96"), ("0.10", "0.11")):
+        t = H.FakeTransport(fill_all=False)
+        t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+        ex = E.FaithfulExecutor(H.store(tmp_path / (bid + ask)), H.limits(),
+                                transport=t, now_fn=H.NOW)
+        rec = ex.handle(_row(H, bid=bid, ask=ask, l5px=bid),
+                        _book(bid=bid, ask=ask), market="m", window="21:00")
+        # The invariant is that NOTHING reaches the venue. Which gate
+        # refuses first is not the point: on some of these books the frozen
+        # rule declines before the measurement is reached, and that is a
+        # stricter outcome, not a looser one. The specific measurement
+        # refusals are pinned by the unit tests above.
+        assert t.sent == [], (bid, ask)
+        assert rec["refused_reason"] in ("BOOK_CROSSED_OR_LOCKED",
+                                         "PRICE_OUT_OF_BAND",
+                                         "STRICT_NOT_EVALUABLE")
+
+
+def test_a_refusal_never_falls_back_to_lambda_sizing(e2e, tmp_path):
+    """The dangerous failure: a measurement that quietly becomes a trade."""
+    H, E = e2e
+    t = H.FakeTransport(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    ex = E.FaithfulExecutor(H.store(tmp_path), H.limits(), transport=t,
+                            now_fn=H.NOW)
+    rec = ex.handle(_row(H), _book(stream_age_s="9"), market="m",
+                    window="21:00")
+    assert t.sent == []
+    assert rec["refused_reason"] == "BOOK_STALE"
+    assert "no fallback" in rec["ORDER"]["labels"]
+
+
+def test_the_ack_is_persisted_durably_on_the_submission_path(e2e, tmp_path):
+    H, E = e2e
+    t = H.FakeTransport(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    st = H.store(tmp_path)
+    ex = E.FaithfulExecutor(st, H.limits(), transport=t, now_fn=H.NOW)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+
+    rec = QM.store_for(st).order()
+    assert rec is not None, "the deadline record was never written"
+    assert rec["venue_order_id"]
+    assert rec["t_cancel"] == QM.t_cancel(rec["t_ack"], T_START + 900)
+    # durable: a fresh store on the same path recovers it
+    import os as _os
+    fresh = QM.DeadlineStore(_os.path.join(
+        _os.path.dirname(st.path), "queue_measurement.json"))
+    assert fresh.order()["venue_order_id"] == rec["venue_order_id"]
+    assert QM.recovery_refusal(fresh)["reason"] == "RECOVERED_PENDING_CANCEL"
+
+
+def test_an_ack_without_a_venue_id_fails_closed_into_reconciliation(e2e,
+                                                                    tmp_path):
+    """The order may be resting and we cannot name it, so nothing further is
+    submitted and it is NEVER assumed cancelled."""
+    H, E = e2e
+
+    class _NoId(H.FakeTransport):
+        def submit(self, intent):
+            super().submit(intent)
+            return {"state": "LIVE"}              # acknowledged, unnamed
+
+    t = _NoId(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    st = H.store(tmp_path)
+    ex = E.FaithfulExecutor(st, H.limits(), transport=t, now_fn=H.NOW)
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+
+    assert len(t.sent) == 1                      # it DID reach the venue
+    assert rec["refused_reason"] == "ACK_WITHOUT_VENUE_ID"
+    assert st.orders_uncertain()                 # reconciliation, not silence
+    assert "NOT assumed cancelled" in rec["ORDER"]["labels"]
+    # and the envelope is still consumed: the order is not written off
+    assert st.live_order_count() >= 1
+
+
+def test_an_ambiguous_submit_outcome_still_marks_uncertain(e2e, tmp_path):
+    """A submit that raises after the POST may have created an order."""
+    H, E = e2e
+
+    class _Boom(H.FakeTransport):
+        def submit(self, intent):
+            super().submit(intent)
+            raise RuntimeError("timeout waiting for ack")
+
+    t = _Boom(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    st = H.store(tmp_path)
+    ex = E.FaithfulExecutor(st, H.limits(), transport=t, now_fn=H.NOW)
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert rec["refused_reason"] == "SUBMIT_OUTCOME_UNKNOWN"
+    assert st.orders_uncertain()
+
+
+def test_the_one_submission_claim_still_binds_the_measurement(e2e, tmp_path):
+    H, E = e2e
+    t = H.FakeTransport(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    ex = E.FaithfulExecutor(H.store(tmp_path), H.limits(), transport=t,
+                            now_fn=H.NOW)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert len(t.sent) == 1
+    # a second decision under the SAME authorization cannot reach the venue
+    lost = E.FaithfulExecutor(E.InventoryStore(str(tmp_path / "b.json")),
+                              H.limits(), transport=t, now_fn=H.NOW)
+    rec = lost.handle(_row(H, key="k2"), _book(), market="m", window="21:00")
+    assert rec["refused_reason"] == "AUTHORIZATION_ALREADY_USED"
+    assert len(t.sent) == 1
+
+
+def test_an_unauthorized_market_is_untouched_by_the_measurement(e2e, tmp_path,
+                                                                monkeypatch):
+    """Activation is per market: another market keeps ordinary L5 behaviour."""
+    H, E = e2e
+    monkeypatch.setenv(QM.MARKET_ENV, "some-other-market")
+    t = H.FakeTransport(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    ex = E.FaithfulExecutor(H.store(tmp_path), H.limits(), transport=t,
+                            now_fn=H.NOW)
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert "QUEUE_MEASUREMENT" not in rec
+    if t.sent:
+        assert t.sent[0].get("post_only") is None

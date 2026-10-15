@@ -251,7 +251,12 @@ def test_the_only_reachable_submission_path_goes_through_the_claim():
         for n, line in enumerate(py.read_text().splitlines(), 1):
             if re.search(r"\btransport\.submit\(", line):
                 sites.append("%s:%d" % (py.name, n))
-    assert sites == ["l5_live_execution.py:3174"], sites
+    # ONE call site, in the executor. The line number is deliberately NOT
+    # asserted: pinning it makes the test fail whenever the submit path is
+    # edited, which is noise rather than a finding. What must hold is that
+    # there is exactly one route to the venue and the claim guards it.
+    assert len(sites) == 1, sites
+    assert sites[0].startswith("l5_live_execution.py:"), sites
 
 
 def test_no_image_module_the_runner_uses_posts_an_order_directly():
