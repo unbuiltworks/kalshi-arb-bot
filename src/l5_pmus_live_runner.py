@@ -136,6 +136,45 @@ ORDER_POLL_RATE = 0.5
 #: how often ONE market's settlement may be re-read. A market that has not
 #: expired will not have expired 3 seconds later either.
 SETTLEMENT_POLL_S = 10.0
+
+def settle_error_class(exc: BaseException) -> str:
+    """Why a settlement read failed, in terms that distinguish the cases
+    that converge from the ones that do not.
+
+    NOT_FOUND and the 5xx/timeout family are transient: the market has not
+    published a resolution yet, or the venue was briefly unreachable, and the
+    next poll may answer. AUTH and FORBIDDEN are not transient and mean the
+    read will never answer until a credential is fixed. UNPARSEABLE means the
+    venue answered something we cannot read, which is the one class that must
+    never be retried silently forever. Classification changes nothing about
+    what is booked: every class leaves the window PENDING.
+    """
+    name = type(exc).__name__
+    text = str(exc)[:300]
+    code = ""
+    for tok in ("401", "403", "404", "429", "500", "502", "503", "504"):
+        if tok in text:
+            code = tok
+            break
+    if code in ("401",):
+        return "AUTH_401"
+    if code in ("403",):
+        return "FORBIDDEN_403"
+    if code in ("404",):
+        return "NOT_FOUND_404"
+    if code in ("429",):
+        return "RATE_LIMITED_429"
+    if code in ("500", "502", "503", "504"):
+        return "VENUE_5XX_%s" % code
+    low = text.lower()
+    if "timed out" in low or "timeout" in low or name.endswith("Timeout"):
+        return "TIMEOUT"
+    if "connection" in low or name.endswith("ConnectionError"):
+        return "CONNECTION"
+    if name in ("JSONDecodeError", "ValueError", "KeyError", "TypeError"):
+        return "UNPARSEABLE_%s" % name
+    return "OTHER_%s" % name
+
 #: how often a vanished order may be re-asked about. These resolve on the
 #: first or second attempt; the interval exists so a genuinely unreadable
 #: order cannot become a hot loop against a venue that is already refusing.
@@ -338,6 +377,9 @@ class Runner:
         self.two_sided: Optional[TS.TwoSidedShadow] = None
         self.last_two_sided_report_t = 0.0
         self.last_two_sided_settle_t = 0.0
+        #: consecutive settlement-read failures per slug. A counter of
+        #: ATTEMPTS says nothing about convergence; this says which slug.
+        self.two_sided_settle_attempts: Dict[str, int] = {}
         #: DURABLE and shadow-only. Scoring a parked window must not depend on
         #: the live ledger having exposure in it -- in shadow it never does --
         #: and must survive a restart without scoring anything twice.
@@ -346,7 +388,90 @@ class Runner:
 
     # ------------------------------------------------------------ window
     def halted(self) -> bool:
+        """The LOCAL env halt only. Not the effective gate -- see
+        `submission_gate`, which is what refuses a submission."""
         return bool(os.getenv("L5_LIVE_HALT", "").strip())
+
+    def submission_gate(self) -> Dict[str, Any]:
+        """Can this process put an order on the venue right now, and if not,
+        which gate says no -- in the order the decision path applies them.
+
+        READ-ONLY and never cached: a latch that was clear a minute ago is
+        not evidence. A read that fails is reported BLOCKED, matching the
+        fail-closed behaviour of the gate itself rather than contradicting
+        it.
+        """
+        out: Dict[str, Any] = {"blocked": True, "reason": "UNKNOWN",
+                               "shadow_lock": None, "halt_latch": None,
+                               "owner_arm_token": None, "armed": None}
+        try:
+            out["shadow_lock"] = shadow_only()
+            out["owner_arm_token"] = bool(Q1.armed())
+            out["armed"] = bool(self.transport and self.transport.armed)
+            hg = getattr(self.executor, "halt_gate", None)
+            if hg is None:
+                out["halt_latch"] = "NO_GATE"
+            else:
+                try:
+                    # the gate's OWN reading, so the heartbeat and the
+                    # refusal can never disagree: `refuse_reason` is the
+                    # string the submission path logs, and None is the only
+                    # permitted answer.
+                    why = hg.refuse_reason()
+                    out["halt_latch"] = "CLEAR" if why is None else "HALT"
+                    out["halt_why"] = why
+                except Exception as exc:                       # noqa: BLE001
+                    out["halt_latch"] = "UNREADABLE"
+                    out["halt_error"] = "%s: %s" % (type(exc).__name__,
+                                                    str(exc)[:80])
+            if out["shadow_lock"]:
+                out["reason"] = "SHADOW_ONLY_LOCK"
+            elif out["halt_latch"] in ("HALT", "UNREADABLE", "NO_GATE"):
+                out["reason"] = "HALT_GATE:%s:%s" % (
+                    out["halt_latch"], out.get("halt_why") or "")
+            elif not out["owner_arm_token"]:
+                out["reason"] = "NO_OWNER_ARM_TOKEN"
+            elif not out["armed"]:
+                out["reason"] = "NOT_ARMED"
+            else:
+                out["blocked"] = False
+                out["reason"] = "OPEN"
+        except Exception as exc:                               # noqa: BLE001
+            out["reason"] = "GATE_UNREADABLE:%s" % type(exc).__name__
+        out["labels"] = ("the EFFECTIVE submission gate, read fresh. blocked "
+                         "true means no order can reach the venue. An "
+                         "unreadable latch is BLOCKED, as the gate itself "
+                         "fails closed. Cancellation is NOT gated by any of "
+                         "these and stays available while blocked.")
+        return out
+
+    def effective_cash_gate(self) -> Dict[str, Any]:
+        """The cash bound actually enforced, and how it differs from the
+        per-market worst-case ceiling.
+
+        These are two different limits and were being read as one. The $5 is
+        `max_usd_per_market`, a WORST-CASE LOSS ceiling on SafetyLimits. The
+        $1 mandate is `max_cash_deployed_usd` on ValidationGates, a
+        run-scoped bound on GROSS CASH OUT with NO_RECYCLING. Reported from
+        the gate object, with None meaning the gates are not active at all --
+        which is a refusal to arm, not a default.
+        """
+        vg = getattr(self.executor, "validation_gates", None)
+        val = getattr(vg, "max_cash_deployed_usd", None)
+        return {
+            "max_cash_deployed_usd": (None if val is None else str(val)),
+            "source": ("ValidationGates object" if val is not None
+                       else "GATES NOT ACTIVE"),
+            "cash_policy": str(getattr(vg, "cash_policy", None) or ""),
+            "max_unmatched_contracts": str(getattr(
+                vg, "max_unmatched_contracts", "") or ""),
+            "max_usd_per_market": str(self.limits.max_usd_per_market),
+            "distinction": ("max_cash_deployed_usd is the run-scoped GROSS "
+                            "CASH OUT bound (the mandate). max_usd_per_market "
+                            "is a per-market WORST-CASE LOSS ceiling. They are "
+                            "different quantities and the smaller one binds; "
+                            "neither is the other's default."),
+        }
 
     def roll(self, now: float) -> None:
         ws = AB.window_start(now)
@@ -1190,8 +1315,33 @@ class Runner:
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
+                # CLASSIFIED, not merely counted. The bare counter reached 892
+                # and could not be diagnosed from telemetry at all, because
+                # the cause was discarded here: one slug failing every 10s
+                # poll and a broad outage are the same number. The class, the
+                # per-slug attempt count and a rate-limited line make
+                # convergence observable without changing what is booked --
+                # a read that fails still settles NOTHING.
                 self.stats["two_sided_settle_read_error"] += 1
+                cls = settle_error_class(exc)
+                self.stats["two_sided_settle_error:%s" % cls] += 1
+                n = self.two_sided_settle_attempts.get(slug, 0) + 1
+                self.two_sided_settle_attempts[slug] = n
+                if n in (1, 5, 25) or n % 100 == 0:
+                    emit("L5_TWO_SIDED_SETTLE_ERROR", {
+                        "slug": slug, "class": cls, "attempt": n,
+                        "error": "%s: %s" % (type(exc).__name__,
+                                             str(exc)[:160]),
+                        "labels": ("a settlement READ failed. The window stays "
+                                   "PENDING with null P&L and is never scored, "
+                                   "never flat, never realized. attempt counts "
+                                   "consecutive failures for THIS slug, so a "
+                                   "rising number is a slug that is not "
+                                   "converging rather than a busy poller.")})
                 continue
+            # the read answered, so this slug is converging: its failure
+            # streak is history and must not be reported as current.
+            self.two_sided_settle_attempts.pop(slug, None)
             if not rep.get("terminal"):
                 self.stats["two_sided_awaiting_settlement"] += 1
                 why = rep.get("not_terminal_reason")
@@ -1421,7 +1571,18 @@ class Runner:
             "utc": now_utc().isoformat(), "role": SERVICE_ROLE,
             "market": t.market_slug if t else None,
             "armed": bool(t and t.armed), "preflight": self.preflight_status,
-            "owner_arm_token": Q1.armed(), "halt": self.halted(),
+            "owner_arm_token": Q1.armed(),
+            # THE CONTRADICTION THIS REPLACES. `halt` was `self.halted()`,
+            # which reads the LOCAL env override L5_LIVE_HALT alone. The gate
+            # that actually refuses reads the DURABLE watchdog latch over
+            # HTTP -- so the heartbeat printed "halt": false through 2,939
+            # consecutive refusals on
+            # HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER. The field
+            # an operator reads now reports the EFFECTIVE submission gate,
+            # and `halt_local_env` keeps the old meaning under its own name.
+            "halt": self.submission_gate().get("blocked"),
+            "halt_local_env": self.halted(),
+            "submission_gate": self.submission_gate(),
             "auth_book": self.book.status(),
             "book_now": self.book.snapshot(t.market_slug) if t else None,
             "stats": dict(self.stats),
@@ -1472,7 +1633,15 @@ class Runner:
             "retired_markets": sorted(
                 self.store.state.get("retired_markets") or {}),
             "realized": self.store.realized_lines(),
-            "limits": self.limits.as_dict(), "lambda": str(self.lam),
+            "limits": self.limits.as_dict(),
+            # THE $1 MANDATE WAS INVISIBLE HERE. max_cash_deployed_usd lives
+            # on ValidationGates, not on SafetyLimits, so the limits block
+            # showed only the $5 worst-case ceilings and the mandate was a
+            # recollection rather than an observation. Reported from the
+            # OBJECT THAT ENFORCES IT, never from the environment, so a
+            # heartbeat cannot claim a bound the decision path is not using.
+            "effective_cash_gate": self.effective_cash_gate(),
+            "lambda": str(self.lam),
             # WHICH POLICY RAN. k is echoed from the executor that is
             # actually wired, not from the environment, so a heartbeat can
             # never claim a treatment the decision path is not applying.
