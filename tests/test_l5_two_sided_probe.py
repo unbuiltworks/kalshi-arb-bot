@@ -53,18 +53,49 @@ def test_another_market_is_untouched(armed):
 
 # -------------------------------------------- the structural refusal
 
-def test_resting_AT_the_touch_is_refused_because_it_loses_both_ways(armed):
-    """pair = 1 - spread = 0.99 on a one-tick book: 1 cent of edge against a
-    3.44-cent worst-case fee. The probe must not place it."""
+def test_resting_AT_the_touch_is_now_ACCEPTED_as_a_post_only_pair(armed):
+    """pair 0.99 is negative as a taker pair and positive as a maker one.
+    Both legs are post-only by construction, so the maker coefficient is the
+    one that applies -- and the taker figure is still reported."""
     r = TS.build_orders(**book(depth_ticks=0))
-    assert r["ok"] is False
-    assert r["reason"] == "EDGE_BELOW_FEE_FLOOR"
+    assert r["ok"] is True, r
     assert r["pair_cost"] == "0.99"
+    ff = r["fee_floor"]
+    assert D(ff["net_if_maker"]) > 0
+    assert D(ff["net_if_taker"]) < 0        # the honest worst case, reported
+    assert ff["requires_post_only"] is True
 
 
-def test_one_tick_behind_is_still_refused(armed):
-    r = TS.build_orders(**book(depth_ticks=1))
-    assert r["ok"] is False and r["reason"] == "EDGE_BELOW_FEE_FLOOR"
+def test_a_pair_at_or_above_a_dollar_is_still_refused(armed):
+    """No fee schedule makes a par pair worth placing."""
+    r = TS.build_orders(**book(bid=D("0.50"), ask=D("0.50"), depth_ticks=0))
+    assert r["ok"] is False
+    assert r["reason"] in ("BOOK_CROSSED_OR_LOCKED", "EDGE_BELOW_FEE_FLOOR")
+    r2 = TS.fee_floor(D("0.50"), D("0.50"))
+    assert r2["edge"] == 0 and r2["ok"] is False
+
+
+def test_the_floor_uses_the_ACTUAL_quote_prices_not_a_constant(armed):
+    """The fee is Theta*p*(1-p), so the requirement at the extremes is less
+    than half what it is at 50/50. A constant floor cannot express that."""
+    mid = TS.fee_floor(D("0.50"), D("0.49"))
+    ext = TS.fee_floor(D("0.88"), D("0.11"))
+    assert mid["edge"] == ext["edge"] == D("0.01")
+    assert ext["taker_fee_per_contract"] < mid["taker_fee_per_contract"] / 2
+    # both are placeable as post-only pairs; neither is as a taker pair
+    assert mid["ok"] and ext["ok"]
+    assert mid["net_if_taker"] < 0 and ext["net_if_taker"] < 0
+
+
+def test_the_floor_verdict_is_explicitly_post_only_only(armed):
+    f = TS.fee_floor(D("0.60"), D("0.39"))
+    assert f["requires_post_only"] is True
+    assert "POST-ONLY" in f["labels"]
+    # and the orders the module emits really are post-only
+    r = TS.build_orders(**book(depth_ticks=0))
+    for leg in r["legs"]:
+        assert leg["post_only"] is True
+        assert leg["mode"] == TS.MODE == FT.MAKER
 
 
 def test_two_ticks_behind_clears_the_fee_floor_and_pays_on_both(armed):

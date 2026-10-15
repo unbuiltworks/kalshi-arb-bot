@@ -188,14 +188,15 @@ def test_an_unauthorized_market_is_untouched(probe, tmp_path):
 
 def test_a_book_the_probe_refuses_submits_NOTHING_not_an_L5_order(
         probe, tmp_path, monkeypatch):
-    """At the touch the pair is 0.99, under the fee floor. The ordinary
-    lambda intent must NOT be sent in its place."""
+    """A refusal is terminal. The ordinary lambda intent must NOT be sent in
+    its place -- that would be a trade under a probe's authorization."""
     H, E = probe
-    monkeypatch.setenv("L5_TS_DEPTH_TICKS", "0")
-    ex, t = mk(H, E, tmp_path / "fresh")
+    # 40 ticks behind drives the DOWN leg below zero: out of band
+    monkeypatch.setenv("L5_TS_DEPTH_TICKS", "40")
+    ex, t = mk(H, E, tmp_path / "oob")
     r = ex.handle(_row(H), _book(), market="m", window="21:00")
     assert t.sent == []
-    assert r["refused_reason"] == "EDGE_BELOW_FEE_FLOOR"
+    assert r["refused_reason"] == "PRICE_OUT_OF_BAND"
 
 
 def test_a_stale_book_refuses_both_legs(probe, tmp_path):

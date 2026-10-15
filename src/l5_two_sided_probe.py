@@ -45,8 +45,53 @@ MAKER_THETA = D("-0.0125")
 #: both legs post-only. A crossing order is a different experiment.
 MODE = FT.MAKER
 
-#: the pair must clear the worst-case fee on both legs, with margin
-MIN_EDGE = D("0.04")
+#: the SMALLEST gross edge ever acceptable. A pair at or above $1.00 is
+#: never placed whatever the fee schedule says.
+MIN_GROSS_EDGE = D("0.01")
+#: retained for callers that still read it; the binding test is now
+#: `fee_floor()`, computed from the ACTUAL proposed quote prices.
+MIN_EDGE = MIN_GROSS_EDGE
+
+
+def fee_floor(up_px: D, dn_px: D) -> Dict[str, Any]:
+    """Is this pair profitable on both outcomes, and under which execution?
+
+    WHY THIS IS NOT A CONSTANT. The old flat 0.04 floor was the worst-case
+    TAKER fee at p ~ 0.45, which is the most expensive point on the curve:
+    the fee is Theta * p * (1-p), so at 0.12/0.88 it is less than half what
+    it is at 50/50. A single constant therefore refused configurations that
+    are comfortably profitable at the extremes, and it refused resting AT
+    THE TOUCH everywhere -- the configuration with by far the best measured
+    fill rate.
+
+    BOTH LEGS ARE POST-ONLY BY CONSTRUCTION, so the maker coefficient is the
+    one that applies: MODE is FT.MAKER, which is what l5_order_body turns
+    into participateDontInitiate, and a crossing order is a different
+    experiment. `requires_post_only` is reported so no caller can read this
+    verdict as applying to a taker fill.
+
+    THE TAKER FIGURE IS STILL COMPUTED AND REPORTED, including when it is
+    negative, because it is the honest worst case if the rebate is not
+    credited on a given order.
+    """
+    edge = D(1) - (up_px + dn_px)
+    taker_cost = (TAKER_THETA * up_px * (D(1) - up_px)
+                  + TAKER_THETA * dn_px * (D(1) - dn_px))
+    maker_credit = -(MAKER_THETA * up_px * (D(1) - up_px)
+                     + MAKER_THETA * dn_px * (D(1) - dn_px))
+    net_maker = edge + maker_credit
+    net_taker = edge - taker_cost
+    return {"edge": edge,
+            "taker_fee_per_contract": taker_cost,
+            "maker_credit_per_contract": maker_credit,
+            "net_if_maker": net_maker,
+            "net_if_taker": net_taker,
+            "ok": bool(edge >= MIN_GROSS_EDGE and net_maker > 0),
+            "requires_post_only": True,
+            "labels": ("the verdict is for POST-ONLY execution on both "
+                       "legs, which is how this probe quotes. net_if_taker "
+                       "is the worst case should the rebate not be credited "
+                       "and is reported even when negative.")}
 #: price sanity, same band the queue measurement uses
 MIN_PRICE = D("0.05")
 MAX_PRICE = D("0.95")
@@ -255,12 +300,15 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             return no("PRICE_NOT_ON_TICK", price=str(px))
 
     pair = up_px + dn_px
-    edge = D(1) - pair
-    if edge < MIN_EDGE:
-        # the structural refusal: at the touch on a one-tick book this is
-        # 0.01 against a 0.0344 worst-case fee, i.e. negative both ways.
+    floor = fee_floor(up_px, dn_px)
+    edge = floor["edge"]
+    if not floor["ok"]:
         return no("EDGE_BELOW_FEE_FLOOR", pair_cost=str(pair),
-                  edge=str(edge), required=str(MIN_EDGE))
+                  edge=str(edge),
+                  net_if_maker=str(floor["net_if_maker"]),
+                  net_if_taker=str(floor["net_if_taker"]),
+                  required="gross edge >= %s and net_if_maker > 0"
+                           % MIN_GROSS_EDGE)
 
     # size: the WORST single-leg fill must stay inside the loss ceiling, and
     # the gross cash must stay inside the envelope. The dearer leg binds.
@@ -297,8 +345,15 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     if bd is None or ad is None:
         return no("NO_DISPLAYED_DEPTH")
 
-    econ = net_settlement(up_qty=qty, dn_qty=qty,
-                          up_price=up_px, dn_price=dn_px)
+    # ACCEPTANCE IS ON THE EXECUTION THIS PROBE ACTUALLY USES. Both legs are
+    # post-only, so the maker coefficient applies here exactly as it does in
+    # fee_floor; evaluating acceptance under taker fees while the floor used
+    # maker fees would have contradicted itself, and did.
+    econ = net_settlement(up_qty=qty, dn_qty=qty, up_price=up_px,
+                          dn_price=dn_px, theta=MAKER_THETA)
+    # the worst case is still COMPUTED and reported, never hidden
+    econ_taker = net_settlement(up_qty=qty, dn_qty=qty, up_price=up_px,
+                                dn_price=dn_px, theta=TAKER_THETA)
     if not econ["both_positive"]:
         return no("NOT_POSITIVE_ON_BOTH_OUTCOMES",
                   up_pnl=str(econ["up_pnl"]), dn_pnl=str(econ["dn_pnl"]))
@@ -312,6 +367,8 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     return {"ok": True, "market": market,
             "legs": [leg("UP", up_px), leg("DOWN", dn_px)],
             "pair_cost": str(pair), "edge_per_contract": str(edge),
+            "fee_floor": {k: (str(v) if isinstance(v, D) else v)
+                          for k, v in floor.items()},
             "qty_per_leg": str(qty),
             "gross_cash_usd": str(econ["cost"]),
             "cash_gate_obligation_usd": str(qty * oblig_per_contract),
@@ -320,6 +377,9 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                            "that basis so the plan the gate sees is the "
                            "plan this built"),
             "up_pnl": str(econ["up_pnl"]), "dn_pnl": str(econ["dn_pnl"]),
+            "up_pnl_if_taker": str(econ_taker["up_pnl"]),
+            "dn_pnl_if_taker": str(econ_taker["dn_pnl"]),
+            "both_positive_if_taker": bool(econ_taker["both_positive"]),
             "worst_single_leg_loss_usd": str(
                 -(qty * dear + worst_fee(qty, dear))),
             "rebate_upside_usd": str(

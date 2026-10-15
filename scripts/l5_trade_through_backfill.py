@@ -15,6 +15,11 @@ from decimal import Decimal as D
 from src import l5_two_sided_shadow as S
 
 DECIDE_AT_S = float(os.getenv("TT_DECIDE_AT_S", "300"))
+#: "first" walks the book in TIME ORDER and places at the FIRST snapshot
+#: whose pair clears the maker-aware fee floor. "fixed" uses the snapshot at
+#: DECIDE_AT_S. Never "best": choosing the best moment in hindsight is not an
+#: executable rule and flatters every result it touches.
+PLACEMENT = os.getenv("TT_PLACEMENT", "fixed")
 QTY = D(os.getenv("TT_QTY", "5"))
 TAPES = os.getenv("TT_TAPES", "data/l5_exit_cf")
 
@@ -46,10 +51,22 @@ def main() -> int:
             continue
         t0 = window_start(slug)
         up = settle_up_from_tape(trades)
-        dec = next((r for r in book
-                    if r["t"] >= t0 + DECIDE_AT_S
-                    and r.get("status") == "OK"
-                    and r.get("bid") and r.get("ask")), None)
+        ok_rows = [r for r in book
+                   if r.get("status") == "OK" and r.get("bid")
+                   and r.get("ask") and r["t"] <= t0 + 900 - 180]
+        if PLACEMENT == "first":
+            from src import l5_two_sided_probe as TSP
+            dec = None
+            for r in ok_rows:                      # TIME ORDER, no hindsight
+                b, a = D(r["bid"]), D(r["ask"])
+                if a <= b:
+                    continue
+                if TSP.fee_floor(b, D(1) - a)["ok"]:
+                    dec = r
+                    break
+        else:
+            dec = next((r for r in ok_rows
+                        if r["t"] >= t0 + DECIDE_AT_S), None)
         for depth in S.TT_DEPTHS:
             ob = S.TradeThroughObserver(slug, depth, QTY, window_start=t0)
             if dec is None:
@@ -61,6 +78,7 @@ def main() -> int:
                 ob.consume(trades, ob.deadline() or (t0 + 900))
             reports.append(ob.report(up))
     print(json.dumps({"source": TAPES, "decide_at_s": DECIDE_AT_S,
+                      "placement": PLACEMENT,
                       "qty_per_leg": str(QTY),
                       "windows": reports,
                       "summary": S.aggregate(reports)},
