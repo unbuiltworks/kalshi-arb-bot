@@ -147,7 +147,16 @@ class CancelOnlyTransport:
         import ssl
         import urllib.request
         data = None if body is None else json.dumps(body).encode()
-        headers = A.signed_headers(method, path, body) \
+        # THE THIRD ARGUMENT IS `now_ms`, NOT A BODY. pmus_auth.signed_headers
+        # is (method, path, now_ms=None), so passing the cancel body here set
+        # the TIMESTAMP to the body: a cancel signed over "{}"+POST+path and
+        # sent with X-PM-Timestamp: "{}" -- a guaranteed 401, meaning the
+        # independent cancel would have reported an error and left the order
+        # resting. It was never caught because credential-free mode never
+        # constructs this transport, so the only POST this class can make had
+        # no test that signed it. PMUS signs ts+method+path and does NOT sign
+        # the body, so there is nothing to pass.
+        headers = A.signed_headers(method, path) \
             if (A is not None and base == A.API) \
             else {"User-Agent": "l5-watchdog"}
         req = urllib.request.Request(base + path, data=data, headers=headers,
