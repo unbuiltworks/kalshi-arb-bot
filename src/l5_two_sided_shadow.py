@@ -54,6 +54,24 @@ from src import l5_maker_fill_model as FM
 
 TICK = D("0.01")
 
+#: the two quoting policies compared in shadow. COMPLEMENT_ONLY is what the
+#: engine does today: while inventory is non-zero the adding leg is refused
+#: outright. SKEWED replaces that cliff with a bounded taper and keeps a
+#: resting leg that is still valid instead of cancelling it when the touch
+#: moves. The taper's SHAPE is taken from L5's measured fills (his adding-side
+#: clip falls and his reducing-side clip rises as inventory grows, ratio 0.971
+#: -> 0.713 over 439,727 fills); the exact coefficients are OURS and are a
+#: descriptive comparison, NOT a fitted profitability guarantee and NOT a claim
+#: that L5 uses this formula.
+COMPLEMENT_ONLY = "COMPLEMENT_ONLY"
+SKEWED = "SKEWED"
+
+#: bounds on the taper. The adding leg never vanishes and never grows; the
+#: reducing leg never more than doubles. Both are clamps, not parameters to
+#: tune, and they exist so one window cannot produce an unbounded clip.
+SKEW_ADD_FLOOR = D("0.25")
+SKEW_REDUCE_CEIL = D("2")
+
 #: frozen sensitivity scenarios. NOT fitted and never chosen by outcome.
 THRESHOLDS = (D("0.96"), D("0.97"), D("0.98"), D("0.99"))
 ENVELOPES = (D("100"), D("200"), D("300"), D("500"))
@@ -108,8 +126,12 @@ class Leg:
 class Config:
     """One (threshold, envelope) cell. Conservative band drives the ledger."""
 
-    def __init__(self, slug: str, thresh: D, envelope: D):
+    def __init__(self, slug: str, thresh: D, envelope: D,
+                 policy: str = COMPLEMENT_ONLY):
         self.slug, self.thresh, self.envelope = slug, thresh, envelope
+        self.policy = policy
+        self.retained_legs = 0
+        self.replaced_legs = 0
         self.qty = {FM.UP: D(0), FM.DOWN: D(0)}
         self.cost = {FM.UP: D(0), FM.DOWN: D(0)}
         self.qty_opt = {FM.UP: D(0), FM.DOWN: D(0)}
@@ -172,12 +194,21 @@ class Config:
                 self.rest.pop(side, None)
             elif leg.filled_cons > 0:
                 self.partial_legs += 1
-        # a quote whose touch has moved is cancelled; what filled stays
+        # A quote whose touch has moved: COMPLEMENT_ONLY cancels it, SKEWED
+        # KEEPS it. Keeping costs nothing in this model -- a resting order only
+        # fills when prints cross its own price -- and it is the behaviour the
+        # ladder evidence supports: a rung that is still valid keeps its queue
+        # position instead of re-joining the back of a new one.
         for side, leg in list(self.rest.items()):
             ref = bid if side == FM.UP else ask
-            if leg.book_px != ref:
-                self.rest.pop(side, None)
-                self.cancels += 1
+            if leg.book_px == ref:
+                continue
+            if self.policy == SKEWED:
+                self.retained_legs += 1
+                continue
+            self.rest.pop(side, None)
+            self.cancels += 1
+            self.replaced_legs += 1
         exp = self.exposure()
         if exp > self.peak_exposure:
             self.peak_exposure = exp
@@ -210,22 +241,50 @@ class Config:
         held = FM.UP if resid > 0 else FM.DOWN
         b = self.basis(held)
         cpx = dn_px if need == FM.DOWN else up_px
-        if b is None or b + cpx > self.thresh:
+        # u is how full the inventory is against one flat pair clip. It is the
+        # taper's only input and is clamped to [0, 1].
+        flat_clip = (self.envelope / (up_px + dn_px)).quantize(
+            TICK, rounding=ROUND_FLOOR)
+        u = min(D(1), abs(resid) / flat_clip) if flat_clip > 0 else D(1)
+        if b is not None and b + cpx <= self.thresh and need not in self.rest \
+                and room > 0:
+            self.eligible += 1
+            disp = ask_sh if need == FM.DOWN else bid_sh
+            want = abs(resid)
+            if self.policy == SKEWED:
+                # the reducing leg grows with inventory, bounded
+                want = (want * min(SKEW_REDUCE_CEIL, D(1) + u)).quantize(
+                    TICK, rounding=ROUND_FLOOR)
+            clip = min((room / cpx).quantize(TICK, rounding=ROUND_FLOOR), want)
+            if disp is not None:
+                clip = min(clip, disp)
+            if clip >= TICK:
+                self.complement_quotes += 1
+                self.quoted_shares += clip
+                self.rest[need] = Leg(self.slug, need, cpx,
+                                      ask if need == FM.DOWN else bid,
+                                      clip, now, bid, ask, disp)
+                room = self.envelope - self.exposure()
+        # THE CLIFF, REPLACED. COMPLEMENT_ONLY refuses the adding leg outright
+        # while inventory is non-zero. SKEWED tapers it instead, which is the
+        # shape L5's fills show, and still refuses it when the pair itself is
+        # uneconomic or the envelope is full.
+        if self.policy != SKEWED or held in self.rest or room <= 0:
             return
-        self.eligible += 1
-        if need in self.rest or room <= 0:
+        apx = up_px if need == FM.DOWN else dn_px
+        if up_px + dn_px > self.thresh:
             return
-        disp = ask_sh if need == FM.DOWN else bid_sh
-        clip = (room / cpx).quantize(TICK, rounding=ROUND_FLOOR)
-        clip = min(clip, abs(resid))
-        if disp is not None:
-            clip = min(clip, disp)
+        disp = bid_sh if held == FM.UP else ask_sh
+        base = (room / apx).quantize(TICK, rounding=ROUND_FLOOR)
+        base = (base * max(SKEW_ADD_FLOOR, D(1) - u)).quantize(
+            TICK, rounding=ROUND_FLOOR)
+        clip = base if disp is None else min(base, disp)
         if clip < TICK:
             return
-        self.complement_quotes += 1
+        self.flat_quotes += 1
         self.quoted_shares += clip
-        self.rest[need] = Leg(self.slug, need, cpx,
-                              ask if need == FM.DOWN else bid,
+        self.rest[held] = Leg(self.slug, held, apx,
+                              bid if held == FM.UP else ask,
                               clip, now, bid, ask, disp)
 
     # ----------------------------------------------------------- report
@@ -246,6 +305,9 @@ class Config:
                 resid_pnl = -resid * ((D(0) if settle_up else D(1)) - bd)
         out = {
             "threshold": str(self.thresh), "envelope": str(self.envelope),
+            "policy": self.policy,
+            "legs_retained_through_a_touch_move": self.retained_legs,
+            "legs_replaced_on_a_touch_move": self.replaced_legs,
             "eligible_ticks": self.eligible,
             "flat_quotes": self.flat_quotes,
             "complement_quotes": self.complement_quotes,
@@ -286,6 +348,10 @@ class TwoSidedShadow:
         self.configs: List[Config] = [
             Config(slug, t, e) for e in tuple(envelopes) + (LIVE_ENVELOPE,)
             for t in thresholds]
+        # the comparison arm, at the only gate the live book reaches, so the
+        # two policies are measured on the same windows and the same prints.
+        self.configs += [Config(slug, D("0.99"), e, SKEWED)
+                         for e in tuple(envelopes) + (LIVE_ENVELOPE,)]
         self.ticks = 0
         self.two_sided_ticks = 0
         self.prints_consumed = 0

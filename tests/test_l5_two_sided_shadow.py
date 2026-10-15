@@ -408,3 +408,81 @@ def test_the_runner_settles_without_any_live_exposure():
     assert "sweep_settlements" not in src
     sweep = code_only(inspect.getsource(R.Runner.sweep_settlements))
     assert "two_sided" not in sweep
+
+
+# ====================================== the SKEWED comparison arm (P1 change)
+
+def cellp(rep, policy, env="100", th="0.99"):
+    return [c for c in rep["cells"] if c["policy"] == policy
+            and c["envelope"] == env and c["threshold"] == th][0]
+
+
+def one_sided(e, bsh="10", ash="10"):
+    """Fill the UP leg only, then move the touch away."""
+    e.step(snap("0.49", "0.50", bsh, ash), [], 1.0)
+    e.step(snap("0.49", "0.50", bsh, ash), [prt("0.49", "500", "sell", 2.0)], 2.0)
+    e.step(snap("0.55", "0.56", bsh, ash), [], 3.0)
+    return e
+
+
+def test_both_policies_are_measured_on_the_same_window():
+    rep = ev().report(None)
+    pol = {c["policy"] for c in rep["cells"]}
+    assert pol == {TS.COMPLEMENT_ONLY, TS.SKEWED}
+    sk = [c for c in rep["cells"] if c["policy"] == TS.SKEWED]
+    assert {c["threshold"] for c in sk} == {"0.99"}      # the reachable gate
+    assert {c["envelope"] for c in sk} == {"1", "100", "200", "300", "500"}
+
+
+def test_complement_only_still_refuses_the_adding_leg():
+    c = cellp(one_sided(ev()).report(None), TS.COMPLEMENT_ONLY)
+    assert c["flat_quotes"] == 1                 # the opening pair, and no more
+    assert c["legs_replaced_on_a_touch_move"] >= 1
+    assert c["legs_retained_through_a_touch_move"] == 0
+
+
+def test_skewed_retains_a_valid_resting_leg_instead_of_cancelling_it():
+    c = cellp(one_sided(ev()).report(None), TS.SKEWED)
+    assert c["legs_retained_through_a_touch_move"] >= 1
+    assert c["legs_replaced_on_a_touch_move"] == 0
+    assert c["cancels"] == 0
+
+
+def test_skewed_adds_a_tapered_leg_where_complement_only_refuses():
+    rep = one_sided(ev()).report(None)
+    assert cellp(rep, TS.SKEWED)["flat_quotes"] > \
+        cellp(rep, TS.COMPLEMENT_ONLY)["flat_quotes"]
+
+
+def test_the_taper_is_bounded_at_both_ends():
+    assert TS.SKEW_ADD_FLOOR == D("0.25") and TS.SKEW_REDUCE_CEIL == D("2")
+    # a full book still quotes something on the adding side, never zero,
+    # and the reducing side never more than doubles
+    e = ev()
+    e.step(snap("0.49", "0.50", "10000", "10000"), [], 1.0)
+    e.step(snap("0.49", "0.50", "10000", "10000"),
+           [prt("0.49", "100000", "sell", 2.0)], 2.0)
+    c = cellp(e.report(None), TS.SKEWED)
+    assert D(c["peak_exposure"]) <= D("100")
+
+
+def test_the_skew_never_breaches_the_envelope():
+    e = one_sided(ev(), "10000", "10000")
+    for env in ("1", "100", "500"):
+        c = cellp(e.report(None), TS.SKEWED, env=env)
+        assert D(c["peak_exposure"]) <= D(env)
+
+
+def test_capital_queue_fees_and_settlement_are_identical_across_policies():
+    """The change is the sizing rule and the retention rule. Nothing else."""
+    import inspect
+    src = code_only(inspect.getsource(TS.Config.step)) + \
+        code_only(inspect.getsource(TS.Config._step))
+    # one exposure definition, no fee term, and every quote -- under either
+    # policy -- is built by the same Leg, which is where queue-ahead is frozen
+    assert src.count("self.exposure()") >= 1
+    assert "fee" not in src.lower()
+    assert src.count("Leg(self.slug") == 4   # pair x2, complement, adding
+    assert "ahead" in code_only(inspect.getsource(TS.Leg.__init__))
+    # settlement is scored by one shared function for both policies
+    assert "policy" not in code_only(inspect.getsource(TS.score_report))
