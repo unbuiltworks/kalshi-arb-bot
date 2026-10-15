@@ -648,3 +648,91 @@ def test_main_returns_nonzero_and_prints_a_refusal_without_env(capsys):
         for k, v in saved.items():
             if v is not None:
                 os.environ[k] = v
+
+
+# --------------------------------------------------------------------------
+# the read-only dry run (how the operator obtains the digest at all)
+# --------------------------------------------------------------------------
+def test_inspect_reports_the_digest_and_writes_nothing():
+    store = FakeStore()
+    d = latch(store)
+    out = R.inspect(store=store, transport=FakeTransport(),
+                    registry_url="http://registry.local",
+                    registry_opener=fresh_registry())
+    assert out["sha256"] == d
+    assert out["set_this_as"][R.EXPECT_ENV] == d
+    assert out["latch"]["reason"] == "UNMANAGED_RESTING_ORDER"
+    assert out["would_clear"] is True
+    assert store.puts == []
+    assert json.loads(store.obj[HG.HALT_KEY])["halt"] is True
+    # the digest it hands back is the one that actually works
+    assert run(store, FakeTransport(), out["sha256"])["ok"] is True
+
+
+def test_inspect_reports_each_failing_precondition_without_refusing():
+    store = FakeStore()
+    latch(store)
+    out = R.inspect(
+        store=store,
+        transport=FakeTransport(open_rows=[{"id": "A1", "state": "OPEN",
+                                            "leavesQuantity": "1"}]),
+        registry_url="http://registry.local",
+        registry_opener=fresh_registry(
+            [{"venue_order_id": "A1", "market": "m", "t": "x"}]))
+    assert out["would_clear"] is False
+    assert out["preconditions"]["venue"]["ok"] is False
+    assert "VENUE_STILL_HAS_OPEN_ORDERS" in \
+        out["preconditions"]["venue"]["refused"]
+    assert out["preconditions"]["registry"]["ok"] is False
+    assert store.puts == []
+
+
+def test_inspect_needs_no_confirm_phrase_and_lists_prior_resets():
+    store = FakeStore()
+    d = latch(store)
+    run(store, FakeTransport(), d)
+    latch(store, reason="AGAIN")
+    saved = {k: os.environ.get(k) for k in
+             (R.CONFIRM_ENV, R.WHO_ENV, R.ID_ENV, R.EXPECT_ENV, R.ATTEST_ENV)}
+    for k in saved:
+        os.environ.pop(k, None)
+    try:
+        out = R.inspect(store=store, transport=FakeTransport(),
+                        registry_url="http://registry.local",
+                        registry_opener=fresh_registry())
+    finally:
+        for k, v in saved.items():
+            if v is not None:
+                os.environ[k] = v
+    assert [r["reset_id"] for r in out["prior_resets"]] == ["reset-1"]
+    assert json.loads(store.obj[HG.HALT_KEY])["halt"] is True
+
+
+def test_inspect_mode_is_selected_by_its_own_variable(capsys, tmp_path):
+    """main() in inspect mode prints the digest and exits zero."""
+    st = HG.FileStore(str(tmp_path))
+    rec = {"halt": True, "t": R._utc().isoformat(), "who": "w",
+           "reason": "UNMANAGED_RESTING_ORDER", "evidence": {"o": 1}}
+    raw = json.dumps(rec, sort_keys=True).encode()
+    st.put(HG.HALT_KEY, raw)
+    saved = {k: os.environ.get(k)
+             for k in (R.INSPECT_ENV, R.STATE_ENV, R.REGISTRY_ENV)}
+    os.environ[R.INSPECT_ENV] = "YES"
+    os.environ[R.STATE_ENV] = str(tmp_path)
+    os.environ[R.REGISTRY_ENV] = ""
+    try:
+        rc = R.main([])
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "L5_HALT_RESET_INSPECT" in out
+    body = json.loads(out.split(" ", 1)[1])
+    assert body["sha256"] == hashlib.sha256(raw).hexdigest()
+    assert body["would_clear"] is False     # no registry url configured
+    # and the latch is untouched on disk
+    assert json.loads(st.get(HG.HALT_KEY))["halt"] is True

@@ -67,6 +67,11 @@ WHO_ENV = "L5_HALT_RESET_WHO"
 ID_ENV = "L5_HALT_RESET_ID"
 EXPECT_ENV = "L5_HALT_RESET_EXPECT"
 ATTEST_ENV = "L5_HALT_RESET_ATTEST"
+#: read-only dry run: print the latch, its digest and every precondition,
+#: and write NOTHING. This is how the operator obtains the digest that gate 2
+#: requires, and it is what makes "the latch you reviewed" a real review
+#: rather than a formality -- the volume is not readable from anywhere else.
+INSPECT_ENV = "L5_HALT_RESET_INSPECT"
 REGISTRY_ENV = "L5_ORDER_REGISTRY_URL"
 STATE_ENV = "L5_WATCHDOG_STATE_DIR"
 
@@ -293,6 +298,39 @@ def _append_audit(store: Any, prior: List[Dict[str, Any]],
     store.put(AUDIT_KEY, ("\n".join(lines) + "\n").encode())
 
 
+def inspect(*, store: Any, transport: Any, registry_url: str,
+            registry_opener=None) -> Dict[str, Any]:
+    """READ-ONLY. Never writes, never clears, and never raises ResetRefused
+    for a failed precondition -- it REPORTS each one so the operator sees the
+    whole picture in a single run. The only hard error is a latch that cannot
+    be read at all."""
+    raw, rec, digest = read_latch(store)
+    out: Dict[str, Any] = {
+        "latch": rec, "sha256": digest,
+        "set_this_as": {EXPECT_ENV: digest},
+        "preconditions": {},
+        "labels": ("READ-ONLY. Nothing was written. Pass the sha256 above as "
+                   "%s to clear THIS latch and no other." % EXPECT_ENV),
+    }
+    for name, fn in (("venue", lambda: venue_evidence(transport)),
+                     ("registry", lambda: registry_evidence(
+                         registry_url, opener=registry_opener))):
+        try:
+            out["preconditions"][name] = {"ok": True, "evidence": fn()}
+        except ResetRefused as exc:
+            out["preconditions"][name] = {"ok": False, "refused": str(exc)}
+    try:
+        prior = audit_entries(store)
+        out["prior_resets"] = [
+            {"t": r.get("t"), "reset_id": r.get("reset_id"),
+             "who": r.get("who"), "cleared": r.get("cleared")} for r in prior]
+    except ResetRefused as exc:
+        out["prior_resets_error"] = str(exc)
+    out["would_clear"] = all(
+        v.get("ok") for v in out["preconditions"].values())
+    return out
+
+
 def perform_reset(*, store: Any, transport: Any, registry_url: str,
                   now: Optional[dt.datetime] = None,
                   registry_opener=None) -> Dict[str, Any]:
@@ -345,6 +383,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     out: Dict[str, Any]
     try:
         transport = W.CancelOnlyTransport()
+        if _env(INSPECT_ENV).upper() == "YES":
+            out = inspect(store=store, transport=transport,
+                          registry_url=_env(REGISTRY_ENV))
+            print("L5_HALT_RESET_INSPECT " + json.dumps(out, sort_keys=True))
+            return 0
         out = perform_reset(store=store, transport=transport,
                             registry_url=_env(REGISTRY_ENV))
         print("L5_HALT_RESET " + json.dumps(out, sort_keys=True))
