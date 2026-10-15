@@ -1410,6 +1410,30 @@ class InventoryStore:
         own_side = canonical_side(side, doing="booking a fill")
         own = own_outcome_price(own_side, price, basis=basis)
         k = "%s|%s" % (own_market, own_side)
+        # Persist fill ownership at booking time; settlement cannot infer it.
+        submitted = ((self.state.get("submitted") or {}).get(coid)
+                     if coid else None)
+        owner_verified = bool(
+            isinstance(submitted, Mapping)
+            and str(submitted.get("session_id") or "").strip()
+            and str(submitted.get("market") or "") == own_market
+            and str(submitted.get("side") or "") == own_side)
+        proof = self.state.setdefault("fill_provenance", {}).setdefault(
+            own_market, {"legs": {}, "entries": []})
+        leg = proof["legs"].setdefault(
+            own_side, {"total_qty": "0", "verified_qty": "0",
+                       "verified_cost": "0"})
+        leg["total_qty"] = str(D(str(leg["total_qty"])) + qty)
+        if owner_verified:
+            leg["verified_qty"] = str(D(str(leg["verified_qty"])) + qty)
+            leg["verified_cost"] = str(
+                D(str(leg["verified_cost"])) + own * qty)
+        proof["entries"].append({
+            "coid": str(coid) if coid else None,
+            "session_id": submitted.get("session_id") if owner_verified else None,
+            "side": own_side, "qty": str(qty), "actual_cost": str(own * qty),
+            "l5_owner_verified": owner_verified})
+
         if str(side).strip().upper() != own_side:
             raw = self.state.setdefault("venue_side_raw", {})
             raw.setdefault(k, sorted(set(raw.get(k, []))
@@ -2236,6 +2260,29 @@ class InventoryStore:
         redeem = up * v + dn * (D(1) - v)
         cost = cost_up + cost_dn
         pnl = redeem - cost
+        proof = (self.state.get("fill_provenance") or {}).get(market) or {}
+        legs = proof.get("legs") or {}
+        # Separate verified GROSS L5 settlement, never an account-loss offset.
+        # Verified NET remains unavailable until fees/rebates are reconciled.
+        verified_l5 = (
+            not unknown_basis_at_settlement
+            and bool(proof.get("entries"))
+            and all(bool(x.get("l5_owner_verified"))
+                    for x in proof["entries"])
+            and D(str((legs.get("UP") or {}).get("total_qty", 0))) == up
+            and D(str((legs.get("DOWN") or {}).get("total_qty", 0))) == dn
+            and D(str((legs.get("UP") or {}).get("verified_cost", 0))) == cost_up
+            and D(str((legs.get("DOWN") or {}).get("verified_cost", 0))) == cost_dn
+        )
+        if verified_l5:
+            self.state["verified_l5_settlement_gross"] = str(
+                D(str(self.state.get("verified_l5_settlement_gross") or 0))
+                + pnl)
+            self.state.setdefault("verified_l5_settlements", []).append({
+                "market": market, "pnl_before_fees": str(pnl),
+                "fee_rebate_status": "NOT_VERIFIED",
+                "source": "VENUE_SETTLEMENT_AND_MATCHED_L5_FILL_ORDERS"})
+
 
         # matched at average cost per leg; the residual carries the rest.
         matched = min(up, dn)
@@ -2278,8 +2325,9 @@ class InventoryStore:
             "up_qty": str(up), "dn_qty": str(dn),
             "cost_total": str(cost), "redemption_total": str(redeem),
             "unverified_cost_basis_keys": unknown_basis_at_settlement,
-            "l5_owner_attribution_verified": False,
-            "pnl_provenance": ("UNKNOWN_COST_UPPER_BOUND" if
+            "l5_owner_attribution_verified": verified_l5,
+            "pnl_provenance": ("VERIFIED_L5_GROSS_SETTLEMENT" if verified_l5
+                               else "UNKNOWN_COST_UPPER_BOUND" if
                                unknown_basis_at_settlement else
                                "OWNERSHIP_NOT_ATTESTED"),
         }
