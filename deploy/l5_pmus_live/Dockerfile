@@ -54,6 +54,7 @@ COPY src/l5_live_execution.py src/l5_live_execution.py
 # bit the preflight and live-probe images. test_the_image_copies_every_module
 # _the_entrypoint_can_reach caught this before it ever ran.
 COPY src/l5_live_authorization.py src/l5_live_authorization.py
+COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py
 COPY src/l5_two_sided_shadow.py src/l5_two_sided_shadow.py
 # Disarmed-shadow validation additions. This image COPYs an explicit file

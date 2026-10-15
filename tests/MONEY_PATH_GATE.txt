@@ -21,6 +21,7 @@ tests/test_l5_stage_b_mandate.py
 tests/test_authenticated_book_submission_gate.py
 tests/test_l5_one_order_limit.py
 tests/test_l5_one_submission_claim.py
+tests/test_l5_queue_measurement.py
 tests/test_l5_concurrency_gate.py
 
 # 2. EFFECTIVE CASH LIMITS

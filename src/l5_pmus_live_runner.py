@@ -1918,6 +1918,83 @@ class Runner:
         self.transport.disarm(reason)
         return rec
 
+    def qm_store(self) -> Any:
+        """The measurement's durable ack/deadline record, beside the ledger.
+
+        Created lazily and cached, so a process that never runs a measurement
+        never touches the file.
+        """
+        st = getattr(self, "_qm_store", None)
+        if st is None:
+            from src import l5_queue_measurement as QM
+            st = QM.DeadlineStore(
+                os.path.join(self.root, "queue_measurement.json"))
+            self._qm_store = st
+        return st
+
+    def maybe_qm_deadline(self, now: float) -> Optional[Dict[str, Any]]:
+        """Cancel the measurement order at min(T_ack + 120s, T_end - 180s).
+
+        WHY THIS EXISTS. Every other cancellation route in this runner fires
+        on a WINDOW or a STATE: window_end, authorization expiry, a latched
+        halt, an unarmed orphan sweep. None of them is a per-order age
+        deadline, so the measurement's defining control -- 120 seconds of
+        bounded exposure from the venue's own acknowledgement -- was not
+        enforced by the engine at all. This is that deadline.
+
+        INERT BY DEFAULT. It returns immediately unless an experiment and its
+        market are both named, so the shadow-locked service running today
+        does not execute a line of it.
+
+        RECOVERY FIRST. After a restart the durable record is consulted
+        before anything else: an unreadable record, a missing venue id or a
+        missing ack time all HALT rather than read as "no order", because an
+        order may be live at the venue and we can neither name nor time it.
+
+        PROOF, NOT A REQUEST. The cancel goes through `deadman`, which
+        cancels by VENUE id and re-reads; `still_open`/`unverified` mark the
+        store UNCERTAIN and are retried. The record is only retired by a
+        terminal state with ZERO remaining -- an accepted cancel request is
+        never treated as a cancellation.
+        """
+        from src import l5_queue_measurement as QM
+        t = self.transport
+        if t is None or not QM.active(getattr(t, "market_slug", None)):
+            return None
+        store = self.qm_store()
+        rec = store.order()
+        bad = QM.recovery_refusal(store)
+        if bad and bad.get("halt"):
+            self.store.mark_uncertain(bad["reason"]) if hasattr(
+                self.store, "mark_uncertain") else None
+            emit("L5_QM_HALT", dict(bad, labels=(
+                "the measurement's durable ack record cannot be trusted, so "
+                "an order may be resting at the venue that we can neither "
+                "name nor time. Reconcile against the venue; never assume "
+                "it was cancelled.")))
+            if t.armed:
+                t.disarm(bad["reason"])
+            return bad
+        if not QM.due(now, rec):
+            return None
+        progress = self.poll_orders()          # a fill is booked, not cancelled
+        out = LX.deadman(self.store, t, reason="qm_deadline")
+        confirmed = False
+        for row in (progress or []):
+            if str(row.get("venue_order_id") or "") == str(
+                    rec.get("venue_order_id") or ""):
+                confirmed = store.confirm_cancel(
+                    terminal=bool(row.get("terminal")),
+                    remaining=row.get("remaining"))
+        emit("L5_QM_DEADLINE_CANCEL", dict(
+            out, venue_order_id=rec.get("venue_order_id"),
+            t_cancel=rec.get("t_cancel"), confirmed=confirmed,
+            labels=("cancelled at the per-order deadline by VENUE id. "
+                    "`confirmed` is true only for a terminal venue state "
+                    "with ZERO remaining; anything else leaves the cancel "
+                    "owed and the book UNCERTAIN.")))
+        return out
+
     def tick(self, now: float) -> None:
         self.now_t = now
         self.roll(now)
@@ -1933,6 +2010,9 @@ class Runner:
         # and, when NOT armed, withdraw anything this ledger still owns: a
         # crash leaves exactly that state and no other path covers it.
         self.maybe_cancel_orphans(now)
+        # the queue measurement's own per-order deadline. Inert unless an
+        # experiment AND its market are both named -- see maybe_qm_deadline.
+        self.maybe_qm_deadline(now)
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.
