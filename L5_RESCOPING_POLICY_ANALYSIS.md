@@ -54,7 +54,15 @@ That argues for measuring the account-wide **delta since the baseline epoch**
 rather than the lifetime total. `l5_baseline` already exists for this:
 `baseline_t 2026-10-16T02:45:12.565947+00:00`.
 
-**I checked the split before recommending it, and it does not help:**
+> **SUPERSEDED BY THE INSPECT RUN — see the correction at the end of this
+> document.** The split below is the *uncorrected* one. Once the 47-leg
+> correction is applied the post-baseline figure flips to a **profit**, and
+> the delta approach becomes the enabler rather than a dead end. I have left
+> the original reasoning in place because the correction only makes sense
+> against it.
+
+**I checked the split before recommending it, and on UNCORRECTED data it does
+not help:**
 
 | | | share |
 |---|---|---|
@@ -160,3 +168,83 @@ I would rather reach step 3 with a real number than argue for a policy now.
 Nothing implemented, nothing activated. `L5_MAX_UNRESOLVED_UNKNOWN_USD`
 unset, the three protected call sites unchanged and still reading
 `realized_today()`, HALT latched, `L5_SHADOW_ONLY` set, all limits unchanged.
+
+
+---
+
+# CORRECTION — the INSPECT run flips this conclusion
+
+I wrote above that the baseline-delta approach "buys almost nothing." **That
+was true of uncorrected data and is false once the correction is applied.** I
+had flagged the recomputation as necessary; doing it reverses the finding.
+
+The INSPECT run (deployment `9ab48e4e`, `activity_walk {pages 107, ended eof,
+complete true}`) gives the per-leg deltas, so the split is now measured rather
+than assumed. **40 of the 47 corrected legs are pre-baseline and 7 are
+post-baseline**, and the post-baseline 7 carry the bulk of the overstatement
+— they are the `$50`, `$5` and `$5.28` placeholders that were actually
+`$1.00`, `$0.40` and `$0.32`.
+
+| | before | **after the correction** |
+|---|---|---|
+| pre-baseline | −$79.01000000 | **−$30.73620000** |
+| **post-baseline (the delta)** | −$154.97540000 | **+$6.41460000** |
+| account-wide total | −$233.98540000 | −$24.32160000 |
+
+Correction deltas: $48.2738 pre-baseline + $161.39 post-baseline = $209.6638,
+reconciling exactly to the reported total.
+
+**The entire remaining loss is pre-baseline. The period a new order can
+influence is net positive.** A delta ceiling would gate on a profit, so it
+permits — on the principled ground, not an engineered one.
+
+And one property I did not expect: **both preserved-UNKNOWN legs are
+pre-baseline** (`...2026-10-15-1930z|UP` and `...2026-10-15-2100z|DOWN`). So
+**the delta carries no unknown component at all.** The figure a delta ceiling
+would read is fully established from venue fills, which is a far stronger
+basis than the backstop I was reaching for.
+
+## What this does and does not fix
+
+**Fixes:** the "historical lockout" problem. −$30.74 of pre-baseline loss
+cannot be re-caused by a new order, and gating on it is a permanent lockout
+rather than risk control. The delta is the controllable quantity and it is
+clean.
+
+**Does not fix — and this still matters:**
+
+1. **+$6.41 is not our profit.** It is *account-wide* and still unattributed:
+   `verified_l5_realized` is 0 and `manual_realized` is null. "The account has
+   not lost money since the baseline" is a much weaker claim than "the
+   strategy makes money," and only the first is supported.
+2. **It depends on applying the correction.** Unapplied, the delta is
+   −$154.98 and refuses everywhere. The correction is the enabler; the policy
+   change alone does nothing.
+3. **−$30.74 of pre-baseline loss remains, $2.04 of it still UNKNOWN.** The
+   two preserved legs keep unknown cost. The account-wide total ceiling should
+   not be deleted — the pre-baseline figure stays visible and reported.
+
+## Revised recommendation
+
+The sequence is unchanged in order but the destination is now reachable:
+
+1. **Apply the 47-leg correction.** The plan is clean: 47 of 49, 0
+   reconciliation failures, every leg reduces cost, 69 distinct venue trade
+   ids with no duplicates. This is a prerequisite, not an optimisation.
+2. **Then** add `max_account_wide_delta_loss_usd` as a ceiling on the
+   baseline delta — enforced *alongside*, never replacing, the existing
+   account-wide total ceiling, which stays configured and reported.
+3. Keep exposure ($5 total, $5 per market, manual and L5 alike), available
+   cash, and the $1 `NO_RECYCLING` run cap exactly as they are. Rescoping
+   touches none of them.
+
+**I withdraw the backstop as the safety story.** I said its bound would have
+to be set to a number chosen to clear the figure it was meant to bound, and
+that remains true. The delta ceiling is better precisely because the number it
+reads is established from fills and contains no unknown. `max_unresolved_
+unknown_usd` can still be set to bound the *pre-baseline* unknown ($2.04 after
+correction), which is a real constraint rather than a cosmetic one — but it is
+not what makes the decision legitimate.
+
+**Still not implemented.** This is the analysis; the change needs your
+approval and a security review of the delta ceiling's placement.
