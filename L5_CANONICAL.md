@@ -1383,3 +1383,125 @@ that is currently healthy.
 `cpc-btc-updown-1d-2026-10-15-2100z|DOWN` stays on the `leg_cost_basis_unknown` list. The $2.04
 redemption extinguished the exposure; it is **not** verified profit, and the booked $0.00
 settlement P&L remains a floor artifact of carrying unknown cost at $1.00/share.
+
+## 26. The persistent multilevel ladder hypothesis, tested. 2026-10-16.
+
+**Verdict: INCONCLUSIVE on behaviour, REJECTED on economics.** The hypothesis
+does not earn a change to the engine, because even where it is behaviourally
+supported it predicts no better pair economics.
+
+### Corpus and split
+
+697,339 BTC15m fills, 5,523 windows, 2026-03-19 to 2026-09-01, deduped on
+(txhash, asset, timestamp, side, price, size) so identical clips are not
+collapsed (the $345k error of section 12). Chronological split, frozen before
+scoring: **DISCOVERY** 2026-03..06 = 2,177 windows / 195,304 fills;
+**HOLDOUT** 2026-07..09 = 3,346 windows / 502,035 fills.
+
+**Honest limits.** Fill timestamps are 1-SECOND resolution. Observed = fills;
+no statement here observes a resting order. And I did not formally
+pre-register thresholds before computing discovery — the protection is that
+**no free parameter is fitted anywhere below**; every number is a descriptive
+statistic, so the holdout could not be tuned on.
+
+### Behavioural tests, discovery -> holdout
+
+| statistic | DISCOVERY | HOLDOUT | reads as |
+|---|---|---|---|
+| consecutive same-side fills at the IDENTICAL price | 34.6% | 39.8% | ladder-consistent |
+| levels with >=2 fills that are REVISITED after an excursion | 56.0% | 65.1% | ladder-consistent |
+| seconds with fills at >=2 distinct prices, one side | 12.1% | 15.3% | ladder-consistent *until direction* |
+| median distinct levels per window-side | 21 | 26 | not discriminating |
+| median price range per window-side | 0.52 | 0.57 | not discriminating |
+| median level lifetime / fills per level | 14s / 3 | 22s / 3 | — |
+| median size by level rank (0..3) | 20.0, 20.0, 18.9, 17.0 | 16.0, 15.4, 14.4, 13.8 | weakly ladder-shaped |
+
+All three ladder-consistent statistics **replicate out-of-sample**, moving in
+the same direction.
+
+### The direction test kills the strongest limb
+
+A resting ladder of buys is consumed by a seller walking DOWN the rungs, so
+burst volume lands at the CHEAP end. L5 lifting offers pays UP, so it lands
+at the DEAR end. Same print pattern, opposite signature.
+
+| | DISCOVERY (16,002 bursts) | HOLDOUT (48,617) |
+|---|---|---|
+| volume at the CHEAP end (his rungs swept) | 26.9% | 26.6% |
+| volume at the DEAR end (he paid up) | **42.8%** | **49.7%** |
+| tied | 30.3% | 23.7% |
+| median level spread within a burst | **0.010** | **0.010** |
+
+The multi-level bursts are **one tick wide** and the volume sits at the dear
+end. That is crossing two adjacent ticks, not a deep ladder being swept.
+
+### The revisit test does not discriminate
+
+Walk-every-tick (repricer) vs jump (live rung): 39.3% / 60.7% on discovery,
+46.2% / 53.8% on holdout. Median excursion away from the level is only
+**0.03-0.04** (3-4 ticks) with a 30-49s gap — fully compatible with a
+repricer that moved away and came back while some intermediate ticks simply
+did not trade. The criterion is brittle (one missing tick scores as a jump)
+and the split moves 7 points. **Inconclusive.**
+
+### M3, state-dependent inventory: NOT SUPPORTED (replicates section 14)
+
+Quote size is flat across inventory imbalance (17.5-19.6 throughout) and the
+reducing-fill rate is flat at ~49%, collapsing to 28.1% at extreme
+imbalance. He does not lean against inventory.
+
+### The economic test — this is what decides it
+
+Per-window FIFO matching, own-outcome prices, windows split into thirds by
+same-price repeat rate (the ladder-likeness proxy):
+
+| group | repeat | pair cost | our edge/pair | residual cost share |
+|---|---|---|---|---|
+| **DISCOVERY** LOW | 0.257 | 0.9758 | +0.00996 | 0.067 |
+| MID | 0.338 | 0.9766 | +0.00923 | 0.063 |
+| HIGH | 0.434 | 0.9758 | +0.01005 | 0.068 |
+| **HOLDOUT** LOW | 0.318 | 0.9918 | **-0.00626** | 0.046 |
+| MID | 0.395 | 0.9884 | **-0.00281** | 0.041 |
+| HIGH | 0.479 | 0.9894 | **-0.00375** | 0.045 |
+
+**Pair cost is flat across ladder-likeness, in both splits, and HIGH is never
+best.** Differences of 0.0008 are noise against a 0.01 tick. Ladder-like
+behaviour does not buy better economics.
+
+What dominates instead is the **era**: pair cost 0.9761 (discovery, our edge
+**+$0.0097**) versus 0.9898 (holdout, our edge **-$0.0042**). In the later
+era, at L5 own achieved pair cost and on our measured 1.454% fee drag, the
+edge is **negative before any residual loss** — section 14 on fresh,
+out-of-sample data.
+
+### Falsification criteria, and what actually happened
+
+| limb | would be REJECTED if | result |
+|---|---|---|
+| bursts are swept rungs | burst volume favours the dear end, or spread ~1 tick | **REJECTED on both** |
+| revisits are live rungs | walk-rate near 50% or unstable across the split | **INCONCLUSIVE** (60.7 -> 53.8) |
+| a ladder earns better pair cost | pair cost flat or worse as repeat rate rises | **REJECTED** |
+| state-dependent inventory | size and reducing-rate flat across imbalance | **REJECTED** |
+| same-price repeats are a ladder | fails to replicate out-of-sample | survived (34.6 -> 39.8) |
+
+### The single most economically important difference
+
+**It is not quote structure.** Our engine quoting one tick behind each touch
+produces a pair cost of **0.97** — materially BETTER than L5 achieved in the
+era we would be copying (0.9898). We are not losing on price.
+
+The difference is **fill frequency at that price**: L5 takes ~90 fills per
+window across both sides; our PMUS maker fills to date number **zero**. His
+economics come from turnover at near-parity plus incentives, not from a
+better pair. Copying his quote structure cannot transfer that, and copying
+his pair cost loses money on our fee schedule.
+
+### Recommendation: NO ladder experiment
+
+Evidence does not support one. A multilevel ladder would multiply resting
+orders in pursuit of a pair cost we already beat, against a per-leg fill
+probability still measured at zero and a break-even bar of 81.9%
+(section 14). The bounded shadow-only experiment the evidence does support is
+unchanged and already deployed: keep accumulating settlement-adjusted window
+records until per-leg fill probability  is measured. Nothing about the
+ladder question changes that ordering.
