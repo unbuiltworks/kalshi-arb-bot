@@ -174,10 +174,22 @@ authorized, and L5 itself only earned $73–$116/day on $6.4M of turnover.
 
 ## 5. The economic test: maker-only matched pairs, zero rebate
 
-Requested constraints applied: **no rebate is assumed** (this account has
-never been credited one — `rebates_ever_credited: false`), residual settlement
+Requested constraints applied: **no rebate is assumed**, residual settlement
 losses are the **actual** ones, and nothing here treats a scaled L5 trade as
 an executable PMUS order (see the two caveats below).
+
+> **Correction.** I wrote earlier that this account "has never been credited"
+> a rebate, citing `rebates_ever_credited: false`. **That reading was wrong**,
+> and for the same reason an earlier one was: before the structured-money
+> extraction landed, all 1,911 commissions were *unreadable*, so the flag was
+> false for want of a parser, not for want of rebates. With the extraction
+> live the production audit reports **`rebates_ever_credited: true`** — 831
+> credited-rebate rows, 975 zero, 105 charges, 0 unreadable, netting a
+> **−$5.88 credit**. The account has received maker rebates.
+>
+> Everything below still assumes **zero** rebate. That is now a deliberate
+> conservative floor rather than a statement of fact, and it means the
+> maker-only case is understated, not overstated.
 
 ### 5a. The residual ratio is the whole lever
 
