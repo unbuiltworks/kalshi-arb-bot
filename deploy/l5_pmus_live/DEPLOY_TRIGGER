@@ -252,3 +252,31 @@ depth recording + tape path fix, shadow-locked 2026-10-16T12:35Z
 # rate and no verdict. Read-only. SHADOW_ONLY set, crossing unset, depth
 # still 1, no limit changed. Money-path gate 1284 passed.
 recorded-depth-only attribution, shadow-locked 2026-10-16T12:45Z
+
+# Resolve the accounting discrepancy and separate the four realized
+# populations. Prepares the bounded live maker run; AUTHORIZES NOTHING.
+#
+# THE DISCREPANCY, diagnosed from the production audit rather than guessed.
+# The cost-basis audit could not establish a single basis for two reasons it
+# reported itself: activity_walk {pages 40, ended max_pages, complete false}
+# -- the bound was set below the history it had to cover -- and
+# our_client_order_ids 0, which is unrecoverable and stays UNKNOWN. It also
+# reported placeholder_cost_total_usd "0" while 33 legs carried non-zero
+# placeholders, because the total was summed only over established legs.
+# Pagination is now bounded at 600 (L5_COST_BASIS_MAX_PAGES) with `complete`
+# still reported honestly, and the placeholder total is always reported,
+# separately from the established subset the overstatement is computed over.
+#
+# FOUR BUCKETS, published in the heartbeat: account_wide = verified_l5 +
+# manual + unknown_unattributed, unknown absorbing everything unattributable
+# so no bucket is guessed. manual is a RESIDUAL and reads None while anything
+# is unattributable. gate_input(bucket) returns None, never zero, for an
+# unknown.
+#
+# NO POLICY CHANGE. The three protected call sites still read
+# realized_today(); a test asserts it. SHADOW_ONLY stays set,
+# L5_TS_COMPLETION_CROSS stays unset, L5_TS_DEPTH_TICKS stays 1,
+# L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD are UNCHANGED at 1 and 1.
+#
+# Money-path gate 1302 passed.
+four-bucket accounting + audit pagination fix, shadow-locked 2026-10-16T13:10Z

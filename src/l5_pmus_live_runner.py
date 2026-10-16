@@ -1794,6 +1794,11 @@ class Runner:
             "retired_markets": sorted(
                 self.store.state.get("retired_markets") or {}),
             "realized": self.store.realized_lines(),
+            # THE FOUR POPULATIONS, APART. account-wide, verified L5, manual
+            # and unknown, with the identity stated and never a guessed
+            # bucket. Reported so the -218.99 cannot be read as verified L5
+            # or as the owner's measured manual losses.
+            "accounting": self.store.four_bucket_accounting(),
             "l5_baseline": self.store.l5_baseline_lines(),
             # ACCOUNT-WIDE EXPOSURE, reported independently of the decision
             # path. The aggregation itself runs inside the gate, which the

@@ -37,11 +37,22 @@ and is what drew HTTP 429 at 93 markets x 25 pages.
 """
 from __future__ import annotations
 
+import os
+
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 ACTIVITIES_PATH = "/v1/portfolio/activities"
-MAX_PAGES = 40
+#: PAGES OF THE ACTIVITY FEED THE WALK MAY READ.
+#:
+#: WHY IT IS NOT 40 ANY MORE. At 40 the production walk read 800 rows and
+#: ended `max_pages` with complete False, so EVERY one of the 33 unknown-basis
+#: legs reported ACTIVITY_WALK_INCOMPLETE and not one cost basis could be
+#: established. The bound existed to keep a read-only audit from spending the
+#: venue budget without limit, which is still right -- it was simply set below
+#: the size of the history it had to cover. It stays a bound, and `complete`
+#: still reports honestly when it binds.
+MAX_PAGES = int(str(os.getenv("L5_COST_BASIS_MAX_PAGES", "600")).strip() or 600)
 
 #: rows that represent an executed trade. A local accounting correction or a
 #: settlement event is NOT a fill and must never contribute a cost basis.
@@ -264,6 +275,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
     legs: List[Dict[str, Any]] = []
     placeholder_total, actual_total = D(0), D(0)
     establishable = 0
+    established_placeholder_total = D(0)
     for key in keys:
         market, _, side = key.rpartition("|")
         held, qty_source = _leg_quantity(store, market, side, key)
@@ -292,9 +304,17 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
                "owner_manual_fills": cls["owner_manual"],
                "unknown_owner_fills": cls["unknown_owner"],
                "basis": basis, "fills": cls["fills"][:12]}
+        # THE PLACEHOLDER IS ALWAYS KNOWN: it is OUR OWN ledger figure, $1 a
+        # share, and it needs no venue evidence. Summing it only for legs
+        # whose basis could be established reported
+        # placeholder_cost_total_usd "0" in production while 33 legs plainly
+        # carried non-zero placeholders -- the one number that says how much
+        # of the account-wide realized total rests on an upper bound rather
+        # than a measurement, reported as nothing.
+        placeholder_total += placeholder
         if basis.get("established"):
             establishable += 1
-            placeholder_total += placeholder
+            established_placeholder_total += placeholder
             actual_total += D(basis["actual_cost_usd"])
         legs.append(row)
     return {
@@ -305,9 +325,19 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         "unknown_basis_legs": len(keys),
         "establishable": establishable,
         "unestablished": len(keys) - establishable,
+        # ALL placeholders, evidence or not: how much of the account-wide
+        # realized total is an upper bound rather than a measurement.
         "placeholder_cost_total_usd": str(placeholder_total),
+        # and the subset the overstatement is actually computed over, so the
+        # two are never confused
+        "established_placeholder_cost_usd": str(established_placeholder_total),
         "actual_cost_total_usd": str(actual_total),
-        "overstatement_usd": str(placeholder_total - actual_total),
+        "overstatement_usd": str(established_placeholder_total - actual_total),
+        "overstatement_basis": ("established legs ONLY. It is NOT the "
+                                "difference against placeholder_cost_total_usd, "
+                                "because the unestablished legs have no "
+                                "measured cost to subtract -- their cost "
+                                "stays UNKNOWN and is never treated as zero."),
         "legs": legs,
         "labels": ("READ-ONLY evidence. overstatement_usd is how much the "
                    "$1/share placeholders exceed the measured cost on the "

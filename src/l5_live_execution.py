@@ -1543,6 +1543,134 @@ class InventoryStore:
                        "their L5 share is UNKNOWN."),
         }
 
+    #: the four populations realized P&L is reported in. Named so a caller
+    #: cannot silently conflate two of them.
+    ACCOUNTING_BUCKETS = ("account_wide", "verified_l5", "manual",
+                          "unknown_unattributed")
+
+    def four_bucket_accounting(self) -> Dict[str, Any]:
+        """Account-wide, verified L5, manual and unknown -- kept APART.
+
+        THE IDENTITY THIS MAINTAINS:
+
+            account_wide = verified_l5 + manual + unknown_unattributed
+
+        and `unknown_unattributed` is what absorbs everything we cannot
+        attribute, so the identity holds without any bucket being guessed.
+
+        WHY `manual` IS USUALLY None, AND MUST BE. Manual P&L is not
+        separately recorded anywhere -- this account is SHARED and the venue
+        does not tell us who placed a historical fill. The only way to get it
+        is as a residual, account_wide minus verified_l5 minus unknown, and
+        that residual is meaningful ONLY when nothing is unknown. While
+        anything is unattributable the manual share of it is unknown too, so
+        this returns None with a reason rather than a number that looks
+        measured. A residual reported as a measurement is how a $1/share
+        upper bound becomes "the owner's trading losses".
+
+        FAIL CLOSED. `verified_l5` is None without a baseline or on any
+        unreadable settlement row, and None NEVER reads as zero. A caller
+        that needs a figure must refuse on None; `gate_input()` below is the
+        only sanctioned way to feed one to a limit.
+        """
+        account = None
+        try:
+            account = self.realized_today()
+        except BaseException:                                  # noqa: BLE001
+            account = None
+        l5 = self.l5_realized_since_baseline()
+        lines = self.l5_baseline_lines()
+
+        # UNKNOWN: every post-T settlement we could not attest, plus the
+        # whole pre-T total, whose L5 share is unknown by construction, plus
+        # any leg still priced at the $1/share upper bound.
+        unattested, unknown_total, unreadable = [], D(0), False
+        for row in (lines.get("post_baseline_settlements_NOT_attested") or []):
+            unattested.append(dict(row))
+            try:
+                unknown_total += D(str(row.get("pnl") or 0))
+            except (InvalidOperation, TypeError, ValueError):
+                unreadable = True
+        pre = lines.get("pre_baseline_realized_total")
+        pre_dec = None
+        if pre is not None:
+            try:
+                pre_dec = D(str(pre))
+                unknown_total += pre_dec
+            except (InvalidOperation, TypeError, ValueError):
+                unreadable = True
+
+        placeholder_keys = sorted(self.state.get("leg_cost_basis_unknown")
+                                  or [])
+        manual, manual_reason = None, None
+        if unreadable:
+            manual_reason = "UNKNOWN_ROW_UNREADABLE"
+        elif account is None:
+            manual_reason = "ACCOUNT_WIDE_UNREADABLE"
+        elif l5 is None:
+            manual_reason = "NO_VERIFIED_L5_FIGURE"
+        elif unknown_total != 0 or placeholder_keys:
+            manual_reason = ("UNATTRIBUTED_RESIDUAL_NONZERO: manual is a "
+                             "residual and is only meaningful once nothing "
+                             "is unattributable")
+        else:
+            manual = account - l5
+        return {
+            "account_wide_realized": None if account is None else str(account),
+            "verified_l5_realized": None if l5 is None else str(l5),
+            "manual_realized": None if manual is None else str(manual),
+            "manual_unavailable_reason": manual_reason,
+            "unknown_unattributed_realized": (
+                None if unreadable else str(unknown_total)),
+            "unknown_detail": {
+                "post_baseline_settlements_not_attested": unattested,
+                "pre_baseline_total_l5_share_unknown": (
+                    None if pre_dec is None else str(pre_dec)),
+                "legs_priced_at_one_dollar_upper_bound": placeholder_keys,
+                "count": len(placeholder_keys),
+            },
+            "identity": ("account_wide = verified_l5 + manual + "
+                         "unknown_unattributed"),
+            "identity_holds": bool(
+                account is not None and l5 is not None and manual is not None
+                and not unreadable and account == l5 + manual + unknown_total),
+            "labels": ("four populations, never collapsed. A None is UNKNOWN "
+                       "and never zero. manual is a RESIDUAL, reported only "
+                       "when nothing is unattributable, because this account "
+                       "is SHARED and the venue does not say who placed a "
+                       "historical fill. A $1/share upper bound is an "
+                       "estimate, not a verified realized loss."),
+        }
+
+    def gate_input(self, bucket: str) -> Optional[D]:
+        """The ONE sanctioned way to feed a realized figure to a limit.
+
+        Returns None -- never zero -- when the named bucket is unknown, and
+        the caller must refuse on None. It exists so that which population a
+        loss ceiling measures is an explicit, named, testable choice at the
+        call site instead of whatever `realized_today()` happens to hold.
+
+        It CHANGES NO POLICY on its own: the account-wide gates still read
+        "account_wide" until the protected rescoping in
+        L5_LOSS_GATE_RESCOPING_REVIEW.md is applied by a human with write
+        access. This is the mechanism that change needs, landed separately
+        from the change itself.
+        """
+        if bucket not in self.ACCOUNTING_BUCKETS:
+            return None
+        acc = self.four_bucket_accounting()
+        raw = acc.get({"account_wide": "account_wide_realized",
+                       "verified_l5": "verified_l5_realized",
+                       "manual": "manual_realized",
+                       "unknown_unattributed":
+                           "unknown_unattributed_realized"}[bucket])
+        if raw is None:
+            return None
+        try:
+            return D(str(raw))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
     def realized_lines(self) -> Dict[str, str]:
         """Every line apart, for reporting. Never collapsed by this method."""
         return {

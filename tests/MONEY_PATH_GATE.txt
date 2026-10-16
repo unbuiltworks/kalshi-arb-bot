@@ -131,3 +131,14 @@ tests/test_l5_pmus_live_wiring.py
     substitute; below the sample thresholds no rate and no verdict is
     reported, and a missing commission withholds the realized edge rather
     than reading as zero.
+
+16. FOUR-BUCKET REALIZED ACCOUNTING (account-wide / verified L5 / manual /
+    unknown, never collapsed)
+    tests/test_l5_four_bucket_accounting.py
+    account_wide = verified_l5 + manual + unknown_unattributed, with unknown
+    absorbing everything unattributable so no bucket is guessed. manual is a
+    RESIDUAL and is None while anything is unattributable, because this
+    account is SHARED and the venue does not say who placed a historical
+    fill. gate_input(bucket) is the only sanctioned way to feed a limit and
+    returns None -- never zero -- for an unknown. It changes NO policy: a
+    test asserts the three protected call sites still read realized_today.
