@@ -1058,3 +1058,85 @@ Our engine rests **two intents at one price each**. That is the same gap
 seen from the other side.
 
 Nothing was changed: no parameter, limit, HALT, SHADOW_ONLY, or order.
+
+---
+
+## 21. 2030z four-outcome settlement analysis. Corrections applied.
+
+### Corrections to §19 and §20, accepted
+* **"L5 quotes AT the touch" (§20) is WITHDRAWN.** Unverified. His fills are
+  consistent with quoting at the touch, with a resting ladder, or with
+  crossing; the public data separates none of them.
+* **"143 re-queues" (§19) was a MECHANICAL reprice-on-every-tick policy**,
+  not a cancellation count and not a policy anyone proposed. A touch change
+  is not a necessary cancellation. The useful comparison is hold vs
+  SELECTIVE repricing vs continuous inventory-aware quoting; the mechanical
+  version is the strawman upper bound on re-queue cost, nothing more.
+* A trade through our price is treated as a fill inference **only** with
+  activity, eligibility and sequencing established, below.
+
+### Fill inference, established rather than assumed
+```
+join t0        touch 0.6500 / 0.6600  ->  our BID 0.6400, our ASK 0.6700
+post-only      ask 0.6600 > our bid 0.6400   OK
+               bid 0.6500 < our ask 0.6700   OK
+cash if both   0.6400 + 0.3300 = 0.9700  <= max_cash_deployed_usd 1   OK
+sequencing     first print THROUGH our ASK at t0 + 7.5s  (px 0.6800)
+               first print THROUGH our BID at t0 + 63.7s (px 0.6300)
+later extremes ask fell to 0.5700 (below our bid); bid rose to 0.8300
+```
+Both legs are reached by the market **moving through them, after the join**,
+with the order active and eligible throughout. Still MODELLED, never an
+execution: nothing was placed.
+
+### Settlement — positive evidence, with its limit named
+`gateway_state: MARKET_STATE_EXPIRED`; the AUTHENTICATED socket book
+converged to **0.9900 / 0.9900**. **UP is INDICATED, not confirmed**: an
+expired BOOK price is not a settlement record, and that is precisely the
+class of evidence behind the Stage A 2230z defect. Reported as such.
+
+### The four outcomes
+| outcome | realised in the model | P&L per contract |
+|---|---|---|
+| **BOTH** | **YES** | pair 0.6400 + 0.3300 = **0.9700** → **+$0.0300**, and it is **independent of settlement** |
+| UP_ONLY | no | long UP @ 0.64 → +$0.36 if UP wins, −$0.64 if not |
+| DOWN_ONLY | no | long DOWN @ 0.33 → −$0.33 if UP wins, +$0.67 if not |
+| NEITHER | no | $0.0000 |
+
+Because both legs filled, the realised modelled outcome is a matched pair
+and **the settlement question does not affect it** — which is why the
+INDICATED/confirmed distinction above does not contaminate the result.
+
+### Adverse selection, measured on the actual path
+The DOWN leg filled first, at **+7.5s**, because price rose through 0.67 —
+and it kept going to 0.83, with UP indicated the winner. **That leg alone
+was −$0.33.** The UP leg filled at +63.7s on the way down through 0.64.
+
+So adverse selection was real and arrived first; **pair completion is what
+neutralised it.** The sequence was: adversely-selected one-sided state for
+**56 seconds**, then completion into a clean +$0.0300 pair.
+
+### Which is the higher-impact bottleneck?
+On this window, measured:
+
+| | cost in 2030z |
+|---|---|
+| adverse selection at our quote levels | **−$0.33** exposure carried for 56s, neutralised only because the second leg filled |
+| inventory-blind maker decisions | **$0.00** — both legs filled, so the inventory-aware variant is byte-identical to the baseline |
+
+**Adverse selection is the larger live exposure; inventory-blindness is the
+lever we control.** They are the same mechanism from two sides: adverse
+selection creates the one-sided state, and inventory-blind quoting is what
+fails to price the completing leg against what the first leg actually cost.
+During those 56 seconds, holding DOWN at 0.33, the fee-correct breakeven
+allowed paying up to **0.9857 − 0.33 = 0.6557** for UP — while the blind
+rule quoted 0.6400, about 1.5 ticks less aggressive, on the leg that
+completes a profitable pair.
+
+**I cannot rank them from one window, and I am not claiming to.** The
+ranking turns on the FREQUENCY of one-sided outcomes, which is unmeasured.
+That is the evidence required, and it is the same evidence the inventory-
+aware proposal needs: windows that actually produce UP_ONLY / DOWN_ONLY.
+
+Nothing changed: no trading-path code, parameter, limit, HALT, or
+SHADOW_ONLY.
