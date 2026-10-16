@@ -1505,3 +1505,117 @@ probability still measured at zero and a break-even bar of 81.9%
 unchanged and already deployed: keep accumulating settlement-adjusted window
 records until per-leg fill probability `p` is measured. Nothing about the
 ladder question changes that ordering.
+
+## 27. PMUS executable profitability. 2026-10-16. Verdict: NOT VIABLE at current parameters.
+
+### Item 5 first: the 81.9% threshold is REPRODUCIBLE BUT ITS INPUT IS MISLABELLED
+
+`EV = p^2*e - 2p(1-p)*alpha` per PAIR of matched inventory. With the stated
+`e=0.05998`, `alpha=0.1361` it gives `p* = 0.8194` exactly, so the arithmetic
+is sound. The defect is the edge:
+
+- `e=0.05998` was attributed to "pair cost <= 0.96".
+- But `1 - 0.96 x 1.01454 = +0.02604`, not 0.05998.
+- Solving back, `e=0.05998` implies a pair cost of **0.9265**, not 0.96.
+
+**Corrected thresholds, same alpha:**
+
+| pair cost | what it is | p* |
+|---|---|---|
+| 0.9265 | what e=0.05998 actually implies | 0.8196 |
+| 0.96 | what section 14 claimed | **0.9127** |
+| **0.97** | **what our engine actually quotes** | **0.9448** |
+
+And `alpha=0.1361` is L5's 35.77% residual loss rate x his 0.3806 mean
+residual price. Our one settled residual (2200z) lost **100%** of its cost.
+At `alpha` = 0.50 on our quoted pair, `p* = 0.9844`.
+
+**So the real bar is 94.5-98.4%, not 81.9%.** Section 14's figure is
+superseded.
+
+### Item 1: fill probability at our quoted prices
+
+**Actual observed live fills: zero observations from zero orders submitted.**
+HALT is latched and SHADOW_ONLY set, so no order has ever rested at the
+venue. The observed fill rate is **UNDEFINED, not zero**, and nothing below
+treats it as zero.
+
+Six windows with ladder coverage from the open (2030z, 2045z, 2100z, 2215z,
+2315z, 2330z), 12 legs:
+
+| measure | result |
+|---|---|
+| legs whose price was TOUCHED by executed volume | 12/12 = 100% |
+| queue-cleared MODELLED fill, displayed depth x1 | 12/12 = 100% |
+| same, x1.5 / x2 / x3 (hidden depth, replenishment) | 12/12 = 100% at every multiple |
+
+Whole-window executed volume exceeds the displayed queue by 10x to 1000x, so
+the modelled fill is **robust to tripling the assumed queue ahead**. Fill
+probability at our prices is NOT the binding constraint.
+
+### Items 2-3: joint outcomes and settlement-adjusted expectancy
+
+Six consecutive automatic windows from the deployed evaluator:
+
+| | |
+|---|---|
+| BOTH / ONE_SIDED / NEITHER | 5 (83.3%) / 1 (16.7%) / 0 |
+| per-leg modelled fill rate (legs filled / quoted) | 11/12 = **91.7%** |
+| P(complete opposite leg given the first filled) | 5/6 = **83.3%** |
+| matched-window mean | **+$0.04378** |
+| one-sided window | **-$0.71240** (16.3x a matched window) |
+| **HOLD net per window** | **-$0.08225** |
+| **BLIND net per window** | **-$0.07022** |
+
+### Item 4: what would be required, and the scale for $480/day
+
+Break-even one-sided frequency is **5.79%**; observed **16.7%**. Equivalently
+the required completion rate is **>= 94.21%** against **83.3%** observed.
+Note 91.7% modelled per-leg fill is already BELOW the corrected 94.5% bar.
+
+$480/day, taking the matched-window mean and **counterfactually deleting the
+one-sided tail entirely** (not a forecast):
+
+| concurrent markets | windows/day | $/day |
+|---|---|---|
+| 1 | 96 | +$4.20 |
+| 4 | 384 | +$16.81 |
+| 16 | 1,536 | +$67.25 |
+| 64 | 6,144 | +$268.98 |
+| **114** | **10,964** | **$480** |
+
+Against a one-market-at-a-time discipline. Size rather than concurrency could
+reach it — ~100x size on one market — but size scales the tail identically: a
+one-sided window would cost ~$71 instead of $0.71. **At the measured
+EV/window of -$0.082, every form of scale multiplies a loss.**
+
+### Item 6: the 2200z record
+
+Still unreadable. No authorized route exists: the token is unset (404), the
+service has no domain, this session is not on Railway private networking, and
+the MCP surface has no exec tool. `railway ssh` from an operator machine
+remains the one documented route. Analysis was not blocked on it.
+
+### Uncertainty
+
+n=6 windows, **n=1 one-sided**, one evening, one market. `alpha` rests on a
+single settled residual. The tail frequency has an enormous confidence
+interval. What does NOT depend on sample size is the scale arithmetic: at
++$0.044 per matched window, even a perfect engine needs ~114 concurrent
+markets or ~100x size for $480/day.
+
+### VERDICT: NOT VIABLE at current parameters
+
+Not "insufficient evidence", because two results are already decisive and
+robust: the corrected break-even (94.5-98.4%) exceeds the modelled per-leg
+fill rate (91.7%) that the queue model generously grants, and the per-window
+economics are negative with the tail included. The blocking parameter is
+**residual severity and completion rate, not fill probability**.
+
+### Single next action
+
+Nothing new to build or deploy. The deployed evaluator and settlement
+reconciler already produce exactly the missing measurement: settlement-
+resolved one-sided windows. Let them run until `alpha` has n > 1 and the
+one-sided frequency has a usable interval. Until then no parameter change,
+size increase or live probe is justified by evidence.
