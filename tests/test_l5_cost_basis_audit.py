@@ -926,7 +926,10 @@ class _RecordingStore:
 def _manifest_for(payload=None):
     """The manifest the INSPECT run would have produced for _audit_payload."""
     return {"legs": 1, "keys": ["m1|UP"], "trade_ids": ["T1"],
-            "realized_delta_usd": "2.31"}
+            "realized_delta_usd": "2.31",
+            "per_leg": {"m1|UP": {"cost_before_usd": "2.90",
+                                  "cost_after_usd": "0.59000000",
+                                  "trade_ids": ["T1"]}}}
 
 
 def _audit_payload():
@@ -1040,7 +1043,10 @@ def _plan(keys=("m1|UP",), ids=("T1",), before="2.90", after="0.59"):
 
 def _man(**kw):
     m = {"legs": 1, "keys": ["m1|UP"], "trade_ids": ["T1"],
-         "realized_delta_usd": "2.31"}
+         "realized_delta_usd": "2.31",
+         "per_leg": {"m1|UP": {"cost_before_usd": "2.90",
+                               "cost_after_usd": "0.59",
+                               "trade_ids": ["T1"]}}}
     m.update(kw)
     return m
 
@@ -1155,3 +1161,106 @@ def test_the_shipped_manifest_is_inside_the_image_copy_set():
     assert m["legs"] == len(m["keys"])
     assert len(m["trade_ids"]) == len(set(m["trade_ids"])), "ids must be distinct"
     assert A._d(m["realized_delta_usd"]) is not None
+
+
+def test_a_second_run_of_the_same_batch_cannot_write_again():
+    """OWNER: "Never apply the same batch twice." TWO independent mechanisms,
+    and either alone is sufficient:
+
+    1. the batch manifest no longer matches, because the corrected legs are
+       no longer unknown-basis and drop out of the audit's leg list;
+    2. per leg, the correction_id is already spent.
+    """
+    st = _RecordingStore()
+    first = A.apply_cost_basis_corrections(
+        st, _audit_payload(), batch_id="b1", manifest=_manifest_for())
+    assert first["mode"] == "APPLIED" and first["applied"] == 1
+
+    # (1) second boot: the corrected leg is established, so the audit no
+    # longer lists it as unknown-basis and the batch shrinks.
+    second = A.apply_cost_basis_corrections(
+        st, {"activity_walk": {"complete": True}, "legs": []},
+        batch_id="b1", manifest=_manifest_for())
+    assert second["mode"] == "ABORTED"
+    assert second["reason"] == "BATCH_MISMATCH"
+    assert len(st.calls) == 1, "no second write"
+
+    # (2) and even if the same leg were somehow offered again, the verb's own
+    # idempotency refuses it on the spent correction_id.
+    spent = _RecordingStore(corrected=False,
+                            reason="COST_CORRECTION_ALREADY_APPLIED")
+    out = A.apply_cost_basis_corrections(
+        spent, _audit_payload(), batch_id="b1", manifest=_manifest_for())
+    assert out["refused"] == 1
+    assert out["refused_detail"][0]["reason"] == "COST_CORRECTION_ALREADY_APPLIED"
+
+
+# -- the aggregate alone is not a precondition -----------------------------
+# Found by the security review of this change: pinning only the aggregate
+# delta plus the key and trade-id SETS is satisfied by two offsetting per-leg
+# changes. The store's guards would still refuse them one at a time, but a
+# precondition that passes a batch nobody inspected is not a precondition.
+
+
+def test_offsetting_per_leg_changes_no_longer_satisfy_the_aggregate():
+    man = {"legs": 2, "keys": ["a|UP", "b|UP"], "trade_ids": ["T1", "T2"],
+           "realized_delta_usd": "4.62",
+           "per_leg": {"a|UP": {"cost_before_usd": "2.90",
+                                "cost_after_usd": "0.59",
+                                "trade_ids": ["T1"]},
+                       "b|UP": {"cost_before_usd": "2.90",
+                                "cost_after_usd": "0.59",
+                                "trade_ids": ["T2"]}}}
+    honest = [{"key": "a|UP", "cost_before_usd": "2.90",
+               "cost_after_usd": "0.59", "trade_ids": ["T1"]},
+              {"key": "b|UP", "cost_before_usd": "2.90",
+               "cost_after_usd": "0.59", "trade_ids": ["T2"]}]
+    assert A.check_batch(honest, man)["ok"] is True
+
+    # same legs, same ids, same AGGREGATE -- different per-leg values
+    offsetting = [{"key": "a|UP", "cost_before_usd": "2.90",
+                   "cost_after_usd": "1.59", "trade_ids": ["T1"]},
+                  {"key": "b|UP", "cost_before_usd": "2.90",
+                   "cost_after_usd": "-0.41", "trade_ids": ["T2"]}]
+    agg = sum(D(r["cost_before_usd"]) - D(r["cost_after_usd"])
+              for r in offsetting)
+    assert agg == D("4.62"), "the aggregate is unchanged, which is the point"
+    out = A.check_batch(offsetting, man)
+    assert out["ok"] is False
+    assert any(p.startswith("PER_LEG_COST_AFTER_USD") for p in out["problems"])
+
+
+def test_a_manifest_without_per_leg_detail_is_refused():
+    man = _man()
+    man.pop("per_leg")
+    assert A.check_batch(_plan(), man)["ok"] is False
+    assert "MANIFEST_PER_LEG_MISSING" in A.check_batch(_plan(), man)["problems"]
+
+
+def test_a_leg_absent_from_per_leg_is_refused():
+    man = _man(per_leg={"other|UP": {"cost_before_usd": "1",
+                                     "cost_after_usd": "0",
+                                     "trade_ids": []}})
+    out = A.check_batch(_plan(), man)
+    assert out["ok"] is False
+    assert any(p.startswith("PER_LEG_UNKNOWN") for p in out["problems"])
+
+
+def test_per_leg_trade_ids_must_match_that_leg_not_just_the_batch():
+    man = _man(per_leg={"m1|UP": {"cost_before_usd": "2.90",
+                                  "cost_after_usd": "0.59",
+                                  "trade_ids": ["T9"]}})
+    out = A.check_batch(_plan(), man)
+    assert out["ok"] is False
+    assert any(p.startswith("PER_LEG_TRADE_IDS") for p in out["problems"])
+
+
+def test_the_shipped_manifest_carries_per_leg_detail_for_every_leg():
+    import pathlib
+    here = pathlib.Path(__file__).resolve().parents[1]
+    m = A.batch_manifest(str(sorted(
+        (here / "config").glob("cost_basis_batch_manifest_*.json"))[-1]))
+    assert len(m["per_leg"]) == m["legs"]
+    assert set(m["per_leg"]) == set(m["keys"])
+    ids = sorted(t for v in m["per_leg"].values() for t in v["trade_ids"])
+    assert ids == sorted(m["trade_ids"])

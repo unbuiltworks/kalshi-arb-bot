@@ -1052,6 +1052,28 @@ def check_batch(plan: List[Mapping[str, Any]], manifest: Mapping[str, Any]
         got_delta += b - a
 
     problems = []
+    # PER-LEG, not just the aggregate. The aggregate alone is satisfied by two
+    # offsetting per-leg changes, which the store's guards would still refuse
+    # one at a time -- but a precondition that can be satisfied by a batch
+    # nobody inspected is not a precondition. `per_leg` is required.
+    want_legs_detail = manifest.get("per_leg")
+    if not isinstance(want_legs_detail, Mapping) or not want_legs_detail:
+        problems.append("MANIFEST_PER_LEG_MISSING")
+    else:
+        for r in plan:
+            k = r.get("key")
+            want = want_legs_detail.get(k)
+            if not isinstance(want, Mapping):
+                problems.append("PER_LEG_UNKNOWN:%s" % k)
+                continue
+            for field in ("cost_before_usd", "cost_after_usd"):
+                a_ = _d(r.get(field))
+                b_ = _d(want.get(field))
+                if a_ is None or b_ is None or a_ != b_:
+                    problems.append("PER_LEG_%s:%s" % (field.upper(), k))
+            if sorted(r.get("trade_ids") or ()) != sorted(
+                    want.get("trade_ids") or ()):
+                problems.append("PER_LEG_TRADE_IDS:%s" % k)
     if want_delta is None:
         problems.append("MANIFEST_DELTA_UNREADABLE")
     if not want_keys or not want_ids:
