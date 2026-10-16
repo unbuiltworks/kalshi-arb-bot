@@ -547,6 +547,27 @@ class Runner:
                            "PMUS_Q1_LIVE/SESSION_ID/ARM. The owner's "
                            "live authorization is unchanged; this "
                            "lock sits in front of it.")})
+        # THE $1/SHARE PLACEHOLDER AUDIT, READ-ONLY and OFF by default.
+        # `leg_cost_basis_unknown` legs arrived as a venue NET position this
+        # executor never booked, so no order of ours exists to ask about and
+        # settlement priced them at the $1/share upper bound -- which is what
+        # makes realized_attributed an ESTIMATE rather than a measurement. It
+        # reads the account activity feed ONCE and reports what the fills
+        # actually were, split L5-owned vs OWNER_MANUAL by our own persisted
+        # client order ids. It WRITES NOTHING and cannot: applying its finding
+        # would move realized toward zero, which correct_settled_market
+        # refuses as CORRECTION_WOULD_RELAX_LOSS_HALT and which needs its own
+        # owner decision. Gated so a normal boot does not spend the feed walk.
+        if str(os.getenv("L5_COST_BASIS_AUDIT", "")).strip().upper() == "YES":
+            try:
+                from src import l5_cost_basis_audit as CBA
+                emit("L5_COST_BASIS_AUDIT", CBA.audit(self.store,
+                                                      self.transport))
+            except BaseException as exc:                       # noqa: BLE001
+                emit("L5_COST_BASIS_AUDIT_FAILED", {
+                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
+                    "labels": ("the audit is read-only; a failure changes "
+                               "nothing and never alters the ledger")})
         self.executor = LX.FaithfulExecutor(
             self.store, self.limits, transport=self.transport, lam=self.lam,
             now_fn=lambda: dt.datetime.fromtimestamp(self.now_t,
