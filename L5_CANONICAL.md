@@ -1140,3 +1140,62 @@ aware proposal needs: windows that actually produce UP_ONLY / DOWN_ONLY.
 
 Nothing changed: no trading-path code, parameter, limit, HALT, or
 SHADOW_ONLY.
+
+## 22. One-sided interval diagnostic: hold vs selective reprice vs inventory-blind baseline
+
+**Withdrawn finding.** An earlier pass on `cpc-btc-updown-15m-2026-10-16-2030z` reported that
+repricing the deficient UP leg to 0.65 would have completed at **+38.6s** versus +63.7s holding.
+That figure is **withdrawn**: it used *first price-through* as the fill test while using
+whole-window executed volume for sequencing — the same price-through-equals-fill error corrected
+in §21. Only 114.69 contracts executed at/below 0.64 during the interval against a queue of
+3,071 ahead.
+
+**Corrected method.** Fill time = the first trade print at which cumulative qualifying executed
+volume *exceeds the displayed queue ahead at our price when we joined*. An unreadable
+`queue_ahead` is treated as never-filling (the engine's own conservative rule). Replayed from the
+deployed ladder emitter's rows, not modeled depth.
+
+| window | touch at open | our UP bid (queue) | our DOWN ask (queue) | pair | UP cleared | DOWN cleared | one-sided |
+|---|---|---|---|---|---|---|---|
+| 2026-10-16 2030z | 0.61 / 0.62 | 0.60 (787.50) | 0.63 (900.40) | 0.9700 | +140.4s | +59.4s | **81.0s** |
+| 2026-10-16 2045z | 0.48 / 0.49 | 0.47 (1294.90) | 0.50 (3419.43) | 0.9700 | +6.6s | +0.8s | **5.8s** |
+
+Both windows resolve **BOTH** (each leg's queue cleared inside the window).
+
+**The three-way comparison.** `inventory_aware_quote()` returns `HOLD_PRIORITY`,
+`reprice=False`, `aware_px=None` on **both** windows. Measured economic delta against the
+inventory-blind baseline: **$0.00**. The selective-reprice branch was never reached, so there is
+nothing to compare against on these windows.
+
+**Why — and this is the structural result.** Under the current policy the engine quotes one tick
+behind each touch, so
+
+```
+pair = 1 - spread - 2·d·tick   =   1 - 0.01 - 0.02 = 0.97
+```
+
+and `held_cost + blind_px = 0.97 <= BREAKEVEN_PAIR = 0.9857` identically. For the blind quote to
+be unprofitable we would need `spread + 2·d·tick < 0.0143`, which is arithmetically impossible at
+`d >= 1` tick on a one-tick spread. **Inventory awareness is therefore structurally inert while
+the engine quotes one tick behind touch on a tight book.** It is not mis-wired; it has no state to
+act on.
+
+The module can only bite when the blind completion price would push the pair above 0.9857 — i.e.
+when the held leg was acquired expensively (chased, or taken), or the spread widened enough that
+one-tick-behind no longer leaves fee headroom, or a *taker* completion is under consideration.
+None of those states occurred in the two windows with real queue data.
+
+**Status of the 2030z reprice branch (for the record).** Forcing it by hand: repricing UP to the
+ceiling 0.65 was *executable* (0.65 < ask 0.74, post-only would rest) but `queue_ahead` at 0.65
+was `None` — 0.65 was not a visible rung on re-join — and zero qualifying volume accumulated, so
+under the conservative rule it **never fills**. Holding was correct on that window too, by a
+second independent route.
+
+**Not optimized on one window.** No parameter was fitted here; 2045z is an independent window and
+reproduces the same inert verdict.
+
+**Single remaining blocker to bounded live validation:** the frequency of the states where
+inventory awareness is non-inert — windows that resolve ONE-SIDED, or where completion requires a
+price above the fee-safe ceiling. Two windows of ladder data cannot measure that. The deployed
+read-only emitter accumulates ~2 windows/hour; this needs a multi-day sample before an
+inventory-aware maker change can be justified as economically material.
