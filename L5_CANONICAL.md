@@ -245,3 +245,90 @@ the 44 now measured. Double-apply protection therefore rests on the spent
 `correction_id` alone (mechanism 2); the "the batch stops matching"
 mechanism (1) does NOT fire. Mechanism 2 is persisted and sufficient, but
 this is one defense fewer than documented.
+
+---
+
+## 8. Two-leg reconstruction, 2026-10-16 — PASS/FAIL
+
+Read-only. No ledger write, no gate change, no HALT reset.
+
+### FAIL — `cpc-btc-updown-15m-2026-10-15-1945z|DOWN`
+Venue history complete (walk 2,129 rows, ended `eof`); **one** trade row
+for this market and side.
+
+| t | trade id | qty | YES px | venue `cost` | fee | coid |
+|---|---|---|---|---|---|---|
+| 2026-10-15T19:45:22Z | `D47QRSGGYZRN` | 1.0000 | 0.5100 | **0.49** | 0.0000 | none → UNKNOWN_OWNER |
+
+Our DOWN cost = `1 × (1 − 0.51)` = **0.4900**, which equals the venue's own
+`cost` exactly. Ledger `cost_total` = **1.4600** on `dn_qty 1.0000`.
+A binary share's cost is bounded by $1.00, so 1.4600 **cannot** be this
+leg's acquisition. Either `cost_total` is market-level and carries an UP
+leg too, or it is a defect. **Not certifiable** from readable evidence:
+needs the row's `up_qty` / per-side cost split. The apply refused it
+correctly. No rebate; fee 0.
+
+### FAIL — `cpcxrp-xrp-updown-15m-2026-10-16-0330z|UP`
+Five fills, 03:37:41–03:40:22Z, every one at YES 0.0200, qty
+`31.73 + 10.19 + 5.00 + 2.08 + 1.00` = **50.0000** = ledger `up_qty`
+exactly. Cost **$1.0000**, fees **$0.0500**, venue `cost` sum **$1.0500**
+(verified per row: `0.0416 = 2.08×0.02`, `0.6746 = 31.73×0.02 + 0.04`).
+Settled worthless, redemption 0. Ledger `cost_total` **37.975400**
+= $0.7595/share, supported by **no fill**.
+
+**Independent corroboration, not "lower is better":** the venue's own cash.
+Baseline `350.05255` @ 2026-10-16T02:45:12Z → `available_cash 344.41255`
+@ 17:41:14Z = **−$5.64000**. The ledger's seven post-baseline settlements
+sum to **−$42.58540**. Restating this leg from 37.9754 to 1.05 gives
+**−$5.66000** — within **$0.02** of the venue's cash movement. The account's
+cash says this loss was ~$1, not ~$38. Caveat: cash delta also absorbs any
+post-baseline acquisition not yet settled; `account_exposure` counts one
+market ($2.0400 worst case, pre-baseline), so little such inventory exists,
+but the $0.02 residual is not certified to the cent.
+
+Verdict: **bookkeeping defect in the ledger**, not incomplete venue
+evidence and not legitimate inventory history. Correcting it needs a NEW
+owner-authorized batch with `expect` set to `37.975400`.
+
+### FAIL — the audit's cost formula is wrong for EVERY DOWN leg
+Found while reconstructing leg 1, and it bears on the 44 already applied.
+`establish_basis` computes `q × price`. PMUS quotes **one price per market,
+always UP/YES**, so our cost on a DOWN leg is `q × (1 − price)`. The
+venue's own `cost` field — already read and carried on every fill by
+`classify_fills`, fee-inclusive — states it correctly and is ignored.
+
+| | |
+|---|---|
+| applied correction total | **157.86380000** |
+| side-aware correct total | **188.61520000** |
+| net understatement | **30.75140000** (ledger is MORE negative than truth) |
+| legs over-corrected | **13**, totalling **15.79500000** (realized flattered) |
+| worst single leg | `cpcxrp…0215z\|DOWN`, excess **4.64640000** |
+
+Aggregate direction is conservative; **per-leg figures are wrong in both
+directions.** Realized would read `-45.37020000` on a side-aware
+restatement, before the XRP leg.
+
+### Post-baseline P&L, recomputed from persisted evidence
+Baseline 2026-10-16T02:45:12.565947+00:00, cash `350.05255`, immutable.
+`l5_realized_since_baseline: 0`; **no** attested L5 settlement since
+baseline. Post-baseline settlements, none attested: **−$42.58540** (7
+markets), of which the disputed XRP leg is **−$37.97540 = 89%**. Venue cash
+delta since baseline: **−$5.64000**. Unrealized: one market,
+`cpc-btc-updown-1d-2026-10-15-2100z`, worst case **$2.0400**, acquired
+PRE-baseline, so it adds no post-baseline unrealized change.
+
+**Post-baseline realized is between −$5.64 and −$42.59 and is not positive
+under any reading.** The withdrawn +$6.4146 was wrong by at least $12. A
+$1.00 delta ceiling therefore refuses immediately either way: activating
+the delta policy does not unblock trading.
+
+### Smallest reporting-only fix for the false UNKNOWN listing
+In the reporting path **only**, derive the display list instead of printing
+`leg_cost_basis_unknown` raw: drop keys whose `retired_markets` row carries
+`cost_provenance == "MEASURED_FROM_VENUE_FILLS"`, and report those
+separately as `legs_measured_from_venue_fills` with their
+`cost_correction_id`. No state mutation, no key removed from
+`leg_cost_basis_unknown`, `cost_superseded` and every correction id
+preserved, and double-apply protection (the spent `correction_id`)
+untouched. Affects the heartbeat's accounting assembly only.
