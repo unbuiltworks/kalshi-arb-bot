@@ -37,6 +37,7 @@ and is what drew HTTP 429 at 93 markets x 25 pages.
 """
 from __future__ import annotations
 
+import json
 import os
 from collections import Counter
 
@@ -998,8 +999,110 @@ def apply_mode() -> str:
     return raw if raw and raw.upper() != APPLY_INSPECT else APPLY_INSPECT
 
 
+BATCH_MANIFEST_ENV = "L5_COST_BASIS_BATCH_MANIFEST"
+
+
+def batch_manifest(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """The INSPECTED batch this apply is allowed to write, or None.
+
+    None means NO manifest, which `apply_cost_basis_corrections` treats as a
+    refusal when a batch id is given: an apply without a manifest to check
+    against is exactly the unverified write the owner asked to prevent.
+    """
+    path = path or (os.getenv(BATCH_MANIFEST_ENV) or "").strip()
+    if not path:
+        return None
+    try:
+        with open(path, "r") as fh:
+            out = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return out if isinstance(out, dict) else None
+
+
+def check_batch(plan: List[Mapping[str, Any]], manifest: Mapping[str, Any]
+                ) -> Dict[str, Any]:
+    """ALL-OR-NOTHING precondition, evaluated BEFORE any write.
+
+    The per-leg guards already refuse a leg whose evidence moved. This is the
+    separate, stronger requirement the owner set: the batch as a whole must be
+    the one that was inspected. A fresh walk that yields 45 legs instead of 47
+    is not a smaller correction to be applied -- it is a changed world, and
+    the batch is abandoned.
+
+    Three independent equalities, all required:
+      * the leg KEYS, as a set;
+      * the distinct venue TRADE IDS, as a set;
+      * the aggregate DELTA, exactly.
+    """
+    want_keys = set(manifest.get("keys") or ())
+    want_ids = set(manifest.get("trade_ids") or ())
+    want_delta = _d(manifest.get("realized_delta_usd"))
+    want_legs = manifest.get("legs")
+
+    got_keys = set(r.get("key") for r in plan)
+    got_ids = set(t for r in plan for t in (r.get("trade_ids") or ()))
+    got_delta = D("0")
+    for r in plan:
+        b = _d(r.get("cost_before_usd"))
+        a = _d(r.get("cost_after_usd"))
+        if b is None or a is None:
+            return {"ok": False, "reason": "BATCH_LEG_UNREADABLE",
+                    "key": r.get("key")}
+        got_delta += b - a
+
+    problems = []
+    # PER-LEG, not just the aggregate. The aggregate alone is satisfied by two
+    # offsetting per-leg changes, which the store's guards would still refuse
+    # one at a time -- but a precondition that can be satisfied by a batch
+    # nobody inspected is not a precondition. `per_leg` is required.
+    want_legs_detail = manifest.get("per_leg")
+    if not isinstance(want_legs_detail, Mapping) or not want_legs_detail:
+        problems.append("MANIFEST_PER_LEG_MISSING")
+    else:
+        for r in plan:
+            k = r.get("key")
+            want = want_legs_detail.get(k)
+            if not isinstance(want, Mapping):
+                problems.append("PER_LEG_UNKNOWN:%s" % k)
+                continue
+            for field in ("cost_before_usd", "cost_after_usd"):
+                a_ = _d(r.get(field))
+                b_ = _d(want.get(field))
+                if a_ is None or b_ is None or a_ != b_:
+                    problems.append("PER_LEG_%s:%s" % (field.upper(), k))
+            if sorted(r.get("trade_ids") or ()) != sorted(
+                    want.get("trade_ids") or ()):
+                problems.append("PER_LEG_TRADE_IDS:%s" % k)
+    if want_delta is None:
+        problems.append("MANIFEST_DELTA_UNREADABLE")
+    if not want_keys or not want_ids:
+        problems.append("MANIFEST_INCOMPLETE")
+    if want_legs is not None and want_legs != len(plan):
+        problems.append("LEG_COUNT:%s!=%s" % (len(plan), want_legs))
+    if got_keys != want_keys:
+        problems.append("KEYS_DIFFER:+%d/-%d"
+                        % (len(got_keys - want_keys), len(want_keys - got_keys)))
+    if got_ids != want_ids:
+        problems.append("TRADE_IDS_DIFFER:+%d/-%d"
+                        % (len(got_ids - want_ids), len(want_ids - got_ids)))
+    if want_delta is not None and got_delta != want_delta:
+        problems.append("DELTA_DIFFERS:%s!=%s" % (got_delta, want_delta))
+    return {
+        "ok": not problems,
+        "problems": problems,
+        "legs": len(plan),
+        "trade_ids": len(got_ids),
+        "delta": str(got_delta),
+        "expected_legs": want_legs,
+        "expected_trade_ids": len(want_ids),
+        "expected_delta": (None if want_delta is None else str(want_delta)),
+    }
+
+
 def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
-                                 *, batch_id: Optional[str] = None
+                                 *, batch_id: Optional[str] = None,
+                                 manifest: Optional[Mapping[str, Any]] = None
                                  ) -> Dict[str, Any]:
     """Apply the measured-cost correction leg by leg, through the guards.
 
@@ -1023,6 +1126,7 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
     applied: List[Any] = []
     refused: List[Any] = []
     skipped: List[Any] = []
+    planned: List[Any] = []
     delta_total = D("0")
     before = (None if dry else store.realized_lines())
     for leg in legs:
@@ -1065,6 +1169,44 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
             "trade_ids": [f["trade_id"] for f in per_fill],
             "correction_id": "%s|%s" % (batch_id or APPLY_INSPECT, key),
         }
+        # a PAIR, not a stashed key: this module's purity test forbids every
+        # `x[...] = ...` as proof it cannot write to the store, and that rule
+        # caught this on the first run.
+        planned.append((plan, per_fill))
+    # THE BATCH PRECONDITION, evaluated before ANY write. On a dry run it is
+    # reported; on an apply a mismatch ABANDONS the batch and writes nothing.
+    checked = (check_batch([p for p, _ in planned], manifest)
+               if manifest is not None else None)
+    if not dry:
+        if manifest is None:
+            return {"mode": "ABORTED", "batch_id": batch_id,
+                    "reason": "BATCH_MANIFEST_MISSING",
+                    "legs_seen": len(legs), "applied": 0, "refused": 0,
+                    "preserved_unknown": len(skipped),
+                    "preserved_detail": skipped,
+                    "would_have_applied": [p for p, _ in planned],
+                    "realized_before": before, "realized_after": before,
+                    "labels": ("an apply with no inspected manifest to check "
+                               "against is an unverified write; nothing was "
+                               "written")}
+        if not checked.get("ok"):
+            return {"mode": "ABORTED", "batch_id": batch_id,
+                    "reason": "BATCH_MISMATCH", "batch_check": checked,
+                    "legs_seen": len(legs), "applied": 0, "refused": 0,
+                    "preserved_unknown": len(skipped),
+                    "preserved_detail": skipped,
+                    "would_have_applied": [p for p, _ in planned],
+                    "realized_before": before, "realized_after": before,
+                    "labels": ("the fresh walk is not the batch that was "
+                               "inspected. A changed world is not a smaller "
+                               "correction: nothing was written")}
+    for plan, per_fill in planned:
+        key = plan["key"]
+        market = plan["market"]
+        side = plan["side"]
+        placeholder = _d(plan["cost_before_usd"])
+        measured = _d(plan["cost_after_usd"])
+        fees = _d(plan["fees_usd"])
         if dry:
             applied.append({**plan, "would_apply": True})
             delta_total += placeholder - measured
@@ -1089,6 +1231,7 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
     return {
         "mode": APPLY_INSPECT if dry else "APPLIED",
         "batch_id": batch_id,
+        "batch_check": checked,
         "activity_walk": walk,
         "legs_seen": len(legs),
         "applied": len(applied),

@@ -1491,6 +1491,81 @@ class InventoryStore:
         self.save()
         return {"established": True, "baseline": rec}
 
+    def account_wide_delta_realized(self) -> Optional[D]:
+        """ACCOUNT-WIDE realized change since the baseline epoch T, or None.
+
+        NOT L5-attributed. Every post-T settlement counts, whoever placed it,
+        because the thing being bounded is what the account can still lose --
+        and an unattributable loss is still a loss.
+
+        WHY IT IS NOT JUST `realized_today() - anchor`. The anchor is frozen
+        at T and must stay frozen, but a cost-basis correction can restate a
+        leg that settled BEFORE T. That correction raises realized_today()
+        without anything having happened after T, so the naive subtraction
+        would credit pre-T restatements to the post-T window. Measured on this
+        account: the naive delta reads +54.68840000 where the true post-T
+        figure is +6.41460000 -- a $48.27380000 overstatement of headroom, and
+        exactly the pre-T correction total. Pre-T correction deltas are
+        therefore subtracted back out.
+
+        FAILS CLOSED. No baseline, an unreadable anchor, or any correction
+        record whose delta or period cannot be determined returns None. None
+        is UNKNOWN and the gate must refuse on it, never read it as zero.
+        """
+        base = self.state.get("l5_baseline")
+        if not isinstance(base, Mapping) or not base.get("t"):
+            return None
+        t0 = str(base["t"])
+        anchor = finite_decimal(base.get("pre_baseline_realized_total"))
+        now = finite_decimal(self.realized_today())
+        if anchor is None or now is None:
+            return None
+        pre_t_corrections = D(0)
+        for rec in (self.state.get("cost_basis_corrections") or []):
+            if not isinstance(rec, Mapping):
+                return None
+            delta = finite_decimal(rec.get("delta"))
+            market = rec.get("market")
+            if delta is None or not market:
+                return None
+            row = (self.state.get("retired_markets") or {}).get(market)
+            if not isinstance(row, Mapping):
+                return None
+            settled_at = str(row.get("t") or "")
+            if not settled_at:
+                return None
+            if settled_at <= t0:
+                pre_t_corrections += delta
+        return now - anchor - pre_t_corrections
+
+    def account_wide_delta_lines(self) -> Dict[str, Any]:
+        """The delta and its parts, for the heartbeat. Reporting only.
+
+        LIFETIME REPORTING IS PRESERVED: `account_wide_realized_lifetime` is
+        carried here verbatim alongside the delta, so a delta ceiling can
+        never be mistaken for the lifetime figure going away.
+        """
+        base = self.state.get("l5_baseline")
+        anchored = isinstance(base, Mapping) and bool(base.get("t"))
+        delta = self.account_wide_delta_realized()
+        return {
+            "baseline_t": (str(base.get("t")) if anchored else None),
+            "baseline_anchor_realized": (
+                str(base.get("pre_baseline_realized_total"))
+                if anchored else None),
+            "account_wide_realized_lifetime": str(self.realized_today()),
+            "account_wide_delta_realized": (None if delta is None
+                                            else str(delta)),
+            "cost_basis_corrections": len(
+                self.state.get("cost_basis_corrections") or []),
+            "labels": (
+                "delta is ACCOUNT-WIDE change since T, not L5-attributed, with "
+                "pre-T cost corrections subtracted back out so a restatement "
+                "of pre-T history cannot create post-T headroom. None is "
+                "UNKNOWN and the gate refuses on it. The lifetime figure is "
+                "reported here unchanged and is never replaced by the delta."),
+        }
+
     def l5_realized_since_baseline(self) -> Optional[D]:
         """Attested L5 settlement P&L since T, or None without a baseline.
 
@@ -3759,6 +3834,12 @@ class FaithfulExecutor:
                 cumulative_realized=self.store.realized_today(),
                 verified_strategy_net=self.store.verified_l5_net_for_gates(),
                 l5_scoped_realized=self.store.l5_realized_since_baseline(),
+                # ADDITIVE and INERT until the ceiling is configured.
+                # `cumulative_realized` above still carries the LIFETIME
+                # account-wide figure and still gates on it; this supplies the
+                # post-baseline delta alongside it, never instead of it.
+                account_wide_delta_usd=(
+                    self.store.account_wide_delta_realized()),
                 cumulative_unrealized_loss=unreal,
                 available_cash_usd=self.available_cash_usd,
                 inventory=inv)

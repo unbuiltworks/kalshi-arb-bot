@@ -74,3 +74,7 @@ data/pmus_btc15m/
 # P10 decoder capture. That workstream is closed and GATE FAILED; its capture
 # is not revived, merged or modified.
 analysis/gemini/p10_capture/
+
+# L5: data/l5_master is a 375MB derivation of data/l5/raw (the source of
+# truth), rebuilt on demand by scripts/l5_settlement_decomposition_audit.py.
+data/l5_master/

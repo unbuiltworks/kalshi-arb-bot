@@ -493,3 +493,41 @@ structured-money extraction, shadow-locked 2026-10-16T20:10Z
 #
 # 244 passed across every money-path suite on this branch.
 cost-basis applier, INSPECT dry run, shadow-locked 2026-10-16T16:55Z
+
+# OWNER-AUTHORIZED: apply the 47-leg cost-basis correction.
+#
+# THE PRECONDITION THE OWNER SET. check_batch revalidates, immediately before
+# any write and across the whole batch: the 47 leg keys, the 69 distinct venue
+# trade ids, the $209.66380000 aggregate, AND now each leg's own
+# cost_before/cost_after and its own trade ids. A mismatch returns
+# BATCH_MISMATCH and writes NOTHING -- a fresh walk yielding 45 legs is not a
+# smaller correction to apply, it is a changed world. An apply with no
+# manifest is BATCH_MANIFEST_MISSING, so the write cannot happen by omission.
+#
+# The per-leg comparison closes a gap this change's security review named:
+# aggregate-plus-sets is satisfied by two offsetting per-leg edits.
+#
+# NEVER TWICE, by two independent mechanisms: the corrected legs stop being
+# unknown-basis so the batch no longer matches the manifest, AND each
+# correction_id is spent.
+#
+# TO APPLY, set on this service:
+#   L5_COST_BASIS_BATCH_MANIFEST=/app/config/cost_basis_batch_manifest_20261016.json
+#   L5_COST_BASIS_APPLY=<batch-id>
+# Unset or INSPECT remains a dry run. The manifest ships in config/ because
+# the Dockerfile COPYs only src/ and config/.
+#
+# ALSO IN THIS IMAGE, INERT: the account-wide delta-loss policy.
+# max_account_wide_delta_loss_usd defaults to None and
+# L5_MAX_ACCOUNT_WIDE_DELTA_LOSS_USD is NOT set, so the check does nothing.
+# It is additive and runs AFTER the lifetime CUMULATIVE_LOSS_LIMIT, which
+# stays configured and still gates realized_today(). Activating it is a
+# separate owner decision and is not taken here.
+#
+# Security review of the diff: NO findings at confidence >= 8.
+# 285 passed across every money-path suite on this branch.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_TS_COMPLETION_CROSS stays
+# unset, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
+# No limit, threshold or gate is touched and no order can be submitted.
+47-leg cost-basis correction, apply-ready, shadow-locked 2026-10-16T17:25Z
