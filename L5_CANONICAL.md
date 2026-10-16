@@ -983,3 +983,78 @@ the resting queue. Depth alone was the wrong lens.
 
 Settlement-adjusted four-outcome P&L for this window is pending its close
 and settlement; it is NOT reported here.
+
+---
+
+## 20. Engine verification against continuous inventory-aware quoting
+
+### Q1. Does it continuously reevaluate both sides as prices change? — YES
+The decision tape shows `arm_refused_shadow_only_lock: 265` in one window,
+so the path runs ~265 times per 900s (~every 3.4s), and `build_orders`
+returns **both** intents on every pass. Re-evaluation is continuous and
+two-sided.
+
+### Q2. Does it preserve queue priority when appropriate? — YES, trivially
+It never gives priority up: there is **no repricing path anywhere**. The
+executor states the contract three times — "never crosses, never chases,
+never re-prices" — and the only `transport.cancel` call site in the
+codebase is the deadman sweep near expiry.
+
+**And the measurement says that default is right.** On 2030z:
+
+| policy | result |
+|---|---|
+| reprice on every touch move (re-queue at the back) | queue cleared in **3 of 143 intervals = 2.1%**; median queue on re-join **2,604.21**; median touch-stable interval **0.91s** |
+| hold (join once, keep priority) | **31,803.60** executed at/below our price against **one** queue of **3,071.00** → cleared |
+
+Holding accumulates the whole window's flow against one queue; repricing
+splits the same flow across 143 fresh queues of ~2,600 each and almost
+never clears any of them. **Chasing is strictly worse here.**
+
+### Q3. Does it selectively reprice when improvement justifies lost priority? — NO
+The capability does not exist. Not "exists but mis-tuned" — absent. Given
+Q2 that is the right default 97.9% of the time, so its absence is cheap in
+the oscillating case. It is **not** cheap when the market walks away: the
+touch ranged **0.5600–0.8300** in this window, and a quote stranded 19
+cents from the touch cannot fill and cannot re-enter, leaving the engine
+out of the market for the remainder with `max_live_orders = 1`.
+
+### Q4. Are inventory and acquisition costs in every decision? — NO, and this is the gap
+| path | reads inventory + cost? | live? |
+|---|---|---|
+| `completion_decision(up_qty, dn_qty, up_cost_px, dn_cost_px, ...)` | **YES** — judges whether completing improves the worse settlement outcome, with fees and the worst-case ceiling | **INERT** (`L5_TS_COMPLETION_CROSS` unset) and governs **crossing only** |
+| `build_orders(market, bid, ask, bid_depth, ask_depth, tick, min_qty, depth_ticks, cash_envelope, max_worst_case_loss, book_age_s, gap_suspected)` | **NO** — market state only | **LIVE**, this is what quotes |
+
+Verified at the call site, `l5_live_execution.py:3774` — nothing resembling
+inventory or cost is passed.
+
+### THE HIGHEST-IMPACT GAP: the maker quoting is inventory-blind
+`build_orders` emits the same symmetric pair one tick behind each touch
+whether we hold nothing, 300 UP, or 300 DOWN, and whatever those were paid
+for. It cannot price the DOWN quote against UP inventory already held.
+
+That is exactly where L5's money was. The FIFO reconstruction of the
+19:45Z window: **457.4 pairs completed at 0.59–0.78 against UP acquired
+minutes earlier**, +$101.68 of a +$103.32 window. Pricing an opposite-side
+quote to complete known inventory at a known cost is the mechanism — and
+our live quoting path cannot see either input.
+
+The judgement machinery already exists (`completion_decision` takes exactly
+`up_cost_px` / `dn_cost_px`). It is wired only to the crossing path and
+switched off. **The gap is the wiring, not the reasoning.**
+
+### On L5 and cancellation — not assumed
+I am not claiming he constantly cancels. Given our own measurement that
+chasing fails against 2,600-deep queues, the more parsimonious reading of
+his evidence — 107 fills/window at many prices, 29 side-switches, 73.5% of
+consecutive same-side fills at a DIFFERENT price, cross-side fills within
+2s in 91.3% of windows — is **a ladder of orders resting simultaneously at
+several price levels**, hit at different levels as price moves. That
+explains the price variation and the fast cross-side fills **with no
+cancellation at all**, and it is consistent with holding priority rather
+than surrendering it.
+
+Our engine rests **two intents at one price each**. That is the same gap
+seen from the other side.
+
+Nothing was changed: no parameter, limit, HALT, SHADOW_ONLY, or order.
