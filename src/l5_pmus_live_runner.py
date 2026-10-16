@@ -2950,6 +2950,11 @@ def validation_gates():
                 "L5_MAX_UNMATCHED_CONTRACTS", "5"))),
             max_cumulative_loss_usd=D(str(os.getenv(
                 "L5_MAX_CUMULATIVE_LOSS_USD", "20"))),
+            # Separately opt-in to the verified L5-only after-fee loss gate.
+            # Without an audited net this refuses, never defaults to $0.
+            max_strategy_loss_usd=(
+                None if not os.getenv("L5_STRATEGY_LOSS_LIMIT_USD", "").strip()
+                else D(os.getenv("L5_STRATEGY_LOSS_LIMIT_USD").strip())),
             max_worst_case_deficit_usd=deficit,
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
