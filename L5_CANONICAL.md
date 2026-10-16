@@ -1503,5 +1503,5 @@ orders in pursuit of a pair cost we already beat, against a per-leg fill
 probability still measured at zero and a break-even bar of 81.9%
 (section 14). The bounded shadow-only experiment the evidence does support is
 unchanged and already deployed: keep accumulating settlement-adjusted window
-records until per-leg fill probability  is measured. Nothing about the
+records until per-leg fill probability `p` is measured. Nothing about the
 ladder question changes that ordering.
