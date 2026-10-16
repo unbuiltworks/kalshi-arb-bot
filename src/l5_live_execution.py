@@ -2468,6 +2468,61 @@ class InventoryStore:
                     bad.add(str(key))
         return sorted(bad)
 
+    def account_wide_risk_by_market(
+            self, *, extra_market: str = "", extra_side: str = "",
+            extra_qty: D = D(0), extra_price: D = D(0)
+            ) -> Dict[str, Any]:
+        """Worst-case cash loss per market, across EVERY market with anything
+        in it -- manual, L5, filled or merely resting.
+
+        THE DEFECT THIS FIXES, which is load-bearing. The gate was handed
+        `risk_by_market={market: ...}` -- a ONE-ENTRY dict for the market
+        being traded. So `sum(risk_by_market.values())` summed a single
+        market and max_total_exposure_usd was arithmetically IDENTICAL to
+        max_usd_per_market: there was no account-wide ceiling at all, and
+        $2.04 of manual inventory in another market contributed nothing to a
+        $5 "total exposure" bound.
+
+        NO DOUBLE COUNTING. risk_exposure_usd(m) already prices m's filled
+        positions AND its still-fillable orders under both settlements, so
+        each market is counted exactly once and nothing is added twice. The
+        pending order is applied to its own market only, via extra_*.
+
+        FAILS CLOSED. Enumeration and every per-market read go through the
+        store's own coherence check; any market that cannot be priced makes
+        the whole figure unavailable and the caller refuses. A partial sum
+        would understate account-wide exposure, which is the one direction
+        that lets more risk through than the bound.
+        """
+        try:
+            markets = set(self.markets_with_exposure())
+        except BaseException as exc:                           # noqa: BLE001
+            return {"ok": False, "reason": "EXPOSURE_ENUMERATION_FAILED:%s"
+                    % type(exc).__name__}
+        # a market with no position but a RESTING order is still exposure
+        for o in (self.state.get("live_orders") or {}).values():
+            m = str((o or {}).get("market") or "").strip()
+            if m:
+                markets.add(m)
+        if extra_market:
+            markets.add(extra_market)
+        out: Dict[str, D] = {}
+        for m in sorted(markets):
+            try:
+                if m == extra_market:
+                    out[m] = self.risk_exposure_usd(
+                        m, extra_side=extra_side, extra_qty=extra_qty,
+                        extra_price=extra_price)
+                else:
+                    out[m] = self.risk_exposure_usd(m)
+            except BaseException as exc:                       # noqa: BLE001
+                return {"ok": False,
+                        "reason": "EXPOSURE_UNREADABLE:%s:%s"
+                        % (m, type(exc).__name__)}
+        return {"ok": True, "risk_by_market": out,
+                "markets": sorted(markets),
+                "total_usd": str(sum(out.values(), D(0)))}
+
     def markets_with_exposure(self) -> List[str]:
         """Every market this book still has anything in.
 
@@ -3778,6 +3833,16 @@ class FaithfulExecutor:
         resid_after = resid_before + (
             tr["qty"] if dec["side"] == "UP" else -tr["qty"])
         outstanding = self.store.outstanding_by_market()
+        # ACCOUNT-WIDE exposure, every market, manual included. A figure we
+        # cannot compute refuses: a partial sum understates the account, and
+        # understating is the only direction that admits more risk than the
+        # bound allows.
+        acct_risk = self.store.account_wide_risk_by_market(
+            extra_market=market, extra_side=dec["side"],
+            extra_qty=tr["qty"], extra_price=tr["price"])
+        if not acct_risk.get("ok"):
+            prov.stage("SAFETY_OVERLAY", {"refused": acct_risk["reason"]})
+            return prov.refuse("SAFETY_OVERLAY", acct_risk["reason"])
         why = self.limits.refuse(
             price=tr["price"], qty=tr["qty"], market=market,
             committed_by_market=self.store.committed(),
@@ -3797,9 +3862,7 @@ class FaithfulExecutor:
             # the corrected metric: worst-case loss over both settlements,
             # with this order counted as if it fills in full. committed_usd
             # is still passed, and still reported, but no longer gates.
-            risk_by_market={market: self.store.risk_exposure_usd(
-                market, extra_side=dec["side"], extra_qty=tr["qty"],
-                extra_price=tr["price"])})
+            risk_by_market=acct_risk["risk_by_market"])
         prov.stage("SAFETY_OVERLAY", {
             "permitted": why is None, "reason": why,
             "limits": self.limits.as_dict(),

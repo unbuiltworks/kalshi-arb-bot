@@ -373,6 +373,12 @@ class _SignedHTTP:
 #: without first resolving a numeric id.
 EVENT_PREFIXES = ("cpc-",)
 
+#: the venue does not serve a 15m market's book for its first minutes, so a
+#: single 404 is not evidence the book is unreachable. Bounded so a genuinely
+#: dead route still fails the preflight rather than retrying forever.
+BOOK_READ_ATTEMPTS = 3
+BOOK_READ_BACKOFF_S = 1.0
+
 
 def event_slug_for(market_slug: str) -> str:
     for p in EVENT_PREFIXES:
@@ -966,11 +972,41 @@ class PmusTransport:
 
         # 8. authenticated book / read connectivity
         bk: Dict[str, Any] = {}
+        book_attempts: List[str] = []
         if ok:
-            try:
-                bk = self.book(self.market_slug)
-            except Exception as exc:                           # noqa: BLE001
-                return self._fail(checks, gate, "book_readable", exc)
+            # BOUNDED RETRY ON A TRANSPORT FAILURE, not on an empty book.
+            # Observed live: book_readable raised HTTP 404 at 02:45:02Z and
+            # 02:45:13Z on cpc-btc-updown-15m-2026-10-16-0245z and then
+            # succeeded at 02:48:50Z -- the venue does not serve the book for
+            # the first minutes of a window. Each failure set
+            # armed_after_preflight false, so arming could not be scheduled
+            # deterministically (preflight_attempts reached 9).
+            #
+            # WHAT THIS DOES NOT DO: it does not make an empty book
+            # executable. A 404 means the ROUTE did not answer; an answered
+            # but empty book still flows into book_readable_now and
+            # book_two_sided_at_preflight below exactly as before, and the
+            # binding two-sided check remains at the decision point in
+            # l5_preview_gate.require_fresh_book. Exhausting the retries
+            # still fails the preflight.
+            import time as _time
+            last_exc: Optional[BaseException] = None
+            for attempt in range(1, BOOK_READ_ATTEMPTS + 1):
+                try:
+                    bk = self.book(self.market_slug)
+                    book_attempts.append("attempt%d:ok" % attempt)
+                    last_exc = None
+                    break
+                except Exception as exc:                       # noqa: BLE001
+                    last_exc = exc
+                    book_attempts.append("attempt%d:%s" % (
+                        attempt, type(exc).__name__))
+                    if attempt < BOOK_READ_ATTEMPTS:
+                        _time.sleep(BOOK_READ_BACKOFF_S * attempt)
+            if last_exc is not None:
+                return self._fail(checks, gate, "book_readable", last_exc)
+            checks.append({"check": "book_read_attempts", "passed": True,
+                           "blocking": False, "detail": book_attempts})
         # A periodic preflight runs hundreds of seconds into a window and
         # can meet a book that is already dying; that says nothing about
         # whether a LATER order, decided at a different moment, is
