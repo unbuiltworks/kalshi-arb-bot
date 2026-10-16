@@ -226,3 +226,152 @@ def test_summarize_excludes_unsettled_residuals_instead_of_scoring_them_zero():
     assert D(s["net_usd"]["HOLD"]) == D(both["net"]["HOLD"]["net_usd"])
     assert all(v == "0" or D(v) == 0 for v in s["vs_blind_usd"].values())
     assert "none of these figures is realized profit" in s["labels"]
+
+
+# ------------------------------- the incremental accumulator (service-ready)
+
+def feed(acc, ladder, trades):
+    """Deliver books and prints in the order the recorder would see them."""
+    ev = [("b", r["t"], r) for r in ladder] + [("t", r["t"], r) for r in trades]
+    ev.sort(key=lambda x: (x[1], 0 if x[0] == "b" else 1))
+    for kind, _t, r in ev:
+        if kind == "b":
+            acc.on_book(r)
+        else:
+            acc.on_trade(r.get("t"), r.get("px"), r.get("qty"))
+    return acc
+
+
+IGNORE = {"incremental", "books_seen", "prints_seen",
+          "out_of_order_dropped", "decisions"}
+
+
+@pytest.mark.parametrize("trs", [
+    [],                                                        # NEITHER
+    [{"t": T0 + 5, "px": "0.63", "qty": "20", "trade_time": "a"}],  # one-sided
+    [{"t": T0 + 5, "px": "0.63", "qty": "20", "trade_time": "a"},
+     {"t": T0 + 40, "px": "0.60", "qty": "20", "trade_time": "b"}],  # BOTH
+])
+def test_incremental_matches_the_batch_evaluation(trs):
+    want = E.evaluate_window(SLUG, base_ladder(), trs, **LIM)
+    got = feed(E.WindowAccumulator(SLUG, **LIM), base_ladder(), trs).finish()
+    for k in sorted(set(want) | set(got)):
+        if k in IGNORE:
+            continue
+        assert got.get(k) == want.get(k), k
+
+
+def test_the_accumulator_holds_no_per_snapshot_history():
+    acc = feed(E.WindowAccumulator(SLUG, **LIM), base_ladder(),
+               [{"t": T0 + 5, "px": "0.63", "qty": "20", "trade_time": "a"}])
+    for name, v in vars(acc).items():
+        assert not isinstance(v, list), (
+            "%s is a list: the accumulator must stay O(1) in window length"
+            % name)
+    rec = acc.finish()
+    assert "decisions" not in rec
+
+
+def test_a_restart_mid_window_fails_closed_instead_of_scoring_a_partial():
+    late = [dict(s, t=T0 + 400.0) for s in base_ladder()]
+    acc = feed(E.WindowAccumulator(SLUG, **LIM), late,
+               [{"t": T0 + 405, "px": "0.63", "qty": "20",
+                 "trade_time": "a"}])
+    rec = acc.finish()
+    assert rec["ok"] is False
+    assert rec["reason"] == "MISSED_WINDOW_OPEN"
+    assert "net" not in rec and "outcome" not in rec
+
+
+def test_out_of_order_events_are_dropped_and_counted_not_guessed_at():
+    lad = base_ladder()
+    acc = E.WindowAccumulator(SLUG, **LIM)
+    acc.on_book(lad[0])
+    acc.on_trade(T0 + 10, "0.63", "20")
+    acc.on_trade(T0 + 5, "0.63", "9999")       # earlier than what we counted
+    rec = acc.finish()
+    assert rec["out_of_order_dropped"] == 1
+    assert rec["resting"]["dn"]["cum_qualifying"] == "20"
+
+
+def test_an_unreadable_queue_never_models_a_fill():
+    thin = snap(T0, "0.6100", "0.6200",
+                bids=(("0.6100", "100"),), asks=(("0.6200", "100"),))
+    acc = feed(E.WindowAccumulator(SLUG, **LIM), [thin],
+               [{"t": T0 + 5, "px": "0.60", "qty": "99999",
+                 "trade_time": "a"}])
+    rec = acc.finish()
+    assert rec["outcome"] == "NEITHER"
+    assert rec["resting"]["up"]["reason"] == "QUEUE_AHEAD_UNREADABLE"
+
+
+# ----------------------------------------------- the log: rollover + restarts
+
+def _log(tmp_path, **kw):
+    return E.ShadowPolicyLog(path=str(tmp_path / "store.jsonl"),
+                             **dict(LIM, **kw))
+
+
+def test_rollover_finishes_a_window_when_the_recorder_drops_its_ladder(tmp_path):
+    log = _log(tmp_path)
+    lad = base_ladder()
+    # interleaved, as the recorder sees them
+    log.observe_book(SLUG, lad[0])
+    log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1])
+    log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    assert log.rollover(keep=[SLUG]) == []          # still live: not scored
+    out = log.rollover(keep=[])                     # ladder dropped: score it
+    assert len(out) == 1 and out[0]["outcome"] == "BOTH"
+    assert out[0]["ok"] is True
+
+
+def test_the_store_makes_a_rescored_window_impossible(tmp_path):
+    log = _log(tmp_path)
+    for s in base_ladder():
+        log.observe_book(SLUG, s)
+    log.rollover(keep=[])
+    # a fresh log, as after a redeploy, reads the store and skips the slug
+    again = _log(tmp_path)
+    assert SLUG in again.done
+    for s in base_ladder():
+        again.observe_book(SLUG, s)
+    assert again.live == {}
+    assert again.rollover(keep=[]) == []
+    assert sum(1 for _ in open(tmp_path / "store.jsonl")) == 1
+
+
+def test_an_unwritable_store_is_counted_not_crashed(tmp_path):
+    log = E.ShadowPolicyLog(path=str(tmp_path / "nope") + "\0bad",
+                            **LIM)
+    for s in base_ladder():
+        log.observe_book(SLUG, s)
+    out = log.rollover(keep=[])
+    assert len(out) == 1
+    assert log.errors >= 1
+
+
+def test_the_log_is_off_unless_explicitly_enabled(monkeypatch):
+    monkeypatch.delenv(E.ENABLE_ENV, raising=False)
+    assert E.enabled() is False
+    monkeypatch.setenv(E.ENABLE_ENV, "yes")
+    assert E.enabled() is True
+    monkeypatch.setenv(E.ENABLE_ENV, "1")
+    assert E.enabled() is False
+
+
+def test_the_emitted_document_stays_small_and_claims_nothing(tmp_path):
+    import json
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0])
+    log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1])
+    log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    doc = log.emit_document(log.rollover(keep=[]))
+    blob = json.dumps(doc)
+    assert len(blob) < 1200, "one window must not cost a large log line"
+    assert "realized profit" in doc["labels"]
+    assert doc["windows"][0]["net_usd"]["HOLD"] is not None
