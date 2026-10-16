@@ -280,3 +280,22 @@ recorded-depth-only attribution, shadow-locked 2026-10-16T12:45Z
 #
 # Money-path gate 1302 passed.
 four-bucket accounting + audit pagination fix, shadow-locked 2026-10-16T13:10Z
+
+# Diagnose NO_FILLS_FOUND. The audit now walks the feed COMPLETELY -- 107
+# pages, 2,126 rows, ended eof -- and reported placeholder_cost_total_usd
+# 279.0900, the figure that previously read "0". But all 46 unknown-basis
+# legs now fail with NO_FILLS_FOUND rather than ACTIVITY_WALK_INCOMPLETE:
+# a complete walk matched no fill for any of them, which across all 46 is far
+# more likely a systematic shape mismatch in classify_fills than 46 legs with
+# no history.
+#
+# classify_fills requires market, fill-kind and side to hold TOGETHER, so the
+# new feed_shape() counts each predicate INDEPENDENTLY and names the one that
+# is wrong instead of guessing. It reports field NAMES, kind VALUES and
+# counts only -- no price, quantity, identifier or credential -- and is
+# computed only when nothing could be established.
+#
+# Read-only throughout. SHADOW_ONLY set, L5_TS_COMPLETION_CROSS unset,
+# L5_TS_DEPTH_TICKS 1, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD
+# UNCHANGED. Money-path gate 1302 passed.
+feed-shape diagnostic, shadow-locked 2026-10-16T13:30Z

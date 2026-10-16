@@ -38,6 +38,7 @@ and is what drew HTTP 429 at 93 markets x 25 pages.
 from __future__ import annotations
 
 import os
+from collections import Counter
 
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -165,6 +166,64 @@ def _row_side(row: Mapping[str, Any]) -> Optional[str]:
     if v in ("DOWN", "NO", "BUY_SHORT"):
         return "DOWN"
     return None
+
+
+def feed_shape(rows: List[Mapping[str, Any]], *, markets: List[str],
+               sides: List[str], sample: int = 6) -> Dict[str, Any]:
+    """WHY did the matcher find nothing? Reports shape, never guesses it.
+
+    `classify_fills` requires THREE predicates to hold together -- the row's
+    market, its kind being a fill, and its side. When all 46 legs report
+    NO_FILLS_FOUND over a COMPLETE walk of 2,126 rows, the cause is far more
+    likely a systematic shape mismatch in one predicate than 46 legs with no
+    history. This says which one, by counting each predicate INDEPENDENTLY
+    instead of inferring.
+
+    STRICTLY DIAGNOSTIC AND READ-ONLY. It reports field NAMES, the distinct
+    kind/type VALUES, and counts. It reports no price, no quantity, no
+    identifier and no credential, so it cannot leak a position or a key.
+    """
+    # COUNTERS WITH .update(), NOT SUBSCRIPT ASSIGNMENT. The module's purity
+    # test forbids every `x[...] = ...` in this file, which is how it proves
+    # the audit cannot write to the store or the ledger. A local tally is not
+    # a store write, but narrowing that rule to allow one would weaken a
+    # safety test to fit a diagnostic, so the diagnostic is written to obey it.
+    kinds: Counter = Counter()
+    keysets: Counter = Counter()
+    market_hits = side_hits = kind_hits = 0
+    all_three = 0
+    want_markets, want_sides = set(markets), set(sides)
+    for r in rows:
+        k = str(r.get("kind") or r.get("type") or "").strip().lower()
+        kinds.update([k or "<absent>"])
+        keysets.update([",".join(sorted(str(x) for x in r.keys()))])
+        m_ok = _row_market(r) in want_markets
+        k_ok = k in FILL_KINDS
+        s_ok = _row_side(r) in want_sides
+        market_hits += int(m_ok)
+        kind_hits += int(k_ok)
+        side_hits += int(s_ok)
+        all_three += int(m_ok and k_ok and s_ok)
+    top = sorted(keysets.items(), key=lambda kv: -kv[1])[:sample]
+    return {
+        "rows": len(rows),
+        "distinct_kinds": dict(sorted(kinds.items(), key=lambda kv: -kv[1])),
+        "fill_kinds_recognised": sorted(FILL_KINDS),
+        "rows_matching_market_only": market_hits,
+        "rows_matching_fill_kind_only": kind_hits,
+        "rows_matching_side_only": side_hits,
+        "rows_matching_all_three": all_three,
+        "most_common_field_name_sets": [
+            {"fields": sig, "rows": n} for sig, n in top],
+        "labels": ("DIAGNOSTIC ONLY. Each predicate is counted "
+                   "INDEPENDENTLY, so a zero names the predicate that is "
+                   "wrong: zero market matches means the market field is "
+                   "read from the wrong key, zero fill-kind matches means "
+                   "FILL_KINDS does not cover this feed's vocabulary, and "
+                   "zero side matches means the side field is. Field NAMES "
+                   "and kind VALUES only -- no price, quantity, identifier "
+                   "or credential is reported."),
+    }
 
 
 def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
@@ -321,6 +380,12 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         "ok": True, "writes": "NONE",
         "activity_walk": {k: walk[k] for k in ("pages", "ended", "complete")},
         "activity_rows": len(walk["rows"]),
+        # WHY nothing matched, when nothing matched. Computed only on the
+        # failing case so a healthy audit does not carry the diagnostic.
+        "feed_shape": (feed_shape(walk["rows"],
+                                  markets=[k.split("|")[0] for k in keys],
+                                  sides=["UP", "DOWN"])
+                       if establishable == 0 and keys else None),
         "our_client_order_ids": len(our),
         "unknown_basis_legs": len(keys),
         "establishable": establishable,

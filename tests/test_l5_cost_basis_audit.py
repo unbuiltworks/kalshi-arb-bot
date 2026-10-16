@@ -283,3 +283,75 @@ def test_an_unreadable_leg_quantity_is_reported_not_guessed_as_zero():
     assert leg["qty_source"] == "retired_markets:UNREADABLE"
     assert leg["basis"]["reason"] == "LEG_QUANTITY_UNAVAILABLE"
     assert out["establishable"] == 0
+
+
+# ------------------------------- why nothing matched, when nothing matched
+
+def test_the_diagnostic_names_the_WRONG_PREDICATE_rather_than_guessing():
+    """THE PRODUCTION CASE. All 46 legs reported NO_FILLS_FOUND over a
+    COMPLETE walk of 2,126 rows. classify_fills needs market, fill-kind and
+    side to hold TOGETHER, so counting them independently is what says which
+    one is wrong."""
+    rows = [{"kind": "trade", "marketId": "wrong-market", "side": "UP"}
+            for _ in range(50)]
+    sh = A.feed_shape(rows, markets=["right-market"], sides=["UP", "DOWN"])
+    assert sh["rows"] == 50
+    assert sh["rows_matching_fill_kind_only"] == 50     # kind is fine
+    assert sh["rows_matching_side_only"] == 50          # side is fine
+    assert sh["rows_matching_market_only"] == 0         # the market is NOT
+    assert sh["rows_matching_all_three"] == 0
+
+
+def test_an_unrecognised_fill_vocabulary_is_named_as_such():
+    rows = [{"kind": "EXECUTION", "market": "m", "side": "UP"}] * 10
+    sh = A.feed_shape(rows, markets=["m"], sides=["UP"])
+    assert sh["rows_matching_market_only"] == 10
+    assert sh["rows_matching_side_only"] == 10
+    assert sh["rows_matching_fill_kind_only"] == 0       # FILL_KINDS misses it
+    assert "execution" in sh["distinct_kinds"]
+    assert sh["fill_kinds_recognised"] == sorted(A.FILL_KINDS)
+
+
+def test_a_wrong_side_vocabulary_is_named_as_such():
+    rows = [{"kind": "trade", "market": "m", "side": "BUY"}] * 7
+    sh = A.feed_shape(rows, markets=["m"], sides=["UP", "DOWN"])
+    assert sh["rows_matching_side_only"] == 0
+    assert sh["rows_matching_market_only"] == 7
+
+
+def test_an_absent_kind_is_reported_not_dropped():
+    sh = A.feed_shape([{"market": "m", "side": "UP"}], markets=["m"],
+                      sides=["UP"])
+    assert sh["distinct_kinds"] == {"<absent>": 1}
+
+
+def test_the_diagnostic_reports_field_NAMES_and_no_values():
+    """It must be safe to log: no price, quantity, identifier or credential."""
+    rows = [{"kind": "trade", "market": "m", "side": "UP", "price": "0.59",
+             "quantity": "5", "clientOrderId": "l5f-secret",
+             "apiKey": "SHOULD-NEVER-APPEAR"}]
+    sh = A.feed_shape(rows, markets=["m"], sides=["UP"])
+    import json as _json
+    blob = _json.dumps(sh)
+    for secret in ("0.59", "l5f-secret", "SHOULD-NEVER-APPEAR"):
+        assert secret not in blob, secret
+    # the field NAMES are present, which is the whole point
+    assert "clientOrderId" in sh["most_common_field_name_sets"][0]["fields"]
+
+
+def test_the_diagnostic_is_computed_only_when_nothing_was_established():
+    """A healthy audit should not carry it."""
+    import inspect
+    src = inspect.getsource(A.audit)
+    assert "if establishable == 0 and keys else None" in src
+
+
+def test_the_placeholder_total_is_summed_for_EVERY_leg():
+    """It reported "0" in production while 33 legs carried non-zero
+    placeholders, because it was summed only over established legs. That is
+    the one number saying how much of realized rests on an upper bound."""
+    import inspect
+    src = inspect.getsource(A.audit)
+    i_all = src.index("placeholder_total += placeholder")
+    i_est = src.index('if basis.get("established")')
+    assert i_all < i_est, "the placeholder total must be summed before the gate"
