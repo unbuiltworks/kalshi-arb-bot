@@ -256,6 +256,75 @@ def _px(value: Any) -> Optional[str]:
     return None if value is None else str(value)
 
 
+#: Which markets retain the FULL ladder, as a comma-separated list of exact
+#: slugs. EMPTY BY DEFAULT, which keeps the memory profile byte-for-byte what
+#: it is today. This is deliberately not a pattern and not "all": `prune_state`
+#: exists because `mstate` reached 8.27 GB RSS holding top-of-book alone, and a
+#: 16-rung two-sided ladder over 240 snapshots is ~300 KB per market -- fine for
+#: the handful of markets we actually quote, 460 MB over a 1,500-market COLD
+#: rotation. The bound lands before the cap, not after.
+LADDER_MARKETS_ENV = "PMUS_WS_LADDER_MARKETS"
+LADDER_RUNGS_ENV = "PMUS_WS_LADDER_RUNGS"
+LADDER_HISTORY_ENV = "PMUS_WS_LADDER_HISTORY"
+LADDER_RUNGS_DEFAULT = 16
+LADDER_HISTORY_DEFAULT = 240      # ~one 15m window at a 4s cadence
+LADDER_RUNGS_CAP = 64
+LADDER_HISTORY_CAP = 1000
+
+
+def ladder_markets() -> frozenset:
+    """Exact slugs retaining a ladder. Unreadable or unset means NONE."""
+    raw = os.getenv(LADDER_MARKETS_ENV) or ""
+    return frozenset(p.strip() for p in raw.split(",") if p.strip())
+
+
+def _bounded_int(env: str, default: int, cap: int) -> int:
+    """A positive int at or under `cap`. Anything unreadable reads as the
+    default, never as unbounded."""
+    try:
+        v = int(str(os.getenv(env) or default).strip())
+    except (TypeError, ValueError):
+        return default
+    if v < 1:
+        return default
+    return min(v, cap)
+
+
+def ladder_rungs() -> int:
+    return _bounded_int(LADDER_RUNGS_ENV, LADDER_RUNGS_DEFAULT, LADDER_RUNGS_CAP)
+
+
+def ladder_history() -> int:
+    return _bounded_int(LADDER_HISTORY_ENV, LADDER_HISTORY_DEFAULT,
+                        LADDER_HISTORY_CAP)
+
+
+def _levels(levels: Any, rungs: int) -> list:
+    """Up to `rungs` [px, qty] pairs, in the order the venue served them.
+
+    WHY THIS EXISTS. `_level` below returns levels[0] and nothing else, so the
+    35-40 rung ladder the venue sends is discarded at ingestion. Our maker
+    intents rest a median 8 ticks behind the touch, so top-of-book depth cannot
+    describe the level we would join, and `l5_maker_fill_model.Ladder` -- which
+    exists precisely to answer "what was ahead of us at the level we joined?"
+    -- has nothing to read. A rung whose price or quantity will not parse is
+    DROPPED rather than carried as a zero: an unknown queue must stay unknown,
+    because treating it as zero puts us at the front of a queue we cannot see.
+    """
+    if not isinstance(levels, list):
+        return []
+    out = []
+    for lv in levels[:max(0, int(rungs))]:
+        if not isinstance(lv, Mapping):
+            continue
+        px = _px(lv.get("px") or lv.get("price"))
+        qty = lv.get("qty")
+        if px is None or qty is None:
+            continue
+        out.append([str(px), str(qty)])
+    return out
+
+
 def _level(levels: Any) -> tuple[Optional[str], Optional[str]]:
     if isinstance(levels, list) and levels and isinstance(levels[0], Mapping):
         lv = levels[0]
@@ -298,6 +367,19 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
                 "bid_qty": s["bid_qty"], "ask_qty": s["ask_qty"],
                 "ask_book_missing": not s["both_sides_served"]})
             del s["bbo_history"][:-2000]
+            # THE RUNGS, for the handful of markets we actually quote. Kept in
+            # its own bounded history rather than widening bbo_history, so the
+            # existing slot replay is untouched and the memory this adds is
+            # confined to the allowlisted slugs.
+            if ev["slug"] in ladder_markets():
+                rungs = ladder_rungs()
+                s.setdefault("ladder_history", []).append({
+                    "t": now,
+                    "bids": _levels(ev.get("bids"), rungs),
+                    "asks": _levels(ev.get("asks"), rungs),
+                    "rungs_cap": rungs,
+                })
+                del s["ladder_history"][:-ladder_history()]
         else:
             # fail closed PER ROW: a malformed price/qty is dropped and
             # counted, never persisted, never allowed to crash the status
