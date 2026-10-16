@@ -3343,6 +3343,15 @@ def validation_gates():
                 None if not os.getenv("L5_MAX_L5_CUMULATIVE_LOSS_USD",
                                       "").strip()
                 else D(os.getenv("L5_MAX_L5_CUMULATIVE_LOSS_USD").strip())),
+            # THE INDEPENDENT ACCOUNT-WIDE BACKSTOP. Additive: it can only
+            # add a refusal. It is the precondition any future L5-scoped
+            # rescoping must satisfy alongside it, because an L5-scoped
+            # ceiling alone would permit trading with material account-wide
+            # losses unresolved.
+            max_unresolved_unknown_usd=(
+                None if not os.getenv("L5_MAX_UNRESOLVED_UNKNOWN_USD",
+                                      "").strip()
+                else D(os.getenv("L5_MAX_UNRESOLVED_UNKNOWN_USD").strip())),
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
         # a gate we cannot build is announced, never silently skipped

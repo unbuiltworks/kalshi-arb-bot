@@ -319,3 +319,18 @@ feed-shape diagnostic, shadow-locked 2026-10-16T13:30Z
 # L5_TS_COMPLETION_CROSS unset, L5_MAX_LIVE_ORDERS and
 # L5_MAX_CASH_DEPLOYED_USD UNCHANGED. Money-path gate 1302 passed.
 activity-feed parser fix, shadow-locked 2026-10-16T13:55Z
+
+# The independent account-wide backstop + the emergency-cancellation proof.
+# AUTHORIZES NOTHING and raises no limit.
+#
+# max_unresolved_unknown_usd (L5_MAX_UNRESOLVED_UNKNOWN_USD, UNSET here so it
+# changes nothing yet) refuses when the unattributable magnitude exceeds its
+# bound, either sign, and refuses when the figure is absent or non-finite --
+# an unreadable unknown is the MAXIMUM possible unknown. It is placed AFTER
+# the account-wide and L5 checks, so it can only ever ADD a refusal. The three
+# protected call sites still read realized_today(); a test asserts it.
+#
+# Money-path gate 1327 passed. SHADOW_ONLY set, HALT latched,
+# L5_TS_COMPLETION_CROSS unset, L5_TS_DEPTH_TICKS 1, L5_MAX_LIVE_ORDERS and
+# L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
+backstop + cancellation proof, shadow-locked 2026-10-16T14:30Z

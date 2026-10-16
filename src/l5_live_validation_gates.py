@@ -102,7 +102,8 @@ class ValidationGates:
                  fee_extra_per_order_usd: D = D("0.01"),
                  max_strategy_loss_usd: Optional[D] = None,
                  max_l5_daily_loss_usd: Optional[D] = None,
-                 max_l5_cumulative_loss_usd: Optional[D] = None) -> None:
+                 max_l5_cumulative_loss_usd: Optional[D] = None,
+                 max_unresolved_unknown_usd: Optional[D] = None) -> None:
         if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
             raise ValueError("unknown cash policy: %r" % cash_policy)
         if cash_policy == RECYCLE_ON_COMPLETE:
@@ -126,6 +127,24 @@ class ValidationGates:
         self.max_l5_cumulative_loss_usd = (
             None if max_l5_cumulative_loss_usd is None
             else _d(max_l5_cumulative_loss_usd))
+        #: THE INDEPENDENT ACCOUNT-WIDE BACKSTOP (OWNER 2026-10-16).
+        #:
+        #: WHAT IT IS FOR. An L5-scoped realized ceiling measures only
+        #: ATTESTED L5 settlements. On this account that figure is 0 -- not
+        #: because L5 broke even, but because nothing has ever been attested
+        #: -- while $294.09 of the account's realized total rests on $1/share
+        #: upper-bound placeholders whose cost AND ownership are unknown. So
+        #: an L5-scoped ceiling on its own would permit trading with material
+        #: account-wide losses entirely unresolved. That is exactly the
+        #: weakening the safety classifier refused, and it was right to.
+        #:
+        #: This bound is the backstop that must hold IN ADDITION. It is
+        #: purely ADDITIVE -- it can only ever add a refusal, never remove
+        #: one -- and it is independent of who owned the activity and of what
+        #: it cost, because both are the things that are unknown.
+        self.max_unresolved_unknown_usd = (
+            None if max_unresolved_unknown_usd is None
+            else _d(max_unresolved_unknown_usd))
         if (self.max_strategy_loss_usd is not None and
                 (not self.max_strategy_loss_usd.is_finite() or
                  self.max_strategy_loss_usd <= 0)):
@@ -402,6 +421,7 @@ class ValidationGates:
                cumulative_realized: D = D(0),
                verified_strategy_net: Optional[D] = None,
                l5_scoped_realized: Optional[D] = None,
+               unresolved_unknown_usd: Optional[D] = None,
                cumulative_unrealized_loss: Optional[D] = D(0),
                windows_used: int = 0,
                book_uncertain: Optional[str] = None,
@@ -478,6 +498,34 @@ class ValidationGates:
                     and l5_loss >= self.max_l5_cumulative_loss_usd):
                 return ("L5_CUMULATIVE_LOSS_LIMIT:%s>=%s"
                         % (l5_loss, self.max_l5_cumulative_loss_usd))
+
+        # THE UNRESOLVED-UNKNOWN BACKSTOP. Additive by construction: every
+        # check above has already run and already returned if breached, so
+        # this can only ever REFUSE something the others permitted.
+        #
+        # It is the precondition any future L5-scoped rescoping must satisfy.
+        # Rescoping the realized ceiling to the verified-L5 population WOULD
+        # permit trading while material account-wide losses are unresolved --
+        # that is a factual answer, not a judgement -- so the rescoping is
+        # only defensible with this bound satisfied alongside it.
+        #
+        # MISSING IS NOT ZERO, and here that matters more than anywhere else:
+        # the whole point is that the unknown is unknown. An unreadable figure
+        # is the maximum possible unknown, not the minimum, so it REFUSES.
+        if self.max_unresolved_unknown_usd is not None:
+            if unresolved_unknown_usd is None:
+                return "UNRESOLVED_UNKNOWN_UNAVAILABLE"
+            try:
+                u = _d(unresolved_unknown_usd)
+                if not u.is_finite():
+                    return "UNRESOLVED_UNKNOWN_UNAVAILABLE"
+            except (ValueError, ArithmeticError):
+                return "UNRESOLVED_UNKNOWN_UNAVAILABLE"
+            # magnitude, either sign: an unexplained CREDIT is as much an
+            # unreconciled book as an unexplained debit.
+            if abs(u) > self.max_unresolved_unknown_usd:
+                return ("UNRESOLVED_UNKNOWN_EXCEEDED:%s>%s"
+                        % (abs(u), self.max_unresolved_unknown_usd))
 
         # Independent strategy budget, NEVER substituted for the conservative
         # account-wide gate above. No verified after-fee net is a refusal.

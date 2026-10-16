@@ -142,3 +142,24 @@ tests/test_l5_pmus_live_wiring.py
     fill. gate_input(bucket) is the only sanctioned way to feed a limit and
     returns None -- never zero -- for an unknown. It changes NO policy: a
     test asserts the three protected call sites still read realized_today.
+
+17. INDEPENDENT ACCOUNT-WIDE BACKSTOP (additive; never a substitution)
+    tests/test_l5_unresolved_unknown_backstop.py
+    max_unresolved_unknown_usd refuses when the unattributable magnitude
+    exceeds its bound, either sign, and refuses UNRESOLVED_UNKNOWN_UNAVAILABLE
+    when the figure is absent or non-finite -- an unreadable unknown is the
+    MAXIMUM possible unknown, not the minimum. It runs AFTER the account-wide
+    and L5 checks in source order, so it can only ever add a refusal. A test
+    asserts the three protected call sites are still unchanged.
+
+18. EMERGENCY CANCELLATION PROOF (exact venue id, every trigger)
+    tests/test_l5_emergency_cancellation_proof.py
+    HALT, terminal deadline, window end, uncertain reconciliation and
+    shutdown all reach the same route, which cancels by VENUE id and never by
+    client order id, then re-reads every id because an ack is not proof. A
+    cancel that returned 200 but reads back WORKING is still_open and marks
+    the book UNCERTAIN, which SafetyLimits then refuses on. A cancel that
+    raised but reads back terminal IS cancelled, with the error recorded.
+    Both failing leaves UNCERTAIN. A fresh store recovers the live orders
+    from disk and cancels them, which is the state a crash leaves. The shadow
+    lock blocks submit and never cancel.
