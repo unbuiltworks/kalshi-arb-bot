@@ -1,8 +1,51 @@
 # L5 loss-gate rescoping — PROPOSED, NOT APPLIED
 
-**Status: BLOCKED pending authorized security review. No code change has been
-made. The deployed executor at `2e8b4772` enforces every existing loss gate
-unchanged.**
+**Status: BLOCKED pending a human with write access. No code change has been
+made. The deployed executor enforces every existing loss gate unchanged, and
+a test (`test_gate_input_changes_no_policy_by_itself`) asserts the three
+protected call sites still read `realized_today()` by counting them in the
+source.**
+
+**Updated 2026-10-16 at `e42c3ef1`.** Two things changed since the first
+draft and both matter to the decision:
+
+1. **The account-wide figure is now `-218.99`, not `-79.01`.** Four post-T
+   settlements arrived priced at the `$1`/share upper bound with
+   `UNKNOWN_COST_UPPER_BOUND` provenance: BTC 0330z `-2.00`, ETH 0330z
+   `-50.00`, SOL 0330z `-50.00`, XRP 0330z `-37.98`. **These are estimates,
+   not verified realized losses**, and none is attributable to L5 or to
+   manual trading.
+2. **The mechanism the change needs now exists and is landed separately from
+   the change.** `InventoryStore.four_bucket_accounting()` and
+   `gate_input(bucket)` split realized P&L into `account_wide`,
+   `verified_l5`, `manual` and `unknown_unattributed`, maintain the identity
+   `account_wide = verified_l5 + manual + unknown_unattributed`, and return
+   `None` -- never zero -- for an unknown. So the diff below is now a
+   *substitution of a named bucket*, not the introduction of a new concept.
+
+### What the four buckets say today
+
+| Bucket | Value | Note |
+|---|---|---|
+| `account_wide_realized` | `-218.99` | authoritative total; what the gates read now |
+| `verified_l5_realized` | `0` | zero **attested** L5 settlements since T |
+| `manual_realized` | **`None`** | a residual, and unavailable while anything is unattributable |
+| `unknown_unattributed_realized` | `-218.99` | every unattested post-T settlement plus the whole pre-T total |
+
+**Essentially the entire `-218.99` is UNKNOWN.** It is neither verified L5
+nor verified manual. The gates are therefore refusing on a figure that is
+almost wholly an upper-bound estimate of unattributable activity -- which is
+the conservative behaviour, and is also why it can never clear on its own.
+
+### Why the cost-basis audit cannot resolve it
+
+Run in production, the audit reported `our_client_order_ids: 0`: our durable
+fill-provenance registry is empty, so **no historical fill can be attributed
+to either party**. That is unrecoverable -- the venue does not say who placed
+a historical fill on a shared account. A separate defect (the walk bounded at
+40 pages) is fixed at `e42c3ef1`, which may let the audit establish the
+*cost* of those legs (an account fact) and so measure the overstatement; it
+will never establish their *ownership*.
 
 Owner approved this change in principle on 2026-10-16, conditional on
 production verification of account-wide exposure aggregation. That condition
@@ -208,3 +251,76 @@ bounded at `$3.60` by §4.
 A true independent canceller needs a second, cancel-scoped credential from
 the venue. That is a request to PMUS, not an engineering task in this
 repository.
+
+---
+
+## 8. The exact diff, and the exact approval action
+
+Requested by the owner 2026-10-16. This is the complete change. It touches no
+limit value and introduces no new concept -- `gate_input` and the four buckets
+are already landed and tested at `e42c3ef1`.
+
+### The diff
+
+In `src/l5_live_execution.py`, insert the fail-closed guard before the gate
+calls (beside the existing account-wide exposure guard):
+
+```python
+# L5-SCOPED REALIZED, fail-closed. None means no verified baseline or an
+# unreadable settlement row, and a loss ceiling fed an unknown figure is
+# not a ceiling. It is NEVER substituted with zero.
+l5_scoped = self.store.gate_input("verified_l5")
+if l5_scoped is None:
+    prov.stage("SAFETY_OVERLAY", {"refused": "L5_SCOPED_REALIZED_UNAVAILABLE"})
+    return prov.refuse("SAFETY_OVERLAY", "L5_SCOPED_REALIZED_UNAVAILABLE")
+```
+
+Then three input substitutions:
+
+| Line | Gate | Limit | From | To |
+|------|------|-------|------|----|
+| 3372 | `ValidationGates.refuse(cumulative_realized=…)` | `max_cumulative_loss_usd` = **20** | `self.store.realized_today()` | `l5_scoped` |
+| 3818 | `ValidationGates.refuse(cumulative_realized=…)` | `max_cumulative_loss_usd` = **20** | `self.store.realized_today()` | `l5_scoped` |
+| 3850 | `SafetyLimits.refuse(realized_today=…)` | `daily_realized_loss_halt_usd` = **5** | `self.store.realized_today()` | `l5_scoped` |
+
+Line numbers are at `e42c3ef1`; the exact strings are
+`cumulative_realized=self.store.realized_today()` (twice) and
+`realized_today=self.store.realized_today()` (once), and a test counts them,
+so a partial application fails the suite.
+
+### The approval action
+
+This repository defines no security-review mechanism: no `CODEOWNERS`, no
+`SECURITY.md`, no `CONTRIBUTING`, and `.github/` holds only `workflows/`. The
+required action is therefore:
+
+> **A human with write access applies the diff above directly** -- in their own
+> checkout on `claude/gemini-btc-economic-viability-h3u7zl`, or through
+> GitHub's web editor -- and pushes it.
+
+Claude cannot: the harness classifier refuses the edit on the *content* of the
+change, so switching tools would defeat the denial's intent, and the owner has
+ruled out changing tool permissions. The rejected edit has not been attempted
+again.
+
+### What to verify after applying it
+
+1. `python3 -m pytest $(grep -v '^#' tests/MONEY_PATH_GATE.txt | grep -oE 'tests/[A-Za-z0-9_./]+\.py' | sort -u) -q` -- green at **1302** before the change.
+2. `tests/test_l5_four_bucket_accounting.py` -- note that
+   `test_gate_input_changes_no_policy_by_itself` asserts the OLD call sites and
+   **must be updated as part of the change**, not deleted: it should assert the
+   three sites now read `gate_input("verified_l5")`.
+3. A new regression asserting `l5_scoped is None` refuses at **all three**
+   sites -- the property whose absence would make a partial rescoping look
+   complete.
+4. Deploy with `L5_SHADOW_ONLY` still set and read the heartbeat's
+   `accounting` block before any separate arming decision.
+
+### What this does NOT do
+
+It does not unblock the bounded live run on its own. After it, the remaining
+blockers are the shadow lock, the latched HALT, and the two risk limits
+(`L5_MAX_LIVE_ORDERS`, `L5_MAX_CASH_DEPLOYED_USD`) -- each a separate explicit
+owner authorization. And it leaves manual trading with no realized-loss
+ceiling, standing instead behind the `$5` account-wide worst-case exposure
+ceiling, which genuinely aggregates every market as of `f69427f0`.
