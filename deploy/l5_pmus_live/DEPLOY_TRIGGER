@@ -531,3 +531,35 @@ cost-basis applier, INSPECT dry run, shadow-locked 2026-10-16T16:55Z
 # unset, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
 # No limit, threshold or gate is touched and no order can be submitted.
 47-leg cost-basis correction, apply-ready, shadow-locked 2026-10-16T17:25Z
+
+# CORRECTION to the entry above, and the reason this deploy exists.
+#
+# That entry said "the manifest ships in config/ because the Dockerfile COPYs
+# only src/ and config/." That is true of the ROOT Dockerfile and FALSE of
+# this one. RAILWAY_DOCKERFILE_PATH on this service is
+# deploy/l5_pmus_live/Dockerfile, which COPYs file by file and named no
+# config/ path -- so /app/config/cost_basis_batch_manifest_20261016.json did
+# not exist in the image, and the apply aborted BATCH_MANIFEST_MISSING on
+# deploy 95e713d0 both at boot and after the restart.
+#
+# THE GUARD BEHAVED CORRECTLY AND NOTHING WAS WRITTEN: realized_before and
+# realized_after both read legacy_realized_today "-233.98540000", applied 0,
+# refused 0, both UNKNOWN legs preserved. This is therefore NOT a retry of a
+# write that may have partly happened -- no write has happened at all.
+#
+# ONE LINE CHANGES IN THE IMAGE: the manifest is now named in this
+# Dockerfile's COPY set. No src file changes. The shipping test now checks
+# EVERY Dockerfile that runs the live runner and requires the money-capable
+# one to be among them, so this class of failure cannot recur silently; it
+# reproduces the exact failure when the line is removed.
+#
+# L5_COST_BASIS_APPLY and L5_COST_BASIS_BATCH_MANIFEST are ALREADY SET on
+# this service, so this boot runs the authorized apply.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_TS_COMPLETION_CROSS stays
+# unset, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and
+# 1. No limit, threshold, gate or baseline is touched and no order can be
+# submitted.
+#
+# 200 passed across the money-path suites.
+manifest in the live image's COPY set, shadow-locked 2026-10-16T17:40Z
