@@ -614,3 +614,45 @@ manifest in the live image's COPY set, shadow-locked 2026-10-16T17:40Z
 # The BTC1d 2100z position stays REAL exposure: no settlement evidence
 # exists, and this change does not touch it.
 restatement verb + manifest c, INSPECT dry run, shadow-locked 2026-10-16T18:45Z
+
+# OWNER-AUTHORIZED APPLY of manifest 20261016d. 23 legs, 34 trade ids,
+# expected realized delta +67.72680000, expected resulting realized
+# -8.39480000.
+#
+# THE PRECONDITION RUNS IMMEDIATELY BEFORE THE WRITE, IN THIS BOOT. The
+# applier walks the activity feed fresh, rebuilds the plan from the CURRENT
+# production rows, and check_batch compares the whole batch -- the 23 leg
+# keys, the 34 distinct trade ids, the 67.72680000 aggregate, AND each
+# leg's own cost_before/cost_after and trade ids -- before any write. A
+# mismatch returns BATCH_MISMATCH and writes NOTHING.
+#
+# WHY THIS MANIFEST AND NOT 20261016c. The 24-leg batch was refused by the
+# fresh INSPECT on deployment efb70ed5 at 18:43:33Z:
+#   LEG_COUNT:23!=24, DELTA_DIFFERS:67.72680000!=68.23680000
+# because cpc-btc-updown-15m-2026-10-15-1945z|DOWN is
+# MARKET_TWO_SIDED_COST_UNREADABLE: _retire stores up_qty/dn_qty/cost_total
+# and NO per-side costs, so that market's 1.4600 pair cost cannot be split
+# and writing 0.4900 over it would have erased the UP leg's real 0.4600.
+# The leg STAYS UNKNOWN and separately tracked. It is not investigated
+# further here.
+#
+# 26 LEGS ARE EXCLUDED AND MUST NOT CHANGE: 23 NOTHING_TO_CORRECT (every UP
+# leg is already right, plus the Stage A 2230z leg at 0.590000), the 2
+# QUANTITY_MISMATCH legs (1930z|UP and the BTC1d 2100z|DOWN), and 1945z.
+#
+# THE BTC1d 2100z POSITION REMAINS REAL EXPOSURE, $2.0400 worst case. It
+# expires 2026-10-16T21:00Z and no settlement evidence exists. This change
+# does not touch it.
+#
+# No runtime file changes in this deploy; manifest 20261016d is added to the
+# COPY set. 248 passed.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_MAX_CUMULATIVE_LOSS_USD
+# UNCHANGED at 20, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED
+# at 1 and 1, L5_TS_COMPLETION_CROSS unset. No limit, threshold, gate or
+# baseline is touched and no order can be submitted. The correction moves
+# realized from -76.12160000 to -8.39480000, which is still a REFUSAL at
+# the unchanged $20 ceiling... no: 8.3948 < 20, so the cumulative-loss gate
+# will PASS on realized alone. HALT and the shadow lock still block every
+# order, and clearing them is a separate decision the owner has not taken.
+apply manifest 20261016d, 23 legs, shadow-locked 2026-10-16T18:55Z
