@@ -696,3 +696,104 @@ So the mismatch is not tuning: **replicating this window would require
 buying into strength at rising prices with a large directional imbalance,
 which is the opposite of what our engine is built to do and what our risk
 controls permit.** Nothing here is a recommendation to change either.
+
+---
+
+## 17. Ladder verification and the four-outcome model. 2026-10-16.
+
+### Correction accepted: no price-through event is called a fill
+Everything in §15 labelled BOTH/NEITHER is restated here as
+**HYPOTHETICAL price-through**, not execution. A print through our price
+proves the level traded; it does not prove our order was reached.
+
+### 3. Ladder depth at the proposed resting prices — HALF VERIFIED
+**Capture is verified and running.** `PMUS_WS_STATUS` shows the rolling
+ladder selection working exactly as designed, releasing one window per
+rollover and retaining the live window plus the next:
+
+```
+19:15:00Z ladder_release retaining [...1915z, ...1930z]
+19:30:06Z ladder_release retaining [...1930z, ...1945z]
+19:45:01Z ladder_release retaining [...1945z, ...2000z]
+20:00:01Z ladder_release retaining [...2000z, ...2015z]
+```
+
+**Contents are NOT reachable from this session.** `ladder_history` is held
+in recorder memory (`_levels(...)`, 16 rungs, 240 snapshots) and written to
+the volume archive. **It is never emitted to a log line**, and the volume
+cannot be read from here. `PMUS_WS_TAPE_READ_SLUG` / `_TICK` are set on the
+service but no code reading them exists in this branch's recorder.
+
+So the depth at our two resting prices — `bid - 1 tick` and `ask + 1 tick`,
+i.e. the SECOND-best level on each side — **is being recorded and cannot be
+read.** Timestamp alignment to the order-intent decision therefore cannot be
+demonstrated either. Surfacing it needs either a new emit or volume access;
+both are outside "no new infrastructure" and neither was taken.
+
+**Consequence: the queue term is unmeasured, so `p_both` is unmeasured.**
+
+### 2. All four outcomes, with settlement — and why the model cannot be populated
+Per contract, from ACTUAL settlement, fees at 1 contract rounding to $0.00:
+
+| window | our bid | our ask | pair | settled | BOTH | UP_ONLY | DN_ONLY | NEITHER |
+|---|---|---|---|---|---|---|---|---|
+| 1630z | 0.15 | 0.18 | 0.97 | UP lost | +0.0300 | −0.1500 | +0.1800 | 0 |
+| 1645z | 0.64 | 0.67 | 0.97 | UP lost | +0.0300 | −0.6400 | +0.6700 | 0 |
+| 1915z | 0.97 | 1.00 | 0.97 | UP won | +0.0300 | +0.0300 | 0.0000 | 0 |
+| 1930z | 0.49 | 0.52 | 0.97 | UP lost | +0.0300 | −0.4900 | +0.5200 | 0 |
+| 1945z | 0.51 | 0.55 | 0.96 | UP won | +0.0400 | +0.4900 | −0.4500 | 0 |
+
+**Adverse selection is structural, not an add-on.** Our bid is reached only
+when price FALLS through it, so UP_ONLY means long UP into weakness. Our
+ask is lifted only when price RISES, so DN_ONLY means long DOWN into
+strength. **Both one-sided states are adversely selected by construction**,
+so correlated legs do NOT remove one-sided risk — they concentrate it in
+precisely the adverse states.
+
+**And the table above cannot be used to price them.** The payoffs are
+computed against each window's realised settlement, NOT conditional on the
+price path that would have caused the one-sided fill. Conditioning is the
+whole question: DN_ONLY looks +0.1840 on average here only because 3 of 5
+windows happened to settle UP-lost. Properly conditioned, DN_ONLY occurs
+when price rises, which correlates with UP winning — i.e. it should be a
+LOSS. **Five windows cannot estimate a conditional distribution.**
+
+Three unknowns decide the sign, and all three are unmeasured:
+1. `p(reach)` — queue position. Ladder captured, not readable.
+2. the split between UP_ONLY and DN_ONLY.
+3. the settlement distribution CONDITIONAL on each one-sided state.
+
+Any EV number quoted today rests on assuming all three. **No EV is claimed.**
+
+### 4. L5 actual vs our counterfactual — kept separate
+Everything in §16 is L5's ACTUAL Polymarket execution (his fills, his
+redemption). Everything in §15 and §17 is OUR PMUS counterfactual on an
+unarmed engine that has never placed a maker order. No PMUS price has been
+used as a Polymarket price and no Polymarket result has been claimed for
+PMUS.
+
+### Could our engine realistically reproduce the observed L5 behaviour?
+**No, and not by a small margin.**
+
+| | L5, 19:45Z window (actual) | our engine (configured) |
+|---|---|---|
+| peak one-sided imbalance | **345 contracts** | `max_abs_residual` **10** |
+| pair cost paid | **0.97–1.10** contemporaneous | refuses above **0.96** |
+| resting orders | both sides, continuously | `max_live_orders` **1** |
+| cash deployed | ~**$434** in one window | `max_cash_deployed_usd` **$1** |
+| direction | bought UP into strength, 49c → 98c | spread capture, rests OUTSIDE the touch |
+
+The engine would have refused **every fill** in that window on pair cost
+alone. This is a difference of kind, not of tuning.
+
+### Single highest-impact remaining blocker
+**The ladder's contents are not readable from anywhere we can reach.** It is
+the only measurement that can turn `p_both` from an assumption into a
+number, the recorder is already capturing it correctly, and without it every
+economic statement about simultaneous quoting on PMUS stays conditional.
+Not the order limit, not the pair target, not HALT — the readout.
+
+### BTC1d
+20:12Z; `cpc-btc-updown-1d-2026-10-15-2100z` expires 21:00Z. Still
+**no settlement evidence**. Remains REAL exposure, $2.0400 worst case,
+cost UNKNOWN.
