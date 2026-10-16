@@ -201,9 +201,14 @@ SIDE_KEYS = ("side", "outcome", "outcomeSide", "orderSide", "positionSide",
              "direction", "takerSide", "buySell")
 
 #: keys that have been seen to carry a commission or rebate.
-FEE_KEYS = ("commission", "commissionNotionalTotalCollected", "fee",
-            "fees", "commissionPaid", "rebate", "makerRebate",
-            "commissionNotional")
+FEE_KEYS = ("commissionNotionalCollected", "commission",
+            "commissionNotionalTotalCollected", "fee", "fees",
+            "commissionPaid", "rebate", "makerRebate", "commissionNotional")
+
+#: our own executed shares and price, which the execution object carries
+#: rather than the trade row: the row's qty/price describe the whole TRADE.
+EXEC_QTY_KEYS = ("lastShares", "lastQty", "qty", "quantity")
+EXEC_PX_KEYS = ("lastPx", "price", "avgPx")
 
 
 def _exec_objects(body: Mapping[str, Any]) -> List[Mapping[str, Any]]:
@@ -292,11 +297,15 @@ def execution_field_inventory(rows: List[Mapping[str, Any]]
         present += 1
         for o in objs:
             keysets.update([",".join(sorted(str(x) for x in o.keys()))])
+            # DEEP: the first census reported {} for both because the side
+            # is inside `order` and the commission key is
+            # commissionNotionalCollected, neither of which it looked at.
             for sk in SIDE_KEYS:
-                if o.get(sk) not in (None, ""):
-                    side_vals.update(["%s=%s" % (sk, str(o[sk])[:40])])
+                v = _first_present([o], (sk,), deep=True)
+                if v not in (None, ""):
+                    side_vals.update(["%s=%s" % (sk, str(v)[:40])])
             for fk in FEE_KEYS:
-                if fk in o:
+                if _first_present([o], (fk,), deep=True) not in (None, ""):
                     fee_keys_seen.update([fk])
     return {
         "fill_rows_with_execution_objects": present,
@@ -328,7 +337,14 @@ def _row_side(row: Mapping[str, Any]) -> Optional[str]:
         # else -- `side` appears only on position_resolution rows and inside
         # the nested execution objects. Reading only the top level is what
         # made all 1,911 trade rows unmatchable.
-        raw = _first_present(_exec_objects(body), SIDE_KEYS)
+        # DEEP, AND ONLY WITHIN OUR OWN EXECUTION. The side sits inside the
+        # execution's nested `order` object -- the execution's own keys are
+        # aggressor/commissionNotionalCollected/commissionSpreadPx/id/lastPx/
+        # lastShares/legPrices/order/... with no side among them. A deep
+        # search is safe here precisely BECAUSE _exec_objects has already
+        # used isAggressor to narrow to one object, so it cannot reach the
+        # counterparty's side.
+        raw = _first_present(_exec_objects(body), SIDE_KEYS, deep=True)
     v = str(raw or "").strip().upper()
     if not v:
         return None
@@ -539,9 +555,18 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
         # AUTHORITATIVE COST, straight off the row. This is the figure the
         # $1/share placeholders were standing in for.
         cost = _d(b.get("cost"))
+        ours = _exec_objects(b)
         fee = _d(_first_present([b], FEE_KEYS))
         if fee is None:
-            fee = _d(_first_present(_exec_objects(b), FEE_KEYS))
+            fee = _d(_first_present(ours, FEE_KEYS, deep=True))
+        # OUR executed shares and price, preferred over the trade-level
+        # figures: the row's qty/price describe the whole trade.
+        oq = _d(_first_present(ours, EXEC_QTY_KEYS))
+        if oq is not None:
+            qty = oq
+        op = _d(_first_present(ours, EXEC_PX_KEYS))
+        if op is not None:
+            px = op
         fills.append({
             "trade_id": str(b.get("tradeId") or b.get("id") or "") or None,
             "order_id": str(b.get("orderId") or "") or None,

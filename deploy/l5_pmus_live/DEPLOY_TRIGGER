@@ -384,3 +384,18 @@ payload-side diagnostic, shadow-locked 2026-10-16T15:10Z
 # Money-path gate 1327 passed. SHADOW_ONLY set, HALT latched, submission
 # disabled, no limit or threshold changed.
 trade-field mapping correction, shadow-locked 2026-10-16T16:10Z
+
+# Final field mapping, from the execution key census. The execution objects
+# carry aggressor/commissionNotionalCollected/commissionSpreadPx/id/lastPx/
+# lastShares/legPrices/order/... -- so the commission key is
+# commissionNotionalCollected (not ...TotalCollected, one word out) and the
+# SIDE is inside the nested `order`. Our executed shares and price come from
+# lastShares/lastPx, which describe OUR fill rather than the whole trade.
+#
+# The deep search is safe ONLY because isAggressor has already narrowed to
+# our own execution, so it cannot reach the counterparty's side; a test
+# asserts the two rows resolve to opposite sides.
+#
+# READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit, threshold or baseline changed.
+final field mapping, shadow-locked 2026-10-16T16:40Z

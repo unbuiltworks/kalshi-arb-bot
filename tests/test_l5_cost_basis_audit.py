@@ -601,3 +601,66 @@ def test_selectability_is_counted_so_attributability_is_bounded():
         [trade(isaggressor=True), trade(isaggressor=False),
          trade(isaggressor=None)])
     assert inv["our_side_selectable_via_isAggressor"] == 2
+
+
+def real_trade(isaggressor=True):
+    """The production execution shape, from the key census: the execution's
+    own keys are aggressor/commissionNotionalCollected/commissionSpreadPx/id/
+    lastPx/lastShares/legPrices/order/... with NO side among them -- the side
+    is inside the nested `order`."""
+    def ex(side, fee):
+        return {"commissionNotionalCollected": fee, "commissionSpreadPx": "0",
+                "lastPx": "0.41", "lastShares": "50", "id": "e-1",
+                "order": {"side": side}}
+    return {"type": "activity_type_trade", "trade": {
+        "marketSlug": "cpc-btc-updown-15m-2026-10-16-0330z",
+        "price": "0.41", "qty": "50", "qtyDecimal": "50", "cost": "20.50",
+        "isAggressor": isaggressor, "id": "t-1",
+        "aggressorExecution": ex("OUTCOME_SIDE_YES", "0.07"),
+        "passiveExecution": ex("OUTCOME_SIDE_NO", "-0.02")}}
+
+
+def test_the_side_is_found_inside_the_executions_nested_order():
+    assert A._row_side(real_trade(True)) == "UP"
+    assert A._row_side(real_trade(False)) == "DOWN"
+
+
+def test_the_deep_search_cannot_reach_the_COUNTERPARTYS_side():
+    """A deep search is only safe because isAggressor narrowed the set to one
+    object first. Both rows carry both sides; each resolves to its own."""
+    assert A._row_side(real_trade(True)) != A._row_side(real_trade(False))
+
+
+def test_the_feeds_real_commission_key_is_read():
+    """commissionNotionalCollected, not commissionNotionalTotalCollected --
+    the census reported {} for fees because of that one word."""
+    assert A.FEE_KEYS[0] == "commissionNotionalCollected"
+    for flag, want in ((True, "0.07"), (False, "-0.02")):
+        f = A.classify_fills(
+            [real_trade(flag)],
+            market="cpc-btc-updown-15m-2026-10-16-0330z",
+            side=("UP" if flag else "DOWN"), our_coids=set())["fills"][0]
+        assert f["fee"] == want, flag
+
+
+def test_OUR_executed_shares_and_price_come_from_OUR_execution():
+    f = A.classify_fills(
+        [real_trade(True)], market="cpc-btc-updown-15m-2026-10-16-0330z",
+        side="UP", our_coids=set())["fills"][0]
+    assert f["qty"] == "50"        # lastShares
+    assert f["price"] == "0.41"    # lastPx
+    assert f["cost"] == "20.50"    # the trade's authoritative cost
+
+
+def test_the_census_searches_deep_enough_to_name_both():
+    inv = A.execution_field_inventory([real_trade(True)])
+    assert inv["side_like_values_inside_executions"] != {}
+    assert "commissionNotionalCollected" in inv[
+        "fee_like_keys_inside_executions"]
+
+
+def test_all_three_predicates_now_match_a_real_trade_row():
+    sh = A.feed_shape([real_trade(True)],
+                      markets=["cpc-btc-updown-15m-2026-10-16-0330z"],
+                      sides=["UP", "DOWN"])
+    assert sh["rows_matching_all_three"] == 1
