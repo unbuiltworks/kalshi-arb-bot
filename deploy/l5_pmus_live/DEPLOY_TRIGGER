@@ -365,3 +365,22 @@ full cost-basis reconciliation + fee/notional evidence, shadow-locked 2026-10-16
 # READ-ONLY. SHADOW_ONLY set, HALT latched, submission disabled, no limit
 # changed.
 payload-side diagnostic, shadow-locked 2026-10-16T15:10Z
+
+# OWNER-AUTHORIZED trade-field mapping correction. READ-ONLY.
+#
+# The feed's trade payload is aggressor/aggressorExecution/cost/isAggressor/
+# market/marketSlug/passive/passiveExecution/price/qty/qtyDecimal/... -- it
+# carries NO top-level side and NO commission, which is why all 1,911 rows
+# read as None. Corrected: qty from qty/qtyDecimal, the AUTHORITATIVE cost
+# from `cost`, side and commission from the nested execution objects, and
+# realizedPnl/costBasis carried where present.
+#
+# OUR SIDE, NOT THE COUNTERPARTY'S. A trade has two sides and the two
+# execution objects hold OPPOSITE ones, so `isAggressor` selects ours.
+# Absent, the side stays UNKNOWN -- never a coin flip. A census of both
+# objects is reported separately, and our_side_selectable_via_isAggressor
+# bounds how much of the history is attributable at all.
+#
+# Money-path gate 1327 passed. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit or threshold changed.
+trade-field mapping correction, shadow-locked 2026-10-16T16:10Z

@@ -496,3 +496,108 @@ def test_the_evidence_reports_no_identifier():
     blob = _json.dumps(A.fee_and_notional_evidence(rows))
     for secret in ("l5f-secret", "SHOULD-NOT-APPEAR"):
         assert secret not in blob, secret
+
+
+# ------------------- the nested execution mapping (the real feed shape)
+
+def trade(isaggressor=True, agg_side="OUTCOME_SIDE_YES",
+          pas_side="OUTCOME_SIDE_NO", agg_fee="0.07", pas_fee="-0.02",
+          market="cpc-btc-updown-15m-2026-10-16-0330z", qty="50",
+          price="0.41", cost="20.50", **extra):
+    """A trade row shaped as the production feed sends it. Its payload has
+    qty/qtyDecimal/cost/price/marketSlug and NO top-level side or
+    commission -- those live in the two nested execution objects."""
+    inner = {"marketSlug": market, "price": price, "qty": qty,
+             "qtyDecimal": qty, "cost": cost, "id": "t-1",
+             "aggressorExecution": {"side": agg_side, "commission": agg_fee},
+             "passiveExecution": {"side": pas_side, "commission": pas_fee}}
+    if isaggressor is not None:
+        inner["isAggressor"] = isaggressor
+    inner.update(extra)
+    return {"type": "activity_type_trade", "trade": inner}
+
+
+def test_OUR_side_comes_from_isAggressor_not_from_whichever_is_first():
+    """A trade has TWO sides and we are one of them. Taking the first would
+    book the COUNTERPARTY's side on half the rows -- a worse failure than
+    reading nothing, because it looks like data."""
+    assert A._row_side(trade(isaggressor=True)) == "UP"
+    assert A._row_side(trade(isaggressor=False)) == "DOWN"
+
+
+def test_OUR_commission_comes_from_OUR_execution():
+    for flag, want in ((True, "0.07"), (False, "-0.02")):
+        f = A.classify_fills(
+            [trade(isaggressor=flag)],
+            market="cpc-btc-updown-15m-2026-10-16-0330z",
+            side=("UP" if flag else "DOWN"), our_coids=set())["fills"][0]
+        assert f["fee"] == want, flag
+
+
+def test_an_absent_isAggressor_leaves_the_side_UNKNOWN():
+    """Do not infer missing values: which side was ours is unknown, so it
+    stays unknown rather than becoming a coin flip."""
+    assert A._row_side(trade(isaggressor=None)) is None
+
+
+def test_a_single_execution_object_is_unambiguous():
+    r = {"type": "activity_type_trade", "trade": {
+        "marketSlug": "m", "price": "0.5", "qty": "1", "cost": "0.5",
+        "passiveExecution": {"side": "OUTCOME_SIDE_NO", "commission": "0"}}}
+    assert A._row_side(r) == "DOWN"
+
+
+def test_the_top_level_probe_is_SHALLOW():
+    """THE BUG THIS PINS. _first_present searching one level down walked into
+    aggressorExecution and returned the aggressor's side before isAggressor
+    was consulted, defeating the selection entirely."""
+    body = {"aggressorExecution": {"side": "OUTCOME_SIDE_YES"}}
+    assert A._first_present([body], A.SIDE_KEYS) is None          # shallow
+    assert A._first_present([body], A.SIDE_KEYS, deep=True) == "OUTCOME_SIDE_YES"
+
+
+def test_the_feeds_own_quantity_and_cost_field_names_are_used():
+    f = A.classify_fills([trade(qty="50", cost="20.50", price="0.41")],
+                         market="cpc-btc-updown-15m-2026-10-16-0330z",
+                         side="UP", our_coids=set())["fills"][0]
+    assert f["qty"] == "50"            # `qty`, not `quantity`
+    assert f["cost"] == "20.50"        # the venue's AUTHORITATIVE cost
+    assert f["price"] == "0.41"
+
+
+def test_realized_pnl_and_cost_basis_are_carried_when_present():
+    f = A.classify_fills(
+        [trade(realizedPnl="-1.25", costBasis="3.40")],
+        market="cpc-btc-updown-15m-2026-10-16-0330z", side="UP",
+        our_coids=set())["fills"][0]
+    assert f["realized_pnl"] == "-1.25"
+    assert f["cost_basis"] == "3.40"
+
+
+def test_the_side_vocabulary_matches_by_SUFFIX():
+    """POSITION_RESOLUTION_SIDE_LONG and OUTCOME_SIDE_YES are both seen on
+    the feed; a new prefix must not fall through to the wrong side."""
+    for v, want in (("OUTCOME_SIDE_YES", "UP"), ("OUTCOME_SIDE_NO", "DOWN"),
+                    ("POSITION_RESOLUTION_SIDE_LONG", "UP"),
+                    ("POSITION_RESOLUTION_SIDE_SHORT", "DOWN"),
+                    ("SOMETHING_ELSE", None)):
+        r = {"type": "activity_type_trade",
+             "trade": {"marketSlug": "m", "passiveExecution": {"side": v}}}
+        assert A._row_side(r) == want, v
+
+
+def test_the_inventory_censuses_BOTH_executions():
+    """The key census is not an attribution, so it is not restricted by
+    isAggressor."""
+    inv = A.execution_field_inventory([trade(isaggressor=None)])
+    assert inv["fill_rows_with_execution_objects"] == 1
+    assert inv["our_side_selectable_via_isAggressor"] == 0
+    vals = inv["side_like_values_inside_executions"]
+    assert "side=OUTCOME_SIDE_YES" in vals and "side=OUTCOME_SIDE_NO" in vals
+
+
+def test_selectability_is_counted_so_attributability_is_bounded():
+    inv = A.execution_field_inventory(
+        [trade(isaggressor=True), trade(isaggressor=False),
+         trade(isaggressor=None)])
+    assert inv["our_side_selectable_via_isAggressor"] == 2

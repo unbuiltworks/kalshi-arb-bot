@@ -190,14 +190,154 @@ def _row_market(row: Mapping[str, Any]) -> str:
     return ""
 
 
+#: the two nested execution objects on a trade row. A trade has two sides and
+#: the account is ONE of them, so the row's own money fields (`cost`, `price`,
+#: `qty`) describe the TRADE and the per-party detail -- which side, what
+#: commission -- is inside these.
+EXEC_KEYS = ("aggressorExecution", "passiveExecution")
+
+#: keys that have been seen to carry a side, in any of the nested objects.
+SIDE_KEYS = ("side", "outcome", "outcomeSide", "orderSide", "positionSide",
+             "direction", "takerSide", "buySell")
+
+#: keys that have been seen to carry a commission or rebate.
+FEE_KEYS = ("commission", "commissionNotionalTotalCollected", "fee",
+            "fees", "commissionPaid", "rebate", "makerRebate",
+            "commissionNotional")
+
+
+def _exec_objects(body: Mapping[str, Any]) -> List[Mapping[str, Any]]:
+    """OUR execution object, or none when which one is ours is UNKNOWN.
+
+    A TRADE HAS TWO SIDES AND WE ARE ONE OF THEM. The row carries both
+    `aggressorExecution` and `passiveExecution`, and they hold OPPOSITE
+    sides -- so taking "the first side found" would attribute the
+    COUNTERPARTY's side half the time and silently book the wrong leg. That
+    is a worse failure than reading nothing, because it looks like data.
+
+    `isAggressor` is the row's own statement of which party the account was,
+    so it selects the object. When it is absent we return NOTHING: which
+    side was ours is then unknown, and an unknown side is left unknown
+    rather than inferred. Rows with only one execution object are
+    unambiguous and are used as-is.
+    """
+    objs = {k: body.get(k) for k in EXEC_KEYS
+            if isinstance(body.get(k), Mapping)}
+    if not objs:
+        return []
+    if len(objs) == 1:
+        return list(objs.values())          # unambiguous
+    flag = body.get("isAggressor")
+    if flag is True:
+        return [objs["aggressorExecution"]]
+    if flag is False:
+        return [objs["passiveExecution"]]
+    return []                               # UNKNOWN, never a coin flip
+
+
+def _first_present(objs: List[Mapping[str, Any]], keys,
+                   deep: bool = False) -> Any:
+    """The first value found for any of `keys`. SHALLOW unless asked.
+
+    `deep` DEFAULTS TO FALSE AND THAT MATTERS. The first version always
+    searched one level down, so probing the trade payload for a side walked
+    into aggressorExecution and returned the AGGRESSOR's side before
+    `isAggressor` was ever consulted -- defeating the our-side selection
+    entirely and booking the counterparty's side on half the rows. The
+    top-level probe must see only the payload's own keys.
+
+    NEVER INVENTS. Absent returns None, and every caller treats None as
+    UNKNOWN rather than as a default.
+    """
+    for o in objs:
+        for k in keys:
+            v = o.get(k)
+            if v not in (None, ""):
+                return v
+        if not deep:
+            continue
+        for v in o.values():
+            if isinstance(v, Mapping):
+                for k in keys:
+                    vv = v.get(k)
+                    if vv not in (None, ""):
+                        return vv
+    return None
+
+
+def execution_field_inventory(rows: List[Mapping[str, Any]]
+                              ) -> Dict[str, Any]:
+    """What keys do the nested execution objects actually carry? READ-ONLY.
+
+    The trade payload has no `side` and no `commission` at its top level --
+    those words appear only inside aggressorExecution / passiveExecution, and
+    this names their keys so the mapping is READ off the feed instead of
+    guessed at for a fourth time. Field NAMES and side-like VALUES only.
+    """
+    keysets: Counter = Counter()
+    side_vals: Counter = Counter()
+    fee_keys_seen: Counter = Counter()
+    present = 0
+    for r in rows:
+        k = str(r.get("kind") or r.get("type") or "").strip().lower()
+        if k not in FILL_KINDS:
+            continue
+        body = _payload(r)
+        # THE CENSUS SEES BOTH. It reports which keys exist, which is not an
+        # attribution, so the isAggressor restriction does not apply here.
+        objs = [body.get(k) for k in EXEC_KEYS
+                if isinstance(body.get(k), Mapping)]
+        if not objs:
+            continue
+        present += 1
+        for o in objs:
+            keysets.update([",".join(sorted(str(x) for x in o.keys()))])
+            for sk in SIDE_KEYS:
+                if o.get(sk) not in (None, ""):
+                    side_vals.update(["%s=%s" % (sk, str(o[sk])[:40])])
+            for fk in FEE_KEYS:
+                if fk in o:
+                    fee_keys_seen.update([fk])
+    return {
+        "fill_rows_with_execution_objects": present,
+        "our_side_selectable_via_isAggressor": sum(
+            1 for r in rows
+            if str(r.get("kind") or r.get("type") or "").strip().lower()
+            in FILL_KINDS
+            and _payload(r).get("isAggressor") in (True, False)),
+        "execution_object_key_sets": [
+            {"keys": sig, "count": n}
+            for sig, n in sorted(keysets.items(), key=lambda kv: -kv[1])[:6]],
+        "side_like_values_inside_executions": dict(
+            sorted(side_vals.items(), key=lambda kv: -kv[1])[:20]),
+        "fee_like_keys_inside_executions": dict(fee_keys_seen),
+        "labels": ("DIAGNOSTIC. Names the keys the nested execution objects "
+                   "carry so side and commission are READ off the feed, not "
+                   "guessed. Field NAMES and side-like VALUES only."),
+    }
+
+
 def _row_side(row: Mapping[str, Any]) -> Optional[str]:
     body = _payload(row)
-    v = str((body.get("side") if isinstance(body, Mapping) else None)
-            or (body.get("outcome") if isinstance(body, Mapping) else None)
-            or "").strip().upper()
-    if v in ("UP", "YES", "BUY_LONG"):
+    if not isinstance(body, Mapping):
+        return None
+    raw = _first_present([body], SIDE_KEYS)
+    if raw in (None, ""):
+        # A TRADE ROW CARRIES NO TOP-LEVEL SIDE. The production feed's trade
+        # payload is aggressor/passive/cost/price/qty/marketSlug and nothing
+        # else -- `side` appears only on position_resolution rows and inside
+        # the nested execution objects. Reading only the top level is what
+        # made all 1,911 trade rows unmatchable.
+        raw = _first_present(_exec_objects(body), SIDE_KEYS)
+    v = str(raw or "").strip().upper()
+    if not v:
+        return None
+    # the venue's own vocabularies, including the POSITION_RESOLUTION_SIDE_*
+    # and OUTCOME_SIDE_* forms observed on the feed. Suffix match, so a new
+    # prefix does not silently fall through to the wrong side.
+    if v.endswith(("UP", "YES", "LONG", "BUY_LONG")):
         return "UP"
-    if v in ("DOWN", "NO", "BUY_SHORT"):
+    if v.endswith(("DOWN", "NO", "SHORT", "BUY_SHORT")):
         return "DOWN"
     return None
 
@@ -386,19 +526,35 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
                    or "") or None
         owner = (L5_OWNED if coid and coid in our_coids
                  else OWNER_MANUAL if coid else UNKNOWN_OWNER)
-        qty = _d(b.get("quantity") if b.get("quantity") is not None
-                 else b.get("cumQuantity"))
+        # THE FEED'S OWN NAMES. A trade row carries qty/qtyDecimal and an
+        # authoritative `cost`; it carries neither `quantity` nor
+        # `commission`, which is why every value read as None before.
+        qty = None
+        for qk in ("qty", "qtyDecimal", "quantity", "cumQuantity"):
+            qty = _d(b.get(qk))
+            if qty is not None:
+                break
         px = _d(b.get("price") if b.get("price") is not None
                 else b.get("avgPx"))
-        fee = _d(b.get("commission") if b.get("commission") is not None
-                 else b.get("commissionNotionalTotalCollected"))
+        # AUTHORITATIVE COST, straight off the row. This is the figure the
+        # $1/share placeholders were standing in for.
+        cost = _d(b.get("cost"))
+        fee = _d(_first_present([b], FEE_KEYS))
+        if fee is None:
+            fee = _d(_first_present(_exec_objects(b), FEE_KEYS))
         fills.append({
             "trade_id": str(b.get("tradeId") or b.get("id") or "") or None,
             "order_id": str(b.get("orderId") or "") or None,
             "client_order_id": coid, "owner": owner,
             "qty": None if qty is None else str(qty),
             "price": None if px is None else str(px),
+            # the venue's own cost for this execution, or None for UNKNOWN
+            "cost": None if cost is None else str(cost),
             "fee": None if fee is None else str(fee),
+            "realized_pnl": (None if _d(b.get("realizedPnl")) is None
+                             else str(_d(b.get("realizedPnl")))),
+            "cost_basis": (None if _d(b.get("costBasis")) is None
+                           else str(_d(b.get("costBasis")))),
             "t": str(b.get("time") or b.get("createTime") or "") or None,
         })
     return {"fills": fills,
@@ -527,6 +683,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         "activity_rows": len(walk["rows"]),
         # ALWAYS computed: the two things that were being assumed.
         "fee_and_notional_evidence": fee_and_notional_evidence(walk["rows"]),
+        "execution_field_inventory": execution_field_inventory(walk["rows"]),
         # WHY nothing matched, when nothing matched. Computed only on the
         # failing case so a healthy audit does not carry the diagnostic.
         "feed_shape": (feed_shape(walk["rows"],
