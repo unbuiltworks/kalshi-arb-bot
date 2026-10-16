@@ -35,6 +35,7 @@ import math
 import os
 import time
 from collections import defaultdict
+from datetime import datetime
 
 import httpx
 
@@ -56,11 +57,10 @@ NINE_SERIES = {
     "zec": "KXZEC15M",
 }
 
-# Candlestick route has moved; try each until one answers 200.
-CANDLE_PATHS = (
-    "/series/{series}/markets/{ticker}/candlesticks",
-    "/historical/markets/{ticker}/candlesticks",
-)
+# Verified live 2026-10-16: the series route answers (unauthenticated);
+# /historical/markets/{ticker}/candlesticks and /markets/{ticker}/candlesticks
+# do not. `candles()` still walks the tuple so a future move needs one edit.
+CANDLE_PATHS = ("/series/{series}/markets/{ticker}/candlesticks",)
 
 # Longshot-side price bands, in cents. 6-10c is the fader's own cell: the
 # complement of its 90-94c favorite entry band.
@@ -116,23 +116,42 @@ def verdict(ci: tuple[float, float] | None, implied: float, fee_frac: float,
     return "NO_EDGE"
 
 
+MAX_429_RETRIES = 5
+
+
 class Kalshi:
-    """Minimal synchronous signed-GET client."""
+    """Synchronous GET client. Signs when credentials exist, public otherwise.
+
+    Market data and candlesticks answer unauthenticated, so the study runs with
+    no credentials; signing is used when available because the authenticated
+    rate limit is far higher. Unauthenticated reads 429 readily -- hence the
+    backoff, which is the difference between a complete sweep and a table full
+    of no_candles.
+    """
 
     def __init__(self, pace_s: float = 0.0) -> None:
-        key_id = os.getenv("KALSHI_API_KEY_ID", "").strip()
-        if not key_id:
-            raise SystemExit("KALSHI_API_KEY_ID is required")
-        self.key_id = key_id
-        self.private_key = load_private_key()
+        self.key_id = os.getenv("KALSHI_API_KEY_ID", "").strip()
+        self.private_key = load_private_key() if self.key_id else None
+        self.authenticated = self.private_key is not None
         self.http = httpx.Client(timeout=20.0)
         self.pace_s = pace_s
+        self.throttled = 0
 
     def get(self, path: str, params: dict | None = None) -> httpx.Response:
-        if self.pace_s:
-            time.sleep(self.pace_s)
-        headers = auth_headers(self.private_key, "GET", f"/trade-api/v2{path}", self.key_id)
-        return self.http.get(f"{KALSHI_BASE}{path}", headers=headers, params=params)
+        delay = self.pace_s
+        for attempt in range(MAX_429_RETRIES + 1):
+            if delay:
+                time.sleep(delay)
+            headers = {}
+            if self.authenticated:
+                headers = auth_headers(
+                    self.private_key, "GET", f"/trade-api/v2{path}", self.key_id)
+            resp = self.http.get(f"{KALSHI_BASE}{path}", headers=headers, params=params)
+            if resp.status_code != 429 or attempt == MAX_429_RETRIES:
+                return resp
+            self.throttled += 1
+            delay = max(self.pace_s, 0.5) * (2 ** attempt)
+        return resp
 
     def get_json(self, path: str, params: dict | None = None) -> dict:
         resp = self.get(path, params)
@@ -177,16 +196,51 @@ def candles(api: Kalshi, series: str, ticker: str, start_ts: int, end_ts: int) -
     return []
 
 
+def touch_close_cents(node: dict | None) -> float | None:
+    """One side's closing touch in cents, from either field generation.
+
+    Kalshi removed the legacy integer-cent fields in March 2026, so live rows
+    carry `close_dollars` as a STRING ("0.4400"). `close` is still read as a
+    fallback so an older captured tape replays unchanged.
+    """
+    if not isinstance(node, dict):
+        return None
+    if node.get("close_dollars") is not None:
+        try:
+            return float(node["close_dollars"]) * 100.0
+        except (TypeError, ValueError):
+            return None
+    try:
+        return float(node["close"])
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def close_ts_of(market: dict) -> int | None:
+    """Window close as epoch seconds, from `close_ts` or ISO `close_time`."""
+    raw = market.get("close_ts")
+    if raw is not None:
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+    iso = market.get("close_time")
+    if not isinstance(iso, str) or not iso:
+        return None
+    try:
+        return int(datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+
 def yes_mid_cents(candle: dict) -> float | None:
     """Mid of the YES touch at the candle's close, in cents.
 
     Mid, not last trade: a tradable price is what an entry actually faces.
     """
-    bid = (candle.get("yes_bid") or {}).get("close")
-    ask = (candle.get("yes_ask") or {}).get("close")
-    try:
-        bid_c, ask_c = float(bid), float(ask)
-    except (TypeError, ValueError):
+    bid_c = touch_close_cents(candle.get("yes_bid"))
+    ask_c = touch_close_cents(candle.get("yes_ask"))
+    if bid_c is None or ask_c is None:
         return None
     if not (0 < bid_c <= ask_c < 100):
         return None
@@ -273,9 +327,8 @@ def collect(api: Kalshi, series: str, markets: list[dict], cells: Cells,
         if result not in ("yes", "no"):
             skipped["unresolved_result"] += 1
             continue
-        try:
-            close_ts = int(market.get("close_ts"))
-        except (TypeError, ValueError):
+        close_ts = close_ts_of(market)
+        if close_ts is None:
             skipped["missing_close_ts"] += 1
             continue
 
@@ -372,6 +425,8 @@ def main() -> None:
                 "lookback_days": args.lookback_days,
                 "order_size_for_fees": args.count,
                 "settled_markets_found": len(markets),
+                "authenticated": api.authenticated,
+                "requests_throttled_429": api.throttled,
                 **stats,
                 "favorite_by_minute": cells.favorite_rows(),
                 "cells": rows,

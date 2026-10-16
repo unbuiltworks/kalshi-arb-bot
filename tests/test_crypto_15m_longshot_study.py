@@ -6,6 +6,8 @@ import pytest
 
 from src.crypto_15m_longshot_study import (
     NINE_SERIES,
+    close_ts_of,
+    touch_close_cents,
     PRICE_BANDS,
     Cells,
     band_of,
@@ -21,6 +23,14 @@ CLOSE_TS = 1_760_000_000
 
 
 def _candle(end_ts: int, bid: float, ask: float) -> dict:
+    """A live-shape candle: prices as *_dollars STRINGS, as Kalshi serves today."""
+    def side(cents):
+        return {} if cents is None else {"close_dollars": f"{cents / 100.0:.4f}"}
+    return {"end_period_ts": end_ts, "yes_bid": side(bid), "yes_ask": side(ask)}
+
+
+def _legacy_candle(end_ts: int, bid, ask) -> dict:
+    """The pre-March-2026 integer-cent shape, for replaying a captured tape."""
     return {"end_period_ts": end_ts, "yes_bid": {"close": bid}, "yes_ask": {"close": ask}}
 
 
@@ -149,7 +159,42 @@ class TestYesMid:
 
     @pytest.mark.parametrize("bid,ask", [(None, 92), (0, 92), (92, 90), (98, 100)])
     def test_rejects_unusable_touch(self, bid, ask):
-        assert yes_mid_cents(_candle(0, bid, ask)) is None
+        assert yes_mid_cents(_legacy_candle(0, bid, ask)) is None
+
+    def test_reads_either_field_generation(self):
+        """Live rows carry *_dollars strings; an old tape carries integer cents."""
+        assert yes_mid_cents(_candle(0, 90, 92)) == pytest.approx(91.0)
+        assert yes_mid_cents(_legacy_candle(0, 90, 92)) == pytest.approx(91.0)
+
+    def test_missing_side_is_unusable(self):
+        assert yes_mid_cents({"yes_bid": {"close_dollars": "0.9000"}}) is None
+
+
+class TestTouchClose:
+    def test_dollars_string_becomes_cents(self):
+        assert touch_close_cents({"close_dollars": "0.4400"}) == pytest.approx(44.0)
+
+    def test_dollars_field_wins_over_legacy(self):
+        node = {"close_dollars": "0.4400", "close": 99}
+        assert touch_close_cents(node) == pytest.approx(44.0)
+
+    @pytest.mark.parametrize("node", [None, {}, "x", {"close_dollars": "abc"}])
+    def test_unusable_nodes_return_none(self, node):
+        assert touch_close_cents(node) is None
+
+
+class TestCloseTs:
+    def test_integer_close_ts_preferred(self):
+        assert close_ts_of({"close_ts": 1792156560}) == 1792156560
+
+    def test_iso_close_time_parsed_when_integer_absent(self):
+        """Live rows have only close_time; the integer field was removed."""
+        assert close_ts_of({"close_time": "2026-10-16T13:30:00Z"}) == 1792157400
+
+    @pytest.mark.parametrize("market", [{}, {"close_time": ""}, {"close_time": "nope"},
+                                        {"close_ts": "abc"}])
+    def test_unparseable_returns_none(self, market):
+        assert close_ts_of(market) is None
 
 
 class TestCollect:
