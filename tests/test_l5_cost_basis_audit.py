@@ -731,3 +731,54 @@ def test_all_three_predicates_match_the_census_shape():
     sh = A.feed_shape([census_trade(True)], markets=["m"],
                       sides=["UP", "DOWN"])
     assert sh["rows_matching_all_three"] == 1
+
+
+# --------------------------------------------------------------------------
+# Section 19: structured money. The venue reports price, cost, lastPx and
+# commissionNotionalCollected as {currency, value} mappings -- confirmed by
+# money_field_shapes() on 1,911 production fill rows. _d() unwraps them, and
+# UNKNOWN still means None, never zero.
+
+
+def test_structured_money_unwraps_to_the_value():
+    assert A._d({"currency": "USD", "value": "0.53"}) == D("0.53")
+    assert A._d({"currency": "usd", "value": 0}) == D("0")
+
+
+def test_a_credited_rebate_keeps_its_negative_sign_through_the_unwrap():
+    assert A._d({"currency": "USD", "value": "-0.01"}) == D("-0.01")
+
+
+def test_an_unrecognized_currency_is_unknown_not_dollars():
+    assert A._d({"currency": "EUR", "value": "1"}) is None
+    assert A._d({"currency": "BTC", "value": "0.5"}) is None
+
+
+def test_a_mapping_without_a_value_key_is_unknown_not_zero():
+    for bad in ({"currency": "USD"}, {}, {"currency": "USD", "value": ""},
+                {"currency": "USD", "value": None}, {"currency": "USD", "value": "nan"}):
+        assert A._d(bad) is None, bad
+
+
+def test_a_currencyless_mapping_still_reads_its_value():
+    # The shape diagnostic saw currency on every row, but absence of the key is
+    # not evidence of a foreign currency.
+    assert A._d({"value": "2.5"}) == D("2.5")
+
+
+def test_scalars_are_unchanged_by_the_structured_money_support():
+    assert A._d("0.44") == D("0.44")
+    assert A._d(3) == D("3")
+    for bad in (None, "", "abc", "nan", "Infinity", [], ()):
+        assert A._d(bad) is None, bad
+
+
+def test_the_money_key_names_come_from_the_diagnostic_not_from_guessing():
+    assert A.MONEY_VALUE_KEY == "value"
+    assert A.MONEY_CURRENCY_KEY == "currency"
+    assert "USD" in A.MONEY_CURRENCIES
+
+
+def test_nested_mappings_do_not_recurse_into_a_fake_decimal():
+    assert A._d({"currency": "USD", "value": {"currency": "USD", "value": "1"}}) == D("1")
+    assert A._d({"currency": "USD", "value": {"nope": 1}}) is None
