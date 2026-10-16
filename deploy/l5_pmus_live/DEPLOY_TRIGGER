@@ -125,3 +125,5 @@ Promote the audit read-verb and retired-quantity fixes 2026-10-16T02:0xZ.
 Promote the L5 baseline epoch and scoped ceilings. SHADOW_ONLY stays on.
 
 Promote the gated baseline establishment. SHADOW_ONLY stays on.
+
+Promote the L5-only baseline. SHADOW_ONLY stays on.
