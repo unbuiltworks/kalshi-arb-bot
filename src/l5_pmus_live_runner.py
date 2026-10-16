@@ -1668,6 +1668,7 @@ class Runner:
             "retired_markets": sorted(
                 self.store.state.get("retired_markets") or {}),
             "realized": self.store.realized_lines(),
+            "l5_baseline": self.store.l5_baseline_lines(),
             "limits": self.limits.as_dict(),
             # THE $1 MANDATE WAS INVISIBLE HERE. max_cash_deployed_usd lives
             # on ValidationGates, not on SafetyLimits, so the limits block
@@ -2977,6 +2978,17 @@ def validation_gates():
                 None if not os.getenv("L5_STRATEGY_LOSS_LIMIT_USD", "").strip()
                 else D(os.getenv("L5_STRATEGY_LOSS_LIMIT_USD").strip())),
             max_worst_case_deficit_usd=deficit,
+            # THE OWNER'S EXISTING FIGURES, RESCOPED -- not raised. They
+            # measure attested L5 settlements since the baseline epoch, and
+            # they sit BESIDE the account-wide realized-loss check, which is
+            # unchanged and still runs first.
+            max_l5_daily_loss_usd=(
+                None if not os.getenv("L5_MAX_L5_DAILY_LOSS_USD", "").strip()
+                else D(os.getenv("L5_MAX_L5_DAILY_LOSS_USD").strip())),
+            max_l5_cumulative_loss_usd=(
+                None if not os.getenv("L5_MAX_L5_CUMULATIVE_LOSS_USD",
+                                      "").strip()
+                else D(os.getenv("L5_MAX_L5_CUMULATIVE_LOSS_USD").strip())),
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
         # a gate we cannot build is announced, never silently skipped

@@ -1315,6 +1315,154 @@ class InventoryStore:
         self.save()
         return {"ok": True, "attestation": rec}
 
+    #: the only source string establish_l5_baseline() will accept.
+    L5_BASELINE_SOURCE = "AUTHORITATIVE_ACCOUNT_READS"
+
+    def establish_l5_baseline(self, *, cash_usd: Any,
+                              l5_open_orders: Any,
+                              positions: Any,
+                              outstanding_obligations_usd: Any,
+                              source: str) -> Dict[str, Any]:
+        """Record the evidence-backed L5 baseline epoch T. Idempotent.
+
+        WHAT A BASELINE IS NOT. It is NOT a claim that historical L5 losses
+        were zero. The pre-T account-wide realized figure is snapshotted here
+        and kept verbatim, the unknown-cost provenance keys are kept with it,
+        and realized_lines() goes on reporting them. Nothing pre-T is
+        rewritten, retired or netted away.
+
+        WHAT IT IS. A stated instant, backed by authoritative account reads,
+        from which L5-ATTRIBUTED settlements are counted. After T the measure
+        reads 0 because zero attested L5 settlements have occurred since T --
+        a COUNTED fact with a counted denominator, not an inference from
+        absent history. That distinction is the whole point: it is why
+        l5_realized_since_baseline() returns None without a baseline and a
+        number only with one.
+
+        EVERY READ IS REQUIRED. Cash, L5-owned open orders, positions and
+        outstanding obligations must all be supplied from authoritative reads;
+        any of them missing refuses. A baseline struck without knowing what is
+        already resting or already held would be a baseline over an unknown
+        book.
+        """
+        if str(source) != self.L5_BASELINE_SOURCE:
+            return {"established": False, "reason": "BASELINE_SOURCE_INVALID",
+                    "required": self.L5_BASELINE_SOURCE}
+        prior = self.state.get("l5_baseline")
+        if isinstance(prior, Mapping) and prior.get("t"):
+            return {"established": False, "reason": "BASELINE_ALREADY_SET",
+                    "baseline": dict(prior)}
+        try:
+            cash = D(str(cash_usd))
+            oblig = D(str(outstanding_obligations_usd))
+            if not (cash.is_finite() and oblig.is_finite()):
+                raise InvalidOperation("non-finite")
+        except (InvalidOperation, TypeError, ValueError):
+            return {"established": False,
+                    "reason": "BASELINE_READS_UNAVAILABLE",
+                    "labels": ("cash and outstanding obligations must come "
+                               "from authoritative reads; missing is never "
+                               "zero")}
+        if l5_open_orders is None or positions is None:
+            return {"established": False,
+                    "reason": "BASELINE_READS_UNAVAILABLE",
+                    "labels": ("L5-owned open orders and positions must be "
+                               "established before an epoch can be struck")}
+        open_ids = sorted(str(x) for x in l5_open_orders)
+        if open_ids:
+            return {"established": False,
+                    "reason": "L5_ORDERS_STILL_OPEN_AT_BASELINE",
+                    "orders": open_ids[:16],
+                    "labels": ("an epoch must start from a book with no L5 "
+                               "order already working")}
+        rec = {
+            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "source": self.L5_BASELINE_SOURCE,
+            "cash_usd": str(cash),
+            "outstanding_obligations_usd": str(oblig),
+            "l5_open_orders": [],
+            "positions_at_baseline": {str(k): str(v)
+                                      for k, v in dict(positions).items()},
+            # PRE-T HISTORY, PRESERVED VERBATIM AND NEVER NETTED AWAY
+            "pre_baseline_realized_attributed": str(
+                D(str(self.state.get("realized_attributed") or 0))),
+            "pre_baseline_realized_unattributed": str(
+                D(str(self.state.get("realized_unattributed") or 0))),
+            "pre_baseline_realized_total": str(self.realized_today()),
+            "pre_baseline_unknown_basis_keys": sorted(
+                str(k) for k in
+                (self.state.get("leg_cost_basis_unknown") or [])),
+            "labels": ("L5 strategy accounting starts here. Pre-T figures are "
+                       "RETAINED and are NOT a claim that historical L5 "
+                       "losses were zero -- they are account-wide and their "
+                       "L5 share is UNKNOWN."),
+        }
+        self.state["l5_baseline"] = rec
+        self.save()
+        return {"established": True, "baseline": rec}
+
+    def l5_realized_since_baseline(self) -> Optional[D]:
+        """Attested L5 settlement P&L since T, or None without a baseline.
+
+        Only markets retired AFTER T whose ownership was ATTESTED at
+        settlement (l5_owner_attribution_verified) are counted. A post-T
+        settlement that was NOT attested is deliberately excluded from the
+        figure and surfaced separately by l5_baseline_lines(), so an
+        unattributable settlement can never silently read as an L5 zero.
+        """
+        base = self.state.get("l5_baseline")
+        if not isinstance(base, Mapping) or not base.get("t"):
+            return None
+        t0 = str(base["t"])
+        total = D(0)
+        for mkt, row in (self.state.get("retired_markets") or {}).items():
+            if not isinstance(row, Mapping):
+                continue
+            if str(row.get("t") or "") <= t0:
+                continue
+            if not row.get("l5_owner_attribution_verified"):
+                continue
+            try:
+                total += D(str(row.get("settlement_pnl") or 0))
+            except (InvalidOperation, TypeError, ValueError):
+                return None          # an unreadable row makes the sum unknown
+        return total
+
+    def l5_baseline_lines(self) -> Dict[str, Any]:
+        """Everything an operator needs to judge the baseline, apart."""
+        base = self.state.get("l5_baseline")
+        if not isinstance(base, Mapping) or not base.get("t"):
+            return {"baseline": None,
+                    "l5_realized_since_baseline": None,
+                    "labels": "no baseline: the L5-scoped gates refuse"}
+        t0 = str(base["t"])
+        counted, excluded = [], []
+        for mkt, row in sorted((self.state.get("retired_markets") or {}).items()):
+            if not isinstance(row, Mapping) or str(row.get("t") or "") <= t0:
+                continue
+            (counted if row.get("l5_owner_attribution_verified")
+             else excluded).append({
+                 "market": str(mkt), "pnl": str(row.get("settlement_pnl")),
+                 "provenance": str(row.get("pnl_provenance"))})
+        net = self.l5_realized_since_baseline()
+        return {
+            "baseline_t": t0,
+            "baseline_cash_usd": str(base.get("cash_usd")),
+            "l5_realized_since_baseline": None if net is None else str(net),
+            "attested_l5_settlements_since_baseline": counted,
+            "post_baseline_settlements_NOT_attested": excluded,
+            "pre_baseline_realized_total": str(
+                base.get("pre_baseline_realized_total")),
+            "pre_baseline_unknown_basis_legs": len(
+                base.get("pre_baseline_unknown_basis_keys") or []),
+            "labels": ("l5_realized_since_baseline counts ONLY attested L5 "
+                       "settlements after T. post_baseline_settlements_NOT_"
+                       "attested are excluded from that figure and listed "
+                       "here so an unattributable settlement is never read "
+                       "as an L5 zero. Pre-T totals are account-wide and "
+                       "their L5 share is UNKNOWN."),
+        }
+
     def realized_lines(self) -> Dict[str, str]:
         """Every line apart, for reporting. Never collapsed by this method."""
         return {
@@ -3096,6 +3244,7 @@ class FaithfulExecutor:
                 unmatched_after=self.store.residual(market),
                 cumulative_realized=self.store.realized_today(),
                 verified_strategy_net=self.store.verified_l5_net_for_gates(),
+                l5_scoped_realized=self.store.l5_realized_since_baseline(),
                 cumulative_unrealized_loss=unreal,
                 available_cash_usd=self.available_cash_usd,
                 inventory=inv)
@@ -3541,6 +3690,7 @@ class FaithfulExecutor:
                     unmatched_after=self.store.residual(market),
                     cumulative_realized=self.store.realized_today(),
                     verified_strategy_net=self.store.verified_l5_net_for_gates(),
+                l5_scoped_realized=self.store.l5_realized_since_baseline(),
                     cumulative_unrealized_loss=(
                         self.unrealized_loss_for_gates()),
                     available_cash_usd=self.available_cash_usd,

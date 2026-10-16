@@ -100,7 +100,9 @@ class ValidationGates:
                  max_worst_case_deficit_usd: Optional[D] = None,
                  fee_theta_worst: D = D("0.0695"),
                  fee_extra_per_order_usd: D = D("0.01"),
-                 max_strategy_loss_usd: Optional[D] = None) -> None:
+                 max_strategy_loss_usd: Optional[D] = None,
+                 max_l5_daily_loss_usd: Optional[D] = None,
+                 max_l5_cumulative_loss_usd: Optional[D] = None) -> None:
         if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
             raise ValueError("unknown cash policy: %r" % cash_policy)
         if cash_policy == RECYCLE_ON_COMPLETE:
@@ -114,6 +116,16 @@ class ValidationGates:
         # unchanged; explicit config requires an independently audited net.
         self.max_strategy_loss_usd = (
             None if max_strategy_loss_usd is None else _d(max_strategy_loss_usd))
+        #: L5-SCOPED ceilings, measured from the verified baseline epoch and
+        #: NEVER a replacement for the account-wide realized-loss check above
+        #: them. Both are the owner's existing figures (5 and 20); rescoping
+        #: changes WHAT is measured, not the limit.
+        self.max_l5_daily_loss_usd = (
+            None if max_l5_daily_loss_usd is None
+            else _d(max_l5_daily_loss_usd))
+        self.max_l5_cumulative_loss_usd = (
+            None if max_l5_cumulative_loss_usd is None
+            else _d(max_l5_cumulative_loss_usd))
         if (self.max_strategy_loss_usd is not None and
                 (not self.max_strategy_loss_usd.is_finite() or
                  self.max_strategy_loss_usd <= 0)):
@@ -148,6 +160,12 @@ class ValidationGates:
                 "max_cumulative_loss_usd": str(self.max_cumulative_loss_usd),
                 "max_strategy_loss_usd": (None if self.max_strategy_loss_usd
                                           is None else str(self.max_strategy_loss_usd)),
+                "max_l5_daily_loss_usd": (None if self.max_l5_daily_loss_usd
+                                          is None
+                                          else str(self.max_l5_daily_loss_usd)),
+                "max_l5_cumulative_loss_usd": (
+                    None if self.max_l5_cumulative_loss_usd is None
+                    else str(self.max_l5_cumulative_loss_usd)),
                 "cash_policy": self.cash_policy,
                 "max_windows": self.max_windows,
                 "max_worst_case_deficit_usd": (
@@ -383,6 +401,7 @@ class ValidationGates:
                unmatched_after: D = D(0),
                cumulative_realized: D = D(0),
                verified_strategy_net: Optional[D] = None,
+               l5_scoped_realized: Optional[D] = None,
                cumulative_unrealized_loss: Optional[D] = D(0),
                windows_used: int = 0,
                book_uncertain: Optional[str] = None,
@@ -426,6 +445,39 @@ class ValidationGates:
         if loss >= self.max_cumulative_loss_usd:
             return ("CUMULATIVE_LOSS_LIMIT:%s>=%s"
                     % (loss, self.max_cumulative_loss_usd))
+
+        # L5-SCOPED CEILINGS, measured from the verified baseline epoch.
+        #
+        # THEY DO NOT REPLACE THE ACCOUNT-WIDE CHECK ABOVE, which has already
+        # run and already returned if it was breached. Removing that check is
+        # a separate, explicit owner decision and is deliberately not
+        # available here (OWNER 2026-10-16: "do not silently replace or
+        # remove an account-wide realized-loss control").
+        #
+        # MISSING IS NOT ZERO. A configured L5 ceiling with no baseline-scoped
+        # figure refuses L5_SCOPED_REALIZED_UNAVAILABLE. The caller supplies 0
+        # only when a verified baseline EXISTS and no attested L5 settlement
+        # has occurred since it -- which is a counted fact, not an inference
+        # from absent history.
+        if (self.max_l5_daily_loss_usd is not None
+                or self.max_l5_cumulative_loss_usd is not None):
+            if l5_scoped_realized is None:
+                return "L5_SCOPED_REALIZED_UNAVAILABLE"
+            try:
+                l5r = _d(l5_scoped_realized)
+                if not l5r.is_finite():
+                    return "L5_SCOPED_REALIZED_UNAVAILABLE"
+            except (ValueError, ArithmeticError):
+                return "L5_SCOPED_REALIZED_UNAVAILABLE"
+            l5_loss = max(D(0), -l5r) + max(D(0), _d(cumulative_unrealized_loss))
+            if (self.max_l5_daily_loss_usd is not None
+                    and l5_loss >= self.max_l5_daily_loss_usd):
+                return ("L5_DAILY_LOSS_LIMIT:%s>=%s"
+                        % (l5_loss, self.max_l5_daily_loss_usd))
+            if (self.max_l5_cumulative_loss_usd is not None
+                    and l5_loss >= self.max_l5_cumulative_loss_usd):
+                return ("L5_CUMULATIVE_LOSS_LIMIT:%s>=%s"
+                        % (l5_loss, self.max_l5_cumulative_loss_usd))
 
         # Independent strategy budget, NEVER substituted for the conservative
         # account-wide gate above. No verified after-fee net is a refusal.
