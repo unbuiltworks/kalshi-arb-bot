@@ -133,3 +133,37 @@ Promote the baseline cash-read fix and retry T once. SHADOW_ONLY stays on.
 Promote account-wide exposure aggregation + book-read retry. SHADOW_ONLY on.
 
 Promote heartbeat exposure reporting + wedge verification. SHADOW_ONLY on.
+
+# OWNER-DIRECTED SHADOW promotion of 29374022: continuous pair accumulation.
+#
+# The one-shot restriction is gone. The durable claim slot is keyed on
+# (market, round, leg) instead of on the leg alone, the plan freeze is per
+# round, and L5_TS_MARKET accepts an instrument-family pattern so
+# accumulation carries across successive fifteen-minute windows.
+#
+# DUPLICATE PROTECTION UNCHANGED: derived client_order_id, already_submitted
+# suppression, the claim fsynced before the wire and never auto-reset,
+# max_live_orders bounding concurrency. No limit value changes and no gate is
+# weakened. L5_SHADOW_ONLY STAYS SET and the arm token still does not match
+# the session id, so submit() raises NotArmed; the claim is taken only behind
+# `if transport.armed`, so SHADOW OBSERVATION SPENDS NO CLAIM SLOT.
+#
+# This deploy ALSO sets, for the first time on this service:
+#   L5_TS_EXPERIMENT_ID / L5_TS_MARKET  -- so the accumulation branch
+#       EVALUATES and logs its proposed pairs instead of being unreachable.
+#       Under the shadow lock this adds observation, not capability.
+#   L5_ACC_MAX_ROUNDS=8                 -- the per-market pair ceiling
+#   L5_MAX_WORST_CASE_DEFICIT_USD=3.60  -- previously UNSET, which left the
+#       deficit gate inert and sized the plan against the $20 cumulative
+#       ceiling. Setting it ADDS a refusal and tightens the proposed sizes
+#       to the ones a live run would actually use.
+#
+# Runtime files changing, all COPYed into this image:
+#   src/l5_live_execution.py      -- rounds, per-round plan freeze
+#   src/l5_live_authorization.py  -- claim_accumulation_leg, accumulation_sid
+#   src/l5_two_sided_probe.py     -- market-pattern authorization
+#
+# Money-path gate 1197 passed, against 1183 on the parent, same selection.
+#
+# Rollback: Railway rollback to the running build of 2e8b4772.
+continuous pair accumulation, shadow-locked 2026-10-16T04:00Z
