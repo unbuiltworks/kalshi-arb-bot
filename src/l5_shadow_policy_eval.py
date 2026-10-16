@@ -872,10 +872,23 @@ class ShadowPolicyLog:
         self.path = path or store_path()
         self.live: Dict[str, WindowAccumulator] = {}
         self.done: set = set()
+        self.settled: set = set()
+        self.latest: Dict[str, Any] = {}
+        self.attempts: Dict[str, int] = {}
         self.errors = 0
+        self.reconcile_errors = 0
         self._load()
 
     def _load(self) -> None:
+        """Rebuild `done`, `latest` and `settled` from the append-only store.
+
+        LAST LINE WINS per market, because a reconciliation is APPENDED
+        rather than written over the original: the scoring record stays on
+        disk exactly as it was emitted, and the reconciled view is a later
+        line that supersedes it. Reading the last one is what makes a
+        restart resume with the reconciliation already applied instead of
+        re-doing it.
+        """
         import json
         try:
             with open(self.path) as fh:
@@ -884,8 +897,15 @@ class ShadowPolicyLog:
                         r = json.loads(line)
                     except ValueError:
                         continue
-                    if r.get("market"):
-                        self.done.add(str(r["market"]))
+                    mk = r.get("market")
+                    if not mk:
+                        continue
+                    mk = str(mk)
+                    self.done.add(mk)
+                    self.latest[mk] = r
+                    if r.get("settlement_evidence") or r.get(
+                            "reconcile_closed"):
+                        self.settled.add(mk)
         except (OSError, ValueError):
             pass            # no store yet, or an unusable path, is not a crash
 
@@ -941,9 +961,23 @@ class ShadowPolicyLog:
                 self.errors += 1
                 continue
             self.done.add(slug)
+            self.latest[slug] = rec
             self._append(rec)
             out.append(rec)
         return out
+
+    def pending_markets(self) -> list:
+        """Slugs whose residual is unresolved and still inside the budget."""
+        return _pending_markets(self)
+
+    def reconcile_pending(self, get_json, *,
+                          now: Optional[float] = None) -> list:
+        """Bounded, idempotent, append-only settlement reconciliation."""
+        return _reconcile_pending(self, get_json, now=now)
+
+    def records_view(self, *, limit: int = 50) -> Dict[str, Any]:
+        """A bounded, allow-listed projection of the store."""
+        return records_view(self, limit=limit)
 
     def emit_document(self, records: Sequence[Mapping[str, Any]]) -> dict:
         """The one log line a finished window produces. Deliberately small."""
@@ -1133,3 +1167,186 @@ def dashboard(records: Sequence[Mapping[str, Any]],
                      "and are NOT summed here. No modelled figure is "
                      "realized profit, and a pending residual has no net.")
     return out
+
+
+# ------------------------------- reading a settlement off the venue's own doc
+
+#: the venue states that may carry a final settlement, copied from
+#: l5_pmus_transport.TERMINAL_MARKET_STATES rather than imported, because
+#: importing that module would pull an order-capable transport into the
+#: recorder's import closure. The constant is asserted equal in tests.
+TERMINAL_MARKET_STATES = ("MARKET_STATE_EXPIRED", "MARKET_STATE_SETTLED",
+                          "MARKET_STATE_RESOLVED")
+
+
+def settlement_from_bbo(doc: Any, slug: str) -> Dict[str, Any]:
+    """Positive settlement evidence from `/v1/markets/<slug>/bbo`, or a refusal.
+
+    THE SAME FOUR BARS THE TRANSPORT ALREADY APPLIES, and for the same
+    reasons it learned them: a terminal STATE alone is not a settlement, the
+    `settlementPx` field is the only admissible one on a document that also
+    carries a last price and a mid, a binary contract that settled at neither
+    0 nor 1 has not finished, and a document naming a different market is not
+    this market's answer. Stage A booked a phantom credit because 0.01 -- the
+    price an expired book still carried -- reached a ledger as a payout.
+
+    PURE. It performs no request; the caller supplies the document.
+    """
+    r = doc if isinstance(doc, Mapping) else {}
+    md = r.get("marketData") or r
+    md = md if isinstance(md, Mapping) else {}
+    state = str(md.get("state") or "")
+    raw = md.get("settlementPx")
+    if isinstance(raw, Mapping):
+        raw = raw.get("value")
+    px = None
+    if raw is not None:
+        try:
+            d = D(str(raw))
+            px = d if D(0) <= d <= D(1) else None
+        except Exception:                                      # noqa: BLE001
+            px = None
+    named = None
+    for key in ("slug", "ticker", "marketSlug", "market"):
+        v = md.get(key) or r.get(key)
+        if isinstance(v, str) and v.strip():
+            named = v.strip()
+            break
+    if state not in TERMINAL_MARKET_STATES:
+        reason = "STATE_NOT_TERMINAL"
+    elif px is None:
+        reason = "SETTLEMENT_ABSENT"
+    elif px not in (D(0), D(1)):
+        reason = "SETTLEMENT_NOT_BINARY"
+    elif named is not None and named != slug:
+        reason = "RESOLUTION_MARKET_MISMATCH"
+    else:
+        reason = None
+    if reason is not None:
+        return {"ok": False, "reason": reason, "market": slug,
+                "state": state or None}
+    return {"ok": True, "reason": None, "market": slug,
+            "resolution_source": "VENUE_SETTLEMENT_PX",
+            "yes_value": str(px), "state": state}
+
+
+#: bounded retry policy for a settlement that has not appeared yet
+RECONCILE_MAX_ATTEMPTS = 8
+RECONCILE_MAX_AGE_S = 7200.0        # two hours after the window ends
+
+
+def _pending_markets(log: "ShadowPolicyLog") -> list:
+    """Slugs whose residual is unresolved and still inside the retry budget."""
+    out = []
+    for mk, rec in log.latest.items():
+        if mk in log.settled:
+            continue
+        if not rec.get("ok"):
+            continue
+        if settlement_basis(rec) != BASIS_PENDING:
+            continue
+        out.append(mk)
+    return sorted(out)
+
+
+def _reconcile_pending(log: "ShadowPolicyLog", get_json, *,
+                       now: Optional[float] = None) -> list:
+    """Try to resolve pending residuals. Bounded, idempotent, fail-closed.
+
+    FAILS OPEN FOR CAPTURE. Every call to `get_json` is wrapped: a reader
+    that is down, slow or returning nonsense costs this pass and nothing
+    else. The recorder keeps capturing either way, which is the property
+    worth more than any reconciliation.
+
+    FAILS CLOSED FOR ACCOUNTING. Only `settlement_from_bbo` evidence is
+    accepted, and only through the existing `reconcile_settlement` bars. A
+    window the venue has not settled stays PENDING; one still unsettled
+    after RECONCILE_MAX_ATTEMPTS tries or RECONCILE_MAX_AGE_S past its close
+    is CLOSED as unresolved -- recorded as such, never priced.
+
+    NEVER OVERWRITES. A result is APPENDED as a new line carrying
+    `supersedes`, so the original scoring record stays on disk verbatim.
+    """
+    import time as _t
+    now = _t.time() if now is None else float(now)
+    out = []
+    for mk in _pending_markets(log):
+        rec = log.latest.get(mk) or {}
+        start = window_start_epoch(mk)
+        closed = None if start is None else start + float(TS.WINDOW_S)
+        n = log.attempts.get(mk, 0)
+        expired = (closed is not None
+                   and now - closed > RECONCILE_MAX_AGE_S)
+        if n >= RECONCILE_MAX_ATTEMPTS or expired:
+            closed_rec = dict(rec, reconciled=False, reconcile_closed=True,
+                              reconcile_reason=("RETRY_BUDGET_EXHAUSTED"
+                                                if not expired
+                                                else "SETTLEMENT_WINDOW_LAPSED"),
+                              reconcile_attempts=n,
+                              supersedes=rec.get("record_id") or mk,
+                              labels=("CLOSED UNRESOLVED. The residual was "
+                                      "never settled by the venue within the "
+                                      "retry budget. It is not priced and "
+                                      "not counted."))
+            log.settled.add(mk)
+            log.latest[mk] = closed_rec
+            log._append(closed_rec)
+            out.append(closed_rec)
+            continue
+        log.attempts[mk] = n + 1
+        try:
+            doc = get_json("/v1/markets/%s/bbo" % mk)
+        except Exception:
+            log.reconcile_errors += 1
+            continue                 # the reader is the thing that failed
+        ev = settlement_from_bbo(doc, mk)
+        if not ev.get("ok"):
+            continue                 # not settled yet: stays PENDING
+        new = reconcile_settlement(rec, ev)
+        if not new.get("reconciled"):
+            log.reconcile_errors += 1
+            continue
+        new = dict(new, reconcile_attempts=log.attempts[mk],
+                   supersedes=rec.get("record_id") or mk)
+        log.settled.add(mk)
+        log.latest[mk] = new
+        log._append(new)
+        out.append(new)
+    return out
+
+
+#: fields the bounded read-only view exposes per record. Nothing outside this
+#: list is served, so a field added to a record later cannot leak by default.
+VIEW_FIELDS = ("market", "ok", "reason", "outcome", "one_sided_s",
+               "selected", "decisions_evaluated", "quote",
+               "inventory_after_acquisition", "resting", "net",
+               "refusal_census", "first_action", "settlement_evidence",
+               "reconciled", "reconcile_reason", "reconcile_attempts",
+               "reconcile_closed", "books_seen", "prints_seen",
+               "out_of_order_dropped", "shadow_only", "submitted",
+               "fills_are_modelled")
+
+VIEW_MAX_RECORDS = 200
+
+
+def records_view(log: "ShadowPolicyLog", *, limit: int = 50) -> Dict[str, Any]:
+    """A BOUNDED projection of the store: newest records, allow-listed fields.
+
+    Bounded three ways -- a field allow-list, a record cap, and newest-first
+    ordering -- so this cannot become an unbounded dump of a growing file,
+    and a field added to the record later is not served until it is named
+    here.
+    """
+    n = max(1, min(int(limit or 1), VIEW_MAX_RECORDS))
+    items = sorted(log.latest.values(),
+                   key=lambda r: str(r.get("market")), reverse=True)[:n]
+    rows = [{k: r[k] for k in VIEW_FIELDS if k in r} for r in items]
+    return {"records": rows, "returned": len(rows),
+            "stored_markets": len(log.latest),
+            "pending": len(_pending_markets(log)),
+            "store_errors": log.errors,
+            "reconcile_errors": log.reconcile_errors,
+            "dashboard": dashboard(list(log.latest.values())),
+            "labels": ("MODELLED, SHADOW ONLY. No order was submitted, no "
+                       "fill occurred and no figure here is realized "
+                       "profit.")}

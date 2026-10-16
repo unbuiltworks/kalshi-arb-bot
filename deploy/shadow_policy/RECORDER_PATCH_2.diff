@@ -1,0 +1,121 @@
+--- a/src/pmus_ws_evidence_recorder.py
++++ b/src/pmus_ws_evidence_recorder.py
+@@ -1659,6 +1659,38 @@
+         return 0
+ 
+ 
++#: the bounded shadow-records path. ABSENT unless a token is configured:
++#: with no token the handler 404s, so the default deployment serves nothing
++#: new at all. The existing status paths carry NO authentication and are
++#: protected only by this service having no public domain -- which is a
++#: network fact, not a control, and is not good enough for records that
++#: carry inventory and cost. This path therefore brings its own.
++SHADOW_RECORDS_PATH = "/shadow-policy"
++SHADOW_RECORDS_TOKEN_ENV = "L5_SHADOW_POLICY_TOKEN"
++SHADOW_RECORDS_MAX_LIMIT = 200
++
++
++def shadow_records_token() -> str:
++    """The bearer token, or empty when the path is disabled."""
++    return str(os.getenv(SHADOW_RECORDS_TOKEN_ENV) or "").strip()
++
++
++def shadow_records_authorized(header: Any) -> bool:
++    """Constant-time bearer check. Empty token => never authorized.
++
++    The token is never logged, never echoed and never compared with `==`.
++    """
++    import hmac
++    tok = shadow_records_token()
++    if not tok:
++        return False
++    got = str(header or "")
++    prefix = "Bearer "
++    if not got.startswith(prefix):
++        return False
++    return hmac.compare_digest(got[len(prefix):], tok)
++
++
+ def serve_status_doc(root: Path, port: int):
+     """Serve the status document read-only on a daemon thread.
+ 
+@@ -1692,6 +1724,45 @@
+                 self.end_headers()
+                 self.wfile.write(blob)
+                 return
++            if path == SHADOW_RECORDS_PATH:
++                if not shadow_records_token():
++                    self.send_response(404)       # the path does not exist
++                    self.end_headers()
++                    return
++                if not shadow_records_authorized(
++                        self.headers.get("Authorization")):
++                    self.send_response(401)
++                    self.send_header("WWW-Authenticate", "Bearer")
++                    self.end_headers()
++                    return
++                _spl = shadow_policy_log()
++                if _spl is None:
++                    self.send_response(503)
++                    self.end_headers()
++                    return
++                try:
++                    import urllib.parse as _up
++                    q = _up.parse_qs(
++                        (self.path.split("?", 1) + [""])[1])
++                    lim = int((q.get("limit") or ["50"])[0])
++                except Exception:
++                    lim = 50
++                lim = max(1, min(lim, SHADOW_RECORDS_MAX_LIMIT))
++                try:
++                    blob = json.dumps(_spl.records_view(limit=lim),
++                                      separators=(",", ":"),
++                                      default=str).encode()
++                except Exception:
++                    self.send_response(503)
++                    self.end_headers()
++                    return
++                self.send_response(200)
++                self.send_header("Content-Type", "application/json")
++                self.send_header("Content-Length", str(len(blob)))
++                self.send_header("Cache-Control", "no-store")
++                self.end_headers()
++                self.wfile.write(blob)
++                return
+             if path == SHADOW_HTTP_PATH:
+                 # the read-only multi-market L5 shadow report (same
+                 # handoff pattern as the status document)
+@@ -2360,6 +2431,33 @@
+                         print("PMUS_SHADOW_POLICY " + json.dumps(
+                             _spl.emit_document(_scored),
+                             separators=(",", ":"), default=str), flush=True)
++                    # SETTLEMENT, on the SAME unauthenticated read the
++                    # recorder already performs for gateway_xcheck. No new
++                    # host, no new endpoint, no credential. Wrapped, because
++                    # capture outranks reconciliation.
++                    try:
++                        from src import pmus_sports_collector as _col
++                        _done = _spl.reconcile_pending(_col.http_get_json)
++                    except Exception:
++                        _done = []
++                        _spl.reconcile_errors += 1
++                    if _done:
++                        print("PMUS_SHADOW_SETTLED " + json.dumps(
++                            {"rows": len(_done),
++                             "markets": [{"market": r.get("market"),
++                                          "reconciled": r.get("reconciled"),
++                                          "reason": r.get("reconcile_reason"),
++                                          "attempts": r.get(
++                                              "reconcile_attempts"),
++                                          "net_usd": {
++                                              p: (r.get("net") or {}).get(
++                                                  p, {}).get("net_usd")
++                                              for p in ("HOLD", "REPRICE",
++                                                        "CROSS", "BLIND")}}
++                                         for r in _done],
++                             "labels": ("venue-confirmed OUTCOME only; the "
++                                        "fills remain MODELLED")},
++                            separators=(",", ":"), default=str), flush=True)
+                 released = drop_stale_ladders(mstate, ladder_keep)
+                 if released:
+                     print("PMUS_WS_STATUS " + json.dumps(

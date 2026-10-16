@@ -2,6 +2,7 @@
 import os
 from decimal import Decimal as D
 
+import json
 import pytest
 
 from src import l5_shadow_policy_eval as E
@@ -634,3 +635,185 @@ def test_pmus_ws_recorder_image_covers_its_import_closure():
     assert not missing, (
         "these modules are imported by the recorder but not COPYed into its "
         "image, so they would raise ImportError in production: %s" % missing)
+
+
+# ------------------------------- venue settlement evidence (pure predicate)
+
+def test_terminal_states_match_the_transport_exactly():
+    from src import l5_pmus_transport as T
+    assert E.TERMINAL_MARKET_STATES == T.TERMINAL_MARKET_STATES
+
+
+def _bbo(state="MARKET_STATE_EXPIRED", px="1.0000", slug=SLUG):
+    return {"marketData": {"state": state, "settlementPx": px, "slug": slug}}
+
+
+def test_settlement_from_bbo_accepts_only_a_binary_terminal_settlement():
+    ok = E.settlement_from_bbo(_bbo(), SLUG)
+    assert ok["ok"] is True
+    assert ok["resolution_source"] == "VENUE_SETTLEMENT_PX"
+    assert D(ok["yes_value"]) == D(1)
+    assert E.settlement_from_bbo(_bbo(px="0.0000"), SLUG)["ok"] is True
+
+
+@pytest.mark.parametrize("doc,reason", [
+    (_bbo(state="MARKET_STATE_OPEN"), "STATE_NOT_TERMINAL"),
+    (_bbo(px=None), "SETTLEMENT_ABSENT"),
+    (_bbo(px="0.0100"), "SETTLEMENT_NOT_BINARY"),   # the expired-book trap
+    (_bbo(px="0.9900"), "SETTLEMENT_NOT_BINARY"),
+    (_bbo(slug="some-other-market"), "RESOLUTION_MARKET_MISMATCH"),
+    ({}, "STATE_NOT_TERMINAL"),
+    (None, "STATE_NOT_TERMINAL"),
+])
+def test_settlement_from_bbo_refuses_everything_else(doc, reason):
+    out = E.settlement_from_bbo(doc, SLUG)
+    assert out["ok"] is False and out["reason"] == reason
+
+
+def test_the_predicate_performs_no_request():
+    import ast
+    src = open("src/l5_shadow_policy_eval.py").read()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.FunctionDef)
+              and n.name == "settlement_from_bbo")
+    calls = {getattr(c.func, "id", getattr(c.func, "attr", ""))
+             for c in ast.walk(fn) if isinstance(c, ast.Call)}
+    assert not (calls & {"urlopen", "urlretrieve", "post", "request",
+                         "http_get_json", "Request"})
+
+
+# ----------------------------------- bounded, idempotent reconciliation loop
+
+#: just inside the retry budget for this slug's window
+NOW_OK = E.window_start_epoch(SLUG) + 900 + 60
+
+
+def _pending_log(tmp_path):
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0])
+    log.observe_trade(SLUG, T0 + 5, "0.63", "20")     # DOWN only
+    log.observe_book(SLUG, lad[1])
+    log.rollover(keep=[])
+    return log
+
+
+def test_a_pending_window_is_reconciled_from_venue_evidence(tmp_path):
+    log = _pending_log(tmp_path)
+    assert log.pending_markets() == [SLUG]
+    out = log.reconcile_pending(lambda path: _bbo(), now=NOW_OK)
+    assert len(out) == 1 and out[0]["reconciled"] is True
+    assert out[0]["settlement_evidence"]["resolution_source"] == \
+        "VENUE_SETTLEMENT_PX"
+    assert out[0]["net"]["HOLD"]["net_usd"] is not None
+    assert log.pending_markets() == []
+
+
+def test_reconciliation_appends_and_never_overwrites(tmp_path):
+    import json
+    log = _pending_log(tmp_path)
+    before = open(tmp_path / "store.jsonl").read().splitlines()
+    log.reconcile_pending(lambda path: _bbo(), now=NOW_OK)
+    after = open(tmp_path / "store.jsonl").read().splitlines()
+    assert len(after) == len(before) + 1
+    assert after[0] == before[0], "the original record must be untouched"
+    first = json.loads(after[0])
+    assert first["net"]["HOLD"]["net_usd"] is None   # still the scoring record
+    assert json.loads(after[-1])["supersedes"]
+
+
+def test_reconciliation_does_not_double_count_across_a_restart(tmp_path):
+    log = _pending_log(tmp_path)
+    log.reconcile_pending(lambda path: _bbo(), now=NOW_OK)
+    lines = len(open(tmp_path / "store.jsonl").read().splitlines())
+    again = _log(tmp_path)                       # as after a redeploy
+    assert SLUG in again.settled
+    assert again.pending_markets() == []
+    assert again.reconcile_pending(lambda path: _bbo(), now=NOW_OK) == []
+    assert len(open(tmp_path / "store.jsonl").read().splitlines()) == lines
+
+
+def test_an_unsettled_market_stays_pending_and_is_retried(tmp_path):
+    log = _pending_log(tmp_path)
+    for _ in range(3):
+        assert log.reconcile_pending(
+            lambda path: _bbo(state="MARKET_STATE_OPEN"), now=NOW_OK) == []
+    assert log.pending_markets() == [SLUG]
+    assert log.attempts[SLUG] == 3
+    out = log.reconcile_pending(lambda path: _bbo(), now=NOW_OK)   # settles
+    assert out[0]["reconciled"] is True
+
+
+def test_the_retry_budget_is_bounded_and_closes_unresolved(tmp_path):
+    log = _pending_log(tmp_path)
+    for _ in range(E.RECONCILE_MAX_ATTEMPTS):
+        log.reconcile_pending(lambda path: _bbo(state="MARKET_STATE_OPEN"),
+                              now=NOW_OK)
+    out = log.reconcile_pending(lambda path: _bbo(state="MARKET_STATE_OPEN"),
+                                now=NOW_OK)
+    assert len(out) == 1
+    assert out[0]["reconcile_closed"] is True
+    assert out[0]["reconcile_reason"] == "RETRY_BUDGET_EXHAUSTED"
+    assert out[0]["net"]["HOLD"]["net_usd"] is None    # never priced
+    assert log.pending_markets() == []
+
+
+def test_a_lapsed_settlement_window_closes_unresolved(tmp_path):
+    log = _pending_log(tmp_path)
+    late = E.window_start_epoch(SLUG) + 900 + E.RECONCILE_MAX_AGE_S + 1
+    out = log.reconcile_pending(lambda path: _bbo(state="MARKET_STATE_OPEN"),
+                                now=late)
+    assert out[0]["reconcile_closed"] is True
+    assert out[0]["reconcile_reason"] == "SETTLEMENT_WINDOW_LAPSED"
+    assert out[0]["net"]["HOLD"]["net_usd"] is None
+
+
+def test_a_broken_settlement_reader_fails_open_for_capture(tmp_path):
+    log = _pending_log(tmp_path)
+
+    def boom(path):
+        raise RuntimeError("reader down")
+
+    assert log.reconcile_pending(boom, now=NOW_OK) == []   # must not raise
+    assert log.reconcile_errors >= 1
+    assert log.pending_markets() == [SLUG]       # still pending, not closed
+    # and capture is unaffected
+    log.observe_book("cpc-btc-updown-15m-2026-10-16-2215z", base_ladder()[0])
+    assert log.errors == 0
+
+
+def test_a_matched_window_is_never_reconciled(tmp_path):
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0])
+    log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1])
+    log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    log.rollover(keep=[])
+    calls = []
+    assert log.reconcile_pending(lambda p: calls.append(p), now=NOW_OK) == []
+    assert calls == [], "a matched pair needs no settlement read"
+
+
+# ------------------------------------------ the bounded read-only projection
+
+def test_the_view_is_bounded_in_records_and_fields(tmp_path):
+    log = _pending_log(tmp_path)
+    v = log.records_view(limit=10_000)
+    assert v["returned"] <= E.VIEW_MAX_RECORDS
+    assert v["pending"] == 1
+    row = v["records"][0]
+    assert set(row) <= set(E.VIEW_FIELDS)
+    # the fields the audit actually needs are present
+    for k in ("quote", "inventory_after_acquisition", "resting", "net"):
+        assert k in row
+    assert "dashboard" in v
+    assert "realized profit" in v["labels"]
+
+
+def test_the_view_serves_no_field_outside_the_allow_list(tmp_path):
+    log = _pending_log(tmp_path)
+    log.latest[SLUG] = dict(log.latest[SLUG], secret_field="CANARY")
+    blob = json.dumps(log.records_view())
+    assert "CANARY" not in blob and "secret_field" not in blob
