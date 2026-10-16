@@ -121,3 +121,5 @@ module was absent from this COPY set; a lazy-import closure test now fails
 until any such module is packaged.
 
 Promote the audit read-verb and retired-quantity fixes 2026-10-16T02:0xZ.
+
+Promote the L5 baseline epoch and scoped ceilings. SHADOW_ONLY stays on.
