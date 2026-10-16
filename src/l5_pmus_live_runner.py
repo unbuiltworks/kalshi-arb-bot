@@ -585,10 +585,17 @@ class Runner:
         if str(os.getenv("L5_ESTABLISH_BASELINE", "")).strip().upper() == "YES":
             try:
                 acct = self.transport.account() or {}
-                cash = next((acct.get(k) for k in
-                             ("availableBalance", "available", "cash",
-                              "buyingPower", "balance")
-                             if acct.get(k) is not None), None)
+                # THE DEFECT THIS REPLACES. /v1/account/balances returns
+                # `balances` as a LIST of entries carrying buyingPower; the
+                # first version read availableBalance/cash/etc off the
+                # TOP-LEVEL dict, never looked inside balances[], and so
+                # produced cash=None and refused BASELINE_READS_UNAVAILABLE
+                # at 02:39:36Z with venue_positions_read=true. The runner's
+                # own cash refresh already does this correctly, and this now
+                # uses the identical proven parser rather than guessing key
+                # names. Still None on a genuinely unreadable balance, which
+                # still refuses -- the validation is unchanged.
+                cash = T.PmusTransport.buying_power(acct)
                 pos = self.transport.positions()
                 # from the store's OWN committed-cash record, not from the
                 # executor (which is constructed below and would therefore

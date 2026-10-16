@@ -302,3 +302,44 @@ def test_post_t_manual_settlement_is_excluded_and_surfaced(tmp_path):
     lines = s.l5_baseline_lines()
     assert [r["market"] for r in
             lines["post_baseline_settlements_NOT_attested"]] == ["manualMkt"]
+
+
+# ------------------------- the production response shape that refused at 02:39
+def test_the_production_balances_shape_yields_cash_not_none():
+    """THE DEFECT PRODUCTION FOUND. /v1/account/balances returns `balances`
+    as a LIST carrying buyingPower. The first baseline read looked for
+    availableBalance/cash/buyingPower on the TOP-LEVEL dict, never inside
+    balances[], so cash was None and the baseline refused
+    BASELINE_READS_UNAVAILABLE at 02:39:36Z with venue_positions_read=true."""
+    from decimal import Decimal
+    from src import l5_pmus_transport as T
+    prod = {"balances": [{"buyingPower": "347.47255"}]}
+    assert T.PmusTransport.buying_power(prod) == Decimal("347.47255")
+    # the shape my first version assumed simply is not there
+    assert prod.get("availableBalance") is None
+    # older shapes still accepted
+    assert T.PmusTransport.buying_power(
+        {"balances": {"buyingPower": "12.5"}}) == Decimal("12.5")
+    assert T.PmusTransport.buying_power({"buyingPower": "9"}) == Decimal("9")
+    # and a genuinely unreadable balance is still None -- not substituted
+    assert T.PmusTransport.buying_power({"balances": []}) is None
+    assert T.PmusTransport.buying_power({}) is None
+
+
+def test_the_runner_uses_the_proven_parser_not_guessed_key_names():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "src/l5_pmus_live_runner.py")).read()
+    b = src.index('os.getenv("L5_ESTABLISH_BASELINE"')
+    tail = src[b:b + 2600]
+    assert "T.PmusTransport.buying_power(acct)" in tail
+    # the guessed-key list must be gone from the baseline block
+    assert '"availableBalance", "available", "cash"' not in tail
+
+
+def test_an_unreadable_cash_still_refuses_the_baseline(tmp_path):
+    """Validation is not weakened: None cash still refuses."""
+    s = _store(tmp_path)
+    out = _ok(s, cash_usd=None)
+    assert out["established"] is False
+    assert out["reason"] == "BASELINE_READS_UNAVAILABLE"
+    assert "l5_baseline" not in s.state
