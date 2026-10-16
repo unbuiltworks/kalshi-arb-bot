@@ -78,3 +78,33 @@ def test_unattested_fill_does_not_become_verified_l5_settlement(tmp_path):
     assert rec["l5_owner_attribution_verified"] is False
     assert rec["pnl_provenance"] == "OWNERSHIP_NOT_ATTESTED"
     assert "verified_l5_settlement_gross" not in s.state
+
+def test_verified_strategy_net_requires_after_fee_attestation(tmp_path):
+    s = InventoryStore(str(tmp_path / "net.json"))
+    assert s.verified_l5_net_for_gates() is None
+    s.state["verified_l5_settlement_gross"] = "-9.00"
+    assert s.verified_l5_net_for_gates() is None
+    s.state["verified_l5_net_attestation"] = {
+        "net_usd": "-7", "source": "AUDITED_L5_FILLS_FEES_SETTLEMENTS",
+        "order_ids": ["order-confirmed"], "fee_evidence": ["fee-confirmed"]}
+    assert s.verified_l5_net_for_gates() == D("-7")
+
+
+def test_two_independent_loss_budgets_preserve_account_guard():
+    from src.l5_live_validation_gates import ValidationGates
+    gate = ValidationGates(max_cumulative_loss_usd=D("10"),
+                           max_strategy_loss_usd=D("5"))
+    base = dict(order_qty=D("1"), order_price=D("0.3"),
+                order_intent="ORDER_INTENT_BUY_LONG",
+                cumulative_unrealized_loss=D("0"))
+    # Owner-specific evidence absent; unknown never counts as zero.
+    assert gate.refuse(**base, cumulative_realized=D("-1"),
+                       verified_strategy_net=None) == "STRATEGY_NET_UNVERIFIED"
+    # Account-wide losses still stop orders even when strategy is positive.
+    assert gate.refuse(**base, cumulative_realized=D("-10"),
+                       verified_strategy_net=D("2")).startswith(
+                           "CUMULATIVE_LOSS_LIMIT:")
+    # Strategy losses stop orders even when account ledger looks positive.
+    assert gate.refuse(**base, cumulative_realized=D("2"),
+                       verified_strategy_net=D("-5")).startswith(
+                           "STRATEGY_LOSS_LIMIT:")
