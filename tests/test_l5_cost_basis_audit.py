@@ -1451,11 +1451,15 @@ def test_the_expectation_is_the_rows_own_cost_total_not_the_placeholder():
     assert out["realized_delta_usd"] == "36.97540000"
 
 
-def test_a_two_sided_market_is_REFUSED_so_the_other_leg_is_not_erased():
+def test_a_two_sided_market_plans_the_LEGS_cost_not_the_PAIRS():
     """cpc-btc-updown-15m-2026-10-15-1945z: up_qty 1 / up_cost 0.4600 AND
     dn_qty 1.0000 / dn_cost 1.0000, cost_total 1.4600 for the PAIR.
-    Correcting the DOWN leg through cost_total would write 0.4900 over the
-    whole market and erase the UP leg's 0.4600."""
+
+    TWO FIGURES. `expect` asserts the market-level cost_total, because that
+    is the field the row carries. The leg's pre-state is its OWN dn_cost.
+    Using the total as the pre-state would book a 0.97 correction where the
+    truth is 0.51 -- the other leg's real cost, double-counted.
+    """
     st = _RecordingStore(state={"retired_markets": {
         "m1": {"up_qty": "1", "dn_qty": "1.0000", "up_cost": "0.4600",
                "dn_cost": "1.0000", "cost_total": "1.4600"}}})
@@ -1467,24 +1471,56 @@ def test_a_two_sided_market_is_REFUSED_so_the_other_leg_is_not_erased():
                             "actual_cost_usd": "0.49000000",
                             "fees_usd": "0.0000"},
                   "fills": [{"trade_id": "T1", "qty": "1.0000",
-                             "price": "0.5100", "fee": "0.0000"}]}]})
-    assert out["applied_detail"] == []
-    assert out["preserved_unknown"] == 1
-    d = out["preserved_detail"][0]
-    assert d["reason"] == "MARKET_TWO_SIDED_COST_TOTAL"
-    assert d["other_side_qty"] == "1"
-    assert d["cost"] == "UNKNOWN"
-    assert st.calls == [], "the verb must not even be called"
+                             "price": "0.4900", "fee": "0.0000"}]}]})
+    leg = out["applied_detail"][0]
+    assert leg["cost_before_usd"] == "1.0000"        # the LEG's own cost
+    assert leg["expect_cost_total"] == "1.4600"      # the MARKET's total
+    assert leg["two_sided"] is True
+    assert leg["restate"] is False
+    assert out["realized_delta_usd"] == "0.51000000"
 
 
-def test_an_already_corrected_leg_leaves_the_batch_restoring_mechanism_one():
+def test_a_two_sided_row_with_unreadable_side_costs_stays_unknown():
     st = _RecordingStore(state={"retired_markets": {
-        "m1": {"up_qty": "2.90", "dn_qty": "0", "cost_total": "0.590000",
+        "m1": {"up_qty": "1", "dn_qty": "1.0000", "cost_total": "1.4600"}}})
+    out = A.apply_cost_basis_corrections(st, {
+        "activity_walk": {"complete": True},
+        "legs": [{"key": "m1|DOWN", "market": "m1", "side": "DOWN",
+                  "placeholder_cost_usd": "1.0000",
+                  "basis": {"established": True,
+                            "actual_cost_usd": "0.49000000",
+                            "fees_usd": "0.0000"},
+                  "fills": [{"trade_id": "T1", "qty": "1.0000",
+                             "price": "0.4900", "fee": "0.0000"}]}]})
+    assert out["applied_detail"] == []
+    assert out["preserved_detail"][0]["reason"] == \
+        "MARKET_TWO_SIDED_COST_UNREADABLE"
+    assert out["preserved_detail"][0]["cost"] == "UNKNOWN"
+
+
+def test_an_already_corrected_leg_is_planned_as_a_RESTATEMENT():
+    """OWNER 2026-10-16: the verb must reconcile previously corrected legs in
+    either direction, so an already-corrected leg now ENTERS the batch with
+    restate=True instead of being skipped. The cost may therefore RISE,
+    which is what the 13 YES-priced DOWN legs need."""
+    st = _RecordingStore(state={"retired_markets": {
+        "m1": {"up_qty": "2.90", "dn_qty": "0", "cost_total": "0.100000",
                "cost_superseded": {"cost_total": "2.90"}}}})
     out = A.apply_cost_basis_corrections(st, _audit_payload())
+    leg = [x for x in out["applied_detail"] if x["key"] == "m1|UP"][0]
+    assert leg["restate"] is True
+    assert leg["cost_before_usd"] == "0.100000"
+    assert leg["cost_after_usd"] == "0.59000000"     # RAISED
+    assert out["realized_delta_usd"] == "-0.49000000"
+
+
+def test_a_first_correction_that_would_RAISE_a_cost_stays_out():
+    st = _RecordingStore(state={"retired_markets": {
+        "m1": {"up_qty": "2.90", "dn_qty": "0", "cost_total": "0.100000"}}})
+    out = A.apply_cost_basis_corrections(st, _audit_payload())
     assert out["applied_detail"] == []
-    assert any(d["reason"] == "COST_ALREADY_CORRECTED"
-               for d in out["preserved_detail"])
+    d = [x for x in out["preserved_detail"] if x["key"] == "m1|UP"][0]
+    assert d["reason"] == "WOULD_RAISE_A_FIRST_COST"
     assert st.calls == []
 
 

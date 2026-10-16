@@ -1825,7 +1825,8 @@ class InventoryStore:
                            expect: Mapping[str, Any],
                            measured_cost: D,
                            measured_fees: D,
-                           evidence: Mapping[str, Any]
+                           evidence: Mapping[str, Any],
+                           restate: bool = False
                            ) -> Dict[str, Any]:
         """Replace ONE leg's $1/share PLACEHOLDER cost with a measured one.
 
@@ -1865,10 +1866,25 @@ class InventoryStore:
         if not row:
             return {"corrected": False, "key": key,
                     "reason": "MARKET_NOT_RETIRED"}
-        # 3. never correct twice
-        if row.get("cost_superseded"):
+        # 3. never correct twice -- UNLESS this is an explicit RESTATEMENT.
+        #    A first correction replaces an upper bound with a measurement
+        #    and may only ever come DOWN. A restatement revisits a figure
+        #    this verb itself got wrong, so it must be able to move EITHER
+        #    way: 13 of the 44 legs corrected on 2026-10-16 were costed at
+        #    the YES price on a DOWN leg and need their cost RAISED. The
+        #    measurement is still re-derived from the named venue fills
+        #    below (guard 6), so a restatement cannot assert a number
+        #    either.
+        restate = bool(restate)
+        if row.get("cost_superseded") and not restate:
             return {"corrected": False, "key": key,
                     "reason": "COST_ALREADY_CORRECTED"}
+        if restate and not row.get("cost_superseded"):
+            # nothing has been corrected here, so there is nothing to
+            # restate. Taking the first correction's one-directional path
+            # by mistake is how an upper bound gets raised.
+            return {"corrected": False, "key": key,
+                    "reason": "NOTHING_TO_RESTATE"}
         # 4. the ledger must hold what the evidence describes
         mismatch = {k: {"expected": str(v), "found": str(row.get(k))}
                     for k, v in dict(expect).items()
@@ -1904,7 +1920,16 @@ class InventoryStore:
                         "reason": "COST_NOT_RECONCILED",
                         "detail": "FILL_UNREADABLE"}
             qty_sum += q
-            cost_sum += q * px
+            # OUR COST PER SHARE, from the market's single quoted price.
+            # PMUS quotes ONE number per market and it is ALWAYS the UP/YES
+            # price, so a DOWN fill's cost is the COMPLEMENT. This
+            # re-derivation had the same defect the audit's establish_basis
+            # did: it charged the YES price on both sides, which on the 44
+            # legs corrected on 2026-10-16 understated the correct total by
+            # 30.75140000 and over-corrected 13 DOWN legs by 15.79500000.
+            # The rule lives in exactly two places -- here and
+            # l5_cost_basis_audit.own_price -- and a test pins them equal.
+            cost_sum += q * (px if side == "UP" else (D(1) - px))
             fee_sum += fee
             ids.append(str(tid))
         want_cost = finite_decimal(measured_cost)
@@ -1936,11 +1961,49 @@ class InventoryStore:
                     "ledger_qty": str(ledger_qty)}
         # 8. ONE-DIRECTIONAL. It may only ever replace an upper bound with a
         #    smaller measurement, never inflate a cost.
-        was_cost = finite_decimal(row.get("cost_total"))
+        # THIS LEG'S OWN COST, and the market total it belongs to. A row
+        # carries BOTH when the market was two-sided:
+        # cpc-btc-updown-15m-2026-10-15-1945z retired with up_cost 0.4600 and
+        # dn_cost 1.0000, so cost_total 1.4600 is the PAIR. Writing a
+        # measured DOWN cost over cost_total would have erased the UP leg's
+        # real 0.4600 and flattered realized. The side's own field is
+        # corrected and the total is RECOMPUTED from the two sides.
+        own_field = "up_cost" if side == "UP" else "dn_cost"
+        other_field = "dn_cost" if side == "UP" else "up_cost"
+        other_qty = finite_decimal(
+            row.get("dn_qty" if side == "UP" else "up_qty")) or D(0)
+        was_total = finite_decimal(row.get("cost_total"))
+        own_now = finite_decimal(row.get(own_field))
+        other_now = finite_decimal(row.get(other_field))
+        if other_qty != 0 and other_now is None:
+            # the other side HOLDS inventory and its cost cannot be read, so
+            # this leg's cost cannot be separated from the pair's. Writing
+            # cost_total here would erase a cost nobody can restate.
+            return {"corrected": False, "key": key,
+                    "reason": "OTHER_SIDE_COST_UNREADABLE",
+                    "other_side_qty": str(other_qty)}
+        if (own_now is not None and other_now is not None
+                and was_total is not None
+                and own_now + other_now != was_total):
+            return {"corrected": False, "key": key,
+                    "reason": "ROW_COSTS_DO_NOT_RECONCILE",
+                    "up_cost": str(row.get("up_cost")),
+                    "dn_cost": str(row.get("dn_cost")),
+                    "cost_total": str(was_total)}
+        # THIS LEG'S OWN pre-state, and the market total it belongs to.
+        was_cost = own_now if own_now is not None else was_total
+        new_total = want_cost + (other_now if other_now is not None else D(0))
         if was_cost is None:
             return {"corrected": False, "key": key,
                     "reason": "COST_UNREADABLE"}
-        if want_cost >= was_cost:
+        if want_cost == was_cost:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_ALREADY_CORRECT",
+                    "was": str(was_cost), "supplied": str(want_cost)}
+        if want_cost > was_cost and not restate:
+            # a FIRST correction may only replace an upper bound with a
+            # smaller measurement. A restatement is exempt, and only a
+            # restatement.
             return {"corrected": False, "key": key,
                     "reason": "COST_CORRECTION_MUST_REDUCE",
                     "was": str(was_cost), "supplied": str(want_cost)}
@@ -1951,6 +2014,12 @@ class InventoryStore:
         # 10. the same fills may not be spent twice across legs
         spent = set()
         for rec in (self.state.get("cost_basis_corrections") or []):
+            # A RESTATEMENT RE-READS THE SAME FILLS. Ids this very leg
+            # already consumed are its own, so they are not a clash; ids
+            # consumed by ANY OTHER leg still are, which is the double-spend
+            # this guard exists to stop.
+            if rec.get("key") == key:
+                continue
             spent.update(rec.get("trade_ids") or ())
         clash = sorted(set(ids) & spent)
         if clash:
@@ -1963,12 +2032,24 @@ class InventoryStore:
         dn = D(str(row.get("dn_qty") or 0))
         v = finite_decimal(row.get("yes_value"))
         redeem = (up * v + dn * (D(1) - v)) if v is not None else None
-        pnl = (redeem - want_cost) if redeem is not None else None
+        pnl = (redeem - new_total) if redeem is not None else None
         delta = (pnl - D(str(row.get("settlement_pnl") or 0))
                  if pnl is not None else was_cost - want_cost)
 
-        row["cost_superseded"] = dict(row)        # verbatim, never edited
-        row["cost_total"] = str(want_cost)
+        if not row.get("cost_superseded"):
+            row["cost_superseded"] = dict(row)    # verbatim, never edited
+        else:
+            # A RESTATEMENT NEVER OVERWRITES THE ORIGINAL. cost_superseded
+            # keeps the row as it was BEFORE the first correction, for good,
+            # and each later state is appended beside it.
+            row.setdefault("cost_restatements", []).append(
+                {k: v for k, v in row.items()
+                 if k not in ("cost_superseded", "cost_restatements")})
+        if own_now is not None:
+            # keep the side field and the total in step; a stale side field
+            # beside a corrected total is a row that disagrees with itself.
+            row[own_field] = str(want_cost)
+        row["cost_total"] = str(new_total)
         row["cost_provenance"] = "MEASURED_FROM_VENUE_FILLS"
         row["fees_total"] = str(want_fees)
         if pnl is not None:
@@ -1989,6 +2070,8 @@ class InventoryStore:
             "t": dt.datetime.now(dt.timezone.utc).isoformat(),
             "was_cost_total": str(was_cost),
             "now_cost_total": str(want_cost),
+            "restatement": restate,
+            "market_cost_total_after": str(new_total),
             "fees_total": str(want_fees),
             "delta": str(delta),
             "qty": str(qty_sum),

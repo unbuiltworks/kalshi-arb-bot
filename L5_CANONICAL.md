@@ -332,3 +332,69 @@ separately as `legs_measured_from_venue_fills` with their
 `leg_cost_basis_unknown`, `cost_superseded` and every correction id
 preserved, and double-apply protection (the spent `correction_id`)
 untouched. Affects the heartbeat's accounting assembly only.
+
+---
+
+## 9. Consolidated restatement + drift verdict (2026-10-16, INSPECT only)
+
+### The verb change (smallest safe, no new framework)
+`correct_cost_basis` gained one optional flag, `restate`, and the UP/DOWN
+rule it was missing:
+
+- **the side rule, in the verb too.** Its own re-derivation computed
+  `q x price` on both sides — the same defect `establish_basis` had — so it
+  REFUSED every side-aware DOWN figure as `COST_NOT_RECONCILED`. It now
+  uses `q x (px if UP else 1-px)`. The rule lives in exactly two places and
+  a test pins them equal.
+- **either direction, for a restatement only.** A first correction still
+  may only come DOWN (`COST_CORRECTION_MUST_REDUCE`). `restate=True` is
+  allowed only on a leg that already carries `cost_superseded`
+  (`NOTHING_TO_RESTATE` otherwise), and it still cannot assert a cost:
+  guard 6 re-derives it from the named venue trade ids.
+- **two-sided markets keep the other leg.** The side's own
+  `up_cost`/`dn_cost` is corrected and `cost_total` is RECOMPUTED. A row
+  whose sides do not sum to its total is refused
+  (`ROW_COSTS_DO_NOT_RECONCILE`); so is one whose other side holds
+  inventory at an unreadable cost (`OTHER_SIDE_COST_UNREADABLE`).
+- **the original is never overwritten.** `cost_superseded` keeps the
+  pre-first-correction row for good; later states append to
+  `cost_restatements`.
+- **own ids are not a double-spend.** A restatement may re-read its own
+  fills; ids consumed by any OTHER leg still refuse
+  (`TRADE_ID_ALREADY_CONSUMED`).
+
+### Manifest `config/cost_basis_batch_manifest_20261016c.json`
+**24 legs, 35 trade ids, `realized_delta_usd 68.23680000`.** 22 DOWN
+restatements + the XRP leg (36.97540000) + the 1945z leg (0.51000000).
+Preserved: 23 `NOTHING_TO_CORRECT` (all 22 UP legs, already right, plus
+Stage A) and the 2 `QUANTITY_MISMATCH` legs, still UNKNOWN.
+
+Proved in `tests/test_l5_consolidated_restatement.py` against the real
+production audit (`tests/data/l5_production_audit_20261016.json`):
+
+| | |
+|---|---|
+| applying ONCE | realized `-76.12160000` → **`-7.88480000`**, 24 applied, 0 refused |
+| applying TWICE | `ABORTED / BATCH_MISMATCH`, 0 applied, ledger byte-identical |
+| under a FRESH batch id | `ABORTED / BATCH_MISMATCH` |
+| one leg moved | `ABORTED / BATCH_MISMATCH`, nothing written |
+| 1945z | `dn_cost 0.4900`, **`up_cost 0.4600` untouched**, `cost_total 0.9500` |
+
+**NOT APPLIED.** `L5_COST_BASIS_APPLY` still holds the spent
+`cb-20261016-47leg-209.6638`; no batch id for this manifest is set
+anywhere, and nothing was deployed.
+
+### The three inventory drift entries
+Ours > 0 while the venue reports 0. **A venue zero is not read as zero
+exposure**; each verdict rests on a positive settlement record or is left
+unresolved.
+
+| entry | verdict | evidence |
+|---|---|---|
+| `cpc-btc-updown-15m-2026-10-12-0030z\|DOWN` | **STALE SETTLED** | `L5_LIVE_SETTLED` 2026-10-12T00:45:39Z, `venue_state MARKET_STATE_EXPIRED`, `dn_qty 2`, `redemption_total 1.9800`, `committed_released 0.3000` |
+| `cpc-btc-updown-15m-2026-10-14-2230z\|UP` | **STALE SETTLED** | Stage A record 2026-10-14T22:45:31Z, EXPIRED, plus the flat balance pair 242.97505 → 242.38505 (−0.59000, the five fills' cost exactly) |
+| `cpc-btc-updown-1d-2026-10-15-2100z\|DOWN` | **UNRESOLVED — treat as REAL** | **No settlement record exists.** It is a ONE-DAY market: the slug names the window start, so it expires 2026-10-16T21:00Z, still in the future. Yet it sits in `retired_markets` while `account_exposure` counts it at $2.0400 worst case and `cash_deployed.leg_cost_down` reads 2.0400. Our books say retired AND open at once. Also one of the two preserved UNKNOWN legs, so its cost stays UNKNOWN. |
+
+Separate, small, not fixed: 0030z settled against `yes_value 0.0100` — the
+expired-book-price defect corrected for 2230z only. Worth about $0.02 on
+that leg. Flagged, not a workstream.

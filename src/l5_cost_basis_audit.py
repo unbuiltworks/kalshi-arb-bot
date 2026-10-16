@@ -974,19 +974,34 @@ def leg_cost_expectation(store: Any, market: str, side: str) -> Dict[str, Any]:
            or {}).get(market)
     if not isinstance(row, Mapping):
         return {"ok": False, "reason": "MARKET_NOT_RETIRED"}
-    if row.get("cost_superseded"):
-        return {"ok": False, "reason": "COST_ALREADY_CORRECTED"}
+    # a leg this verb already corrected is a RESTATEMENT, not a first
+    # correction: it may move either way, and the verb requires the flag.
+    restate = bool(row.get("cost_superseded"))
     cost_total = _d(row.get("cost_total"))
     if cost_total is None:
         return {"ok": False, "reason": "COST_TOTAL_UNREADABLE"}
-    other = _d(row.get("dn_qty" if side == "UP" else "up_qty"))
-    if other is None:
+    other_qty = _d(row.get("dn_qty" if side == "UP" else "up_qty"))
+    if other_qty is None:
         return {"ok": False, "reason": "OTHER_SIDE_QTY_UNREADABLE"}
-    if other != 0:
-        return {"ok": False, "reason": "MARKET_TWO_SIDED_COST_TOTAL",
-                "other_side_qty": str(other),
-                "cost_total": str(cost_total)}
-    return {"ok": True, "cost_total": cost_total}
+    # TWO FIGURES, NOT ONE. `expect` asserts the MARKET-level cost_total,
+    # because that is the field the row carries and the verb matches. The
+    # leg's OWN cost is what the correction replaces, and on a two-sided
+    # market they are different numbers: 1945z holds cost_total 1.4600 for
+    # the pair while the DOWN leg's own cost is 1.0000. Using the total as
+    # the leg's pre-state would overstate the correction by the other leg.
+    own = _d(row.get("up_cost" if side == "UP" else "dn_cost"))
+    if other_qty != 0:
+        if own is None or _d(row.get("dn_cost" if side == "UP"
+                                     else "up_cost")) is None:
+            # two-sided and the per-side costs are not both readable, so
+            # the leg's own cost cannot be separated from the pair's.
+            return {"ok": False, "reason": "MARKET_TWO_SIDED_COST_UNREADABLE",
+                    "other_side_qty": str(other_qty),
+                    "cost_total": str(cost_total)}
+    if own is None:
+        own = cost_total
+    return {"ok": True, "cost_total": cost_total, "own_cost": own,
+            "restate": restate, "two_sided": other_qty != 0}
 
 
 def correction_request(audit_result: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1268,12 +1283,18 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
                             **{k: v for k, v in exp.items()
                                if k not in ("ok", "reason")}})
             continue
-        placeholder = exp["cost_total"]
-        if measured >= placeholder:
-            # nothing to reduce. The verb would refuse MUST_REDUCE anyway;
-            # keeping it out of the batch keeps the manifest honest.
+        placeholder = exp["own_cost"]
+        if measured == placeholder:
             skipped.append({"key": key, "reason": "NOTHING_TO_CORRECT",
-                            "cost_total": str(placeholder),
+                            "own_cost": str(placeholder),
+                            "measured": str(measured)})
+            continue
+        if measured > placeholder and not exp["restate"]:
+            # a FIRST correction may only come down; the verb refuses it
+            # anyway, and keeping it out of the batch keeps the manifest
+            # honest about what it will do.
+            skipped.append({"key": key, "reason": "WOULD_RAISE_A_FIRST_COST",
+                            "own_cost": str(placeholder),
                             "measured": str(measured)})
             continue
         per_fill = []
@@ -1299,6 +1320,9 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
             "fees_usd": str(fees),
             "trade_ids": [f["trade_id"] for f in per_fill],
             "correction_id": "%s|%s" % (batch_id or APPLY_INSPECT, key),
+            "expect_cost_total": str(exp["cost_total"]),
+            "restate": exp["restate"],
+            "two_sided": exp["two_sided"],
         }
         # a PAIR, not a stashed key: this module's purity test forbids every
         # `x[...] = ...` as proof it cannot write to the store, and that rule
@@ -1345,9 +1369,10 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
         out = store.correct_cost_basis(
             market, side,
             correction_id=plan["correction_id"],
-            expect={"cost_total": str(placeholder)},
+            expect={"cost_total": plan["expect_cost_total"]},
             measured_cost=measured,
             measured_fees=fees,
+            restate=bool(plan.get("restate")),
             evidence={"trade_ids": plan["trade_ids"], "per_fill": per_fill,
                       "activity_walk": walk})
         if out.get("corrected"):

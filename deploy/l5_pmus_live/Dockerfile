@@ -111,6 +111,7 @@ COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.
 # nothing). This image COPYs per file, so the manifest must be named.
 COPY config/cost_basis_batch_manifest_20261016.json config/cost_basis_batch_manifest_20261016.json
 COPY config/cost_basis_batch_manifest_20261016b.json config/cost_basis_batch_manifest_20261016b.json
+COPY config/cost_basis_batch_manifest_20261016c.json config/cost_basis_batch_manifest_20261016c.json
 
 ENV PMUS_SERVICE_ROLE=l5-pmus-live \
     L5_LIVE_ROOT=/state/l5-live \
