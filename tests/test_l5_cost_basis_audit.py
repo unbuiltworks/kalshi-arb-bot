@@ -923,6 +923,12 @@ class _RecordingStore:
         return {"corrected": False, "reason": self._reason}
 
 
+def _manifest_for(payload=None):
+    """The manifest the INSPECT run would have produced for _audit_payload."""
+    return {"legs": 1, "keys": ["m1|UP"], "trade_ids": ["T1"],
+            "realized_delta_usd": "2.31"}
+
+
 def _audit_payload():
     return {"activity_walk": {"pages": 107, "ended": "eof", "complete": True},
             "legs": [
@@ -963,7 +969,8 @@ def test_a_batch_id_authorizes_the_write(monkeypatch):
 
 def test_the_quantity_mismatched_leg_is_preserved_as_unknown():
     st = _RecordingStore()
-    out = A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    out = A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1",
+                                         manifest=_manifest_for())
     assert out["preserved_unknown"] == 1
     assert out["preserved_detail"][0]["cost"] == "UNKNOWN"
     assert out["preserved_detail"][0]["reason"] == "QUANTITY_MISMATCH"
@@ -973,7 +980,8 @@ def test_the_quantity_mismatched_leg_is_preserved_as_unknown():
 
 def test_the_evidence_passed_is_the_audits_own_fresh_walk():
     st = _RecordingStore()
-    A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1",
+                                         manifest=_manifest_for())
     ev = st.calls[0]["evidence"]
     assert ev["activity_walk"]["complete"] is True
     assert ev["per_fill"][0]["trade_id"] == "T1"
@@ -982,7 +990,8 @@ def test_the_evidence_passed_is_the_audits_own_fresh_walk():
 
 def test_a_refusal_is_reported_and_not_retried():
     st = _RecordingStore(corrected=False, reason="COST_NOT_RECONCILED")
-    out = A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    out = A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1",
+                                         manifest=_manifest_for())
     assert out["applied"] == 0 and out["refused"] == 1
     assert out["refused_detail"][0]["reason"] == "COST_NOT_RECONCILED"
     assert len(st.calls) == 1, "no retry"
@@ -992,20 +1001,157 @@ def test_an_incomplete_walk_is_carried_so_the_verb_can_refuse_it():
     st = _RecordingStore()
     payload = _audit_payload()
     payload["activity_walk"] = {"complete": False, "ended": "max_pages"}
-    A.apply_cost_basis_corrections(st, payload, batch_id="b1")
+    A.apply_cost_basis_corrections(st, payload, batch_id="b1",
+                                     manifest=_manifest_for())
     assert st.calls[0]["evidence"]["activity_walk"]["complete"] is False
 
 
-def test_an_unreadable_fill_preserves_the_leg_rather_than_correcting_it():
+def test_an_unreadable_fill_aborts_the_batch_and_preserves_the_leg():
+    """The leg drops out of the plan, so the batch no longer matches the
+    manifest -- and a changed batch is abandoned, not applied smaller."""
     st = _RecordingStore()
     payload = _audit_payload()
     payload["legs"][0]["fills"][0]["price"] = None
-    out = A.apply_cost_basis_corrections(st, payload, batch_id="b1")
+    out = A.apply_cost_basis_corrections(st, payload, batch_id="b1",
+                                         manifest=_manifest_for())
     assert st.calls == []
-    assert out["preserved_detail"][0]["reason"] == "FILL_UNREADABLE"
+    assert out["mode"] == "ABORTED" and out["reason"] == "BATCH_MISMATCH"
+    reasons = [r["reason"] for r in out["preserved_detail"]]
+    assert "FILL_UNREADABLE" in reasons
 
 
 def test_the_correction_id_carries_the_batch_so_a_rerun_is_idempotent():
     st = _RecordingStore()
-    A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1",
+                                         manifest=_manifest_for())
     assert st.calls[0]["correction_id"] == "b1|m1|UP"
+
+
+# --------------------------------------------------------------------------
+# Section 22: the all-or-nothing batch precondition (OWNER 2026-10-16:
+# "revalidate all 69 distinct trade IDs, all ten guards, and the expected
+# $209.6638 aggregate adjustment. Abort on any mismatch.")
+
+
+def _plan(keys=("m1|UP",), ids=("T1",), before="2.90", after="0.59"):
+    return [{"key": k, "cost_before_usd": before, "cost_after_usd": after,
+             "trade_ids": list(ids)} for k in keys]
+
+
+def _man(**kw):
+    m = {"legs": 1, "keys": ["m1|UP"], "trade_ids": ["T1"],
+         "realized_delta_usd": "2.31"}
+    m.update(kw)
+    return m
+
+
+def test_a_matching_batch_passes_all_three_equalities():
+    out = A.check_batch(_plan(), _man())
+    assert out["ok"] is True and out["problems"] == []
+    assert out["delta"] == "2.31" and out["trade_ids"] == 1
+
+
+def test_a_missing_leg_aborts_rather_than_applying_a_smaller_correction():
+    out = A.check_batch([], _man())
+    assert out["ok"] is False
+    assert any(p.startswith("LEG_COUNT") for p in out["problems"])
+
+
+def test_an_extra_leg_aborts():
+    out = A.check_batch(_plan(keys=("m1|UP", "m2|UP")), _man())
+    assert out["ok"] is False
+    assert any(p.startswith("KEYS_DIFFER") for p in out["problems"])
+
+
+def test_a_substituted_trade_id_aborts():
+    out = A.check_batch(_plan(ids=("T9",)), _man())
+    assert out["ok"] is False
+    assert any(p.startswith("TRADE_IDS_DIFFER") for p in out["problems"])
+
+
+def test_a_changed_aggregate_aborts_even_with_the_same_legs_and_ids():
+    out = A.check_batch(_plan(after="0.60"), _man())
+    assert out["ok"] is False
+    assert any(p.startswith("DELTA_DIFFERS") for p in out["problems"])
+
+
+def test_an_incomplete_or_unreadable_manifest_aborts():
+    for bad in ({"legs": 1, "keys": [], "trade_ids": ["T1"],
+                 "realized_delta_usd": "2.31"},
+                {"legs": 1, "keys": ["m1|UP"], "trade_ids": [],
+                 "realized_delta_usd": "2.31"},
+                {"legs": 1, "keys": ["m1|UP"], "trade_ids": ["T1"],
+                 "realized_delta_usd": "abc"}):
+        assert A.check_batch(_plan(), bad)["ok"] is False, bad
+
+
+def test_an_unreadable_leg_cost_aborts_the_batch():
+    bad = _plan()
+    bad[0]["cost_after_usd"] = None
+    assert A.check_batch(bad, _man())["ok"] is False
+
+
+# -- the applier refuses to write without a verified manifest --------------
+
+def test_an_apply_with_no_manifest_is_aborted_not_attempted():
+    st = _RecordingStore()
+    out = A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    assert out["mode"] == "ABORTED"
+    assert out["reason"] == "BATCH_MANIFEST_MISSING"
+    assert st.calls == []
+    assert out["realized_before"] == out["realized_after"]
+
+
+def test_a_mismatched_manifest_writes_nothing_at_all():
+    st = _RecordingStore()
+    out = A.apply_cost_basis_corrections(
+        st, _audit_payload(), batch_id="b1",
+        manifest=_man(realized_delta_usd="999"))
+    assert out["mode"] == "ABORTED" and out["reason"] == "BATCH_MISMATCH"
+    assert st.calls == [], "not one leg may be written on a mismatch"
+    assert out["realized_before"] == out["realized_after"]
+    assert out["would_have_applied"][0]["key"] == "m1|UP"
+
+
+def test_a_dry_run_reports_the_check_without_needing_to_pass_it():
+    st = _RecordingStore()
+    out = A.apply_cost_basis_corrections(
+        st, _audit_payload(), manifest=_man(realized_delta_usd="999"))
+    assert out["mode"] == "INSPECT"
+    assert out["batch_check"]["ok"] is False
+    assert st.calls == []
+
+
+def test_the_manifest_file_reader_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.delenv(A.BATCH_MANIFEST_ENV, raising=False)
+    assert A.batch_manifest() is None
+    missing = tmp_path / "nope.json"
+    assert A.batch_manifest(str(missing)) is None
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json")
+    assert A.batch_manifest(str(bad)) is None
+    notdict = tmp_path / "list.json"
+    notdict.write_text("[1,2]")
+    assert A.batch_manifest(str(notdict)) is None
+    good = tmp_path / "ok.json"
+    good.write_text('{"legs": 1}')
+    assert A.batch_manifest(str(good)) == {"legs": 1}
+
+
+def test_the_shipped_manifest_is_inside_the_image_copy_set():
+    """A manifest the container cannot read fails the apply closed, which is
+    safe but useless. The Dockerfile COPYs only src/ and config/, so the
+    manifest lives in config/ -- data/ would not exist in the image."""
+    import pathlib
+    import re
+    here = pathlib.Path(__file__).resolve().parents[1]
+    shipped = sorted((here / "config").glob("cost_basis_batch_manifest_*.json"))
+    assert shipped, "no manifest in config/"
+    copied = re.findall(r"^COPY\s+(\S+)", (here / "Dockerfile").read_text(),
+                        re.M)
+    assert any(c.rstrip("/") == "config" for c in copied), copied
+    m = A.batch_manifest(str(shipped[-1]))
+    assert m is not None
+    assert m["legs"] == len(m["keys"])
+    assert len(m["trade_ids"]) == len(set(m["trade_ids"])), "ids must be distinct"
+    assert A._d(m["realized_delta_usd"]) is not None

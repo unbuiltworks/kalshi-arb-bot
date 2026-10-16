@@ -644,7 +644,8 @@ class Runner:
                 mode = CBA.apply_mode()
                 emit("L5_COST_BASIS_APPLY", CBA.apply_cost_basis_corrections(
                     self.store, result,
-                    batch_id=(None if mode == CBA.APPLY_INSPECT else mode)))
+                    batch_id=(None if mode == CBA.APPLY_INSPECT else mode),
+                    manifest=CBA.batch_manifest()))
             except BaseException as exc:                       # noqa: BLE001
                 emit("L5_COST_BASIS_AUDIT_FAILED", {
                     "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
@@ -3362,6 +3363,17 @@ def validation_gates():
                 None if not os.getenv("L5_MAX_UNRESOLVED_UNKNOWN_USD",
                                       "").strip()
                 else D(os.getenv("L5_MAX_UNRESOLVED_UNKNOWN_USD").strip())),
+            # THE ACCOUNT-WIDE DELTA CEILING, bounding what the account can
+            # lose AFTER the immutable baseline epoch. UNSET BY DEFAULT, which
+            # makes the check inert: it is DEVELOPED, not activated, and
+            # activating it is a separate owner decision. It is additive and
+            # does NOT replace max_cumulative_loss_usd, which stays
+            # configured above and keeps gating the lifetime figure.
+            max_account_wide_delta_loss_usd=(
+                None if not os.getenv("L5_MAX_ACCOUNT_WIDE_DELTA_LOSS_USD",
+                                      "").strip()
+                else D(os.getenv(
+                    "L5_MAX_ACCOUNT_WIDE_DELTA_LOSS_USD").strip())),
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
         # a gate we cannot build is announced, never silently skipped

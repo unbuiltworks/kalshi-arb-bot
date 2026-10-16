@@ -103,7 +103,9 @@ class ValidationGates:
                  max_strategy_loss_usd: Optional[D] = None,
                  max_l5_daily_loss_usd: Optional[D] = None,
                  max_l5_cumulative_loss_usd: Optional[D] = None,
-                 max_unresolved_unknown_usd: Optional[D] = None) -> None:
+                 max_unresolved_unknown_usd: Optional[D] = None,
+                 max_account_wide_delta_loss_usd: Optional[D] = None
+                 ) -> None:
         if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
             raise ValueError("unknown cash policy: %r" % cash_policy)
         if cash_policy == RECYCLE_ON_COMPLETE:
@@ -142,6 +144,9 @@ class ValidationGates:
         #: purely ADDITIVE -- it can only ever add a refusal, never remove
         #: one -- and it is independent of who owned the activity and of what
         #: it cost, because both are the things that are unknown.
+        self.max_account_wide_delta_loss_usd = (
+            None if max_account_wide_delta_loss_usd is None
+            else _d(max_account_wide_delta_loss_usd))
         self.max_unresolved_unknown_usd = (
             None if max_unresolved_unknown_usd is None
             else _d(max_unresolved_unknown_usd))
@@ -421,6 +426,7 @@ class ValidationGates:
                cumulative_realized: D = D(0),
                verified_strategy_net: Optional[D] = None,
                l5_scoped_realized: Optional[D] = None,
+               account_wide_delta_usd: Any = None,
                unresolved_unknown_usd: Optional[D] = None,
                cumulative_unrealized_loss: Optional[D] = D(0),
                windows_used: int = 0,
@@ -465,6 +471,39 @@ class ValidationGates:
         if loss >= self.max_cumulative_loss_usd:
             return ("CUMULATIVE_LOSS_LIMIT:%s>=%s"
                     % (loss, self.max_cumulative_loss_usd))
+
+        # THE ACCOUNT-WIDE DELTA CEILING, measured from the immutable
+        # baseline epoch. ADDITIVE: the lifetime account-wide check above has
+        # already run and already returned if breached, so this can only ever
+        # ADD a refusal. It does NOT replace that check and does not relax it;
+        # removing it is a separate, explicit owner decision and is
+        # deliberately not available here.
+        #
+        # IT IS ACCOUNT-WIDE, NOT L5-ATTRIBUTED. Every post-T settlement
+        # counts whoever placed it, because what is being bounded is what the
+        # account can still lose, and an unattributable loss is still a loss.
+        #
+        # UNREALIZED IS INCLUDED, the same way the lifetime check includes it:
+        # a book about to lose must be able to trip this, not only a book that
+        # already has.
+        #
+        # MISSING IS NOT ZERO. No baseline, an unreadable anchor, or a
+        # correction record whose period cannot be determined all arrive here
+        # as None, and None REFUSES.
+        if self.max_account_wide_delta_loss_usd is not None:
+            if account_wide_delta_usd is None:
+                return "ACCOUNT_WIDE_DELTA_UNAVAILABLE"
+            try:
+                dlt = _d(account_wide_delta_usd)
+                if not dlt.is_finite():
+                    return "ACCOUNT_WIDE_DELTA_UNAVAILABLE"
+            except (ValueError, ArithmeticError):
+                return "ACCOUNT_WIDE_DELTA_UNAVAILABLE"
+            delta_loss = max(D(0), -dlt) + max(
+                D(0), _d(cumulative_unrealized_loss))
+            if delta_loss >= self.max_account_wide_delta_loss_usd:
+                return ("ACCOUNT_WIDE_DELTA_LOSS_LIMIT:%s>=%s"
+                        % (delta_loss, self.max_account_wide_delta_loss_usd))
 
         # L5-SCOPED CEILINGS, measured from the verified baseline epoch.
         #
