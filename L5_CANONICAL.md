@@ -376,3 +376,102 @@ path. It needs authorization because it widens what completion may pay,
 and because reaching above the touch may require `L5_TS_COMPLETION_CROSS`,
 which is a separate capability decision. No limit, service or strategy
 changes, and nothing here is implemented.
+
+---
+
+## 14. The two-sided quoting hypothesis, tested. 2 limbs of 3 hold.
+
+Observed = fills. **Public fills cannot prove when an order was posted or
+cancelled**, so everything below about resting orders is inference from fill
+patterns, labelled as such.
+
+### 1. Simultaneous two-sided quoting — SUPPORTED (inference)
+| | |
+|---|---|
+| inter-fill gap, next fill SAME side | median **1.0s** (p25 0.0s) |
+| inter-fill gap, next fill OPPOSITE side | median **4.0s** (p25 2.0s) |
+| opposite-side fills within ≤2s of each other | **65,935 events** |
+| windows containing at least one such ≤2s cross-side pair | **5,066 = 91.3%** |
+| of those, the two prices summed **< 1.00** | **77.3%** |
+
+Two bids hit within two seconds at prices summing below parity, in 91% of
+windows, is the signature of quotes resting on both books at once. Directly
+observed: the fills. Inferred: that they were resting.
+
+### 2. Quote-implied prices track the market — SUPPORTED
+Consecutive same-side fill price change: median **0.0100** — exactly one
+tick — mean 0.0267, with **73.5%** of consecutive same-side fills at a
+different price. Contemporaneous UP+DN last-fill sum: median **0.9800**
+(p10 0.87, p90 1.06). He reprices a tick at a time and keeps both sides
+just inside parity.
+
+### 3. Inventory-aware size and aggressiveness — **NOT SUPPORTED. It is the reverse.**
+| imbalance / total | fills | P(next fill reduces) | mean qty |
+|---|---|---|---|
+| 0/5 | 523,566 | 48.7% | 19.61 |
+| 1/5 | 101,600 | 49.2% | 18.19 |
+| 2/5 | 31,591 | 49.2% | 17.51 |
+| 3/5 | 12,576 | 51.2% | 17.47 |
+| **4/5** | 31,370 | **28.1%** | 18.47 |
+
+The reducing-fill rate is **flat at ~49%** across imbalance, and at extreme
+imbalance it **collapses to 28.1%** — he gets *more* fills on the side he is
+already long. Quote size never varies (17.5–19.6 throughout). He does not
+lean against inventory; the market leans on him. This is precisely where the
+residual's −35.77% comes from.
+
+### 4. Is fast completion passive or aggressive? — BOTH, and the split is economic
+The sub-parity majority is consistent with passive fills (opposite-side gaps
+of 2–4s with both sides resting). The expensive tail is not: **39.4% of
+matched quantity completes at pair ≥ 1.00**, and a resting bid fills at
+*your own* price — nobody rests a bid that makes a pair cost 1.22. Paying up
+is crossing. Plus 15.1% unambiguous single-side multi-price sweeps. So:
+**passive for the cheap majority, aggressive for the costly 39.4%.**
+
+### 5. Our engine: two-sided by design, sequential by configuration
+`build_orders` in `src/l5_two_sided_probe.py` already constructs **both**
+intents, and `min_completion_probability` already models the simultaneous
+case as `EV = p^2*e - 2p(1-p)*alpha`. The design is not sequential.
+
+But `l5_live_execution.py:473` refuses `MAX_LIVE_ORDERS` once
+`live_order_count >= max_live_orders`, and that is **1**. The second intent
+is refused the instant the first rests. **A one-value bound defeats a
+two-sided design that already exists.** That is the single highest-impact
+mismatch.
+
+### The economics, through our own model, on measured numbers
+`e` = +$0.05998 per pair (pair ≤ 0.96, after our measured 1.454% fee drag).
+`alpha` = $0.1361 per unmatched contract (measured −35.77% x 0.3806).
+
+| per-leg fill probability | EV per pair |
+|---|---|
+| 0.50 | −$0.05305 |
+| 0.70 | −$0.02777 |
+| **0.8194** | **break-even** |
+| 0.90 | +$0.02409 |
+| 1.00 | +$0.05998 |
+
+**Both legs need an 81.9% fill probability just to break even.**
+
+And the result that governs everything: at **L5's own** achieved pair cost
+of 0.9863, on our fee schedule, `e = 1 - 0.9863 x 1.01454 = -$0.00064` —
+negative, so **no fill probability whatsoever makes it profitable.**
+Reproducing L5's execution quality faithfully on PMUS **loses money**. The
+strategy only works for us at a materially better pair cost than he
+achieved, plus a fill rate we have never observed.
+
+### Smallest proposed change — measure `p`, change nothing else
+Do **not** raise `max_live_orders`. The entire thesis rests on a per-leg
+fill probability that has never been observed on PMUS (zero maker fills,
+ever), against a bar of 81.9%. The machinery to estimate it already exists
+and is already deployed: `src/l5_maker_fill_model.py` (queue-aware,
+`ahead_of_us` / `depth_at`), the `depth_ticks` and `touch_at_placement`
+fields `build_orders` already records, the enabled `L5_DEPTH_COMPARISON`,
+and the ladder recorder.
+
+The smallest change is therefore to score the shadow path's *already
+constructed* pair intents through the existing maker fill model and report
+the counterfactual per-leg fill rate — a read-only measurement on an
+existing code path, no limit, capability, strategy or service change. Until
+`p` is measured and exceeds 0.8194 at a pair cost at or below 0.96, raising
+the order limit has negative expectancy by our own model.
