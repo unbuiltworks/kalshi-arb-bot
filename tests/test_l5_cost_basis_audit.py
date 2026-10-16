@@ -1146,16 +1146,34 @@ def test_the_manifest_file_reader_fails_closed(tmp_path, monkeypatch):
 
 def test_the_shipped_manifest_is_inside_the_image_copy_set():
     """A manifest the container cannot read fails the apply closed, which is
-    safe but useless. The Dockerfile COPYs only src/ and config/, so the
-    manifest lives in config/ -- data/ would not exist in the image."""
+    safe but useless -- and that is exactly what happened on deploy 95e713d0:
+    the money-capable service pins RAILWAY_DOCKERFILE_PATH at
+    deploy/l5_pmus_live/Dockerfile, which COPYs per file and named no config/
+    path, so the apply aborted BATCH_MANIFEST_MISSING with nothing written.
+
+    So this pins the manifest into EVERY Dockerfile that runs the live runner,
+    not just the root one.
+    """
     import pathlib
     import re
     here = pathlib.Path(__file__).resolve().parents[1]
     shipped = sorted((here / "config").glob("cost_basis_batch_manifest_*.json"))
     assert shipped, "no manifest in config/"
-    copied = re.findall(r"^COPY\s+(\S+)", (here / "Dockerfile").read_text(),
-                        re.M)
-    assert any(c.rstrip("/") == "config" for c in copied), copied
+    rel = ["config/" + s.name for s in shipped]
+
+    images = [f for f in [here / "Dockerfile",
+                          *sorted((here / "deploy").rglob("Dockerfile"))]
+              if f.is_file() and "l5_pmus_live_runner" in f.read_text()]
+    assert images, "no image runs the live runner"
+    assert any("l5_pmus_live" in str(f) for f in images), \
+        "the money-capable image must be among those checked"
+
+    for f in images:
+        copied = [c.rstrip("/") for c in
+                  re.findall(r"^COPY\s+(\S+)", f.read_text(), re.M)]
+        assert any(c == "config" for c in copied) or all(
+            r in copied for r in rel), (str(f), copied)
+
     m = A.batch_manifest(str(shipped[-1]))
     assert m is not None
     assert m["legs"] == len(m["keys"])

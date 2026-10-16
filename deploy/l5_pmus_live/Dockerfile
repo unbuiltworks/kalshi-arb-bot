@@ -106,6 +106,11 @@ COPY src/polymarket_l5/action_model_v2.py src/polymarket_l5/action_model_v2.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.py
 
+# The cost-basis apply reads its inspected batch manifest from this path.
+# Without it the apply aborts BATCH_MANIFEST_MISSING (safe, but it writes
+# nothing). This image COPYs per file, so the manifest must be named.
+COPY config/cost_basis_batch_manifest_20261016.json config/cost_basis_batch_manifest_20261016.json
+
 ENV PMUS_SERVICE_ROLE=l5-pmus-live \
     L5_LIVE_ROOT=/state/l5-live \
     PYTHONUNBUFFERED=1
