@@ -276,9 +276,58 @@ def _order_fee(theta: D, qty: D, price: D, *, cent_rounding: bool = True) -> D:
     return q
 
 
+def build_sequences() -> List[Dict[str, Any]]:
+    """Derive the per-leg window sequences straight from data/l5/raw.
+
+    MASTER is a 375MB derivation, so it is not tracked and may be absent. It
+    is fully reproducible from the raw capture, which is the source of truth,
+    so rebuild rather than skip section 4. Cash per leg is `usdcSize`; `cost`
+    is the window's actual cash, not a price*qty reconstruction.
+    """
+    legs: Dict[str, List[Dict[str, Any]]] = collections.defaultdict(list)
+    cost: collections.Counter = collections.Counter()
+    winner: Dict[str, Optional[str]] = {}
+    for path in ACTIVITY:
+        if not os.path.exists(path):
+            continue
+        for page in _pages(path):
+            for row in page.get("payload") or []:
+                slug = row.get("slug") or ""
+                if not slug.startswith(PREFIX):
+                    continue
+                outcome = (row.get("outcome") or "").lower()
+                side = {"up": "Up", "down": "Down"}.get(outcome)
+                if row.get("type") == "TRADE" and row.get("side") == "BUY" and side:
+                    legs[slug].append(
+                        {
+                            "t": float(row.get("timestamp") or 0),
+                            "side": side,
+                            "price": float(row.get("price") or 0.0),
+                            "qty": float(row.get("size") or 0.0),
+                        }
+                    )
+                    cost[slug] += float(row.get("usdcSize") or 0.0)
+                elif row.get("type") == "REDEEM" and side:
+                    if (float(row.get("size") or 0) > 0) or (float(row.get("usdcSize") or 0) > 0):
+                        winner.setdefault(slug, side)
+    out = []
+    for slug, trades in legs.items():
+        if winner.get(slug) not in ("Up", "Down") or cost[slug] <= 0:
+            continue
+        out.append(
+            {
+                "slug": slug,
+                "winner": winner[slug],
+                "cost": cost[slug],
+                "trades": sorted(trades, key=lambda t: t["t"]),
+            }
+        )
+    return out
+
+
 def load_sequences() -> List[Dict[str, Any]]:
     if not os.path.exists(MASTER):
-        return []
+        return build_sequences()
     seqs = []
     for line in open(MASTER):
         r = json.loads(line)
@@ -448,10 +497,9 @@ def main() -> None:
     print("4. WHOLE-CONTRACT CAPITAL SCALING ON PMUS  (%d sequences)" % len(seqs))
     print("=" * 78)
     if not seqs:
-        # The per-leg sequences are a 375MB local derivation, not a tracked
-        # artifact. Say so rather than printing a scaling table from nothing.
-        print("  SKIPPED: %s absent. Rebuild it before reading section 4." % MASTER)
+        print("  SKIPPED: no sequences, from %s or from %s." % (MASTER, ACTIVITY[0]))
         return
+    print("  source: %s" % (MASTER if os.path.exists(MASTER) else "rebuilt from " + ACTIVITY[0]))
     cal = replay_calibration(seqs, tot("net_usd"), tot("spend_usd"))
     print("  replay basis pays $1.00 per winning share: %+.4f%% of spend" % cal["replay_pct_of_spend"])
     print("  venue actually realized:                   %+.4f%% of spend" % cal["actual_pct_of_spend"])

@@ -3,7 +3,9 @@
 Read-only audit. No orders, no deployment, no configuration change. Live
 execution remains halted and `L5_SHADOW_ONLY` remains set.
 
-Reproduce: `python3 -I scripts/l5_settlement_decomposition_audit.py`
+Reproduce: `python3 -I scripts/l5_settlement_decomposition_audit.py` — it rebuilds the
+per-window leg sequences from `data/l5/raw` when the untracked derivation is
+absent, so every figure here is reproducible from the raw capture alone.
 
 ---
 
@@ -116,15 +118,20 @@ note.
 
 | budget/window | maker | taker |
 |---|---|---|
-| $5 | **+0.68%** | **−2.03%** |
-| $20 | +0.68% | −2.04% |
-| $50 | +0.68% | −2.05% |
-| $100 | +0.68% | −2.05% |
-| $250 | +0.68% | −2.05% |
+| $5 | **+0.76%** | **−1.95%** |
+| $20 | +0.75% | −1.97% |
+| $50 | +0.75% | −1.97% |
+| $100 | +0.75% | −1.97% |
+| $250 | +0.75% | −1.97% |
 
-**Size-invariant.** Of the +0.68% maker figure, **+0.42pp is the maker rebate**
-and only +0.26pp is trading. Taker is fatally negative at every size:
-`Θ_taker × p(1−p)` ≈ 1.7% of notional against a 0.26% edge.
+**Size-invariant.** Of the +0.75% maker figure, **+0.41pp is the maker rebate**
+and only +0.33pp is trading. Taker is fatally negative at every size:
+`Θ_taker × p(1−p)` ≈ 1.7% of notional against a 0.33% edge.
+
+(Sequences rebuilt from `data/l5/raw` — 5,530 settled windows, cash from
+`usdcSize`. The 375MB `data/l5_master` derivation gives +0.68% / −2.05% on
+5,546 windows, because it carries 16 unsettled windows and reconstructs cash
+as price×qty. Same conclusion either way.)
 
 ### Artifact note — do not read the small-budget numbers as printed
 
@@ -161,7 +168,7 @@ deployed cash, before venue fees.
 
 1. **Taker completion stays disabled.** −2.05% of spend at every size, against
    a +0.26% trading edge. Not marginal; not recoverable by sizing.
-2. **Maker-only is the only viable posture,** and 62% of its margin is a
+2. **Maker-only is the only viable posture,** and 55% of its margin is a
    rebate we have not seen credited. `L5_MAX_UNRESOLVED_UNKNOWN_USD` and the
    "no unsupported rebate assumptions" rule both still bind.
 3. **Residual suppression is correct and should not be relaxed** to imitate
