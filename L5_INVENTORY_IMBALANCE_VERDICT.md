@@ -24,7 +24,7 @@ $1.00. The residual — the imbalance — destroys 88% of that profit.
 | unredeemed / price rounding | — | — | −$7,000.23 |
 | **actual realized net** | | **$6,434,084 spent** | **+$12,105.85 (+0.188%)** |
 
-Over 5,546 windows and 165.5 days: **+$73.15/day**, 53.2% of windows
+Over 5,546 windows and 165.5 days: **+$73.15/day** (see "the three totals" below), 53.2% of windows
 profitable, median window +$3.67.
 
 ---
@@ -57,10 +57,30 @@ proceeds, and `usdcSize` — the cash that actually moved — for spend. Not
 `size × price`: the reported price is rounded and does not reconcile to the
 cashflow (a $27,610 gap across the history).
 
-Cross-checked three ways, all agreeing on sign and order of magnitude:
-`+$12,106` (this build), `+$17,789` (same build, duplicate rows removed),
-`+$19,177` (the pre-existing `data/l5_master/btc15m_sequences.jsonl`). Call it
-**+$12k to +$19k total, +0.19% to +0.30% of deployed cash, $73–$116/day.**
+### The three totals, and which one is right
+
+Cross-checked three ways. The spread is fully attributable — it is two
+bookkeeping choices, not three measurements:
+
+| total | basis | difference explained |
+|---|---|---|
+| **+$12,105.85** | undeduped, cash = `usdcSize` | **the authoritative figure** |
+| +$17,788.58 | deduped, cash = `usdcSize` | 3,969 duplicate-key rows contribute **+$5,682.73** net cash; dropping them raises net by exactly that |
+| +$19,176.71 | `data/l5_master`, cash = price×qty | `price×qty` undercounts buys by **$27,610.81** against actual cash, and its redemption total is $50,160 lower in coverage |
+
+**+$12,105.85 is the one to use, so $73.15/day is the defensible figure, not
+the middle of the range.** It uses the cash that actually moved, and it never
+discards a row that might be a real fill. The two higher numbers come from
+either dropping rows that may be genuine split fills (same `transactionHash`,
+asset, type, timestamp, size, price and outcome — a split fill looks exactly
+like a duplicate here, and I cannot distinguish them from this capture) or
+from reconstructing cash as `price × qty`, where the reported price is rounded
+and does not reconcile to the cashflow.
+
+**Provisional only in this direction:** if those 3,969 rows turn out to be API
+duplicates rather than split fills, the true figure rises toward $17.8k
+($107/day). It cannot go below $12.1k. Resolving it needs per-fill identifiers
+the public capture does not carry.
 
 L5 **never sold**: 0.00 SELL shares across 700,703 trades. It also earned
 **$0.00 in rebates or rewards** on btc-updown-15m. L5 was not rebate-funded.
@@ -149,6 +169,95 @@ day** — ~96 windows/day at ~$2,650 per window. At $250/window that is
 ~$45/day. The historical target is not reachable at any capital level we have
 authorized, and L5 itself only earned $73–$116/day on $6.4M of turnover.
 
+
+---
+
+## 5. The economic test: maker-only matched pairs, zero rebate
+
+Requested constraints applied: **no rebate is assumed** (this account has
+never been credited one — `rebates_ever_credited: false`), residual settlement
+losses are the **actual** ones, and nothing here treats a scaled L5 trade as
+an executable PMUS order (see the two caveats below).
+
+### 5a. The residual ratio is the whole lever
+
+Per matched share, from the realized aggregate: the matched pair edge is
+**+$0.026607** and a residual share is worth **−$0.128955**. Hold the residual
+to ratio *k* of matched:
+
+| k (residual / matched) | net per matched share | % of spend |
+|---|---|---|
+| 0.00 | +$0.026607 | **+2.73%** |
+| 0.05 | +$0.020159 | +2.03% |
+| 0.10 | +$0.013711 | +1.36% |
+| **0.1825 (L5's own)** | +$0.003098 | **+0.30%** |
+| 0.30 | −$0.012080 | −1.11% |
+
+**Break-even k = 0.206.** L5 ran at 0.1825 — inside break-even by a hair, which
+is the whole story of its $73–$116/day. Our existing residual caps put us far
+below that, on the right side of the lever.
+
+**Break-even both-leg fill rate, zero rebate: 82.90%.** Below that, one-sided
+fills dominate and the pair edge cannot carry them.
+
+### 5b. I had the taker question wrong
+
+My earlier verdict said taker is "fatally negative, not recoverable by
+sizing." That was measured with **every leg** crossing. Using a taker order
+**only to complete a residual** is a different trade, and the data reverses
+the conclusion:
+
+| residual policy | realized | per share |
+|---|---|---|
+| **hold to settlement** (what L5 did) | **−$145,244.95** | −$0.12896 |
+| **complete by crossing** the complement | **+$29,964.64** | +$0.02660 |
+| — PMUS taker fees inside that | $15,379.11 | $0.01365 |
+
+**Completing beats holding by $175,210**, and is individually better in 60.4%
+of windows. Total goes from **+0.29% to +3.02% of spend.** A 1.4¢ taker fee is
+cheap against a 12.9¢ adverse-settlement loss.
+
+### 5c. Where this is fragile
+
+The completion price above is the complement's **average traded price across
+the window**, not the ask we would actually pay. Adding slippage *s* per share:
+
+| slippage | completion | total % of spend |
+|---|---|---|
+| 0¢ | +$29,965 | +3.02% |
+| 1¢ | +$18,838 | +2.85% |
+| **2.7¢** | **$0 — break-even** | +2.55% |
+| 10¢ | −$80,236 | +1.31% |
+| **15.9¢** | — | **ties L5's hold-to-settlement** |
+
+Completion stays better than holding until ~**15.9¢** of slippage, but is only
+**absolutely profitable to ~2.7¢** — and measured adverse selection on this
+venue was 1.0–1.3¢. That margin is real but thin. The robustness comes from
+the matched book, not from completion: even at 10¢ slippage the total is
++1.31%, still 4× L5's realized rate.
+
+### 5d. Two caveats that bound every number above
+
+1. **Pair-cost selection is hindsight.** Restricting to windows that achieved
+   pair ≤$0.96 gives +3.24% of spend, and ≤$0.94 gives +4.16% — but the
+   realized pair cost is only knowable *after* both legs filled. You cannot
+   select on it ex ante. Treat those as an upper bound, not a plan.
+2. **No measured PMUS maker fill rate exists.** The depth comparison has
+   reported `NOT_COMPARABLE` on every run because nothing has ever been
+   placed. The 82.90% break-even both-fill rate is therefore an unmet
+   *requirement*, not a satisfied condition. This is the single binding
+   unknown.
+
+### Verdict on the economics
+
+**CONDITIONAL GO on measurement, NO-GO on capital.** The matched-pair maker
+book has a defensible +2.73% edge on matched cash with zero rebate assumed,
+and completing residuals by crossing is worth another ~$175k against holding
+them. What is missing is not economics but one measured number: whether we
+achieve an 82.90% both-leg fill rate at depth 1 on PMUS. Nothing in this
+repository has measured it. Until it is measured, position size should not
+move.
+
 ---
 
 ## Verdict
@@ -166,8 +275,11 @@ deployed cash, before venue fees.
 
 ## Consequences for the live program
 
-1. **Taker completion stays disabled.** −2.05% of spend at every size, against
-   a +0.26% trading edge. Not marginal; not recoverable by sizing.
+1. **Taker completion deserves a second look, and I was wrong to close it.**
+   Crossing *every* leg is −1.97% of spend. Crossing *only to complete a
+   residual* is worth +$175,210 against holding, with ~15.9¢ of slack before
+   it loses and ~2.7¢ before it stops being profitable outright. That is a
+   measurement question for `L5_TS_COMPLETION_CROSS`, not a settled no.
 2. **Maker-only is the only viable posture,** and 55% of its margin is a
    rebate we have not seen credited. `L5_MAX_UNRESOLVED_UNKNOWN_USD` and the
    "no unsupported rebate assumptions" rule both still bind.
