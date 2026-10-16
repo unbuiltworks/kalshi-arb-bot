@@ -987,6 +987,19 @@ def _as_qty(v: Any) -> D:
         raise UnrecognizedVenueShape("quantity %r is not a number" % (v,), [])
 
 
+def _nonzero(value: Any) -> bool:
+    """True when a quantity is unambiguously non-zero.
+
+    AN UNREADABLE QUANTITY COUNTS AS NON-ZERO. It is used to decide whether
+    an L5-owned position still blocks a baseline, so "I could not parse it"
+    must behave like "something is still held", never like a clean zero.
+    """
+    try:
+        return D(str(value)) != 0
+    except (InvalidOperation, TypeError, ValueError):
+        return True
+
+
 class InventoryStore:
     """Persisted inventory. The VENUE is authoritative; this is a cache."""
 
@@ -1318,6 +1331,30 @@ class InventoryStore:
     #: the only source string establish_l5_baseline() will accept.
     L5_BASELINE_SOURCE = "AUTHORITATIVE_ACCOUNT_READS"
 
+    def classify_inventory_ownership(self, positions: Mapping[str, Any]
+                                     ) -> Dict[str, Dict[str, str]]:
+        """Split held inventory into L5-OWNED and MANUAL_OR_UNKNOWN.
+
+        A leg is L5-owned only when its market carries fill_provenance with
+        at least one l5_owner_verified entry -- our own durable ACK record.
+        Everything else is MANUAL_OR_UNKNOWN and is never promoted to L5 by
+        the absence of a record: unknown ownership stays unknown.
+
+        Both halves are returned, and the caller snapshots BOTH, because the
+        manual/unknown half must keep contributing to account-wide capital and
+        risk even though it is not L5's.
+        """
+        prov = self.state.get("fill_provenance") or {}
+        l5_owned: Dict[str, str] = {}
+        other: Dict[str, str] = {}
+        for key, qty in dict(positions or {}).items():
+            market = str(key).rsplit("|", 1)[0]
+            entries = ((prov.get(market) or {}).get("entries") or [])
+            mine = any(isinstance(e, Mapping) and e.get("l5_owner_verified")
+                       for e in entries)
+            (l5_owned if mine else other)[str(key)] = str(qty)
+        return {"l5_owned": l5_owned, "manual_or_unknown": other}
+
     def establish_l5_baseline(self, *, cash_usd: Any,
                               l5_open_orders: Any,
                               positions: Any,
@@ -1375,14 +1412,49 @@ class InventoryStore:
                     "orders": open_ids[:16],
                     "labels": ("an epoch must start from a book with no L5 "
                                "order already working")}
+        # L5-ONLY FLATNESS, NOT ACCOUNT-WIDE (OWNER 2026-10-16). The owner
+        # trades manually alongside L5 and must not be asked to stop, so a
+        # manual or unknown-ownership position does NOT block the epoch. What
+        # must be clear is L5's OWN side: no working order (above), no
+        # outstanding obligation, and no unresolved L5-owned position.
+        if oblig != 0:
+            return {"established": False,
+                    "reason": "L5_OBLIGATIONS_OUTSTANDING_AT_BASELINE",
+                    "outstanding_obligations_usd": str(oblig),
+                    "labels": ("L5 still has committed cash outstanding; an "
+                               "epoch cannot start over its own unsettled "
+                               "obligation")}
+        split = self.classify_inventory_ownership(positions)
+        unresolved_l5 = {k: v for k, v in split["l5_owned"].items()
+                         if _nonzero(v)}
+        if unresolved_l5:
+            return {"established": False,
+                    "reason": "L5_POSITIONS_UNRESOLVED_AT_BASELINE",
+                    "l5_owned_positions": dict(sorted(unresolved_l5.items())),
+                    "labels": ("an L5-owned position is still held; its "
+                               "settlement would land post-T and be counted "
+                               "as L5 without its pre-T cost being in the "
+                               "L5 measure")}
         rec = {
             "t": dt.datetime.now(dt.timezone.utc).isoformat(),
             "source": self.L5_BASELINE_SOURCE,
             "cash_usd": str(cash),
             "outstanding_obligations_usd": str(oblig),
             "l5_open_orders": [],
+            # BOTH halves are snapshotted. The manual/unknown half is
+            # recorded so its exposure stays visible to account-wide capital
+            # and risk, and is explicitly NOT assigned to L5.
             "positions_at_baseline": {str(k): str(v)
                                       for k, v in dict(positions).items()},
+            "l5_owned_positions_at_baseline": dict(
+                sorted(split["l5_owned"].items())),
+            "manual_or_unknown_positions_at_baseline": dict(
+                sorted(split["manual_or_unknown"].items())),
+            "manual_inventory_labels": (
+                "MANUAL_OR_UNKNOWN ownership. NOT L5 inventory and NOT L5 "
+                "P&L. It remains in account-wide capital, exposure and risk "
+                "calculations, and its ownership stays UNKNOWN rather than "
+                "being read as L5 or as zero."),
             # PRE-T HISTORY, PRESERVED VERBATIM AND NEVER NETTED AWAY
             "pre_baseline_realized_attributed": str(
                 D(str(self.state.get("realized_attributed") or 0))),

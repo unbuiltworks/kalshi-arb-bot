@@ -221,3 +221,84 @@ def test_the_runner_baseline_caller_is_gated_and_reads_before_striking():
     # and the gates stay opt-in
     assert '"L5_MAX_L5_DAILY_LOSS_USD"' in src
     assert '"L5_MAX_L5_CUMULATIVE_LOSS_USD"' in src
+
+
+# ---------------------------------- L5-ONLY flatness, manual stays untouched
+def _prov(s, market):
+    s.state.setdefault("fill_provenance", {})[market] = {
+        "legs": {}, "entries": [{"coid": "ours1", "l5_owner_verified": True}]}
+
+
+def test_manual_positions_do_not_block_the_baseline(tmp_path):
+    """OWNER 2026-10-16: the owner must not be asked to pause trading."""
+    s = _store(tmp_path)
+    pos = {"cpc-btc-updown-1d-2026-10-15-2100z|DOWN": "2.04",
+           "cpcxrp-xrp-updown-15m-2026-10-16-0215z|DOWN": "5.28"}
+    out = _ok(s, positions=pos)
+    assert out["established"] is True
+    b = out["baseline"]
+    # snapshotted, and explicitly NOT L5's
+    assert b["manual_or_unknown_positions_at_baseline"] == {
+        "cpc-btc-updown-1d-2026-10-15-2100z|DOWN": "2.04",
+        "cpcxrp-xrp-updown-15m-2026-10-16-0215z|DOWN": "5.28"}
+    assert b["l5_owned_positions_at_baseline"] == {}
+    assert "MANUAL_OR_UNKNOWN" in b["manual_inventory_labels"]
+    # and the L5 measure starts from a counted zero, not from their P&L
+    assert s.l5_realized_since_baseline() == D(0)
+
+
+def test_an_unresolved_l5_owned_position_still_blocks(tmp_path):
+    s = _store(tmp_path)
+    _prov(s, "mL5")
+    out = _ok(s, positions={"mL5|UP": "2", "manualMkt|DOWN": "9"})
+    assert out["established"] is False
+    assert out["reason"] == "L5_POSITIONS_UNRESOLVED_AT_BASELINE"
+    assert out["l5_owned_positions"] == {"mL5|UP": "2"}
+    assert "l5_baseline" not in s.state
+
+
+def test_a_settled_l5_leg_at_zero_does_not_block(tmp_path):
+    s = _store(tmp_path)
+    _prov(s, "mL5")
+    out = _ok(s, positions={"mL5|UP": "0"})
+    assert out["established"] is True
+    assert out["baseline"]["l5_owned_positions_at_baseline"] == {"mL5|UP": "0"}
+
+
+def test_an_unreadable_l5_quantity_blocks_rather_than_reading_as_zero(
+        tmp_path):
+    s = _store(tmp_path)
+    _prov(s, "mL5")
+    out = _ok(s, positions={"mL5|UP": "nonsense"})
+    assert out["reason"] == "L5_POSITIONS_UNRESOLVED_AT_BASELINE"
+
+
+def test_outstanding_l5_obligations_block_the_baseline(tmp_path):
+    s = _store(tmp_path)
+    out = _ok(s, outstanding_obligations_usd="2.50")
+    assert out["established"] is False
+    assert out["reason"] == "L5_OBLIGATIONS_OUTSTANDING_AT_BASELINE"
+    assert out["outstanding_obligations_usd"] == "2.50"
+
+
+def test_unknown_ownership_is_never_promoted_to_l5(tmp_path):
+    """Absence of a provenance record must not make a leg L5's."""
+    s = _store(tmp_path)
+    split = s.classify_inventory_ownership({"noRecord|UP": "3"})
+    assert split["l5_owned"] == {}
+    assert split["manual_or_unknown"] == {"noRecord|UP": "3"}
+
+
+def test_post_t_manual_settlement_is_excluded_and_surfaced(tmp_path):
+    """A manual position open at T settles after T and must not count."""
+    s = _store(tmp_path)
+    _ok(s, positions={"manualMkt|DOWN": "2.04"})
+    s.state["retired_markets"] = {
+        "manualMkt": {"t": "2999-01-01T00:00:00+00:00",
+                      "settlement_pnl": "-2.04",
+                      "l5_owner_attribution_verified": False,
+                      "pnl_provenance": "UNKNOWN_COST_UPPER_BOUND"}}
+    assert s.l5_realized_since_baseline() == D(0)      # not -2.04
+    lines = s.l5_baseline_lines()
+    assert [r["market"] for r in
+            lines["post_baseline_settlements_NOT_attested"]] == ["manualMkt"]
