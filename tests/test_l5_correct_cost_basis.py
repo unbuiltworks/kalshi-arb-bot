@@ -179,11 +179,21 @@ def test_guard7_a_quantity_mismatch_preserves_the_leg_as_unknown(store):
 
 
 def test_guard8_the_correction_is_one_directional(store):
+    """A FIRST correction replaces an upper bound and may only come DOWN.
+    Only an explicit restatement is exempt; see the restatement section."""
+    out = _apply(store, measured_cost=D("3.19"),
+                 evidence=_evidence(per_fill=[
+                     {"trade_id": "T1", "qty": "2.9000", "price": "1.1000",
+                      "fee": "0.0000"}]))
+    _unwritten(store, out, "COST_CORRECTION_MUST_REDUCE")
+
+
+def test_guard8_a_cost_already_equal_is_not_a_correction(store):
     out = _apply(store, measured_cost=D("2.90"),
                  evidence=_evidence(per_fill=[
                      {"trade_id": "T1", "qty": "2.9000", "price": "1.0000",
                       "fee": "0.0000"}]))
-    _unwritten(store, out, "COST_CORRECTION_MUST_REDUCE")
+    _unwritten(store, out, "COST_ALREADY_CORRECT")
 
 
 def test_guard9_a_negative_cost_is_not_a_measurement(store):
@@ -309,3 +319,195 @@ def test_the_runner_defaults_to_inspect_so_a_boot_cannot_write():
     # the batch id is None unless the env names one
     assert "batch_id=(None if mode == CBA.APPLY_INSPECT else mode)" in src
     assert CBA.apply_mode.__doc__ and "DRY RUN" in CBA.apply_mode.__doc__
+
+
+# == restatement: reconciling a leg this verb itself got wrong =============
+# 13 of the 44 legs corrected on 2026-10-16 were costed at the YES price on
+# a DOWN leg, so their recorded cost must be RAISED. A first correction may
+# not do that; an explicit restatement must.
+
+DN_MARKET = "cpcxrp-xrp-updown-15m-2026-10-16-0215z"
+# the fill carries the YES price, as every PMUS fill does: 0.0600. OUR cost
+# on the DOWN leg is the complement, 5.2800 x 0.9400 = 4.9632.
+DN_FILLS = [{"trade_id": "DX1", "qty": "5.2800", "price": "0.0600",
+             "fee": "0.0200"}]
+
+
+def _dn_store(d, *, corrected=True):
+    """The 0215z|DOWN leg as the ledger holds it AFTER the wrong correction:
+    cost 0.31680000 (5.28 x 0.06, the YES price) where the truth is
+    5.28 x 0.94 = 4.9632."""
+    s = LX.InventoryStore(os.path.join(d, "inv.json"))
+    # yes_value 1.0000: UP resolved true, so the DOWN leg redeemed NOTHING
+    # and its settlement pnl is exactly minus its cost.
+    row = {"t": "2026-10-16T02:30:00+00:00", "yes_value": "1.0000",
+           "settlement_pnl": "-0.31680000", "up_qty": "0", "dn_qty": "5.2800",
+           "cost_total": "0.31680000", "redemption_total": "0E-8"}
+    if corrected:
+        row["cost_superseded"] = {"cost_total": "5.2800",
+                                  "settlement_pnl": "-5.28000000"}
+    s.state["retired_markets"] = {DN_MARKET: row}
+    s.state["realized_attributed"] = "-76.12160000"
+    s.state["realized_unattributed"] = "0"
+    s.state["realized_today"] = "-76.12160000"
+    if corrected:
+        s.state["cost_basis_corrections"] = [
+            {"id": "cb-20261016-47leg-209.6638|%s|DOWN" % DN_MARKET,
+             "key": "%s|DOWN" % DN_MARKET, "trade_ids": ["DX1"]}]
+    return s
+
+
+def _restate(store, **over):
+    kw = {"correction_id": "rs-0215z-dn-1",
+          "expect": {"cost_total": "0.31680000"},
+          "measured_cost": D("4.9632"), "measured_fees": D("0.0200"),
+          "evidence": {"trade_ids": ["DX1"],
+                       "per_fill": copy.deepcopy(DN_FILLS),
+                       "activity_walk": dict(WALK)},
+          "restate": True}
+    kw.update(over)
+    return store.correct_cost_basis(DN_MARKET, "DOWN", **kw)
+
+
+def test_a_restatement_RAISES_a_wrongly_lowered_cost():
+    with tempfile.TemporaryDirectory() as d:
+        s = _dn_store(d)
+        out = _restate(s)
+        assert out["corrected"] is True, out
+        row = s.state["retired_markets"][DN_MARKET]
+        assert row["cost_total"] == "4.9632"
+        assert D(row["settlement_pnl"]) == D("-4.9632")
+        # realized moves the UNFAVOURABLE way: -0.3168 -> -4.9632
+        assert out["delta"] == "-4.64640000"
+        assert s.state["realized_today"] == "-80.76800000"
+        assert s.state["realized_attributed"] == "-80.76800000"
+        assert s.state["realized_unattributed"] == "0"
+
+
+def test_a_restatement_never_overwrites_the_ORIGINAL_superseded_row():
+    with tempfile.TemporaryDirectory() as d:
+        s = _dn_store(d)
+        assert _restate(s)["corrected"] is True
+        row = s.state["retired_markets"][DN_MARKET]
+        # the pre-FIRST-correction figure survives, untouched
+        assert row["cost_superseded"]["cost_total"] == "5.2800"
+        # and the wrong intermediate state is kept beside it
+        assert len(row["cost_restatements"]) == 1
+        assert row["cost_restatements"][0]["cost_total"] == "0.31680000"
+        assert "cost_superseded" not in row["cost_restatements"][0]
+
+
+def test_restating_an_UNCORRECTED_leg_is_refused(store):
+    """The one-directional rule still governs a first correction."""
+    out = _apply(store, measured_cost=D("3.19"), restate=True,
+                 evidence=_evidence(per_fill=[
+                     {"trade_id": "T1", "qty": "2.9000", "price": "1.1000",
+                      "fee": "0.0000"}]))
+    _unwritten(store, out, "NOTHING_TO_RESTATE")
+
+
+def test_a_restatement_still_cannot_assert_a_cost():
+    with tempfile.TemporaryDirectory() as d:
+        s = _dn_store(d)
+        out = _restate(s, measured_cost=D("0.01"))
+        assert out["corrected"] is False
+        assert out["reason"] == "COST_NOT_RECONCILED"
+        assert s.state["realized_today"] == "-76.12160000"
+
+
+def test_a_restatement_may_re_spend_its_OWN_ids_but_not_another_legs():
+    with tempfile.TemporaryDirectory() as d:
+        s = _dn_store(d)
+        # its own prior correction consumed DX1; that is not a double spend
+        assert _restate(s)["corrected"] is True
+    with tempfile.TemporaryDirectory() as d:
+        s = _dn_store(d)
+        s.state["cost_basis_corrections"].append(
+            {"id": "someone-else", "key": "other-market|UP",
+             "trade_ids": ["DX1"]})
+        out = _restate(s)
+        assert out["corrected"] is False
+        assert out["reason"] == "TRADE_ID_ALREADY_CONSUMED"
+
+
+def test_applying_the_same_restatement_TWICE_refuses():
+    with tempfile.TemporaryDirectory() as d:
+        s = _dn_store(d)
+        assert _restate(s)["corrected"] is True
+        after = copy.deepcopy(s.state)
+        again = _restate(s)
+        assert again["corrected"] is False
+        assert again["reason"] == "COST_CORRECTION_ALREADY_APPLIED"
+        assert s.state == after, "the second attempt changed the ledger"
+        # and even under a FRESH correction id it cannot land again: the
+        # expectation no longer matches the row it was written against,
+        # which is the second, independent never-twice mechanism.
+        third = _restate(s, correction_id="rs-0215z-dn-2")
+        assert third["corrected"] is False
+        assert third["reason"] == "LEDGER_DOES_NOT_MATCH_EVIDENCE"
+        assert s.state == after
+        # and asserting the NEW value instead leaves nothing to do
+        fourth = _restate(s, correction_id="rs-0215z-dn-3",
+                          expect={"cost_total": "4.9632"})
+        assert fourth["corrected"] is False
+        assert fourth["reason"] == "COST_ALREADY_CORRECT"
+        assert s.state == after
+
+
+# == two-sided markets: the other leg's real cost is preserved =============
+
+TS_MARKET = "cpc-btc-updown-15m-2026-10-15-1945z"
+
+
+def _ts_store(d):
+    """1945z as the venue settled it: a REAL up_cost of 0.4600 beside the
+    DOWN leg's $1/share placeholder, cost_total 1.4600 for the PAIR."""
+    s = LX.InventoryStore(os.path.join(d, "inv.json"))
+    s.state["retired_markets"] = {TS_MARKET: {
+        "t": "2026-10-15T20:03:03+00:00", "yes_value": "0.0000",
+        "settlement_pnl": "-0.46000000", "up_qty": "1", "dn_qty": "1.0000",
+        "up_cost": "0.4600", "dn_cost": "1.0000", "cost_total": "1.4600",
+        "redemption_total": "1.00000000"}}
+    s.state["realized_attributed"] = "-76.12160000"
+    s.state["realized_unattributed"] = "0"
+    s.state["realized_today"] = "-76.12160000"
+    return s
+
+
+def _ts_correct(store, **over):
+    kw = {"correction_id": "cb-1945z-dn-1",
+          "expect": {"cost_total": "1.4600"},
+          "measured_cost": D("0.4900"), "measured_fees": D("0.0000"),
+          "evidence": {"trade_ids": ["D47QRSGGYZRN"],
+                       # YES price 0.5100; OUR DOWN cost is 0.4900
+                       "per_fill": [{"trade_id": "D47QRSGGYZRN",
+                                     "qty": "1.0000", "price": "0.5100",
+                                     "fee": "0.0000"}],
+                       "activity_walk": dict(WALK)}}
+    kw.update(over)
+    return store.correct_cost_basis(TS_MARKET, "DOWN", **kw)
+
+
+def test_a_two_sided_market_corrects_the_SIDE_and_keeps_the_other():
+    with tempfile.TemporaryDirectory() as d:
+        s = _ts_store(d)
+        out = _ts_correct(s)
+        assert out["corrected"] is True, out
+        row = s.state["retired_markets"][TS_MARKET]
+        assert row["dn_cost"] == "0.4900"      # the corrected leg
+        assert row["up_cost"] == "0.4600"      # UNTOUCHED, and not erased
+        assert D(row["cost_total"]) == D("0.95")   # recomputed, never 0.4900
+        # redemption 1.00 against the new pair cost 0.95
+        assert D(row["settlement_pnl"]) == D("0.05")
+        assert out["delta"] == "0.51000000"
+        assert s.state["realized_today"] == "-75.61160000"
+
+
+def test_a_two_sided_row_whose_sides_do_not_add_up_is_refused():
+    with tempfile.TemporaryDirectory() as d:
+        s = _ts_store(d)
+        s.state["retired_markets"][TS_MARKET]["cost_total"] = "9.9900"
+        out = _ts_correct(s, expect={"cost_total": "9.9900"})
+        assert out["corrected"] is False
+        assert out["reason"] == "ROW_COSTS_DO_NOT_RECONCILE"
+        assert s.state["realized_today"] == "-76.12160000"

@@ -563,3 +563,54 @@ cost-basis applier, INSPECT dry run, shadow-locked 2026-10-16T16:55Z
 #
 # 200 passed across the money-path suites.
 manifest in the live image's COPY set, shadow-locked 2026-10-16T17:40Z
+
+# OWNER-AUTHORIZED promotion of the restatement verb + manifest 20261016c.
+# THIS BOOT IS A DRY RUN. L5_COST_BASIS_APPLY is set to INSPECT, which
+# apply_mode() reads as the dry run, so the applier reports what it WOULD
+# correct against the EXACT CURRENT PRODUCTION STATE and calls the verb
+# zero times. The owner's approval is conditional on that fresh INSPECT
+# passing; the apply is a second, separate step with a real batch id.
+#
+# WHY THE VERB CHANGED. correct_cost_basis re-derived cost as q x price on
+# BOTH sides -- the same defect establish_basis had. PMUS quotes one price
+# per market and it is always UP/YES, so a DOWN leg costs q x (1 - price).
+# The old arithmetic over-corrected 13 DOWN legs by 15.79500000 (realized
+# flattered) and under-corrected 9 by 46.54640000.
+#
+# WHAT IS NEW, AND IT IS ONE FLAG:
+#   restate=True   -- allowed ONLY on a leg already carrying
+#                     cost_superseded (else NOTHING_TO_RESTATE). It lets a
+#                     cost RISE, which the 13 legs need. A FIRST correction
+#                     is still one-directional. A restatement still cannot
+#                     assert a cost: guard 6 re-derives it from the named
+#                     venue trade ids, and it may re-read its OWN fills but
+#                     not another leg's.
+#   per-side costs -- the side's own up_cost/dn_cost is corrected and
+#                     cost_total is RECOMPUTED, so 1945z keeps its real
+#                     up_cost of 0.4600 instead of having it erased.
+#                     ROW_COSTS_DO_NOT_RECONCILE and
+#                     OTHER_SIDE_COST_UNREADABLE refuse the rest.
+#   cost_superseded is NEVER overwritten; later states append to
+#   cost_restatements.
+#
+# Runtime files changing, both already COPYed into this image:
+#   src/l5_live_execution.py    -- the side rule, restate, per-side write
+#   src/l5_cost_basis_audit.py  -- side-aware establish_basis with a venue
+#                                  cross-check; the plan's pre-state comes
+#                                  from the ROW, not the $1/share figure
+#
+# Manifests 20261016b and 20261016c are added to the COPY set. Shipping a
+# manifest authorizes nothing: only a deliberate batch id can write.
+#
+# 247 passed. Applying ONCE moves realized -76.12160000 -> -7.88480000;
+# applying twice, under a fresh batch id, or with any leg moved, aborts
+# BATCH_MISMATCH and writes nothing.
+#
+# HALT STAYS LATCHED. L5_SHADOW_ONLY STAYS SET. L5_TS_COMPLETION_CROSS
+# stays unset, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at
+# 1 and 1, L5_MAX_CUMULATIVE_LOSS_USD UNCHANGED at 20. No limit, threshold,
+# gate or baseline is touched and no order can be submitted.
+#
+# The BTC1d 2100z position stays REAL exposure: no settlement evidence
+# exists, and this change does not touch it.
+restatement verb + manifest c, INSPECT dry run, shadow-locked 2026-10-16T18:45Z

@@ -713,18 +713,58 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
                                  if f["owner"] == UNKNOWN_OWNER)}
 
 
-def establish_basis(fills: List[Mapping[str, Any]], *, expect_qty: D
-                    ) -> Dict[str, Any]:
+#: The cross-check tolerance, PER FILL. The venue rounds a commission or a
+#: credited rebate to the cent, so `cost` can differ from
+#: `qty x own_price + fee` by up to half a cent of rounding and no more. A
+#: wider gap is a disagreement about the trade, not rounding.
+CROSSCHECK_TOLERANCE = D("0.005")
+
+
+def own_price(price: D, side: str) -> D:
+    """OUR cost per share, from the market's single quoted price.
+
+    PMUS quotes ONE number per market and it is ALWAYS the UP/YES price. A
+    DOWN buy at cost q is a SELL of YES resting at 1 - q, so the price on a
+    DOWN fill is the YES price and OUR cost per share is its complement.
+
+    THE DEFECT THIS FIXES. establish_basis used `price` for both sides, so
+    every DOWN leg was costed at the YES price. On the 44 legs corrected on
+    2026-10-16 that understated the correct total by 30.75140000 in
+    aggregate while OVER-correcting 13 DOWN legs by 15.79500000 -- wrong in
+    both directions, and on those 13 in the direction that flatters
+    realized.
+    """
+    return price if side == "UP" else (D(1) - price)
+
+
+def establish_basis(fills: List[Mapping[str, Any]], *, expect_qty: D,
+                    side: str) -> Dict[str, Any]:
     """The leg's ACTUAL cost and fees, or an explicit refusal.
 
     Every fill must carry a quantity, a price AND a fee, and the quantities
     must sum to the quantity the ledger holds. A partial match is not a
     basis: it would understate cost, which is the one direction that
     flatters realized.
+
+    SIDE-AWARE. The cost is `qty x own_price(price, side)`; see own_price.
+
+    CROSS-CHECKED AGAINST THE VENUE'S OWN FIGURE. Each fill carries `cost`,
+    which is fee-inclusive: it equals `qty x own_price + fee`, where a
+    credited maker rebate is a NEGATIVE fee and so REDUCES it. Our
+    arithmetic must agree with it to within a cent of rounding per fill, or
+    the basis is REFUSED rather than reported. A leg whose own two
+    independent readings disagree has no established cost, and an
+    unestablished cost stays UNKNOWN -- never zero and never the cheaper of
+    the two.
     """
+    side = str(side or "").strip().upper()
+    if side not in ("UP", "DOWN"):
+        return {"established": False, "reason": "BAD_SIDE", "side": side}
     if not fills:
         return {"established": False, "reason": "NO_FILLS_FOUND"}
     total_qty, cost, fee_total = D(0), D(0), D(0)
+    venue_cost_total, checked, unchecked = D(0), 0, 0
+    worst = None
     for f in fills:
         q, p, fee = _d(f.get("qty")), _d(f.get("price")), _d(f.get("fee"))
         if q is None:
@@ -734,15 +774,47 @@ def establish_basis(fills: List[Mapping[str, Any]], *, expect_qty: D
         if fee is None:
             return {"established": False, "reason": "FILL_WITHOUT_FEE",
                     "labels": "an absent fee is not a free $0"}
+        own = q * own_price(p, side)
         total_qty += q
-        cost += q * p
+        cost += own
         fee_total += fee
+        # the venue's own fee-inclusive cost for this execution, when it
+        # carries one. An ABSENT cost is not a failed check: it is one
+        # fewer reading, and it is counted as such.
+        vc = _d(f.get("cost"))
+        if vc is None:
+            unchecked += 1
+            continue
+        venue_cost_total += vc
+        checked += 1
+        gap = abs(vc - (own + fee))
+        if worst is None or gap > worst[0]:
+            worst = (gap, f.get("trade_id"), str(vc), str(own), str(fee))
     if total_qty != expect_qty:
         return {"established": False, "reason": "QUANTITY_MISMATCH",
                 "venue_qty": str(total_qty), "ledger_qty": str(expect_qty)}
+    if worst is not None and worst[0] > CROSSCHECK_TOLERANCE:
+        return {"established": False, "reason": "COST_CROSSCHECK_FAILED",
+                "worst_gap_usd": str(worst[0]), "trade_id": worst[1],
+                "venue_cost": worst[2], "our_cost": worst[3],
+                "fee": worst[4], "tolerance_usd": str(CROSSCHECK_TOLERANCE),
+                "labels": ("two independent readings of the same fill "
+                           "disagree by more than a cent of rounding. The "
+                           "cost stays UNKNOWN; the cheaper reading is NOT "
+                           "adopted.")}
     return {"established": True, "qty": str(total_qty),
+            "side": side,
             "actual_cost_usd": str(cost), "fees_usd": str(fee_total),
-            "avg_price": str(cost / total_qty) if total_qty else None}
+            "avg_price": str(cost / total_qty) if total_qty else None,
+            "venue_cost_total_usd": str(venue_cost_total),
+            "venue_cost_fills_checked": checked,
+            "venue_cost_fills_absent": unchecked,
+            "crosscheck_worst_gap_usd": (None if worst is None
+                                         else str(worst[0])),
+            "labels": ("actual_cost_usd EXCLUDES fees and is side-aware. "
+                       "venue_cost_total_usd is the venue's own "
+                       "fee-INCLUSIVE figure over the fills that carry "
+                       "one, and is a cross-check, not the basis.")}
 
 
 def _leg_quantity(store: Any, market: str, side: str, key: str
@@ -799,7 +871,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
             continue
         cls = classify_fills(walk["rows"], market=market, side=side,
                              our_coids=our)
-        basis = (establish_basis(cls["fills"], expect_qty=held)
+        basis = (establish_basis(cls["fills"], expect_qty=held, side=side)
                  if walk["complete"]
                  else {"established": False,
                        "reason": "ACTIVITY_WALK_INCOMPLETE:%s" % walk["ended"]})
@@ -871,6 +943,65 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
 
 
 CORRECTION_SCHEMA_VERSION = "cost-basis-correction/1"
+
+
+def leg_cost_expectation(store: Any, market: str, side: str) -> Dict[str, Any]:
+    """What the row ACTUALLY holds for this leg, or why it cannot be corrected.
+
+    THREE DEFECTS THIS FIXES, all found on 2026-10-16 after the 44/47 apply.
+
+    1. THE PLAN ASSERTED THE PLACEHOLDER. `expect` was the $1/share figure
+       (the leg quantity), not the row's own `cost_total`. Three legs
+       refused LEDGER_DOES_NOT_MATCH_EVIDENCE because their row never
+       carried that placeholder, and no manifest could ever fix them: the
+       assertion itself was wrong. The pre-state now comes from the row.
+
+    2. `cost_total` IS MARKET-LEVEL. cpc-btc-updown-15m-2026-10-15-1945z
+       retired with up_qty 1 / up_cost 0.4600 AND dn_qty 1.0000 /
+       dn_cost 1.0000, so cost_total 1.4600 is the pair. Correcting the
+       DOWN leg through that field would have written 0.4900 over the whole
+       market and ERASED the UP leg's 0.4600, flattering realized. A
+       two-sided market is therefore REFUSED here: a per-leg correction
+       cannot be expressed through a market-level field, and this verb will
+       not pretend otherwise.
+
+    3. AN ALREADY-CORRECTED LEG STAYED IN THE PLAN. `leg_cost_basis_unknown`
+       is not cleared by a correction, so a re-run re-planned all 44 and
+       relied on the spent correction_id alone. Skipping them here restores
+       the second, independent never-twice mechanism: the batch shrinks.
+    """
+    row = ((getattr(store, "state", {}) or {}).get("retired_markets")
+           or {}).get(market)
+    if not isinstance(row, Mapping):
+        return {"ok": False, "reason": "MARKET_NOT_RETIRED"}
+    # a leg this verb already corrected is a RESTATEMENT, not a first
+    # correction: it may move either way, and the verb requires the flag.
+    restate = bool(row.get("cost_superseded"))
+    cost_total = _d(row.get("cost_total"))
+    if cost_total is None:
+        return {"ok": False, "reason": "COST_TOTAL_UNREADABLE"}
+    other_qty = _d(row.get("dn_qty" if side == "UP" else "up_qty"))
+    if other_qty is None:
+        return {"ok": False, "reason": "OTHER_SIDE_QTY_UNREADABLE"}
+    # TWO FIGURES, NOT ONE. `expect` asserts the MARKET-level cost_total,
+    # because that is the field the row carries and the verb matches. The
+    # leg's OWN cost is what the correction replaces, and on a two-sided
+    # market they are different numbers: 1945z holds cost_total 1.4600 for
+    # the pair while the DOWN leg's own cost is 1.0000. Using the total as
+    # the leg's pre-state would overstate the correction by the other leg.
+    own = _d(row.get("up_cost" if side == "UP" else "dn_cost"))
+    if other_qty != 0:
+        if own is None or _d(row.get("dn_cost" if side == "UP"
+                                     else "up_cost")) is None:
+            # two-sided and the per-side costs are not both readable, so
+            # the leg's own cost cannot be separated from the pair's.
+            return {"ok": False, "reason": "MARKET_TWO_SIDED_COST_UNREADABLE",
+                    "other_side_qty": str(other_qty),
+                    "cost_total": str(cost_total)}
+    if own is None:
+        own = cost_total
+    return {"ok": True, "cost_total": cost_total, "own_cost": own,
+            "restate": restate, "two_sided": other_qty != 0}
 
 
 def correction_request(audit_result: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1140,10 +1271,31 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
             continue
         measured = _d(basis.get("actual_cost_usd"))
         fees = _d(basis.get("fees_usd"))
-        placeholder = _d(leg.get("placeholder_cost_usd"))
-        if measured is None or fees is None or placeholder is None:
+        if measured is None or fees is None:
             skipped.append({"key": key, "reason": "COST_UNREADABLE_AFTER_AUDIT",
                             "cost": "UNKNOWN"})
+            continue
+        # THE PRE-STATE COMES FROM THE ROW, not from the $1/share assumption.
+        exp = leg_cost_expectation(store, market, side)
+        if not exp.get("ok"):
+            skipped.append({"key": key, "reason": exp.get("reason"),
+                            "cost": "UNKNOWN",
+                            **{k: v for k, v in exp.items()
+                               if k not in ("ok", "reason")}})
+            continue
+        placeholder = exp["own_cost"]
+        if measured == placeholder:
+            skipped.append({"key": key, "reason": "NOTHING_TO_CORRECT",
+                            "own_cost": str(placeholder),
+                            "measured": str(measured)})
+            continue
+        if measured > placeholder and not exp["restate"]:
+            # a FIRST correction may only come down; the verb refuses it
+            # anyway, and keeping it out of the batch keeps the manifest
+            # honest about what it will do.
+            skipped.append({"key": key, "reason": "WOULD_RAISE_A_FIRST_COST",
+                            "own_cost": str(placeholder),
+                            "measured": str(measured)})
             continue
         per_fill = []
         unreadable = False
@@ -1168,6 +1320,9 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
             "fees_usd": str(fees),
             "trade_ids": [f["trade_id"] for f in per_fill],
             "correction_id": "%s|%s" % (batch_id or APPLY_INSPECT, key),
+            "expect_cost_total": str(exp["cost_total"]),
+            "restate": exp["restate"],
+            "two_sided": exp["two_sided"],
         }
         # a PAIR, not a stashed key: this module's purity test forbids every
         # `x[...] = ...` as proof it cannot write to the store, and that rule
@@ -1214,9 +1369,10 @@ def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
         out = store.correct_cost_basis(
             market, side,
             correction_id=plan["correction_id"],
-            expect={"cost_total": str(placeholder)},
+            expect={"cost_total": plan["expect_cost_total"]},
             measured_cost=measured,
             measured_fees=fees,
+            restate=bool(plan.get("restate")),
             evidence={"trade_ids": plan["trade_ids"], "per_fill": per_fill,
                       "activity_walk": walk})
         if out.get("corrected"):
