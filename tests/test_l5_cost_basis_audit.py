@@ -42,7 +42,14 @@ def _fill(market, side, qty, price, fee, coid=None, tid="t1"):
 
 # ------------------------------------------------------------------ the point
 def test_a_manual_leg_basis_is_measured_and_the_overstatement_reported():
-    """The $1/share placeholder vs the real fill price."""
+    """The $1/share placeholder vs the real fill price.
+
+    THIS TEST ENCODED THE DEFECT. It asserted 1.27 x 0.12 = 0.1524 for a
+    DOWN leg, costing it at the YES price. PMUS quotes one price per market
+    and it is always the UP/YES price, so a DOWN fill at YES 0.12 cost US
+    0.88 a share: 1.27 x 0.88 = 1.1176. The placeholder was 1.27, so the
+    real overstatement is 0.1524 -- the two figures trade places.
+    """
     s = FakeStore(["mBTC|DOWN"], {"mBTC|DOWN": "1.27"})
     t = FakeT([{"activities": [
         _fill("mBTC", "DOWN", "1.27", "0.12", "0.01",
@@ -50,10 +57,10 @@ def test_a_manual_leg_basis_is_measured_and_the_overstatement_reported():
     out = A.audit(s, t)
     leg = out["legs"][0]
     assert leg["basis"]["established"] is True
-    assert leg["basis"]["actual_cost_usd"] == "0.1524"
+    assert leg["basis"]["actual_cost_usd"] == "1.1176"
     assert leg["placeholder_cost_usd"] == "1.27"
     assert leg["owners"] == [A.OWNER_MANUAL]        # no coid of ours
-    assert out["overstatement_usd"] == "1.1176"
+    assert out["overstatement_usd"] == "0.1524"
     assert out["writes"] == "NONE"
 
 
@@ -907,11 +914,21 @@ def test_the_request_carries_the_walk_so_a_partial_walk_is_visible():
 class _RecordingStore:
     """A store that records calls and answers like the real verb's contract."""
 
-    def __init__(self, *, corrected=True, reason=None):
+    def __init__(self, *, corrected=True, reason=None, state=None):
         self.calls = []
         self._corrected = corrected
         self._reason = reason
         self.lines = {"realized_today": "-233.98540000"}
+        # the plan reads its pre-state from the ROW, so the fake must carry
+        # one. Single-sided, cost_total 2.90, as m1|UP retired.
+        self.state = state if state is not None else {
+            "retired_markets": {
+                "m1": {"up_qty": "2.90", "dn_qty": "0",
+                       "cost_total": "2.90", "yes_value": "0",
+                       "settlement_pnl": "-2.90"},
+                "m2": {"up_qty": "1.0000", "dn_qty": "0",
+                       "cost_total": "1.0000", "yes_value": "0",
+                       "settlement_pnl": "-1.0000"}}}
 
     def realized_lines(self):
         return dict(self.lines)
@@ -1282,3 +1299,219 @@ def test_the_shipped_manifest_carries_per_leg_detail_for_every_leg():
     assert set(m["per_leg"]) == set(m["keys"])
     ids = sorted(t for v in m["per_leg"].values() for t in v["trade_ids"])
     assert ids == sorted(m["trade_ids"])
+
+
+# == section 23: the YES-price convention, both sides ======================
+# The defect this section pins cost 13 of the 44 legs corrected on
+# 2026-10-16 a too-favourable realized figure, and understated the correct
+# aggregate correction by 30.75140000. Found by reconstructing
+# cpc-btc-updown-15m-2026-10-15-1945z|DOWN against the venue's own `cost`.
+
+def _vfill(market, side, qty, price, fee, cost=None, tid="t1", coid=None):
+    """A fill carrying the venue's fee-INCLUSIVE `cost`, as production does."""
+    r = _fill(market, side, qty, price, fee, coid=coid, tid=tid)
+    if cost is not None:
+        r["cost"] = cost
+    return r
+
+
+def test_own_price_is_the_quote_for_UP_and_its_complement_for_DOWN():
+    assert A.own_price(D("0.51"), "UP") == D("0.51")
+    assert A.own_price(D("0.51"), "DOWN") == D("0.49")
+    assert A.own_price(D("0.02"), "UP") == D("0.02")
+    # the case that made the XRP-style legs look free: a DOWN leg at a
+    # 2-cent YES quote costs 98 cents a share, not 2.
+    assert A.own_price(D("0.02"), "DOWN") == D("0.98")
+
+
+def test_an_UP_leg_costs_the_quoted_price():
+    b = A.establish_basis(
+        [{"qty": "50", "price": "0.02", "fee": "0.05", "cost": "1.05",
+          "trade_id": "x"}], expect_qty=D("50"), side="UP")
+    assert b["established"] is True
+    assert b["actual_cost_usd"] == "1.00"          # fees are their own line
+    assert b["fees_usd"] == "0.05"
+    assert b["venue_cost_total_usd"] == "1.05"     # fee-inclusive
+    assert b["crosscheck_worst_gap_usd"] == "0.00"
+
+
+def test_a_DOWN_leg_costs_the_complement_and_reconciles_to_the_venue():
+    """The production row for 1945z|DOWN: 1.0000 at YES 0.5100, venue 0.49."""
+    b = A.establish_basis(
+        [{"qty": "1.0000", "price": "0.5100", "fee": "0.0000",
+          "cost": "0.49", "trade_id": "D47QRSGGYZRN"}],
+        expect_qty=D("1.0000"), side="DOWN")
+    assert b["established"] is True
+    assert D(b["actual_cost_usd"]) == D("0.49")
+    assert b["venue_cost_total_usd"] == "0.49"
+    assert D(b["crosscheck_worst_gap_usd"]) == D(0)
+    # and the old arithmetic, which this refuses to reproduce
+    assert D(b["actual_cost_usd"]) != D("0.51")
+
+
+def test_the_old_YES_price_arithmetic_is_not_reproduced_on_a_DOWN_leg():
+    """cpcxrp-xrp-updown-15m-2026-10-16-0215z|DOWN, the worst of the 13."""
+    b = A.establish_basis(
+        [{"qty": "5.28", "price": "0.06", "fee": "0.02", "cost": "4.9832",
+          "trade_id": "w"}], expect_qty=D("5.28"), side="DOWN")
+    assert b["established"] is True
+    assert b["actual_cost_usd"] == "4.9632"        # 5.28 x 0.94
+    assert b["actual_cost_usd"] != "0.3168"        # 5.28 x 0.06, the defect
+    # the correction against a 5.28 placeholder is 0.3168, not 4.9632: the
+    # over-correction on this one leg was 4.6464.
+    assert D("5.28") - D(b["actual_cost_usd"]) == D("0.3168")
+
+
+def test_a_credited_rebate_is_a_negative_fee_and_REDUCES_the_venue_cost():
+    """A rebate is additive economics, and it lands in `cost`, not in ours."""
+    b = A.establish_basis(
+        [{"qty": "1", "price": "0.40", "fee": "-0.01", "cost": "0.39",
+          "trade_id": "r"}], expect_qty=D("1"), side="UP")
+    assert b["established"] is True
+    assert b["actual_cost_usd"] == "0.40"   # the cost itself is unchanged
+    assert b["fees_usd"] == "-0.01"         # kept separate, sign preserved
+    assert b["venue_cost_total_usd"] == "0.39"
+    assert D(b["crosscheck_worst_gap_usd"]) == D(0)
+
+
+def test_cent_rounding_is_tolerated_and_a_real_disagreement_is_not():
+    """The venue rounds to the cent; it does not round by a dollar."""
+    ok = A.establish_basis(
+        [{"qty": "1", "price": "0.333", "fee": "0.00", "cost": "0.33",
+          "trade_id": "a"}], expect_qty=D("1"), side="UP")
+    assert ok["established"] is True
+    assert D(ok["crosscheck_worst_gap_usd"]) <= A.CROSSCHECK_TOLERANCE
+
+    bad = A.establish_basis(
+        [{"qty": "1", "price": "0.33", "fee": "0.00", "cost": "0.67",
+          "trade_id": "b"}], expect_qty=D("1"), side="UP")
+    assert bad["established"] is False
+    assert bad["reason"] == "COST_CROSSCHECK_FAILED"
+    assert bad["worst_gap_usd"] == "0.34"
+    assert "cheaper reading is NOT adopted" in bad["labels"]
+
+
+def test_a_side_mixup_is_CAUGHT_by_the_crosscheck_not_silently_costed():
+    """The whole point of carrying two readings: costing a DOWN fill at the
+    YES price now CONTRADICTS the venue's own cost and refuses."""
+    out = A.establish_basis(
+        [{"qty": "5.28", "price": "0.06", "fee": "0.02", "cost": "4.9832",
+          "trade_id": "w"}], expect_qty=D("5.28"), side="UP")
+    assert out["established"] is False
+    assert out["reason"] == "COST_CROSSCHECK_FAILED"
+
+
+def test_an_absent_venue_cost_is_one_fewer_reading_not_a_failure():
+    b = A.establish_basis(
+        [{"qty": "1", "price": "0.40", "fee": "0.00", "trade_id": "n"}],
+        expect_qty=D("1"), side="DOWN")
+    assert b["established"] is True
+    assert b["actual_cost_usd"] == "0.60"
+    assert b["venue_cost_fills_absent"] == 1
+    assert b["venue_cost_fills_checked"] == 0
+    assert b["crosscheck_worst_gap_usd"] is None
+
+
+def test_a_bad_side_establishes_nothing():
+    for s in (None, "", "YES", "BUY", "up ", "ORDER_SIDE_BUY"):
+        out = A.establish_basis([{"qty": "1", "price": "0.4", "fee": "0"}],
+                                expect_qty=D("1"), side=s)
+        if s == "up ":                      # stripped and upper-cased
+            assert out["established"] is True
+        else:
+            assert out["established"] is False and out["reason"] == "BAD_SIDE"
+
+
+def test_the_quantity_check_still_precedes_everything():
+    out = A.establish_basis(
+        [{"qty": "1", "price": "0.4", "fee": "0", "cost": "9.99"}],
+        expect_qty=D("2"), side="UP")
+    assert out["reason"] == "QUANTITY_MISMATCH"
+
+
+# == section 24: the plan's pre-state comes from the ROW ====================
+
+def test_the_expectation_is_the_rows_own_cost_total_not_the_placeholder():
+    """The 2026-10-16 refusals were caused by asserting the $1/share figure."""
+    st = _RecordingStore(state={"retired_markets": {
+        "m1": {"up_qty": "50.0000", "dn_qty": "0",
+               "cost_total": "37.975400"}}})
+    out = A.apply_cost_basis_corrections(st, {
+        "activity_walk": {"complete": True},
+        "legs": [{"key": "m1|UP", "market": "m1", "side": "UP",
+                  "placeholder_cost_usd": "50.0000",
+                  "basis": {"established": True,
+                            "actual_cost_usd": "1.00000000",
+                            "fees_usd": "0.0500"},
+                  "fills": [{"trade_id": "T1", "qty": "50.0000",
+                             "price": "0.0200", "fee": "0.0500"}]}]})
+    leg = out["applied_detail"][0]
+    assert leg["cost_before_usd"] == "37.975400"     # the ROW, not 50.0000
+    assert leg["cost_after_usd"] == "1.00000000"
+    assert out["realized_delta_usd"] == "36.97540000"
+
+
+def test_a_two_sided_market_is_REFUSED_so_the_other_leg_is_not_erased():
+    """cpc-btc-updown-15m-2026-10-15-1945z: up_qty 1 / up_cost 0.4600 AND
+    dn_qty 1.0000 / dn_cost 1.0000, cost_total 1.4600 for the PAIR.
+    Correcting the DOWN leg through cost_total would write 0.4900 over the
+    whole market and erase the UP leg's 0.4600."""
+    st = _RecordingStore(state={"retired_markets": {
+        "m1": {"up_qty": "1", "dn_qty": "1.0000", "up_cost": "0.4600",
+               "dn_cost": "1.0000", "cost_total": "1.4600"}}})
+    out = A.apply_cost_basis_corrections(st, {
+        "activity_walk": {"complete": True},
+        "legs": [{"key": "m1|DOWN", "market": "m1", "side": "DOWN",
+                  "placeholder_cost_usd": "1.0000",
+                  "basis": {"established": True,
+                            "actual_cost_usd": "0.49000000",
+                            "fees_usd": "0.0000"},
+                  "fills": [{"trade_id": "T1", "qty": "1.0000",
+                             "price": "0.5100", "fee": "0.0000"}]}]})
+    assert out["applied_detail"] == []
+    assert out["preserved_unknown"] == 1
+    d = out["preserved_detail"][0]
+    assert d["reason"] == "MARKET_TWO_SIDED_COST_TOTAL"
+    assert d["other_side_qty"] == "1"
+    assert d["cost"] == "UNKNOWN"
+    assert st.calls == [], "the verb must not even be called"
+
+
+def test_an_already_corrected_leg_leaves_the_batch_restoring_mechanism_one():
+    st = _RecordingStore(state={"retired_markets": {
+        "m1": {"up_qty": "2.90", "dn_qty": "0", "cost_total": "0.590000",
+               "cost_superseded": {"cost_total": "2.90"}}}})
+    out = A.apply_cost_basis_corrections(st, _audit_payload())
+    assert out["applied_detail"] == []
+    assert any(d["reason"] == "COST_ALREADY_CORRECTED"
+               for d in out["preserved_detail"])
+    assert st.calls == []
+
+
+def test_a_leg_with_nothing_to_reduce_is_not_put_in_the_batch():
+    """cpc-btc-updown-15m-2026-10-14-2230z: the row already holds the
+    measured 0.59, so there is no correction to make."""
+    st = _RecordingStore(state={"retired_markets": {
+        "m1": {"up_qty": "2.90", "dn_qty": "0", "cost_total": "0.590000"}}})
+    out = A.apply_cost_basis_corrections(st, _audit_payload())
+    assert out["applied_detail"] == []
+    d = [x for x in out["preserved_detail"] if x["key"] == "m1|UP"][0]
+    assert d["reason"] == "NOTHING_TO_CORRECT"
+    assert st.calls == []
+
+
+def test_an_unretired_or_unreadable_row_establishes_no_expectation():
+    for state, reason in (
+            ({"retired_markets": {}}, "MARKET_NOT_RETIRED"),
+            ({"retired_markets": {"m1": {"up_qty": "2.9", "dn_qty": "0",
+                                         "cost_total": None}}},
+             "COST_TOTAL_UNREADABLE"),
+            ({"retired_markets": {"m1": {"up_qty": "2.9", "dn_qty": "zzz",
+                                         "cost_total": "2.90"}}},
+             "OTHER_SIDE_QTY_UNREADABLE")):
+        st = _RecordingStore(state=state)
+        out = A.apply_cost_basis_corrections(st, _audit_payload())
+        assert out["applied_detail"] == []
+        assert any(d["reason"] == reason for d in out["preserved_detail"]), (
+            reason, out["preserved_detail"])
+        assert st.calls == []
