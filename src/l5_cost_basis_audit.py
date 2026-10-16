@@ -317,6 +317,27 @@ def feed_shape(rows: List[Mapping[str, Any]], *, markets: List[str],
         side_hits += int(s_ok)
         all_three += int(m_ok and k_ok and s_ok)
     top = sorted(keysets.items(), key=lambda kv: -kv[1])[:sample]
+    # THE PAYLOAD'S OWN FIELD NAMES AND SIDE VOCABULARY.
+    #
+    # WHY THIS WAS NEEDED A SECOND TIME. The first version reported only the
+    # TOP-LEVEL field names ("trade,type"), which was enough to find the
+    # envelope but said nothing about what is inside it. After the envelope
+    # fix, market and fill-kind matched (125 and 1,911 rows) and side STILL
+    # matched zero -- and the diagnostic could not name the field or the
+    # vocabulary responsible. A diagnostic that cannot answer the question it
+    # is pointed at is half a diagnostic.
+    inner_keys: Counter = Counter()
+    side_values: Counter = Counter()
+    for r in rows:
+        b = _payload(r)
+        if not isinstance(b, Mapping) or b is r:
+            continue
+        inner_keys.update([",".join(sorted(str(x) for x in b.keys()))])
+        for cand in ("side", "outcome", "direction", "buySell", "takerSide",
+                     "outcomeSide", "positionSide", "orderSide"):
+            v = b.get(cand)
+            if v not in (None, ""):
+                side_values.update(["%s=%s" % (cand, str(v)[:40])])
     return {
         "rows": len(rows),
         "distinct_kinds": dict(sorted(kinds.items(), key=lambda kv: -kv[1])),
@@ -327,6 +348,15 @@ def feed_shape(rows: List[Mapping[str, Any]], *, markets: List[str],
         "rows_matching_all_three": all_three,
         "most_common_field_name_sets": [
             {"fields": sig, "rows": n} for sig, n in top],
+        "most_common_PAYLOAD_field_name_sets": [
+            {"fields": sig, "rows": n}
+            for sig, n in sorted(inner_keys.items(),
+                                 key=lambda kv: -kv[1])[:sample]],
+        "side_field_values_seen": dict(
+            sorted(side_values.items(), key=lambda kv: -kv[1])[:20]),
+        "side_vocabulary_recognised": {
+            "UP": ["UP", "YES", "BUY_LONG"],
+            "DOWN": ["DOWN", "NO", "BUY_SHORT"]},
         "labels": ("DIAGNOSTIC ONLY. Each predicate is counted "
                    "INDEPENDENTLY, so a zero names the predicate that is "
                    "wrong: zero market matches means the market field is "

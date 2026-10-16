@@ -350,3 +350,18 @@ backstop + cancellation proof, shadow-locked 2026-10-16T14:30Z
 # READ-ONLY. SHADOW_ONLY set, HALT latched, submission disabled, no limit
 # changed. Money-path gate 1327 passed.
 full cost-basis reconciliation + fee/notional evidence, shadow-locked 2026-10-16T14:50Z
+
+# Second diagnostic pass. The envelope fix moved two predicates but not the
+# third: market 0 -> 125, fill-kind 0 -> 1911, side STILL 0. The first
+# diagnostic reported only TOP-LEVEL field names ("trade,type"), which found
+# the envelope but says nothing about what is inside it -- so it could not
+# name the field or vocabulary responsible for the remaining failure.
+#
+# feed_shape now also reports the PAYLOAD's field-name sets, every value
+# seen under eight candidate side keys, and the vocabulary currently
+# recognised, so the next read names the culprit instead of guessing again.
+# Still aggregates and field NAMES only.
+#
+# READ-ONLY. SHADOW_ONLY set, HALT latched, submission disabled, no limit
+# changed.
+payload-side diagnostic, shadow-locked 2026-10-16T15:10Z
