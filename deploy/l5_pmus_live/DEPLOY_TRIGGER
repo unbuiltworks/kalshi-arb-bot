@@ -399,3 +399,21 @@ trade-field mapping correction, shadow-locked 2026-10-16T16:10Z
 # READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
 # disabled, no limit, threshold or baseline changed.
 final field mapping, shadow-locked 2026-10-16T16:40Z
+
+# TWO DEFECTS the key census identified, both mine, both read-only fixes.
+#
+# 1. KEY PRECEDENCE. The execution's nested `order` carries
+#    side = ORDER_SIDE_BUY / ORDER_SIDE_SELL -- 1,911 of each -- which is a
+#    DIRECTION, not a market outcome. SIDE_KEYS probed `side` first, so every
+#    trade row resolved to None and nothing could be attributed. The outcome
+#    is `outcomeSide` (YES 1591, NO 1480, UNSPECIFIED 751), which now comes
+#    first. BUY/SELL and UNSPECIFIED are explicitly refused rather than
+#    coerced into a side.
+# 2. FEE SOURCE. fee_and_notional_evidence read the trade body, which carries
+#    no commission at all, so all 1,911 rows reported `unreadable` and
+#    rebates_ever_credited read false FOR THE WRONG REASON. It now reads OUR
+#    execution via the same accessor the attribution uses.
+#
+# READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit, threshold or baseline changed.
+side precedence + fee source, shadow-locked 2026-10-16T17:10Z

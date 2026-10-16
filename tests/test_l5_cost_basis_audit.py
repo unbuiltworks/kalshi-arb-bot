@@ -664,3 +664,70 @@ def test_all_three_predicates_now_match_a_real_trade_row():
                       markets=["cpc-btc-updown-15m-2026-10-16-0330z"],
                       sides=["UP", "DOWN"])
     assert sh["rows_matching_all_three"] == 1
+
+
+def census_trade(isaggressor=True, agg_outcome="OUTCOME_SIDE_YES",
+                 pas_outcome="OUTCOME_SIDE_NO", agg_fee="0.07",
+                 pas_fee="-0.02"):
+    """The shape the production key census reported: the execution carries
+    `outcomeSide` AND a nested order whose `side` is ORDER_SIDE_BUY/SELL."""
+    def ex(outcome, fee):
+        return {"commissionNotionalCollected": fee,
+                "commissionNotionalTotalCollected": fee,
+                "lastPx": "0.41", "lastShares": "50",
+                "outcomeSide": outcome,
+                "order": {"side": "ORDER_SIDE_BUY"}}
+    return {"type": "activity_type_trade", "trade": {
+        "marketSlug": "m", "price": "0.41", "qty": "50", "cost": "20.50",
+        "isAggressor": isaggressor,
+        "aggressorExecution": ex(agg_outcome, agg_fee),
+        "passiveExecution": ex(pas_outcome, pas_fee)}}
+
+
+def test_outcomeSide_is_preferred_over_the_orders_BUY_SELL_side():
+    """THE PRECEDENCE DEFECT. The order's `side` is ORDER_SIDE_BUY/SELL --
+    1,911 of each in production -- which is a DIRECTION, not an outcome.
+    Probing `side` first returned None for every trade row."""
+    assert A.SIDE_KEYS.index("outcomeSide") < A.SIDE_KEYS.index("side")
+    assert A._row_side(census_trade(True)) == "UP"
+    assert A._row_side(census_trade(False)) == "DOWN"
+
+
+def test_a_BUY_SELL_direction_never_resolves_to_an_outcome():
+    """Returning UP for ORDER_SIDE_BUY would book a side the row never
+    stated."""
+    for v in ("ORDER_SIDE_BUY", "ORDER_SIDE_SELL", "BUY", "SELL"):
+        r = {"type": "activity_type_trade", "trade": {
+            "marketSlug": "m", "passiveExecution": {"order": {"side": v}}}}
+        assert A._row_side(r) is None, v
+
+
+def test_the_venues_UNSPECIFIED_outcome_stays_UNKNOWN():
+    """751 executions carry it. It is the venue declining to say."""
+    r = {"type": "activity_type_trade", "trade": {
+        "marketSlug": "m",
+        "passiveExecution": {"outcomeSide": A.UNSPECIFIED_SIDE}}}
+    assert A._row_side(r) is None
+
+
+def test_the_fee_evidence_reads_OUR_execution_not_the_trade_body():
+    """THE SECOND DEFECT. The trade body has no commission at all, so every
+    one of the 1,911 rows reported `unreadable` and rebates_ever_credited
+    read false for the wrong reason."""
+    ev = A.fee_and_notional_evidence([census_trade(True), census_trade(False)])
+    assert ev["commission_signs"]["unreadable"] == 0
+    assert ev["commission_signs"]["negative_a_credited_rebate"] == 1
+    assert ev["commission_signs"]["positive_a_charge"] == 1
+    assert ev["rebates_ever_credited"] is True
+
+
+def test_the_notional_evidence_uses_our_executed_shares_and_price():
+    ev = A.fee_and_notional_evidence([census_trade(True)])
+    assert ev["smallest_executed_quantity"] == "50"
+    assert D(ev["smallest_executed_notional_usd"]) == D("20.50")
+
+
+def test_all_three_predicates_match_the_census_shape():
+    sh = A.feed_shape([census_trade(True)], markets=["m"],
+                      sides=["UP", "DOWN"])
+    assert sh["rows_matching_all_three"] == 1

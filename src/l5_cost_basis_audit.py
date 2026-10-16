@@ -197,8 +197,19 @@ def _row_market(row: Mapping[str, Any]) -> str:
 EXEC_KEYS = ("aggressorExecution", "passiveExecution")
 
 #: keys that have been seen to carry a side, in any of the nested objects.
-SIDE_KEYS = ("side", "outcome", "outcomeSide", "orderSide", "positionSide",
+#: ORDER MATTERS, AND THIS IS A DEFECT THE CENSUS CAUGHT. `outcomeSide`
+#: comes FIRST because the execution's nested `order` object carries
+#: `side` = ORDER_SIDE_BUY / ORDER_SIDE_SELL -- a BUY/SELL direction, not a
+#: market outcome. Probing `side` first found 1,911 of each, neither of which
+#: is UP or DOWN, so _row_side returned None for every trade row and nothing
+#: could be attributed. The outcome lives in `outcomeSide`
+#: (OUTCOME_SIDE_YES 1591, _NO 1480, _UNSPECIFIED 751).
+SIDE_KEYS = ("outcomeSide", "outcome", "positionSide", "side", "orderSide",
              "direction", "takerSide", "buySell")
+
+#: the venue's explicit "we are not telling you" value. 751 executions carry
+#: it, and it must stay UNKNOWN rather than be read as a side.
+UNSPECIFIED_SIDE = "OUTCOME_SIDE_UNSPECIFIED"
 
 #: keys that have been seen to carry a commission or rebate.
 FEE_KEYS = ("commissionNotionalCollected", "commission",
@@ -346,7 +357,11 @@ def _row_side(row: Mapping[str, Any]) -> Optional[str]:
         # counterparty's side.
         raw = _first_present(_exec_objects(body), SIDE_KEYS, deep=True)
     v = str(raw or "").strip().upper()
-    if not v:
+    if not v or v == UNSPECIFIED_SIDE:
+        return None
+    if v.endswith(("_BUY", "_SELL")) or v in ("BUY", "SELL"):
+        # a DIRECTION is not an OUTCOME. Returning UP for ORDER_SIDE_BUY
+        # would book a side the row never stated.
         return None
     # the venue's own vocabularies, including the POSITION_RESOLUTION_SIDE_*
     # and OUTCOME_SIDE_* forms observed on the feed. Suffix match, so a new
@@ -392,8 +407,15 @@ def fee_and_notional_evidence(rows: List[Mapping[str, Any]]) -> Dict[str, Any]:
             continue
         b = _payload(r)
         fills += 1
-        fee = _d(b.get("commission") if b.get("commission") is not None
-                 else b.get("commissionNotionalTotalCollected"))
+        # OUR EXECUTION, same accessor the attribution uses. Reading the
+        # trade body found no commission at all -- the key lives inside the
+        # execution objects -- which is why all 1,911 rows reported
+        # `unreadable` and rebates_ever_credited read false for the wrong
+        # reason.
+        ours = _exec_objects(b)
+        fee = _d(_first_present([b], FEE_KEYS))
+        if fee is None:
+            fee = _d(_first_present(ours, FEE_KEYS, deep=True))
         if fee is None:
             fee_unreadable += 1
         else:
@@ -404,10 +426,13 @@ def fee_and_notional_evidence(rows: List[Mapping[str, Any]]) -> Dict[str, Any]:
                 fees_zero += 1
             else:
                 fees_pos += 1
-        q = _d(b.get("quantity") if b.get("quantity") is not None
-               else b.get("cumQuantity"))
-        px = _d(b.get("price") if b.get("price") is not None
-                else b.get("avgPx"))
+        q = _d(_first_present(ours, EXEC_QTY_KEYS))
+        if q is None:
+            q = _d(_first_present([b], ("qty", "qtyDecimal", "quantity",
+                                        "cumQuantity")))
+        px = _d(_first_present(ours, EXEC_PX_KEYS))
+        if px is None:
+            px = _d(_first_present([b], ("price", "avgPx")))
         if q is not None and q > 0:
             qtys.append(q)
             if px is not None and px > 0:
