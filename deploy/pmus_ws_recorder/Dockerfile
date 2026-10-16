@@ -31,6 +31,14 @@ COPY src/pmus_l5_action_shadow.py src/pmus_l5_action_shadow.py
 COPY src/pmus_l5_multi_shadow.py src/pmus_l5_multi_shadow.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
 COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
+# the continuous shadow policy evaluator and the probe module it reads its
+# fee model and decision predicates from. This Dockerfile copies file by
+# file, so a module the recorder imports but nobody COPYs is an ImportError
+# in the image and a feature that is silently inert -- which is exactly how
+# the first shadow-policy deploy came up doing nothing. test_pmus_ws_recorder_
+# image_covers_its_import_closure now fails before that can happen again.
+COPY src/l5_shadow_policy_eval.py src/l5_shadow_policy_eval.py
+COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 COPY src/pmus_l5_fidelity_live.py src/pmus_l5_fidelity_live.py
 COPY analysis/l5/l5_fidelity_pass.json analysis/l5/l5_fidelity_pass.json
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py

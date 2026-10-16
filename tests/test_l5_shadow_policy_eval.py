@@ -598,3 +598,39 @@ def test_the_dashboard_never_reports_a_combined_net():
     assert "total_net_usd" not in d
     assert "net_usd" not in d
     assert d["actual_trading"]["realized_usd"] is None
+
+
+# ------------------------------------------------- the image must be complete
+
+def test_pmus_ws_recorder_image_covers_its_import_closure():
+    """Every local module the recorder imports must be COPYed into its image.
+
+    THE DEFECT THIS CATCHES, which it did not catch the first time. The
+    recorder Dockerfile copies file by file. `src/l5_shadow_policy_eval.py`
+    was not among them, so the first shadow-policy deploy came up healthy,
+    logged nothing, and scored no window: the import raised, the broken latch
+    set, and every hook went inert. Nothing was wrong at runtime -- the
+    module simply was not there.
+    """
+    import ast
+    import os
+    df = open("deploy/pmus_ws_recorder/Dockerfile").read()
+    seen, stack = set(), ["src/pmus_ws_evidence_recorder.py",
+                          "src/pmus_ws_evidence_recorder_enriched.py"]
+    while stack:
+        f = stack.pop()
+        if f in seen or not os.path.exists(f):
+            continue
+        seen.add(f)
+        for n in ast.walk(ast.parse(open(f).read())):
+            if isinstance(n, ast.ImportFrom) and n.level:
+                for a in n.names:
+                    stack.append("src/%s.py" % a.name)
+            elif isinstance(n, ast.Import):
+                for a in n.names:
+                    if a.name.startswith("src."):
+                        stack.append("src/%s.py" % a.name.split(".", 1)[1])
+    missing = sorted(f for f in seen if f not in df)
+    assert not missing, (
+        "these modules are imported by the recorder but not COPYed into its "
+        "image, so they would raise ImportError in production: %s" % missing)
