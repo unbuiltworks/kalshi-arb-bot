@@ -1,19 +1,30 @@
-"""Read-only favorite/longshot study for 15-minute crypto UP/DOWN markets.
+"""Read-only buy-vs-sell calibration study for 15-minute crypto UP/DOWN markets.
 
-Answers two questions over settled 15m windows, bucketed by minutes remaining:
+Settles one question across the nine Kalshi 15m series: in each
+(series, minutes-remaining, price-band) cell, does the cheap side win MORE or
+LESS often than its price implies?
 
-  1. How often does the favored side (mid > 50c) actually win?
-  2. Is the longshot side overpriced -- i.e. does a side quoted at X cents win
-     LESS than X% of the time? That, not the favorite's raw win rate, is the
-     only thing that makes selling longshots profitable.
+  realized > implied + fee  ->  BUY the longshot
+  realized < implied - fee  ->  SELL the longshot (buy the favorite)
+  otherwise                 ->  NO EDGE, and the fee band is wide
+
+The fee enters as a no-trade band of width 2*fee around the price, so "no edge"
+is the default verdict and a cell must clear fees in one direction to earn one.
+A verdict also requires the Wilson 95% interval -- not the point estimate -- to
+clear that bound, so a lucky cell cannot produce a recommendation.
+
+Why this exists: kalshi-longshot-fader SILENT_FAILURES.md SF-002 found the live
+15m gate pays 90-94c for what it derives as a ~78% event, and that the market
+was better calibrated than the gate at every level >= 1.5 (z 0.5-1: market
+82.6%, actual 83.0%). That 78% is Phi() of a bug-corrected feature, not a
+counted frequency. This module counts the frequency.
 
 Never submits, modifies, or cancels orders. Market data reads only.
 
-Source: Kalshi settled KX*15M series, which have the longest history of
-index-settled 15m crypto windows. Polymarket US settlement source is NOT
-assumed equivalent -- see ARB_STATUS_HISTORY_2026-08-23.md
-(REALIZED_INDEX_MISMATCH, -$0.885300, Kalshi BRTI vs a different venue index).
-Use --source pmus only once a PMUS price-history adapter is verified.
+Polymarket US is deliberately out of scope: its settlement index is not
+established as equivalent to Kalshi BRTI, and assuming so already cost a
+realized -$0.885300 (REALIZED_INDEX_MISMATCH, kalshi-arb-bot
+ARB_STATUS_HISTORY_2026-08-23.md).
 """
 
 from __future__ import annotations
@@ -31,12 +42,18 @@ from src.auth import auth_headers, load_private_key
 
 KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 
-# 15-minute up/down series, one per coin.
-SERIES = {
+# The nine 15m series tracked by kalshi-longshot-fader
+# (causal_300_shadow.NINE_SERIES_PRODUCT).
+NINE_SERIES = {
     "btc": "KXBTC15M",
     "eth": "KXETH15M",
     "sol": "KXSOL15M",
     "xrp": "KXXRP15M",
+    "doge": "KXDOGE15M",
+    "bnb": "KXBNB15M",
+    "hype": "KXHYPE15M",
+    "near": "KXNEAR15M",
+    "zec": "KXZEC15M",
 }
 
 # Candlestick route has moved; try each until one answers 200.
@@ -45,21 +62,75 @@ CANDLE_PATHS = (
     "/historical/markets/{ticker}/candlesticks",
 )
 
-PRICE_BUCKETS = ((1, 5), (6, 10), (11, 20), (21, 35), (36, 50))
+# Longshot-side price bands, in cents. 6-10c is the fader's own cell: the
+# complement of its 90-94c favorite entry band.
+PRICE_BANDS = ((1, 5), (6, 10), (11, 20), (21, 35), (36, 49))
+
+# Kalshi taker fee: ceil(0.07 * C * P * (1-P)) dollars, P in dollars.
+TAKER_RATE = 0.07
+
+
+def taker_fee_cents_per_contract(price_cents: float, count: int) -> float:
+    """Per-contract taker fee in cents, carrying Kalshi's ceil-to-the-cent.
+
+    The ceil is applied to the ORDER, not the contract, so the per-contract cost
+    falls with size: a single contract at 8c pays a full 1c (12.5% of stake),
+    while 100 pay ~0.52c each. Size is part of the economics, not a detail.
+    """
+    if count <= 0:
+        raise ValueError("count must be positive")
+    p = price_cents / 100.0
+    fee_dollars = math.ceil(TAKER_RATE * count * p * (1.0 - p) * 100.0) / 100.0
+    return fee_dollars * 100.0 / count
+
+
+def wilson_95(wins: int, n: int) -> tuple[float, float] | None:
+    """95% Wilson interval on a win rate; None when the sample is empty."""
+    if n <= 0:
+        return None
+    z = 1.959964
+    p = wins / n
+    denom = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, center - half), min(1.0, center + half))
+
+
+def verdict(ci: tuple[float, float] | None, implied: float, fee_frac: float,
+            min_n: int, n: int) -> str:
+    """Direction a cell earns, or why it earns none.
+
+    Buying the longshot needs realized > implied + fee; selling it needs
+    realized < implied - fee. The interval, not the point estimate, must clear
+    the bound, so UNDERPOWERED is a distinct answer from NO_EDGE.
+    """
+    if n < min_n:
+        return "UNDERPOWERED"
+    if ci is None:
+        return "UNDERPOWERED"
+    low, high = ci
+    if low > implied + fee_frac:
+        return "BUY_LONGSHOT"
+    if high < implied - fee_frac:
+        return "SELL_LONGSHOT"
+    return "NO_EDGE"
 
 
 class Kalshi:
     """Minimal synchronous signed-GET client."""
 
-    def __init__(self) -> None:
+    def __init__(self, pace_s: float = 0.0) -> None:
         key_id = os.getenv("KALSHI_API_KEY_ID", "").strip()
         if not key_id:
             raise SystemExit("KALSHI_API_KEY_ID is required")
         self.key_id = key_id
         self.private_key = load_private_key()
         self.http = httpx.Client(timeout=20.0)
+        self.pace_s = pace_s
 
     def get(self, path: str, params: dict | None = None) -> httpx.Response:
+        if self.pace_s:
+            time.sleep(self.pace_s)
         headers = auth_headers(self.private_key, "GET", f"/trade-api/v2{path}", self.key_id)
         return self.http.get(f"{KALSHI_BASE}{path}", headers=headers, params=params)
 
@@ -73,7 +144,7 @@ class Kalshi:
 
 
 def settled_markets(api: Kalshi, series: str, lookback_days: int, cap: int) -> list[dict]:
-    """Page settled markets for one series, newest first."""
+    """Page settled markets for one series."""
     min_close = int(time.time()) - lookback_days * 86400
     rows: list[dict] = []
     cursor = ""
@@ -109,10 +180,10 @@ def candles(api: Kalshi, series: str, ticker: str, start_ts: int, end_ts: int) -
 def yes_mid_cents(candle: dict) -> float | None:
     """Mid of the YES touch at the candle's close, in cents.
 
-    Mid -- not last trade -- because a tradable price is what a seller faces.
+    Mid, not last trade: a tradable price is what an entry actually faces.
     """
-    bid = ((candle.get("yes_bid") or {}).get("close"))
-    ask = ((candle.get("yes_ask") or {}).get("close"))
+    bid = (candle.get("yes_bid") or {}).get("close")
+    ask = (candle.get("yes_ask") or {}).get("close")
     try:
         bid_c, ask_c = float(bid), float(ask)
     except (TypeError, ValueError):
@@ -122,28 +193,80 @@ def yes_mid_cents(candle: dict) -> float | None:
     return (bid_c + ask_c) / 2.0
 
 
-def wilson_95(wins: int, n: int) -> tuple[float, float] | None:
-    """95% Wilson interval on a win rate; None when the sample is empty."""
-    if n <= 0:
-        return None
-    z = 1.959964
-    p = wins / n
-    denom = 1 + z * z / n
-    center = (p + z * z / (2 * n)) / denom
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
-    return (round(max(0.0, center - half), 4), round(min(1.0, center + half), 4))
+def band_of(price_cents: float) -> str | None:
+    for low, high in PRICE_BANDS:
+        if low <= price_cents <= high:
+            return f"{low}-{high}c"
+    return None
 
 
-def study(api: Kalshi, coin: str, series: str, lookback_days: int, cap: int) -> dict:
-    markets = settled_markets(api, series, lookback_days, cap)
+class Cells:
+    """Accumulates longshot-side outcomes per (minutes_remaining, price band)."""
 
-    # minutes_remaining -> counters
-    fav = defaultdict(lambda: {"n": 0, "fav_wins": 0})
-    # (minutes_remaining, bucket) -> longshot-side counters
-    longshot = defaultdict(lambda: {"n": 0, "longshot_wins": 0, "implied_sum": 0.0})
+    def __init__(self) -> None:
+        self.cells: dict[tuple[int, str], dict] = defaultdict(
+            lambda: {"n": 0, "wins": 0, "price_sum": 0.0})
+        self.favorite: dict[int, dict] = defaultdict(lambda: {"n": 0, "wins": 0})
 
+    def add(self, minutes: int, longshot_price: float, longshot_won: bool) -> bool:
+        band = band_of(longshot_price)
+        if band is None:
+            return False
+        cell = self.cells[(minutes, band)]
+        cell["n"] += 1
+        cell["wins"] += int(longshot_won)
+        cell["price_sum"] += longshot_price
+        fav = self.favorite[minutes]
+        fav["n"] += 1
+        fav["wins"] += int(not longshot_won)
+        return True
+
+    def rows(self, count: int, min_n: int) -> list[dict]:
+        out = []
+        for (minutes, band) in sorted(self.cells):
+            cell = self.cells[(minutes, band)]
+            n, wins = cell["n"], cell["wins"]
+            avg_price = cell["price_sum"] / n
+            implied = avg_price / 100.0
+            realized = wins / n
+            fee_c = taker_fee_cents_per_contract(avg_price, count)
+            ci = wilson_95(wins, n)
+            out.append({
+                "minutes_remaining": minutes,
+                "longshot_price_band": band,
+                "n": n,
+                "avg_longshot_price_cents": round(avg_price, 2),
+                "implied_win_rate": round(implied, 4),
+                "realized_win_rate": round(realized, 4),
+                "ci95_realized": [round(ci[0], 4), round(ci[1], 4)] if ci else None,
+                "fee_cents_per_contract": round(fee_c, 3),
+                # EV per contract, in cents, net of one taker fee on entry.
+                "ev_buy_longshot_cents": round(realized * 100.0 - avg_price - fee_c, 3),
+                "ev_sell_longshot_cents": round(
+                    (1.0 - realized) * 100.0 - (100.0 - avg_price) - fee_c, 3),
+                "verdict": verdict(ci, implied, fee_c / 100.0, min_n, n),
+            })
+        return out
+
+    def favorite_rows(self) -> list[dict]:
+        out = []
+        for minutes in sorted(self.favorite):
+            cell = self.favorite[minutes]
+            ci = wilson_95(cell["wins"], cell["n"])
+            out.append({
+                "minutes_remaining": minutes,
+                "n": cell["n"],
+                "favorite_win_rate": round(cell["wins"] / cell["n"], 4) if cell["n"] else None,
+                "ci95": [round(ci[0], 4), round(ci[1], 4)] if ci else None,
+            })
+        return out
+
+
+def collect(api: Kalshi, series: str, markets: list[dict], cells: Cells,
+            pooled: Cells) -> dict:
+    """Score every usable window of one series into both cell tables."""
     usable = 0
-    skipped = defaultdict(int)
+    skipped: dict[str, int] = defaultdict(int)
 
     for market in markets:
         result = str(market.get("result") or "").lower()
@@ -179,88 +302,97 @@ def study(api: Kalshi, coin: str, series: str, lookback_days: int, cap: int) -> 
 
             yes_won = result == "yes"
             yes_is_favorite = mid > 50.0
-
-            bucket = fav[minutes]
-            bucket["n"] += 1
-            bucket["fav_wins"] += int(yes_won == yes_is_favorite)
-
-            # The longshot is the cheap side; its price is its implied probability.
             longshot_price = (100.0 - mid) if yes_is_favorite else mid
             longshot_won = yes_won != yes_is_favorite
-            for low, high in PRICE_BUCKETS:
-                if low <= longshot_price <= high:
-                    cell = longshot[(minutes, f"{low}-{high}c")]
-                    cell["n"] += 1
-                    cell["longshot_wins"] += int(longshot_won)
-                    cell["implied_sum"] += longshot_price / 100.0
-                    break
-            window_used = True
+
+            if cells.add(minutes, longshot_price, longshot_won):
+                pooled.add(minutes, longshot_price, longshot_won)
+                window_used = True
 
         usable += int(window_used)
 
-    favorite_by_minute = []
-    for minutes in sorted(fav):
-        cell = fav[minutes]
-        favorite_by_minute.append({
-            "minutes_remaining": minutes,
-            "n": cell["n"],
-            "favorite_win_rate": round(cell["fav_wins"] / cell["n"], 4) if cell["n"] else None,
-            "ci95": wilson_95(cell["fav_wins"], cell["n"]),
-        })
+    return {"windows_usable": usable, "skipped": dict(skipped)}
 
-    longshot_calibration = []
-    for (minutes, label) in sorted(longshot, key=lambda k: (k[0], k[1])):
-        cell = longshot[(minutes, label)]
-        n = cell["n"]
-        realized = cell["longshot_wins"] / n if n else None
-        implied = cell["implied_sum"] / n if n else None
-        longshot_calibration.append({
-            "minutes_remaining": minutes,
-            "longshot_price_bucket": label,
-            "n": n,
-            "implied_win_rate": round(implied, 4) if implied is not None else None,
-            "realized_win_rate": round(realized, 4) if realized is not None else None,
-            # Positive edge_pct_points = longshot overpriced = selling it has gross edge.
-            "edge_pct_points": round((implied - realized) * 100, 3) if n else None,
-            "ci95_realized": wilson_95(cell["longshot_wins"], n),
-        })
 
+def headline(rows: list[dict]) -> dict:
+    """The decision summary: which cells earned a direction, and the fader's own."""
+    buys = [r for r in rows if r["verdict"] == "BUY_LONGSHOT"]
+    sells = [r for r in rows if r["verdict"] == "SELL_LONGSHOT"]
+    # The live 15m gate: 90-94c favorite, 250-350s to close = 4-6 minutes left.
+    fader = [r for r in rows
+             if r["longshot_price_band"] == "6-10c" and 4 <= r["minutes_remaining"] <= 6]
     return {
-        "coin": coin,
-        "series": series,
-        "lookback_days": lookback_days,
-        "settled_markets_found": len(markets),
-        "windows_usable": usable,
-        "skipped": dict(skipped),
-        "favorite_by_minute": favorite_by_minute,
-        "longshot_calibration": longshot_calibration,
-        "fees_applied": False,
-        "classification": "HISTORICAL_REPLAY_NOT_REALIZED",
+        "cells_total": len(rows),
+        "cells_buy_longshot": len(buys),
+        "cells_sell_longshot": len(sells),
+        "cells_no_edge": sum(1 for r in rows if r["verdict"] == "NO_EDGE"),
+        "cells_underpowered": sum(1 for r in rows if r["verdict"] == "UNDERPOWERED"),
+        "best_buy_cell": max(buys, key=lambda r: r["ev_buy_longshot_cents"], default=None),
+        "best_sell_cell": max(sells, key=lambda r: r["ev_sell_longshot_cents"], default=None),
+        "fader_entry_cells_6_10c_at_4_6min": fader,
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--coin", action="append", default=[], choices=sorted(SERIES),
-                        help="repeatable; defaults to all four")
+    parser.add_argument("--coin", action="append", default=[], choices=sorted(NINE_SERIES),
+                        help="repeatable; defaults to all nine series")
     parser.add_argument("--lookback-days", type=int, default=30)
     parser.add_argument("--max-markets", type=int, default=2000,
-                        help="per-coin cap on settled markets pulled")
+                        help="per-series cap on settled markets pulled")
+    parser.add_argument("--count", type=int, default=100,
+                        help="order size the fee is computed for; the ceil makes this matter")
+    parser.add_argument("--min-n", type=int, default=200,
+                        help="minimum cell sample before a cell may earn a verdict")
+    parser.add_argument("--pace-s", type=float, default=0.05,
+                        help="sleep between API calls; this walks thousands of markets")
     parser.add_argument("--source", default="kalshi", choices=("kalshi", "pmus"))
     args = parser.parse_args()
 
     if args.source == "pmus":
         raise SystemExit(
             "PMUS adapter not implemented: gateway.polymarket.us /v1/price-history is "
-            "unverified from this environment, and PMUS settlement-index equivalence with "
-            "Kalshi BRTI is NOT established. Do not infer PMUS rates from Kalshi output."
+            "unverified, and PMUS settlement-index equivalence with Kalshi BRTI is NOT "
+            "established. Do not infer PMUS rates from Kalshi output."
         )
 
-    api = Kalshi()
+    api = Kalshi(pace_s=args.pace_s)
+    pooled = Cells()
     try:
-        for coin in (args.coin or sorted(SERIES)):
-            print(json.dumps(study(api, coin, SERIES[coin], args.lookback_days, args.max_markets),
-                             sort_keys=True))
+        for coin in (args.coin or sorted(NINE_SERIES)):
+            series = NINE_SERIES[coin]
+            cells = Cells()
+            markets = settled_markets(api, series, args.lookback_days, args.max_markets)
+            stats = collect(api, series, markets, cells, pooled)
+            rows = cells.rows(args.count, args.min_n)
+            print(json.dumps({
+                "scope": "per_series",
+                "coin": coin,
+                "series": series,
+                "lookback_days": args.lookback_days,
+                "order_size_for_fees": args.count,
+                "settled_markets_found": len(markets),
+                **stats,
+                "favorite_by_minute": cells.favorite_rows(),
+                "cells": rows,
+                "headline": headline(rows),
+                "fees_applied": True,
+                "classification": "HISTORICAL_REPLAY_NOT_REALIZED",
+            }, sort_keys=True))
+
+        pooled_rows = pooled.rows(args.count, args.min_n)
+        print(json.dumps({
+            "scope": "pooled_all_series",
+            "order_size_for_fees": args.count,
+            "favorite_by_minute": pooled.favorite_rows(),
+            "cells": pooled_rows,
+            "headline": headline(pooled_rows),
+            "fees_applied": True,
+            "classification": "HISTORICAL_REPLAY_NOT_REALIZED",
+            "caveat": "Pooling mixes coins with different vol regimes; a pooled verdict "
+                      "is a screen, not an attribution. See REPLICATION_PROTOCOL_15M.md "
+                      "SF-019 (INSUFFICIENT OVERLAP TO IDENTIFY).",
+        }, sort_keys=True))
     finally:
         api.close()
 
