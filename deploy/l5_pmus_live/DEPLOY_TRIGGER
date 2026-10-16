@@ -459,3 +459,37 @@ money-field shape diagnostic, shadow-locked 2026-10-16T18:00Z
 # 77 passed across both files importing the module (8 new cases, section 19).
 # No full-suite rerun: the diff is two files and the baseline is unchanged.
 structured-money extraction, shadow-locked 2026-10-16T20:10Z
+
+# OWNER-AUTHORIZED promotion of the protected cost-basis APPLIER, to run its
+# DRY RUN. Cherry-pick of the applier and its tests only -- the ladder
+# recorder and the backstop proofs are deliberately NOT in this set.
+#
+# L5_COST_BASIS_APPLY IS UNSET, which is INSPECT: the applier reports what it
+# WOULD correct and calls nothing. apply_mode() reads an unset, empty or
+# "INSPECT" value as the dry run, so the write cannot happen by omission --
+# only a deliberate batch id authorizes it.
+#
+# Runtime files changing, all already COPYed into this image:
+#   src/l5_live_execution.py      -- correct_cost_basis, 10 guards, plus
+#                                    finite_decimal; correct_settled_market is
+#                                    UNTOUCHED and its delta > 0 refusal is
+#                                    neither relaxed, inherited nor shared
+#   src/l5_cost_basis_audit.py    -- correction_request, apply_mode and
+#                                    apply_cost_basis_corrections, which adds
+#                                    NO authority: every guard lives in the
+#                                    store's verb and runs on every call
+#   src/l5_pmus_live_runner.py    -- boot-only hook, so it cannot run twice in
+#                                    a session; batch_id is None unless the
+#                                    env names one
+#
+# THE EVIDENCE IS THE WALK THAT JUST RAN. Nothing is hardcoded, so a leg whose
+# venue fills have changed fails its own reconciliation rather than being
+# corrected against a stale figure.
+#
+# BOTH LOCKS STAY ON. L5_SHADOW_ONLY is set, the watchdog HALT stays latched,
+# L5_TS_COMPLETION_CROSS stays unset, L5_MAX_LIVE_ORDERS and
+# L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1. No limit, threshold, gate or
+# baseline is touched, and the correction is NOT applied.
+#
+# 244 passed across every money-path suite on this branch.
+cost-basis applier, INSPECT dry run, shadow-locked 2026-10-16T16:55Z

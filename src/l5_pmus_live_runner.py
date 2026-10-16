@@ -634,13 +634,23 @@ class Runner:
         if str(os.getenv("L5_COST_BASIS_AUDIT", "")).strip().upper() == "YES":
             try:
                 from src import l5_cost_basis_audit as CBA
-                emit("L5_COST_BASIS_AUDIT", CBA.audit(self.store,
-                                                      self.transport))
+                result = CBA.audit(self.store, self.transport)
+                emit("L5_COST_BASIS_AUDIT", result)
+                # THE MEASURED-COST CORRECTION, from the walk that JUST ran.
+                # INSPECT is the default and writes nothing; a batch id in
+                # L5_COST_BASIS_APPLY is the owner's authorization to write.
+                # Boot only, so it cannot run twice in a session, and each
+                # leg still passes all ten guards inside the store's verb.
+                mode = CBA.apply_mode()
+                emit("L5_COST_BASIS_APPLY", CBA.apply_cost_basis_corrections(
+                    self.store, result,
+                    batch_id=(None if mode == CBA.APPLY_INSPECT else mode)))
             except BaseException as exc:                       # noqa: BLE001
                 emit("L5_COST_BASIS_AUDIT_FAILED", {
                     "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
-                    "labels": ("the audit is read-only; a failure changes "
-                               "nothing and never alters the ledger")})
+                    "labels": ("the audit is read-only. The correction is "
+                               "guarded leg by leg and INSPECT by default, so "
+                               "a failure here leaves the ledger as it was")})
         # THE L5 BASELINE EPOCH, struck ONCE and only from authoritative
         # reads (OWNER 2026-10-16). It is NOT a claim that historical L5
         # losses were zero: establish_l5_baseline snapshots and preserves
