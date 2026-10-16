@@ -898,3 +898,88 @@ anyway — so it exposes a surface without delivering the measurement.
 ### BTC1d
 20:20Z; `cpc-btc-updown-1d-2026-10-15-2100z` expires 21:00Z. Still no
 settlement evidence. REAL exposure, $2.0400, cost UNKNOWN.
+
+---
+
+## 19. Queue-aware measurement, 2030z window. Deployment 599a3700 verified.
+
+`PMUS_LADDER_ROWS` live from 20:32:03Z. Recorder healthy, `connected: true`,
+`status: OK` on every row. Measured cost: 198 bytes/row, ~348 KB per 15m
+window, ~32.6 MB/day — against the ~6,900 book rows the same window
+already logs.
+
+**2,280 ladder snapshots and 1,874 trade prints** on
+`cpc-btc-updown-15m-2026-10-16-2030z`.
+
+### 1. Decision aligned to its contemporaneous snapshot
+```
+t0 = 1792182659.125   touch 0.6500 / 0.6600
+our UP bid  0.6400   queue ahead at join  3071.00
+our DN ask  0.6700   queue ahead at join  2228.00
+```
+
+### 2. Depth evolution at both resting prices
+Our UP price was a visible rung in **423 of 2,280** snapshots, the DN price
+in **427** — the touch moves away often enough that our level leaves the
+top four rungs most of the time.
+
+| level | first | min | max | last |
+|---|---|---|---|---|
+| 0.6400 (our bid) | 3071.00 | 1.00 | 7002.94 | 2651.58 |
+| 0.6700 (our ask) | 2228.00 | 0.01 | 8911.01 | 10.01 |
+
+### 3. Depth reduction DECOMPOSED — displayed drop is not executed volume
+| | gross displayed reduction | executed | UNEXPLAINED (cancel/replenish) |
+|---|---|---|---|
+| 0.6400 | 70,372.89 | 31,803.60 (541 prints) | **38,569.29** |
+| 0.6700 | 90,368.01 | 53,363.46 (1,200 prints) | **37,004.55** |
+
+**55% and 41% of the displayed reduction is NOT executed volume.** Treating
+depth decay as queue progress would have overstated our advance roughly
+two-fold. Only executed volume is counted below.
+
+### 4. Where the fill actually comes from — and it is NOT level turnover
+| | executed EXACTLY at our price | queue ahead | verdict on same-level volume |
+|---|---|---|---|
+| 0.6400 | **2,136.27** (51 prints) | 3,071.00 | **does NOT fill** |
+| 0.6700 | **2,990.98** (71 prints) | 2,228.00 | fills, barely |
+
+But the market traded **strictly through** both levels: 29,667.33 below
+0.6400 (490 prints) and 50,372.48 above 0.6700 (1,129 prints). The touch
+ranged **0.5600–0.8300** on the bid and 0.5700–0.8500 on the ask — a
+27-cent excursion that swept both our levels repeatedly.
+
+**So the conservative verdict is FILL on both legs, but the fill is earned
+by price EXCURSION, not by queue turnover at our level.** That distinction
+matters economically: a fill earned by the market sweeping through us is
+the adversely-selected case by definition.
+
+### 5. Static quote vs continuous repricing — the measurement is decisive
+The touch changed **143 times** in this window (46 distinct touch states
+across 2,280 snapshots). A policy that reprices on every touch move
+**re-queues 143 times, each time at the BACK of the new level**, against
+only ~222 contracts of executed volume per re-queue interval and queue
+depths of 2,000–3,000.
+
+**A repricing policy would almost never fill here; the static quote fills
+precisely because it holds its place while the market sweeps across it.**
+Queue position is the scarce resource and repricing forfeits it. This is
+measurement, not a parameter fit, and nothing was changed.
+
+(It also sharpens the contrast with L5: he reprices constantly and still
+fills — but he quotes AT the touch, where turnover is high, not one tick
+behind it.)
+
+### 6. Is one-tick-behind-touch economically impractical?
+**No — but not for the reason the depth suggests, and the answer is
+conditional.** Same-level turnover does NOT clear our queue (2,136 executed
+against 3,071 ahead on the bid). The policy fills only when price makes a
+large excursion through the level. In a volatile window like this one it
+fills on both sides; in a quiet window it would fill on neither.
+
+**I withdraw the claim in my previous message that queue depth looks like
+the blocker.** Measured executed volume through both levels was 10x and 24x
+the resting queue. Depth alone was the wrong lens.
+
+Settlement-adjusted four-outcome P&L for this window is pending its close
+and settlement; it is NOT reported here.
