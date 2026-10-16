@@ -558,3 +558,43 @@ def test_a_reconciled_residual_prices_the_winning_side_correctly():
     won = E.reconcile_settlement(rec, dict(GOOD_EV, yes_value="0"))   # DOWN
     lost = E.reconcile_settlement(rec, dict(GOOD_EV, yes_value="1"))  # UP
     assert D(won["net"]["HOLD"]["net_usd"]) > D(lost["net"]["HOLD"]["net_usd"])
+
+
+# ---------------------------------------------------------------- dashboard
+
+def test_the_dashboard_keeps_the_four_kinds_of_number_apart():
+    matched = E.evaluate_window(SLUG, base_ladder(), BOTH_TRADES, **LIM)
+    pending = E.evaluate_window(SLUG, base_ladder(), ONE_TRADE, **LIM)
+    settled = E.reconcile_settlement(pending, GOOD_EV)
+    d = E.dashboard([matched, pending, settled],
+                    live={"submitted": 0, "filled": 0,
+                          "realized_usd": "-8.39480000"})
+    assert d["modelled_matched_pair"]["windows"] == 1
+    assert d["pending_residual"]["windows"] == 1
+    assert d["venue_settled_modelled"]["windows"] == 1
+    # a pending residual has NO net, only exposure
+    assert d["pending_residual"]["net_usd"] is None
+    assert D(d["pending_residual"]["exposure_usd"]) > 0
+    assert D(d["pending_residual"]["residual_qty"]) > 0
+    # and the modelled buckets never absorb it
+    assert D(d["modelled_matched_pair"]["net_usd"]["HOLD"]) == D(
+        matched["net"]["HOLD"]["net_usd"])
+    assert d["actual_trading"]["realized_usd"] == "-8.39480000"
+    assert d["actual_trading"]["submitted"] == 0
+    assert "NOT summed" in d["labels"]
+
+
+def test_the_dashboard_counts_unscored_windows_by_reason():
+    bad = E.evaluate_window(SLUG, [], [], **LIM)
+    d = E.dashboard([bad])
+    assert d["not_scored"]["windows"] == 1
+    assert d["not_scored"]["reasons"]["NO_LADDER_EVIDENCE"] == 1
+    assert d["modelled_matched_pair"]["windows"] == 0
+
+
+def test_the_dashboard_never_reports_a_combined_net():
+    matched = E.evaluate_window(SLUG, base_ladder(), BOTH_TRADES, **LIM)
+    d = E.dashboard([matched])
+    assert "total_net_usd" not in d
+    assert "net_usd" not in d
+    assert d["actual_trading"]["realized_usd"] is None

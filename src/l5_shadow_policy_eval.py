@@ -1069,3 +1069,67 @@ def reconcile_settlement(rec: Mapping[str, Any],
                     "labels": ("venue-confirmed OUTCOME only. The fills in "
                                "this record remain MODELLED and are not "
                                "confirmed by this evidence.")})
+
+
+def dashboard(records: Sequence[Mapping[str, Any]],
+              live: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """The four figures, kept apart on purpose.
+
+    THE SEPARATION IS THE POINT. A modelled matched-pair net is arithmetic on
+    fills that never happened; a pending residual has no net at all and is
+    carried as EXPOSURE, not as zero; a venue-settled modelled net has a
+    confirmed outcome but still-modelled fills; and realized P&L is what the
+    account actually did. Summing any two of these produces a number that
+    means nothing, so this never sums them.
+    """
+    out: Dict[str, Any] = {
+        "modelled_matched_pair": {"windows": 0,
+                                  "net_usd": {p: D(0) for p in POLICIES}},
+        "pending_residual": {"windows": 0, "exposure_usd": D(0),
+                             "residual_qty": D(0), "net_usd": None},
+        "venue_settled_modelled": {"windows": 0,
+                                   "net_usd": {p: D(0) for p in POLICIES}},
+        "not_scored": {"windows": 0, "reasons": {}},
+    }
+    for r in records:
+        if not r.get("ok"):
+            n = out["not_scored"]
+            n["windows"] += 1
+            k = str(r.get("reason") or r.get("detail") or "UNKNOWN")
+            n["reasons"][k] = n["reasons"].get(k, 0) + 1
+            continue
+        basis = settlement_basis(r)
+        nets = r.get("net") or {}
+        if basis == BASIS_PENDING:
+            p = out["pending_residual"]
+            p["windows"] += 1
+            hold = nets.get("HOLD") or {}
+            p["exposure_usd"] += _d(hold.get("cash_out_usd")) or D(0)
+            p["residual_qty"] += ((_d(hold.get("residual_up")) or D(0))
+                                  + (_d(hold.get("residual_dn")) or D(0)))
+            continue
+        bucket = ("modelled_matched_pair"
+                  if basis == BASIS_MODELLED_MATCHED
+                  else "venue_settled_modelled")
+        out[bucket]["windows"] += 1
+        for pol in POLICIES:
+            v = _d((nets.get(pol) or {}).get("net_usd"))
+            if v is not None:
+                out[bucket]["net_usd"][pol] += v
+    for b in ("modelled_matched_pair", "venue_settled_modelled"):
+        out[b]["net_usd"] = {k: str(v) for k, v in out[b]["net_usd"].items()}
+        base = D(out[b]["net_usd"]["BLIND"])
+        out[b]["vs_blind_usd"] = {
+            k: str(D(v) - base) for k, v in out[b]["net_usd"].items()}
+    p = out["pending_residual"]
+    p["exposure_usd"] = str(p["exposure_usd"])
+    p["residual_qty"] = str(p["residual_qty"])
+    p["labels"] = ("carried as EXPOSURE, never as zero and never in a net. "
+                   "Reconcile with positive venue settlement evidence.")
+    out["actual_trading"] = dict({
+        "submitted": 0, "filled": 0, "settled": None, "realized_usd": None,
+        "source": None}, **dict(live or {}))
+    out["labels"] = ("MODELLED and REALIZED are different kinds of number "
+                     "and are NOT summed here. No modelled figure is "
+                     "realized profit, and a pending residual has no net.")
+    return out
