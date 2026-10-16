@@ -406,6 +406,45 @@ class Runner:
         `submission_gate`, which is what refuses a submission."""
         return bool(os.getenv("L5_LIVE_HALT", "").strip())
 
+    def account_exposure_lines(self) -> Dict[str, Any]:
+        """Account-wide worst-case exposure and the capacity left under it.
+
+        READ-ONLY and reported for verification. MISSING IS NEVER ZERO: if
+        the figure cannot be computed the reason is reported and capacity is
+        None, never a comfortable number.
+        """
+        try:
+            out = self.store.account_wide_risk_by_market()
+        except BaseException as exc:                           # noqa: BLE001
+            return {"ok": False,
+                    "reason": "EXPOSURE_CALL_FAILED:%s" % type(exc).__name__,
+                    "capacity_usd": None}
+        if not out.get("ok"):
+            return {"ok": False, "reason": out.get("reason"),
+                    "capacity_usd": None,
+                    "labels": ("exposure is UNKNOWN, not zero; the gate "
+                               "refuses in this state")}
+        total = D(str(out["total_usd"]))
+        cap = self.limits.max_total_exposure_usd
+        per_market = {k: str(v) for k, v in out["risk_by_market"].items()}
+        worst = max(out["risk_by_market"].items(),
+                    key=lambda kv: kv[1], default=(None, D(0)))
+        return {
+            "ok": True,
+            "markets_counted": out["markets"],
+            "per_market_worst_case_usd": per_market,
+            "account_total_worst_case_usd": str(total),
+            "max_total_exposure_usd": str(cap),
+            "capacity_usd": str(cap - total),
+            "largest_market": worst[0],
+            "largest_market_usd": str(worst[1]),
+            "max_usd_per_market": str(self.limits.max_usd_per_market),
+            "labels": ("worst-case cash loss over both settlements, every "
+                       "market with a position OR a resting order, manual "
+                       "and L5 alike. Each market counted once. capacity_usd "
+                       "is what remains under the account-wide ceiling."),
+        }
+
     def submission_gate(self) -> Dict[str, Any]:
         """Can this process put an order on the venue right now, and if not,
         which gate says no -- in the order the decision path applies them.
@@ -1722,6 +1761,13 @@ class Runner:
                 self.store.state.get("retired_markets") or {}),
             "realized": self.store.realized_lines(),
             "l5_baseline": self.store.l5_baseline_lines(),
+            # ACCOUNT-WIDE EXPOSURE, reported independently of the decision
+            # path. The aggregation itself runs inside the gate, which the
+            # account-wide loss check refuses BEFORE reaching -- so without
+            # this line the new figure could not be verified in production at
+            # all. Read-only, gates nothing, and reports its own failure
+            # rather than a zero.
+            "account_exposure": self.account_exposure_lines(),
             "limits": self.limits.as_dict(),
             # THE $1 MANDATE WAS INVISIBLE HERE. max_cash_deployed_usd lives
             # on ValidationGates, not on SafetyLimits, so the limits block
