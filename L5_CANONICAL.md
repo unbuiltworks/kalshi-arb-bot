@@ -261,3 +261,118 @@ the same windows go from +$17.91 to **+$61.09** per window. Our existing
 controls — `RESIDUAL_CAP_k2`, `max_abs_residual`, the worst-case deficit
 gate, NO_RECYCLING — are therefore not the obstacle. They are the one thing
 we already do better than L5, who ended non-flat in 5,545 of 5,546 windows.
+
+---
+
+## 13. How L5 actually completes. FIFO replay, 700,703 fills, undeduped.
+
+Every BTC15m fill replayed chronologically with continuous UP/DOWN
+inventory; each opposite-side fill matched FIFO against the oldest
+unmatched contract on the other side.
+
+### Most of his volume does NOT complete anything
+| | fills | quantity |
+|---|---|---|
+| reduce unmatched | 637,466 (61.6%) | 6,170,308 (**45.8%**) |
+| extend unmatched | 396,569 (38.4%) | 7,299,969 (**54.2%**) |
+
+### Quantity-weighted completion — my earlier "26s" was the first-fill artifact
+| share of matched quantity | completed within |
+|---|---|
+| 25% | **17 s** |
+| 50% | **44 s** |
+| 75% | **93 s** |
+| 100% | **782 s** |
+
+Unweighted median age 48s, mean 71.8s. So half the matched quantity pairs
+off inside 44s, but the last quarter takes most of the window. "Median 26s
+to the first opposite fill" was not completion and is superseded.
+
+### Pair cost achieved AT THE MOMENT OF MATCHING (qty-weighted)
+**0.9863** — essentially our own fee-correct breakeven of 0.9857.
+
+| matched quantity at pair cost | share |
+|---|---|
+| ≤ 0.96 | 37.8% |
+| ≤ 0.98 | 48.2% |
+| ≤ 1.00 | 60.6% |
+| **≥ 1.00** | **39.4%** |
+
+He completes **at whatever the market offers**, including 39.4% of quantity
+at or above parity. 25%/50%/75% of matched quantity had ≥605/387/198s left
+in the window, so this is not end-of-window panic — it is continuous.
+
+### Mechanism classification — only what the data supports
+| | quantity | share |
+|---|---|---|
+| FAVORABLE_REPRICING (waited ≥5s, pair < 1.00) | 2,714,122 | **44.0%** |
+| INDETERMINATE (pair ≥ 1.00, no book or flag) | 2,270,575 | **36.8%** |
+| AGGRESSIVE_SWEEP (single-side multi-price tx) | 930,023 | **15.1%** |
+| FAST_SUB_DOLLAR (< 5s, pair < 1.00) | 255,588 | 4.1% |
+
+**Resting-maker cannot be separated from spread-crossing** for the
+non-sweep buckets: the public activity feed carries no maker/taker flag and
+no order book. 623,997 of 661,405 transactions hold a single fill;
+single-side multi-price transactions (unambiguous book-walking) number
+30,729.
+
+### Simultaneous, chasing, or a combination? — a combination, and mostly neither
+**Only 5.5%** of his fill timestamps carry BOTH sides (23,271 of 426,387).
+He is NOT getting filled on both sides at once. 15.1% of completion
+quantity is aggressive sweeping, so he does chase, but it is a minority.
+
+The real mechanism, visible in the traces: **he oscillates through flat.**
+Unmatched goes 0 → 15 → 0 → 10 → 0 → 15 → ... many times per window, in
+small repeated clips (5.00 and 30.00 recur constantly). Completion is
+**driven by inventory and unconditional on price**.
+
+`btc-updown-15m-1781596800` (2026-06-16 08:00 UTC, 61 fills), abridged:
+
+```
+t+75  UP   5.00 @0.4600   unmatched   0.00 ->   5.00  EXTEND
+t+90  UP  20.41 @0.4900   unmatched  12.00 ->  32.41  EXTEND
+t+93  DN   8.24 @0.4900   unmatched  32.41 ->  24.17  MATCH @pair 0.9500 / 0.9600
+t+120 UP  30.00 @0.6700   unmatched  76.57 -> 106.57  EXTEND
+t+142 DN  12.13 @0.2300   unmatched 106.57 ->  94.44  MATCH @pair 0.8400
+t+184 DN  30.00 @0.5500   unmatched  66.07 ->  36.07  MATCH @pair 1.2200  <-- pays up
+t+267 DN  30.00 @0.4300   unmatched  15.75 ->  14.25  MATCH @pair 1.1000, then EXTEND
+t+301 UP  30.00 @0.4000   unmatched  74.25 ->  44.25  MATCH @pair 0.8300 / 0.9900
+```
+
+He takes 0.84 when offered and 1.22 when not. Nothing waits for 0.96.
+
+### The single biggest behavioural mismatch
+**Our completion is conditional on price; his is conditional on inventory.**
+Our engine refuses to complete above a 0.96 pair and cannot cross
+(`L5_TS_COMPLETION_CROSS` unset), so whenever the opposite side is not
+cheap it carries the imbalance to settlement. Residual at settlement is the
+single most destructive component measured anywhere in this book:
+**−35.77% of residual cost** (−$152,245 on $425,622).
+
+Quantified, from measured numbers only:
+
+```
+carrying one unmatched contract to settlement costs, in expectation,
+    0.3577 x 0.3806 = $0.1361 per contract
+completing it at pair cost C costs C x 1.01454 - 1.00
+=> completion is cheaper than carrying residual for any C up to
+    C* = 1.1361 / 1.01454 = 1.1199
+```
+
+Our gate refuses the entire band **0.96 → 1.1199**, where completing is
+measurably cheaper than the alternative it forces. L5's achieved 0.9863
+sits inside that band.
+
+### One minimal proposed engine change (NOT made)
+**Separate the completion ceiling from the opening target.** Keep
+`<= 0.96` for OPENING a pair — §12 showed opening above it is net negative.
+Add one bound, read by the existing `completion_decision` in
+`src/l5_two_sided_probe.py`, that caps completion of an **already
+unmatched** position at a measured ceiling; default `None` so it is inert
+and changes nothing until set.
+
+That is one optional bound in an existing function on an existing code
+path. It needs authorization because it widens what completion may pay,
+and because reaching above the touch may require `L5_TS_COMPLETION_CROSS`,
+which is a separate capability decision. No limit, service or strategy
+changes, and nothing here is implemented.
