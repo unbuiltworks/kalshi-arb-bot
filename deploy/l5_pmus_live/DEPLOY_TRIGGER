@@ -417,3 +417,16 @@ final field mapping, shadow-locked 2026-10-16T16:40Z
 # READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
 # disabled, no limit, threshold or baseline changed.
 side precedence + fee source, shadow-locked 2026-10-16T17:10Z
+
+# Read-only SHAPE diagnostic for price / cost / commissionNotionalCollected,
+# authorized after the attribution was proven correct (79 rows matched all
+# three predicates; fill quantities reconcile EXACTLY to ledger quantities on
+# every leg checked). The remaining refusal is FILL_WITHOUT_PRICE: those three
+# fields are PRESENT and NOT parseable as a decimal, so they are structured
+# rather than scalar. This reports WHICH structure -- Python type names,
+# whether _d() parses, and for a mapping its KEY NAMES -- and never a value.
+# No extraction change is made until the shape is confirmed from this output.
+#
+# READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
+# disabled, no limit, threshold or baseline changed.
+money-field shape diagnostic, shadow-locked 2026-10-16T18:00Z

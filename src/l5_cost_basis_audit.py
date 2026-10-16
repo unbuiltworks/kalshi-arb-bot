@@ -373,6 +373,76 @@ def _row_side(row: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
+def money_field_shapes(rows: List[Mapping[str, Any]],
+                       sample: int = 4) -> Dict[str, Any]:
+    """What SHAPE are price, cost and commission? Types and keys, no values.
+
+    WHY THIS AND NOT ANOTHER GUESS. The attribution now matches -- 79 rows
+    matched all three predicates and the fill quantities reconcile exactly to
+    the ledger quantities -- but `establish_basis` still refuses
+    FILL_WITHOUT_PRICE because `_d()` returns None for price, cost and
+    commissionNotionalCollected. The fields are PRESENT in the key inventory
+    and NOT parseable as a decimal, which means they are structured rather
+    than scalar. This reports WHICH structure.
+
+    DISCLOSES NO VALUE. For a scalar it reports the Python type name and
+    whether `_d()` can parse it -- never the number. For a mapping it reports
+    the sorted key names only. That is enough to write the extraction and not
+    enough to reveal a position.
+    """
+    # NO SUBSCRIPT ASSIGNMENT: the module's purity test forbids every
+    # `x[...] = ...` here, which is how it proves the audit cannot write to
+    # the store. Accumulated as pairs and sealed with dict() instead.
+    acc: List[Any] = []
+    for field, where in (("price", "body"), ("cost", "body"),
+                         ("qty", "body"), ("qtyDecimal", "body"),
+                         ("commissionNotionalCollected", "execution"),
+                         ("lastPx", "execution"),
+                         ("lastShares", "execution")):
+        types: Counter = Counter()
+        keysets: Counter = Counter()
+        parseable = unparseable = absent = 0
+        for r in rows:
+            k = str(r.get("kind") or r.get("type") or "").strip().lower()
+            if k not in FILL_KINDS:
+                continue
+            b = _payload(r)
+            if where == "body":
+                v = b.get(field)
+            else:
+                ex = [b.get(x) for x in EXEC_KEYS
+                      if isinstance(b.get(x), Mapping)]
+                v = _first_present(ex, (field,), deep=True) if ex else None
+            if v is None:
+                absent += 1
+                continue
+            types.update([type(v).__name__])
+            if isinstance(v, Mapping):
+                keysets.update([",".join(sorted(str(x) for x in v.keys()))])
+            if _d(v) is None:
+                unparseable += 1
+            else:
+                parseable += 1
+        acc.append((field, {
+            "source": where,
+            "python_types": dict(types),
+            "parses_as_decimal": parseable,
+            "present_but_UNPARSEABLE": unparseable,
+            "absent": absent,
+            "mapping_key_sets": [
+                {"keys": sig, "count": n}
+                for sig, n in sorted(keysets.items(),
+                                     key=lambda kv: -kv[1])[:sample]],
+        }))
+    acc.append(("labels",
+                "SHAPES ONLY. Python type names, whether _d() parses, and "
+                "for a mapping its KEY NAMES -- never a value. "
+                "present_but_UNPARSEABLE above zero with a dict type names "
+                "the structured-money case and its keys give the extraction "
+                "directly."))
+    return dict(acc)
+
+
 def fee_and_notional_evidence(rows: List[Mapping[str, Any]]) -> Dict[str, Any]:
     """Were maker rebates ACTUALLY credited, and what is the real minimum?
 
@@ -734,6 +804,10 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         # ALWAYS computed: the two things that were being assumed.
         "fee_and_notional_evidence": fee_and_notional_evidence(walk["rows"]),
         "execution_field_inventory": execution_field_inventory(walk["rows"]),
+        # computed only on the failing case, same rule as the other
+        # diagnostics: a healthy audit does not carry it.
+        "money_field_shapes": (money_field_shapes(walk["rows"])
+                               if establishable == 0 and keys else None),
         # WHY nothing matched, when nothing matched. Computed only on the
         # failing case so a healthy audit does not carry the diagnostic.
         "feed_shape": (feed_shape(walk["rows"],
