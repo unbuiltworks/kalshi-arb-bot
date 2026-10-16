@@ -113,3 +113,9 @@ two-sided probe wired + maker-aware fee floor, shadow-locked 2026-10-15T20:00:50
 # Rollback: Railway rollback to deployment 8bf8062d (the running build of
 # 5dd24f3e), or d17928bc before it.
 probe deadline corrected, shadow-locked 2026-10-15T20:50:55Z
+
+Promote 9f1dabf8: package src/l5_cost_basis_audit.py into this image.
+READ-ONLY audit behind L5_COST_BASIS_AUDIT=YES. SHADOW_ONLY stays set, no
+limit changed, no order. The previous boot raised ImportError because the
+module was absent from this COPY set; a lazy-import closure test now fails
+until any such module is packaged.
