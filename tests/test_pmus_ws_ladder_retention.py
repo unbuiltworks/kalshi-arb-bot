@@ -216,3 +216,25 @@ def test_eviction_is_idempotent_and_counts_only_real_drops():
 def test_eviction_survives_a_non_dict_entry():
     st = {"m": None, "n": {"ladder_history": [{"t": 1.0}]}}
     assert R.drop_stale_ladders(st, frozenset()) == 1
+
+
+def test_the_eviction_is_actually_wired_into_the_main_loop():
+    """A bound that is never called is not a bound.
+
+    drop_stale_ladders was written and left unwired on the first pass, which
+    would have accumulated a ladder per retired window for the whole two-hour
+    prune grace period -- the exact failure it exists to prevent.
+    """
+    import inspect
+    src = inspect.getsource(R)
+    body = src.split("def drop_stale_ladders", 1)[0] + \
+        src.split("def drop_stale_ladders", 1)[1].split("\ndef ", 1)[1]
+    assert "drop_stale_ladders(" in body, "no call site outside the definition"
+
+
+def test_release_runs_before_prune_so_rungs_are_not_held_for_the_grace_period():
+    import inspect
+    src = inspect.getsource(R)
+    i_rel = src.rindex("drop_stale_ladders(mstate")
+    i_prune = src.rindex("prune_state(mstate")
+    assert i_rel < i_prune, "the ladder release must precede prune_state"

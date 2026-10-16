@@ -2181,6 +2181,20 @@ async def run(minutes: Optional[float]) -> int:
         # Bound memory the same way and at the same cadence as disk. Runs AFTER
         # the plan so the newly-chosen seats are protected from their own sweep.
         try:
+            # RUNS BEFORE prune_state, on its own schedule. prune_state keeps a
+            # market for two hours after its last frame because admission reads
+            # trades_1h off it; a 15m product leaves eight retired windows
+            # inside that grace period, and each would still be holding a
+            # ladder. Selection, not idleness, is what releases rungs.
+            ladder_keep = ladder_markets()
+            if ladder_keep or any("ladder_history" in (v or {})
+                                  for v in mstate.values() if isinstance(v, dict)):
+                released = drop_stale_ladders(mstate, ladder_keep)
+                if released:
+                    print("PMUS_WS_STATUS " + json.dumps(
+                        {"ladder_release": {"markets": released,
+                                            "retaining": sorted(ladder_keep)}},
+                        separators=(",", ":"), default=str), flush=True)
             pruned = prune_state(mstate, set(slugs) | set(protected_now))
             if pruned["evicted_idle"] or pruned["evicted_over_cap"]:
                 print("PMUS_WS_STATUS " + json.dumps(
