@@ -1,3 +1,7 @@
+> **CANONICAL:** day-to-day inventory, release workflow, the
+> prioritized blocker register and the current operational status
+> live in `L5_CANONICAL.md`. Read that first; this file is history.
+
 # L5 Canonical Pipeline — Status
 
 Subject: Polymarket trader `l5zn1bwom8etsk`
