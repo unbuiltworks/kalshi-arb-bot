@@ -475,3 +475,112 @@ the counterfactual per-leg fill rate — a read-only measurement on an
 existing code path, no limit, capability, strategy or service change. Until
 `p` is measured and exceeds 0.8194 at a pair cost at or below 0.96, raising
 the order limit has negative expectancy by our own model.
+
+---
+
+## 15. JOINT execution outcomes on real PMUS tape. 2026-10-16.
+
+The owner rejected the 81.9% break-even as resting on independent,
+identical leg probabilities. **That rejection is correct, and the tape
+shows why.**
+
+### The structural fact that governs everything
+`build_orders` sets `up_px = bid - d*tick` and `dn_px = (1 - ask) - d*tick`,
+so in WIRE terms (one book, always UP/YES) our two orders are:
+
+* UP leg  = a **BID** at `bid - d*tick`
+* DOWN leg = an **ASK** at `ask + d*tick`
+
+Therefore **`pair = 1 - spread - 2*d*tick`**. The pair cost is not a free
+parameter: it is the market's spread plus how far behind the touch we rest.
+At the live `L5_TS_DEPTH_TICKS = 1`, a 1-tick market gives pair 0.97 and a
+2-tick market gives 0.96. And because both legs sit on the same book on
+opposite sides, their fill events are **driven by the same price path** —
+they cannot be independent.
+
+### Observed joint outcomes, 5 BTC15m windows (2026-10-16)
+Real authenticated book + trade tape from the existing recorder
+(9,097 book rows, 4,891 trade prints after dedup). Conservative fill test:
+a print **strictly through** our price, which proves that level cleared.
+
+| window | mkt spread | our bid | our ask | pair | outcome | settled |
+|---|---|---|---|---|---|---|
+| 1630z | 0.01 | 0.15 | 0.18 | 0.97 | **BOTH** | UP lost (0.01) |
+| 1645z | 0.01 | 0.64 | 0.67 | 0.97 | **BOTH** | UP lost (0.01) |
+| 1915z | 0.01 | 0.97 | 1.00 | 0.97 | **NEITHER** | UP won (0.99) |
+| 1930z | 0.01 | 0.49 | 0.52 | 0.97 | **BOTH** | UP lost (0.01) |
+| 1945z | 0.02 | 0.51 | 0.55 | 0.96 | **BOTH** | UP won (0.63) |
+
+**BOTH 4, NEITHER 1, UP_ONLY 0, DN_ONLY 0** — identical under the looser
+at-the-level test. The legs came out **perfectly correlated**: both or
+neither, never one-sided.
+
+### What that does to the economics
+With perfectly correlated legs the residual term vanishes:
+`EV = P(both) x e`, not `p^2*e - 2p(1-p)*alpha`. There is no single-sided
+inventory to carry, so no `alpha` is charged. **The 81.9% threshold does
+not apply to this outcome structure** — it was an artifact of assuming
+independence.
+
+Fees at the authorized size are a **no-op**: the maker rebate
+`0.0125 x C x p x (1-p)` at C = 1 contract is at most $0.003, which the
+venue rounds to **$0.00**. So at 1 contract we are credited nothing and
+charged nothing. The 1.454% drag measured in §12 came from larger,
+mostly-taker fills and **does not apply to a 1-contract maker pair.**
+
+| outcome | net per contract (1945z, pair 0.96) |
+|---|---|
+| BOTH | **+$0.0400** |
+| UP_ONLY | +$0.4900 (settled UP) |
+| DN_ONLY | −$0.4500 |
+| NEITHER | $0.0000 |
+
+Observed-classification total: **+$0.1300 over 5 windows = +$0.0260 per
+window per contract.**
+
+### Why this is NOT yet a defensible positive edge
+1. **Five windows, one day, one asset.** No expectancy claim survives that.
+2. **Queue position is unmeasured, and it is the decisive variable.** Our
+   quotes rest one tick OUTSIDE the touch, i.e. on the second-best level,
+   where depth is typically largest. The tape carries **top-of-book only**,
+   so depth at our own level is unknown — and `l5_maker_fill_model`'s own
+   documented rule is that an unknown `queue_ahead` **never fills**. Under
+   the engine's own conservative rule the honest answer for all 5 windows
+   is NOT_ESTABLISHED, not BOTH.
+3. **A print through our price is a proxy, not a fill.** It proves the level
+   traded, not that our specific order was reached.
+4. **Nothing was placed.** These are counterfactuals on an unarmed engine.
+5. **Zero one-sided outcomes in 5 windows is itself suspect** — a trending
+   window should produce them. 1915z also exposes a structural trap: with
+   the book at bid 0.97, our DOWN leg's ask sits at **1.00**, which can
+   never be exceeded, so that pair was unfillable by construction.
+
+### Comparison with L5's distribution, without assuming venue parity
+Our counterfactual pair cost is **0.96–0.97**; L5's quantity-weighted
+achieved pair cost was **0.9863**, with only 37.8% of his matched quantity
+at or below 0.96. So the engine's quoting rule would, if it filled, achieve
+a **better** pair cost than L5 actually did. That is not a claim of
+superiority: he traded size against real queues on a different venue with a
+different fee schedule, and we have filled nothing.
+
+### GO / NO-GO
+**NO-GO on any limit, control or parameter change.** The one number the
+whole thesis turns on — the probability our order at the second-best level
+is actually reached — remains unmeasured, and the engine's own rule treats
+it as zero.
+
+**GO on one measurement, which needs no new infrastructure.** The ladder
+variables already exist on the recorder (`PMUS_WS_LADDER_ROLLING`,
+`_RUNGS`, `_HISTORY`, `_AHEAD`) and the queue-aware model already exists
+(`src/l5_maker_fill_model.py`, with `depth_at` and `ahead_of_us`). The
+single next step is to confirm the ladder is recording depth at the rungs
+where our quotes would rest — one tick outside the touch on both sides —
+and then re-run exactly this joint-outcome measurement with a real
+`queue_ahead` instead of a price-through proxy. That converts P(both) from
+an assumption into a measurement, and it is the only thing standing between
+this evidence and a defensible GO.
+
+### BTC1d residual — still pending, by the clock
+`cpc-btc-updown-1d-2026-10-15-2100z|DOWN` expires **2026-10-16T21:00:00Z**;
+it is 19:49Z, so **70 minutes remain**. No positive settlement evidence can
+exist yet. It stays REAL exposure at $2.0400 worst case with cost UNKNOWN.
