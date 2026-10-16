@@ -177,3 +177,87 @@ NOT recommended.
 This is a discipline parameter, so it needs authorization and is not
 changed here. It also does not fix the throughput gap, which is bounded by
 `max_live_orders 1` — a separate decision.
+
+---
+
+## 12. Three checks, 2026-10-16. §11's headline is WITHDRAWN.
+
+### Check 1 — the reconciliation. The entire gap is deduplication.
+Same corpus, same settlement treatment (`redeem_in + sell_in - buy_out`,
+venue REDEEM rows only), same series filter. The only variable is the
+dedup key `(txHash, asset, timestamp, size, type, side)`:
+
+| basis | rows | buy_out | redeem_in | realized |
+|---|---|---|---|---|
+| **undeduped** | 706,564 | 6,434,083.99 | 6,446,189.84 | **+12,105.85** |
+| deduped | 686,395 | 6,070,392.86 | 6,415,918.50 | +345,525.64 |
+| difference | 20,169 rows | **+363,691.13** | **+30,271.34** | **+333,419.79** |
+
+`345,525.64 - 12,105.85 = 333,419.79` exactly. The 20,169 dropped rows are
+**92% buy-side by cash**: dropping them removes $363.7k of cost and only
+$30.3k of proceeds, which manufactures the entire difference. A split fill
+is indistinguishable from an API duplicate in this capture, so dropping
+them is not conservative — it is the one direction that flatters the
+result.
+
+**The authoritative figure stays +$12,105.85 (+0.188% on $6,434,084,
+$73.15/day), exactly as `L5_INVENTORY_IMBALANCE_VERDICT.md` already
+concluded.** §11's `+$345,525.64 / +$62.30 per window / +5.692%` is
+**withdrawn**; the correct per-window figure is **+$2.17**. I promoted a
+deduped figure without reconciling it, which is the error this check was
+set to catch.
+
+The prior verdict's decomposition also stands, and my §11 residual figure
+was the one that was wrong: matched **+$164,172.58** (this pass
+reproduces it to the cent), residual **−$152,245.19** by identity. My §11
+"residual −7.54%" came from a 41% subsample; on the full undeduped book the
+residual is **−49.27%** on the ≤0.96 windows. Residual is far more
+destructive than §11 said, not less.
+
+### Check 2 — completion: we have none to compare
+L5: **median 26s** to the first opposite-side fill, assembled from a median
+**107 fills** and **29 side-switches** per window, repricing continuously
+across both books and matching as he goes.
+
+Ours, from production: `ts_completion:NO_INVENTORY_TO_COMPLETE` on every
+evaluation, `live_orders 0`, **zero fills ever**, HALT latched and
+`SHADOW_ONLY` set. There is no measured completion behaviour to compare.
+
+**The single highest-impact mismatch is structural, not parametric:**
+`max_live_orders = 1` means we cannot quote both sides at once. L5's pair
+is assembled from ~100 small opportunistic fills across both books within
+seconds; ours must fill one resting order, and only then chase the other
+side — which is exactly when pair cost drifts above the fee-correct
+breakeven. At `<= 0.96` a pair nets **+$0.05998** after our measured fees;
+that number is only reachable if both legs are quoted together.
+
+### Check 3 — 0.96 vs 0.98 on executable PMUS economics: KEEP 0.96
+Our measured fee drag is **1.454% of notional** (our own 74 production
+fills: $1.26 commissions against 4 credited rebates of −$0.01, net $1.22
+on $83.899). Net per pair = `1.00 - C x 1.01454`.
+
+| | windows | matched net/pair | matched net total |
+|---|---|---|---|
+| ≤ 0.96 | 2,151 | +$0.05998 | +$131,401.87 |
+| 0.96–0.98 **marginal** | 946 | +$0.01553 | +$19,061.95 |
+
+Matched-only, raising the target looks additive. **Including the residual
+those same windows actually carried, it is not:**
+
+| | matched net | residual | **total** | per window |
+|---|---|---|---|---|
+| ≤ 0.96 | +131,401.87 | −92,871.36 | **+38,530.51** | **+$17.91** |
+| 0.96–0.98 marginal | +19,061.95 | −29,115.17 | **−10,053.22** | **−$10.63** |
+
+**The marginal pairs between 0.96 and 0.98 are net NEGATIVE.** The 0.96
+target is correct and my §11 recommendation to raise it to 0.98 is
+withdrawn — it rested on deduped figures and on counting matched P&L
+without the residual those windows carry.
+
+### What the numbers actually point at
+At ≤0.96, matched is +$131,401.87 and residual is **−$92,871.36**:
+residual destroys **71%** of the matched profit. Eliminate the residual and
+the same windows go from +$17.91 to **+$61.09** per window. Our existing
+controls — `RESIDUAL_CAP_k2`, `max_abs_residual`, the worst-case deficit
+gate, NO_RECYCLING — are therefore not the obstacle. They are the one thing
+we already do better than L5, who ended non-flat in 5,545 of 5,546 windows.
