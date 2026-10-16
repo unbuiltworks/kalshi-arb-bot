@@ -94,8 +94,29 @@ OWNER_MANUAL = "OWNER_MANUAL"
 UNKNOWN_OWNER = "UNKNOWN_OWNER"
 
 
+MONEY_VALUE_KEY = "value"
+MONEY_CURRENCY_KEY = "currency"
+MONEY_CURRENCIES = frozenset(("USD", "usd"))
+
+
 def _d(value: Any) -> Optional[D]:
-    """A finite Decimal, or None. None means UNKNOWN, never zero."""
+    """A finite Decimal, or None. None means UNKNOWN, never zero.
+
+    The venue reports every money field as a {currency, value} mapping, not a
+    scalar -- confirmed by money_field_shapes() on 1,911 production fill rows:
+    price, cost, lastPx and commissionNotionalCollected are all dicts carrying
+    exactly those two keys, while qty, qtyDecimal and lastShares are plain
+    strings. A mapping is unwrapped only when the currency is one we can book
+    in dollars; an unrecognized currency stays UNKNOWN rather than being
+    silently treated as USD.
+    """
+    if isinstance(value, Mapping):
+        if MONEY_VALUE_KEY not in value:
+            return None
+        currency = value.get(MONEY_CURRENCY_KEY)
+        if currency is not None and str(currency) not in MONEY_CURRENCIES:
+            return None
+        return _d(value.get(MONEY_VALUE_KEY))
     if value is None or value == "":
         return None
     try:
@@ -377,13 +398,19 @@ def money_field_shapes(rows: List[Mapping[str, Any]],
                        sample: int = 4) -> Dict[str, Any]:
     """What SHAPE are price, cost and commission? Types and keys, no values.
 
-    WHY THIS AND NOT ANOTHER GUESS. The attribution now matches -- 79 rows
-    matched all three predicates and the fill quantities reconcile exactly to
-    the ledger quantities -- but `establish_basis` still refuses
-    FILL_WITHOUT_PRICE because `_d()` returns None for price, cost and
-    commissionNotionalCollected. The fields are PRESENT in the key inventory
-    and NOT parseable as a decimal, which means they are structured rather
+    WHY THIS AND NOT ANOTHER GUESS. The attribution matched -- 79 rows matched
+    all three predicates and the fill quantities reconcile exactly to the
+    ledger quantities -- but `establish_basis` refused FILL_WITHOUT_PRICE
+    because `_d()` returned None for price, cost and
+    commissionNotionalCollected. The fields were PRESENT in the key inventory
+    and NOT parseable as a decimal, which meant they were structured rather
     than scalar. This reports WHICH structure.
+
+    IT HAS ANSWERED. On 1,911 production fill rows: price, cost, lastPx and
+    commissionNotionalCollected are all dicts carrying exactly
+    {currency, value}; qty, qtyDecimal and lastShares are plain strings that
+    already parse. `_d()` now unwraps that mapping, so this stays in place as
+    the check that the shape has not changed underneath the extraction.
 
     DISCLOSES NO VALUE. For a scalar it reports the Python type name and
     whether `_d()` can parse it -- never the number. For a mapping it reports
