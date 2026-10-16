@@ -3431,6 +3431,8 @@ class FaithfulExecutor:
                     book_uncertain=self.store.orders_uncertain(),
                     unmatched_after=self.store.residual(market),
                     cumulative_realized=self.store.realized_today(),
+                 verified_strategy_net=self.store.verified_l5_net_for_gates(),
+                    verified_strategy_net=self.store.verified_l5_net_for_gates(),
                     cumulative_unrealized_loss=(
                         self.unrealized_loss_for_gates()),
                     available_cash_usd=self.available_cash_usd,
