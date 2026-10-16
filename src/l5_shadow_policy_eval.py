@@ -964,3 +964,108 @@ class ShadowPolicyLog:
                 } for r in records],
                 "labels": ("MODELLED, SHADOW ONLY. Nothing was submitted and "
                            "no figure here is realized profit.")}
+
+
+# ----------------------------------- settlement: modelled vs venue-confirmed
+
+#: how a record's net came to be. These are the only three answers.
+BASIS_MODELLED_MATCHED = "MODELLED_EXECUTION_OUTCOME_INDEPENDENT"
+BASIS_VENUE_SETTLED = "MODELLED_EXECUTION_VENUE_SETTLED_RESIDUAL"
+BASIS_PENDING = "PENDING_SETTLEMENT"
+
+#: the only settlement evidence accepted. A book price at expiry is not one.
+POSITIVE_SETTLEMENT_SOURCES = ("VENUE_SETTLEMENT_PX",)
+
+
+def settlement_basis(rec: Mapping[str, Any]) -> str:
+    """Which of the three bases a record's net rests on.
+
+    THE DISTINCTION THAT MATTERS. Every fill in every record is MODELLED --
+    that never changes and is never upgraded by settlement. What settlement
+    changes is only whether the RESIDUAL leg can be priced. A matched pair
+    needs no settlement at all, because it pays a dollar on either outcome;
+    an unmatched leg cannot be priced without the venue saying which outcome
+    paid. Calling the first one "settled" without this field invites reading
+    an outcome-independent arithmetic identity as a venue confirmation, which
+    it is not.
+    """
+    nets = (rec or {}).get("net") or {}
+    hold = nets.get("HOLD") or {}
+    if hold.get("pending_residual"):
+        return BASIS_PENDING
+    if (rec or {}).get("settlement_evidence"):
+        return BASIS_VENUE_SETTLED
+    if hold.get("net_usd") is None:
+        return BASIS_PENDING
+    res_up = _d(hold.get("residual_up")) or D(0)
+    res_dn = _d(hold.get("residual_dn")) or D(0)
+    if res_up == 0 and res_dn == 0:
+        return BASIS_MODELLED_MATCHED
+    return BASIS_VENUE_SETTLED
+
+
+def reconcile_settlement(rec: Mapping[str, Any],
+                         evidence: Optional[Mapping[str, Any]]
+                         ) -> Dict[str, Any]:
+    """Re-price a PENDING record once positive settlement evidence exists.
+
+    NEVER MUTATES AND NEVER DOUBLE-COUNTS. It returns a NEW record. A record
+    that is not pending is returned unchanged with a reason, so running the
+    reconciler twice over the same store is a no-op on the second pass --
+    the second run sees a record that already carries `settlement_evidence`
+    and declines it as `ALREADY_RECONCILED`.
+
+    POSITIVE EVIDENCE ONLY. `evidence` must name a source in
+    POSITIVE_SETTLEMENT_SOURCES and carry a yes_value of exactly 0 or 1. An
+    expired book price, a last trade, a market marked inactive and a missing
+    record are all refused -- an unresolved outcome stays unresolved.
+    """
+    out = dict(rec or {})
+    if not out.get("ok"):
+        return dict(out, reconciled=False,
+                    reconcile_reason="RECORD_NOT_SCORED")
+    if out.get("settlement_evidence"):
+        return dict(out, reconciled=False,
+                    reconcile_reason="ALREADY_RECONCILED")
+    if settlement_basis(out) != BASIS_PENDING:
+        return dict(out, reconciled=False,
+                    reconcile_reason="NOTHING_PENDING")
+    ev = dict(evidence or {})
+    src = str(ev.get("resolution_source") or "")
+    if src not in POSITIVE_SETTLEMENT_SOURCES:
+        return dict(out, reconciled=False,
+                    reconcile_reason="NO_POSITIVE_SETTLEMENT_EVIDENCE",
+                    offered_source=(src or None))
+    yv = _d(ev.get("yes_value"))
+    if yv is None or yv not in (D(0), D(1)):
+        return dict(out, reconciled=False,
+                    reconcile_reason="YES_VALUE_NOT_BINARY",
+                    offered_yes_value=ev.get("yes_value"))
+    nets = {}
+    for p, n in (out.get("net") or {}).items():
+        cash = _d(n.get("cash_out_usd"))
+        m = _d(n.get("matched_qty"))
+        ru = _d(n.get("residual_up")); rd = _d(n.get("residual_dn"))
+        if cash is None or m is None or ru is None or rd is None:
+            nets[p] = dict(n)
+            continue
+        re_ = settlement_net(qty_up=m + ru, qty_dn=m + rd,
+                             cash_up=cash, cash_dn=D(0), yes_value=yv)
+        # cash was already split across the legs when the record was built;
+        # only the redemption side is re-derived here, so the net is
+        # redemption minus the SAME cash the record already carries.
+        nets[p] = dict(n, redemption_usd=re_["redemption_usd"],
+                       net_usd=re_["net_usd"], settled=True,
+                       pending_residual=False)
+    base = (nets.get("BLIND") or {}).get("net_usd")
+    for p in nets:
+        v = nets[p].get("net_usd")
+        nets[p]["vs_blind_usd"] = (None if v is None or base is None
+                                   else str(D(v) - D(base)))
+    return dict(out, net=nets, reconciled=True, reconcile_reason=None,
+                settlement_evidence={
+                    "resolution_source": src, "yes_value": str(yv),
+                    "observed_at": ev.get("observed_at"),
+                    "labels": ("venue-confirmed OUTCOME only. The fills in "
+                               "this record remain MODELLED and are not "
+                               "confirmed by this evidence.")})

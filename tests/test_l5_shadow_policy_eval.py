@@ -476,3 +476,85 @@ def test_an_unknown_slug_trade_is_ignored_rather_than_opening_a_window(
     log.observe_trade("cpc-btc-updown-15m-2026-10-16-9999z", T0, "0.5", "1")
     assert log.live == {}
     assert log.errors == 0
+
+
+# ------------------------------- modelled execution vs venue-confirmed outcome
+
+BOTH_TRADES = [{"t": T0 + 5, "px": "0.63", "qty": "20", "trade_time": "a"},
+               {"t": T0 + 40, "px": "0.60", "qty": "20", "trade_time": "b"}]
+ONE_TRADE = [{"t": T0 + 5, "px": "0.63", "qty": "20", "trade_time": "a"}]
+GOOD_EV = {"resolution_source": "VENUE_SETTLEMENT_PX", "yes_value": "1",
+           "observed_at": "2026-10-16T21:05:01Z"}
+
+
+def test_a_matched_pair_is_outcome_independent_not_venue_confirmed():
+    rec = E.evaluate_window(SLUG, base_ladder(), BOTH_TRADES, **LIM)
+    assert E.settlement_basis(rec) == E.BASIS_MODELLED_MATCHED
+    assert rec["fills_are_modelled"] is True
+    assert "settlement_evidence" not in rec
+
+
+def test_an_unmatched_residual_stays_pending_with_no_net():
+    rec = E.evaluate_window(SLUG, base_ladder(), ONE_TRADE, **LIM)
+    assert E.settlement_basis(rec) == E.BASIS_PENDING
+    for p in E.POLICIES:
+        assert rec["net"][p]["net_usd"] is None
+        assert rec["net"][p]["pending_residual"] is True
+
+
+def test_reconciliation_prices_a_pending_residual_from_positive_evidence():
+    rec = E.evaluate_window(SLUG, base_ladder(), ONE_TRADE, **LIM)
+    out = E.reconcile_settlement(rec, GOOD_EV)
+    assert out["reconciled"] is True
+    assert E.settlement_basis(out) == E.BASIS_VENUE_SETTLED
+    assert out["net"]["HOLD"]["net_usd"] is not None
+    assert out["net"]["HOLD"]["pending_residual"] is False
+    # the fills are still modelled; settlement confirmed the OUTCOME only
+    assert out["fills_are_modelled"] is True
+    assert "remain MODELLED" in out["settlement_evidence"]["labels"]
+
+
+def test_reconciliation_is_idempotent_and_cannot_double_count():
+    rec = E.evaluate_window(SLUG, base_ladder(), ONE_TRADE, **LIM)
+    once = E.reconcile_settlement(rec, GOOD_EV)
+    twice = E.reconcile_settlement(once, GOOD_EV)
+    assert twice["reconciled"] is False
+    assert twice["reconcile_reason"] == "ALREADY_RECONCILED"
+    assert twice["net"]["HOLD"]["net_usd"] == once["net"]["HOLD"]["net_usd"]
+    # and the original record was not mutated
+    assert rec["net"]["HOLD"]["net_usd"] is None
+
+
+@pytest.mark.parametrize("ev,reason", [
+    (None, "NO_POSITIVE_SETTLEMENT_EVIDENCE"),
+    ({"resolution_source": "BOOK_PRICE_AT_EXPIRY", "yes_value": "1"},
+     "NO_POSITIVE_SETTLEMENT_EVIDENCE"),
+    ({"resolution_source": "LAST_TRADE", "yes_value": "1"},
+     "NO_POSITIVE_SETTLEMENT_EVIDENCE"),
+    ({"resolution_source": "VENUE_SETTLEMENT_PX", "yes_value": "0.99"},
+     "YES_VALUE_NOT_BINARY"),
+    ({"resolution_source": "VENUE_SETTLEMENT_PX", "yes_value": None},
+     "YES_VALUE_NOT_BINARY"),
+])
+def test_weak_evidence_leaves_the_outcome_unresolved(ev, reason):
+    rec = E.evaluate_window(SLUG, base_ladder(), ONE_TRADE, **LIM)
+    out = E.reconcile_settlement(rec, ev)
+    assert out["reconciled"] is False and out["reconcile_reason"] == reason
+    assert out["net"]["HOLD"]["net_usd"] is None
+    assert E.settlement_basis(out) == E.BASIS_PENDING
+
+
+def test_reconciling_a_matched_window_changes_nothing():
+    rec = E.evaluate_window(SLUG, base_ladder(), BOTH_TRADES, **LIM)
+    out = E.reconcile_settlement(rec, GOOD_EV)
+    assert out["reconciled"] is False
+    assert out["reconcile_reason"] == "NOTHING_PENDING"
+    assert out["net"]["HOLD"]["net_usd"] == rec["net"]["HOLD"]["net_usd"]
+
+
+def test_a_reconciled_residual_prices_the_winning_side_correctly():
+    rec = E.evaluate_window(SLUG, base_ladder(), ONE_TRADE, **LIM)
+    assert rec["inventory_after_acquisition"]["held_side"] == "DOWN"
+    won = E.reconcile_settlement(rec, dict(GOOD_EV, yes_value="0"))   # DOWN
+    lost = E.reconcile_settlement(rec, dict(GOOD_EV, yes_value="1"))  # UP
+    assert D(won["net"]["HOLD"]["net_usd"]) > D(lost["net"]["HOLD"]["net_usd"])
