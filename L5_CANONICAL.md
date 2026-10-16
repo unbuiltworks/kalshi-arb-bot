@@ -1278,3 +1278,108 @@ is remove a real loss path that `completion_decision` would have taken on 2/2 wi
 and C remain unexercised: both need states that have not yet occurred (an expensively acquired
 held leg, a widened spread, or the resting quote gone). 7 new regression tests; money-path gate
 **1,343 passed**. Nothing deployed; HALT latched, `SHADOW_ONLY` set.
+
+## 25. Continuous shadow policy evaluation (`src/l5_shadow_policy_eval.py`)
+
+Replaces manual replay. One persisted record per eligible BTC15m window, produced from the
+evidence the read-only recorder **already emits** (`PMUS_LADDER_ROWS`, `PMUS_TRADE_ROWS`).
+No new service, branch, or infrastructure; **nothing deployed**.
+
+```
+L5_TS_EXPERIMENT_ID=shadow-policy-eval L5_TS_MARKET='cpc-btc-updown-15m-*' \
+  python3 scripts/l5_shadow_policy_run.py <evidence...> [--settlement s.json]
+```
+Store: `data/l5/shadow/policy_eval.jsonl`, keyed by slug, so a re-run is idempotent and never
+double-counts.
+
+**Reuse, not reimplementation.** Eligibility, prices and **size** come from the existing
+`build_orders` — so `depth_ticks`, the cash envelope, the worst-case ceiling and the
+fee-shrink sizing loop are the authorized ones, not constants retyped here. A test asserts the
+record's qty and prices equal `build_orders`' own, and that an unauthorized market is refused
+`NOT_THE_AUTHORIZED_MARKET` rather than scored.
+
+**Fee-model consistency is enforced, not asserted in prose.** Every leg of every policy is
+priced through `l5_two_sided_probe.fee` — `MAKER_THETA` for a resting leg, `TAKER_THETA` for a
+crossing one. Each policy's record carries its `fee_model` string and a test requires all four to
+be identical *and* that the module contains no fee coefficient of its own.
+
+**Four policies scored per window:**
+
+| | what it does |
+|---|---|
+| `HOLD` | keep the resting opposite quote and its queue priority |
+| `REPRICE` | re-join at the fee-safe ceiling `inventory_aware_quote` computes |
+| `CROSS` | `completion_decision` narrowed by `completion_vs_resting` |
+| `BLIND` | the **deployed** baseline: resting quotes, and unguarded `completion_decision` *only in the COMPLETION phase* |
+
+**A correction to §24.** §24 scored its cross branch continuously. The deployed path consults
+`completion_decision` **only in the COMPLETION phase** (last 120s before the cutoff), so on
+2030z and 2045z — both of which completed early — the deployed baseline would **not** have
+crossed, and the −$0.09 / −$0.04 figures describe an *unguarded continuous* cross, not the
+deployed engine. The counterfactual defect is real but **latent**: it bites only when a one-sided
+state survives into the final 120s. `completion_vs_resting` remains the right safeguard;
+its measured urgency is lower than §24 implied.
+
+### Cumulative results, three consecutive completed windows (2026-10-16 2030z / 2045z / 2100z)
+
+| | HOLD | REPRICE | CROSS | BLIND (baseline) |
+|---|---|---|---|---|
+| modelled net | $0.1212 | $0.1212 | **$0.1484** | $0.1212 |
+| vs blind | $0.0000 | $0.0000 | **+$0.0272** | — |
+
+Outcomes **BOTH ×3**, no `NEITHER`, no one-sided carry. One-sided interval: median **33.4s**,
+max **81.0s**. Selected action: `HOLD` ×2, `CROSS` ×1. Settled ×3, `pending_residual` 0 — every
+window completed as a matched pair, so these nets are outcome-independent and no settlement
+assumption is load-bearing.
+
+**The one window where inventory awareness paid: 2100z.** Legs UP 0.39 / DOWN 0.58 (pair 0.97),
+qty 1.43; DOWN acquired first at 0.58. At **+53.2s** the UP ask fell to **0.35** — four ticks
+below our own resting bid. All three guard bars passed: completed pair **0.93** (under the 0.9857
+ceiling), the resting quote was *not* better, and the cross beat it after the $0.03 taker fee
+(cash $1.3599 vs $1.3871). Modelled net **+$0.0701 vs +$0.0429** holding: **+$0.0272**. The guard
+refused the cross at the other 222 snapshots — 215 on the pair ceiling, 6 on the after-fee bar,
+1 because the resting quote was better.
+
+**So does inventory awareness improve net outcomes? On this evidence, yes but barely and on one
+window of three: +$0.0272 total, +22% on a $0.12 base.** `REPRICE` has still never fired
+(`HOLD_PRIORITY` at all 844 snapshots across the three windows), consistent with §22's structural
+result. Three windows is not a sample; the 2100z gain rests on a single price excursion.
+
+**Every fill here is MODELLED.** Resting legs fill when cumulative qualifying executed volume
+exceeds the displayed queue ahead at join, counted only from the join forward; an unreadable queue
+never fills. A cross is modelled as immediate at the displayed price, clipped to displayed depth by
+`completion_decision`. Records carry `shadow_only: true`, `submitted: false`,
+`fills_are_modelled: true`, and the per-leg queue evidence (`queue_ahead`, `cum_qualifying`,
+`prints_counted`). None of it is a fill, a position, or realized profit. An unsettled residual is
+counted in `pending_residual` and **excluded** from the net, never marked at a price.
+
+20 new tests; money-path gate plus the new file **1,363 passed**.
+
+### If this is to run inside a service: the exact change and its safety boundary
+
+**Not required, and not done.** The evaluation runs today over emitted evidence with nothing
+deployed, which is why it is proposed rather than shipped.
+
+The only in-process host that would be correct is **`pmus-ws-evidence-recorder`**, which holds no
+credentials and no ledger. It cannot run there as-is: queue-cleared fills need the whole window's
+prints from the open (~3,700 on a BTC15m window) and the recorder keeps only the **last 500** per
+market (`src/pmus_ws_evidence_recorder.py`, `del s["trades"][:-500]`).
+
+The exact change would be:
+1. raise that per-market trade retention for **allowlisted ladder markets only**, from 500 to a
+   bounded ~4,000, mirroring how `ladder_history` is already confined to `ladder_markets(now)`;
+2. one call in the main loop, beside the existing `emit_new_ladders`, emitting
+   `PMUS_SHADOW_POLICY` at window rollover.
+
+**Safety boundary.** The money-capable `l5-pmus-live` service is **not** touched — its
+`watchPatterns` is `["deploy/l5_pmus_live/DEPLOY_TRIGGER"]` only, so a recorder-side change cannot
+reach it. The recorder is read-only by construction. The cost is bounded memory on the two or
+three allowlisted slugs, which is the risk that needs sizing before this is worth proposing for
+approval. **Not proposed for deployment yet:** three windows do not justify changing a service
+that is currently healthy.
+
+### BTC1d, unchanged
+
+`cpc-btc-updown-1d-2026-10-15-2100z|DOWN` stays on the `leg_cost_basis_unknown` list. The $2.04
+redemption extinguished the exposure; it is **not** verified profit, and the booked $0.00
+settlement P&L remains a floor artifact of carrying unknown cost at $1.00/share.
