@@ -982,3 +982,129 @@ def correction_request(audit_result: Mapping[str, Any]) -> Dict[str, Any]:
             "realized toward zero."
         ),
     }
+
+
+APPLY_ENV = "L5_COST_BASIS_APPLY"
+APPLY_INSPECT = "INSPECT"
+
+
+def apply_mode() -> str:
+    """INSPECT (the default) is a DRY RUN that writes nothing.
+
+    Anything else is read as the owner's batch id and authorizes the write.
+    An unset or unreadable value is INSPECT, never apply.
+    """
+    raw = str(os.getenv(APPLY_ENV, "") or "").strip()
+    return raw if raw and raw.upper() != APPLY_INSPECT else APPLY_INSPECT
+
+
+def apply_cost_basis_corrections(store: Any, audit_result: Mapping[str, Any],
+                                 *, batch_id: Optional[str] = None
+                                 ) -> Dict[str, Any]:
+    """Apply the measured-cost correction leg by leg, through the guards.
+
+    THE EVIDENCE IS THE AUDIT'S OWN, from the walk that just ran. Nothing is
+    hardcoded and no cost is carried in from a previous session, so a leg
+    whose fills have changed at the venue fails its own reconciliation rather
+    than being corrected against a stale figure.
+
+    DRY RUN BY DEFAULT. With no batch id this reports what each leg WOULD do
+    and calls nothing. The store's verb is the only thing that can write, and
+    every one of its ten guards still runs when it is called for real -- this
+    function adds no authority, it only iterates.
+
+    REFUSALS ARE NOT FAILURES. A leg that cannot be established keeps its
+    UNKNOWN cost, which is the intended outcome for the two quantity-mismatched
+    legs. They are reported, not retried and not worked around.
+    """
+    walk = dict(audit_result.get("activity_walk") or {})
+    legs = list(audit_result.get("legs") or [])
+    dry = batch_id is None
+    applied: List[Any] = []
+    refused: List[Any] = []
+    skipped: List[Any] = []
+    delta_total = D("0")
+    before = (None if dry else store.realized_lines())
+    for leg in legs:
+        key = leg.get("key") or ""
+        market = leg.get("market")
+        side = leg.get("side")
+        basis = dict(leg.get("basis") or {})
+        if not basis.get("established"):
+            skipped.append({"key": key, "reason": basis.get("reason"),
+                            "cost": "UNKNOWN"})
+            continue
+        measured = _d(basis.get("actual_cost_usd"))
+        fees = _d(basis.get("fees_usd"))
+        placeholder = _d(leg.get("placeholder_cost_usd"))
+        if measured is None or fees is None or placeholder is None:
+            skipped.append({"key": key, "reason": "COST_UNREADABLE_AFTER_AUDIT",
+                            "cost": "UNKNOWN"})
+            continue
+        per_fill = []
+        unreadable = False
+        for f in (leg.get("fills") or []):
+            q = _d(f.get("qty"))
+            px = _d(f.get("price"))
+            fee = _d(f.get("fee"))
+            tid = f.get("trade_id")
+            if q is None or px is None or fee is None or not tid:
+                unreadable = True
+                break
+            per_fill.append({"trade_id": tid, "qty": str(q),
+                             "price": str(px), "fee": str(fee)})
+        if unreadable or not per_fill:
+            skipped.append({"key": key, "reason": "FILL_UNREADABLE",
+                            "cost": "UNKNOWN"})
+            continue
+        plan = {
+            "key": key, "market": market, "side": side,
+            "cost_before_usd": str(placeholder),
+            "cost_after_usd": str(measured),
+            "fees_usd": str(fees),
+            "trade_ids": [f["trade_id"] for f in per_fill],
+            "correction_id": "%s|%s" % (batch_id or APPLY_INSPECT, key),
+        }
+        if dry:
+            applied.append({**plan, "would_apply": True})
+            delta_total += placeholder - measured
+            continue
+        out = store.correct_cost_basis(
+            market, side,
+            correction_id=plan["correction_id"],
+            expect={"cost_total": str(placeholder)},
+            measured_cost=measured,
+            measured_fees=fees,
+            evidence={"trade_ids": plan["trade_ids"], "per_fill": per_fill,
+                      "activity_walk": walk})
+        if out.get("corrected"):
+            applied.append({**plan, "delta": out.get("delta")})
+            d = _d(out.get("delta"))
+            if d is not None:
+                delta_total += d
+        else:
+            refused.append({"key": key, "reason": out.get("reason"),
+                            "detail": {k: v for k, v in out.items()
+                                       if k not in ("corrected", "reason")}})
+    return {
+        "mode": APPLY_INSPECT if dry else "APPLIED",
+        "batch_id": batch_id,
+        "activity_walk": walk,
+        "legs_seen": len(legs),
+        "applied": len(applied),
+        "refused": len(refused),
+        "preserved_unknown": len(skipped),
+        "realized_delta_usd": str(delta_total),
+        "realized_before": before,
+        "realized_after": (None if dry else store.realized_lines()),
+        "applied_detail": applied,
+        "refused_detail": refused,
+        "preserved_detail": skipped,
+        "labels": (
+            "mode INSPECT writes NOTHING. A refusal is not a failure: the leg "
+            "keeps its UNKNOWN cost, which is the intended outcome for a "
+            "quantity-mismatched leg. This function adds no authority -- every "
+            "guard lives in the store's verb and runs on every call. HALT is "
+            "neither read nor cleared and no ownership field is written, so "
+            "verified_l5 and manual are exactly as they were."),
+    }

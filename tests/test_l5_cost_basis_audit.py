@@ -204,6 +204,19 @@ def test_the_audit_module_calls_no_write_or_order_verb():
     for forbidden in ("save", "submit", "cancel", "correct_settled_market",
                       "reconstruct_cost_basis", "persist", "put"):
         assert forbidden not in called, forbidden
+    # ONE DELIBERATE EXCEPTION, and it is confined. The module gained a gated
+    # applier, so it is no longer read-only as a whole -- the claim is now
+    # narrower and is asserted rather than assumed: `correct_cost_basis` is
+    # the only write verb it ever calls, and it is called from exactly one
+    # function. Everything else here, `audit()` included, stays pure.
+    assert "correct_cost_basis" in called
+    writers = [fn.name for fn in ast.walk(tree)
+               if isinstance(fn, ast.FunctionDef)
+               and any(isinstance(c, ast.Call)
+                       and isinstance(c.func, ast.Attribute)
+                       and c.func.attr == "correct_cost_basis"
+                       for c in ast.walk(fn))]
+    assert writers == ["apply_cost_basis_corrections"], writers
     # the only venue verbs it resolves are the two READ verbs, and the
     # method it ever passes is GET
     src = inspect.getsource(A._get)
@@ -884,3 +897,115 @@ def test_the_request_carries_the_walk_so_a_partial_walk_is_visible():
     r = A.correction_request({"activity_walk": {"pages": 40, "ended": "max_pages",
                                                 "complete": False}, "legs": []})
     assert r["activity_walk"]["complete"] is False
+
+
+# --------------------------------------------------------------------------
+# Section 21: the gated applier. INSPECT is the default and writes nothing;
+# a batch id authorizes the write and every guard still runs in the verb.
+
+
+class _RecordingStore:
+    """A store that records calls and answers like the real verb's contract."""
+
+    def __init__(self, *, corrected=True, reason=None):
+        self.calls = []
+        self._corrected = corrected
+        self._reason = reason
+        self.lines = {"realized_today": "-233.98540000"}
+
+    def realized_lines(self):
+        return dict(self.lines)
+
+    def correct_cost_basis(self, market, side, **kw):
+        self.calls.append({"market": market, "side": side, **kw})
+        if self._corrected:
+            return {"corrected": True, "delta": "2.31000000"}
+        return {"corrected": False, "reason": self._reason}
+
+
+def _audit_payload():
+    return {"activity_walk": {"pages": 107, "ended": "eof", "complete": True},
+            "legs": [
+                {"key": "m1|UP", "market": "m1", "side": "UP",
+                 "placeholder_cost_usd": "2.90",
+                 "basis": {"established": True, "actual_cost_usd": "0.59000000",
+                           "fees_usd": "0.0000"},
+                 "fills": [{"trade_id": "T1", "qty": "2.9000",
+                            "price": "0.2034482758620689655172413793",
+                            "fee": "0.0000"}]},
+                {"key": "m2|UP", "market": "m2", "side": "UP",
+                 "placeholder_cost_usd": "1.0000",
+                 "basis": {"established": False, "reason": "QUANTITY_MISMATCH"},
+                 "fills": [{"trade_id": "T2", "qty": "1.0", "price": "0.28",
+                            "fee": "0.0"}]}]}
+
+
+def test_inspect_is_the_default_and_writes_nothing(monkeypatch):
+    monkeypatch.delenv(A.APPLY_ENV, raising=False)
+    assert A.apply_mode() == A.APPLY_INSPECT
+    st = _RecordingStore()
+    out = A.apply_cost_basis_corrections(st, _audit_payload())
+    assert out["mode"] == "INSPECT"
+    assert st.calls == []
+    assert out["realized_before"] is None and out["realized_after"] is None
+
+
+def test_an_unreadable_apply_value_reads_as_inspect(monkeypatch):
+    for bad in ("", "   ", "inspect", "INSPECT"):
+        monkeypatch.setenv(A.APPLY_ENV, bad)
+        assert A.apply_mode() == A.APPLY_INSPECT, bad
+
+
+def test_a_batch_id_authorizes_the_write(monkeypatch):
+    monkeypatch.setenv(A.APPLY_ENV, "batch-7")
+    assert A.apply_mode() == "batch-7"
+
+
+def test_the_quantity_mismatched_leg_is_preserved_as_unknown():
+    st = _RecordingStore()
+    out = A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    assert out["preserved_unknown"] == 1
+    assert out["preserved_detail"][0]["cost"] == "UNKNOWN"
+    assert out["preserved_detail"][0]["reason"] == "QUANTITY_MISMATCH"
+    # and it was never even offered to the verb
+    assert [c["market"] for c in st.calls] == ["m1"]
+
+
+def test_the_evidence_passed_is_the_audits_own_fresh_walk():
+    st = _RecordingStore()
+    A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    ev = st.calls[0]["evidence"]
+    assert ev["activity_walk"]["complete"] is True
+    assert ev["per_fill"][0]["trade_id"] == "T1"
+    assert st.calls[0]["expect"] == {"cost_total": "2.90"}
+
+
+def test_a_refusal_is_reported_and_not_retried():
+    st = _RecordingStore(corrected=False, reason="COST_NOT_RECONCILED")
+    out = A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    assert out["applied"] == 0 and out["refused"] == 1
+    assert out["refused_detail"][0]["reason"] == "COST_NOT_RECONCILED"
+    assert len(st.calls) == 1, "no retry"
+
+
+def test_an_incomplete_walk_is_carried_so_the_verb_can_refuse_it():
+    st = _RecordingStore()
+    payload = _audit_payload()
+    payload["activity_walk"] = {"complete": False, "ended": "max_pages"}
+    A.apply_cost_basis_corrections(st, payload, batch_id="b1")
+    assert st.calls[0]["evidence"]["activity_walk"]["complete"] is False
+
+
+def test_an_unreadable_fill_preserves_the_leg_rather_than_correcting_it():
+    st = _RecordingStore()
+    payload = _audit_payload()
+    payload["legs"][0]["fills"][0]["price"] = None
+    out = A.apply_cost_basis_corrections(st, payload, batch_id="b1")
+    assert st.calls == []
+    assert out["preserved_detail"][0]["reason"] == "FILL_UNREADABLE"
+
+
+def test_the_correction_id_carries_the_batch_so_a_rerun_is_idempotent():
+    st = _RecordingStore()
+    A.apply_cost_basis_corrections(st, _audit_payload(), batch_id="b1")
+    assert st.calls[0]["correction_id"] == "b1|m1|UP"

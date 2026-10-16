@@ -289,12 +289,23 @@ def test_correct_settled_market_is_untouched_and_still_refuses_upward():
     assert "if delta > 0:" in src
 
 
-def test_the_verb_is_not_wired_to_any_automatic_call_site():
+def test_the_only_caller_is_the_gated_applier():
+    """One call site, and it cannot write without an owner batch id."""
     import pathlib
     hits = []
-    for p in pathlib.Path("src").glob("*.py"):
-        for i, line in enumerate(p.read_text().splitlines(), 1):
+    for path in pathlib.Path("src").glob("*.py"):
+        for i, line in enumerate(path.read_text().splitlines(), 1):
             if "correct_cost_basis" in line and "def correct_cost_basis" not in line:
-                hits.append("%s:%d" % (p, i))
-    assert hits == [], ("applying it must be an explicit owner action, "
-                        "not something a boot path does: %s" % hits)
+                hits.append("%s:%d" % (path.name, i))
+    assert [h.split(":")[0] for h in hits] == ["l5_cost_basis_audit.py"], hits
+
+
+def test_the_runner_defaults_to_inspect_so_a_boot_cannot_write():
+    from src import l5_cost_basis_audit as CBA
+    from src import l5_pmus_live_runner as RUN
+    import inspect
+    src = inspect.getsource(RUN)
+    assert "apply_cost_basis_corrections" in src
+    # the batch id is None unless the env names one
+    assert "batch_id=(None if mode == CBA.APPLY_INSPECT else mode)" in src
+    assert CBA.apply_mode.__doc__ and "DRY RUN" in CBA.apply_mode.__doc__
