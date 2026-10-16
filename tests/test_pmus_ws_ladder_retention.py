@@ -238,3 +238,100 @@ def test_release_runs_before_prune_so_rungs_are_not_held_for_the_grace_period():
     i_rel = src.rindex("drop_stale_ladders(mstate")
     i_prune = src.rindex("prune_state(mstate")
     assert i_rel < i_prune, "the ladder release must precede prune_state"
+
+
+# == the ladder TAPE emitter ==============================================
+# The ladder was captured and unreadable: not logged, status doc carries
+# only ladder_release, and the service has no domain. These pin the emitter.
+
+def _lstate(slug, snaps):
+    return {slug: {"ladder_history": snaps}}
+
+
+def _snap(t, bids, asks, cap=16):
+    return {"t": t, "bids": bids, "asks": asks, "rungs_cap": cap}
+
+
+def test_emit_new_ladders_prints_nothing_when_no_market_retains(monkeypatch, capsys):
+    monkeypatch.delenv(R.LADDER_ROLLING_ENV, raising=False)
+    monkeypatch.delenv(R.LADDER_MARKETS_ENV, raising=False)
+    out = R.emit_new_ladders(_lstate("m1", [_snap(1, [[0.5, 10]], [[0.52, 8]])]))
+    assert out is None
+    assert capsys.readouterr().out == ""
+
+
+def test_selection_is_exactly_ladder_markets(monkeypatch, capsys):
+    monkeypatch.setenv(R.LADDER_MARKETS_ENV, "m1")
+    monkeypatch.delenv(R.LADDER_ROLLING_ENV, raising=False)
+    st = {"m1": {"ladder_history": [_snap(1, [[0.5, 10]], [[0.52, 8]])]},
+          "m2": {"ladder_history": [_snap(1, [[0.1, 1]], [[0.9, 1]])]}}
+    doc = R.emit_new_ladders(st)
+    assert doc is not None
+    assert set(doc["markets"]) == {"m1"}, "a market not retaining must not emit"
+    assert "m2" not in capsys.readouterr().out
+
+
+def test_it_is_an_incremental_tape_not_a_repeated_snapshot(monkeypatch):
+    monkeypatch.setenv(R.LADDER_MARKETS_ENV, "m1")
+    R._LADDER_LOG_SEEN.clear()
+    st = _lstate("m1", [_snap(1, [[0.5, 10]], [[0.52, 8]])])
+    assert R.emit_new_ladders(st)["rows"] == 1
+    assert R.emit_new_ladders(st) is None, "same snapshot must not re-emit"
+    st["m1"]["ladder_history"].append(_snap(2, [[0.51, 11]], [[0.53, 9]]))
+    doc = R.emit_new_ladders(st)
+    assert doc["rows"] == 1 and doc["markets"]["m1"][0]["t"] == 2
+
+
+def test_rungs_and_snapshots_are_bounded(monkeypatch):
+    monkeypatch.setenv(R.LADDER_MARKETS_ENV, "m1")
+    R._LADDER_LOG_SEEN.clear()
+    wide = [[0.5 - i / 100.0, 10 + i] for i in range(16)]
+    deep = [[0.52 + i / 100.0, 8 + i] for i in range(16)]
+    snaps = [_snap(t, wide, deep) for t in range(200)]
+    doc = R.emit_new_ladders(_lstate("m1", snaps))
+    rows = doc["markets"]["m1"]
+    assert len(rows) == R.LADDER_LOG_CAP, "snapshots per emission are capped"
+    assert all(len(r["bids"]) == R.LADDER_LOG_RUNGS for r in rows)
+    assert all(len(r["asks"]) == R.LADDER_LOG_RUNGS for r in rows)
+
+
+def test_the_rows_carry_what_an_intent_needs_to_align(monkeypatch):
+    """market id, both touches, price levels, quantities and a timestamp."""
+    monkeypatch.setenv(R.LADDER_MARKETS_ENV, "m1")
+    R._LADDER_LOG_SEEN.clear()
+    doc = R.emit_new_ladders(_lstate(
+        "m1", [_snap(1234.5, [[0.50, 10], [0.49, 25]], [[0.52, 8], [0.53, 30]])]))
+    r = doc["markets"]["m1"][0]
+    assert r["t"] == 1234.5
+    assert r["bid"] == 0.50 and r["ask"] == 0.52
+    # the rung our UP intent would JOIN (bid - 1 tick) and its queue ahead
+    assert r["bids"][1] == [0.49, 25]
+    # the rung our DOWN intent would JOIN (ask + 1 tick) and its queue ahead
+    assert r["asks"][1] == [0.53, 30]
+    assert doc["kind"] == "authenticated_ladder_rows"
+    assert "DEPTH IS NOT A FILL" in doc["labels"]
+
+
+def test_it_never_raises_and_never_blocks_capture(monkeypatch):
+    monkeypatch.setenv(R.LADDER_MARKETS_ENV, "m1")
+    R._LADDER_LOG_SEEN.clear()
+    assert R.emit_new_ladders({"m1": {"ladder_history": [{"t": None}]}}) is None
+    assert R.emit_new_ladders({"m1": {"ladder_history": "not a list"}}) is None
+    assert R.emit_new_ladders(None) is None
+
+
+def test_it_carries_no_credential_or_account_field(monkeypatch):
+    monkeypatch.setenv(R.LADDER_MARKETS_ENV, "m1")
+    R._LADDER_LOG_SEEN.clear()
+    import json as _j
+    doc = R.emit_new_ladders(_lstate("m1", [_snap(1, [[0.5, 10]], [[0.52, 8]])]))
+    # the DATA, not the prose labels (which legitimately say "keys the book")
+    blob = _j.dumps({k: v for k, v in doc.items()
+                     if k not in ("schema", "labels")}).lower()
+    # "authenticated_ladder_rows" is the kind, so match credential words only
+    for bad in ("secret", "token", "wallet", "address", "apikey", "api_key",
+                "privatekey", "private_key", "bearer", "signature"):
+        assert bad not in blob, bad
+    # and the rows themselves carry only market data
+    row = doc["markets"]["m1"][0]
+    assert set(row) == {"t", "bid", "ask", "bids", "asks", "rungs_cap", "status"}

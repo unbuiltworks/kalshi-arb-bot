@@ -1322,6 +1322,113 @@ def book_status(snap: Mapping[str, Any], now: float,
     return "OK"
 
 
+#: THE LADDER TAPE. `ladder_history` is captured for the markets
+#: PMUS_WS_LADDER_ROLLING selects, but nothing ever printed it, so the depth
+#: at the level our maker intents would JOIN was recorded and unreadable:
+#: emit_new_books carries top-of-book only, the status document carries
+#: ladder_release only, and the service has no domain. This prints it, using
+#: the same incremental-tape discipline as emit_new_books so a consumer can
+#: concatenate emissions without deduplicating and without holes.
+#:
+#: BOUNDED THREE WAYS, because a 16-rung ladder at ~1 snapshot/second would
+#: otherwise dwarf every other line: rungs per side (LADDER_LOG_RUNGS),
+#: snapshots per emission (LADDER_LOG_CAP) and markets per document. It adds
+#: no capture, no subscription and no state -- it only reads what is already
+#: there.
+LADDER_LOG_RUNGS = 4
+LADDER_LOG_CAP = 40
+LADDER_LOG_MARKETS_PER_DOC = 2
+_LADDER_LOG_SEEN: dict = {}
+
+
+def emit_new_ladders(state: Mapping[str, Any], *, connected: bool = True,
+                     now: Optional[float] = None) -> Optional[dict]:
+    """Print ladder snapshots first seen since the last emission.
+
+    Selection is EXACTLY `ladder_markets()`: a market that is not retaining a
+    ladder is not emitted, so this can never widen what is captured. Never
+    raises, for the same reason emit_new_books does not: an evidence
+    convenience must not be able to stop the capture it observes.
+    """
+    try:
+        keep = ladder_markets(now)
+        if not keep:
+            return None
+        now = time.time() if now is None else now
+        out: dict = {}
+        total = 0
+        for slug, s in (state or {}).items():
+            if slug not in keep or not isinstance(s, Mapping):
+                continue
+            hist = list((s or {}).get("ladder_history") or [])
+            if not hist:
+                continue
+            seen = _LADDER_LOG_SEEN.setdefault(slug, set())
+            fresh = []
+            for h in hist:
+                ts = h.get("t")
+                if ts is None or ts in seen:
+                    continue
+                seen.add(ts)
+                bids = list(h.get("bids") or [])[:LADDER_LOG_RUNGS]
+                asks = list(h.get("asks") or [])[:LADDER_LOG_RUNGS]
+                # the touch, named explicitly, so a consumer never has to
+                # infer which rung was best from ordering alone
+                fresh.append({
+                    "t": ts,
+                    "bid": (bids[0][0] if bids else None),
+                    "ask": (asks[0][0] if asks else None),
+                    "bids": bids, "asks": asks,
+                    "rungs_cap": h.get("rungs_cap"),
+                    "status": book_status(
+                        {"bid": (bids[0][0] if bids else None),
+                         "ask": (asks[0][0] if asks else None),
+                         "t": ts}, now, connected),
+                })
+            if len(seen) > 4000:
+                _LADDER_LOG_SEEN[slug] = set(list(seen)[-2000:])
+            if fresh:
+                out[slug] = fresh[-LADDER_LOG_CAP:]
+                total += len(out[slug])
+        if not out:
+            return None
+
+        def document(markets: dict) -> dict:
+            return {
+                "t": datetime.now(timezone.utc).isoformat(),
+                "kind": "authenticated_ladder_rows",
+                "markets": markets,
+                "rows": sum(len(v) for v in markets.values()),
+                "rungs_per_side": LADDER_LOG_RUNGS,
+                "cap_per_market": LADDER_LOG_CAP,
+                "connected": connected,
+                "schema": ("t=OUR receipt epoch for that book state; bids/asks"
+                           "=[[price, quantity], ...] best-first, AUTHENTICATED"
+                           " as the venue served them, truncated to "
+                           "rungs_per_side; bid/ask repeat rung 0 for "
+                           "convenience; status=OK|STALE|ONE_SIDED|NO_BOOK|"
+                           "DISCONNECTED"),
+                "labels": ("AUTHENTICATED read-only ladder tape. DEPTH IS NOT "
+                           "A FILL: these rungs say what was resting ahead of "
+                           "a joiner at that price, not that any order of ours "
+                           "executed. Nothing here is derived, interpolated or "
+                           "backfilled, and the same marketSlug keys the book "
+                           "and trade tapes."),
+            }
+
+        slugs = list(out)
+        for i in range(0, len(slugs), LADDER_LOG_MARKETS_PER_DOC):
+            chunk = {s: out[s] for s in slugs[i:i + LADDER_LOG_MARKETS_PER_DOC]}
+            print("PMUS_LADDER_ROWS " + json.dumps(
+                document(chunk), separators=(",", ":"), default=str),
+                flush=True)
+        doc = document(out)
+        doc["rows"] = total
+        return doc
+    except Exception:                                    # noqa: BLE001
+        return None
+
+
 def emit_new_books(state: Mapping[str, Any], *, connected: bool = True,
                    now: Optional[float] = None) -> Optional[dict]:
     """Print authenticated book snapshots first seen since the last emission.
@@ -2046,6 +2153,7 @@ async def run(minutes: Optional[float]) -> int:
                 publish_live_trades(snap, time.time())
                 emit_new_trades(snap)
                 emit_new_books(snap, connected=connected)
+                emit_new_ladders(snap, connected=connected)
                 try:
                     from src import pmus_sports_collector as col
                     xs = gateway_xcheck(
