@@ -167,3 +167,40 @@ def test_package_inits_are_still_packaged(image):
     inits = [p for p in (Path(f) for f in closure_files(image))
              if p.name == "__init__.py"]
     assert inits, "no package __init__ in the closure at all"
+
+
+def test_every_lazily_imported_module_is_in_the_image():
+    """THE GAP THAT SHIPPED A BROKEN AUDIT.
+
+    This file materialises the COPY set and imports the entrypoint, which
+    catches a missing module only if the import happens AT IMPORT TIME. The
+    cost-basis audit is imported lazily, inside `if
+    L5_COST_BASIS_AUDIT == YES`, so the module could be absent from the image
+    and every test here still passed -- until the real boot raised
+    ImportError: cannot import name 'l5_cost_basis_audit' from 'src' at
+    2026-10-16T01:46:08Z, on a service that looked correctly wired.
+
+    So the lazy imports are enumerated from the runner's own AST and each one
+    is required to be in the image. A new `from src import X` inside any
+    function of the runner now fails this test until it is packaged.
+    """
+    import ast
+
+    root = Path(__file__).resolve().parents[1]
+    runner = root / "src" / "l5_pmus_live_runner.py"
+    tree = ast.parse(runner.read_text())
+    lazy = set()
+    for fn in [n for n in ast.walk(tree)
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+        for n in ast.walk(fn):
+            if isinstance(n, ast.ImportFrom) and n.module == "src":
+                for a in n.names:
+                    lazy.add(a.name)
+    assert lazy, "the AST scan found no lazy imports -- it has stopped working"
+
+    df = (root / "deploy" / "l5_pmus_live" / "Dockerfile").read_text()
+    copied = {ln.split()[1] for ln in df.splitlines()
+              if ln.startswith("COPY ")}
+    missing = sorted("src/%s.py" % m for m in lazy
+                     if "src/%s.py" % m not in copied)
+    assert not missing, "lazily imported but not in the image: %s" % missing

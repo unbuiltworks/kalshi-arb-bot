@@ -75,6 +75,11 @@ COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
 COPY src/l5_live_validation_gates.py src/l5_live_validation_gates.py
 COPY src/l5_order_body.py src/l5_order_body.py
 COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
+# lazily imported by the runner behind L5_COST_BASIS_AUDIT=YES. A LAZY import
+# is exactly what the closure test could not see: the module was missing from
+# this image and the audit raised ImportError at 01:46:08Z while looking
+# wired. It is read-only and writes nothing.
+COPY src/l5_cost_basis_audit.py src/l5_cost_basis_audit.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
