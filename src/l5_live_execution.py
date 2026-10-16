@@ -1186,6 +1186,27 @@ class InventoryStore:
                     + D(str(self.state.get("realized_unattributed") or 0)))
         return D(str(self.state.get("realized_today") or 0))
 
+    def verified_l5_net_for_gates(self) -> Optional[D]:
+        """Return verified after-fee L5 net, never legacy estimated gross.
+
+        No trustworthy net ledger exists for the earlier mixed/manual
+        positions. Future activation requires the fee/rebate reconciliation
+        to persist an explicit verified result with source evidence. An
+        absent or malformed record is UNKNOWN, never a free $0 baseline.
+        """
+        record = self.state.get("verified_l5_net_attestation")
+        if not isinstance(record, Mapping):
+            return None
+        if record.get("source") != "AUDITED_L5_FILLS_FEES_SETTLEMENTS":
+            return None
+        if not record.get("order_ids") or not record.get("fee_evidence"):
+            return None
+        try:
+            amount = D(str(record.get("net_usd")))
+            return amount if amount.is_finite() else None
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
     def realized_lines(self) -> Dict[str, str]:
         """Every line apart, for reporting. Never collapsed by this method."""
         return {
