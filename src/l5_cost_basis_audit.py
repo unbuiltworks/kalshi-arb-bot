@@ -63,6 +63,25 @@ def _d(value: Any) -> Optional[D]:
         return None
 
 
+def _get(transport: Any, path: str) -> Any:
+    """One signed GET, through whichever read verb this transport exposes.
+
+    THE DEFECT THIS FIXES. The first version called `transport.request(...)`.
+    PmusTransport has NO public `request` -- that method belongs to the
+    private _SignedHTTP class -- so the deployed audit raised AttributeError
+    on its very first page and established nothing, while reporting itself
+    `ok`. The executor's public read verb is `_get(path)`, which routes
+    through _request and so keeps the venue backoff. `request` is tried only
+    as a fallback, which is what the test doubles provide.
+    """
+    for verb in ("_get", "request"):
+        fn = getattr(transport, verb, None)
+        if callable(fn):
+            return fn(path) if verb == "_get" else fn("GET", path)
+    raise AttributeError(
+        "transport exposes neither _get nor request; the audit cannot read")
+
+
 def walk_activities(transport: Any, *, max_pages: int = MAX_PAGES
                     ) -> Dict[str, Any]:
     """Every reachable activity row, newest first. READ-ONLY GETs only.
@@ -77,7 +96,7 @@ def walk_activities(transport: Any, *, max_pages: int = MAX_PAGES
     while pages < max_pages:
         path = ACTIVITIES_PATH + ("?cursor=%s" % cursor if cursor else "")
         try:
-            body = transport.request("GET", path) or {}
+            body = _get(transport, path) or {}
         except BaseException as exc:                           # noqa: BLE001
             ended = "error:%s" % type(exc).__name__
             break
@@ -207,6 +226,33 @@ def establish_basis(fills: List[Mapping[str, Any]], *, expect_qty: D
             "avg_price": str(cost / total_qty) if total_qty else None}
 
 
+def _leg_quantity(store: Any, market: str, side: str, key: str
+                  ) -> Tuple[Optional[D], str]:
+    """The leg's quantity, from the RIGHT place for its lifecycle stage.
+
+    THE DEFECT THIS FIXES. The first version read `positions[key]`, which is
+    ZERO for a retired market -- settlement consumes the position. So 28 of
+    29 legs reported ledger_qty 0 and a $0 placeholder, which made the whole
+    audit look empty and would have understated the overstatement to nothing.
+    A retired leg's quantity lives in `retired_markets[market]` as up_qty /
+    dn_qty, recorded at settlement, and that is the figure a $1/share
+    placeholder was applied to.
+    """
+    retired = (getattr(store, "state", {}) or {}).get("retired_markets") or {}
+    row = retired.get(market)
+    if isinstance(row, Mapping):
+        raw = row.get("up_qty" if side == "UP" else "dn_qty")
+        q = _d(raw)
+        if q is None:
+            return (None, "retired_markets:UNREADABLE")
+        return (q, "retired_markets")
+    q = _d(((getattr(store, "state", {}) or {}).get("positions") or {})
+           .get(key))
+    if q is None:
+        return (None, "positions:ABSENT")
+    return (q, "positions")
+
+
 def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
           ) -> Dict[str, Any]:
     """The whole read-only pass. Writes nothing, decides nothing."""
@@ -220,10 +266,17 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
     establishable = 0
     for key in keys:
         market, _, side = key.rpartition("|")
-        try:
-            held = D(str((store.state.get("positions") or {}).get(key, 0)))
-        except (InvalidOperation, TypeError, ValueError):
-            held = D(0)
+        held, qty_source = _leg_quantity(store, market, side, key)
+        if held is None:
+            legs.append({"key": key, "market": market, "side": side,
+                         "ledger_qty": None, "qty_source": qty_source,
+                         "placeholder_cost_usd": None, "owners": [],
+                         "l5_owned_fills": 0, "owner_manual_fills": 0,
+                         "unknown_owner_fills": 0,
+                         "basis": {"established": False,
+                                   "reason": "LEG_QUANTITY_UNAVAILABLE"},
+                         "fills": []})
+            continue
         cls = classify_fills(walk["rows"], market=market, side=side,
                              our_coids=our)
         basis = (establish_basis(cls["fills"], expect_qty=held)
@@ -233,7 +286,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         # the placeholder this leg currently carries: $1 a share
         placeholder = held
         row = {"key": key, "market": market, "side": side,
-               "ledger_qty": str(held),
+               "ledger_qty": str(held), "qty_source": qty_source,
                "placeholder_cost_usd": str(placeholder),
                "owners": cls["owners"], "l5_owned_fills": cls["l5_owned"],
                "owner_manual_fills": cls["owner_manual"],

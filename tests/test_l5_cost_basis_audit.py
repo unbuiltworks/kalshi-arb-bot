@@ -204,11 +204,82 @@ def test_the_audit_module_calls_no_write_or_order_verb():
     for forbidden in ("save", "submit", "cancel", "correct_settled_market",
                       "reconstruct_cost_basis", "persist", "put"):
         assert forbidden not in called, forbidden
-    # the only venue verb it uses is a GET
-    assert "request" in called
-    assert '"GET"' in inspect.getsource(A.walk_activities)
+    # the only venue verbs it resolves are the two READ verbs, and the
+    # method it ever passes is GET
+    src = inspect.getsource(A._get)
+    assert '("_get", "request")' in src
+    assert '"GET"' in src
+    assert "POST" not in inspect.getsource(A)
     # and no assignment anywhere targets a store/state subscript
     for n in ast.walk(tree):
         if isinstance(n, ast.Assign):
             for tgt in n.targets:
                 assert not isinstance(tgt, ast.Subscript), ast.dump(tgt)[:80]
+
+
+# ------------------------------------------- the two defects the deploy found
+class GetOnlyT(FakeT):
+    """A transport shaped like the REAL PmusTransport: _get, no request."""
+    def _get(self, path, base=None):
+        return FakeT.request(self, "GET", path)
+    request = property(lambda self: (_ for _ in ()).throw(
+        AttributeError("PmusTransport has no public request")))
+
+
+def test_the_executor_read_verb_is_used_not_a_nonexistent_request():
+    """THE DEFECT THE DEPLOY FOUND. PmusTransport has no public `request` --
+    that belongs to the private _SignedHTTP -- so the first deployed audit
+    raised AttributeError on page one and established nothing while
+    reporting itself ok."""
+    s = FakeStore([], {})
+    t = GetOnlyT([{"activities": [], "eof": True}])
+    walk = A.walk_activities(t)
+    assert walk["ended"] == "eof" and walk["complete"] is True
+    assert t.calls == [A.ACTIVITIES_PATH]
+
+
+def test_a_transport_with_neither_verb_is_reported_not_silently_empty():
+    class Mute:
+        pass
+    walk = A.walk_activities(Mute())
+    assert walk["ended"].startswith("error:AttributeError")
+    assert walk["complete"] is False
+
+
+def test_a_retired_leg_uses_the_settled_quantity_not_the_zeroed_position():
+    """THE SECOND DEFECT. Settlement consumes the position, so positions[key]
+    is 0 for a retired market and 28 of 29 legs reported a $0 placeholder."""
+    s = FakeStore(["mBTC|UP"], {"mBTC|UP": "0"})
+    s.state["retired_markets"] = {"mBTC": {
+        "up_qty": "2.9000", "dn_qty": "0", "cost_total": "2.9000",
+        "pnl_provenance": "UNKNOWN_COST_UPPER_BOUND"}}
+    t = GetOnlyT([{"activities": [
+        _fill("mBTC", "UP", "2.9000", "0.20", "0.02",
+              coid="owner-manual-9")], "eof": True}])
+    out = A.audit(s, t)
+    leg = out["legs"][0]
+    assert leg["qty_source"] == "retired_markets"
+    assert leg["ledger_qty"] == "2.9000"
+    assert leg["placeholder_cost_usd"] == "2.9000"
+    assert leg["basis"]["established"] is True
+    assert leg["basis"]["actual_cost_usd"] == "0.580000"
+    assert out["overstatement_usd"] == "2.320000"
+
+
+def test_a_live_leg_still_uses_positions():
+    s = FakeStore(["mLive|DOWN"], {"mLive|DOWN": "1.27"})
+    t = GetOnlyT([{"activities": [], "eof": True}])
+    out = A.audit(s, t)
+    assert out["legs"][0]["qty_source"] == "positions"
+    assert out["legs"][0]["ledger_qty"] == "1.27"
+
+
+def test_an_unreadable_leg_quantity_is_reported_not_guessed_as_zero():
+    s = FakeStore(["mX|UP"], {})
+    s.state["retired_markets"] = {"mX": {"up_qty": "nonsense"}}
+    out = A.audit(s, GetOnlyT([{"activities": [], "eof": True}]))
+    leg = out["legs"][0]
+    assert leg["ledger_qty"] is None
+    assert leg["qty_source"] == "retired_markets:UNREADABLE"
+    assert leg["basis"]["reason"] == "LEG_QUANTITY_UNAVAILABLE"
+    assert out["establishable"] == 0
