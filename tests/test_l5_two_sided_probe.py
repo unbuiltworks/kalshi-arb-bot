@@ -288,3 +288,49 @@ def test_fees_round_a_cost_up_and_a_credit_down_in_magnitude():
     assert cost == D("0.01")             # 0.00382 -> a whole cent of cost
     assert cred == D("0.00")             # -0.00069 -> no credit assumed
     assert TS.fee(TS.MAKER_THETA, D(10), D("0.5")) == D("-0.03")
+
+
+# ------------------------------------------- continuous market authorization
+
+def test_an_exact_slug_is_still_exact(monkeypatch):
+    """Nothing already configured widens. A pattern is opt-in."""
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV, MKT)
+    assert TS.active(MKT) is True
+    assert TS.active(MKT + "x") is False
+    assert TS.active("cpc-btc-updown-15m-2026-10-15-1745z") is False
+
+
+def test_a_family_pattern_carries_across_successive_windows(monkeypatch):
+    """The runner builds a NEW slug every fifteen minutes, so an exact-slug
+    authorization goes inert on the roll. A family pattern is what lets
+    accumulation continue into the next market without a human edit."""
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
+    assert TS.active("cpc-btc-updown-15m-2026-10-16-2100z") is True
+    assert TS.active("cpc-btc-updown-15m-2026-10-16-2115z") is True
+    # and it is NOT "any market": a different instrument is not covered
+    assert TS.active("cpc-btc-updown-1d-2026-10-16-2100z") is False
+    assert TS.active("cpceth-eth-updown-15m-2026-10-16-2100z") is False
+
+
+def test_several_patterns_may_be_authorized(monkeypatch):
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV,
+                       "cpc-btc-updown-15m-*, cpceth-eth-updown-15m-*")
+    assert TS.active("cpceth-eth-updown-15m-2026-10-16-2100z") is True
+    assert TS.active("cpcsol-sol-updown-15m-2026-10-16-2100z") is False
+
+
+def test_an_empty_or_comma_only_market_is_inert(monkeypatch):
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    for raw in ("", "   ", ",", " , , "):
+        monkeypatch.setenv(TS.MARKET_ENV, raw)
+        assert TS.active(MKT) is False
+        assert TS.market_patterns() == ()
+
+
+def test_matching_is_case_sensitive(monkeypatch):
+    monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
+    monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
+    assert TS.active("CPC-BTC-UPDOWN-15M-2026-10-16-2100z") is False

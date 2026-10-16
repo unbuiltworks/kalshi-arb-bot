@@ -97,13 +97,121 @@ def test_both_legs_reach_the_transport_post_only_on_successive_ticks(
     assert r1["TWO_SIDED_PROBE"]["leg_to_place"] == "DOWN"
 
 
-def test_a_third_tick_places_nothing_because_both_claims_are_spent(
-        probe, tmp_path):
+def test_accumulation_keeps_working_pairs_past_the_first(probe, tmp_path,
+                                                        monkeypatch):
+    """SUPERSEDES `a third tick places nothing`. Two slots per authorization
+    was the one-shot restriction; the engine now works successive PAIRS, and
+    the bound is an explicit round count rather than an accident of the
+    claim namespace."""
     H, E = probe
+    monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "3")
+    ex, t = mk(H, E, tmp_path)
+    ex.limits = H.limits(max_live_orders=16)
+    seen = []
+    for _ in range(8):
+        seen.append(ex.handle(_row(H), _book(), market="m",
+                              window="21:00").get("refused_reason"))
+    # MORE THAN ONE PAIR, which is the whole point.
+    assert [s["side"] for s in t.sent] == ["DOWN", "UP", "DOWN", "UP"]
+    # every client order id distinct: these are independent intents, not a
+    # replay slipping past duplicate suppression
+    assert len({s["client_order_id"] for s in t.sent}) == 4
+    # AND IT STOPS ON A RISK GATE, not on the claim namespace. With nothing
+    # filling, round two's pair exhausts the $8 cash envelope and the gate
+    # refuses -- which is the bound that should decide how much inventory is
+    # accumulated.
+    assert seen[-1].startswith("PAIR_UP:CASH_COMMITMENT"), seen
+
+
+def test_the_round_bound_is_hard_and_then_refuses(probe, tmp_path,
+                                                  monkeypatch):
+    H, E = probe
+    monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "1")
     ex, t = mk(H, E, tmp_path)
     for _ in range(4):
-        ex.handle(_row(H), _book(), market="m", window="21:00")
+        r = ex.handle(_row(H), _book(), market="m", window="21:00")
     assert len(t.sent) == 2
+    assert r["refused_reason"] == "ACCUMULATION_EXHAUSTED"
+
+
+def test_an_unparseable_round_bound_takes_the_safe_reading(probe, tmp_path,
+                                                           monkeypatch):
+    H, E = probe
+    monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "lots")
+    ex, t = mk(H, E, tmp_path)
+    assert ex.acc_max_rounds() == 1
+    assert ex.acc_max_rounds() <= E.ACC_MAX_ROUNDS_HARD_CAP
+
+
+def test_the_hard_cap_bounds_any_configuration(probe, tmp_path, monkeypatch):
+    H, E = probe
+    monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "100000")
+    ex, _t = mk(H, E, tmp_path)
+    assert ex.acc_max_rounds() == E.ACC_MAX_ROUNDS_HARD_CAP
+
+
+def test_a_replay_of_the_SAME_intent_is_still_refused(probe, tmp_path):
+    """THE PROPERTY THAT PROTECTS MONEY, unchanged. The slot moved from the
+    leg to (market, round, leg), so a new intent gets a new slot -- but the
+    same intent, replayed, lands on the slot it already spent."""
+    H, E = probe
+    ex, t = mk(H, E, tmp_path)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert len(t.sent) == 1
+    before = AUTH.accumulation_sid("TS-E2E-1", "m", 0, "DOWN")
+    assert AUTH.claim_held(before) is True
+    with pytest.raises(AUTH.Refused):
+        AUTH.claim_accumulation_leg("m", 0, "DOWN", {})
+    # a DIFFERENT round is a different slot and is available
+    AUTH.claim_accumulation_leg("m", 1, "DOWN", {})
+
+
+def test_a_one_sided_round_is_completed_before_a_new_pair_is_opened(
+        probe, tmp_path, monkeypatch):
+    """Accumulation must not stack fresh first legs on top of an unpaired
+    position: `probe_round` returns the first INCOMPLETE round."""
+    H, E = probe
+    monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "4")
+    ex, t = mk(H, E, tmp_path)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert ex.probe_round("m") == 0          # round 0 is HALF done
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert ex.probe_round("m") == 1          # only now does a new pair open
+    assert [s["side"] for s in t.sent] == ["DOWN", "UP"]
+
+
+def test_each_market_accumulates_in_its_own_namespace(probe, tmp_path,
+                                                      monkeypatch):
+    """Successive windows are successive MARKETS. A round spent in one must
+    not read as spent in the next, or the engine goes inert on the roll."""
+    H, E = probe
+    monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
+    AUTH.claim_accumulation_leg("cpc-btc-updown-15m-2026-10-16-2100z", 0,
+                                "UP", {})
+    ex, _t = mk(H, E, tmp_path)
+    assert ex.probe_legs_claimed(
+        "cpc-btc-updown-15m-2026-10-16-2100z", 0)["UP"] is True
+    assert ex.probe_legs_claimed(
+        "cpc-btc-updown-15m-2026-10-16-2115z", 0)["UP"] is False
+
+
+def test_each_round_is_planned_against_the_CURRENT_book(probe, tmp_path,
+                                                        monkeypatch):
+    """The plan freeze is per ROUND. Frozen per market forever, the first
+    pair's economics were reused however far the book had moved."""
+    H, E = probe
+    monkeypatch.setenv(E.ACC_MAX_ROUNDS_ENV, "2")
+    ex, t = mk(H, E, tmp_path)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    p0 = ex.probe_stored_plan("m", 0)
+    r = ex.handle(_row(H), _book(bid="0.50", ask="0.51"),
+                  market="m", window="21:00")
+    p1 = ex.probe_stored_plan("m", 1)
+    assert p0 is not None and p1 is not None, r.get("refused_reason")
+    assert p1 != p0
+    assert {l["side"]: l["price"] for l in p1["legs"]} != \
+        {l["side"]: l["price"] for l in p0["legs"]}
 
 
 def test_restart_recovery_cannot_replace_a_claimed_leg(probe, tmp_path):
@@ -116,9 +224,14 @@ def test_restart_recovery_cannot_replace_a_claimed_leg(probe, tmp_path):
     ex2, t2 = mk(H, E, tmp_path)          # new process, same ledger dir
     ex2.handle(_row(H), _book(), market="m", window="21:00")
     assert [s["side"] for s in t2.sent] == ["UP"]     # only the unclaimed leg
+    # a third process re-places NEITHER leg of round 0; the only thing it
+    # may do is open the NEXT round, which is accumulation working.
     ex3, t3 = mk(H, E, tmp_path)
     ex3.handle(_row(H), _book(), market="m", window="21:00")
-    assert t3.sent == []
+    assert [s["side"] for s in t3.sent] == ["DOWN"]
+    assert ex3.probe_round("m") == 1
+    assert {s["client_order_id"] for s in t3.sent}.isdisjoint(
+        {s["client_order_id"] for s in t.sent + t2.sent})
 
 
 # ------------------------------------------------------- the pair pre-check
@@ -220,11 +333,11 @@ def test_a_persistence_failure_refuses_rather_than_submitting(probe,
     ex, t = mk(H, E, tmp_path)
 
     def boom(*a, **k):
-        raise AUTH.Refused("PROBE_CLAIM_UNAVAILABLE", {"note": "disk"})
-    monkeypatch.setattr(AUTH, "claim_probe_leg", boom)
+        raise AUTH.Refused("ACC_CLAIM_UNAVAILABLE", {"note": "disk"})
+    monkeypatch.setattr(AUTH, "claim_accumulation_leg", boom)
     r = ex.handle(_row(H), _book(), market="m", window="21:00")
     assert t.sent == []
-    assert r["refused_reason"] == "PROBE_CLAIM_UNAVAILABLE"
+    assert r["refused_reason"] == "ACC_CLAIM_UNAVAILABLE"
 
 
 # ------------------------------------------------------------ the claims
@@ -258,7 +371,7 @@ def test_an_unreadable_claim_state_is_treated_as_spent(probe, tmp_path,
                         lambda *a, **k: (_ for _ in ()).throw(OSError("io")))
     r = ex.handle(_row(H), _book(), market="m", window="21:00")
     assert t.sent == []
-    assert r["refused_reason"] == "BOTH_LEGS_SPENT"
+    assert r["refused_reason"] == "ACCUMULATION_EXHAUSTED"
 
 
 # =====================================================================
@@ -423,3 +536,30 @@ def test_Q5_leg_two_is_bounded_by_the_deadline_not_by_another_L5_trade(probe,
         .maybe_ts_deadline)
     assert "live_orders" in body
     assert "now <= TSP.cancel_cutoff" in body
+
+
+def test_accumulation_claim_refusals(tmp_path, monkeypatch):
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path / "a.jsonl"))
+    monkeypatch.delenv(AUTH.EXPERIMENT_ENV, raising=False)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 0, "UP", {})
+    assert e.value.reason == "ACC_CLAIM_NO_EXPERIMENT"
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "x")
+    for args, why in ((("", 0, "UP"), "ACC_CLAIM_NO_MARKET"),
+                      (("m", 0, "SIDEWAYS"), "ACC_CLAIM_BAD_LEG"),
+                      (("m", -1, "UP"), "ACC_CLAIM_BAD_ROUND"),
+                      (("m", "x", "UP"), "ACC_CLAIM_BAD_ROUND")):
+        with pytest.raises(AUTH.Refused) as e:
+            AUTH.claim_accumulation_leg(args[0], args[1], args[2], {})
+        assert e.value.reason == why, args
+
+
+def test_accumulation_sids_are_distinct_on_every_axis():
+    a = AUTH.accumulation_sid
+    sids = {a("e", "m", 0, "UP"), a("e", "m", 0, "DOWN"),
+            a("e", "m", 1, "UP"), a("e", "m2", 0, "UP"),
+            a("e2", "m", 0, "UP")}
+    assert len(sids) == 5
+    # and a DIFFERENT namespace from the superseded two-slot claim
+    assert not any(s.startswith("ts1.") for s in sids)
+    assert all(s.startswith("acc1.") for s in sids)

@@ -27,6 +27,7 @@ NOTHING HERE SUBMITS, CANCELS OR SETTLES ANYTHING.
 from __future__ import annotations
 
 import datetime as dt
+import fnmatch
 import os
 from decimal import Decimal as D, ROUND_CEILING, InvalidOperation
 from typing import Any, Dict, Mapping, Optional, Sequence
@@ -122,19 +123,56 @@ def named_market() -> str:
     return str(os.getenv(MARKET_ENV, "")).strip()
 
 
+def market_patterns() -> tuple:
+    """The authorized market patterns, in order, from `L5_TS_MARKET`.
+
+    Comma-separated. An entry with no `*` is an EXACT slug and matches only
+    itself, exactly as before.
+    """
+    raw = named_market()
+    return tuple(p for p in (x.strip() for x in raw.split(",")) if p)
+
+
+def market_authorized(market: str) -> bool:
+    """Does this slug match an authorized pattern?
+
+    WHY A PATTERN AT ALL. The runner rebuilds its venue client against a
+    NEW slug every fifteen minutes, so an exact-slug authorization
+    expires the moment its window rolls and the engine goes inert until a
+    human edits an environment variable. That is the second half of the
+    one-shot restriction: continuous accumulation across successive markets
+    is impossible while the authorization names one slug.
+
+    A pattern is still a deliberate, bounded authorization -- it names an
+    instrument family (`cpc-btc-updown-15m-*`), not "any market" -- and an
+    exact slug remains exact, so nothing already configured widens.
+    """
+    m = str(market or "").strip()
+    if not m:
+        return False
+    for pat in market_patterns():
+        if "*" in pat:
+            if fnmatch.fnmatchcase(m, pat):
+                return True
+        elif m == pat:
+            return True
+    return False
+
+
 def active(market: Optional[str] = None) -> bool:
     """False unless BOTH an experiment and a market are named AND it matches.
 
     INERT IS THE DEFAULT AND THERE IS NO PARTIAL ARMING. A missing experiment
-    id, a missing market, or a market that is not the named one all return
-    False, so an incomplete configuration cannot half-enable the probe.
+    id, a missing market, or a market that no authorized pattern covers all
+    return False, so an incomplete configuration cannot half-enable the
+    probe.
     """
-    exp, mkt = experiment_id(), named_market()
-    if not exp or not mkt:
+    exp = experiment_id()
+    if not exp or not market_patterns():
         return False
     if market is None:
         return True
-    return str(market).strip() == mkt
+    return market_authorized(market)
 
 
 # --------------------------------------------------------------- timing

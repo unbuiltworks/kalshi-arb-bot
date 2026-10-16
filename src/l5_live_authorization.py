@@ -457,6 +457,74 @@ def claim_probe_leg(leg: str, payload: Mapping[str, Any],
     return rec
 
 
+#: CONTINUOUS ACCUMULATION. `PROBE_LEGS` above gives the whole
+#: authorization exactly two slots, which is what made the two-sided probe a
+#: ONE-SHOT experiment: once `ts1.<exp>.UP` and `ts1.<exp>.DOWN` were spent,
+#: no further pair could ever be worked, in that window or any later one.
+#:
+#: Accumulation needs MANY independent intents while keeping the property
+#: that actually protects money: the SAME intent can never be submitted
+#: twice. So the slot is namespaced by the thing that identifies the intent
+#: -- its market, its accumulation round and its leg -- instead of by the
+#: leg alone. A replay of the same decision lands on the same sid and is
+#: refused exactly as before; a genuinely new intent (next round, next
+#: window, next market) gets its own slot.
+#:
+#: This LOOSENS NOTHING about duplicate protection. `client_order_id` is
+#: still derived, `already_submitted(coid)` still suppresses, and
+#: `max_live_orders` still bounds concurrency. What is removed is only the
+#: artificial cap of two orders per authorization.
+def accumulation_sid(experiment: str, market: str, rnd: int, leg: str) -> str:
+    return "acc1.%s.%s.%d.%s" % (experiment, market, int(rnd), leg)
+
+
+def claim_accumulation_leg(market: str, rnd: int, leg: str,
+                           payload: Mapping[str, Any],
+                           path: Optional[str] = None) -> Dict[str, Any]:
+    """Consume ONE accumulation leg's claim, or raise. Never auto-resets.
+
+    Durable on the same volume as the ledger, taken BEFORE the wire, and
+    never returned by a cancel, a partial fill, a reconnect, a restart or an
+    ambiguous acknowledgement -- identical semantics to `claim_probe_leg`,
+    with the slot keyed on (market, round, leg) rather than on leg alone.
+    """
+    exp = experiment_id()
+    if not exp:
+        raise Refused("ACC_CLAIM_NO_EXPERIMENT")
+    mkt = str(market or "").strip()
+    if not mkt:
+        raise Refused("ACC_CLAIM_NO_MARKET")
+    side = str(leg or "").upper()
+    if side not in PROBE_LEGS:
+        raise Refused("ACC_CLAIM_BAD_LEG", side)
+    try:
+        r = int(rnd)
+    except (TypeError, ValueError):
+        raise Refused("ACC_CLAIM_BAD_ROUND", str(rnd))
+    if r < 0:
+        raise Refused("ACC_CLAIM_BAD_ROUND", str(rnd))
+    sid = accumulation_sid(exp, mkt, r, side)
+    rec = {"kind": "accumulation_leg_claim", "experiment": exp,
+           "market": mkt, "round": r, "leg": side, "sid": sid,
+           "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+           **dict(payload)}
+    try:
+        claim_once(path or ledger_path(), sid, rec)
+    except Refused:
+        raise
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise Refused("ACC_CLAIM_UNAVAILABLE",
+                      {"sid": sid, "leg": side, "market": mkt, "round": r,
+                       "error": "%s: %s" % (type(exc).__name__,
+                                            str(exc)[:200]),
+                       "note": "the claim could not be persisted, so it is "
+                               "not held. Refusing rather than submitting "
+                               "on an unproven claim."})
+    return rec
+
+
 def claim_held(sid: str, path: Optional[str] = None) -> bool:
     """Is this claim already spent? Read from DISK, failing closed.
 

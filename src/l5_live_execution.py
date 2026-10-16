@@ -388,6 +388,14 @@ class NullTransport:
 AT_LIMIT_WHEN_UNCOUNTABLE = 1_000_000
 
 
+#: ACCUMULATION BOUND. How many UP+DOWN pairs may be worked per market.
+#: The superseded design allowed exactly one for the whole authorization.
+ACC_MAX_ROUNDS_ENV = "L5_ACC_MAX_ROUNDS"
+ACC_MAX_ROUNDS_DEFAULT = 8
+#: no configuration may exceed this, whatever the environment says
+ACC_MAX_ROUNDS_HARD_CAP = 64
+
+
 def client_order_id(action_key: str, attempt: int = 0) -> str:
     """DERIVED, never random: the same action always yields the same id.
 
@@ -3303,24 +3311,58 @@ class FaithfulExecutor:
         c = vg.max_cumulative_loss_usd
         return c if d is None else min(d, c)
 
-    def probe_plan_key(self, market: str) -> str:
-        from src import l5_live_authorization as AUTH
-        return "%s|%s" % (AUTH.experiment_id(), market)
+    def acc_max_rounds(self) -> int:
+        """How many PAIRS may be worked per market. The accumulation bound.
 
-    def probe_stored_plan(self, market: str) -> Optional[Dict[str, Any]]:
-        """The frozen plan for this experiment and market, or None."""
+        One round is one UP+DOWN pair. The old design had exactly one round
+        for the whole authorization; this makes the count explicit and
+        configurable, and it is a HARD bound: when the rounds for a market
+        are spent, the engine refuses rather than continuing.
+
+        It does not replace any risk gate. Cash, the worst-case deficit,
+        account-wide exposure, unmatched contracts and the realized-loss
+        halts are all still evaluated per round, and each round is sized
+        against the state the PREVIOUS rounds left behind -- so accumulation
+        stops on whichever of those binds first, usually well before this.
+        """
+        raw = str(os.getenv(ACC_MAX_ROUNDS_ENV, "")).strip()
+        if not raw:
+            return ACC_MAX_ROUNDS_DEFAULT
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            return 1                      # unparseable = the safe reading
+        return max(0, min(n, ACC_MAX_ROUNDS_HARD_CAP))
+
+    def probe_plan_key(self, market: str, rnd: int = 0) -> str:
+        from src import l5_live_authorization as AUTH
+        return "%s|%s|%d" % (AUTH.experiment_id(), market, int(rnd))
+
+    def probe_stored_plan(self, market: str, rnd: int = 0
+                          ) -> Optional[Dict[str, Any]]:
+        """The frozen plan for this experiment, market and round, or None."""
         p = (self.store.state.get("probe_plans") or {}).get(
-            self.probe_plan_key(market))
+            self.probe_plan_key(market, rnd))
         return dict(p) if isinstance(p, Mapping) else None
 
-    def probe_store_plan(self, market: str, plan: Mapping[str, Any]) -> None:
-        """Freeze it durably, so leg two matches leg one across a restart."""
+    def probe_store_plan(self, market: str, plan: Mapping[str, Any],
+                         rnd: int = 0) -> None:
+        """Freeze it durably, so leg two matches leg one across a restart.
+
+        PER ROUND, which is what makes re-planning safe. The plan was
+        previously frozen per market forever, so the economics of the FIRST
+        pair were reused for every later one however far the book had moved.
+        Each round now plans against the book and the inventory as they are,
+        while the two legs WITHIN a round stay byte-identical across a
+        restart -- which is the property the freeze existed for.
+        """
         plans = self.store.state.setdefault("probe_plans", {})
-        plans[self.probe_plan_key(market)] = dict(plan)
+        plans[self.probe_plan_key(market, rnd)] = dict(plan)
         self.store.save()
 
-    def probe_legs_claimed(self) -> Dict[str, bool]:
-        """Which legs this authorization has already spent, from DISK.
+    def probe_legs_claimed(self, market: str = "", rnd: int = 0
+                           ) -> Dict[str, bool]:
+        """Which legs of THIS round this market has already spent, from DISK.
 
         The claim file is the restart record: its presence means the leg was
         submitted, so a restarted process cannot re-place a leg whatever its
@@ -3330,11 +3372,26 @@ class FaithfulExecutor:
         out = {}
         for leg in AUTH.PROBE_LEGS:
             try:
-                out[leg] = AUTH.claim_held(
-                    AUTH.probe_leg_sid(AUTH.experiment_id(), leg))
+                out[leg] = AUTH.claim_held(AUTH.accumulation_sid(
+                    AUTH.experiment_id(), str(market), int(rnd), leg))
             except BaseException:                              # noqa: BLE001
                 out[leg] = True        # unreadable = treat as spent
         return out
+
+    def probe_round(self, market: str) -> Optional[int]:
+        """The first round of this market with a leg still unspent, or None.
+
+        Rounds are walked in order from zero and the first incomplete one is
+        the current one, so a one-sided round is FINISHED before a new pair
+        is started -- the opposite leg of an existing position always takes
+        priority over opening another. None means every permitted round for
+        this market is spent, and the caller refuses.
+        """
+        for r in range(self.acc_max_rounds()):
+            claimed = self.probe_legs_claimed(market, r)
+            if not all(claimed.values()):
+                return r
+        return None
 
     def probe_precheck(self, market: str, plan: Mapping[str, Any]
                        ) -> Optional[str]:
@@ -3646,7 +3703,14 @@ class FaithfulExecutor:
             # against 0.98 in test -- which is not a matched pair at all. The
             # first tick fixes both prices and the common quantity, the
             # second reuses them, and the store makes that survive a restart.
-            plan = self.probe_stored_plan(market)
+            # WHICH ACCUMULATION ROUND IS THIS. Walked from disk, so a
+            # restart resumes the round it was working rather than opening a
+            # fresh pair on top of inventory it has forgotten.
+            rnd = self.probe_round(market)
+            if rnd is None:
+                return prov.refuse("TWO_SIDED_PROBE",
+                                   "ACCUMULATION_EXHAUSTED")
+            plan = self.probe_stored_plan(market, rnd)
             bad = None
             if plan is None:
                 bad = "PROBE_NOT_SIZED"
@@ -3669,7 +3733,7 @@ class FaithfulExecutor:
                         break
                     ceiling = ceiling * D("0.85")
                 if not bad:
-                    self.probe_store_plan(market, plan)
+                    self.probe_store_plan(market, plan, rnd)
             if bad:
                 prov.stage("TWO_SIDED_PROBE", {
                     "refused": bad, "pair_cost": plan.get("pair_cost"),
@@ -3677,14 +3741,16 @@ class FaithfulExecutor:
                                "already resting, so neither is placed. Leg "
                                "one can never spend leg two's headroom.")})
                 return prov.refuse("TWO_SIDED_PROBE", bad[:120])
-            claimed = self.probe_legs_claimed()
+            claimed = self.probe_legs_claimed(market, rnd)
             legs = {l["side"]: l for l in plan["legs"]}
             # deterministic: the CHEAPER leg first, because a cheap leg
             # filling alone is the smaller worst case.
             order = sorted(legs, key=lambda k: D(legs[k]["price"]))
             nxt = next((k for k in order if not claimed.get(k)), None)
             if nxt is None:
-                return prov.refuse("TWO_SIDED_PROBE", "BOTH_LEGS_SPENT")
+                # probe_round only returns an INCOMPLETE round, so this is
+                # unreachable unless the claim state changed underneath us.
+                return prov.refuse("TWO_SIDED_PROBE", "ACCUMULATION_EXHAUSTED")
             leg = legs[nxt]
             # rewrite BOTH the decision and the translation: downstream code
             # reads dec["side"] for the order intent and the residual
@@ -3700,8 +3766,11 @@ class FaithfulExecutor:
                       price=D(leg["price"]), qty=executable)
             prov.stage("TWO_SIDED_PROBE", dict(
                 plan, leg_to_place=nxt, legs_claimed=claimed,
+                accumulation_round=rnd,
+                accumulation_max_rounds=self.acc_max_rounds(),
                 replaced_l5_intent=dict(superseded_l5)))
             self._probe_leg_pending = nxt
+            self._probe_round_pending = rnd
 
         if QM.active(market):
             built = QM.build_order(
@@ -4007,14 +4076,21 @@ class FaithfulExecutor:
                 "side": str(dec["side"]), "price": str(tr["price"]),
                 "qty": str(tr["qty"]), "mode": str(tr.get("mode") or "")}
             try:
-                # THE PROBE NEEDS EXACTLY TWO SUBMISSIONS, so it claims a
-                # NAMED LEG rather than loosening the single-submission rule
-                # for everything else. Each leg is still one-shot and
-                # durable, and max_live_orders still bounds concurrency.
+                # ACCUMULATION NEEDS MANY SUBMISSIONS, so it claims a
+                # NAMED (market, round, leg) slot rather than loosening the
+                # single-submission rule for everything else. Each slot is
+                # still one-shot and durable, the coid is still derived and
+                # still duplicate-suppressed, and max_live_orders still
+                # bounds concurrency.
                 leg_pending = getattr(self, "_probe_leg_pending", None)
-                if TS.active(market) and leg_pending:
-                    claim = AUTH.claim_probe_leg(
-                        leg_pending, dict(payload, market=market))
+                rnd_pending = getattr(self, "_probe_round_pending", None)
+                if TS.active(market) and leg_pending and rnd_pending is not None:
+                    # KEYED ON (market, round, leg), so an intent that is
+                    # genuinely new gets its own durable slot while a replay
+                    # of THIS intent lands on the same slot and is refused.
+                    claim = AUTH.claim_accumulation_leg(
+                        market, rnd_pending, leg_pending,
+                        dict(payload, market=market))
                 else:
                     claim = AUTH.claim_submission(market, payload)
             except BaseException as exc:                       # noqa: BLE001
@@ -4064,6 +4140,7 @@ class FaithfulExecutor:
                 return prov.refuse("SAFETY_OVERLAY",
                                    "INTENT_MUTATED_AFTER_GATES")
             self._probe_leg_pending = None
+            self._probe_round_pending = None
             ack = self.transport.submit(intent)
         except NotArmed as exc:
             # DISARMED never reached the venue, so the reservation is undone.
