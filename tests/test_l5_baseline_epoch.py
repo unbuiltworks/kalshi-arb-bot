@@ -201,3 +201,23 @@ def test_the_scoped_ceilings_are_absent_unless_configured():
                            cash_policy=VG.NO_RECYCLING)
     assert g.max_l5_daily_loss_usd is None
     assert _refuse(g, l5_scoped_realized=None) is None   # not configured
+
+
+def test_the_runner_baseline_caller_is_gated_and_reads_before_striking():
+    """The caller must be env-gated, use authoritative reads, and run where
+    the transport exists."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "src/l5_pmus_live_runner.py")).read()
+    t = src.index("self.transport = T.PmusTransport(")
+    b = src.index('os.getenv("L5_ESTABLISH_BASELINE"')
+    e = src.index("self.executor = LX.FaithfulExecutor(")
+    assert t < b < e, "the baseline must be struck after the transport exists"
+    assert ".account()" in src and ".positions()" in src
+    # obligations must NOT come from the not-yet-built executor
+    assert "self.executor_cash_legs()" not in src
+    assert "self.store.committed()" in src
+    # ownership from our OWN record, not account-wide open orders
+    assert "self.store.live_orders()" in src
+    # and the gates stay opt-in
+    assert '"L5_MAX_L5_DAILY_LOSS_USD"' in src
+    assert '"L5_MAX_L5_CUMULATIVE_LOSS_USD"' in src

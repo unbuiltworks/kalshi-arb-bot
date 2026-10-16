@@ -568,6 +568,52 @@ class Runner:
                     "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
                     "labels": ("the audit is read-only; a failure changes "
                                "nothing and never alters the ledger")})
+        # THE L5 BASELINE EPOCH, struck ONCE and only from authoritative
+        # reads (OWNER 2026-10-16). It is NOT a claim that historical L5
+        # losses were zero: establish_l5_baseline snapshots and preserves
+        # every pre-T figure, including the unknown-cost provenance keys. It
+        # is the instant from which ATTESTED L5 settlements are counted.
+        #
+        # Every read is required and none may be inferred. Cash comes from
+        # /v1/account/balances, the positions from /v1/portfolio/positions,
+        # L5-owned open orders from our OWN durable live-order record (the
+        # account's open orders say what is resting, not whose it is, and
+        # this account is SHARED), and the outstanding obligation from the
+        # same helper the cash gate uses. A failure strikes NO baseline, so
+        # the scoped ceilings keep refusing L5_SCOPED_REALIZED_UNAVAILABLE --
+        # the safe direction.
+        if str(os.getenv("L5_ESTABLISH_BASELINE", "")).strip().upper() == "YES":
+            try:
+                acct = self.transport.account() or {}
+                cash = next((acct.get(k) for k in
+                             ("availableBalance", "available", "cash",
+                              "buyingPower", "balance")
+                             if acct.get(k) is not None), None)
+                pos = self.transport.positions()
+                # from the store's OWN committed-cash record, not from the
+                # executor (which is constructed below and would therefore
+                # have reported a silent zero -- missing is never zero).
+                oblig = sum((D(str(v)) for v in
+                             (self.store.committed() or {}).values()), D(0))
+                mine = sorted(str((r or {}).get("venue_order_id") or "")
+                              for r in (self.store.live_orders() or {}).values()
+                              if (r or {}).get("venue_order_id"))
+                res = self.store.establish_l5_baseline(
+                    cash_usd=cash, l5_open_orders=mine,
+                    positions={str(k): str(v) for k, v in
+                               (self.store.state.get("positions") or {}).items()},
+                    outstanding_obligations_usd=oblig,
+                    source=self.store.L5_BASELINE_SOURCE)
+                emit("L5_BASELINE_ESTABLISHED" if res.get("established")
+                     else "L5_BASELINE_REFUSED",
+                     dict(res, venue_positions_read=(pos is not None)))
+            except BaseException as exc:                       # noqa: BLE001
+                emit("L5_BASELINE_REFUSED", {
+                    "established": False,
+                    "reason": "BASELINE_READ_FAILED",
+                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
+                    "labels": ("no baseline was struck, so the L5-scoped "
+                               "ceilings keep refusing -- the safe direction")})
         self.executor = LX.FaithfulExecutor(
             self.store, self.limits, transport=self.transport, lam=self.lam,
             now_fn=lambda: dt.datetime.fromtimestamp(self.now_t,
