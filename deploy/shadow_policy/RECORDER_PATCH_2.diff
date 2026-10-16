@@ -85,37 +85,83 @@
              if path == SHADOW_HTTP_PATH:
                  # the read-only multi-market L5 shadow report (same
                  # handoff pattern as the status document)
-@@ -2360,6 +2431,33 @@
+@@ -2190,7 +2261,7 @@
+     loop = asyncio.get_running_loop()
+     worker = concurrent.futures.ThreadPoolExecutor(
+         max_workers=1, thread_name_prefix="pmus-side")
+-    side_busy = {"status": False, "tick": False}
++    side_busy = {"status": False, "tick": False, "settle": False}
+     side_state = {"slugs": [], "discovery": {}, "l5_alloc": None}
+ 
+     def _status_job(snap: dict, connected: bool, msgs_now: int,
+@@ -2266,6 +2337,53 @@
+             side_state["l5_alloc"], sh)
+         return True
+ 
++    def schedule_settlement(spl: Any) -> None:
++        """Reconcile pending residuals on the side worker, never inline.
++
++        Never overlaps itself (`side_busy["settle"]`), never raises into the
++        loop, and each read carries SETTLEMENT_HTTP_TIMEOUT_S rather than the
++        collector's 15s default. If the reader is unavailable the pass is
++        abandoned and capture continues untouched.
++        """
++        if spl is None or side_busy.get("settle"):
++            return
++        side_busy["settle"] = True
++
++        def _settle() -> None:
++            try:
++                from functools import partial
++                from src import l5_shadow_policy_eval as _SPE
++                from src import pmus_sports_collector as _col
++                _get = partial(_col.http_get_json,
++                               timeout=_SPE.SETTLEMENT_HTTP_TIMEOUT_S)
++                done = spl.reconcile_pending(_get)
++                if done:
++                    print("PMUS_SHADOW_SETTLED " + json.dumps(
++                        {"rows": len(done),
++                         "markets": [{"market": r.get("market"),
++                                      "reconciled": r.get("reconciled"),
++                                      "basis": _SPE.settlement_basis(r),
++                                      "reason": r.get("reconcile_reason"),
++                                      "attempts": r.get("reconcile_attempts"),
++                                      "net_usd": {
++                                          k: (r.get("net") or {}).get(
++                                              k, {}).get("net_usd")
++                                          for k in ("HOLD", "REPRICE",
++                                                    "CROSS", "BLIND")}}
++                                     for r in done],
++                         "labels": ("venue-confirmed OUTCOME only; the fills "
++                                    "remain MODELLED")},
++                        separators=(",", ":"), default=str), flush=True)
++            except Exception:                              # noqa: BLE001
++                try:
++                    spl.reconcile_errors += 1
++                except Exception:                          # noqa: BLE001
++                    pass
++            finally:
++                side_busy["settle"] = False
++
++        loop.run_in_executor(worker, _settle)
++
+     def schedule_shadow_tick() -> None:
+         nonlocal last_shadow_tick
+         if shadow is None or side_busy["tick"] or \
+@@ -2360,6 +2478,16 @@
                          print("PMUS_SHADOW_POLICY " + json.dumps(
                              _spl.emit_document(_scored),
                              separators=(",", ":"), default=str), flush=True)
-+                    # SETTLEMENT, on the SAME unauthenticated read the
-+                    # recorder already performs for gateway_xcheck. No new
-+                    # host, no new endpoint, no credential. Wrapped, because
-+                    # capture outranks reconciliation.
-+                    try:
-+                        from src import pmus_sports_collector as _col
-+                        _done = _spl.reconcile_pending(_col.http_get_json)
-+                    except Exception:
-+                        _done = []
-+                        _spl.reconcile_errors += 1
-+                    if _done:
-+                        print("PMUS_SHADOW_SETTLED " + json.dumps(
-+                            {"rows": len(_done),
-+                             "markets": [{"market": r.get("market"),
-+                                          "reconciled": r.get("reconciled"),
-+                                          "reason": r.get("reconcile_reason"),
-+                                          "attempts": r.get(
-+                                              "reconcile_attempts"),
-+                                          "net_usd": {
-+                                              p: (r.get("net") or {}).get(
-+                                                  p, {}).get("net_usd")
-+                                              for p in ("HOLD", "REPRICE",
-+                                                        "CROSS", "BLIND")}}
-+                                         for r in _done],
-+                             "labels": ("venue-confirmed OUTCOME only; the "
-+                                        "fills remain MODELLED")},
-+                            separators=(",", ":"), default=str), flush=True)
++                    # SETTLEMENT, OFF THE EVENT LOOP. This block runs
++                    # inside `async def run`, so a synchronous GET here
++                    # blocks the websocket exactly as long as it takes --
++                    # the collector's default timeout is 15s and four
++                    # pending windows would be a minute of lost capture.
++                    # It therefore goes to the SAME side worker and the
++                    # SAME busy-flag pattern that schedule_status and
++                    # schedule_shadow_tick already use, with a short
++                    # explicit timeout. Capture outranks reconciliation.
++                    schedule_settlement(_spl)
                  released = drop_stale_ladders(mstate, ladder_keep)
                  if released:
                      print("PMUS_WS_STATUS " + json.dumps(

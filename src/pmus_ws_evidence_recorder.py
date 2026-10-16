@@ -1659,6 +1659,38 @@ def status_port() -> int:
         return 0
 
 
+#: the bounded shadow-records path. ABSENT unless a token is configured:
+#: with no token the handler 404s, so the default deployment serves nothing
+#: new at all. The existing status paths carry NO authentication and are
+#: protected only by this service having no public domain -- which is a
+#: network fact, not a control, and is not good enough for records that
+#: carry inventory and cost. This path therefore brings its own.
+SHADOW_RECORDS_PATH = "/shadow-policy"
+SHADOW_RECORDS_TOKEN_ENV = "L5_SHADOW_POLICY_TOKEN"
+SHADOW_RECORDS_MAX_LIMIT = 200
+
+
+def shadow_records_token() -> str:
+    """The bearer token, or empty when the path is disabled."""
+    return str(os.getenv(SHADOW_RECORDS_TOKEN_ENV) or "").strip()
+
+
+def shadow_records_authorized(header: Any) -> bool:
+    """Constant-time bearer check. Empty token => never authorized.
+
+    The token is never logged, never echoed and never compared with `==`.
+    """
+    import hmac
+    tok = shadow_records_token()
+    if not tok:
+        return False
+    got = str(header or "")
+    prefix = "Bearer "
+    if not got.startswith(prefix):
+        return False
+    return hmac.compare_digest(got[len(prefix):], tok)
+
+
 def serve_status_doc(root: Path, port: int):
     """Serve the status document read-only on a daemon thread.
 
@@ -1689,6 +1721,45 @@ def serve_status_doc(root: Path, port: int):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(blob)))
+                self.end_headers()
+                self.wfile.write(blob)
+                return
+            if path == SHADOW_RECORDS_PATH:
+                if not shadow_records_token():
+                    self.send_response(404)       # the path does not exist
+                    self.end_headers()
+                    return
+                if not shadow_records_authorized(
+                        self.headers.get("Authorization")):
+                    self.send_response(401)
+                    self.send_header("WWW-Authenticate", "Bearer")
+                    self.end_headers()
+                    return
+                _spl = shadow_policy_log()
+                if _spl is None:
+                    self.send_response(503)
+                    self.end_headers()
+                    return
+                try:
+                    import urllib.parse as _up
+                    q = _up.parse_qs(
+                        (self.path.split("?", 1) + [""])[1])
+                    lim = int((q.get("limit") or ["50"])[0])
+                except Exception:
+                    lim = 50
+                lim = max(1, min(lim, SHADOW_RECORDS_MAX_LIMIT))
+                try:
+                    blob = json.dumps(_spl.records_view(limit=lim),
+                                      separators=(",", ":"),
+                                      default=str).encode()
+                except Exception:
+                    self.send_response(503)
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(blob)))
+                self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(blob)
                 return
@@ -2190,7 +2261,7 @@ async def run(minutes: Optional[float]) -> int:
     loop = asyncio.get_running_loop()
     worker = concurrent.futures.ThreadPoolExecutor(
         max_workers=1, thread_name_prefix="pmus-side")
-    side_busy = {"status": False, "tick": False}
+    side_busy = {"status": False, "tick": False, "settle": False}
     side_state = {"slugs": [], "discovery": {}, "l5_alloc": None}
 
     def _status_job(snap: dict, connected: bool, msgs_now: int,
@@ -2265,6 +2336,53 @@ async def run(minutes: Optional[float]) -> int:
             len(side_state["slugs"]), dict(side_state["discovery"]),
             side_state["l5_alloc"], sh)
         return True
+
+    def schedule_settlement(spl: Any) -> None:
+        """Reconcile pending residuals on the side worker, never inline.
+
+        Never overlaps itself (`side_busy["settle"]`), never raises into the
+        loop, and each read carries SETTLEMENT_HTTP_TIMEOUT_S rather than the
+        collector's 15s default. If the reader is unavailable the pass is
+        abandoned and capture continues untouched.
+        """
+        if spl is None or side_busy.get("settle"):
+            return
+        side_busy["settle"] = True
+
+        def _settle() -> None:
+            try:
+                from functools import partial
+                from src import l5_shadow_policy_eval as _SPE
+                from src import pmus_sports_collector as _col
+                _get = partial(_col.http_get_json,
+                               timeout=_SPE.SETTLEMENT_HTTP_TIMEOUT_S)
+                done = spl.reconcile_pending(_get)
+                if done:
+                    print("PMUS_SHADOW_SETTLED " + json.dumps(
+                        {"rows": len(done),
+                         "markets": [{"market": r.get("market"),
+                                      "reconciled": r.get("reconciled"),
+                                      "basis": _SPE.settlement_basis(r),
+                                      "reason": r.get("reconcile_reason"),
+                                      "attempts": r.get("reconcile_attempts"),
+                                      "net_usd": {
+                                          k: (r.get("net") or {}).get(
+                                              k, {}).get("net_usd")
+                                          for k in ("HOLD", "REPRICE",
+                                                    "CROSS", "BLIND")}}
+                                     for r in done],
+                         "labels": ("venue-confirmed OUTCOME only; the fills "
+                                    "remain MODELLED")},
+                        separators=(",", ":"), default=str), flush=True)
+            except Exception:                              # noqa: BLE001
+                try:
+                    spl.reconcile_errors += 1
+                except Exception:                          # noqa: BLE001
+                    pass
+            finally:
+                side_busy["settle"] = False
+
+        loop.run_in_executor(worker, _settle)
 
     def schedule_shadow_tick() -> None:
         nonlocal last_shadow_tick
@@ -2360,6 +2478,16 @@ async def run(minutes: Optional[float]) -> int:
                         print("PMUS_SHADOW_POLICY " + json.dumps(
                             _spl.emit_document(_scored),
                             separators=(",", ":"), default=str), flush=True)
+                    # SETTLEMENT, OFF THE EVENT LOOP. This block runs
+                    # inside `async def run`, so a synchronous GET here
+                    # blocks the websocket exactly as long as it takes --
+                    # the collector's default timeout is 15s and four
+                    # pending windows would be a minute of lost capture.
+                    # It therefore goes to the SAME side worker and the
+                    # SAME busy-flag pattern that schedule_status and
+                    # schedule_shadow_tick already use, with a short
+                    # explicit timeout. Capture outranks reconciliation.
+                    schedule_settlement(_spl)
                 released = drop_stale_ladders(mstate, ladder_keep)
                 if released:
                     print("PMUS_WS_STATUS " + json.dumps(

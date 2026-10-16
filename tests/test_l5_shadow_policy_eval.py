@@ -817,3 +817,109 @@ def test_the_view_serves_no_field_outside_the_allow_list(tmp_path):
     log.latest[SLUG] = dict(log.latest[SLUG], secret_field="CANARY")
     blob = json.dumps(log.records_view())
     assert "CANARY" not in blob and "secret_field" not in blob
+
+
+# ------------------------------ UNRESOLVED_EXPIRED is explicit and unpriced
+
+def test_retry_exhaustion_yields_an_explicit_unresolved_expired_state(tmp_path):
+    log = _pending_log(tmp_path)
+    for _ in range(E.RECONCILE_MAX_ATTEMPTS):
+        log.reconcile_pending(lambda path: _bbo(state="MARKET_STATE_OPEN"),
+                              now=NOW_OK)
+    out = log.reconcile_pending(lambda path: _bbo(state="MARKET_STATE_OPEN"),
+                                now=NOW_OK)
+    rec = out[0]
+    assert E.settlement_basis(rec) == E.BASIS_UNRESOLVED_EXPIRED
+    assert rec["settlement_basis"] == "UNRESOLVED_EXPIRED"
+    assert rec["reconciled"] is False
+    # no false settlement attribution, and nothing priced
+    assert "settlement_evidence" not in rec
+    for p in E.POLICIES:
+        assert rec["net"][p]["net_usd"] is None
+    assert rec["net"]["HOLD"]["pending_residual"] is True
+
+
+def test_the_dashboard_counts_unresolved_expired_separately(tmp_path):
+    log = _pending_log(tmp_path)
+    lapsed = E.window_start_epoch(SLUG) + 900 + E.RECONCILE_MAX_AGE_S + 1
+    out = log.reconcile_pending(lambda p: _bbo(state="MARKET_STATE_OPEN"),
+                                now=lapsed)
+    d = E.dashboard(out)
+    assert d["unresolved_expired"]["windows"] == 1
+    assert d["unresolved_expired"]["net_usd"] is None
+    assert d["pending_residual"]["windows"] == 0
+    assert d["modelled_matched_pair"]["windows"] == 0
+    assert d["venue_settled_modelled"]["windows"] == 0
+
+
+def test_a_pass_is_bounded_in_how_many_markets_it_reads(tmp_path):
+    log = _log(tmp_path)
+    seen = []
+    # windows near NOW_OK, so none of them is already past the retry budget
+    for hhmm in ("2030z", "2045z", "2100z", "2115z", "2130z", "2145z",
+                 "2200z")[:E.RECONCILE_MAX_PER_PASS + 3]:
+        slug = "cpc-btc-updown-15m-2026-10-16-%s" % hhmm
+        log.latest[slug] = {"market": slug, "ok": True,
+                            "net": {p: {"net_usd": None,
+                                        "pending_residual": True}
+                                    for p in E.POLICIES}}
+    log.reconcile_pending(lambda path: seen.append(path) or
+                          _bbo(state="MARKET_STATE_OPEN"), now=NOW_OK)
+    assert len(seen) == E.RECONCILE_MAX_PER_PASS
+
+
+def test_the_view_reports_the_settlement_basis_for_every_record(tmp_path):
+    log = _pending_log(tmp_path)
+    row = log.records_view()["records"][0]
+    assert row["settlement_basis"] == E.BASIS_PENDING
+
+
+# --------------------------- the recorder patch must not block the loop
+
+def test_the_recorder_patch_runs_settlement_off_the_event_loop():
+    """A synchronous GET inside `async def run` would stall the websocket.
+
+    The collector's default timeout is 15s; four pending windows back to
+    back is a minute of lost capture. The patch therefore schedules the
+    reconciliation onto the SAME side worker, under the SAME busy flag,
+    that schedule_status and schedule_shadow_tick already use.
+    """
+    import ast
+    diff = open("deploy/shadow_policy/RECORDER_PATCH_2.diff").read()
+    added = "\n".join(l[1:] for l in diff.splitlines()
+                      if l.startswith("+") and not l.startswith("+++"))
+    assert "run_in_executor(worker, _settle)" in added
+    assert 'side_busy["settle"] = True' in added
+    assert "SETTLEMENT_HTTP_TIMEOUT_S" in added
+    # and the reconciliation must NOT be called straight from the loop body
+    assert "_spl.reconcile_pending(" not in added
+    assert "schedule_settlement(_spl)" in added
+
+
+def test_the_settlement_timeout_is_far_below_the_collector_default():
+    from src import pmus_sports_collector as col
+    import inspect
+    default = inspect.signature(col.http_get_json).parameters["timeout"].default
+    assert E.SETTLEMENT_HTTP_TIMEOUT_S <= 5.0
+    assert E.SETTLEMENT_HTTP_TIMEOUT_S < default
+
+
+def test_the_recorder_patch_adds_no_write_verb_or_order_path():
+    diff = open("deploy/shadow_policy/RECORDER_PATCH_2.diff").read()
+    added = "\n".join(l[1:] for l in diff.splitlines()
+                      if l.startswith("+") and not l.startswith("+++"))
+    for bad in ("requests.post", "urlopen(", ".post(", "place_order",
+                "create_order", "cancel_order", "do_POST", "do_PUT",
+                "PMUS_API_SECRET", "PMUS_API_KEY"):
+        assert bad not in added, bad
+
+
+def test_the_token_is_never_logged_or_echoed():
+    diff = open("deploy/shadow_policy/RECORDER_PATCH_2.diff").read()
+    added = "\n".join(l[1:] for l in diff.splitlines()
+                      if l.startswith("+") and not l.startswith("+++"))
+    assert "compare_digest" in added
+    # the token must never reach a print or a response body
+    for line in added.splitlines():
+        if "print(" in line or "wfile.write" in line:
+            assert "token" not in line.lower()

@@ -1006,6 +1006,12 @@ class ShadowPolicyLog:
 BASIS_MODELLED_MATCHED = "MODELLED_EXECUTION_OUTCOME_INDEPENDENT"
 BASIS_VENUE_SETTLED = "MODELLED_EXECUTION_VENUE_SETTLED_RESIDUAL"
 BASIS_PENDING = "PENDING_SETTLEMENT"
+#: retry budget spent or the settlement window lapsed. A TERMINAL state that
+#: is NOT a settlement: the net stays null, no settlement_evidence is ever
+#: attached, and nothing is attributed to the venue. It exists so an
+#: unresolved residual is reported as unresolved rather than quietly dropped
+#: out of the pending count and read as if it had settled.
+BASIS_UNRESOLVED_EXPIRED = "UNRESOLVED_EXPIRED"
 
 #: the only settlement evidence accepted. A book price at expiry is not one.
 POSITIVE_SETTLEMENT_SOURCES = ("VENUE_SETTLEMENT_PX",)
@@ -1023,6 +1029,8 @@ def settlement_basis(rec: Mapping[str, Any]) -> str:
     an outcome-independent arithmetic identity as a venue confirmation, which
     it is not.
     """
+    if (rec or {}).get("reconcile_closed"):
+        return BASIS_UNRESOLVED_EXPIRED
     nets = (rec or {}).get("net") or {}
     hold = nets.get("HOLD") or {}
     if hold.get("pending_residual"):
@@ -1123,6 +1131,10 @@ def dashboard(records: Sequence[Mapping[str, Any]],
                              "residual_qty": D(0), "net_usd": None},
         "venue_settled_modelled": {"windows": 0,
                                    "net_usd": {p: D(0) for p in POLICIES}},
+        "unresolved_expired": {"windows": 0, "net_usd": None,
+                               "labels": ("retry budget spent or settlement "
+                                          "window lapsed. Never priced, "
+                                          "never attributed to the venue.")},
         "not_scored": {"windows": 0, "reasons": {}},
     }
     for r in records:
@@ -1134,6 +1146,9 @@ def dashboard(records: Sequence[Mapping[str, Any]],
             continue
         basis = settlement_basis(r)
         nets = r.get("net") or {}
+        if basis == BASIS_UNRESOLVED_EXPIRED:
+            out["unresolved_expired"]["windows"] += 1
+            continue
         if basis == BASIS_PENDING:
             p = out["pending_residual"]
             p["windows"] += 1
@@ -1232,6 +1247,8 @@ def settlement_from_bbo(doc: Any, slug: str) -> Dict[str, Any]:
 
 #: bounded retry policy for a settlement that has not appeared yet
 RECONCILE_MAX_ATTEMPTS = 8
+#: markets a single pass may touch, so one pass is bounded even on the worker
+RECONCILE_MAX_PER_PASS = 4
 RECONCILE_MAX_AGE_S = 7200.0        # two hours after the window ends
 
 
@@ -1270,7 +1287,7 @@ def _reconcile_pending(log: "ShadowPolicyLog", get_json, *,
     import time as _t
     now = _t.time() if now is None else float(now)
     out = []
-    for mk in _pending_markets(log):
+    for mk in _pending_markets(log)[:RECONCILE_MAX_PER_PASS]:
         rec = log.latest.get(mk) or {}
         start = window_start_epoch(mk)
         closed = None if start is None else start + float(TS.WINDOW_S)
@@ -1279,15 +1296,18 @@ def _reconcile_pending(log: "ShadowPolicyLog", get_json, *,
                    and now - closed > RECONCILE_MAX_AGE_S)
         if n >= RECONCILE_MAX_ATTEMPTS or expired:
             closed_rec = dict(rec, reconciled=False, reconcile_closed=True,
+                              settlement_basis=BASIS_UNRESOLVED_EXPIRED,
                               reconcile_reason=("RETRY_BUDGET_EXHAUSTED"
                                                 if not expired
                                                 else "SETTLEMENT_WINDOW_LAPSED"),
                               reconcile_attempts=n,
                               supersedes=rec.get("record_id") or mk,
-                              labels=("CLOSED UNRESOLVED. The residual was "
+                              labels=("UNRESOLVED_EXPIRED. The residual was "
                                       "never settled by the venue within the "
-                                      "retry budget. It is not priced and "
-                                      "not counted."))
+                                      "retry budget. The net stays null, no "
+                                      "settlement evidence is attached and "
+                                      "nothing is attributed to the venue."))
+            closed_rec.pop("settlement_evidence", None)
             log.settled.add(mk)
             log.latest[mk] = closed_rec
             log._append(closed_rec)
@@ -1317,7 +1337,13 @@ def _reconcile_pending(log: "ShadowPolicyLog", get_json, *,
 
 #: fields the bounded read-only view exposes per record. Nothing outside this
 #: list is served, so a field added to a record later cannot leak by default.
+#: a short, explicit timeout for the settlement read. The collector default
+#: is 15s; four of those back to back is a minute, which is far too long to
+#: hold anything up, so the caller always passes this instead.
+SETTLEMENT_HTTP_TIMEOUT_S = 3.0
+
 VIEW_FIELDS = ("market", "ok", "reason", "outcome", "one_sided_s",
+               "settlement_basis",
                "selected", "decisions_evaluated", "quote",
                "inventory_after_acquisition", "resting", "net",
                "refusal_census", "first_action", "settlement_evidence",
@@ -1340,7 +1366,8 @@ def records_view(log: "ShadowPolicyLog", *, limit: int = 50) -> Dict[str, Any]:
     n = max(1, min(int(limit or 1), VIEW_MAX_RECORDS))
     items = sorted(log.latest.values(),
                    key=lambda r: str(r.get("market")), reverse=True)[:n]
-    rows = [{k: r[k] for k in VIEW_FIELDS if k in r} for r in items]
+    rows = [dict({k: r[k] for k in VIEW_FIELDS if k in r},
+                 settlement_basis=settlement_basis(r)) for r in items]
     return {"records": rows, "returned": len(rows),
             "stored_markets": len(log.latest),
             "pending": len(_pending_markets(log)),
