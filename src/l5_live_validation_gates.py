@@ -99,7 +99,8 @@ class ValidationGates:
                  max_windows: int = 20,
                  max_worst_case_deficit_usd: Optional[D] = None,
                  fee_theta_worst: D = D("0.0695"),
-                 fee_extra_per_order_usd: D = D("0.01")) -> None:
+                 fee_extra_per_order_usd: D = D("0.01"),
+                 max_strategy_loss_usd: Optional[D] = None) -> None:
         if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
             raise ValueError("unknown cash policy: %r" % cash_policy)
         if cash_policy == RECYCLE_ON_COMPLETE:
@@ -109,6 +110,14 @@ class ValidationGates:
         self.max_cash_deployed_usd = _d(max_cash_deployed_usd)
         self.max_unmatched_contracts = _d(max_unmatched_contracts)
         self.max_cumulative_loss_usd = _d(max_cumulative_loss_usd)
+        # Separate verified L5 net loss cap. None leaves old behaviour
+        # unchanged; explicit config requires an independently audited net.
+        self.max_strategy_loss_usd = (
+            None if max_strategy_loss_usd is None else _d(max_strategy_loss_usd))
+        if (self.max_strategy_loss_usd is not None and
+                (not self.max_strategy_loss_usd.is_finite() or
+                 self.max_strategy_loss_usd <= 0)):
+            raise ValueError("strategy loss ceiling must be positive and finite")
         self.cash_policy = cash_policy
         self.max_windows = int(max_windows)
         # DEFAULT DISABLED. None means the gate is not configured and never
@@ -137,6 +146,8 @@ class ValidationGates:
         return {"max_cash_deployed_usd": str(self.max_cash_deployed_usd),
                 "max_unmatched_contracts": str(self.max_unmatched_contracts),
                 "max_cumulative_loss_usd": str(self.max_cumulative_loss_usd),
+                "max_strategy_loss_usd": (None if self.max_strategy_loss_usd
+                                          is None else str(self.max_strategy_loss_usd)),
                 "cash_policy": self.cash_policy,
                 "max_windows": self.max_windows,
                 "max_worst_case_deficit_usd": (
@@ -371,6 +382,7 @@ class ValidationGates:
                outstanding: Sequence[Mapping[str, Any]] = (),
                unmatched_after: D = D(0),
                cumulative_realized: D = D(0),
+               verified_strategy_net: Optional[D] = None,
                cumulative_unrealized_loss: Optional[D] = D(0),
                windows_used: int = 0,
                book_uncertain: Optional[str] = None,
@@ -414,6 +426,23 @@ class ValidationGates:
         if loss >= self.max_cumulative_loss_usd:
             return ("CUMULATIVE_LOSS_LIMIT:%s>=%s"
                     % (loss, self.max_cumulative_loss_usd))
+
+        # Independent strategy budget, NEVER substituted for the conservative
+        # account-wide gate above. No verified after-fee net is a refusal.
+        if self.max_strategy_loss_usd is not None:
+            if verified_strategy_net is None:
+                return "STRATEGY_NET_UNVERIFIED"
+            try:
+                snet = _d(verified_strategy_net)
+                if not snet.is_finite():
+                    return "STRATEGY_NET_UNVERIFIED"
+            except (ValueError, ArithmeticError):
+                return "STRATEGY_NET_UNVERIFIED"
+            strategy_loss = max(D(0), -snet) + max(
+                D(0), _d(cumulative_unrealized_loss))
+            if strategy_loss >= self.max_strategy_loss_usd:
+                return ("STRATEGY_LOSS_LIMIT:%s>=%s" %
+                        (strategy_loss, self.max_strategy_loss_usd))
 
         # 3. cash commitment, including this order as if it filled in full
         this_order = (q if str(order_intent or "").upper()
