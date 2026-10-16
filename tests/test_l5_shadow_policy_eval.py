@@ -375,3 +375,104 @@ def test_the_emitted_document_stays_small_and_claims_nothing(tmp_path):
     assert len(blob) < 1200, "one window must not cost a large log line"
     assert "realized profit" in doc["labels"]
     assert doc["windows"][0]["net_usd"]["HOLD"] is not None
+
+
+# ------------------------------------------------ the deployment safety check
+
+def test_the_module_can_reach_no_network_crypto_or_subprocess_module():
+    """The closure of what this module imports, proved rather than grepped."""
+    import ast
+    import os
+    seen, stack, ext = set(), ["src/l5_shadow_policy_eval.py"], set()
+    while stack:
+        f = stack.pop()
+        if f in seen or not os.path.exists(f):
+            continue
+        seen.add(f)
+        for n in ast.walk(ast.parse(open(f).read())):
+            if isinstance(n, ast.Import):
+                for a in n.names:
+                    ext.add(a.name.split(".")[0])
+            elif isinstance(n, ast.ImportFrom):
+                if n.level:
+                    for a in n.names:
+                        stack.append("src/%s.py" % a.name)
+                elif n.module:
+                    ext.add(n.module.split(".")[0])
+    assert seen == {"src/l5_shadow_policy_eval.py",
+                    "src/l5_two_sided_probe.py"}
+    forbidden = {"socket", "ssl", "http", "urllib", "requests", "httpx",
+                 "aiohttp", "websockets", "subprocess", "hmac", "hashlib",
+                 "base64", "cryptography", "ftplib", "smtplib", "pickle"}
+    assert not (ext & forbidden), sorted(ext & forbidden)
+
+
+def test_the_module_reads_only_its_own_two_environment_variables():
+    import ast
+    names = set()
+    for f in ("src/l5_shadow_policy_eval.py",):
+        for n in ast.walk(ast.parse(open(f).read())):
+            if (isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Attribute)
+                    and n.func.attr == "getenv"):
+                a = n.args[0]
+                names.add(a.id if isinstance(a, ast.Name) else getattr(
+                    a, "value", None))
+    assert names == {"ENABLE_ENV", "STORE_ENV"}
+    assert E.ENABLE_ENV == "L5_SHADOW_POLICY_EVAL"
+    assert E.STORE_ENV == "L5_SHADOW_POLICY_STORE"
+
+
+def test_no_environment_value_can_reach_the_record_the_log_or_the_store(
+        tmp_path, monkeypatch):
+    """Secrets in the environment must not appear in anything this emits."""
+    import json
+    canary = "CANARY-SECRET-b7f3e1"
+    for var in ("PMUS_API_KEY_ID", "PMUS_API_SECRET_KEY", "SOME_TOKEN"):
+        monkeypatch.setenv(var, canary)
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0])
+    log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1])
+    log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    scored = log.rollover(keep=[])
+    assert scored and scored[0]["ok"] is True
+    blobs = [json.dumps(scored[0], default=str),
+             json.dumps(log.emit_document(scored), default=str),
+             open(tmp_path / "store.jsonl").read()]
+    for b in blobs:
+        assert canary not in b
+        for var in ("PMUS_API_KEY_ID", "PMUS_API_SECRET_KEY"):
+            assert var not in b
+
+
+def test_a_failing_accumulator_cannot_interrupt_the_recorder(tmp_path):
+    """Every hook swallows and counts. The capture must never stop."""
+    log = _log(tmp_path)
+    log.observe_book(SLUG, base_ladder()[0])
+
+    class Boom:
+        def on_book(self, *a, **k):
+            raise RuntimeError("boom")
+
+        def on_trade(self, *a, **k):
+            raise RuntimeError("boom")
+
+        def finish(self, **k):
+            raise RuntimeError("boom")
+
+    log.live[SLUG] = Boom()
+    log.observe_book(SLUG, base_ladder()[1])          # must not raise
+    log.observe_trade(SLUG, T0 + 5, "0.63", "20")     # must not raise
+    assert log.rollover(keep=[]) == []                # must not raise
+    assert log.errors >= 3
+
+
+def test_an_unknown_slug_trade_is_ignored_rather_than_opening_a_window(
+        tmp_path):
+    log = _log(tmp_path)
+    log.observe_trade("cpc-btc-updown-15m-2026-10-16-9999z", T0, "0.5", "1")
+    assert log.live == {}
+    assert log.errors == 0

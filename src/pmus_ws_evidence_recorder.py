@@ -312,6 +312,48 @@ def ladder_markets(now: Optional[float] = None) -> frozenset:
     return frozenset(out)
 
 
+#: SHADOW POLICY EVALUATION, OFF BY DEFAULT. Built lazily and only when
+#: L5_SHADOW_POLICY_EVAL is YES, so an unset or unreadable variable leaves this
+#: process byte-identical to what it is today. Read-only: it scores decisions
+#: against evidence this process already holds, opens no socket, signs nothing
+#: and has no path to an order.
+_SHADOW_POLICY_LOG = None
+_SHADOW_POLICY_BROKEN = False
+
+
+def shadow_policy_log():
+    """The per-process shadow log, or None when the feature is off.
+
+    THE FLAG IS RE-READ EVERY CALL, not cached with the object. Caching the
+    answer would mean unsetting L5_SHADOW_POLICY_EVAL did nothing until a
+    restart, and the documented rollback for this feature is exactly that
+    unset. A disable therefore takes effect on the next event.
+
+    A construction that raises sets `_SHADOW_POLICY_BROKEN` and is never
+    retried, so a broken evaluator costs one attempt rather than one per
+    event, and can never take the recorder down.
+    """
+    global _SHADOW_POLICY_LOG
+    global _SHADOW_POLICY_BROKEN
+    if _SHADOW_POLICY_BROKEN:
+        return None
+    try:
+        from . import l5_shadow_policy_eval as SPE
+        if not SPE.enabled():
+            return None
+        if _SHADOW_POLICY_LOG is None:
+            from decimal import Decimal
+            _SHADOW_POLICY_LOG = SPE.ShadowPolicyLog(
+                tick=Decimal("0.01"), min_qty=Decimal("0.01"),
+                depth_ticks=1, cash_envelope=Decimal("2.00"),
+                max_worst_case_loss=Decimal("2.00"))
+    except Exception:
+        _SHADOW_POLICY_BROKEN = True
+        _SHADOW_POLICY_LOG = None
+        return None
+    return _SHADOW_POLICY_LOG
+
+
 def drop_stale_ladders(state: dict, keep: frozenset) -> int:
     """Release rungs for markets no longer selected.
 
@@ -434,6 +476,17 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
                     "rungs_cap": rungs,
                 })
                 del s["ladder_history"][:-ladder_history()]
+                _spl = shadow_policy_log()
+                if _spl is not None:
+                    # the touch named EXACTLY as emit_new_ladders names it --
+                    # the top rung of each side -- so the evaluator sees the
+                    # same book the emitted evidence rows show.
+                    _h = s["ladder_history"][-1]
+                    _b = list(_h.get("bids") or [])
+                    _a = list(_h.get("asks") or [])
+                    _spl.observe_book(ev["slug"], dict(
+                        _h, bid=(_b[0][0] if _b else None),
+                        ask=(_a[0][0] if _a else None)))
         else:
             # fail closed PER ROW: a malformed price/qty is dropped and
             # counted, never persisted, never allowed to crash the status
@@ -468,6 +521,9 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
                 "ask_at_trade": s.get("ask"),
                 "dir": _trade_direction({**ev, "price": str(px)}, s)})
             del s["trades"][:-500]
+            _spl = shadow_policy_log()
+            if _spl is not None:
+                _spl.observe_trade(ev["slug"], now, str(px), ev.get("qty"))
 
 
 def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
@@ -2297,6 +2353,13 @@ async def run(minutes: Optional[float]) -> int:
             ladder_keep = ladder_markets()
             if ladder_keep or any("ladder_history" in (v or {})
                                   for v in mstate.values() if isinstance(v, dict)):
+                _spl = shadow_policy_log()
+                if _spl is not None:
+                    _scored = _spl.rollover(keep=ladder_keep)
+                    if _scored:
+                        print("PMUS_SHADOW_POLICY " + json.dumps(
+                            _spl.emit_document(_scored),
+                            separators=(",", ":"), default=str), flush=True)
                 released = drop_stale_ladders(mstate, ladder_keep)
                 if released:
                     print("PMUS_WS_STATUS " + json.dumps(
