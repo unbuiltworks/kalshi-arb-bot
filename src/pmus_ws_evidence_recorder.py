@@ -272,10 +272,64 @@ LADDER_RUNGS_CAP = 64
 LADDER_HISTORY_CAP = 1000
 
 
-def ladder_markets() -> frozenset:
-    """Exact slugs retaining a ladder. Unreadable or unset means NONE."""
+#: Follow the rotating window. A 15m product retires its slug every quarter
+#: hour, so a STATIC exact list goes stale within one window and retains a
+#: ladder for a market that no longer trades. This resolves the live slug from
+#: the clock, which keeps the selection EXACT -- never a pattern -- while
+#: still tracking the rotation. `ahead` of 1 covers the boundary, where the
+#: next window opens before the current one settles.
+LADDER_ROLLING_ENV = "PMUS_WS_LADDER_ROLLING"
+LADDER_ROLLING_AHEAD_ENV = "PMUS_WS_LADDER_ROLLING_AHEAD"
+LADDER_ROLLING_AHEAD_DEFAULT = 1
+LADDER_ROLLING_AHEAD_CAP = 3
+
+
+def ladder_rolling() -> bool:
+    return str(os.getenv(LADDER_ROLLING_ENV) or "").strip().upper() == "YES"
+
+
+def ladder_markets(now: Optional[float] = None) -> frozenset:
+    """Exact slugs retaining a ladder. Unreadable or unset means NONE.
+
+    Two sources, both exact: the static allowlist, and -- when
+    PMUS_WS_LADDER_ROLLING is YES -- the slug of the window trading now plus
+    the next one, computed from the clock by `rolling_window_slugs`. A pattern
+    is never matched, so the number of markets holding rungs stays small and
+    countable, which is what keeps the memory bound meaningful.
+    """
     raw = os.getenv(LADDER_MARKETS_ENV) or ""
-    return frozenset(p.strip() for p in raw.split(",") if p.strip())
+    out = set(p.strip() for p in raw.split(",") if p.strip())
+    if ladder_rolling():
+        ahead = _bounded_int(LADDER_ROLLING_AHEAD_ENV,
+                             LADDER_ROLLING_AHEAD_DEFAULT,
+                             LADDER_ROLLING_AHEAD_CAP)
+        try:
+            out.update(rolling_window_slugs(now, ahead=ahead) or ())
+        except Exception:
+            # a bad prefix or period must not take the recorder down, and
+            # must not silently widen the selection either
+            pass
+    return frozenset(out)
+
+
+def drop_stale_ladders(state: dict, keep: frozenset) -> int:
+    """Release rungs for markets no longer selected.
+
+    WHY THIS AND NOT prune_state. prune_state evicts a whole market only
+    after it has been idle for two hours, because admission reads trades_1h
+    off it. A rotating 15m product leaves eight retired windows inside that
+    grace period, each still holding a ladder -- so the ladders have to be
+    released on their own schedule, by selection rather than by idleness.
+    Only the ladder is dropped; every other piece of that market's evidence
+    is left exactly where it is.
+    """
+    dropped = 0
+    for slug, s in state.items():
+        if slug in keep:
+            continue
+        if isinstance(s, dict) and s.pop("ladder_history", None) is not None:
+            dropped += 1
+    return dropped
 
 
 def _bounded_int(env: str, default: int, cap: int) -> int:
@@ -371,7 +425,7 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
             # its own bounded history rather than widening bbo_history, so the
             # existing slot replay is untouched and the memory this adds is
             # confined to the allowlisted slugs.
-            if ev["slug"] in ladder_markets():
+            if ev["slug"] in ladder_markets(now):
                 rungs = ladder_rungs()
                 s.setdefault("ladder_history", []).append({
                     "t": now,

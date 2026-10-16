@@ -132,3 +132,87 @@ def test_rung_order_is_preserved_because_queue_position_depends_on_it():
     rows = [{"px": "0.55", "qty": "1"}, {"px": "0.54", "qty": "2"},
             {"px": "0.53", "qty": "3"}]
     assert R._levels(rows, 2) == [["0.55", "1"], ["0.54", "2"]]
+
+
+# -- rolling exact-slug selection ------------------------------------------
+# A 15m product retires its slug every quarter hour, so a static exact list
+# goes stale inside one window. The selection follows the clock and stays
+# EXACT; these pin that it never becomes a pattern and never grows unbounded.
+
+
+def test_rolling_is_off_by_default(monkeypatch):
+    monkeypatch.delenv(R.LADDER_ROLLING_ENV, raising=False)
+    assert R.ladder_rolling() is False
+    assert R.ladder_markets(1000.0) == frozenset()
+
+
+def test_rolling_only_turns_on_for_an_explicit_yes(monkeypatch):
+    for v in ("", "no", "1", "true", "Y", "yes "):
+        monkeypatch.setenv(R.LADDER_ROLLING_ENV, v)
+        assert R.ladder_rolling() is (v.strip().upper() == "YES"), v
+
+
+def test_rolling_adds_the_live_window_and_the_next(monkeypatch):
+    monkeypatch.setenv(R.LADDER_ROLLING_ENV, "YES")
+    monkeypatch.setenv(R.ROLLOVER_SLUG_ENV, "cpc-btc-updown-15m-")
+    monkeypatch.setenv(R.ROLLOVER_ENV, "900")
+    got = R.ladder_markets(1792166665.0)
+    assert len(got) == 2, got
+    assert all(s.startswith("cpc-btc-updown-15m-") for s in got)
+    assert all(s.endswith("z") for s in got)
+
+
+def test_rolling_keeps_the_static_allowlist_too(monkeypatch):
+    monkeypatch.setenv(R.LADDER_ROLLING_ENV, "YES")
+    monkeypatch.setenv(R.LADDER_MARKETS_ENV, "pinned-one")
+    monkeypatch.setenv(R.ROLLOVER_SLUG_ENV, "cpc-btc-updown-15m-")
+    monkeypatch.setenv(R.ROLLOVER_ENV, "900")
+    got = R.ladder_markets(1792166665.0)
+    assert "pinned-one" in got
+    assert len(got) == 3
+
+
+def test_rolling_ahead_is_capped_so_the_set_stays_small(monkeypatch):
+    monkeypatch.setenv(R.LADDER_ROLLING_ENV, "YES")
+    monkeypatch.setenv(R.LADDER_ROLLING_AHEAD_ENV, "9999")
+    monkeypatch.setenv(R.ROLLOVER_SLUG_ENV, "cpc-btc-updown-15m-")
+    monkeypatch.setenv(R.ROLLOVER_ENV, "900")
+    got = R.ladder_markets(1792166665.0)
+    assert len(got) == R.LADDER_ROLLING_AHEAD_CAP + 1
+
+
+def test_a_broken_prefix_does_not_widen_the_selection(monkeypatch):
+    monkeypatch.setenv(R.LADDER_ROLLING_ENV, "YES")
+    monkeypatch.delenv(R.ROLLOVER_SLUG_ENV, raising=False)
+    assert R.ladder_markets(1792166665.0) == frozenset()
+
+
+# -- eviction, which is what keeps a rotating product bounded --------------
+
+def test_a_retired_window_releases_its_rungs():
+    st = {"live": {"ladder_history": [{"t": 1.0}], "trades": [{"t": 1.0}]},
+          "retired": {"ladder_history": [{"t": 1.0}], "trades": [{"t": 1.0}]}}
+    dropped = R.drop_stale_ladders(st, frozenset({"live"}))
+    assert dropped == 1
+    assert "ladder_history" in st["live"]
+    assert "ladder_history" not in st["retired"]
+
+
+def test_eviction_touches_nothing_but_the_ladder():
+    st = {"retired": {"ladder_history": [{"t": 1.0}], "trades": [{"t": 2.0}],
+                      "bbo_history": [{"t": 3.0}], "bid": "0.31"}}
+    R.drop_stale_ladders(st, frozenset())
+    assert st["retired"]["trades"] == [{"t": 2.0}]
+    assert st["retired"]["bbo_history"] == [{"t": 3.0}]
+    assert st["retired"]["bid"] == "0.31"
+
+
+def test_eviction_is_idempotent_and_counts_only_real_drops():
+    st = {"m": {"ladder_history": [{"t": 1.0}]}}
+    assert R.drop_stale_ladders(st, frozenset()) == 1
+    assert R.drop_stale_ladders(st, frozenset()) == 0
+
+
+def test_eviction_survives_a_non_dict_entry():
+    st = {"m": None, "n": {"ladder_history": [{"t": 1.0}]}}
+    assert R.drop_stale_ladders(st, frozenset()) == 1

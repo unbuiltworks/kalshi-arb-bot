@@ -712,6 +712,16 @@ VENUE_ORDER_PRICE_KEYS = ("price", "limitPrice", "limit_price", "orderPrice",
 VENUE_SCALAR_KEYS = ("value", "amount", "decimal")
 
 
+def finite_decimal(raw: Any) -> Optional[D]:
+    """`venue_decimal` plus finiteness. A NaN or an Infinity is UNKNOWN.
+
+    The cost-basis correction compares and sums these, and a non-finite value
+    would propagate silently through both -- so it is refused at the edge.
+    """
+    out = venue_decimal(raw)
+    return out if (out is not None and out.is_finite()) else None
+
+
 def venue_decimal(raw: Any) -> Optional[D]:
     """A venue number as a Decimal, or None when it cannot be read.
 
@@ -1734,6 +1744,198 @@ class InventoryStore:
         # authority: realized_today() prefers the decomposed fields.
         self.save()
         return dict(self.realized_lines(), rebases=len(hist), prior=prior)
+
+    def correct_cost_basis(self, market: str, side: str, *,
+                           correction_id: str,
+                           expect: Mapping[str, Any],
+                           measured_cost: D,
+                           measured_fees: D,
+                           evidence: Mapping[str, Any]
+                           ) -> Dict[str, Any]:
+        """Replace ONE leg's $1/share PLACEHOLDER cost with a measured one.
+
+        WHY A SEPARATE VERB. `correct_settled_market` restates a settlement
+        OUTCOME: it recomputes pnl from `row["cost_total"]` and never WRITES
+        it. A cost correction also necessarily moves realized TOWARD zero,
+        which that method refuses as CORRECTION_WOULD_RELAX_LOSS_HALT. That
+        guard is correct and is NOT relaxed, inherited or shared here --
+        `correct_settled_market` is untouched. This is a different operation
+        with its own, narrower guards.
+
+        WHAT IT IS NOT. It cannot clear HALT, cannot change a limit, and
+        cannot attribute a leg to anyone. It writes no owner field, so
+        `verified_l5` stays whatever it was and `manual` stays UNKNOWN. A
+        corrected cost is not evidence of who traded.
+
+        THE CALLER CANNOT ASSERT A COST. `measured_cost` must reconcile to
+        the sum of the named `evidence` fills, or the correction is refused.
+        The caller supplies venue trade ids and arithmetic is re-derived from
+        them; a figure that merely looks plausible is rejected.
+        """
+        market = canonical_market(market, doing="correcting a cost basis")
+        side = str(side or "").strip().upper()
+        if side not in ("UP", "DOWN"):
+            return {"corrected": False, "reason": "BAD_SIDE", "side": side}
+        key = "%s|%s" % (market, side)
+
+        # 1. idempotent by correction id
+        done = {r.get("id") for r in
+                (self.state.get("cost_basis_corrections") or [])}
+        if correction_id in done:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_CORRECTION_ALREADY_APPLIED",
+                    "correction_id": correction_id}
+        # 2. the leg must exist as a retired market
+        row = (self.state.get("retired_markets") or {}).get(market)
+        if not row:
+            return {"corrected": False, "key": key,
+                    "reason": "MARKET_NOT_RETIRED"}
+        # 3. never correct twice
+        if row.get("cost_superseded"):
+            return {"corrected": False, "key": key,
+                    "reason": "COST_ALREADY_CORRECTED"}
+        # 4. the ledger must hold what the evidence describes
+        mismatch = {k: {"expected": str(v), "found": str(row.get(k))}
+                    for k, v in dict(expect).items()
+                    if str(row.get(k)) != str(v)}
+        if mismatch:
+            return {"corrected": False, "key": key,
+                    "reason": "LEDGER_DOES_NOT_MATCH_EVIDENCE",
+                    "mismatch": mismatch}
+        # 5. a partial walk cannot establish a cost. Missing is not complete.
+        walk = dict((evidence or {}).get("activity_walk") or {})
+        if walk.get("complete") is not True:
+            return {"corrected": False, "key": key,
+                    "reason": "ACTIVITY_WALK_INCOMPLETE",
+                    "activity_walk": walk}
+        # 6. RE-DERIVE the cost from the named fills. The caller cannot
+        #    assert it, and a fill whose qty or price will not parse makes
+        #    the whole correction unreconciled rather than smaller.
+        fills = list((evidence or {}).get("per_fill") or ())
+        if not fills:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_NOT_RECONCILED", "detail": "NO_FILLS"}
+        qty_sum = D(0)
+        cost_sum = D(0)
+        fee_sum = D(0)
+        ids = []
+        for f in fills:
+            q = finite_decimal(f.get("qty"))
+            px = finite_decimal(f.get("price"))
+            fee = finite_decimal(f.get("fee"))
+            tid = f.get("trade_id")
+            if q is None or px is None or fee is None or not tid:
+                return {"corrected": False, "key": key,
+                        "reason": "COST_NOT_RECONCILED",
+                        "detail": "FILL_UNREADABLE"}
+            qty_sum += q
+            cost_sum += q * px
+            fee_sum += fee
+            ids.append(str(tid))
+        want_cost = finite_decimal(measured_cost)
+        want_fees = finite_decimal(measured_fees)
+        if want_cost is None or want_fees is None:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_UNREADABLE"}
+        if want_cost != cost_sum or want_fees != fee_sum:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_NOT_RECONCILED",
+                    "supplied_cost": str(want_cost),
+                    "derived_cost": str(cost_sum),
+                    "supplied_fees": str(want_fees),
+                    "derived_fees": str(fee_sum)}
+        # 7. the venue quantity must equal the ledger quantity. This is what
+        #    PRESERVES a gross-vs-net leg as UNKNOWN by construction, rather
+        #    than by anyone remembering to exclude it.
+        ledger_qty = finite_decimal(row.get("%s_qty" % side.lower()[:2]))
+        if ledger_qty is None:
+            ledger_qty = finite_decimal(
+                row.get("up_qty") if side == "UP" else row.get("dn_qty"))
+        if ledger_qty is None:
+            return {"corrected": False, "key": key,
+                    "reason": "LEDGER_QTY_UNREADABLE"}
+        if qty_sum != ledger_qty:
+            return {"corrected": False, "key": key,
+                    "reason": "VENUE_QTY_NE_LEDGER_QTY",
+                    "venue_qty": str(qty_sum),
+                    "ledger_qty": str(ledger_qty)}
+        # 8. ONE-DIRECTIONAL. It may only ever replace an upper bound with a
+        #    smaller measurement, never inflate a cost.
+        was_cost = finite_decimal(row.get("cost_total"))
+        if was_cost is None:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_UNREADABLE"}
+        if want_cost >= was_cost:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_CORRECTION_MUST_REDUCE",
+                    "was": str(was_cost), "supplied": str(want_cost)}
+        # 9. a negative or non-finite cost is not a measurement
+        if want_cost < 0:
+            return {"corrected": False, "key": key,
+                    "reason": "COST_UNREADABLE", "supplied": str(want_cost)}
+        # 10. the same fills may not be spent twice across legs
+        spent = set()
+        for rec in (self.state.get("cost_basis_corrections") or []):
+            spent.update(rec.get("trade_ids") or ())
+        clash = sorted(set(ids) & spent)
+        if clash:
+            return {"corrected": False, "key": key,
+                    "reason": "TRADE_ID_ALREADY_CONSUMED",
+                    "trade_ids": clash}
+
+        before = self.realized_lines()
+        up = D(str(row.get("up_qty") or 0))
+        dn = D(str(row.get("dn_qty") or 0))
+        v = finite_decimal(row.get("yes_value"))
+        redeem = (up * v + dn * (D(1) - v)) if v is not None else None
+        pnl = (redeem - want_cost) if redeem is not None else None
+        delta = (pnl - D(str(row.get("settlement_pnl") or 0))
+                 if pnl is not None else was_cost - want_cost)
+
+        row["cost_superseded"] = dict(row)        # verbatim, never edited
+        row["cost_total"] = str(want_cost)
+        row["cost_provenance"] = "MEASURED_FROM_VENUE_FILLS"
+        row["fees_total"] = str(want_fees)
+        if pnl is not None:
+            row["settlement_pnl"] = str(pnl)
+            row["redemption_total"] = str(redeem)
+        row["cost_corrected_at"] = dt.datetime.now(
+            dt.timezone.utc).isoformat()
+        row["cost_correction_id"] = correction_id
+        self.state["realized_attributed"] = str(
+            D(str(self.state.get("realized_attributed") or 0)) + delta)
+        self.state["realized_today"] = str(
+            D(str(self.state.get("realized_today") or 0)) + delta)
+        # `realized_unattributed` IS NOT TOUCHED, for the same reason
+        # correct_settled_market leaves it alone: inventing an unattributed
+        # line here would be a phantom credit in another column.
+        self.state.setdefault("cost_basis_corrections", []).append({
+            "id": correction_id, "key": key, "market": market, "side": side,
+            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "was_cost_total": str(was_cost),
+            "now_cost_total": str(want_cost),
+            "fees_total": str(want_fees),
+            "delta": str(delta),
+            "qty": str(qty_sum),
+            "trade_ids": ids,
+            "cost_provenance": "MEASURED_FROM_VENUE_FILLS",
+            "activity_walk": walk,
+            "ownership_unchanged": True,
+        })
+        self.save()
+        return {"corrected": True, "key": key,
+                "correction_id": correction_id,
+                "was_cost_total": str(was_cost),
+                "now_cost_total": str(want_cost),
+                "delta": str(delta),
+                "trade_ids": ids,
+                "realized_before": before,
+                "realized_after": self.realized_lines(),
+                "halt_unchanged": True,
+                "labels": ("a COST restatement. It attributes nothing: no "
+                           "owner field is written, so verified_l5 and manual "
+                           "are exactly as they were. HALT is not read and "
+                           "not cleared.")}
 
     def correct_settled_market(self, market: str, *, correction_id: str,
                                expect: Mapping[str, Any],
