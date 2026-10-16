@@ -68,9 +68,13 @@ ledger holds too little, so realized is FLATTERED.
 | basis established, cross-check passed | **47 of 47** |
 | UP legs needing no change | **22** (difference 0E-8 on every one) |
 | DOWN legs wrong | **22 of 22** |
-| net difference | **68.69680000** |
-| of which ledger too negative (conservative) | **84.49180000** |
-| of which realized FLATTERED | **-15.79500000** (13 legs) |
+| net difference, ALL 47 | **68.69680000** |
+| — the 44 applied | **30.75140000** (ledger too negative) |
+| — the XRP refused leg | **36.97540000** |
+| — the 1945z refused leg | **0.97000000** (of which only 0.51 is this leg's) |
+| — the 2230z refused leg | **0** (nothing due) |
+| of the 44: ledger too negative | **46.54640000** across 9 DOWN legs |
+| of the 44: realized FLATTERED | **-15.79500000** across 13 DOWN legs |
 
 ## The two disputed legs, separately
 
