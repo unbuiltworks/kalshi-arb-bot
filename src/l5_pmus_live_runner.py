@@ -218,6 +218,21 @@ PENDING_RESOLVE_S = 3.0
 SOAK_RECONCILE_S = float(os.getenv("L5_LIVE_SOAK_RECONCILE_S", "0") or 0)
 
 
+def _dec(v: Any) -> Optional[D]:
+    """Decimal or None. NEVER zero: a field we cannot read is not a zero.
+
+    Added because `D(str(None))` raises InvalidOperation, which surfaced as a
+    bare CASH_HEADROOM_UNREADABLE and said nothing about which field was
+    wrong.
+    """
+    if v is None:
+        return None
+    try:
+        return D(str(v))
+    except (ArithmeticError, ValueError, TypeError):
+        return None
+
+
 def emit(kind: str, doc: Mapping[str, Any]) -> None:
     print("%s %s" % (kind, json.dumps(doc, default=str,
                                       separators=(",", ":"))), flush=True)
@@ -2166,12 +2181,31 @@ class Runner:
                              (self.store.committed() or {}).values()), D(0))
                 cash_h = D(str(vg.max_cash_deployed_usd)) - spent
             exp = self.store.account_wide_risk_by_market()
-            if exp.get("ok"):
-                capacity = D(str(exp.get("capacity_usd")))
-                cash_h = capacity if cash_h is None else min(cash_h, capacity)
-            else:
+            if not exp.get("ok"):
                 return dict(out, ok=False, reason="EXPOSURE_UNREADABLE",
                             detail=str(exp.get("reason"))[:120])
+            # CAPACITY IS DERIVED HERE, from the ceiling and the aggregate,
+            # because account_wide_risk_by_market returns `total_usd` and
+            # does NOT carry a capacity figure. Reading a `capacity_usd` key
+            # off it got None, D("None") raised InvalidOperation, and the
+            # whole completion path refused CASH_HEADROOM_UNREADABLE in
+            # production on the 1130z window -- a fail-closed refusal, but a
+            # refusal for a reason that had nothing to do with the economics.
+            # Same arithmetic as account_exposure_lines, one source.
+            total = _dec(exp.get("total_usd"))
+            if total is None:
+                return dict(out, ok=False, reason="EXPOSURE_TOTAL_UNREADABLE",
+                            total_usd=str(exp.get("total_usd"))[:40])
+            ceil_total = getattr(self.limits, "max_total_exposure_usd", None)
+            if ceil_total is None:
+                return dict(out, ok=False,
+                            reason="ACCOUNT_EXPOSURE_CEILING_UNKNOWN")
+            ceil_dec = _dec(ceil_total)
+            if ceil_dec is None:
+                return dict(out, ok=False,
+                            reason="ACCOUNT_EXPOSURE_CEILING_UNREADABLE")
+            capacity = ceil_dec - total
+            cash_h = capacity if cash_h is None else min(cash_h, capacity)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

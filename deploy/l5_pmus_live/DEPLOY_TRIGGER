@@ -200,3 +200,25 @@ continuous pair accumulation, shadow-locked 2026-10-16T04:00Z
 # Rollback: Railway rollback to deployment 223ce402, the running build of
 # b0f9916b.
 patient completion + depth comparison, shadow-locked 2026-10-16T12:00Z
+
+# Fix CASH_HEADROOM_UNREADABLE, found in production on 4b8f3162.
+#
+# The completion path ran on the 1130z window and refused on every tick with
+# reason CASH_HEADROOM_UNREADABLE / InvalidOperation. Cause: it read a
+# `capacity_usd` key off account_wide_risk_by_market, which returns
+# {ok, risk_by_market, markets, total_usd} and carries no such key. The
+# None became D("None") and raised. Capacity is now DERIVED from the
+# account-wide ceiling minus the aggregate, the same arithmetic
+# account_exposure_lines already uses, and each numeric field refuses by its
+# own name instead of surfacing as an opaque InvalidOperation.
+#
+# The test fake had invented the missing key, so the suite passed against a
+# fiction. It now mirrors the real return shape, and a regression pins the
+# real method as carrying no capacity key.
+#
+# Also enables L5_DEPTH_COMPARISON=YES: read-only, reads the decision tape
+# on the volume, writes nothing.
+#
+# SHADOW_ONLY stays set, L5_TS_COMPLETION_CROSS stays unset, no limit
+# changed. Money-path gate 1280 passed.
+completion cash-headroom fix + depth comparison enabled, shadow-locked 2026-10-16T12:20Z

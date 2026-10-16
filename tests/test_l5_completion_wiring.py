@@ -36,13 +36,22 @@ class FakeBook:
 class FakeStore:
     """Only what the completion inputs read."""
     def __init__(self, up="5", dn="0", up_cost="2.95", dn_cost="0",
-                 attested=("UP", "DOWN"), committed=None, exposure=None):
+                 attested=("UP", "DOWN"), committed=None, exposure=None,
+                 total_usd="1.00"):
         self._g = {"up": up, "dn": dn}
         self._lc = {"UP": D(up_cost), "DOWN": D(dn_cost)}
         self._attested = set(attested)
         self._committed = committed or {}
+        # THE REAL RETURN SHAPE. account_wide_risk_by_market returns
+        # {ok, risk_by_market, markets, total_usd} and carries NO
+        # capacity_usd. The first version of this fake invented that key,
+        # so every test passed while production refused
+        # CASH_HEADROOM_UNREADABLE on D("None"). The fake now mirrors the
+        # real method, and test_the_exposure_reply_carries_no_capacity_key
+        # pins it against the real class.
         self._exposure = exposure if exposure is not None else {
-            "ok": True, "capacity_usd": "4.00"}
+            "ok": True, "risk_by_market": {}, "markets": [],
+            "total_usd": total_usd}
 
     def gross_inventory(self, market):
         return dict(self._g)
@@ -65,6 +74,10 @@ class Gates:
     max_worst_case_deficit_usd = D("3.60")
 
 
+class Limits:
+    max_total_exposure_usd = D("5")
+
+
 class Executor:
     validation_gates = Gates()
 
@@ -84,6 +97,7 @@ class Stub:
         self.transport = FakeTransport()
         self.store = store or FakeStore()
         self.executor = Executor()
+        self.limits = Limits()
         self.book = FakeBook(BOOK if snap is _KEEP else snap)
         self.last_ts_completion_t = 0.0
         self.stats = __import__("collections").Counter()
@@ -209,11 +223,58 @@ def test_insufficient_depth_is_reported_as_a_partial(armed):
 def test_the_cash_headroom_is_the_SMALLER_of_the_two_bounds(armed):
     """The run-scoped cash bound and the account-wide exposure capacity are
     different quantities; the tighter one binds, recomputed now."""
-    s = Stub(store=FakeStore(exposure={"ok": True, "capacity_usd": "0.50"}))
-    src = s.ts_completion_inputs(SLUG)
-    assert src["cash_headroom"] == D("0.50")           # not the gates' 10
+    # exposure 4.50 of a 5 ceiling leaves 0.50, tighter than the gates' 10
+    s = Stub(store=FakeStore(total_usd="4.50"))
+    assert s.ts_completion_inputs(SLUG)["cash_headroom"] == D("0.50")
     s2 = Stub(store=FakeStore(committed={SLUG: "9.80"}))
     assert s2.ts_completion_inputs(SLUG)["cash_headroom"] == D("0.20")
+
+
+def test_capacity_is_DERIVED_from_the_ceiling_and_the_aggregate(armed):
+    """THE PRODUCTION DEFECT. account_wide_risk_by_market carries no
+    capacity figure, so reading one got None and D("None") raised
+    InvalidOperation -- the completion path refused
+    CASH_HEADROOM_UNREADABLE on every 1130z tick for a reason that had
+    nothing to do with the economics."""
+    s = Stub(store=FakeStore(total_usd="2.04"))
+    # 5 ceiling - 2.04 aggregate = 2.96, the figure the heartbeat reports
+    assert s.ts_completion_inputs(SLUG)["cash_headroom"] == D("2.96")
+
+
+def test_the_exposure_reply_carries_no_capacity_key(armed):
+    """Pinned against the REAL class, not the fake. This is the assertion
+    whose absence let the fake invent a key production never returns."""
+    import inspect
+    from src import l5_live_execution as E
+    src = inspect.getsource(E.InventoryStore.account_wide_risk_by_market)
+    assert "capacity_usd" not in src
+    assert "total_usd" in src
+
+
+@pytest.mark.parametrize("bad", ["", "nope", None])
+def test_an_unreadable_exposure_total_refuses_by_its_own_name(armed, bad):
+    s = Stub(store=FakeStore(total_usd=bad))
+    src = s.ts_completion_inputs(SLUG)
+    assert src["ok"] is False
+    assert src["reason"] == "EXPOSURE_TOTAL_UNREADABLE"
+
+
+def test_a_missing_exposure_ceiling_refuses(armed):
+    s = Stub()
+    s.limits = type("L", (), {"max_total_exposure_usd": None})()
+    assert s.ts_completion_inputs(SLUG)["reason"] == \
+        "ACCOUNT_EXPOSURE_CEILING_UNKNOWN"
+    s.limits = type("L", (), {"max_total_exposure_usd": "wat"})()
+    assert s.ts_completion_inputs(SLUG)["reason"] == \
+        "ACCOUNT_EXPOSURE_CEILING_UNREADABLE"
+
+
+def test_no_remaining_capacity_leaves_no_legal_completion(armed):
+    """Exposure already at the ceiling: the economics never get a say."""
+    s = Stub(store=FakeStore(total_usd="5"))
+    r = s.maybe_ts_completion(CUT - 30)
+    assert r["ok"] is False
+    assert r["reason"] == "NO_LEGAL_COMPLETION_QUANTITY"
 
 
 # ------------------------------------ crossing needs its own authorization
