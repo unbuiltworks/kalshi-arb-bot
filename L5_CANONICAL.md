@@ -584,3 +584,115 @@ this evidence and a defensible GO.
 `cpc-btc-updown-1d-2026-10-15-2100z|DOWN` expires **2026-10-16T21:00:00Z**;
 it is 19:49Z, so **70 minutes remain**. No positive settlement evidence can
 exist yet. It stays REAL exposure at $2.0400 worst case with cost UNKNOWN.
+
+---
+
+## 16. One window reconstructed: 2026-10-16 19:45–20:00 UTC (3:45–4:00 PM ET)
+
+**MISSING DATA, stated first.** The Polymarket public data API is
+unreachable from this container: the environment's network policy denies
+`data-api.polymarket.com`, `gamma-api.polymarket.com` and
+`clob.polymarket.com` (proxy returns 403 on CONNECT). Our corpus ends
+2026-08-31, so this window is not in it either. **Everything below comes
+from the owner's five screenshots.** No Polymarket order book, bid/ask,
+last-traded series or BTC reference price could be retrieved, so quoted
+prices below are EXECUTED prices only. No PMUS price has been substituted.
+
+### Chronological reconstruction (screenshot fills, ET, ±1 min)
+
+| t | side | badge | shares | usd | cum UP | cum DN | matched | residual |
+|---|---|---|---|---|---|---|---|---|
+| 15:44 | UP | 49¢ | 40.0 | 19.60 | 40.0 | 0 | 0 | 40.0 |
+| 15:44 | UP | 50¢ | 40.0 | 20.00 | 80.0 | 0 | 0 | 80.0 |
+| 15:45 | UP | 61¢ | 20.0 | 12.53 | 100.0 | 0 | 0 | 100.0 |
+| 15:46 | UP | 63/65/59¢ | 115.0 | 72.49 | 215.0 | 0 | 0 | 215.0 |
+| 15:47 | UP | 70¢ | 50.0 | 35.00 | 265.0 | 0 | 0 | 265.0 |
+| 15:48 | UP | 72¢ | 30.0 | 21.60 | 295.0 | 0 | 0 | **295.0** |
+| 15:49 | DN | 30¢ | 5.0 | 1.50 | 295.0 | 5.0 | 5.0 | 290.0 |
+| 15:50 | UP | 73/74/80¢ | 55.0 | 42.33 | 350.0 | 5.0 | 5.0 | 345.0 |
+| 15:50 | DN | 27¢ | 50.0 | 13.50 | 350.0 | 55.0 | 55.0 | 295.0 |
+| 15:52 | UP | 82/86¢ | 20.0 | 16.88 | 370.0 | 55.0 | 55.0 | 315.0 |
+| 15:53 | UP | 95¢ | 19.1 | 18.13 | 389.1 | 55.0 | 55.0 | 334.1 |
+| 15:53 | DN | 9,7,6,5,4,4,2¢ | 302.4 | 15.22 | 389.1 | 357.4 | 357.4 | 31.7 |
+| 15:54 | UP | 96¢ x3 | 50.0 | 48.00 | 439.1 | 357.4 | 357.4 | 81.7 |
+| 15:54 | UP | 98¢ x2 | 100.0 | 98.00 | 539.1 | 357.4 | 357.4 | 181.7 |
+| 15:54 | DN | 1¢ x2 | 100.0 | 1.00 | **539.1** | **457.4** | **457.4** | **81.7** |
+
+### Does $539.09 reconcile? — the UP leg does, EXACTLY
+| | |
+|---|---|
+| screenshot UP shares | **539.1** |
+| Positions screen UP shares | **539.1** |
+| redemption shares | **539.1** |
+| screenshot UP cost (sum of $ amounts) | $404.56 |
+| Positions screen UP cost (539.1 x 74.7c) | $402.71 |
+
+**The UP leg is COMPLETE in the screenshots** — share count matches to the
+decimal. The $1.85 (0.46%) cost gap is UI rounding: the badge is rounded to
+the cent and the displayed average to three digits.
+
+**The DOWN leg does NOT reconcile and cannot.** It settled worthless, so it
+leaves no position record and no redemption. $31.22 over 457.4 shares is a
+FLOOR, not a total.
+
+### Window P&L
+| | |
+|---|---|
+| redemption | **+$539.09** |
+| UP acquisition | **−$402.71** |
+| **UP leg net** | **+$136.38** (screen: +$135.99; delta is rounding) |
+| visible DOWN cost, worthless | **−$31.22** (at least) |
+| **NET, upper bound** | **+$105.16** |
+
+Fees/rebates: **none verifiable.** No MAKER_REBATE/TAKER_REBATE row could
+be retrieved, and the BTC15m series carried zero incentive rows across our
+entire 763,727-row corpus. **Net realized P&L is UNVERIFIED** — it is a
+ceiling, because any unseen DOWN fill lowers it.
+
+### How he actually made money here — direction, not pair capture
+The tempting reading is a matched book: 457.4 pairs at an average pair cost
+of **0.8153**, worth +$84.50, plus residual +$20.67.
+
+**That 0.8153 is an averaging artifact and no pair was bought at it.**
+Contemporaneous pairs, same minute:
+
+| minute | UP paid | DOWN paid | pair |
+|---|---|---|---|
+| 15:49–50 | 0.73–0.80 | 0.27–0.30 | **1.00–1.10** |
+| 15:53 | 0.95 | 0.02–0.09 | **0.97–1.04** |
+| 15:54 | 0.96–0.98 | 0.01 | **0.97–0.99** |
+
+0.97–1.04, right on his corpus figure of 0.9863. The cheap "pair" exists
+only because UP was accumulated EARLY at 0.49–0.74 and DOWN was bought LATE
+at 0.01–0.09 after UP had already run. **He was long UP into a trend and
+his DOWN buying was a late, cheap hedge.** The money came from an average
+UP cost of 74.7c settling at 100c — a directional outcome, booked
+retrospectively as a cheap pair.
+
+### Execution behaviour — observed vs inferred
+**Observed:** 50.0-share clips recur 11 times — a standing clip size.
+Irregular quantities (63.6, 36.1, 19.1, 16.3, 4.4, 8.5) are partial fills
+of that clip. UP prices walk monotonically with the market
+(49→50→61→63→65→59→70→72→73→74→80→82→86→95→96→98) — he follows price up,
+paying more as it rises. At 15:53–15:54 he buys UP at 95–98c AND DOWN at
+1–9c within the same minute: two-sided activity at the same moment.
+Maximum imbalance reached **345 contracts** long UP.
+
+**Inferred, not observed:** that any of these were resting maker orders.
+Buying UP at successively higher prices into a rising market is the
+signature of crossing, not resting, but the screenshots carry no
+maker/taker flag and no book, so this stays inference.
+
+### The single biggest behavioural mismatch
+Our engine is a **spread-capture** design; this window was a **directional
+momentum** trade. `build_orders` rests one tick OUTSIDE the touch on both
+sides and requires pair ≤ 0.96 — it would have refused every fill here,
+because every contemporaneous pair was 0.97–1.10. And L5 ran a 345-contract
+one-sided imbalance while our `RESIDUAL_CAP_k2`, `max_abs_residual 10`,
+`max_live_orders 1` and $1 cash cap bound us to a fraction of one contract
+of imbalance.
+
+So the mismatch is not tuning: **replicating this window would require
+buying into strength at rising prices with a large directional imbalance,
+which is the opposite of what our engine is built to do and what our risk
+controls permit.** Nothing here is a recommendation to change either.
