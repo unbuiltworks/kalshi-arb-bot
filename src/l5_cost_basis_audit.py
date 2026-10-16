@@ -57,7 +57,37 @@ MAX_PAGES = int(str(os.getenv("L5_COST_BASIS_MAX_PAGES", "600")).strip() or 600)
 
 #: rows that represent an executed trade. A local accounting correction or a
 #: settlement event is NOT a fill and must never contribute a cost basis.
-FILL_KINDS = frozenset(("filled", "fill", "trade"))
+#: THE FEED'S ACTUAL VOCABULARY, read off it rather than assumed.
+#: feed_shape() on the production feed reported, over 2,129 rows:
+#:   activity_type_trade                1911
+#:   activity_type_position_resolution    205
+#:   activity_type_transfer                 8
+#:   activity_type_account_deposit          4
+#:   activity_type_referral_bonus           1
+#: The old set ("filled", "fill", "trade") matched NONE of them, so every
+#: one of the 49 legs reported NO_FILLS_FOUND while 1,911 trade rows sat in
+#: the feed. The bare forms are kept because they cost nothing and a feed
+#: that changes back still parses.
+FILL_KINDS = frozenset(("filled", "fill", "trade", "activity_type_trade"))
+
+#: and the envelope the payload sits in. Each row has exactly TWO top-level
+#: fields -- `type` and one payload key -- so market, side, price, quantity
+#: and commission are all ONE LEVEL DOWN. Reading them off the envelope is
+#: what made every predicate fail at once.
+PAYLOAD_KEYS = ("trade", "positionResolution", "accountBalanceChange")
+
+
+def _payload(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The row's inner payload, or the row itself when it is already flat.
+
+    The feed wraps: {"type": "activity_type_trade", "trade": {...}}. A flat
+    row is still handled, so a feed that stops wrapping does not break this.
+    """
+    for k in PAYLOAD_KEYS:
+        v = row.get(k)
+        if isinstance(v, Mapping):
+            return v
+    return row
 
 L5_OWNED = "L5_OWNED"
 OWNER_MANUAL = "OWNER_MANUAL"
@@ -152,15 +182,19 @@ def our_client_order_ids(store: Any) -> set:
 
 
 def _row_market(row: Mapping[str, Any]) -> str:
-    for k in ("marketSlug", "market", "slug"):
-        v = row.get(k)
+    body = _payload(row)
+    for k in ("marketSlug", "market", "slug", "marketId", "ticker"):
+        v = body.get(k) if isinstance(body, Mapping) else None
         if v:
             return str(v)
     return ""
 
 
 def _row_side(row: Mapping[str, Any]) -> Optional[str]:
-    v = str(row.get("side") or row.get("outcome") or "").strip().upper()
+    body = _payload(row)
+    v = str((body.get("side") if isinstance(body, Mapping) else None)
+            or (body.get("outcome") if isinstance(body, Mapping) else None)
+            or "").strip().upper()
     if v in ("UP", "YES", "BUY_LONG"):
         return "UP"
     if v in ("DOWN", "NO", "BUY_SHORT"):
@@ -238,23 +272,26 @@ def classify_fills(rows: List[Mapping[str, Any]], *, market: str, side: str,
             continue                      # a settlement or correction is not a fill
         if _row_side(r) != side:
             continue
-        coid = str(r.get("clientOrderId") or r.get("clientOrderID") or "") or None
+        # THE PAYLOAD, not the envelope. Every money field is one level down.
+        b = _payload(r)
+        coid = str(b.get("clientOrderId") or b.get("clientOrderID")
+                   or "") or None
         owner = (L5_OWNED if coid and coid in our_coids
                  else OWNER_MANUAL if coid else UNKNOWN_OWNER)
-        qty = _d(r.get("quantity") if r.get("quantity") is not None
-                 else r.get("cumQuantity"))
-        px = _d(r.get("price") if r.get("price") is not None
-                else r.get("avgPx"))
-        fee = _d(r.get("commission") if r.get("commission") is not None
-                 else r.get("commissionNotionalTotalCollected"))
+        qty = _d(b.get("quantity") if b.get("quantity") is not None
+                 else b.get("cumQuantity"))
+        px = _d(b.get("price") if b.get("price") is not None
+                else b.get("avgPx"))
+        fee = _d(b.get("commission") if b.get("commission") is not None
+                 else b.get("commissionNotionalTotalCollected"))
         fills.append({
-            "trade_id": str(r.get("tradeId") or r.get("id") or "") or None,
-            "order_id": str(r.get("orderId") or "") or None,
+            "trade_id": str(b.get("tradeId") or b.get("id") or "") or None,
+            "order_id": str(b.get("orderId") or "") or None,
             "client_order_id": coid, "owner": owner,
             "qty": None if qty is None else str(qty),
             "price": None if px is None else str(px),
             "fee": None if fee is None else str(fee),
-            "t": str(r.get("time") or r.get("createTime") or "") or None,
+            "t": str(b.get("time") or b.get("createTime") or "") or None,
         })
     return {"fills": fills,
             "owners": sorted({f["owner"] for f in fills}),

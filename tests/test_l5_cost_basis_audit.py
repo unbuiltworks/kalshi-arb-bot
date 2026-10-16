@@ -355,3 +355,93 @@ def test_the_placeholder_total_is_summed_for_EVERY_leg():
     i_all = src.index("placeholder_total += placeholder")
     i_est = src.index('if basis.get("established")')
     assert i_all < i_est, "the placeholder total must be summed before the gate"
+
+
+# ----------------------------- the REAL feed shape, from the production feed
+
+def prod_row(market="cpc-btc-updown-15m-2026-10-16-0330z", side="YES",
+             price="0.41", qty="50", fee="0.00", coid=None):
+    """A row shaped EXACTLY as the production feed sends it: two top-level
+    fields, `type` and `trade`, with every money field one level down.
+    feed_shape reported 1,911 of these and the parser matched none."""
+    inner = {"marketSlug": market, "side": side, "price": price,
+             "quantity": qty, "commission": fee, "tradeId": "t-1",
+             "time": "2026-10-16T03:30:00Z"}
+    if coid:
+        inner["clientOrderId"] = coid
+    return {"type": "activity_type_trade", "trade": inner}
+
+
+def test_the_feeds_actual_kind_is_recognised():
+    """activity_type_trade, not "trade". The old set matched none of the
+    five kinds the feed actually sends."""
+    assert "activity_type_trade" in A.FILL_KINDS
+    for legacy in ("trade", "fill", "filled"):
+        assert legacy in A.FILL_KINDS, legacy
+
+
+def test_the_market_is_read_from_the_NESTED_payload():
+    r = prod_row()
+    assert A._row_market(r) == "cpc-btc-updown-15m-2026-10-16-0330z"
+
+
+def test_the_side_is_read_from_the_NESTED_payload():
+    assert A._row_side(prod_row(side="YES")) == "UP"
+    assert A._row_side(prod_row(side="NO")) == "DOWN"
+
+
+def test_a_flat_row_still_parses():
+    """A feed that stops wrapping must not break this."""
+    flat = {"type": "trade", "marketSlug": "m", "side": "YES",
+            "price": "0.5", "quantity": "1"}
+    assert A._row_market(flat) == "m"
+    assert A._row_side(flat) == "UP"
+
+
+def test_the_money_fields_come_from_the_payload_not_the_envelope():
+    c = A.classify_fills([prod_row(price="0.41", qty="50", fee="0.07")],
+                         market="cpc-btc-updown-15m-2026-10-16-0330z",
+                         side="UP", our_coids=set())
+    assert len(c["fills"]) == 1
+    f = c["fills"][0]
+    assert f["price"] == "0.41" and f["qty"] == "50" and f["fee"] == "0.07"
+    assert f["trade_id"] == "t-1"
+    assert f["t"] == "2026-10-16T03:30:00Z"
+
+
+def test_ownership_still_comes_from_OUR_coids_only():
+    """A nested clientOrderId we do not recognise is OWNER_MANUAL, and an
+    absent one is UNKNOWN_OWNER. Neither is ever assumed to be ours."""
+    ours = A.classify_fills([prod_row(coid="l5f-mine")],
+                            market="cpc-btc-updown-15m-2026-10-16-0330z",
+                            side="UP", our_coids={"l5f-mine"})
+    assert ours["fills"][0]["owner"] == A.L5_OWNED
+    theirs = A.classify_fills([prod_row(coid="someone-else")],
+                              market="cpc-btc-updown-15m-2026-10-16-0330z",
+                              side="UP", our_coids={"l5f-mine"})
+    assert theirs["fills"][0]["owner"] == A.OWNER_MANUAL
+    anon = A.classify_fills([prod_row()],
+                            market="cpc-btc-updown-15m-2026-10-16-0330z",
+                            side="UP", our_coids={"l5f-mine"})
+    assert anon["fills"][0]["owner"] == A.UNKNOWN_OWNER
+
+
+def test_a_position_resolution_is_NOT_counted_as_a_fill():
+    """205 of these rows exist. A settlement is not an acquisition."""
+    r = {"type": "activity_type_position_resolution",
+         "positionResolution": {"marketSlug": "m", "side": "YES",
+                                "quantity": "5"}}
+    c = A.classify_fills([r], market="m", side="UP", our_coids=set())
+    assert c["fills"] == []
+
+
+def test_the_production_shape_now_matches_all_three_predicates():
+    """The end-to-end regression for the defect: feed_shape counted zero on
+    every predicate against these rows."""
+    rows = [prod_row() for _ in range(5)]
+    sh = A.feed_shape(rows, markets=["cpc-btc-updown-15m-2026-10-16-0330z"],
+                      sides=["UP", "DOWN"])
+    assert sh["rows_matching_market_only"] == 5
+    assert sh["rows_matching_fill_kind_only"] == 5
+    assert sh["rows_matching_side_only"] == 5
+    assert sh["rows_matching_all_three"] == 5

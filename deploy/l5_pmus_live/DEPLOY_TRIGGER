@@ -299,3 +299,23 @@ four-bucket accounting + audit pagination fix, shadow-locked 2026-10-16T13:10Z
 # L5_TS_DEPTH_TICKS 1, L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD
 # UNCHANGED. Money-path gate 1302 passed.
 feed-shape diagnostic, shadow-locked 2026-10-16T13:30Z
+
+# Fix the activity-feed parser. The diagnostic named all three predicates at
+# once, and the feed's own vocabulary explains it:
+#   distinct_kinds: activity_type_trade 1911, position_resolution 205, ...
+#   field name sets: "trade,type" 1911
+# The kind is activity_type_trade, not "trade", and each row has exactly TWO
+# top-level fields -- type and one payload key -- so market, side, price,
+# quantity and commission are ONE LEVEL DOWN. The parser read the envelope,
+# so all 49 legs reported NO_FILLS_FOUND while 1,911 trade rows sat in the
+# feed. FILL_KINDS now covers the real vocabulary and every field is read
+# from the payload, with flat rows still handled.
+#
+# Ownership is UNCHANGED and still comes only from OUR coids: an unrecognised
+# clientOrderId is OWNER_MANUAL and an absent one is UNKNOWN_OWNER. A
+# position_resolution is still not counted as a fill.
+#
+# Read-only. SHADOW_ONLY set, HALT latched, L5_TS_DEPTH_TICKS 1,
+# L5_TS_COMPLETION_CROSS unset, L5_MAX_LIVE_ORDERS and
+# L5_MAX_CASH_DEPLOYED_USD UNCHANGED. Money-path gate 1302 passed.
+activity-feed parser fix, shadow-locked 2026-10-16T13:55Z
