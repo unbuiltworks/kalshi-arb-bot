@@ -867,3 +867,118 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
                    "CORRECTION_WOULD_RELAX_LOSS_HALT and which needs its own "
                    "owner decision."),
     }
+
+
+CORRECTION_SCHEMA_VERSION = "cost-basis-correction/1"
+
+
+def correction_request(audit_result: Mapping[str, Any]) -> Dict[str, Any]:
+    """The owner-facing correction request, derived from an audit result.
+
+    PREPARES. DOES NOT APPLY. There is no verb in this codebase that can
+    apply it: `correct_settled_market` restates a settlement OUTCOME
+    (`yes_value`) and never writes `cost_total`, and a cost correction moves
+    realized TOWARD zero, which that method refuses as
+    CORRECTION_WOULD_RELAX_LOSS_HALT. Both facts are reported in `blocked_by`
+    so the request is read as a request.
+
+    Every leg appears, established or not. The two unestablished legs keep
+    their cost as UNKNOWN -- never zero, never the placeholder treated as
+    measured -- and ownership is carried through verbatim, so an
+    UNKNOWN_OWNER leg is never silently reclassified as manual.
+    """
+    legs_in = list(audit_result.get("legs") or [])
+    rows: List[Any] = []
+    established = 0
+    placeholder_established = D("0")
+    measured_established = D("0")
+    fees_established = D("0")
+    for leg in legs_in:
+        basis = dict(leg.get("basis") or {})
+        placeholder = _d(leg.get("placeholder_cost_usd"))
+        row = {
+            "key": leg.get("key"),
+            "market": leg.get("market"),
+            "side": leg.get("side"),
+            "ledger_qty": leg.get("ledger_qty"),
+            "qty_source": leg.get("qty_source"),
+            # ownership is EVIDENCE, carried through untouched
+            "owners": list(leg.get("owners") or []),
+            "l5_owned_fills": leg.get("l5_owned_fills"),
+            "owner_manual_fills": leg.get("owner_manual_fills"),
+            "unknown_owner_fills": leg.get("unknown_owner_fills"),
+            "cost_before_usd": leg.get("placeholder_cost_usd"),
+            "cost_before_provenance": "PLACEHOLDER_ONE_DOLLAR_PER_SHARE_UPPER_BOUND",
+            "fill_trade_ids": [f.get("trade_id") for f in (leg.get("fills") or [])],
+        }
+        if basis.get("established"):
+            measured = _d(basis.get("actual_cost_usd"))
+            fees = _d(basis.get("fees_usd"))
+            if measured is None or placeholder is None:
+                row.update({"action": "NONE", "reason": "COST_UNREADABLE_AFTER_AUDIT",
+                            "cost_after_usd": None})
+            else:
+                established += 1
+                placeholder_established += placeholder
+                measured_established += measured
+                if fees is not None:
+                    fees_established += fees
+                row.update({
+                    "action": "REPLACE_COST",
+                    "cost_after_usd": str(measured),
+                    "cost_after_provenance": "MEASURED_FROM_VENUE_FILLS",
+                    "fees_usd": basis.get("fees_usd"),
+                    "avg_price": basis.get("avg_price"),
+                    "venue_qty": basis.get("qty"),
+                    "delta_usd": str(measured - placeholder),
+                })
+        else:
+            # PRESERVED AS UNKNOWN. Not zero, and not the placeholder promoted
+            # to a measurement.
+            row.update({
+                "action": "PRESERVE_UNKNOWN",
+                "reason": basis.get("reason"),
+                "venue_qty": basis.get("venue_qty"),
+                "ledger_qty_reported": basis.get("ledger_qty"),
+                "cost_after_usd": None,
+                "cost_after_provenance": "UNKNOWN",
+            })
+        rows.append(row)
+    overstatement = placeholder_established - measured_established
+    return {
+        "schema": CORRECTION_SCHEMA_VERSION,
+        "prepared": True,
+        "applied": False,
+        "legs_total": len(legs_in),
+        "legs_to_correct": established,
+        "legs_preserved_unknown": len(legs_in) - established,
+        "cost_before_total_usd": str(placeholder_established),
+        "cost_after_total_usd": str(measured_established),
+        "fees_measured_usd": str(fees_established),
+        "realized_delta_usd": str(overstatement),
+        "realized_delta_direction": "TOWARD_ZERO",
+        "activity_walk": dict(audit_result.get("activity_walk") or {}),
+        # the per-leg before/after, every leg, established or preserved
+        "legs": rows,
+        "blocked_by": [
+            "NO_COST_CORRECTION_VERB: correct_settled_market restates "
+            "yes_value and never writes cost_total, so no existing protected "
+            "method can apply this.",
+            "CORRECTION_WOULD_RELAX_LOSS_HALT: a lower cost raises "
+            "settlement_pnl, and that method refuses any correction whose "
+            "delta is positive. The guard is correct and is not bypassed "
+            "here.",
+        ],
+        "ownership_note": (
+            "Every leg in this request is UNKNOWN_OWNER with zero L5-owned "
+            "fills. Correcting a COST does not attribute a leg to anyone: "
+            "verified_l5 stays 0 and manual stays UNKNOWN."
+        ),
+        "labels": (
+            "A REQUEST, not a mutation. cost_before is a $1/share upper "
+            "bound; cost_after is measured from venue fills by trade id. The "
+            "preserved legs keep cost UNKNOWN. Applying this needs a new "
+            "protected verb and an explicit owner decision, because it moves "
+            "realized toward zero."
+        ),
+    }

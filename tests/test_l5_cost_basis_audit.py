@@ -782,3 +782,105 @@ def test_the_money_key_names_come_from_the_diagnostic_not_from_guessing():
 def test_nested_mappings_do_not_recurse_into_a_fake_decimal():
     assert A._d({"currency": "USD", "value": {"currency": "USD", "value": "1"}}) == D("1")
     assert A._d({"currency": "USD", "value": {"nope": 1}}) is None
+
+
+# --------------------------------------------------------------------------
+# Section 20: the correction REQUEST. It prepares and never applies. The two
+# unestablished legs keep cost UNKNOWN, ownership is carried verbatim, and the
+# reasons no existing verb can apply it are stated rather than worked around.
+
+
+def _leg(key, placeholder, *, established=True, cost="0.59", reason=None,
+         owners=("UNKNOWN_OWNER",), l5=0, manual=0, unknown=1):
+    basis = ({"established": True, "qty": "2.9000", "actual_cost_usd": cost,
+              "fees_usd": "0.0100", "avg_price": "0.20"}
+             if established else
+             {"established": False, "reason": reason or "QUANTITY_MISMATCH",
+              "venue_qty": "2.0000", "ledger_qty": "1.0000"})
+    return {"key": key, "market": key.split("|")[0], "side": key.split("|")[1],
+            "ledger_qty": "2.90", "qty_source": "retired_markets",
+            "placeholder_cost_usd": placeholder, "owners": list(owners),
+            "l5_owned_fills": l5, "owner_manual_fills": manual,
+            "unknown_owner_fills": unknown, "basis": basis,
+            "fills": [{"trade_id": "T-%s" % key}]}
+
+
+def _req(*legs):
+    return A.correction_request({"activity_walk": {"complete": True}, "legs": list(legs)})
+
+
+def test_the_request_is_prepared_and_never_applied():
+    r = _req(_leg("m|UP", "2.90"))
+    assert r["prepared"] is True
+    assert r["applied"] is False
+
+
+def test_an_unestablished_leg_keeps_its_cost_unknown_not_zero():
+    r = _req(_leg("m|UP", "1.00", established=False))
+    row = r["legs"][0] if "legs" in r else None
+    assert r["legs_to_correct"] == 0
+    assert r["legs_preserved_unknown"] == 1
+    # and it contributes nothing to either total
+    assert A._d(r["cost_before_total_usd"]) == D("0")
+    assert A._d(r["cost_after_total_usd"]) == D("0")
+
+
+def test_the_unknown_leg_is_not_promoted_to_a_measurement():
+    r = _req(_leg("m|UP", "1.00", established=False))
+    assert r["realized_delta_usd"] == "0"
+
+
+def test_totals_cover_only_the_established_legs():
+    r = _req(_leg("a|UP", "2.90", cost="0.59"),
+             _leg("b|DOWN", "1.00", cost="0.88"),
+             _leg("c|UP", "5.00", established=False))
+    assert r["legs_total"] == 3
+    assert r["legs_to_correct"] == 2
+    assert r["legs_preserved_unknown"] == 1
+    assert A._d(r["cost_before_total_usd"]) == D("3.90")
+    assert A._d(r["cost_after_total_usd"]) == D("1.47")
+    assert A._d(r["realized_delta_usd"]) == D("2.43")
+
+
+def test_the_delta_direction_is_named_as_toward_zero():
+    r = _req(_leg("m|UP", "2.90"))
+    assert r["realized_delta_direction"] == "TOWARD_ZERO"
+
+
+def test_both_blocking_reasons_are_reported_not_worked_around():
+    r = _req(_leg("m|UP", "2.90"))
+    blob = " ".join(r["blocked_by"])
+    assert "NO_COST_CORRECTION_VERB" in blob
+    assert "CORRECTION_WOULD_RELAX_LOSS_HALT" in blob
+
+
+def test_ownership_is_carried_verbatim_and_never_reclassified():
+    r = _req(_leg("m|UP", "2.90", owners=("UNKNOWN_OWNER",), unknown=5))
+    row = r["legs"][0]
+    assert row["owners"] == ["UNKNOWN_OWNER"]
+    assert row["unknown_owner_fills"] == 5
+    assert row["l5_owned_fills"] == 0
+    assert "verified_l5 stays 0" in r["ownership_note"]
+
+
+def test_every_row_records_the_before_provenance_and_its_trade_ids():
+    r = _req(_leg("m|UP", "2.90"))
+    row = r["legs"][0]
+    assert row["cost_before_provenance"] == "PLACEHOLDER_ONE_DOLLAR_PER_SHARE_UPPER_BOUND"
+    assert row["cost_after_provenance"] == "MEASURED_FROM_VENUE_FILLS"
+    assert row["fill_trade_ids"] == ["T-m|UP"]
+
+
+def test_an_unreadable_measured_cost_takes_no_action():
+    leg = _leg("m|UP", "2.90")
+    leg["basis"]["actual_cost_usd"] = None
+    r = _req(leg)
+    assert r["legs_to_correct"] == 0
+    assert r["legs"][0]["action"] == "NONE"
+    assert r["legs"][0]["cost_after_usd"] is None
+
+
+def test_the_request_carries_the_walk_so_a_partial_walk_is_visible():
+    r = A.correction_request({"activity_walk": {"pages": 40, "ended": "max_pages",
+                                                "complete": False}, "legs": []})
+    assert r["activity_walk"]["complete"] is False
