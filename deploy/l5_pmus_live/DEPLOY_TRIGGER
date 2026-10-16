@@ -430,3 +430,32 @@ side precedence + fee source, shadow-locked 2026-10-16T17:10Z
 # READ-ONLY. Money-path gate 1327. SHADOW_ONLY set, HALT latched, submission
 # disabled, no limit, threshold or baseline changed.
 money-field shape diagnostic, shadow-locked 2026-10-16T18:00Z
+
+# The extraction the shape diagnostic asked for, and nothing else. The answer
+# came back unambiguous on 1,911 production fill rows: price, cost, lastPx and
+# commissionNotionalCollected are every one of them a dict carrying exactly
+# {currency, value}, while qty, qtyDecimal and lastShares are plain strings
+# that already parse. That is the whole of FILL_WITHOUT_PRICE.
+#
+# _d() now unwraps a money mapping. ONE READER, nothing else:
+#   src/l5_cost_basis_audit.py  -- _d() unwraps {currency, value}; the
+#                                  money_field_shapes docstring records that
+#                                  it has answered and stays as the check
+#                                  that the shape has not moved
+#
+# UNKNOWN STAYS UNKNOWN. A mapping with no value key, an empty or non-finite
+# value, or a currency that cannot be booked in dollars returns None, never
+# zero. A credited rebate keeps its negative sign, and an unrecognised
+# currency is not silently treated as USD.
+#
+# THIS DOES NOT CLEAR THE ACCOUNT-WIDE LOSS GATE, and the $294.09 total stays
+# labelled a placeholder until this audit reports established legs from real
+# venue prices. No limit, threshold, baseline or gate is touched.
+#
+# READ-ONLY. L5_SHADOW_ONLY stays set, the watchdog HALT stays latched,
+# L5_TS_COMPLETION_CROSS stays unset, L5_TS_DEPTH_TICKS stays 1,
+# L5_MAX_LIVE_ORDERS and L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
+# 77 passed across both files importing the module (8 new cases, section 19).
+# Full suite 26 failed / 14 errors in 10 files, none importing this module:
+# the established baseline exactly.
+structured-money extraction, shadow-locked 2026-10-16T19:40Z
