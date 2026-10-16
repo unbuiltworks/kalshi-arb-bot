@@ -1207,6 +1207,114 @@ class InventoryStore:
         except (InvalidOperation, TypeError, ValueError):
             return None
 
+    #: the one source string verified_l5_net_for_gates() will accept. Named
+    #: here so the writer and the reader cannot drift apart.
+    VERIFIED_L5_NET_SOURCE = "AUDITED_L5_FILLS_FEES_SETTLEMENTS"
+
+    def reconcile_verified_l5_net(self) -> Dict[str, Any]:
+        """Turn verified GROSS L5 settlement into a verified NET attestation.
+
+        THE GAP THIS CLOSES. `verified_l5_net_for_gates()` has always read a
+        `verified_l5_net_attestation` record, and NOTHING in src/ or scripts/
+        ever wrote one -- the only writer in the repository was a test
+        fixture. So the independent strategy-loss gate could never activate:
+        opting in refused STRATEGY_NET_UNVERIFIED forever. The settlement
+        path already accumulates the hard part (`verified_l5_settlement_gross`
+        and `verified_l5_settlements`, gated on known cost basis AND
+        l5_owner_verified provenance AND exact quantity/cost agreement); the
+        only missing step was fees, which is why every row carries
+        fee_rebate_status NOT_VERIFIED. This is that step and nothing more.
+
+        WHAT IT WILL NOT DO. It never touches realized_attributed,
+        realized_unattributed, or any retired settlement row: the
+        account-wide history stays exactly as recorded, including the
+        conservative $1/share upper bounds. It produces a SEPARATE L5-only
+        figure. It is therefore not a way to make an account-wide loss
+        smaller, and must never be described as one.
+
+        MISSING IS NOT ZERO. A contributing order with no recorded commission
+        refuses FEE_EVIDENCE_MISSING rather than contributing a free $0 fee,
+        because an unknown fee makes the net unknown, and an unknown net must
+        not reach a risk gate. A zero RECORDED commission is a fact and is
+        accepted; an ABSENT one is not. Rebates are deliberately excluded:
+        this venue credits them separately and a zero commission is not a
+        rebate, so counting an uncredited rebate here would flatter the net.
+        """
+        rows = list(self.state.get("verified_l5_settlements") or [])
+        if not rows:
+            return {"ok": False, "reason": "NO_VERIFIED_L5_SETTLEMENTS",
+                    "labels": ("no settled market has passed the verified-L5 "
+                               "test, so there is no L5-only net to attest. "
+                               "This is the correct answer while every leg "
+                               "carries an unknown cost basis.")}
+        prov = self.state.get("fill_provenance") or {}
+        fee_map = self.state.get("fees") or {}   # NOT the pmus_fees module
+        gross = D(str(self.state.get("verified_l5_settlement_gross") or 0))
+        order_ids: List[str] = []
+        fee_evidence: Dict[str, str] = {}
+        missing: List[str] = []
+        markets: List[str] = []
+        for row in rows:
+            mkt = str(row.get("market") or "")
+            if not mkt:
+                return {"ok": False, "reason": "VERIFIED_ROW_WITHOUT_MARKET"}
+            markets.append(mkt)
+            entries = ((prov.get(mkt) or {}).get("entries") or [])
+            if not entries:
+                return {"ok": False, "reason": "PROVENANCE_MISSING:%s" % mkt}
+            for e in entries:
+                if not e.get("l5_owner_verified"):
+                    # a row that reached verified_l5_settlements cannot hold
+                    # one of these, so this is a corrupted book, not a skip
+                    return {"ok": False,
+                            "reason": "UNVERIFIED_OWNER_IN_VERIFIED_ROW:%s"
+                            % mkt}
+                coid = e.get("coid")
+                if not coid:
+                    return {"ok": False, "reason": "FILL_WITHOUT_COID:%s" % mkt}
+                coid = str(coid)
+                if coid in fee_evidence:
+                    continue
+                if coid not in fee_map:
+                    missing.append(coid)
+                    continue
+                try:
+                    fee_evidence[coid] = str(D(str(fee_map[coid])))
+                except (InvalidOperation, TypeError, ValueError):
+                    return {"ok": False,
+                            "reason": "FEE_UNPARSEABLE:%s" % coid}
+                order_ids.append(coid)
+        if missing:
+            return {"ok": False, "reason": "FEE_EVIDENCE_MISSING",
+                    "orders": sorted(set(missing))[:16],
+                    "labels": ("an unknown commission makes the net unknown. "
+                               "A missing fee is never counted as zero.")}
+        if not order_ids:
+            return {"ok": False, "reason": "NO_CONTRIBUTING_ORDERS"}
+        fees_total = sum((D(v) for v in fee_evidence.values()), D(0))
+        net = gross - fees_total
+        rec = {
+            "source": self.VERIFIED_L5_NET_SOURCE,
+            "net_usd": str(net),
+            "gross_usd": str(gross),
+            "fees_usd": str(fees_total),
+            "order_ids": sorted(set(order_ids)),
+            "fee_evidence": dict(fee_evidence),
+            "markets": sorted(set(markets)),
+            "rebates_usd_excluded": "0",
+            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "labels": ("verified L5-ONLY after-fee net. NOT an account-wide "
+                       "figure and NOT an offset against account-wide "
+                       "realized loss. Rebates are excluded until credited "
+                       "and source-accounted."),
+        }
+        self.state["verified_l5_net_attestation"] = rec
+        for row in self.state.get("verified_l5_settlements") or []:
+            if str(row.get("market") or "") in set(markets):
+                row["fee_rebate_status"] = "FEES_VERIFIED_REBATES_EXCLUDED"
+        self.save()
+        return {"ok": True, "attestation": rec}
+
     def realized_lines(self) -> Dict[str, str]:
         """Every line apart, for reporting. Never collapsed by this method."""
         return {
