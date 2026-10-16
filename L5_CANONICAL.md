@@ -797,3 +797,104 @@ Not the order limit, not the pair target, not HALT — the readout.
 20:12Z; `cpc-btc-updown-1d-2026-10-15-2100z` expires 21:00Z. Still
 **no settlement evidence**. Remains REAL exposure, $2.0400 worst case,
 cost UNKNOWN.
+
+---
+
+## 18. Two corrections to §16, and the ladder access audit. 2026-10-16.
+
+### Correction 1 — §16's "directional, not pair capture" was WRONG
+The owner is right: a pair completed minutes later is a real pair, and the
+first leg's ACTUAL acquisition cost is what prices it. Judging the window by
+contemporaneous prices was the error.
+
+FIFO matched-inventory reconstruction at actual acquisition costs:
+
+| | |
+|---|---|
+| completed pairs | **457.4** |
+| matched acquisition cost | **$355.72** → avg pair cost **0.7777** |
+| **completed-pair gain** | **+$101.68** |
+| residual at window end | 81.7 UP @ 0.98, cost $80.07 |
+| **residual directional P&L** | **+$1.63** |
+| **total** | **+$103.32** |
+
+Cross-check against cashflow: `539.09 − 435.78 = +103.31` (1c rounding).
+
+**Completed pairs are 98.4% of the window's P&L; the residual is 1.6%.**
+The window was pair completion, not a directional trade. §16's conclusion
+is withdrawn.
+
+The mechanism, without inferring intent: UP was acquired 15:44–15:52 at
+0.49–0.87. As UP rose, DOWN became cheap, and the 15:53–15:54 DOWN fills at
+0.01–0.09 completed against that OLDER UP inventory — pairs at **0.59–0.78**
+on lags of 3–9 minutes. Representative rows:
+
+```
+opened 15:44  closed 15:53   25.0 @ UP 0.5000 + DN 0.0898 = pair 0.5898  +$10.26
+opened 15:46  closed 15:53   42.4 @ UP 0.5900 + DN 0.0500 = pair 0.6400  +$15.26
+opened 15:50  closed 15:53   25.0 @ UP 0.8112 + DN 0.0200 = pair 0.8312   +$4.22
+opened 15:54  closed 15:54   18.3 @ UP 0.9800 + DN 0.0100 = pair 0.9900   +$0.18
+```
+
+The residual he was left holding is the LATEST and most expensive UP
+(81.7 @ 0.98), which returned +$1.63 — not a directional position of
+consequence.
+
+### Correction 2 — the UP ledger is NOT "exact"
+§16 said the UP leg reconciles exactly. **Withdrawn.** What is true:
+
+* screenshot UP shares **539.1** = position **539.1** = redeemed **539.1**;
+* but cost does NOT agree to the cent: **$404.56** (sum of displayed $) vs
+  **$402.71** (539.1 x 74.7c) vs **$402.83** (implied by the +$135.99 gain)
+  — a spread of ~$1.85, ~0.46%;
+* fills were deduped ACROSS overlapping screenshots on
+  (side, price, shares, amount). **L5 repeats identical 50.0-share clips at
+  identical prices**, so two genuinely distinct fills can be collapsed into
+  one by that key. The quantity match could therefore arise from an omission
+  and a double-count offsetting.
+
+So the UP ledger is **consistent with completeness, not proof of it**. The
+DOWN leg has no independent check at all: it settled worthless, leaves no
+position record, and $31.22 over 457.4 shares remains a floor. The
++$103.32 above is therefore **screenshot-derived and unverified**, not a
+confirmed window P&L. Only the **$539.09 redemption** is confirmed.
+
+### Ladder access audit — inspected before changing anything
+| path | finding |
+|---|---|
+| `ladder_history` in recorder state | captured, 16 rungs x 240 snapshots, rolling selection verified working |
+| emitted to logs? | **No.** Nothing prints it. |
+| status document (`pmus_ws_status.jsonl`) | written to the volume; the logged `PMUS_WS_STATUS` line carries `ladder_release` ONLY |
+| HTTP surface `/status`, `/l5_shadow` | exists, GET-only, no credentials — but the service has **no domain** (`serviceDomains: []`), so it is unreachable |
+| `PMUS_WS_TAPE_READ_SLUG` / `_TICK` | set on the service; **no code reads them** in this branch |
+| widen `PMUS_BOOK_ROWS` by env? | **No.** The row builder is hardcoded to `bid/ask/bid_qty/ask_qty`; no variable changes it |
+| volume | not mountable from this session |
+
+**Conclusion: there is no zero-change path.** The data is being captured
+correctly and is unreachable by every existing route.
+
+### The single next action
+**Add a `PMUS_LADDER_ROWS` log emit to the recorder**, mirroring the
+existing `PMUS_BOOK_ROWS` emitter line-for-line, reading the
+`ladder_history` already in state and gated behind the EXISTING
+`PMUS_WS_LADDER_ROLLING` selection so it prints only the markets already
+retaining a ladder. ~15 lines of additive, read-only code in the read-only
+recorder; no new service, no strategy, no schema change, nothing on the
+money path. Then one recorder deployment, and re-run the joint-outcome
+analysis with a real `queue_ahead` at both resting prices instead of a
+price-through proxy.
+
+**It requires approval**, for one reason: it deploys a change to a running
+production service. The recorder is read-only and self-recovering, and a
+restart costs only the in-memory ladder for the current window (it
+repopulates in seconds), but it is still a deployment and the owner asked
+to avoid unnecessary ones. **Not done.**
+
+Alternative considered and rejected: generating a public Railway domain to
+reach `/status`. It needs no code, but it publishes an endpoint to the
+internet, and the status document does not currently carry the ladder
+anyway — so it exposes a surface without delivering the measurement.
+
+### BTC1d
+20:20Z; `cpc-btc-updown-1d-2026-10-15-2100z` expires 21:00Z. Still no
+settlement evidence. REAL exposure, $2.0400, cost UNKNOWN.
