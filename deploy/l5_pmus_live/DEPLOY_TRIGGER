@@ -167,3 +167,36 @@ Promote heartbeat exposure reporting + wedge verification. SHADOW_ONLY on.
 #
 # Rollback: Railway rollback to the running build of 2e8b4772.
 continuous pair accumulation, shadow-locked 2026-10-16T04:00Z
+
+# OWNER-APPROVED SHADOW promotion of 78e091ea: patient opposite-side
+# completion, plus the read-only depth comparison.
+#
+# CROSSING IS NOT ENABLED. L5_TS_COMPLETION_CROSS is deliberately UNSET and
+# L5_SHADOW_ONLY stays set, so the completion decision is computed, logged
+# with its full economics, and places nothing. The owner's approval covers
+# implementing and shadow-deploying the decision; live taker execution is a
+# separate explicit authorization he has not given.
+#
+# The terminal cancellation is unchanged. A refusal to cross leaves
+# maybe_ts_deadline cancelling by venue id with proof by re-read, which is
+# the only thing that stops a leg resting into expiry.
+#
+# L5_TS_DEPTH_TICKS STAYS AT 1. Flipping it to 2 on the strength of the
+# larger quoted edge is precisely the assumption the comparison exists to
+# refuse; there are no 2-tick records yet and the module reports
+# NOT_COMPARABLE rather than a verdict.
+#
+# Runtime files changing, all COPYed into this image:
+#   src/l5_two_sided_probe.py     -- completion_phase, completion_decision
+#   src/l5_pmus_live_runner.py    -- ts_completion_inputs,
+#                                    maybe_ts_completion, the gated
+#                                    L5_DEPTH_COMPARISON hook
+#   src/l5_depth_comparison.py    -- NEW; COPY added beside the cost-basis
+#                                    audit, so the image-closure test passes
+#
+# Money-path gate 1273 passed (two new sections added), 1197 on the prior
+# selection unchanged.
+#
+# Rollback: Railway rollback to deployment 223ce402, the running build of
+# b0f9916b.
+patient completion + depth comparison, shadow-locked 2026-10-16T12:00Z
