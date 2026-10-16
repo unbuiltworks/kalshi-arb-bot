@@ -486,3 +486,200 @@ def top_up(*, up_qty: Any, dn_qty: Any, up_price: Any, dn_price: Any,
             "worst_after": after["worst_outcome"],
             "up_pnl_after": after["up_pnl"], "dn_pnl_after": after["dn_pnl"],
             "both_positive_after": after["both_positive"]}
+
+
+# ------------------------------------------- patient opposite-side completion
+
+#: how close to the terminal deadline completion may be CONSIDERED. Before
+#: this the maker leg is still resting and still the better price, so there is
+#: nothing to decide; crossing early throws away the edge the maker quote was
+#: placed for.
+COMPLETION_WINDOW_S = 120.0
+
+
+def completion_phase(now: float, t_start: float) -> str:
+    """MAKER while there is time, COMPLETION near the deadline, else LATE.
+
+    Three named phases rather than a boolean, because "near the deadline" and
+    "past the deadline" need different answers: at the cutoff nothing may
+    rest, so a completion that has not been decided by then is not decided at
+    all.
+    """
+    cut = cancel_cutoff_from_start(float(t_start))
+    if float(now) >= cut:
+        return "LATE"
+    if float(now) >= cut - COMPLETION_WINDOW_S:
+        return "COMPLETION"
+    return "MAKER"
+
+
+def completion_decision(*, up_qty: Any, dn_qty: Any,
+                        up_cost_px: Any, dn_cost_px: Any,
+                        taker_price: Any, available_depth: Any,
+                        tick: Any, min_qty: Any,
+                        cash_headroom: Any, worst_case_ceiling: Any,
+                        book_age_s: Any = None,
+                        gap_suspected: bool = False) -> Dict[str, Any]:
+    """Should we CROSS to complete the deficient side? Economics only.
+
+    THE DEADLINE IS NOT A REASON. This never returns ok True because time is
+    short. It returns ok True only when crossing at the price actually
+    executable, paying the actual taker fee, STRICTLY IMPROVES the worst of
+    the two settlement outcomes, and fits inside the cash headroom and the
+    worst-case ceiling we are already authorized for. Every other case is a
+    refusal with its reason, and the caller's answer to a refusal is to
+    cancel the unfilled order and carry the residual under the existing
+    controls -- not to cross anyway.
+
+    WHY IT CAN BEAT HOLDING. A one-sided book bought at `c` loses `c` on the
+    wrong outcome. Completing at `q` makes the pair cost `c + q`, which pays
+    `min(a, b)` on BOTH outcomes; whenever `c + q + fee < min(a, b)` after the
+    completion that is a smaller worst case than holding, even though `q` is
+    a crossing price and strictly worse than the maker quote we wanted.
+
+    PARTIAL COMPLETION IS ALLOWED AND IS THE NORMAL CASE. Displayed depth
+    rarely covers the whole deficit. A partial fill of the deficient side
+    still lifts `min(a, b)`, so the size is clipped to the depth, the cash and
+    the ceiling, and judged on what that clipped size actually does.
+
+    PRICES ARE OWN-OUTCOME. `taker_price` is what a share of the DEFICIENT
+    side costs to buy right now -- for DOWN that is `1 - up_bid`, not the UP
+    ask -- and the caller owns that arithmetic because only the caller has the
+    book.
+
+    NOTHING HERE SUBMITS, CANCELS OR SETTLES ANYTHING.
+    """
+    def no(reason: str, **extra: Any) -> Dict[str, Any]:
+        return dict({"ok": False, "reason": reason, "cross": False}, **extra)
+
+    a = _d(up_qty); b = _d(dn_qty)
+    if a is None or b is None or a < 0 or b < 0:
+        return no("INVENTORY_UNREADABLE")
+    if a == 0 and b == 0:
+        return no("NO_INVENTORY_TO_COMPLETE")
+    if a == b:
+        return no("ALREADY_MATCHED", matched=str(a))
+    side = "DOWN" if a > b else "UP"
+    deficit = abs(a - b)
+
+    if gap_suspected:
+        return no("GAP_SUSPECTED", side=side, deficit=str(deficit))
+    age = _d(book_age_s)
+    if age is None or age > D(str(MAX_BOOK_AGE_S)):
+        # A STALE BOOK IS NOT AN EXECUTABLE PRICE. Crossing on a price we
+        # cannot date is how a "completion" becomes a worse one-sided book.
+        return no("BOOK_STALE", side=side, book_age_s=None if age is None
+                  else str(age))
+    q = _d(taker_price)
+    if q is None or q <= 0 or q >= D(1):
+        return no("COMPLETION_PRICE_UNREADABLE", side=side)
+    if q < MIN_PRICE or q > MAX_PRICE:
+        return no("COMPLETION_PRICE_OUT_OF_BAND", side=side, price=str(q))
+    tk = _d(tick)
+    if tk is None or tk <= 0:
+        return no("TICK_UNKNOWN")
+    if (q / tk) != (q / tk).to_integral_value():
+        return no("COMPLETION_PRICE_NOT_ON_TICK", side=side, price=str(q))
+    mq = _d(min_qty)
+    if mq is None or mq <= 0:
+        return no("MIN_QTY_UNKNOWN")
+    depth = _d(available_depth)
+    if depth is None:
+        # NO DISPLAYED DEPTH IS NOT INFINITE DEPTH.
+        return no("NO_DISPLAYED_DEPTH", side=side)
+    cash = _d(cash_headroom)
+    cap = _d(worst_case_ceiling)
+    if cash is None or cash < 0:
+        return no("CASH_HEADROOM_UNKNOWN", side=side)
+    if cap is None or cap <= 0:
+        return no("WORST_CASE_CEILING_UNKNOWN", side=side)
+
+    # SIZE: the deficit, clipped by displayed depth, by the cash this costs,
+    # and then shrunk on the venue grid until the fee fits too.
+    qty = min(deficit, depth, cash / q if q > 0 else D(0))
+    qty = (qty / mq).to_integral_value(rounding="ROUND_FLOOR") * mq
+    for _ in range(64):
+        if qty < mq:
+            break
+        if qty * q + worst_fee(qty, q) <= cash:
+            break
+        qty -= mq
+    if qty < mq:
+        return no("NO_LEGAL_COMPLETION_QUANTITY", side=side,
+                  deficit=str(deficit), depth=str(depth),
+                  cash_headroom=str(cash))
+
+    # THE DECISION, through the EXISTING predicate. top_up already answers
+    # "does extra on this side improve the worst outcome", at taker fees, so
+    # the completion is judged by the same arithmetic as any other top-up
+    # rather than by a second opinion written for the deadline.
+    tu = top_up(up_qty=a, dn_qty=b, up_price=up_cost_px, dn_price=dn_cost_px,
+                extra_side=side, extra_qty=qty, extra_price=q)
+    if not tu.get("ok"):
+        return no(str(tu.get("reason") or "TOP_UP_WORSENS_WORST_OUTCOME"),
+                  side=side, qty=str(qty), price=str(q),
+                  worst_before=str(tu.get("worst_before")),
+                  worst_after=str(tu.get("worst_after")),
+                  labels=("crossing would NOT improve the worst settlement "
+                          "outcome, so the deadline is not a reason to do "
+                          "it. Cancel the unfilled order and carry the "
+                          "residual under the existing controls."))
+
+    # AND THE CROSS MUST BUY MORE THAN IT COSTS.
+    #
+    # WHY THIS SECOND BAR IS NEEDED, measured rather than assumed. "Improves
+    # the worst outcome" alone is very nearly VACUOUS once a book is
+    # one-sided: holding loses the leg's whole cost on the wrong outcome, so
+    # every completion priced below a dollar reduces that. On a 5-share UP
+    # leg at 0.59 the predicate passes at 0.35, 0.45, 0.60, 0.80, 0.90 AND
+    # 0.95 -- so a rule written only on worst-case improvement would cross at
+    # essentially any price the book showed, which is not an economic
+    # decision.
+    #
+    # WHAT COMPLETION ACTUALLY COSTS. At the market's own price the cross is
+    # fair value, so in expectation it costs exactly the TAKER FEE and buys
+    # the removal of all settlement variance. This bar says that purchase
+    # must be worth its price: the worst case must improve by MORE than the
+    # fee paid for the improvement.
+    taker_fee = worst_fee(qty, q)
+    improvement = tu["worst_after"] - tu["worst_before"]
+    if improvement <= taker_fee:
+        return no("IMPROVEMENT_BELOW_ITS_OWN_FEE", side=side, qty=str(qty),
+                  price=str(q), improvement_usd=str(improvement),
+                  taker_fee_usd=str(taker_fee),
+                  labels=("the cross would cost more in fee than it buys in "
+                          "worst-case improvement. In expectation a "
+                          "completion at the market's own price costs "
+                          "exactly the taker fee and buys the removal of "
+                          "settlement variance; this one does not pay for "
+                          "itself."))
+
+    # AND IT MUST STILL FIT THE CEILING WE ARE AUTHORIZED FOR. An improvement
+    # that breaches the worst-case bound is not permission to breach it.
+    worst_after = tu["worst_after"]
+    if worst_after < -cap:
+        return no("COMPLETION_EXCEEDS_WORST_CASE_CEILING", side=side,
+                  qty=str(qty), price=str(q), worst_after=str(worst_after),
+                  ceiling=str(cap))
+
+    partial = bool(qty < deficit)
+    return {"ok": True, "cross": True, "side": side, "action": "BUY",
+            "qty": str(qty), "price": str(q), "mode": FT.TAKER,
+            "post_only": False,
+            "deficit": str(deficit), "partial": partial,
+            "displayed_depth": str(depth),
+            "taker_fee_usd": str(taker_fee),
+            "cash_cost_usd": str(qty * q + worst_fee(qty, q)),
+            "worst_before": str(tu["worst_before"]),
+            "worst_after": str(worst_after),
+            "worst_improvement_usd": str(worst_after - tu["worst_before"]),
+            "up_pnl_after": str(tu["up_pnl_after"]),
+            "dn_pnl_after": str(tu["dn_pnl_after"]),
+            "both_positive_after": bool(tu["both_positive_after"]),
+            "labels": ("a CROSSING order, priced at the displayed executable "
+                       "price and charged the TAKER fee. It is proposed only "
+                       "because it improves the worst settlement outcome, "
+                       "never because the deadline arrived. Displayed depth "
+                       "is not a fill: the size may fill partially or not at "
+                       "all, and a refusal to fill leaves the residual the "
+                       "existing controls already bound.")}

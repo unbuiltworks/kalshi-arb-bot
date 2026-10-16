@@ -390,6 +390,7 @@ class Runner:
         #: touches no store, no transport, no limit and no gate.
         self.two_sided: Optional[TS.TwoSidedShadow] = None
         self.last_two_sided_report_t = 0.0
+        self.last_ts_completion_t = 0.0
         self.last_two_sided_settle_t = 0.0
         #: consecutive settlement-read failures per slug. A counter of
         #: ATTEMPTS says nothing about convergence; this says which slug.
@@ -597,6 +598,24 @@ class Runner:
         # would move realized toward zero, which correct_settled_market
         # refuses as CORRECTION_WOULD_RELAX_LOSS_HALT and which needs its own
         # owner decision. Gated so a normal boot does not spend the feed walk.
+        # 1 TICK vs 2 TICKS, from the ACTUAL order and fill records on this
+        # volume. READ-ONLY and OFF by default. It exists because a deeper
+        # quote always shows a larger QUOTED edge -- 0.95 against 0.97 on a
+        # one-tick book -- so comparing quoted edges would always "prove"
+        # that deeper is better and prove nothing. It reports per depth the
+        # measured single-leg and both-leg fill rates, the realized edge from
+        # recorded prices and commissions, and withholds any verdict below
+        # the sample thresholds. It WRITES NOTHING.
+        if str(os.getenv("L5_DEPTH_COMPARISON", "")).strip().upper() == "YES":
+            try:
+                from src import l5_depth_comparison as DC
+                emit("L5_DEPTH_COMPARISON", DC.from_tape(self.tape))
+            except BaseException as exc:                       # noqa: BLE001
+                emit("L5_DEPTH_COMPARISON_FAILED", {
+                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:200]),
+                    "labels": ("the comparison is read-only; a failure "
+                               "changes nothing and never alters the "
+                               "ledger")})
         if str(os.getenv("L5_COST_BASIS_AUDIT", "")).strip().upper() == "YES":
             try:
                 from src import l5_cost_basis_audit as CBA
@@ -1917,6 +1936,10 @@ class Runner:
     #: how often the SHADOW two-sided evaluator prints an interim row. Low
     #: enough to see a window develop, high enough not to bury the heartbeat.
     TWO_SIDED_REPORT_S = 180.0
+    #: the completion decision is re-evaluated this often inside the
+    #: completion window. Often enough to catch a book that improves,
+    #: rarely enough not to spend the venue budget on a read per tick.
+    TS_COMPLETION_EVERY_S = 10.0
 
     def maybe_cancel_orphans(self, now: float) -> Optional[Dict[str, Any]]:
         """WITHDRAW AN ORDER WE OWN BUT CAN NO LONGER MANAGE.
@@ -2067,6 +2090,195 @@ class Runner:
             self._qm_store = st
         return st
 
+    #: crossing to complete is a SEPARATE live authorization from resting a
+    #: maker quote. Unset means the decision is computed, logged and NOT
+    #: acted on -- which is what shadow observation is for.
+    TS_COMPLETION_CROSS_ENV = "L5_TS_COMPLETION_CROSS"
+
+    def ts_completion_cross_authorized(self) -> bool:
+        return str(os.getenv(self.TS_COMPLETION_CROSS_ENV, "")
+                   ).strip().upper() == "YES"
+
+    def ts_completion_inputs(self, slug: str) -> Dict[str, Any]:
+        """Gather the completion economics inputs, or say what is missing.
+
+        FAIL CLOSED ON EVERY FIELD. A missing blended cost, an unattested
+        leg, an unreadable book, an unknown tick and an unknown cash
+        headroom are each a refusal; none of them is substituted with zero,
+        because a worst-case comparison fed a zero cost basis reports an
+        improvement that does not exist.
+        """
+        from src import l5_two_sided_probe as TSP
+        out: Dict[str, Any] = {"market": slug}
+        try:
+            g = self.store.gross_inventory(slug)
+            up_q, dn_q = D(str(g.get("up") or 0)), D(str(g.get("dn") or 0))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return dict(out, ok=False, reason="INVENTORY_UNREADABLE",
+                        error=type(exc).__name__)
+        # THE BLENDED COST PER SHARE, and only from an ATTESTED leg. A leg
+        # whose quantity was adopted from the venue's net has no basis we
+        # can name, and `UNKNOWN_COST_BASIS` is the honest answer rather
+        # than pricing it at zero or at a dollar.
+        px: Dict[str, Any] = {}
+        for side, qty in (("UP", up_q), ("DOWN", dn_q)):
+            if qty <= 0:
+                px[side] = D(0)
+                continue
+            if not self.store.cost_attested(slug, side):
+                return dict(out, ok=False, reason="UNKNOWN_COST_BASIS",
+                            side=side, qty=str(qty),
+                            labels=("this leg's quantity came from the "
+                                    "venue's net, not from a fill of ours, "
+                                    "so its cost basis is unknown. It is "
+                                    "NOT priced at zero."))
+            try:
+                total = self.store.leg_cost(slug)[side]
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                return dict(out, ok=False, reason="LEG_COST_UNREADABLE",
+                            side=side, error=type(exc).__name__)
+            px[side] = D(str(total)) / qty
+        snap = self.book.snapshot(slug) or {}
+        bid, ask = snap.get("bid"), snap.get("ask")
+        # OWN-OUTCOME CROSSING PRICE. Buying UP crosses the UP ask; buying
+        # DOWN crosses the DOWN ask, which is 1 - the UP BID. Passing the UP
+        # ask for a DOWN completion is the arithmetic error this names.
+        side = "DOWN" if up_q > dn_q else "UP"
+        if side == "UP":
+            cross_px = None if ask is None else D(str(ask))
+            depth = snap.get("ask_shares")
+        else:
+            cross_px = None if bid is None else (D(1) - D(str(bid)))
+            depth = snap.get("bid_shares")
+        # CASH AND CEILING, from the gates already in force. The smaller of
+        # the run-scoped cash bound's remaining headroom and the
+        # account-wide exposure capacity binds, recomputed NOW rather than
+        # carried from an earlier reading.
+        vg = getattr(self.executor, "validation_gates", None)
+        cash_h = None
+        try:
+            if vg is not None and vg.max_cash_deployed_usd is not None:
+                spent = sum((D(str(v)) for v in
+                             (self.store.committed() or {}).values()), D(0))
+                cash_h = D(str(vg.max_cash_deployed_usd)) - spent
+            exp = self.store.account_wide_risk_by_market()
+            if exp.get("ok"):
+                capacity = D(str(exp.get("capacity_usd")))
+                cash_h = capacity if cash_h is None else min(cash_h, capacity)
+            else:
+                return dict(out, ok=False, reason="EXPOSURE_UNREADABLE",
+                            detail=str(exp.get("reason"))[:120])
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return dict(out, ok=False, reason="CASH_HEADROOM_UNREADABLE",
+                        error=type(exc).__name__)
+        ceiling = None
+        if vg is not None:
+            ceiling = vg.max_worst_case_deficit_usd
+        return dict(out, ok=True, side=side,
+                    up_qty=up_q, dn_qty=dn_q,
+                    up_cost_px=px["UP"], dn_cost_px=px["DOWN"],
+                    taker_price=cross_px, available_depth=depth,
+                    tick=getattr(self.transport, "tick_size", None),
+                    min_qty=getattr(self.transport, "quantity_increment",
+                                    None),
+                    cash_headroom=cash_h, worst_case_ceiling=ceiling,
+                    book_age_s=snap.get("stream_age_s"),
+                    gap_suspected=bool(snap.get("gap_suspected")))
+
+    def maybe_ts_completion(self, now: float) -> Optional[Dict[str, Any]]:
+        """Decide, on ECONOMICS, whether to cross to complete the pair.
+
+        PATIENT. Nothing happens in the MAKER phase: the resting quote is
+        still the better price and crossing early throws away the edge it
+        was placed for. In the COMPLETION phase -- the last two minutes
+        before the terminal deadline -- the actual executable price, the
+        displayed depth, the real taker fee and the resulting worst-case
+        settlement are computed and compared against holding.
+
+        THE DEADLINE IS NEVER THE REASON. `completion_decision` returns ok
+        True only when crossing STRICTLY improves the worst of the two
+        settlement outcomes and fits the cash headroom and worst-case
+        ceiling already in force. On any refusal this does nothing, and
+        `maybe_ts_deadline` cancels the unfilled order at the cutoff as it
+        always has -- the residual is then carried under the existing
+        controls.
+
+        CROSSING IS ITS OWN AUTHORIZATION. Even when the economics say yes,
+        no order is placed unless L5_TS_COMPLETION_CROSS is YES and the
+        transport is armed. Unset, this is a logged proposal and nothing
+        more, which is what the shadow deployment runs.
+        """
+        from src import l5_two_sided_probe as TSP
+        t = self.transport
+        if t is None:
+            return None
+        slug = getattr(t, "market_slug", None)
+        if not slug or not TSP.active(slug):
+            return None
+        ws = AB.slug_start(slug)
+        if ws is None:
+            return None            # the deadline path owns an unknown window
+        phase = TSP.completion_phase(now, float(ws))
+        if phase != "COMPLETION":
+            return None
+        if now - self.last_ts_completion_t < self.TS_COMPLETION_EVERY_S:
+            return None
+        self.last_ts_completion_t = now
+        src = self.ts_completion_inputs(slug)
+        if not src.get("ok"):
+            # RETURN WHAT WAS EMITTED. Emitting one dict and returning
+            # another let a caller miss `crossed` on exactly the paths where
+            # it matters most -- the fail-closed ones.
+            rec = dict(src, phase=phase, cross=False, crossed=False,
+                       authorized_to_cross=(
+                           self.ts_completion_cross_authorized()))
+            emit("L5_TS_COMPLETION", rec)
+            self.stats["ts_completion:%s" % (src.get("reason")
+                                             or "INPUTS")] += 1
+            return rec
+        dec = TSP.completion_decision(
+            up_qty=src["up_qty"], dn_qty=src["dn_qty"],
+            up_cost_px=src["up_cost_px"], dn_cost_px=src["dn_cost_px"],
+            taker_price=src["taker_price"],
+            available_depth=src["available_depth"],
+            tick=src["tick"], min_qty=src["min_qty"],
+            cash_headroom=src["cash_headroom"],
+            worst_case_ceiling=src["worst_case_ceiling"],
+            book_age_s=src["book_age_s"],
+            gap_suspected=src["gap_suspected"])
+        authorized = self.ts_completion_cross_authorized()
+        rec = dict(dec, market=slug, phase=phase,
+                   authorized_to_cross=authorized,
+                   armed=bool(t.armed),
+                   up_qty=str(src["up_qty"]), dn_qty=str(src["dn_qty"]),
+                   up_cost_px=str(src["up_cost_px"]),
+                   dn_cost_px=str(src["dn_cost_px"]),
+                   cash_headroom=str(src["cash_headroom"]),
+                   worst_case_ceiling=str(src["worst_case_ceiling"]),
+                   crossed=False,
+                   labels=("PROPOSED. A crossing completion is a separate "
+                           "live authorization from resting a maker quote, "
+                           "so an economically positive decision is logged "
+                           "and NOT acted on unless "
+                           "L5_TS_COMPLETION_CROSS is YES and the "
+                           "transport is armed. Nothing here is a fill and "
+                           "nothing here is realized."))
+        if dec.get("ok") and authorized and t.armed:
+            rec["crossed"] = "WOULD_SUBMIT"
+            rec["submission_route"] = ("deliberately not wired: crossing "
+                                       "requires the owner's separate "
+                                       "explicit authorization for live "
+                                       "taker execution")
+        emit("L5_TS_COMPLETION", rec)
+        self.stats["ts_completion:%s" % (dec.get("reason") or "OK")] += 1
+        return rec
+
     def maybe_ts_deadline(self, now: float) -> Optional[Dict[str, Any]]:
         """Cancel the two-sided probe's resting legs at the TERMINAL deadline.
 
@@ -2194,6 +2406,10 @@ class Runner:
         # the queue measurement's own per-order deadline. Inert unless an
         # experiment AND its market are both named -- see maybe_qm_deadline.
         self.maybe_qm_deadline(now)
+        # BEFORE the deadline sweep, deliberately. The completion
+        # decision needs the order still resting to be worth making;
+        # after the cutoff there is nothing left to complete against.
+        self.maybe_ts_completion(now)
         self.maybe_ts_deadline(now)
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local

@@ -109,3 +109,25 @@ tests/test_l5_pmus_live_wiring.py
     Passing the start gave start-180: a deadline expired before the window
     opened. Boundaries at +0/+300/+719/+720/+721s, cancellation by exact
     venue id proved by re-read, and a caller audit for the whole class.
+
+14. PATIENT OPPOSITE-SIDE COMPLETION (economics-driven; crossing is a
+    SEPARATE authorization)
+    tests/test_l5_patient_completion.py
+    tests/test_l5_completion_wiring.py
+    completion_decision takes NO clock, so the deadline can never be the
+    reason to cross. It crosses only when the worst of the two settlement
+    outcomes strictly improves by MORE than the taker fee that bought the
+    improvement, and only inside the cash headroom and worst-case ceiling
+    already in force. Worst-case improvement ALONE is measured to be nearly
+    vacuous once a book is one-sided -- it passes at every price up to 0.95
+    -- which is why the fee bar exists. Unattested cost basis, a stale book,
+    absent depth and unreadable exposure each refuse rather than default.
+
+15. DEPTH COMPARISON (read-only; refuses to conclude without a sample)
+    tests/test_l5_depth_comparison.py
+    1 tick vs 2 ticks decided on realized edge TIMES the measured both-leg
+    fill rate, from actual order and fill records. A deeper quote always
+    shows a larger QUOTED edge, so the quoted edge is never used as a
+    substitute; below the sample thresholds no rate and no verdict is
+    reported, and a missing commission withholds the realized edge rather
+    than reading as zero.
