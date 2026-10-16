@@ -222,3 +222,17 @@ patient completion + depth comparison, shadow-locked 2026-10-16T12:00Z
 # SHADOW_ONLY stays set, L5_TS_COMPLETION_CROSS stays unset, no limit
 # changed. Money-path gate 1280 passed.
 completion cash-headroom fix + depth comparison enabled, shadow-locked 2026-10-16T12:20Z
+
+# Fix the depth comparison's two blind spots, found by running it on the
+# real tape: 7,310 order records, ALL of them UNKNOWN_DEPTH.
+#
+# Half one: the reader looked for row["bid"], but the BBO lives at
+# row.pmus.bbo, so the touch at placement was None for every record.
+# Half two: nothing wrote down the depth at all, so even a correct touch
+# left it to be re-derived. build_orders now records depth_ticks and
+# touch_at_placement on each leg, which is the only unambiguous source.
+#
+# Still read-only, still no verdict without a sample. SHADOW_ONLY set,
+# L5_TS_COMPLETION_CROSS unset, L5_TS_DEPTH_TICKS still 1, no limit changed.
+# Money-path gate 1283 passed.
+depth recording + tape path fix, shadow-locked 2026-10-16T12:35Z

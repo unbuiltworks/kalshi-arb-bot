@@ -249,17 +249,36 @@ def from_tape(path: str, limit: int = 200000) -> Dict[str, Any]:
             if not o.get("client_order_id"):
                 continue
             intent = o.get("intent") or {}
+            side = str(intent.get("side") or rec.get("side") or "").upper()
+            # THE BBO LIVES AT row.pmus.bbo, NOT AT row.bid. Reading
+            # row["bid"] returned None for every one of the 7,310 records on
+            # the production tape, so every order was UNKNOWN_DEPTH and the
+            # comparison could never attribute a single one.
+            bbo = ((doc.get("row") or {}).get("pmus") or {}).get("bbo") or {}
+            # PREFER THE RECORDED DEPTH. The probe now writes depth_ticks and
+            # the touch it placed against onto each leg, which is the only
+            # unambiguous source; the BBO is the fallback for orders placed
+            # before that was recorded.
+            stage = rec.get("TWO_SIDED_PROBE") or {}
+            legs = {str(l.get("side") or "").upper(): l
+                    for l in (stage.get("legs") or [])
+                    if isinstance(l, Mapping)}
+            leg = legs.get(side) or {}
             orders.append({"market": rec.get("market") or intent.get("market"),
-                           "side": intent.get("side") or rec.get("side"),
+                           "side": side,
                            "price": intent.get("price"),
                            "qty": intent.get("qty"),
                            "filled_qty": o.get("filled_qty"),
                            "commission": o.get("commission"),
-                           "depth_ticks": o.get("depth_ticks"),
-                           "bid_at_placement": (doc.get("row") or {}).get(
-                               "bid"),
-                           "ask_at_placement": (doc.get("row") or {}).get(
-                               "ask")})
+                           "depth_ticks": (o.get("depth_ticks")
+                                           if o.get("depth_ticks") is not None
+                                           else leg.get("depth_ticks")
+                                           if leg.get("depth_ticks") is not None
+                                           else stage.get("depth_ticks")),
+                           "touch_at_placement": leg.get(
+                               "touch_at_placement"),
+                           "bid_at_placement": bbo.get("bid"),
+                           "ask_at_placement": bbo.get("ask")})
     out = compare(orders)
     out["ok"] = True
     out["tape"] = path

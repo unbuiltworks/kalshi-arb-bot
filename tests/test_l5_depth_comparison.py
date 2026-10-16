@@ -176,7 +176,7 @@ def test_a_tape_is_read_and_bad_lines_counted(tmp_path):
         fh.write("{not json\n")
         for i in range(3):
             fh.write(json.dumps({
-                "row": {"bid": "0.60", "ask": "0.61"},
+                "row": {"pmus": {"bbo": {"bid": "0.60", "ask": "0.61"}}},
                 "record": {"market": "w%d" % i, "ORDER": {
                     "client_order_id": "c%d" % i, "filled_qty": "5",
                     "commission": "0.00",
@@ -196,3 +196,74 @@ def test_the_module_cannot_submit_cancel_or_write():
     for forbidden in ("submit", ".cancel(", "requests", "urllib",
                       'open(path, "w"', ".save()"):
         assert forbidden not in code, forbidden
+
+
+# ------------------------------- the production defect, both halves
+
+def test_the_BBO_is_read_from_row_pmus_bbo_not_row_bid(tmp_path):
+    """THE DEFECT THE DEPLOYMENT FOUND. 7,310 order records on the
+    production tape all came back UNKNOWN_DEPTH because the reader looked
+    for row["bid"]; the BBO lives at row.pmus.bbo."""
+    p = tmp_path / "t.jsonl"
+    with open(p, "w") as fh:
+        for i in range(25):
+            fh.write(json.dumps({
+                "row": {"pmus": {"bbo": {"bid": "0.60", "ask": "0.61"}}},
+                "record": {"market": "w%d" % i, "ORDER": {
+                    "client_order_id": "c%d" % i, "filled_qty": "5",
+                    "commission": "0.00",
+                    "intent": {"side": "UP", "price": "0.59", "qty": "5"}}}
+            }) + "\n")
+    out = C.from_tape(str(p))
+    assert out["unknown_depth"] == 0, out
+    assert out["depths"]["1"]["orders"] == 25
+
+
+def test_a_recorded_depth_on_the_probe_leg_is_preferred(tmp_path):
+    """The probe now writes depth_ticks onto each leg, which is the only
+    unambiguous source: it needs no touch to be recoverable."""
+    p = tmp_path / "t.jsonl"
+    with open(p, "w") as fh:
+        for i in range(25):
+            fh.write(json.dumps({
+                "row": {},                      # no BBO at all
+                "record": {"market": "w%d" % i,
+                           "TWO_SIDED_PROBE": {"depth_ticks": 2, "legs": [
+                               {"side": "UP", "depth_ticks": 2,
+                                "touch_at_placement": "0.60"}]},
+                           "ORDER": {
+                               "client_order_id": "c%d" % i,
+                               "filled_qty": "5", "commission": "0.00",
+                               "intent": {"side": "UP", "price": "0.58",
+                                          "qty": "5"}}}}) + "\n")
+    out = C.from_tape(str(p))
+    assert out["unknown_depth"] == 0
+    assert out["depths"]["2"]["orders"] == 25
+
+
+def test_the_probe_writes_the_depth_it_placed_at():
+    """Pinned against the REAL builder, so the recording cannot be dropped
+    without this failing."""
+    from src import l5_two_sided_probe as TSP
+    import os
+    os.environ[TSP.EXPERIMENT_ENV] = "e"
+    os.environ[TSP.MARKET_ENV] = "m"
+    try:
+        built = TSP.build_orders(
+            market="m", bid="0.60", ask="0.61", bid_depth="900",
+            ask_depth="900", tick="0.01", min_qty="0.01", depth_ticks=2,
+            cash_envelope="8", max_worst_case_loss="3", book_age_s="0.05")
+        assert built["ok"] is True, built
+        assert built["depth_ticks"] == 2
+        for l in built["legs"]:
+            assert l["depth_ticks"] == 2
+            assert l["touch_at_placement"] is not None
+        touch = {l["side"]: l["touch_at_placement"] for l in built["legs"]}
+        assert touch["UP"] == "0.60"            # the UP bid
+        assert touch["DOWN"] == "0.39"          # 1 - the UP ask
+        # and the recorded depth round-trips through the attributor
+        for l in built["legs"]:
+            assert C.depth_of(l) == 2
+    finally:
+        os.environ.pop(TSP.EXPERIMENT_ENV, None)
+        os.environ.pop(TSP.MARKET_ENV, None)

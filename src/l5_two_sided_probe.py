@@ -417,12 +417,21 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                   up_pnl=str(econ["up_pnl"]), dn_pnl=str(econ["dn_pnl"]))
 
     def leg(side: str, px: D) -> Dict[str, Any]:
+        # DEPTH IS RECORDED ON THE LEG, not left to be re-derived later. The
+        # depth comparison read 7,310 order records off the production tape
+        # and attributed NOT ONE of them, because nothing wrote down how far
+        # behind the touch each order rested and the touch at placement was
+        # not recoverable from the record. A measurement whose input is not
+        # recorded cannot be taken.
         return {"side": side, "action": "BUY", "price": str(px),
                 "qty": str(qty), "mode": MODE, "post_only": True,
+                "depth_ticks": int(depth_ticks),
+                "touch_at_placement": str(b if side == "UP" else D(1) - a),
                 "worst_case_fee_usd": str(worst_fee(qty, px)),
                 "alone_cost_usd": str(qty * px + worst_fee(qty, px))}
 
     return {"ok": True, "market": market,
+            "depth_ticks": int(depth_ticks),
             "legs": [leg("UP", up_px), leg("DOWN", dn_px)],
             "pair_cost": str(pair), "edge_per_contract": str(edge),
             "fee_floor": {k: (str(v) if isinstance(v, D) else v)
