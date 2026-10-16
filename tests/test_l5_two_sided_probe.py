@@ -429,3 +429,89 @@ def test_build_orders_is_BYTE_IDENTICAL_without_inventory(monkeypatch):
     assert {k: v for k, v in b.items() if k != "inventory_aware"} == a
     # and the QUOTE itself is unchanged -- this reports, it does not reprice
     assert [l["price"] for l in a["legs"]] == [l["price"] for l in b["legs"]]
+
+
+# ------------------------------------------- completion_vs_resting (report only)
+
+def _ok_cross(price="0.46", qty="1"):
+    return {"ok": True, "cross": True, "side": "UP", "qty": qty,
+            "price": price, "worst_improvement_usd": "0.49"}
+
+
+def test_completion_vs_resting_never_promotes_a_refusal():
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=D("0.47"),
+        resting_still_live=True,
+        decision={"ok": False, "reason": "BOOK_STALE", "cross": False})
+    assert out["vs_resting_ok"] is False
+    assert out["vs_resting_reason"] == "DECISION_ALREADY_REFUSED"
+    assert out["ok"] is False
+
+
+def test_completion_vs_resting_refuses_pair_above_breakeven():
+    # the measured 2030z case: held 0.37 + cross 0.67 = 1.04
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.37"), resting_completion_px=D("0.60"),
+        resting_still_live=True, decision=_ok_cross("0.67"))
+    assert out["ok"] is False and out["cross"] is False
+    assert out["vs_resting_reason"] == "COMPLETED_PAIR_ABOVE_BREAKEVEN"
+    assert out["completed_pair"] == "1.04"
+
+
+def test_completion_vs_resting_refuses_when_resting_price_is_better():
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=D("0.44"),
+        resting_still_live=True, decision=_ok_cross("0.45"))
+    assert out["vs_resting_reason"] == "RESTING_QUOTE_IS_BETTER"
+    assert out["ok"] is False
+
+
+def test_completion_vs_resting_refuses_a_cross_that_loses_to_the_taker_fee():
+    # the measured 2045z case: ask fell to 0.46 against our resting 0.47, so
+    # the cross IS better on price and still costs more once the taker fee is
+    # charged and the maker fee rounds to zero.
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=D("0.47"),
+        resting_still_live=True, decision=_ok_cross("0.46"))
+    assert out["ok"] is False
+    assert out["vs_resting_reason"] == "CROSS_COSTS_MORE_THAN_RESTING_AFTER_FEE"
+    assert D(out["cross_cash_usd"]) > D(out["resting_cash_usd"])
+
+
+def test_completion_vs_resting_allows_a_cross_that_beats_the_fee():
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=D("0.47"),
+        resting_still_live=True, decision=_ok_cross("0.40"))
+    assert out["vs_resting_ok"] is True and out["ok"] is True
+    assert out["completed_pair"] == "0.90"
+
+
+def test_completion_vs_resting_drops_the_resting_bars_once_the_quote_is_gone():
+    # with nothing resting, only the fee-safe pair ceiling applies.
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=None,
+        resting_still_live=False, decision=_ok_cross("0.46"))
+    assert out["vs_resting_ok"] is True
+    out2 = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=None,
+        resting_still_live=False, decision=_ok_cross("0.60"))
+    assert out2["vs_resting_reason"] == "COMPLETED_PAIR_ABOVE_BREAKEVEN"
+
+
+def test_completion_vs_resting_refuses_unreadable_inputs():
+    for kw, reason in (
+            ({"held_cost_px": None}, "HELD_COST_UNREADABLE"),
+            ({"held_cost_px": D("-1")}, "HELD_COST_UNREADABLE")):
+        out = TS.completion_vs_resting(
+            resting_completion_px=D("0.47"), resting_still_live=True,
+            decision=_ok_cross("0.40"), **kw)
+        assert out["vs_resting_reason"] == reason and out["ok"] is False
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=None,
+        resting_still_live=True, decision=_ok_cross("0.40"))
+    assert out["vs_resting_reason"] == "RESTING_PRICE_UNREADABLE"
+    out = TS.completion_vs_resting(
+        held_cost_px=D("0.50"), resting_completion_px=D("0.47"),
+        resting_still_live=True,
+        decision={"ok": True, "cross": True, "qty": "1", "price": None})
+    assert out["vs_resting_reason"] == "CROSS_PRICE_UNREADABLE"

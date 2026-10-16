@@ -1199,3 +1199,82 @@ inventory awareness is non-inert — windows that resolve ONE-SIDED, or where co
 price above the fee-safe ceiling. Two windows of ladder data cannot measure that. The deployed
 read-only emitter accumulates ~2 windows/hour; this needs a multi-day sample before an
 inventory-aware maker change can be justified as economically material.
+
+## 23. BTC1d reconciliation, closed from positive settlement evidence
+
+`cpc-btc-updown-1d-2026-10-15-2100z|DOWN` expired at 2026-10-16T21:00Z. The live runner emitted
+`L5_LIVE_SETTLED` at **21:05:01Z**:
+
+| field | value |
+|---|---|
+| `venue_state` | `MARKET_STATE_EXPIRED` |
+| `resolution_source` | `VENUE_SETTLEMENT_PX` |
+| `yes_value` | `0.0000` → UP worthless, **DOWN won** |
+| `dn_qty` / `dn_cost` | `2.0400` / `2.0400` |
+| `residual_redeem` | `2.04000000` |
+| `settlement_pnl` | `0E-8` |
+| `realized_today_after` | `-8.39480000` (unchanged) |
+
+**Exposure is extinguished.** The redemption is a positive venue cashflow, the position is retired,
+and the three-market reconcile drift entry for this slug is resolved. Realized is unchanged at
+**−$8.3948**, so the gate reading stays `8.3948 < 20`.
+
+**The $0.00 settlement P&L is bookkeeping, not a verified economic outcome.** This leg was on the
+`leg_cost_basis_unknown` list (49 entries) at 20:59Z and again at 21:04Z, so its cost was carried
+at the conservative **$1.00/share floor**: `dn_cost 2.0400` equals `dn_qty 2.0400` exactly. The
+redemption therefore netted to zero *by construction*. True economics are
+`2.04 − actual_cost >= 0` — the real result can only be at or above the booked figure. The cost
+basis stays **UNKNOWN** and separately tracked; it is not restated to zero and the win is not
+claimed as profit.
+
+## 24. Sequential shadow replay after acquiring one side: three policies
+
+Replayed at every ladder timestamp between acquisition and completion, using only information
+available at that timestamp. No hindsight, no invented fills (queue-cleared from join forward),
+no threshold fitted to these windows. Size = the authorized 1 contract; cash headroom and
+worst-case ceiling = the limits already authorized.
+
+| | 2030z | 2045z |
+|---|---|---|
+| open touch | 0.61 / 0.62 | 0.48 / 0.49 |
+| legs | UP @0.60, DOWN @0.37 (pair 0.97) | UP @0.47, DOWN @0.50 (pair 0.97) |
+| acquired first | DOWN @0.37 at +59.4s | DOWN @0.50 at +0.8s |
+| **A hold resting quote** | completes +140.4s, pair 0.97, **net +$0.03** | completes +6.6s, pair 0.97, **net +$0.03** |
+| **B passive reprice** | no reprice at any of 572 snapshots (`HOLD_PRIORITY`) | no reprice at any of 47 snapshots |
+| **C cross (`completion_decision`)** | fires at +59.4s, px 0.67 → pair **1.04**, net **−$0.06** | fires at +1.0s, px 0.49 → pair **0.99**, net **−$0.01** |
+| **C − A** | **−$0.09** | **−$0.04** |
+
+Maker fee at 1 contract rounds to $0.00; taker fee is $0.02. Both windows settled as matched
+pairs, so these nets are outcome-independent — no settlement assumption is doing any work.
+
+**The material finding: `completion_decision` fires on both windows and is wrong both times.**
+It returned `ok: True` at the *first* timestamp after acquisition in each window, with worst-case
+improvements of $0.31 and $0.49 against a $0.02 taker fee. Its own docstring already warns the
+worst-case bar is "very nearly VACUOUS" once a book is one-sided. The defect is the comparison
+set: it measures crossing against *carrying the bare residual*, but our maker quote for the
+deficient side was **still resting and still better**, and in both windows it filled. Fired 570
+of 1,140 snapshots on 2030z and 47 of 94 on 2045z.
+
+**The fix — `completion_vs_resting()`, additive and report-only.** It can only narrow a positive
+decision, never promote a refusal, and applies three bars already established elsewhere:
+
+1. `COMPLETED_PAIR_ABOVE_BREAKEVEN` — `held_cost + cross_px <= 0.9857`, the same ceiling
+   `inventory_aware_quote` applies to a passive completion. Caught 2030z (pair 1.04) at 570
+   snapshots and 2045z (pair 0.99) at 40.
+2. `RESTING_QUOTE_IS_BETTER` — while our quote is live at a strictly better price, the cross buys
+   only immediacy.
+3. `CROSS_COSTS_MORE_THAN_RESTING_AFTER_FEE` — the decisive one. On 2045z the ask fell to **0.46**
+   against our resting 0.47: a better price, a better pair (0.96 vs 0.97), and still **$0.01
+   worse** net, because the taker fee is two cents on a dollar of notional while the maker fee
+   rounds to zero. The cross must be more than two cents better, not merely better. Caught at 7
+   snapshots.
+
+With the guard, **all four policies hold the resting quote on both windows** and the expanded
+policy's measured improvement over the baseline is **$0.00** — but it no longer *destroys* $0.09
+and $0.04, which is what the unguarded cross branch would have done.
+
+**Does the expanded policy materially improve results? Not yet, on this evidence.** What it does
+is remove a real loss path that `completion_decision` would have taken on 2/2 windows. Branches B
+and C remain unexercised: both need states that have not yet occurred (an expensively acquired
+held leg, a widened spread, or the resting quote gone). 7 new regression tests; money-path gate
+**1,343 passed**. Nothing deployed; HALT latched, `SHADOW_ONLY` set.

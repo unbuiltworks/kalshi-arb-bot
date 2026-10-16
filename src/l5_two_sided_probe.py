@@ -823,3 +823,90 @@ def completion_decision(*, up_qty: Any, dn_qty: Any,
                        "is not a fill: the size may fill partially or not at "
                        "all, and a refusal to fill leaves the residual the "
                        "existing controls already bound.")}
+
+
+# ------------------------------- completion judged against the RESTING quote
+
+def completion_vs_resting(*, held_cost_px: Any, resting_completion_px: Any,
+                          resting_still_live: bool,
+                          decision: Dict[str, Any]) -> Dict[str, Any]:
+    """Re-judge a positive `completion_decision` against the quote still resting.
+
+    WHY THIS EXISTS, measured rather than assumed. `completion_decision`
+    compares crossing against carrying the residual, and its own comment
+    already warns that bar is "very nearly VACUOUS" once a book is one-sided:
+    holding loses the whole leg cost on the wrong outcome, so almost any
+    completion below a dollar improves it. But when a maker quote for the
+    deficient side is STILL RESTING, carrying the bare residual is not the
+    alternative -- the resting quote is. Sequential shadow replay of
+    2026-10-16 2030z and 2045z found `completion_decision` returning ok True
+    at the very first timestamp after acquisition in BOTH windows, proposing
+    crosses that would have settled at pair 1.04 and 0.99 against the resting
+    quote's 0.97: -$0.09 and -$0.04 against simply holding. The worst-case
+    bar passed both (improvement 0.31 and 0.49, far above the $0.02 taker
+    fee) because it was measuring against the wrong alternative.
+
+    TWO BARS, both already established elsewhere in this module:
+
+    1. THE FEE-SAFE PAIR CEILING. `held_cost_px + cross_price` must leave the
+       completed pair at or under `BREAKEVEN_PAIR`, the same ceiling
+       `inventory_aware_quote` applies to a passive completion. A cross that
+       lands the pair above it is a locked loss however much it improves the
+       one-sided worst case.
+
+    2. THE RESTING QUOTE IS THE ALTERNATIVE. While our maker quote for the
+       deficient side is live at a strictly better price, crossing buys
+       nothing but immediacy and pays the taker fee plus the spread for it.
+       Immediacy is only worth buying once that quote is gone.
+
+    REPORT ONLY. This neither submits nor cancels anything, and it never
+    turns a refusal into permission -- it can only narrow a positive decision.
+    """
+    out = dict(decision)
+    if not decision.get("ok"):
+        return dict(out, vs_resting_ok=False,
+                    vs_resting_reason="DECISION_ALREADY_REFUSED")
+    held = _d(held_cost_px)
+    cross = _d(decision.get("price"))
+    if held is None or held < 0:
+        return dict(out, ok=False, cross=False,
+                    vs_resting_ok=False, vs_resting_reason="HELD_COST_UNREADABLE")
+    if cross is None or cross <= 0:
+        return dict(out, ok=False, cross=False,
+                    vs_resting_ok=False, vs_resting_reason="CROSS_PRICE_UNREADABLE")
+    pair = held + cross
+    if pair > BREAKEVEN_PAIR:
+        return dict(out, ok=False, cross=False, vs_resting_ok=False,
+                    vs_resting_reason="COMPLETED_PAIR_ABOVE_BREAKEVEN",
+                    completed_pair=str(pair),
+                    breakeven_pair=str(BREAKEVEN_PAIR))
+    rest = _d(resting_completion_px)
+    if resting_still_live:
+        if rest is None:
+            return dict(out, ok=False, cross=False, vs_resting_ok=False,
+                        vs_resting_reason="RESTING_PRICE_UNREADABLE")
+        if rest < cross:
+            return dict(out, ok=False, cross=False, vs_resting_ok=False,
+                        vs_resting_reason="RESTING_QUOTE_IS_BETTER",
+                        resting_px=str(rest), cross_px=str(cross),
+                        completed_pair=str(pair))
+        # 3. AND IT MUST BEAT THE RESTING QUOTE *AFTER THE TAKER FEE*. A
+        #    cross one tick better than our resting bid still loses: at the
+        #    authorized size the taker fee is two cents on a dollar of
+        #    notional while the maker fee rounds to zero, so the cross has to
+        #    be more than two cents better, not merely better. 2045z is the
+        #    measured case -- the ask fell to 0.46 against our resting 0.47,
+        #    pair 0.96 versus 0.97, and crossing still netted $0.01 LESS.
+        qty = _d(decision.get("qty")) or D(0)
+        cross_cash = qty * cross + fee(TAKER_THETA, qty, cross)
+        rest_cash = qty * rest + fee(MAKER_THETA, qty, rest)
+        if cross_cash >= rest_cash:
+            return dict(out, ok=False, cross=False, vs_resting_ok=False,
+                        vs_resting_reason="CROSS_COSTS_MORE_THAN_RESTING_AFTER_FEE",
+                        resting_px=str(rest), cross_px=str(cross),
+                        cross_cash_usd=str(cross_cash),
+                        resting_cash_usd=str(rest_cash),
+                        completed_pair=str(pair))
+    return dict(out, vs_resting_ok=True, vs_resting_reason=None,
+                completed_pair=str(pair),
+                breakeven_pair=str(BREAKEVEN_PAIR))
