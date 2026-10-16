@@ -445,3 +445,54 @@ def test_the_production_shape_now_matches_all_three_predicates():
     assert sh["rows_matching_fill_kind_only"] == 5
     assert sh["rows_matching_side_only"] == 5
     assert sh["rows_matching_all_three"] == 5
+
+
+# ------------------------- the two things that were being assumed
+
+def test_a_zero_commission_is_NOT_counted_as_a_rebate():
+    """The programme's standing rule, now enforced by the counter."""
+    rows = [prod_row(fee="0.00") for _ in range(10)]
+    ev = A.fee_and_notional_evidence(rows)
+    assert ev["commission_signs"]["zero"] == 10
+    assert ev["commission_signs"]["negative_a_credited_rebate"] == 0
+    assert ev["rebates_ever_credited"] is False
+
+
+def test_a_NEGATIVE_commission_is_a_credited_rebate():
+    ev = A.fee_and_notional_evidence([prod_row(fee="-0.02")])
+    assert ev["commission_signs"]["negative_a_credited_rebate"] == 1
+    assert ev["rebates_ever_credited"] is True
+    assert ev["commission_sum_usd"] == "-0.02"
+
+
+def test_an_unreadable_commission_is_counted_not_dropped():
+    ev = A.fee_and_notional_evidence([prod_row(fee=None)])
+    assert ev["commission_signs"]["unreadable"] == 1
+    assert ev["rebates_ever_credited"] is False
+
+
+def test_the_smallest_executed_notional_is_reported():
+    """The venue's minimum order VALUE is read nowhere in this codebase, so
+    the smallest notional it has actually executed is the evidence."""
+    rows = [prod_row(price="0.59", qty="5"), prod_row(price="0.41", qty="0.01")]
+    ev = A.fee_and_notional_evidence(rows)
+    assert ev["smallest_executed_quantity"] == "0.01"
+    assert D(ev["smallest_executed_notional_usd"]) == D("0.0041")
+    assert D(ev["largest_executed_notional_usd"]) == D("2.95")
+
+
+def test_a_settlement_is_not_counted_in_the_fee_evidence():
+    rows = [{"type": "activity_type_position_resolution",
+             "positionResolution": {"quantity": "5", "price": "1"}}]
+    ev = A.fee_and_notional_evidence(rows)
+    assert ev["fill_rows"] == 0
+    assert ev["smallest_executed_notional_usd"] is None
+
+
+def test_the_evidence_reports_no_identifier():
+    rows = [prod_row(coid="l5f-secret")]
+    rows[0]["trade"]["tradeId"] = "SHOULD-NOT-APPEAR"
+    import json as _json
+    blob = _json.dumps(A.fee_and_notional_evidence(rows))
+    for secret in ("l5f-secret", "SHOULD-NOT-APPEAR"):
+        assert secret not in blob, secret

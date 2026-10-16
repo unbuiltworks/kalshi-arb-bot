@@ -202,6 +202,84 @@ def _row_side(row: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
+def fee_and_notional_evidence(rows: List[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Were maker rebates ACTUALLY credited, and what is the real minimum?
+
+    Both questions are answerable only from executed trades, and both have
+    been assumed up to now:
+
+      REBATES. The programme's standing rule is that a zero commission is NOT
+      a rebate and nothing counts until it is credited. A credited maker
+      rebate appears as a NEGATIVE commission on a fill. This counts the
+      signs over every fill row in the feed, so "rebates are credited" stops
+      being a hope and becomes a number. If `negative` is 0, no rebate has
+      ever been credited on this account and every pair whose profitability
+      depends on one is unproven.
+
+      MINIMUM NOTIONAL. No minimum ORDER VALUE is read anywhere in this
+      codebase; only orderMinQuantity is. The smallest notional the venue has
+      actually executed is the closest evidence available to what it will
+      accept, and it bounds the 0.01-contract configuration from below.
+
+    READ-ONLY. Prices, quantities and commissions are AGGREGATED -- counts,
+    sums and extremes -- and no identifier is reported.
+    """
+    fees_neg = fees_zero = fees_pos = 0
+    fee_sum = D(0)
+    fee_unreadable = 0
+    notionals: List[D] = []
+    qtys: List[D] = []
+    fills = 0
+    for r in rows:
+        k = str(r.get("kind") or r.get("type") or "").strip().lower()
+        if k not in FILL_KINDS:
+            continue
+        b = _payload(r)
+        fills += 1
+        fee = _d(b.get("commission") if b.get("commission") is not None
+                 else b.get("commissionNotionalTotalCollected"))
+        if fee is None:
+            fee_unreadable += 1
+        else:
+            fee_sum += fee
+            if fee < 0:
+                fees_neg += 1
+            elif fee == 0:
+                fees_zero += 1
+            else:
+                fees_pos += 1
+        q = _d(b.get("quantity") if b.get("quantity") is not None
+               else b.get("cumQuantity"))
+        px = _d(b.get("price") if b.get("price") is not None
+                else b.get("avgPx"))
+        if q is not None and q > 0:
+            qtys.append(q)
+            if px is not None and px > 0:
+                notionals.append(q * px)
+    return {
+        "fill_rows": fills,
+        "commission_signs": {"negative_a_credited_rebate": fees_neg,
+                             "zero": fees_zero, "positive_a_charge": fees_pos,
+                             "unreadable": fee_unreadable},
+        "commission_sum_usd": str(fee_sum),
+        "rebates_ever_credited": bool(fees_neg > 0),
+        "smallest_executed_quantity": (str(min(qtys)) if qtys else None),
+        "smallest_executed_notional_usd": (str(min(notionals))
+                                           if notionals else None),
+        "largest_executed_notional_usd": (str(max(notionals))
+                                          if notionals else None),
+        "labels": ("EVIDENCE, not assumption. A credited maker rebate is a "
+                   "NEGATIVE commission; a zero commission is NOT a rebate. "
+                   "rebates_ever_credited false means no pair whose "
+                   "profitability depends on the rebate has been proven on "
+                   "this account. smallest_executed_notional_usd is the "
+                   "closest available evidence of the venue's minimum order "
+                   "VALUE, which this codebase reads nowhere -- it bounds "
+                   "the smallest configuration from below. Aggregates only; "
+                   "no identifier is reported."),
+    }
+
+
 def feed_shape(rows: List[Mapping[str, Any]], *, markets: List[str],
                sides: List[str], sample: int = 6) -> Dict[str, Any]:
     """WHY did the matcher find nothing? Reports shape, never guesses it.
@@ -417,6 +495,8 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         "ok": True, "writes": "NONE",
         "activity_walk": {k: walk[k] for k in ("pages", "ended", "complete")},
         "activity_rows": len(walk["rows"]),
+        # ALWAYS computed: the two things that were being assumed.
+        "fee_and_notional_evidence": fee_and_notional_evidence(walk["rows"]),
         # WHY nothing matched, when nothing matched. Computed only on the
         # failing case so a healthy audit does not carry the diagnostic.
         "feed_shape": (feed_shape(walk["rows"],

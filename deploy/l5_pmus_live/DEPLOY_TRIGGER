@@ -334,3 +334,19 @@ activity-feed parser fix, shadow-locked 2026-10-16T13:55Z
 # L5_TS_COMPLETION_CROSS unset, L5_TS_DEPTH_TICKS 1, L5_MAX_LIVE_ORDERS and
 # L5_MAX_CASH_DEPLOYED_USD UNCHANGED at 1 and 1.
 backstop + cancellation proof, shadow-locked 2026-10-16T14:30Z
+
+# Run the full read-only reconciliation (OWNER-AUTHORIZED 2026-10-16). Adds
+# the two things the codebase was assuming, both answered from executed
+# trades rather than from hope:
+#   rebates_ever_credited  -- a credited maker rebate is a NEGATIVE
+#     commission; a zero commission is NOT a rebate. False means no pair
+#     whose profitability depends on the rebate is proven on this account.
+#   smallest_executed_notional_usd -- no minimum order VALUE is read anywhere
+#     in this codebase, only orderMinQuantity, so the smallest notional the
+#     venue has actually executed is the evidence bounding the 0.01-contract
+#     configuration from below.
+# Aggregates only; no identifier reported.
+#
+# READ-ONLY. SHADOW_ONLY set, HALT latched, submission disabled, no limit
+# changed. Money-path gate 1327 passed.
+full cost-basis reconciliation + fee/notional evidence, shadow-locked 2026-10-16T14:50Z
