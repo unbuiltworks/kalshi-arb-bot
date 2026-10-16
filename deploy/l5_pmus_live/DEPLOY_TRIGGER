@@ -236,3 +236,19 @@ completion cash-headroom fix + depth comparison enabled, shadow-locked 2026-10-1
 # L5_TS_COMPLETION_CROSS unset, L5_TS_DEPTH_TICKS still 1, no limit changed.
 # Money-path gate 1283 passed.
 depth recording + tape path fix, shadow-locked 2026-10-16T12:35Z
+
+# Count ONLY a recorded depth. Found by running the comparison on the real
+# volume after the previous fix: unknown_depth fell from 7,310 to 82, but it
+# produced buckets from depth 0 to depth 96 -- 1,134 orders at depth 0, 757
+# at depth 2 -- and NONE were probe orders, because nothing has been placed.
+# They were ordinary L5-mirroring records, so (touch - price)/tick was
+# measuring how far L5 quoted from the touch and reporting it as our resting
+# depth, with orders_filled 0 on every row because a shadow record never
+# fills. No wrong verdict escaped (the realized-edge requirement still gave
+# NOT_COMPARABLE) but the rows read as measurements. A manufactured sample is
+# worse than no sample.
+#
+# Derived depths are now reported as derived_depth_NOT_counted and feed no
+# rate and no verdict. Read-only. SHADOW_ONLY set, crossing unset, depth
+# still 1, no limit changed. Money-path gate 1284 passed.
+recorded-depth-only attribution, shadow-locked 2026-10-16T12:45Z

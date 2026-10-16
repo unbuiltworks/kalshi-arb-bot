@@ -17,7 +17,11 @@ def order(market, side, price, depth=None, filled="5", commission="0.00",
 
 
 def book(n, depth, *, both=True, fill=True, edge_px=None, start=0):
-    """n windows of UP/DOWN orders at `depth` ticks behind a 0.60/0.61 book."""
+    """n windows of UP/DOWN orders at `depth` ticks behind a 0.60/0.61 book.
+
+    The depth is RECORDED on each order, as the probe now records it: a
+    derived depth is deliberately no longer counted.
+    """
     up_px, dn_px = edge_px or ("0.59", "0.38")
     out = []
     for i in range(n):
@@ -33,6 +37,14 @@ def book(n, depth, *, both=True, fill=True, edge_px=None, start=0):
 
 def test_a_recorded_depth_is_used_as_recorded():
     assert C.depth_of(order("m", "UP", "0.59", depth=2)) == 2
+
+
+def test_only_a_RECORDED_depth_is_counted_as_a_depth():
+    o = order("m", "UP", "0.59")                  # derivable, not recorded
+    assert C.depth_of(o) == 1
+    assert C.depth_of(o, recorded_only=True) is None
+    rec = order("m", "UP", "0.59", depth=1)
+    assert C.depth_of(rec, recorded_only=True) == 1
 
 
 def test_an_UP_depth_is_derived_from_the_BID():
@@ -200,10 +212,12 @@ def test_the_module_cannot_submit_cancel_or_write():
 
 # ------------------------------- the production defect, both halves
 
-def test_the_BBO_is_read_from_row_pmus_bbo_not_row_bid(tmp_path):
-    """THE DEFECT THE DEPLOYMENT FOUND. 7,310 order records on the
-    production tape all came back UNKNOWN_DEPTH because the reader looked
-    for row["bid"]; the BBO lives at row.pmus.bbo."""
+def test_a_derived_depth_is_REPORTED_but_never_COUNTED(tmp_path):
+    """THE SECOND DEFECT, found by running it on the real volume. Deriving
+    the depth from the touch and the order's own price attributed 7,228
+    ordinary L5-mirroring records into buckets from 0 to 96 ticks -- it was
+    measuring how far L5 quoted from the touch, not where we rested. Those
+    records are now reported as derivable and counted into nothing."""
     p = tmp_path / "t.jsonl"
     with open(p, "w") as fh:
         for i in range(25):
@@ -215,8 +229,12 @@ def test_the_BBO_is_read_from_row_pmus_bbo_not_row_bid(tmp_path):
                     "intent": {"side": "UP", "price": "0.59", "qty": "5"}}}
             }) + "\n")
     out = C.from_tape(str(p))
-    assert out["unknown_depth"] == 0, out
-    assert out["depths"]["1"]["orders"] == 25
+    # the BBO IS read from row.pmus.bbo -- these are derivable, which the
+    # first version proved by bucketing them. They are no longer counted.
+    assert out["derived_depth_NOT_counted"] == 25
+    assert out["unknown_depth"] == 25
+    assert out["depths"]["1"]["orders"] == 0
+    assert out["conclusion"] == "NOT_COMPARABLE"
 
 
 def test_a_recorded_depth_on_the_probe_leg_is_preferred(tmp_path):

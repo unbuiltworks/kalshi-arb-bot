@@ -48,14 +48,27 @@ def _d(v: Any) -> Optional[D]:
         return None
 
 
-def depth_of(order: Mapping[str, Any]) -> Optional[int]:
+def depth_of(order: Mapping[str, Any], *, recorded_only: bool = False
+             ) -> Optional[int]:
     """How many ticks behind the touch this order rested, if recordable.
 
-    PREFERS WHAT WAS RECORDED. An order whose record carries the depth it was
-    placed at is the only unambiguous answer. Otherwise it is derived from the
-    touch at placement and the order's own price, and an order that recorded
-    neither returns None and is counted as UNKNOWN_DEPTH rather than being
-    assigned to a bucket it might not belong in.
+    ONLY A RECORDED DEPTH IS A DEPTH, which is what `recorded_only` enforces
+    and what `compare` now uses.
+
+    WHY, measured on the production tape. The first version fell back to
+    deriving the depth from the touch at placement and the order's own price.
+    Run against the real volume that attributed 7,228 records into buckets
+    from depth 0 to depth 96 -- 1,134 at depth 0, 757 at depth 2 -- and NONE
+    of them were probe orders, because nothing had been placed. They were the
+    ordinary L5-mirroring decisions, whose prices come from L5's own actions,
+    so the arithmetic was measuring how far L5 quoted from the touch and
+    reporting it as our resting depth. Every row also read orders_filled 0,
+    because a shadow record never fills, so the rates were structurally zero
+    and meaningless.
+
+    That is worse than UNKNOWN_DEPTH: it manufactures a sample. The derived
+    value is still computed for diagnostics, and it is no longer allowed to
+    feed a rate or a verdict.
     """
     for key in ("depth_ticks", "ts_depth_ticks"):
         if order.get(key) is not None:
@@ -63,6 +76,8 @@ def depth_of(order: Mapping[str, Any]) -> Optional[int]:
                 return int(order[key])
             except (TypeError, ValueError):
                 return None
+    if recorded_only:
+        return None
     px = _d(order.get("price"))
     tick = _d(order.get("tick")) or D("0.01")
     side = str(order.get("side") or "").upper()
@@ -104,15 +119,28 @@ def compare(orders: Iterable[Mapping[str, Any]],
     rows = [dict(o) for o in orders]
     buckets: Dict[Any, List[Dict[str, Any]]] = {}
     unknown = 0
+    derived_only = 0
     for o in rows:
-        d = depth_of(o)
+        d = depth_of(o, recorded_only=True)
         if d is None:
             unknown += 1
+            # was it derivable at all? Reported, never counted.
+            if depth_of(o) is not None:
+                derived_only += 1
             continue
         buckets.setdefault(d, []).append(o)
 
     out: Dict[str, Any] = {
         "orders_read": len(rows), "unknown_depth": unknown,
+        "derived_depth_NOT_counted": derived_only,
+        "labels_attribution": (
+            "only an order whose RECORDED depth_ticks the probe wrote is "
+            "counted. derived_depth_NOT_counted is how many could have had a "
+            "depth inferred from the touch and their own price; inferring it "
+            "attributed 7,228 ordinary L5-mirroring records into buckets "
+            "from 0 to 96 ticks on the production tape, measuring how far "
+            "L5 quoted from the touch rather than where we rested. A "
+            "manufactured sample is worse than no sample."),
         "min_orders_for_a_rate": MIN_ORDERS_FOR_A_RATE,
         "min_windows_for_a_pair_rate": MIN_WINDOWS_FOR_A_PAIR_RATE,
         "depths": {}}
