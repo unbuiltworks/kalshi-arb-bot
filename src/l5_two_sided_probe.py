@@ -303,6 +303,117 @@ def min_completion_probability(*, matched_edge: Any,
 
 # ------------------------------------------------- the two intents
 
+#: THE FEE-CORRECT BREAKEVEN PAIR COST for our own account, from our own
+#: measured blended drag (74 production fills: $1.26 commissions against 4
+#: credited rebates of -$0.01, net $1.22 on $83.899 of notional = 1.454%).
+#: A pair costing C pays 1.00 and is charged ~FEE_RATE*C, so it breaks even
+#: at C <= 1/(1+FEE_RATE). At the authorized 1-contract size the maker
+#: rebate rounds to $0.00 and this is conservative.
+FEE_RATE = D("0.01454")
+BREAKEVEN_PAIR = D(1) / (D(1) + FEE_RATE)
+
+
+def inventory_aware_quote(*, up_qty: Any, dn_qty: Any,
+                          up_cost_px: Any, dn_cost_px: Any,
+                          blind_up_px: Any, blind_dn_px: Any,
+                          tick: Any) -> Dict[str, Any]:
+    """What the DEFICIENT side may pay and still complete a PROFITABLE pair.
+
+    THE GAP THIS CLOSES. `build_orders` prices both legs from the book alone
+    -- it never sees what we already hold or what it cost -- so it quotes the
+    same symmetric pair whether we are flat, long 300 UP at 0.59, or long 300
+    UP at 0.98. The judgement already exists in `completion_decision`, which
+    takes exactly up_qty / dn_qty / up_cost_px / dn_cost_px; what was missing
+    was the arithmetic that turns held inventory into a MAKER quote.
+
+    THE RULE, and it is one line of economics: holding the surplus side at an
+    average cost `c`, a completing fill at `q` makes the pair cost `c + q`,
+    which pays 1.00 on BOTH outcomes. So the most we may pay and still clear
+    our own fee-correct breakeven is `BREAKEVEN_PAIR - c`.
+
+    QUEUE PRIORITY IS PRESERVED BY DEFAULT. `reprice` is True ONLY when the
+    blind quote would complete into a LOSING pair (`max_completing_px <
+    blind_px`), i.e. when the resting order is worse than useless. Whenever
+    the blind quote still completes profitably this returns HOLD, because a
+    better price is not worth surrendering queue position for -- measured on
+    2030z, re-joining at the back of a ~2,600-deep queue cleared in 3 of 143
+    touch-stable intervals.
+
+    NOTHING HERE QUOTES, SUBMITS, CANCELS OR REPRICES ANYTHING. It reports.
+    """
+    a = _d(up_qty); b = _d(dn_qty)
+    cu = _d(up_cost_px); cd = _d(dn_cost_px)
+    tk = _d(tick)
+    if a is None or b is None or tk is None or tk <= 0:
+        return {"ok": False, "reason": "INVENTORY_UNREADABLE"}
+    if a < 0 or b < 0:
+        return {"ok": False, "reason": "NEGATIVE_INVENTORY"}
+    if a == b:
+        # flat or perfectly matched: nothing to complete, quote symmetric.
+        return {"ok": True, "deficient": None, "action": "QUOTE_SYMMETRIC",
+                "reason": "BALANCED", "reprice": False}
+    if a > b:
+        deficient, surplus_qty, held_cost = "DOWN", a - b, cu
+        blind_px = _d(blind_dn_px)
+    else:
+        deficient, surplus_qty, held_cost = "UP", b - a, cd
+        blind_px = _d(blind_up_px)
+    if held_cost is None or held_cost <= 0:
+        # a side present with no cost is NOT free inventory; refuse it the
+        # way inventory_for_gates refuses an incoherent book.
+        return {"ok": False, "reason": "HELD_COST_UNREADABLE",
+                "deficient": deficient}
+    if blind_px is None:
+        return {"ok": False, "reason": "BLIND_PRICE_UNREADABLE",
+                "deficient": deficient}
+    max_px = BREAKEVEN_PAIR - held_cost
+    if max_px <= 0:
+        # already paid at or above breakeven: no completing price helps.
+        return {"ok": True, "deficient": deficient, "action": "NO_PROFITABLE_COMPLETION",
+                "held_cost": str(held_cost), "max_completing_px": str(max_px),
+                "blind_px": str(blind_px), "reprice": True,
+                "reason": "HELD_COST_EXCEEDS_BREAKEVEN",
+                "surplus_qty": str(surplus_qty)}
+    # quantise DOWN to the grid: never quote a price the venue cannot take
+    aware_px = (max_px / tk).to_integral_value(rounding="ROUND_FLOOR") * tk
+    if aware_px < MIN_PRICE:
+        # the arithmetic allows a completing price, but not one the venue
+        # will accept. Reporting a headroom here would be reporting a quote
+        # that cannot be placed.
+        return {"ok": True, "deficient": deficient,
+                "action": "NO_PROFITABLE_COMPLETION",
+                "reason": "COMPLETING_PRICE_BELOW_MIN_PRICE",
+                "held_cost": str(held_cost),
+                "max_completing_px": str(aware_px),
+                "min_price": str(MIN_PRICE),
+                "blind_px": str(blind_px), "reprice": True,
+                "surplus_qty": str(surplus_qty)}
+    headroom = aware_px - blind_px
+    profitable_blind = (held_cost + blind_px) <= BREAKEVEN_PAIR
+    return {
+        "ok": True,
+        "deficient": deficient,
+        "surplus_qty": str(surplus_qty),
+        "held_cost": str(held_cost),
+        "breakeven_pair": str(BREAKEVEN_PAIR),
+        "max_completing_px": str(aware_px),
+        "blind_px": str(blind_px),
+        "headroom_px": str(headroom),
+        "headroom_ticks": str((headroom / tk).to_integral_value(
+            rounding="ROUND_FLOOR")),
+        "blind_quote_completes_profitably": profitable_blind,
+        # QUEUE PRIORITY: hold unless the blind quote is economically useless
+        "reprice": (not profitable_blind),
+        "action": ("HOLD_PRIORITY" if profitable_blind
+                   else "REPRICE_DEFENSIBLE"),
+        "labels": ("max_completing_px is the most the DEFICIENT side may pay "
+                   "and still clear our fee-correct breakeven against the "
+                   "cost actually paid for the surplus side. reprice is True "
+                   "only when the blind quote would complete into a losing "
+                   "pair, so queue priority is preserved by default."),
+    }
+
+
 def build_orders(*, market: str, bid: Any, ask: Any,
                  bid_depth: Any, ask_depth: Any,
                  tick: Any, min_qty: Any,
@@ -310,7 +421,10 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                  cash_envelope: Any,
                  max_worst_case_loss: Any,
                  book_age_s: Any = None,
-                 gap_suspected: bool = False) -> Dict[str, Any]:
+                 gap_suspected: bool = False,
+                 up_qty: Any = None, dn_qty: Any = None,
+                 up_cost_px: Any = None,
+                 dn_cost_px: Any = None) -> Dict[str, Any]:
     """Exactly two post-only intents, or a terminal refusal.
 
     NO FALLBACK. Every failure returns ok False and nothing is submitted. The
@@ -416,6 +530,20 @@ def build_orders(*, market: str, bid: Any, ask: Any,
         return no("NOT_POSITIVE_ON_BOTH_OUTCOMES",
                   up_pnl=str(econ["up_pnl"]), dn_pnl=str(econ["dn_pnl"]))
 
+    #: INVENTORY-AWARE SHADOW, REPORT ONLY. The four inventory arguments
+    #: default to None, so a caller that does not pass them -- which is every
+    #: caller on the live path -- gets a byte-identical result. When they ARE
+    #: passed, the quote is UNCHANGED and an extra `inventory_aware` block
+    #: reports what the deficient side could pay against the cost actually
+    #: paid for the surplus side. It changes no price and places nothing.
+    inv_shadow = None
+    if up_qty is not None or dn_qty is not None:
+        inv_shadow = inventory_aware_quote(
+            up_qty=(0 if up_qty is None else up_qty),
+            dn_qty=(0 if dn_qty is None else dn_qty),
+            up_cost_px=up_cost_px, dn_cost_px=dn_cost_px,
+            blind_up_px=up_px, blind_dn_px=dn_px, tick=tk)
+
     def leg(side: str, px: D) -> Dict[str, Any]:
         # DEPTH IS RECORDED ON THE LEG, not left to be re-derived later. The
         # depth comparison read 7,310 order records off the production tape
@@ -430,9 +558,12 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                 "worst_case_fee_usd": str(worst_fee(qty, px)),
                 "alone_cost_usd": str(qty * px + worst_fee(qty, px))}
 
+    out_extra = ({} if inv_shadow is None
+                 else {"inventory_aware": inv_shadow})
     return {"ok": True, "market": market,
             "depth_ticks": int(depth_ticks),
             "legs": [leg("UP", up_px), leg("DOWN", dn_px)],
+            **out_extra,
             "pair_cost": str(pair), "edge_per_contract": str(edge),
             "fee_floor": {k: (str(v) if isinstance(v, D) else v)
                           for k, v in floor.items()},

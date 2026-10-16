@@ -334,3 +334,98 @@ def test_matching_is_case_sensitive(monkeypatch):
     monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
     monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
     assert TS.active("CPC-BTC-UPDOWN-15M-2026-10-16-2100z") is False
+
+
+# == inventory-aware maker quoting (SHADOW/REPORT ONLY) ===================
+# The verified gap: build_orders priced both legs from the book alone and
+# never saw what we hold or what it cost, while completion_decision already
+# took up_qty/dn_qty/up_cost_px/dn_cost_px. These pin the bridge.
+
+def _iaq(**kw):
+    base = dict(up_qty=0, dn_qty=0, up_cost_px=None, dn_cost_px=None,
+                blind_up_px="0.64", blind_dn_px="0.33", tick="0.01")
+    base.update(kw)
+    return TS.inventory_aware_quote(**base)
+
+
+def test_flat_or_balanced_quotes_symmetric():
+    for a, b in ((0, 0), (5, 5), ("2.5", "2.5")):
+        r = _iaq(up_qty=a, dn_qty=b)
+        assert r["ok"] and r["deficient"] is None
+        assert r["action"] == "QUOTE_SYMMETRIC" and r["reprice"] is False
+
+
+def test_cheap_inventory_opens_headroom_on_the_completing_side():
+    """Long 300 UP at 0.59: DOWN may pay up to breakeven - 0.59."""
+    r = _iaq(up_qty=300, dn_qty=0, up_cost_px="0.59")
+    assert r["deficient"] == "DOWN"
+    assert r["max_completing_px"] == "0.39"      # 0.9856.. - 0.59, floored
+    assert r["blind_px"] == "0.33"
+    assert r["headroom_ticks"] == "6"
+    assert r["blind_quote_completes_profitably"] is True
+
+
+def test_queue_priority_is_PRESERVED_when_the_blind_quote_still_pays():
+    """Headroom alone is NOT a reason to reprice: measured on 2030z,
+    re-joining a ~2,600-deep queue cleared in 3 of 143 intervals."""
+    r = _iaq(up_qty=300, dn_qty=0, up_cost_px="0.59")
+    assert r["reprice"] is False
+    assert r["action"] == "HOLD_PRIORITY"
+
+
+def test_reprice_only_when_the_blind_quote_would_complete_INTO_A_LOSS():
+    """Long 300 UP at 0.98: the blind DOWN quote of 0.33 makes a 1.31 pair."""
+    r = _iaq(up_qty=300, dn_qty=0, up_cost_px="0.98")
+    assert r["reprice"] is True
+    assert r["action"] == "NO_PROFITABLE_COMPLETION"
+    # 0.9856.. - 0.98 = 0.0057, which floors to 0.00 -- arithmetically a
+    # completing price exists, but not one the venue would accept.
+    assert r["reason"] == "COMPLETING_PRICE_BELOW_MIN_PRICE"
+    assert r["max_completing_px"] == "0.00"
+
+
+def test_the_2030z_state_reproduces_the_measured_headroom():
+    """Long 1 DOWN at 0.33 -- the real one-sided state at t0+7.5s."""
+    r = _iaq(up_qty=0, dn_qty=1, dn_cost_px="0.33")
+    assert r["deficient"] == "UP"
+    assert r["max_completing_px"] == "0.65"
+    assert r["blind_px"] == "0.64"
+    assert r["headroom_ticks"] == "1"
+    assert r["action"] == "HOLD_PRIORITY"
+
+
+def test_inventory_present_with_no_cost_is_refused_not_read_as_free():
+    for kw in (dict(up_qty=300, dn_qty=0, up_cost_px=None),
+               dict(up_qty=300, dn_qty=0, up_cost_px="0")):
+        r = _iaq(**kw)
+        assert r["ok"] is False and r["reason"] == "HELD_COST_UNREADABLE"
+
+
+def test_unreadable_inventory_and_negative_quantities_refuse():
+    assert _iaq(up_qty=None, dn_qty=None)["reason"] == "INVENTORY_UNREADABLE"
+    assert _iaq(up_qty=-1, dn_qty=0)["reason"] == "NEGATIVE_INVENTORY"
+    assert _iaq(up_qty=1, dn_qty=0, up_cost_px="0.5",
+                tick=None)["reason"] == "INVENTORY_UNREADABLE"
+
+
+def test_the_completing_price_is_quantised_DOWN_to_the_grid():
+    r = _iaq(up_qty=1, dn_qty=0, up_cost_px="0.5")
+    # 0.98566.. - 0.5 = 0.48566.. -> 0.48, never 0.49
+    assert r["max_completing_px"] == "0.48"
+
+
+def test_build_orders_is_BYTE_IDENTICAL_without_inventory(monkeypatch):
+    monkeypatch.setenv("L5_TS_MARKET", "*")
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "x")
+    kw = dict(market="cpc-btc-updown-15m-2026-10-16-2030z", bid="0.65",
+              ask="0.66", bid_depth="4951", ask_depth="2141", tick="0.01",
+              min_qty="0.01", depth_ticks=1, cash_envelope="1",
+              max_worst_case_loss="5", book_age_s=0.1)
+    a = TS.build_orders(**kw)
+    b = TS.build_orders(**kw, up_qty=0, dn_qty=1, dn_cost_px="0.33")
+    assert a["ok"] and b["ok"]
+    assert "inventory_aware" not in a, "the live path must be untouched"
+    assert "inventory_aware" in b
+    assert {k: v for k, v in b.items() if k != "inventory_aware"} == a
+    # and the QUOTE itself is unchanged -- this reports, it does not reprice
+    assert [l["price"] for l in a["legs"]] == [l["price"] for l in b["legs"]]
