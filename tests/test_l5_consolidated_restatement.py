@@ -32,11 +32,11 @@ AUDIT = json.loads(
     (HERE / "data" / "l5_production_audit_20261016.json").read_text())
 MANIFEST = json.loads(
     (HERE.parent / "config"
-     / "cost_basis_batch_manifest_20261016c.json").read_text())
-BATCH = "cb-20261016c-24leg-68.2368"
+     / "cost_basis_batch_manifest_20261016d.json").read_text())
+BATCH = "cb-20261016d-23leg-67.7268"
 
 REALIZED_BEFORE = D("-76.12160000")
-REALIZED_AFTER = D("-7.88480000")
+REALIZED_AFTER = D("-8.39480000")
 
 XRP = "cpcxrp-xrp-updown-15m-2026-10-16-0330z"
 TWO_SIDED = "cpc-btc-updown-15m-2026-10-15-1945z"
@@ -56,8 +56,15 @@ def _rows():
                        "settlement_pnl": "-37.97540000",
                        "redemption_total": "0E-8"}
         elif m == TWO_SIDED:
+            # THE REAL ROW SHAPE, and it is the point. `_retire` stores
+            # up_qty / dn_qty / cost_total and NO per-side costs -- up_cost
+            # and dn_cost appear only in the L5_LIVE_SETTLED log line, not
+            # in the ledger. So this market's two legs cannot be separated
+            # from its 1.4600 pair cost, and the verb must refuse rather
+            # than write 0.4900 over the pair. The fresh production INSPECT
+            # on deployment efb70ed5 proved exactly this, by excluding the
+            # leg and failing the 24-leg batch check.
             rows[m] = {"up_qty": "1", "dn_qty": "1.0000",
-                       "up_cost": "0.4600", "dn_cost": "1.0000",
                        "cost_total": "1.4600", "yes_value": "0.0000",
                        "settlement_pnl": "-0.46000000",
                        "redemption_total": "1.00000000"}
@@ -112,9 +119,9 @@ def _apply(store, batch=BATCH):
 # -- 1. the manifest itself ------------------------------------------------
 
 def test_the_manifest_is_internally_consistent():
-    assert MANIFEST["legs"] == 24 == len(MANIFEST["keys"])
-    assert len(MANIFEST["trade_ids"]) == len(set(MANIFEST["trade_ids"])) == 35
-    assert MANIFEST["realized_delta_usd"] == "68.23680000"
+    assert MANIFEST["legs"] == 23 == len(MANIFEST["keys"])
+    assert len(MANIFEST["trade_ids"]) == len(set(MANIFEST["trade_ids"])) == 34
+    assert MANIFEST["realized_delta_usd"] == "67.72680000"
     total = sum(D(v["cost_before_usd"]) - D(v["cost_after_usd"])
                 for v in MANIFEST["per_leg"].values())
     assert total == D(MANIFEST["realized_delta_usd"])
@@ -127,14 +134,14 @@ def test_applying_once_produces_the_correct_accounting(store):
     out = _apply(store)
     assert out["mode"] == "APPLIED", out.get("reason")
     assert out["batch_check"]["ok"] is True
-    assert (out["applied"], out["refused"]) == (24, 0), out["refused_detail"]
-    assert out["preserved_unknown"] == 25
-    assert out["realized_delta_usd"] == "68.23680000"
+    assert (out["applied"], out["refused"]) == (23, 0), out["refused_detail"]
+    assert out["preserved_unknown"] == 26
+    assert out["realized_delta_usd"] == "67.72680000"
     # BOTH realized keys move together, and unattributed is untouched
     assert store.state["realized_today"] == str(REALIZED_AFTER)
     assert store.state["realized_attributed"] == str(REALIZED_AFTER)
     assert store.state["realized_unattributed"] == "0"
-    assert D(store.state["realized_today"]) - REALIZED_BEFORE == D("68.2368")
+    assert D(store.state["realized_today"]) - REALIZED_BEFORE == D("67.7268")
 
 
 def test_the_restated_legs_move_realized_the_UNFAVOURABLE_way(store):
@@ -148,12 +155,39 @@ def test_the_restated_legs_move_realized_the_UNFAVOURABLE_way(store):
     assert row["cost_provenance"] == "MEASURED_FROM_VENUE_FILLS"
 
 
-def test_the_two_sided_market_keeps_the_other_legs_real_cost(store):
-    _apply(store)
-    row = store.state["retired_markets"][TWO_SIDED]
-    assert D(row["dn_cost"]) == D("0.49")     # corrected
-    assert row["up_cost"] == "0.4600"         # UNTOUCHED
-    assert D(row["cost_total"]) == D("0.95")  # recomputed, never 0.49
+def test_the_two_sided_market_is_REFUSED_because_its_legs_cannot_be_split():
+    """A production row carries no per-side costs, so the DOWN leg's 0.4900
+    cannot be written without erasing the UP leg's real 0.4600 inside
+    cost_total 1.4600. The verb refuses and the leg stays UNKNOWN."""
+    with tempfile.TemporaryDirectory() as d:
+        s = LX.InventoryStore(os.path.join(d, "inv.json"))
+        s.state["retired_markets"] = _rows()
+        s.state["realized_today"] = str(REALIZED_BEFORE)
+        s.state["realized_attributed"] = str(REALIZED_BEFORE)
+        out = s.correct_cost_basis(
+            TWO_SIDED, "DOWN", correction_id="x",
+            expect={"cost_total": "1.4600"},
+            measured_cost=D("0.4900"), measured_fees=D("0.0000"),
+            evidence={"trade_ids": ["D47QRSGGYZRN"],
+                      "per_fill": [{"trade_id": "D47QRSGGYZRN",
+                                    "qty": "1.0000", "price": "0.5100",
+                                    "fee": "0.0000"}],
+                      "activity_walk": {"complete": True}})
+        assert out["corrected"] is False
+        assert out["reason"] == "OTHER_SIDE_COST_UNREADABLE"
+        row = s.state["retired_markets"][TWO_SIDED]
+        assert row["cost_total"] == "1.4600"          # untouched
+        assert "cost_superseded" not in row
+        assert s.state["realized_today"] == str(REALIZED_BEFORE)
+
+
+def test_the_two_sided_market_is_NOT_in_the_fresh_plan(store):
+    out = A.apply_cost_basis_corrections(store, copy.deepcopy(AUDIT))
+    assert TWO_SIDED + "|DOWN" not in {x["key"] for x in out["applied_detail"]}
+    d = [x for x in out["preserved_detail"]
+         if x["key"] == TWO_SIDED + "|DOWN"][0]
+    assert d["reason"] == "MARKET_TWO_SIDED_COST_UNREADABLE"
+    assert d["cost"] == "UNKNOWN"
 
 
 def test_the_original_superseded_rows_are_never_overwritten(store):
@@ -177,6 +211,7 @@ def test_nothing_that_needs_no_correction_was_touched(store):
     for d in out["preserved_detail"]:
         reasons.setdefault(d["reason"], []).append(d["key"])
     assert len(reasons["NOTHING_TO_CORRECT"]) == 23
+    assert len(reasons["MARKET_TWO_SIDED_COST_UNREADABLE"]) == 1
     assert len(reasons["QUANTITY_MISMATCH"]) == 2
     # both UNKNOWN legs stay UNKNOWN, and the Stage A leg is left alone
     assert all(d["cost"] == "UNKNOWN" for d in out["preserved_detail"]
@@ -203,7 +238,7 @@ def test_ownership_and_the_halt_are_untouched(store):
 
 def test_applying_twice_writes_nothing_at_all(store):
     first = _apply(store)
-    assert first["applied"] == 24
+    assert first["applied"] == 23
     after = copy.deepcopy(store.state)
 
     second = _apply(store)
@@ -237,8 +272,8 @@ def test_the_batch_refuses_outright_if_one_leg_has_moved(store):
 def test_INSPECT_with_no_batch_id_writes_nothing(store):
     out = A.apply_cost_basis_corrections(store, copy.deepcopy(AUDIT))
     assert out["mode"] == "INSPECT"
-    assert len(out["applied_detail"]) == 24
-    assert out["realized_delta_usd"] == "68.23680000"
+    assert len(out["applied_detail"]) == 23
+    assert out["realized_delta_usd"] == "67.72680000"
     assert store.state["realized_today"] == str(REALIZED_BEFORE)
     assert not any("cost_restatements" in r
                    for r in store.state["retired_markets"].values())
