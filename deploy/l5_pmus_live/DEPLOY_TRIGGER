@@ -129,3 +129,5 @@ Promote the gated baseline establishment. SHADOW_ONLY stays on.
 Promote the L5-only baseline. SHADOW_ONLY stays on.
 
 Promote the baseline cash-read fix and retry T once. SHADOW_ONLY stays on.
+
+Promote account-wide exposure aggregation + book-read retry. SHADOW_ONLY on.
