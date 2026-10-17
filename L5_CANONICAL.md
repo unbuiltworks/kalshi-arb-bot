@@ -6162,3 +6162,96 @@ HALT latched, `SHADOW_ONLY` set, `armed false`, zero open orders, zero
 exposure, cash `$344.41255`. No order, no arming, no reset, no limit change.
 Live eligibility still requires owner approval **and** the §66.2 credential
 blocker resolved.
+
+## 67. NO_VENUE_CREDENTIALS: root cause is operational. The minimal fix is zero code.
+
+### 67.1 Root cause
+
+`pmus_auth.has_credentials()` requires exactly `PMUS_API_KEY_ID` and
+`PMUS_API_SECRET_KEY` — the same two names `l5-halt-watchdog` lists — and is
+a pure `os.getenv(...).strip()` truth test that imports nothing. So the
+failure is not a name mismatch, not a missing dependency and not an import
+error:
+
+```python
+def has_credentials() -> bool:
+    return bool(os.getenv(KEY_ENV, "").strip()) and \
+        bool(os.getenv(SECRET_ENV, "").strip())
+```
+
+**The two variables are listed as NAMES on the service but render EMPTY at
+runtime**, so the predicate correctly returns false. Reproduced exactly:
+
+```
+names present, values empty   has_credentials() -> False
+                              read_only_transport() -> ResetRefused: NO_VENUE_CREDENTIALS
+whitespace-only values        has_credentials() -> False     (the .strip())
+```
+
+**This is the designed safe state, not a defect.** The reset image's own
+Dockerfile says so: *"CREDENTIALS ARE TEMPORARY AND MUST BE REMOVED. They are
+set on the service for the reset and deleted straight after; the procedure
+verifies their absence."* The previous reset
+(`owner-20261015-1945z-d47r06gg0zrx`, 2026-10-15T23:28:37Z) was followed by
+that removal, which left the names in place with empty values. The §66 boot
+then did the only correct thing with no credentials: it refused the
+authenticated checks and still returned the digest and registry evidence.
+
+Ruled out by inspection: the image installs `cryptography>=42` (line 47) and
+copies `src/pmus_auth.py` (line 56); it sets no credential `ENV` and blanks
+nothing; `sealedVariableNames` is `[]`, so nothing is unreadable-by-design.
+Stated as a limit: an OAuth session cannot read variable VALUES, so "empty"
+versus "a reference that renders empty" cannot be distinguished from here —
+but the rendered runtime value is empty either way, which is precisely what
+the predicate measured.
+
+### 67.2 The minimal fix: no code change
+
+Populate the two variables that already exist on `l5-halt-watchdog` for the
+duration of the reset, then delete them — the step the image documents and
+which has simply not been performed. **This is a credential action and is the
+owner's**; nothing here prints, stores or substitutes a secret.
+
+**No code correction is warranted, and proposing one would be wrong.** The
+only way code could make this pass is by weakening `has_credentials()` or by
+skipping the venue precondition — which is the bypass that is explicitly
+forbidden. A gate refusing for the stated reason is the gate working.
+
+### 67.3 Evidence that populating them restores verification
+
+Offline, with obviously-fake values, no network and no secret printed:
+
+| check | result |
+|---|---|
+| empty values | `has_credentials() False` → `ResetRefused: NO_VENUE_CREDENTIALS` |
+| populated values | `has_credentials() True` → `read_only_transport() -> ReadOnlyTransport` |
+| signing | four headers produced; `sign_path` strips the query string |
+| `venue_evidence()` over a GET-only stub | `l5_owned_working_orders 0`, `venue_working_orders_seen 0`, `account_positions []`, `account_positions_error None` |
+| unreadable positions | `account_positions None`, error recorded — **never read as flat** |
+
+**Authority is not expanded.** The transport stays GET-only with the refusal
+in the object: `POST`, `PUT`, `DELETE` and `PATCH` each raise
+`PermissionError`. The reset image still contains no `l5_pmus_transport`, no
+`l5_live_execution`, no order body and no arming key, so it cannot place or
+cancel anything; its only write remains the halt object behind four
+fail-closed gates.
+
+### 67.4 What this means for the ceremony
+
+Gate 4 should then pass in full: the registry precondition already returned
+`ok true` (readable, age `0.001s`, `live_orders 0`), `l5_claimed_order_ids` is
+empty, and venue working orders are zero by several independent reads. The
+remaining gates are the owner's to supply — confirm phrase, a human `WHO`, a
+**fresh** `ID` (the 10-15 one is consumed), the `EXPECT` digest, the retyped
+reason and the attestation.
+
+One caveat: `L5_HALT_RESET_EXPECT`
+(`40f9c34033cced8a1006e0b922d30787735a88749b14e4df0a4442e7a879719e`) is valid
+only while the latch is unchanged. It is stable today — `assert_halt` fires
+only on an overdue order and there are none, and the latch still reads
+`2026-10-16T03:40:12.037515+00:00` — but a re-latch for a new reason would
+move the digest and the reset would correctly refuse.
+
+Nothing was deployed, swapped, armed or reset. The watchdog remains on its
+restored credential-free image with healthy sweeps, HALT latched and
+`SHADOW_ONLY` set.
