@@ -666,3 +666,15 @@ apply manifest 20261016d, 23 legs, shadow-locked 2026-10-16T18:55Z
 # are NOT part of this deployment -- no order can reach the venue, and the
 # five staged experimental variables stay staged and uncommitted.
 deploy daily-halt boundary fix, shadow-locked and HALTed 2026-10-17T20:00Z
+
+# 2026-10-17: deploy the disarmed-cancel repair ONLY (owner-authorised after
+# an independent security review returned APPROVE WITH CHANGES, all five of
+# its merge conditions applied). The change set inside this image is exactly
+# ONE source file, src/l5_pmus_transport.py: _CancelOnlyHTTP plus the cancel
+# wiring. src/l5_watchdog.py changed by one regex anchor but is NOT in this
+# image and the watchdog service is trigger-gated, so it is not redeployed
+# and keeps its credential-free image and HALT authority. No submission path
+# is added; this widens only what can WITHDRAW an order we own. HALT and
+# L5_SHADOW_ONLY remain ACTIVE and are not part of this deployment, and the
+# five staged experimental variables stay staged and uncommitted.
+deploy disarmed-cancel repair, shadow-locked and HALTed 2026-10-17T20:30Z
