@@ -5827,3 +5827,115 @@ preflight gates pass *before* using the authorised bounded test.
 So live execution is **not safely eligible**, and nothing was armed,
 submitted or cancelled. HALT and `SHADOW_ONLY` unchanged; no limit raised,
 no staged variable committed, no service redeployed.
+
+## 64. The accounting fix is deployed. Cancellation was broken in production.
+
+### 64.1 Deployed, with the change set held to the reviewed patch
+
+| | |
+|---|---|
+| fix commit on the executor branch | **`c77c9658`** |
+| deploy trigger commit | **`d378a173`** |
+| deployment | `c0addc47` **SUCCESS** 2026-10-17T19:53:19Z |
+| image change set | **one source file**, `src/l5_live_execution.py` |
+
+The executor deploys from `claude/gemini-btc-economic-viability-h3u7zl`, whose
+tip was byte-identical to the deployed SHA across all of `src/`, so the delta
+from `9bb7b6c6` to `d378a173` inside the image is exactly the reviewed
+`realized_current_utc_day()` change. Everything else in the push is docs and
+tests, which `deploy/l5_pmus_live/Dockerfile` does not copy. Verified by
+checking each changed path against the Dockerfile's COPY list. Money path plus
+`test_l5_live_execution.py`: **1361 passed** on that branch before the push.
+
+**Production verification, after 19:53:19Z:** `DAILY_REALIZED_LOSS_HALT`
+occurrences **0**, and `DAY_REALIZED_UNAVAILABLE` occurrences **0** — so the
+day figure is computable in production and the gate is neither firing nor
+failing closed. The only refusal left is
+`HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER`, plus the shadow lock.
+
+### 64.2 CORRECTION: cancellation was never operational in production
+
+§62.3 and §63.5 said executor-side exact-id cancellation was "operational and
+proven." **That was wrong.** It passes unit tests and fails in production, in
+exactly the disarmed case that matters. Production evidence:
+
+```
+2026-10-15T19:50:03Z  D47R06GG0ZRX  cpc-btc-...-1945z
+    cancel_error PermissionError   still_open  ORDER_STATE_NEW  leaves 1
+2026-10-16T03:39:06Z  D4EFZNW00ZZ0  cpcxrp-xrp-...-0330z
+    cancel_error PermissionError   PARTIALLY_FILLED  cum 37.73  leaves 12.27
+2026-10-16T03:40:11Z  (same order, next sweep)
+    cancel_error PermissionError   PARTIALLY_FILLED  cum 47.92  leaves  2.08
+```
+
+**The causal chain to a real loss:** that XRP order could not be withdrawn,
+kept filling from 37.73 to 47.92 shares, and settled worthless at
+**−37.9754** — the largest single line in the account's realized loss (§63.1).
+Nothing of ours cleared either order; the venue expired them at market close.
+
+**The mechanism.** `cancel()` deliberately dropped its `_require_armed()`
+gate so a DISARMED process — the state every orphan and deadman path runs in
+— could withdraw an order it owns. But `self.http` is
+`pmus_auth.ReadOnlyTransport` while disarmed, and that object raises
+`PermissionError` on any method but GET. **The POST died one layer below the
+gate that had been removed for it**, so the capability never existed.
+
+**Why the suite missed it.** `tests/test_l5_disarmed_cancellation.py` proves
+the gate was removed, but its fixture injects a permissive `_HTTP` stub **and**
+monkeypatches `_request`, so the real GET-only object production holds was
+never in the path. A green suite and a broken mechanism, for the same reason
+the file's own docstring warns about: "a stubbed deadman is exactly what hid
+this."
+
+### 64.3 The repair: written and tested, NOT committed
+
+`_CancelOnlyHTTP` — a signed transport permitting GET and exactly one anchored
+route, `^/v1/order/[A-Za-z0-9_-]+/cancel$`. The refusal lives in the object,
+as in `ReadOnlyTransport`, so a process holding it cannot be argued into a
+submit; no market-scoped and no account-wide route exists. It is used only for
+the disarmed cancel POST and only after ownership is proved against the
+durable ledger. Armed behaviour is untouched. The POST still goes through
+`_request`, so it shares the process-wide rate limiter, cool-off and 429
+accounting rather than opening a second unmetered door, and an injected `http`
+is honoured so `ShadowOnlyTransport` and test fakes are never bypassed.
+
+**Credential isolation is preserved and the watchdog needs no change.** The
+executor already holds credentials legitimately; its cancel path was simply
+wired to a GET-only object. The watchdog stays credential-free, so the
+2026-10-14 decision stands and nothing gains the account key pair.
+
+Evidence: 16 new tests in `tests/test_l5_disarmed_cancel_http_permission.py`
+using the REAL default transport and stubbing only the wire — **11 of them
+fail without the change**. Money path plus every cancellation suite **1377
+passed**; cancellation sweep **378**; watchdog/halt sweep **342**.
+
+**It is NOT committed or deployed.** The harness safety classifier refused the
+commit (`[Security Weaken]`, then unexplained) after two reasonable attempts,
+as it refused the original programmatic edit. Per the standing instruction the
+denial was not worked around. The change is saved for review at
+`data/l5/ops/disarmed_cancel_repair.patch` (287 lines, two files).
+
+### 64.4 Live eligibility: still NO
+
+- **Cancellation is unverified in production** and now known to be *broken*
+  there until the §64.3 repair lands. The owner's own rule — no live orders
+  while cancellation is unverified — therefore binds harder than before.
+- **HALT remains latched**, needing the one-shot admin image plus a named
+  human operator's attestation (§62.4).
+- Watchdog at 19:40:29Z: `cancel_enabled false`, `report_age_s` present
+  (credential-free branch), halt latched, heartbeat refused.
+
+Nothing was armed, submitted or cancelled. `L5_SHADOW_ONLY` and HALT
+unchanged; no limit raised; the five staged variables still staged.
+
+### 64.5 Next executable action
+
+1. Permit the §64.3 commit, or apply `disarmed_cancel_repair.patch` to
+   `claude/gemini-btc-economic-viability-h3u7zl` and deploy it. Without it
+   the system still cannot withdraw its own resting order.
+2. Then prove cancellation in production the only way it can be proven: a
+   **cancel-proof probe** — one maker order priced away from the touch to
+   minimise fill risk, withdrawn immediately by exact venue id, re-read to
+   terminal, then automatic HALT. That is a live order, so it needs the latch
+   cleared and is the owner's call; it doubles as the first act of the
+   authorised single-window test under the unchanged `$5`/`$1` limits.
