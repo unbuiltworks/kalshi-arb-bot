@@ -1970,3 +1970,91 @@ One of:
 
 Until then the A/B economic question stays **open**, and B must not be
 deployed on a fill-count advantage.
+
+## 32. A/B closed with AUTHORITATIVE settlement. 2026-10-17. Verdict: INDISTINGUISHABLE.
+
+### Settlement obtained: 6 of 6
+
+After the network policy was updated, `GET gateway.polymarket.us/v1/markets/
+<slug>/bbo` returned a terminal state and a binary `settlementPx` for every
+frozen window:
+
+| window | state | settlementPx | outcome |
+|---|---|---|---|
+| 2030z | MARKET_STATE_EXPIRED | 1.0000 | UP |
+| 2045z | MARKET_STATE_EXPIRED | 1.0000 | UP |
+| 2100z | MARKET_STATE_EXPIRED | 0.0000 | DOWN |
+| 2215z | MARKET_STATE_EXPIRED | 1.0000 | UP |
+| 2315z | MARKET_STATE_EXPIRED | 0.0000 | DOWN |
+| 2330z | MARKET_STATE_EXPIRED | 0.0000 | DOWN |
+
+Applied to BOTH policies' terminal inventories. **All 6 of 6 windows now
+price under both policies at every ceiling** -- no pending cells, no
+selected subset.
+
+(2030z did settle UP, which is what the expired book had suggested. That
+does not retroactively justify section 29-30's use of the book: it was the
+right answer reached by an inadmissible route, and the withdrawal stands.)
+
+### PAIRED A-minus-B, 6 of 6 identical windows
+
+| ceiling | A | B | **A - B** | A wins | mean/stdev of the per-window difference |
+|---|---|---|---|---|---|
+| **$10** | +$1.10 | **+$1.14** | **-$0.04** | 4 of 6 | **-0.00** |
+| **$25** | +$8.43 | **+$10.92** | **-$2.49** | 2 of 6 | **-0.19** |
+| **$50** | **+$7.21** | +$2.77 | **+$4.44** | 5 of 6 | **+0.44** |
+
+Per-window differences range from **-$3.17 to +$3.23** with a standard
+deviation of **$1.67-$2.23**. The sign flips with the ceiling: B "wins" at
+$10 and $25, A "wins" at $50, and the mean difference is smaller than its own
+standard deviation in every case.
+
+### Why the comparison is INDISTINGUISHABLE, not merely close
+
+The matched-pair edge is bounded by arithmetic: a pair cost of 0.97 earns
+**$0.03 per contract**, so the most any ceiling could earn from matched pairs
+is **$0.15 ($10), $0.45 ($25), $1.05 ($50)**.
+
+Observed per-window nets span **-$2.90 to +$5.68** -- two to twenty times
+larger than any possible matched-pair edge. **Almost the entire P&L, and
+therefore the entire A-B difference, is the RESIDUAL settling in or out of
+the money.** That is a directional coin flip on BTC, not the strategy's edge.
+
+Both policies made money overall on this sample because 2215z and 2315z
+happened to settle in favour of the residual they were carrying. Reverse two
+coin flips and both columns invert. **With n=6 and a signal buried under
+residual variance of this size, these numbers cannot rank A against B.**
+
+### Capital, inventory and worst-case, verified
+
+| ceiling | B max committed | B max unmatched | B worst-case residual (cap) |
+|---|---|---|---|
+| $10 | $9.60 | 10 | $2.50 ($2.50) |
+| $25 | $24.80 | 10 (cap) | $4.53 ($6.25) |
+| $50 | $49.40 | 10 (cap) | $4.53 ($12.50) |
+
+Every ceiling respected; the unmatched-inventory cap binds at $25 and $50.
+
+### Modelled vs venue-confirmed
+
+**All fills remain MODELLED** -- zero orders have ever been submitted. What
+is now venue-confirmed is the **OUTCOME** of all six markets. Settlement
+confirms which side paid; it does not confirm that any fill would have
+occurred.
+
+### VERDICT
+
+**Independent per-side replenishment (B) is behaviourally better and
+economically INDISTINGUISHABLE from A on this sample.** It is not rejected
+and it is not supported. The A/B question is now *measurable* -- the
+settlement blocker is gone -- but it is not *answered*, and it cannot be
+answered on six windows whose P&L is dominated by residual coin flips.
+
+### Next evidence
+
+The discriminating measurement is **matched-pair P&L separated from residual
+P&L**, accumulated over enough windows that the residual term averages out.
+At a residual standard deviation of ~$2 per window and a matched edge of
+~$0.45, distinguishing a real A/B difference of even $0.20 per window needs
+on the order of **several hundred windows**, not six. The deployed recorder
+and reconciler already generate that stream; nothing new is needed but time.
