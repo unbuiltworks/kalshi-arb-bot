@@ -32,3 +32,11 @@ pin watchdog deploy isolation, shadow-locked 2026-10-15T13:20Z
 # deploy/l5_halt_watchdog/Dockerfile, python3 -m scripts.l5_halt_watchdog and
 # ALWAYS immediately afterwards.
 inspect the latched halt, read-only, owner-authorised 2026-10-17T21:06Z
+
+# 2026-10-17T21:12Z: RESTORE the credential-free watchdog image immediately
+# after the read-only INSPECT. dockerfilePath, startCommand and
+# restartPolicyType are already set back to deploy/l5_halt_watchdog/Dockerfile,
+# python3 -m scripts.l5_halt_watchdog and ALWAYS; this rebuilds that image so
+# independent sweeping resumes. The latch was NOT cleared: INSPECT reported
+# would_clear false and wrote nothing, and the latch digest is unchanged.
+restore the credential-free watchdog image 2026-10-17T21:12Z
