@@ -141,17 +141,47 @@ not drafted the text you will sign.
 the id is NOT consumed. The message names the gate. Correct it and Apply again,
 or abort to Phase 4.
 
-## 6. Phase 4 — remove the credentials
+## 6. Phase 4 — stand the service back down: credentials AND authorization
 
-Dashboard → **Variables** → **delete** `PMUS_API_KEY_ID` and
-`PMUS_API_SECRET_KEY` from `l5-halt-watchdog`.
+Do all of this **whether or not** Phase 3 succeeded, in one staged batch.
+
+**(a) Delete the two credentials.** Dashboard → **Variables** → **delete**
+`PMUS_API_KEY_ID` and `PMUS_API_SECRET_KEY` from `l5-halt-watchdog`.
 
 Prefer **delete** over blanking, so their absence from the variable list is
 itself the verification. (Blanking also fails closed — `has_credentials()`
 strips and returns false — which is why §67 found them listed-but-empty, but
 deletion leaves no ambiguity.)
 
-Do this **whether or not** Phase 3 succeeded.
+**(b) Return `L5_HALT_RESET_INSPECT` to `YES`.** This is the fail-safe
+default and the value the image itself bakes in. Left at `NO`, any later boot
+of the one-shot image would go straight down the reset path instead of
+performing a dry run.
+
+**(c) Delete the six reset authorization variables:**
+
+```
+L5_HALT_RESET_CONFIRM
+L5_HALT_RESET_WHO
+L5_HALT_RESET_ID
+L5_HALT_RESET_EXPECT
+L5_HALT_RESET_CONFIRM_REASON
+L5_HALT_RESET_ATTEST
+```
+
+A spent ceremony left populated on the service is a loaded one. The spent id
+would refuse with `RESET_ID_ALREADY_CONSUMED`, and a stale `EXPECT` would
+refuse at gate 2, so the system still fails closed — but the next operator
+must be made to assemble the ceremony deliberately rather than inherit one.
+Removing them, together with (b), means a future boot of this image can only
+ever produce a read-only dry run until a human re-authorises it from scratch.
+
+**Verify (a)–(c)** by re-reading the service's variable list: the two
+credential names and the six authorization names should be gone, and
+`L5_HALT_RESET_INSPECT` should read `YES`. The remaining expected names are
+`L5_HALT_STATE_DIR`, `L5_ORDER_REGISTRY_URL`, `L5_WATCHDOG_POLL_S`,
+`L5_WATCHDOG_REPORT_MAX_AGE_S`, `L5_WATCHDOG_STATE_DIR`, `PORT`,
+`PYTHONUNBUFFERED`, `RAILWAY_DOCKERFILE_PATH` and the `RAILWAY_*` set.
 
 ## 7. Phase 5 — restore the watchdog. MANDATORY
 
@@ -205,4 +235,12 @@ HALT does not authorise it.
 | attestation empty | gate 4 refuses `NO_ATTESTATION` |
 | process dies mid-reset | audit entry lands first: an audited `CLEAR_ATTEMPTED` and a still-latched halt |
 | watchdog not restored | no halt endpoint → executor's gate fails closed; `SHADOW_ONLY` still blocks submission |
+| ceremony variables left populated after the reset | spent id refuses `RESET_ID_ALREADY_CONSUMED`; stale digest refuses at gate 2 — still closed, but Phase 4(b)(c) removes them so the next boot is a dry run and the next reset must be authorised from scratch |
 | anything at all | `L5_SHADOW_ONLY` is never cleared by this procedure |
+
+**Observed in production, 2026-10-17:** while the one-shot image was the
+running configuration the executor logged
+`HALT_GATE:HALT:halt_state_unavailable` 8 times — the halt endpoint was
+unreachable and the gate failed closed exactly as designed, rather than
+treating an unreadable latch as absent. That is this table's "watchdog not
+restored" row, verified rather than assumed.
