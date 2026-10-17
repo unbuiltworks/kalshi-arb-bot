@@ -4532,3 +4532,170 @@ collecting toward the 50- and 100-window marks.
 MODELLED, SHADOW ONLY. Nothing submitted, no realized profit, nothing
 deployed, no strategy/capital/limit/arm change. HALT and SHADOW_ONLY
 unchanged.
+
+---
+
+## 55. L5's advantage is pair COUNT at a worse price, not pair quality
+
+Reconstructed from the deduped corpus: 697,339 fills, 5,523 BTC15m windows.
+**Observed means his fills** -- timestamp, side, outcome, price, size. We do
+not see his resting orders, his quotes before they filled, his cancels, or
+anything he rested that never filled. Every number below is from fills;
+where a mechanism cannot be inferred from fills, it is marked as such.
+
+### 55.1 He never exits
+
+```
+BUY Down  352,251 (50.5%)      BUY Up  345,088 (49.5%)
+contracts  BUY 13,420,682   SELL 0        sell/buy ratio 0.000
+windows containing at least one SELL: 0 of 5,523
+```
+
+**Zero sells in 697,339 fills.** L5 buys both sides and holds to settlement,
+structurally identical to B25D3. The residual problem is not solved by
+trading out, because he never trades out. That removes the most obvious
+hypothesis before it is proposed.
+
+### 55.2 Inventory trajectory
+
+```
+fills/window                      median    111    p90   228
+gross contracts/window            median  1,981
+matched (min(up,dn))              median    896
+residual at settlement            median    143
+PEAK |imbalance| in-window        median    263    p90   554
+time-weighted mean |imbalance|    median    105
+peak capital at cost              median $  938    p90 $2,230
+active span                       median    781s
+inter-fill gap                    median    4.0s   p25 2s  p75 11s
+distinct fill prices per window   median     89
+most-repeated price level         median     10 fills
+```
+
+He runs a far larger imbalance than we permit (peak 263 against our cap of
+10) and ends with 143 unmatched -- carried, never hedged.
+
+### 55.3 His balancing is unconditional, and that is the finding
+
+```
+fills that REDUCE |imbalance|  318,084 (45.6%)
+fills that GROW  |imbalance|   379,229 (54.4%)
+
+state immediately BEFORE each:
+   BALANCE  |imb| 115   price 0.440   t 456s   size 14
+   EXTEND   |imb| 103   price 0.450   t 451s   size 14
+```
+
+**The two states are indistinguishable.** Imbalance, price, time and size
+before a balancing fill match those before an extending one to within noise.
+L5 is not deciding to balance; balancing is a by-product of quoting both
+sides continuously, and roughly 46% of what comes back happens to reduce
+inventory. There is no inventory-balancing trigger to copy, which is the
+same negative result we reached about our own fills in section 45 and is now
+confirmed on his.
+
+### 55.4 His own fills, priced with OUR fees
+
+The prices, sizes and sequence are his; only the fee schedule and the FIFO
+pairing are ours. Polymarket's own fees and rebates are assumed nowhere.
+
+```
+L5 realized matched-pair cost (634,680 pairs)
+   median 0.9800   mean 0.9801   p25 0.9200   p75 1.0400
+   share <= 0.9857 (our fee breakeven):  52.0%
+   share <= 0.97: 45.2%   <= 0.96: 40.5%   <= 0.93: 29.7%
+
+his matched book under OUR MAKER fee
+   matched contracts/window median 902
+   matched net/window  median $+18.82   mean $+22.27
+   positive in 66.8% of windows
+
+the same book under the TAKER fee
+   matched net/window  median $-14.33   positive in 36.5% of windows
+```
+
+**This is the concrete economic finding.** His median pair costs **0.9800**;
+ours costs **0.9100**. He pays seven cents more per pair -- a 2.0c gross
+margin against our 9.0c, four and a half times worse. Nearly half his pairs
+(48%) are above our fee-adjusted breakeven and lose money outright; his p75
+pair costs 1.0400, which cannot win on any outcome.
+
+And his matched book is still worth **$+18.82 per window on our fee
+schedule**, against B25D3's measured **$+2.13 per window** (section 54
+holdout: $+21.34 over 10 windows). Roughly **nine times more money from a
+four-and-a-half-times worse price**, because he completes 902 contracts to
+our 31.
+
+It is viable only as a maker: the identical book priced at the taker fee is
+-$14.33 per window. Nothing here requires a rebate assumption -- our maker
+fee is a credit, and the +$18.82 already includes it.
+
+### 55.5 Could it be executed on PMUS?
+
+- **Venue volume is not the constraint.** Section 35 measured 26,393-35,276
+  qualifying contracts per PMUS window against his 1,981 gross -- 13 to 18
+  times his entire book.
+- **Capital is a hard blocker at the current authorization.** His median peak
+  committed is **$938** against our **$25** ceiling, a 37x gap. No behavioural
+  change closes that, and none is proposed.
+- **Whether his fill RATE is reachable cannot be determined from our data.**
+  He fills every 4 seconds across 89 distinct price levels per window. Fills
+  alone cannot distinguish a simultaneous multi-level ladder from continuous
+  re-quoting as the book moves; section 26 left that question INCONCLUSIVE
+  behaviourally and it remains so. We can observe only that he is not parked
+  on one level -- his most-repeated price accounts for a median of 10 fills
+  out of 111.
+
+### 55.6 The single largest reproducible behavioural difference
+
+Not his tolerance for near-$1 pairs, which is bounded by capital we do not
+have. **It is that he never leaves a quote parked.** Our engine places one
+order per side and, in `on_book`, re-places only when `resting[side] is
+None` -- so a completing-side order sits at the price it was born with while
+the book walks away from it, unfillable, until the window ends. His 89 price
+levels per window show that whatever his mechanism, his quotes are not
+parked.
+
+That difference is reproducible at our size, costs no capital, changes no
+risk limit, and is the opposite of the three rejected changes: it does not
+avoid inventory, it tries to complete more of it.
+
+### 55.7 ONE falsifiable offline experiment
+
+**Re-quote, do not withdraw.** When the book has moved such that a resting
+order is no longer at its intended depth, replace it at the current
+touch-minus-depth price instead of leaving it parked. Depth stays 3, clip
+stays 5, the $25 ceiling, the 10-contract unmatched cap and the residual cap
+all stay exactly as they are. No entry filter, no cancellation threshold, no
+capital change.
+
+This is explicitly NOT the section 54 rule. That one cancelled and did not
+replace, and failed precisely because it removed the orders that would have
+completed pairs. This one keeps both sides live.
+
+**Predictions, stated before the run:**
+- matched contracts per window RISE from 31;
+- residual contracts FALL from the current 85 per 10 windows;
+- matched net and total net both rise against frozen B25D3.
+
+**Falsified if** matched net falls, or residual rises, or total net does not
+improve under the same conservative queue discipline (volume must still
+exceed displayed depth at the NEW join, counted strictly after the new join
+-- a re-quote goes to the BACK of the queue, which is the cost that could
+sink it).
+
+**Discovery sample:** the 20 forward windows already analysed (1130z-1630z).
+**Untouched validation sample:** the forward windows after 1630z, which are
+still accumulating through the running collection and have never been read.
+
+### 55.8 What this does not claim
+
+It does not claim L5's pricing is better -- it is four and a half times
+worse per pair. It does not claim we can reach his turnover; that is
+capital-bound and partly unobservable. It does not claim his 0.98 tolerance
+is safe for us: at our 31 contracts a window, a 2c margin would earn $0.62 a
+window before residual, which is worse than what we have. **His price
+tolerance only pays at his volume, and his volume needs his capital.**
+
+MODELLED, SHADOW ONLY. Nothing deployed, no strategy, capital, limit or arm
+change; collection continues. HALT and SHADOW_ONLY unchanged.
