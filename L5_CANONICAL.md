@@ -4830,3 +4830,125 @@ rule, threshold, filter or re-quote change is proposed.
 
 MODELLED, SHADOW ONLY. Nothing deployed, no strategy, capital, limit or arm
 change; collection continues. HALT and SHADOW_ONLY unchanged.
+
+---
+
+## 57. Capital sensitivity: FAIL. Capital buys residual inventory, not matched contracts.
+
+Frozen B25D3 execution logic at $25 / $50 / $100 / $250. Unchanged at every
+level: depth 3, clip 5, the conservative queue model (volume must EXCEED
+displayed depth at join, counted strictly after; no touch=fill), PMUS fees,
+FIFO accounting, authoritative settlement. Only the capital ceiling moves,
+plus -- in regime A only -- the risk limits defined as a function of it.
+
+**Two risk regimes, because they answer different questions:**
+
+- **A SCALED** -- unmatched cap = 0.4 x capital (10 at $25, as today),
+  residual cap = capital / 4 ($6.25 at $25, as today). "What if we ran the
+  same policy with more money."
+- **B FIXED** -- unmatched cap stays 10 contracts and residual cap stays
+  $6.25 at every level. "What if we added money but kept today's risk
+  appetite."
+
+Nothing is assumed about how fills scale; the simulator decides.
+
+### 57.1 Discovery, 20 forward windows
+
+```
+A SCALED
+  cap   unmCap residCap fills matchQ residQ  matched$   resid$   TOTAL$  $/win     dd  util%
+  $25     10    $6.25     103    185    145  $+30.16  $-48.50  $-18.34 -0.917 -23.35   76%
+  $50     20   $12.50     146    210    310  $+45.44  $-80.55  $-35.11 -1.756 -50.42   54%
+ $100     40   $25.00     171    205    445  $+44.07  $-94.10  $-50.03 -2.502 -65.34   30%
+ $250    100   $62.50     171    205    445  $+44.07  $-94.10  $-50.03 -2.502 -65.34   12%
+
+  ret/committed   -4.80%   -6.48%   -8.29%   -8.29%
+  pct >= $5          5%      15%      15%      15%
+  paired vs $25            $-0.839  $-1.585  $-1.585
+                           t=-0.95  t=-1.71  t=-1.71   better 5/20 at every level
+
+B FIXED
+  $25     10    $6.25     103    185    145  $+30.16  $-48.50  $-18.34 -0.917 -23.35   76%
+  $50     10    $6.25     113    200    165  $+32.77  $-57.20  $-24.43 -1.222 -34.94   46%
+ $100     10    $6.25     113    200    165  (identical)                        23%
+ $250     10    $6.25     113    200    165  (identical)                         9%
+
+  ret/committed   -4.80%   -5.30%   -5.30%   -5.30%
+  paired vs $25            $-0.304 at every level, t=-0.62, better 2/20
+```
+
+**More capital is monotonically worse, in both regimes.**
+
+### 57.2 The mechanism, in one comparison
+
+From $25 to $100 under scaled caps:
+
+```
+matched contracts   185 -> 205     +11%
+residual contracts  145 -> 445    +207%
+matched net      $+30.16 -> $+44.07    +46%
+residual net     $-48.50 -> $-94.10    -94%
+```
+
+**Capital does not buy matched contracts.** Matched quantity saturates at
+roughly 205 contracts across 20 windows -- about 10 per window -- and then
+stops, exactly as section 38 found (matched quantity saturates at 10-13
+contracts) and section 39 explained (completion is flow-bound). What the
+extra money buys is **three times the one-sided inventory**, which is pure
+added exposure, and the residual loss grows twice as fast as the matched
+gain.
+
+Capital utilisation makes the same point without any P&L: **76% of the $25
+ceiling is committed, but only 12% of $250.** Most of the additional money is
+never even deployed, because there is nothing at our quote to spend it on.
+The ceiling is not the binding constraint; executable flow at our price is.
+
+And the risk grows with it: worst window -$4.91 -> -$10.78, maximum drawdown
+-$23.35 -> -$65.34, return on committed capital -4.80% -> -8.29%.
+
+### 57.3 Validation sample: insufficient
+
+```
+3 untouched windows after 1630z (1645z, 1700z, 1715z)
+
+A SCALED   $25 $+6.38 (+2.127/win)   $100 $+17.88 (+5.960/win, paired +$3.833)
+B FIXED    $25 $+6.38 (+2.127/win)   $100  $+2.86 (+0.953/win, paired -$1.173)
+```
+
+Under scaled caps the validation set points the OTHER way from discovery.
+**It is not evidence.** n = 3, t = +0.60 and +0.65, better in 2 of 3 windows,
+and the worst window still degrades from +$0.64 to -$4.50 with drawdown from
+0.00 to -$4.50. Under fixed caps it agrees with discovery (worse, better in
+0 of 3). **The validation sample is too small to decide anything and is
+reported as insufficient rather than used.**
+
+### 57.4 Verdict
+
+**FAIL.** No tested capital level shows defensible positive net expectancy.
+The smallest capital level with defensible positive expectancy is **none** --
+$25 is the least bad of the four, and it is itself negative at -$0.917 per
+window over 20 windows.
+
+**Increased capital creates exposure, not economic improvement.** Every
+measure that matters moves the wrong way: total net, return on committed
+capital, worst window, and drawdown. The only thing that improves is matched
+net, and it is outrun two-to-one by the residual it brings with it.
+
+### 57.5 The headline question, answered
+
+**No -- the $25 ceiling is not what makes L5-style continuous two-sided
+accumulation nonviable.** Raising it does not produce L5-style accumulation
+at all: matched contracts per window stop growing almost immediately
+(+11% for 4x the money, then flat from $100 to $250), while one-sided
+inventory triples. L5's $938 median peak committed is a symptom of his
+turnover, not its cause -- he has the fills to deploy it against and we do
+not.
+
+That closes capital as an explanation, alongside the four rejected quote-
+management changes. What remains unexplained is the turnover itself, and
+section 56 established that the mechanism behind his turnover is
+unobservable in fills-only data.
+
+MODELLED, SHADOW ONLY. No deployment, no live orders, no capital increase,
+no new infrastructure; the frozen arms keep collecting. HALT and SHADOW_ONLY
+unchanged.
