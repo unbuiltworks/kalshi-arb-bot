@@ -145,6 +145,14 @@ or abort to Phase 4.
 
 Do all of this **whether or not** Phase 3 succeeded, in one staged batch.
 
+**RECOMMENDED: stage Phase 4 and Phase 5 together and Apply once.** The
+one-shot container has already exited by this point, so a single Apply strips
+the credentials and authorization *and* rebuilds the watchdog image in one
+deploy. Applying Phase 4 alone, while Settings still point at the one-shot
+image, boots that image a third time — harmless, because `INSPECT` is back to
+`YES` and the dry run writes nothing, but it is an avoidable boot and an
+avoidable gap in sweeping.
+
 **(a) Delete the two credentials.** Dashboard → **Variables** → **delete**
 `PMUS_API_KEY_ID` and `PMUS_API_SECRET_KEY` from `l5-halt-watchdog`.
 
