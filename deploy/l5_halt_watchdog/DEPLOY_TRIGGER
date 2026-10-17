@@ -21,3 +21,14 @@
 #
 # Nothing here arms anything, clears a halt, or changes a capital limit.
 pin watchdog deploy isolation, shadow-locked 2026-10-15T13:20Z
+
+# 2026-10-17T21:06Z: owner-authorised TEMPORARY swap to the one-shot
+# deploy/l5_halt_reset image to run the READ-ONLY HALT_RESET_INSPECT dry run
+# and nothing else. L5_HALT_RESET_INSPECT is pinned to YES on the service, so
+# main() takes the inspect branch and returns before perform_reset is
+# reachable. NO RESET. The watchdog image, volume, branch, builder,
+# watchPatterns and every other variable are untouched, and the three changed
+# fields (dockerfilePath, startCommand, restartPolicyType) are restored to
+# deploy/l5_halt_watchdog/Dockerfile, python3 -m scripts.l5_halt_watchdog and
+# ALWAYS immediately afterwards.
+inspect the latched halt, read-only, owner-authorised 2026-10-17T21:06Z
