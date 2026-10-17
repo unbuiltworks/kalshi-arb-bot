@@ -3637,3 +3637,176 @@ to change this.
 
 MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged. No live orders, no new
 service, no capital increase, no limit loosened.
+
+---
+
+## 47. Clip size at depth 3: size is pure leverage, not a better edge
+
+Offline, 20 archived windows, frozen depth_ticks=3. Discovery only; nothing
+tuned, nothing deployed, no live limit changed.
+
+### 47.1 A modelling correction that this question requires
+
+Frozen B's queue rule fills the WHOLE resting order the instant cumulative
+qualifying volume exceeds the depth displayed ahead of it. It never requires
+the flow to cover our own size. At a 5-contract clip that is a 5-contract
+optimism; at 50 it would hand us 50 contracts on the strength of one print.
+Every run in this section instead uses conservative partial fills:
+
+```
+filled_so_far = clamp(cum_qualifying - queue_ahead, 0, order_qty)
+```
+
+Everything else is frozen B. At clip 5 the correction is worth $0.05 over 20
+windows ($+19.93 all-or-nothing vs $+19.88 partial), so it changes nothing we
+have already reported -- but it is what makes the large-clip question
+answerable at all.
+
+### 47.2 L5's observed fill sizes, and what they are evidence of
+
+Deduped corpus, 697,339 BTC15m fills:
+
+```
+OBSERVED FILLS   mean 19.2  median 14.0  p75 30.0  p90 49.4  p99 80.0  max 225
+   size <= 5     25.5% of fills,  3.6% of contracts
+   5-10          17.8%,  7.1%
+   10-20         22.3%, 18.7%
+   20-40         22.0%, 33.1%
+   40-50          6.9%, 17.1%
+   50-100         5.6%, 20.3%
+   fills exactly in 40-50: 52,921 (7.59%)
+```
+
+Aggregating fills that share txhash + asset + side + price to INFER submitted
+order size gives 697,171 groups from 697,339 fills -- essentially one fill per
+order. **There is no evidence he slices**, and the inferred distribution is
+the observed one (median 14.0, p90 49.5, 13.2% at or above 40).
+
+So the 40-50 band is real but is **not his typical size**: his median fill is
+14 and a quarter of his fills are 5 or smaller -- the same size we use.
+CAVEAT, stated because it changes the inference: a txhash could batch several
+orders, making the aggregate an UPPER bound on submitted size, while the raw
+fill is a LOWER bound. Neither is an observed book entry, and size he rested
+that never filled is invisible to public fill data.
+
+### 47.3 Clip sweep under the UNCHANGED $25 ceiling and 10-contract cap
+
+```
+clip  fills  matched  matched$   resid$   TOTAL$   peak$  util  worstR$  top refusal
+   5    130      225   $+33.28  $-13.40  $+19.88  $25.00  100%   $4.65  UNMATCHED_CAP
+   8     94      264   $+20.47  $-17.68   $+2.79  $24.96  100%   $5.04  CAPITAL
+  10     75      180   $+14.83  $-30.90  $-16.07  $22.30   89%   $5.50  CAPITAL
+  20      0        0    $+0.00   $+0.00   $+0.00   $0.00    0%   $0.00  CLIP>ENGINE
+
+pooled paired delta vs clip 5:  8 -$0.955 (t=-1.89)   10 -$1.298 (t=-2.67)
+                               20 -$2.494 (t=-4.25)
+```
+
+**Bigger is worse, and significantly so.** Clip 8 matches MORE contracts (264
+vs 225) and earns LESS matched net ($20.47 vs $33.28), because at a $25
+envelope a larger clip exhausts capital on one leg at worse prices. Clip 20 is
+refused outright, 146,196 times, by `CLIP_EXCEEDS_ENGINE_SIZE` -- the engine's
+own pre-trade sizing gate at a $25 cash envelope, not a flow limit.
+
+What blocks what:
+
+```
+clip  contracts  CAPITAL_CEILING  UNMATCHED_CAP  CLIP>ENGINE  PAST_CUTOFF
+   5        570            32410          38046            0        28012
+   8        600            74435          31107            0        29925
+  10        520            70832          55305            0        32638
+  20          0                0          25888       146196        34798
+```
+
+The 10-contract unmatched cap binds at every clip, but it is **not** what
+stops the larger ones: capital does at 8 and 10, and the engine's sizing gate
+does at 20.
+
+### 47.4 Order size is never the binding constraint in the queue model
+
+This is the result that governs how section 47.5 must be read:
+
+```
+clip  orders  filled FULL  partial  unfilled  median volume past the queue  mean/stdev
+   5     124          114        0        10                            66       0.305
+  10     124          114        0        10                            68       0.303
+  25     124          114        0        10                            82       0.300
+  40     124          114        0        10                            91       0.299
+  50     124          115        0         9                            98       0.284
+```
+
+**The same 124 orders are placed and the same 114 fill in full at every size
+from 5 to 50. Not one order fills partially.** The median volume arriving past
+our queue position is 66-98 contracts, comfortably above 50, so qualifying
+flow clears a 50-share order as readily as a 5-share one.
+
+That means the model does not *test* size in this range; it **extrapolates**
+linearly through it. Two things it never charges: the market impact of our own
+larger resting size, and the fact that displayed depth is only an UPPER bound
+on the true queue -- an optimism a bigger order is more exposed to, not less.
+
+And mean/stdev is flat at **0.28-0.305 at every size**.
+
+### 47.5 HYPOTHETICAL L5-scale sensitivity -- NOT AUTHORIZED, NOT EXECUTABLE
+
+Live limits are unchanged. These runs raise the simulated capital envelope and
+simulated unmatched cap inside the offline harness only, to answer "what would
+it take", not "what should we do". Residual cap scales as cap/4 throughout.
+
+```
+clip  cap$  unmCap  contracts  matched  matched$    resid$    TOTAL$   peak$  worstR$
+   5    25      10        570      225   $+33.28   $-13.40   $+19.88  $25.00   $4.65
+  10    50      20       1140      450   $+66.40   $-26.80   $+39.60  $50.00   $9.30
+  25   125      50       2850     1125  $+166.37   $-68.50   $+97.87 $125.00  $23.25
+  40   200      80       4560     1800  $+265.90  $-109.60  $+156.30 $200.00  $37.20
+  50   250     100       5750     2250  $+335.18  $-150.00  $+185.18 $249.00  $46.50
+
+per-window TOTAL:   clip 5  mean $+0.994  stdev  3.263   >=$5 in 1/20 windows
+                   clip 10  mean $+1.980  stdev  6.530   >=$5 in 5/20
+                   clip 25  mean $+4.894  stdev 16.330   >=$5 in 6/20
+                   clip 40  mean $+7.815  stdev 26.127   >=$5 in 7/20
+                   clip 50  mean $+9.259  stdev 32.658   >=$5 in 7/20
+```
+
+**The scaling is exactly linear and that is the finding, not the promise.**
+Clip 10 at $50 is 2.000x clip 5 at $25 in contracts, matched quantity, matched
+net AND residual loss; clip 25 at $125 is 5.000x. Per 47.4 this is arithmetic,
+because size never binds in the model.
+
+**The pooled paired deltas (+$2.49, +$9.90, +$17.32, +$23.02, every t about
++4.2) are an artifact of scale and must not be read as evidence of a better
+edge.** Comparing a 10x bet against a 1x bet produces a large t whatever the
+edge is. The scale-free statistic is mean/stdev, and it is FLAT: 0.305 at clip
+5, 0.284 at clip 50. Size multiplies the gain and the variance by the same
+factor. It is leverage, not edge.
+
+### 47.6 Decisions
+
+**Does size improve total net at depth 3 under existing limits? No.** Clip 8
+is -$0.955/window (t=-1.89) and clip 10 is -$1.298/window (t=-2.67) against
+clip 5; clip 20 cannot be placed at all at a $25 envelope. The binding
+constraints are capital at 8-10 and the engine's pre-trade sizing gate at 20 --
+not opposite-side flow, which clears every size tested, and not the
+10-contract unmatched cap, which binds everywhere but stops none of them.
+
+**Are our 5-share orders leaving economically valuable fills uncaptured?**
+Under current limits, no -- the opposite is true: larger clips capture more
+gross contracts and less money. In the hypothetical, size is not blocked by
+flow, so larger orders DO capture proportionally more -- and proportionally
+more risk, with no improvement in edge quality.
+
+**Could L5-sized orders produce more than $5 total net per window under
+realistic PMUS execution?** Only by scaling the position, and only in 7 of 20
+windows even then. Reaching a $+9.26/window mean requires a simulated **$250
+capital envelope (10x) and 100 contracts of unmatched exposure (10x), with a
+worst-case residual loss of $46.50 in a single window** -- and it buys no
+better edge: mean/stdev is 0.284 against today's 0.305. $5/window is a
+leverage decision, not a strategy discovery, and nothing here supports taking
+it. The unmodelled market impact of 50-share resting orders cuts against it
+further.
+
+L5's own distribution does not argue for 40-50 either: his median fill is 14
+and a quarter of his fills are 5 or smaller.
+
+All figures MODELLED, SHADOW ONLY, offline. No live orders, no deployment, no
+capital increase, no limit loosened. HALT and SHADOW_ONLY unchanged.
