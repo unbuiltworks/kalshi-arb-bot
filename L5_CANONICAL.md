@@ -3361,3 +3361,151 @@ What we have not found is a way to make pairs form more often at our size.
 
 All figures MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged; `src/`
 unchanged; nothing deployed.
+
+---
+
+## 45. Fill selection cannot add value; price can. Both answers, with the reason.
+
+All 20 windows, frozen B as baseline, identical capital and risk limits,
+realistic queue execution, corrected FIFO. Everything here is MECHANISM
+DISCOVERY on these windows and is explicitly not validated on them.
+
+### 45.1 What is observable at decision time, and what it is worth
+
+Every placement was instrumented with contemporaneous state only; the
+matched/stranded label comes from FIFO afterwards and is never fed back.
+
+```
+class     n   outcome    opp_depth  own_depth  opp_flow  t_left  headroom
+OPEN     19   matched         631        495         0     894    +0.010
+          1   STRANDED          0        752         0     894    +0.010
+EXTEND   35   matched        1780        726      2801     877    +0.010
+         25   STRANDED       1886        854      3386     642    +0.010
+COMPLETE 54   matched        1298        751      2447     873    +0.010
+```
+
+- **Opposite-side depth does not discriminate** (1886 stranded vs 1780
+  matched -- if anything the wrong way).
+- **Recent opposite flow does not discriminate** and points the wrong way
+  too (3386 stranded vs 2801 matched). More flow at entry did not mean a
+  partner arrived.
+- **Breakeven headroom carries no information at all, structurally.** The
+  highest opposite-leg price still leaving positive net after maker fees is
+  always exactly one tick above the executable opposite touch, because at a
+  one-tick spread our quote and the opposite touch are mechanically pinned
+  that far apart. The number is `+0.010` for all 134 entries. It cannot
+  select anything.
+- **Time remaining is the only discriminator:**
+
+```
+EXTEND matched   n=35   t_left  min 499  p25 840  med 877  p75 888
+EXTEND stranded  n=25   t_left  min 183  p25 477  med 642  p75 737
+```
+
+### 45.2 The rule that follows, and the flip test that kills it
+
+Threshold not swept: it is the **p90 of the completion times B actually
+achieves** (median 104.8s, p75 233.2s, **p90 596.9s**), i.e. "only extend if
+more time remains than nine of ten completions have needed".
+
+```
+arm                   fills  matched  matched$   resid$   TOTAL$ | TOTAL$(flip)  losing
+B frozen                134      270   $+20.73  $-12.70   $+8.03 |     $+58.03   10/20
+B + late-EXTEND veto    131      275   $+20.66   $-4.50  $+16.16 |     $+41.16    9/20
+
+pooled paired delta over 40 window-outcomes: mean $-0.218  stdev 1.372  t = -1.01
+```
+
+In-sample it doubles total net, cuts the residual by $8.20, costs $0.07 of
+matched net and actually RAISES matched quantity (270 -> 275), and hurts
+exactly one window. Direction-neutral it is **negative**. The +$8.13 is this
+sample's settlement direction, again.
+
+### 45.3 Why every inventory-selection mechanism fails, and why this is now closed
+
+Section 42 established that the residual is **fairly priced**: it won 6 of 16
+against a quantity-weighted cost-implied 0.428, z = -0.43. Declining a fairly
+priced bet cannot create expected value -- it can only remove variance. That
+is exactly what the measurements show, across four independent mechanisms:
+
+```
+mechanism                          pooled paired delta vs B      t
+side-aware capital budget (s.43)          $+0.030             +0.05
+C inventory-aware        (s.44)           $-0.799             -2.02
+D soft-inventory         (s.44)           $-0.320             -1.19
+late-EXTEND veto         (s.45)           $-0.218             -1.01
+```
+
+None positive. **This question is closed:** there is no fill-selection edge
+to find, because the thing being selected against is fairly priced. The
+discriminating signal we did find (time remaining) is real and causal -- it
+just selects away a bet with zero expectation.
+
+### 45.4 L5's accumulation gives no transferable entry signal
+
+Section 37 measured it: he completes SLOWER when more imbalanced (22s at
+0-50 contracts to 136s at 200-250), his pair cost FALLS with waiting, and his
+completion is dominated by recent movement rather than by any state we could
+read as a go/no-go at entry. He does not decline extensions on observable
+state; he extends persistently and tolerates 250+ contracts of imbalance
+against our cap of 10. His accumulation behaviour is therefore evidence
+about *patience*, which B already implements, and not a transferable
+entry-selection rule. Nothing in it is adopted here.
+
+### 45.5 The one lever that does move direction-neutral net: price
+
+Identical capital and risk limits; only `depth_ticks` changes.
+
+```
+depth  fills  matched  matched$/contract  matched$   resid$   TOTAL$ | TOTAL$(flip)  losing
+d=1      134      270       $+0.0768       $+20.73  $-12.70   $+8.03 |     $+58.03   10/20
+d=2      123      240       $+0.1094       $+26.25  $-17.70   $+8.55 |     $+73.55   12/20
+d=3      114      225       $+0.1481       $+33.33  $-13.40  $+19.93 |     $+79.93    8/20
+
+pooled paired delta vs d=1:   d=2  $+0.401  t=+0.95     d=3  $+0.845  t=+1.56
+```
+
+**We are not simply exchanging fill probability for better-looking prices.**
+Going from d=1 to d=3 loses 15% of fills and 17% of matched contracts, and
+still raises matched net **61%** (+$20.73 -> +$33.33), because margin per
+contract nearly doubles ($0.0768 -> $0.1481). It is the only mechanism tested
+whose direction-neutral delta is positive, and it is positive in BOTH
+settlement directions.
+
+It is **not established**: t = +1.56 at n=40 window-outcomes. Exploratory.
+
+**Tension to record, not to bury.** Section 36 found d=1 -> d=3 drove total
+net NEGATIVE (-$0.320). That was 6 windows at a **$100** ceiling, where
+depth's fill loss is not offset because capital is not binding. This is 20
+windows at **$25**, where capital rations anyway and the fills given up are
+largely ones B could not have funded. Both can be true; neither generalises
+past its ceiling. Section 35's limit still stands: at d>=4 the level is not a
+visible rung at the open and the conservative rule yields zero fills, so this
+is not a direction that keeps paying.
+
+### 45.6 Decision
+
+**Can we improve the economic quality of the 95% simulated fills by choosing
+which ones to take? No -- and the reason is structural, not a modelling
+gap.** The only decision-time signal that separates a stranded fill from a
+matched one is time remaining; acting on it removes a bet that is fairly
+priced, so it buys variance reduction at zero or negative expected value.
+Opposite-side depth and recent flow carry no signal, and breakeven headroom
+is mechanically constant. Opposite-side flow is what prevents profitable
+scaling: completion opportunities arrive at 1/5 the rate of extension
+opportunities (44.8s vs 8.8s, section 44) and no entry filter creates them.
+
+**Is there a repeatable executable tick edge? Possibly, and it is the only
+candidate left standing.** Quoting one to two ticks deeper raises matched net
+61% on 15% fewer fills with a positive direction-neutral delta (+$0.845/win,
+t=+1.56) -- but t=+1.56 is not evidence of repeatability, it contradicts
+section 36 at a different ceiling, and it was discovered on the same 20
+windows it was measured on.
+
+**Required before any promotion:** fresh forward shadow evidence at d=2/d=3
+against unchanged d=1 B, accumulated by the already-deployed evaluator. No
+such change is prepared or proposed here.
+
+All figures MODELLED, SHADOW ONLY. Nothing submitted, no realized profit.
+HALT and SHADOW_ONLY unchanged; `src/` unchanged; nothing deployed; no limit
+loosened and no capital added.
