@@ -6255,3 +6255,99 @@ move the digest and the reset would correctly refuse.
 Nothing was deployed, swapped, armed or reset. The watchdog remains on its
 restored credential-free image with healthy sweeps, HALT latched and
 `SHADOW_ONLY` set.
+
+## 68. Authenticated INSPECT via a Railway secret reference. Gate 4 now passes in full. No reset performed.
+
+### 68.1 What the owner authorised and what I did
+
+The owner asked for a fully agent-operated path that did not require them to
+paste a secret into the Railway dashboard, then authorised the temporary
+secret-reference approach for an **authenticated INSPECT only**, with HALT
+latched, `SHADOW_ONLY` enabled and the executor disarmed.
+
+Railway reference variables (`${{SERVICE_NAME.VAR}}`) are a documented,
+first-class feature, and a service variable overrides an image `ENV`. So the
+two names that already existed empty on `l5-halt-watchdog` were set to
+**expressions, not values**:
+
+```
+PMUS_API_KEY_ID      = ${{l5-pmus-live.PMUS_API_KEY_ID}}
+PMUS_API_SECRET_KEY  = ${{l5-pmus-live.PMUS_API_SECRET_KEY}}
+```
+
+**No secret value passed through this session.** I wrote expressions; Railway
+resolved them inside the container at boot. This OAuth client is
+`valuesRedacted: true`, so I could not have read either value even had I
+tried, and nothing was printed, logged or transmitted.
+
+Security implications, stated plainly:
+
+- The reference grants the *reset image* the same venue read authority the
+  executor already has. It does not widen that authority: the image contains
+  no `l5_pmus_transport`, no `l5_live_execution`, no order body and no arming
+  key, and `ReadOnlyTransport` raises `PermissionError` on `POST`/`PUT`/
+  `DELETE`/`PATCH`.
+- It is reversible without touching the executor: blanking the two variables
+  on the watchdog restores the pre-ceremony state, and `has_credentials()`
+  fails closed on the `.strip()`.
+- It does not rotate, copy or re-key anything. The executor's own variables
+  were never read or modified.
+
+### 68.2 The authenticated INSPECT result
+
+Build `f38700b3` → deployment `6ea184ae`, SUCCESS 2026-10-17T23:17:29Z. The
+inspect branch emitted twice (23:17:28 and 23:17:32) — both read-only.
+
+| field | value |
+|---|---|
+| `sha256` / `L5_HALT_RESET_EXPECT` | `40f9c34033cced8a1006e0b922d30787735a88749b14e4df0a4442e7a879719e` |
+| `reason` | `UNMANAGED_RESTING_ORDER` |
+| latch `t` / `who` / `halt` | `2026-10-16T03:40:12.037515+00:00` / `l5-watchdog` / `true` |
+| latch evidence | `D4EFZNW00ZZ0`, `cpcxrp-xrp-updown-15m-2026-10-16-0330z` |
+| `preconditions.venue.ok` | **TRUE** — `l5_owned_working_orders 0`, `venue_working_orders_seen 0`, `owner_manual_orders_allowed []`, `account_positions []`, `account_positions_error null`; signed `/v1/orders/open` and `/v1/portfolio/positions` |
+| `preconditions.registry.ok` | **TRUE** — readable, age `0.001s`, `live_orders 0` |
+| `l5_claimed_order_ids` / `ownership_error` | `[]` / `null` |
+| `would_clear` | **TRUE** (was `false` in §66 only because the venue checks could not run) |
+| label | "READ-ONLY. Nothing was written." |
+
+This is the §67.3 prediction confirmed against the live venue: the credential
+blocker was operational, and populating the two variables made gate 4 pass in
+full with no code change and no weakened check.
+
+**Nothing was reset.** `L5_HALT_RESET_INSPECT` was pinned to `YES` on the
+service for the whole window, so `main()` returned 0 from the inspect branch
+before `perform_reset` was reachable. HALT is still latched on the same
+digest; `SHADOW_ONLY` is still set; the executor is still `armed false`.
+
+One caveat on the redeploy metadata: the restore reuses an earlier build, so
+Railway shows that build's original commit message, which says
+`would_clear false`. That text describes the §66 unauthenticated inspect, not
+this one. Immutable git history, not a current claim.
+
+### 68.3 Stand-down
+
+Performed immediately rather than leaving a one-shot image deployed during the
+owner's review:
+
+1. `set-variables` blanked `PMUS_API_KEY_ID` and `PMUS_API_SECRET_KEY` to `""`
+   and re-pinned `L5_HALT_RESET_INSPECT=YES`, `skipDeploys: true`. No
+   variable-delete verb exists in this MCP surface, so blanking is the
+   available revocation; it returns the service to exactly its pre-ceremony
+   state (names present, values empty) and fails closed through the `.strip()`.
+2. `update-service` restored `dockerfilePath`
+   `deploy/l5_halt_watchdog/Dockerfile`, `startCommand`
+   `python3 -m scripts.l5_halt_watchdog`, `restartPolicyType ALWAYS`.
+3. The watchdog image was redeployed so independent sweeping resumes.
+
+`describe-service` after the restore matches the §66 baseline field for field,
+and the five unknown staged Railway changes are untouched: patch
+`a8fb9c09-42c4-409c-a2f5-149c68b98216`, `STAGED`, `changeCount 5`,
+`createdAt 2026-10-16T11:05:21.706Z`.
+
+### 68.4 What remains the owner's
+
+Gates 1 and 4(d) require a named human by design: the confirm phrase with a
+human `WHO`, a fresh one-time `ID` (the 10-15 one is consumed), the retyped
+reason, and the operator attestation. A fully agent-operated reset is
+therefore impossible, and that is the gate working rather than a gap to close.
+`EXPECT` is valid only while the latch is unchanged.
