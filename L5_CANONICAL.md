@@ -2157,3 +2157,81 @@ to a rule, and no parameter was tuned against these settlements.
 
 98 tests in file; money-path gate green. `inventory_aware` defaults False.
 Nothing deployed.
+
+## 34. The gradient under controls, and soft rule D. 2026-10-17.
+
+### The gradient SURVIVES stratification -- and strengthens
+
+Section 33's gradient was fill-conditional and could have been a market
+artifact. Stratified on **price level x time remaining x recent own-side
+price movement**, comparing P(next fill extends the side) when that side is
+SHORT (imb <= -0.2) against LONG (imb >= +0.2), pooled Mantel-Haenszel style
+over strata with n >= 100 in both arms:
+
+| | crude gap | **adjusted gap** | strata favouring | median stratum gap |
+|---|---|---|---|---|
+| DISCOVERY | +2.8 pts (n=66,789) | **+4.7 pts** | **60 of 69** | +5.3 |
+| HOLDOUT | +6.6 pts (n=108,819) | **+8.7 pts** | **69 of 72** | +10.2 |
+
+Controlling makes it **larger**, not smaller, in both halves. It is not a
+price, time or momentum artifact.
+
+**The limit that still stands.** We observe L5's FILLS, not his ORDERS, and
+not the market's full tape -- so **available fill opportunity is unobserved**
+and nothing here establishes the probability that he PLACED or REPLENISHED
+anything. It measures the composition of his fills given state. That is
+weaker than a placement probability and is why the rule below is soft.
+
+### Rule D, frozen on DISCOVERY before any test
+
+> **Re-quote the long side only once the deficient side is already resting.**
+
+Derived from the discovery half alone (+4.7 pts). It **defers, never
+blocks**, matching L5, whose P(extend) never falls to zero. It carries **no
+tuned constant**: "deficient side resting" and "one clip" are the engine's
+own units. C's hard cutoff is sharper than L5 and stays unpromoted.
+
+### B vs D on the frozen PMUS tape, 18 window-runs
+
+| policy | matched net | residual net | fills | peak cap | **matched / $cap** |
+|---|---|---|---|---|---|
+| A coupled | +$5.99 | +$10.75 | 73 | $37.25 | **0.1608** |
+| **B independent** | +$14.85 | -$0.02 | 106 | $49.40 | **0.3006** |
+| **D soft-inventory** | +$15.02 | +$1.92 | 105 | $49.40 | **0.3040** |
+
+Worst-case loss and peak unmatched are unchanged from section 32 (caps
+respected throughout; D never relaxes a bound, it only defers a quote).
+
+### Verdict: D is very nearly a NO-OP, and that is the finding
+
+D differs from B on **2 of 18 window-runs**, 105 fills against 106, and
+improves the stated objective by **+1.1%**. The real gain on
+matched-net-per-committed-dollar is **B over A: 1.87x** -- it comes from
+independent replenishment, not from the inventory rule.
+
+**Why a real gradient yields no useful rule.** B already quotes BOTH sides
+continuously, so the deficient side is almost always resting and D's
+condition seldom binds. B's imbalance arises from differential **fill**
+rates, not from quoting choice -- and a quoting rule cannot correct a
+fill-rate asymmetry. L5's gradient describes which of his orders got HIT,
+which is not something our quoting controls.
+
+### What is and is not supported
+
+**Supported:** the gradient itself -- real, replicating, robust to controls.
+And B over A on the capital-efficiency objective, driven by matched-pair net
+rather than settlement luck.
+
+**Not supported:** that any inventory-dependent REPLENISHMENT rule improves
+that objective. D is the smallest faithful rule derivable from L5's
+discovery half, and it does essentially nothing.
+
+### Caveats
+
+The PMUS test set is the SAME six windows at three ceilings -- **not** out of
+sample for PMUS. Only the RULE is out of sample, having been frozen on L5's
+discovery half before use. Effective n remains 6 windows. The L5 holdout
+confirms the gradient (+8.7 pts) but says nothing about D's PMUS economics.
+
+101 tests in file; gate green. `inventory_aware` and `soft_inventory` both
+default False. B remains the offline baseline; nothing deployed.

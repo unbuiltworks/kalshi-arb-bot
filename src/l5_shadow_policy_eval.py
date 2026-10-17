@@ -1597,7 +1597,8 @@ class IndependentReplenishSim:
                  max_unmatched_qty: Any,
                  max_residual_loss_usd: Any,
                  book_age_s: Any = D("0.5"),
-                 inventory_aware: bool = False):
+                 inventory_aware: bool = False,
+                 soft_inventory: bool = False):
         self.slug = str(slug)
         self.lim = dict(tick=tick, min_qty=min_qty, depth_ticks=depth_ticks,
                         cash_envelope=cash_envelope,
@@ -1628,6 +1629,16 @@ class IndependentReplenishSim:
         #: -- so this is a sharper rule than his behaviour, and the ONE clip
         #: threshold is the engine's own trade unit, not a tuned parameter.
         self.inventory_aware = bool(inventory_aware)
+        #: POLICY D, SOFT. Re-quote the long side only once the DEFICIENT
+        #: side is already resting. It deprioritises the long side without
+        #: ever blocking it, which is what L5 does: his P(extend that side)
+        #: falls from ~75% when short to ~72% when long on the discovery
+        #: half -- +4.7 points after pooling 69 strata of price x time
+        #: remaining x recent movement (60 of 69 strata favour it) -- but
+        #: never reaches zero. C's hard cutoff is sharper than he is; this
+        #: is not. It carries NO tuned constant: "deficient side resting"
+        #: and "one clip" are both the engine's own units.
+        self.soft_inventory = bool(soft_inventory)
 
     # ---- helpers
 
@@ -1677,11 +1688,14 @@ class IndependentReplenishSim:
             return self._no("CAPITAL_CEILING")
         # inventory and worst-case bounds, evaluated on the state this fill
         # WOULD create -- the bound must hold before the order rests.
-        if self.inventory_aware:
-            own = self.up_qty if side == "UP" else self.dn_qty
-            other = self.dn_qty if side == "UP" else self.up_qty
-            if own - other >= qty:
-                return self._no("INVENTORY_AWARE_SKIP_LONG_SIDE")
+        own = self.up_qty if side == "UP" else self.dn_qty
+        other = self.dn_qty if side == "UP" else self.up_qty
+        if self.inventory_aware and own - other >= qty:
+            return self._no("INVENTORY_AWARE_SKIP_LONG_SIDE")
+        if (self.soft_inventory and own - other >= qty
+                and self.resting["DOWN" if side == "UP" else "UP"] is None):
+            # long side waits its turn: the deficient side must be working
+            return self._no("SOFT_INVENTORY_DEFER_LONG_SIDE")
         would = abs((self.up_qty + qty) - self.dn_qty) if side == "UP" \
             else abs(self.up_qty - (self.dn_qty + qty))
         if self.max_unmatched is not None and would > self.max_unmatched:

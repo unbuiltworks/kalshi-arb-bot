@@ -1191,3 +1191,34 @@ def test_policy_c_is_off_by_default():
     s._place("UP", base_ladder()[0])
     assert s.resting["UP"] is not None
     assert "INVENTORY_AWARE_SKIP_LONG_SIDE" not in s.refusals
+
+
+def test_policy_d_defers_the_long_side_until_the_deficient_side_rests():
+    s = _sim(soft_inventory=True)
+    s.up_qty = D(5)                                  # long UP by one clip
+    s._place("UP", base_ladder()[0])                 # deficient side not resting
+    assert s.resting["UP"] is None
+    assert s.refusals.get("SOFT_INVENTORY_DEFER_LONG_SIDE") == 1
+    s._place("DOWN", base_ladder()[0])               # deficient side now works
+    assert s.resting["DOWN"] is not None
+    s._place("UP", base_ladder()[0])                 # long side may now follow
+    assert s.resting["UP"] is not None, "D defers, it must never block"
+
+
+def test_policy_d_is_softer_than_c():
+    hard = _sim(inventory_aware=True); soft = _sim(soft_inventory=True)
+    for s in (hard, soft):
+        s.up_qty = D(5)
+        s._place("DOWN", base_ladder()[0])           # deficient side resting
+        s._place("UP", base_ladder()[0])
+    assert hard.resting["UP"] is None, "C blocks outright"
+    assert soft.resting["UP"] is not None, "D only defers"
+
+
+def test_policy_d_is_off_by_default():
+    s = _sim()
+    assert s.soft_inventory is False
+    s.up_qty = D(5)
+    s._place("UP", base_ladder()[0])
+    assert s.resting["UP"] is not None
+    assert "SOFT_INVENTORY_DEFER_LONG_SIDE" not in s.refusals
