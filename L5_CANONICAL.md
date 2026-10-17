@@ -3212,3 +3212,152 @@ two-sided flow at our size, not of the budget.
 
 All figures MODELLED, SHADOW ONLY. Nothing was submitted and no figure here
 is realized profit. HALT and SHADOW_ONLY unchanged; `src/` unchanged.
+
+---
+
+## 44. Fill-to-profit: the fill rate is already converted. The limit is completion opportunities.
+
+All 20 independent windows, frozen B, per-fill reconstruction. 134 modelled
+fills, 670 contracts. No parameter fitted. Nothing submitted.
+
+### 44.1 The fills, by role in the sequence
+
+```
+class       n    qty   avg px   median wait   median queue ahead
+OPEN       20    100   0.4830        4.9s          507.1
+EXTEND     60    300   0.4362        8.8s          800.5
+COMPLETE   54    270   0.4631       44.8s          750.6
+```
+
+The asymmetry that drives everything: an EXTEND fill arrives in **8.8s**, a
+COMPLETE fill in **44.8s** -- five times slower from a comparable queue
+position. Imbalance builds because the side that deepens it is the side the
+flow is hitting.
+
+### 44.2 Executable price path after a fill (far touch, not midpoint)
+
+Signed as what an unwind would realise: for a long UP the contemporaneous
+bid, for a long DOWN `1 - ask`.
+
+```
+class         +5s     +15s     +30s     +60s    adverse at 30s
+OPEN        -1.80c   -0.05c   +1.25c   +1.25c       40%
+EXTEND      -3.05c   -2.50c   -2.43c   -0.29c       57%
+COMPLETE    -2.63c   -3.44c   -3.02c   -0.98c       57%
+ALL         -2.69c   -2.51c   -2.12c   -0.34c       54%
+```
+
+**This refines section 41.** Section 41 measured the mid, 30s after the LAST
+residual-side fill, and found +2.4c. Measured on the EXECUTABLE touch across
+ALL 134 fills, the post-fill move is negative at every horizon and adverse
+in 54% of cases. Both estimators are correct about different things; the
+executable one is the one that matters for an exit, and it says there IS
+roughly 2-3c of short-horizon adverse drift, decaying by +60s.
+
+It does not destroy the trade, because our edge is not a mark -- it is the
+pair cost. OPEN fills are the cleanest (+1.25c by 30s, adverse only 40%);
+EXTEND and COMPLETE fills both run ~-2.5c to -3c.
+
+### 44.3 Completed cycles are uniformly profitable
+
+```
+cycles 54   contracts 270   net $+20.34
+per cycle $+0.3767     per paired contract $+0.0753
+median open->close 104.8s     median pair cost 0.9400
+cycles with net > 0:  54 of 54  (100%)
+```
+
+Every single completed cycle made money after maker fees. The pair-cost
+discipline works exactly as designed.
+
+### 44.4 Conversion
+
+```
+contracts filled                     670
+contracts ever matched               540   (80.6%)
+contracts unmatched at settlement    130   (19.4%)
+completed pairs                      270 pairs from those 540 contracts
+pairs that were profitable           270   (100%)
+```
+
+**The fill rate is already converted.** Four fifths of everything we fill
+finds a partner, and every pair that forms is profitable. There is no
+conversion leak to fix.
+
+### 44.5 Where the residual comes from
+
+```
+unmatched lots 26    contracts 130    settled P&L $-12.31
+   from OPEN      1 lot     5 contracts   $-2.58
+   from EXTEND   25 lots   125 contracts  $-9.73
+```
+
+**125 of 130 unmatched contracts are EXTEND fills.** The residual is not a
+completion failure spread across the book; it is specifically the inventory
+added by same-side extension that never found a partner before expiry.
+
+### 44.6 Total settlement net
+
+```
+matched  $+20.34     residual  $-12.31     TOTAL  $+8.03
+per window: mean $+0.402   stdev $3.344   mean/stdev 0.12
+```
+
+### 44.7 Can suppressing EXTEND convert the fill rate into more pairs?
+
+The two knobs that already exist in frozen B for this are C
+(`inventory_aware`, refuse the long side) and D (`soft_inventory`, defer the
+long side while the deficient side works). Both run on all 20 windows under
+identical event streams, with the section 43 flip-settlement control:
+
+```
+arm            fills  matched  matched$   resid$   TOTAL$ | TOTAL$(flip)
+B frozen         134      270   $+20.73  $-12.70   $+8.03 |     $+58.03
+C inv-aware      120      265   $+10.55   $-8.50   $+2.05 |     $+32.05
+D soft-inv       128      275   $+21.03   $-4.40  $+16.63 |     $+36.63
+
+pooled paired delta vs B (40 window-outcomes, both settlement directions):
+  C   mean $-0.799/window   t = -2.02
+  D   mean $-0.320/window   t = -1.19
+```
+
+D looks excellent in-sample (+$16.63) and is the only arm that RAISES
+completed quantity (275 vs 270). Direction-neutral it is **negative** vs B,
+and C is significantly negative. Neither converts the fill rate into more
+profitable pairs. (As in section 43, only the paired deltas are valid; the
+pooled LEVELS are upward-biased because a residual bought near 0.44 gains
+under a 50/50 flip and 0.50 is not the real probability.)
+
+Section 43's side-aware capital budget -- evaluated already, not re-run --
+is the same story from the other end: it cut completed quantity 270 -> 260
+and added zero DOWN fills.
+
+### 44.8 Decision
+
+**No. The high maker-fill rate cannot be turned into materially more
+completed profitable pairs or positive total net by any mechanism tested.**
+
+The reason is now precise, and it is not a defect we can engineer around:
+
+1. There is no conversion loss to recover. 80.6% of filled contracts match
+   and **100% of completed pairs are profitable** at $+0.3767 each.
+2. The binding quantity is **completion opportunities**, not fills, capital,
+   quote timing or clip size. COMPLETE fills take 44.8s against EXTEND's
+   8.8s, so B completes ~2.7 cycles per window and earns ~$1.02 of matched
+   net against a $-0.62 residual.
+3. Every mechanism that suppresses the imbalance-extending fill also
+   suppresses the matched quantity that pays us: C -49% matched net, D
+   direction-neutral negative, side budget -10 contracts.
+4. $5/window needs roughly 13 cycles per window against today's 2.7 -- 4.8x
+   -- which matches section 38's saturation at 10-13 matched contracts and
+   section 39's flow bound.
+
+Total net remains $+0.402/window with stdev $3.344 (mean/stdev 0.12) over 20
+windows: **not distinguishable from zero, and not claimed as profit.**
+
+The strongest executable component of the replication is real and should be
+preserved as a finding: *when a pair forms, it is profitable, every time.*
+What we have not found is a way to make pairs form more often at our size.
+
+All figures MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged; `src/`
+unchanged; nothing deployed.
