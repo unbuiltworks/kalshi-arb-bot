@@ -425,9 +425,13 @@ def test_the_module_reads_only_its_own_two_environment_variables():
                 a = n.args[0]
                 names.add(a.id if isinstance(a, ast.Name) else getattr(
                     a, "value", None))
-    assert names == {"ENABLE_ENV", "STORE_ENV"}
+    assert names == {"ENABLE_ENV", "STORE_ENV", "VARIANTS_ENV"}
     assert E.ENABLE_ENV == "L5_SHADOW_POLICY_EVAL"
     assert E.STORE_ENV == "L5_SHADOW_POLICY_STORE"
+    assert E.VARIANTS_ENV == "L5_SHADOW_POLICY_VARIANTS"
+    # none of them is a credential name
+    for n in (E.ENABLE_ENV, E.STORE_ENV, E.VARIANTS_ENV):
+        assert "KEY" not in n and "SECRET" not in n and "TOKEN" not in n
 
 
 def test_no_environment_value_can_reach_the_record_the_log_or_the_store(
@@ -1222,3 +1226,77 @@ def test_policy_d_is_off_by_default():
     s._place("UP", base_ladder()[0])
     assert s.resting["UP"] is not None
     assert "SOFT_INVENTORY_DEFER_LONG_SIDE" not in s.refusals
+
+
+# ------------------------------- policy-B variants inside the deployed log
+
+def test_variants_are_off_by_default_and_the_control_is_untouched(tmp_path,
+                                                                  monkeypatch):
+    monkeypatch.delenv(E.VARIANTS_ENV, raising=False)
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0]); log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1]); log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    rec = log.rollover(keep=[])[0]
+    assert log.variants == {}
+    assert "variants" not in rec
+    plain = E.evaluate_window(SLUG, base_ladder(), BOTH_TRADES, **LIM)
+    assert rec["net"]["HOLD"]["net_usd"] == plain["net"]["HOLD"]["net_usd"]
+
+
+def test_variants_run_on_the_same_stream_as_the_control(tmp_path, monkeypatch):
+    monkeypatch.setenv(E.VARIANTS_ENV, "YES")
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0]); log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1]); log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    rec = log.rollover(keep=[])[0]
+    v = rec["variants"]
+    assert set(v) == {"B10", "B25", "B50"}
+    for label, cap in (("B10", D(10)), ("B25", D(25)), ("B50", D(50))):
+        assert D(v[label]["max_committed_capital_usd"]) <= cap
+        assert D(v[label]["peak_unmatched_qty"]) <= D(10)
+    # the control's own result is unchanged by their presence
+    plain = E.evaluate_window(SLUG, base_ladder(), BOTH_TRADES, **LIM)
+    assert rec["net"]["HOLD"]["net_usd"] == plain["net"]["HOLD"]["net_usd"]
+
+
+def test_variant_residuals_stay_pending_until_authoritative_settlement(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv(E.VARIANTS_ENV, "YES")
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0]); log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1])
+    rec = log.rollover(keep=[])[0]
+    for v in rec["variants"].values():
+        if D(v["residual_qty"]) > 0:
+            assert v["priced"] is False and v["net_usd"] is None
+    out = E.reconcile_settlement(rec, GOOD_EV)
+    assert out["reconciled"] is True
+    for v in out["variants"].values():
+        assert v["priced"] is True and v["net_usd"] is not None
+        # matched-pair net and residual settlement net reported separately
+        assert "matched_pair_net_usd" in v
+        assert "residual_settlement_net_usd" in v
+
+
+def test_a_failing_variant_cannot_disturb_the_control(tmp_path, monkeypatch):
+    monkeypatch.setenv(E.VARIANTS_ENV, "YES")
+    log = _log(tmp_path)
+    log.observe_book(SLUG, base_ladder()[0])
+
+    class Boom:
+        def on_book(self, *a, **k): raise RuntimeError("boom")
+        def on_trade(self, *a, **k): raise RuntimeError("boom")
+        def result(self, **k): raise RuntimeError("boom")
+
+    log.variants[SLUG]["B25"] = Boom()
+    log.observe_book(SLUG, base_ladder()[1])       # must not raise
+    log.observe_trade(SLUG, T0 + 5, "0.63", "20")  # must not raise
+    rec = log.rollover(keep=[])[0]
+    assert rec["ok"] is True
+    assert "B25" not in rec["variants"]            # dropped, not fatal
+    assert log.errors >= 2

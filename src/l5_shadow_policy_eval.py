@@ -969,6 +969,19 @@ STORE_ENV = "L5_SHADOW_POLICY_STORE"
 DEFAULT_STORE = "/state/pmus-ws/l5_shadow_policy.jsonl"
 #: OFF unless explicitly YES. An unreadable value reads as OFF.
 ENABLE_ENV = "L5_SHADOW_POLICY_EVAL"
+#: policy-B shadow variants, OFF unless set to YES. Each variant is an
+#: `IndependentReplenishSim` on the SAME event stream as the policy-A
+#: control, at its own simulated committed-capital ceiling.
+VARIANTS_ENV = "L5_SHADOW_POLICY_VARIANTS"
+#: (label, capital ceiling, clip, unmatched cap, residual-loss cap)
+VARIANT_SPECS = (("B10", D(10), D(5), D(10), D("2.50")),
+                 ("B25", D(25), D(5), D(10), D("6.25")),
+                 ("B50", D(50), D(5), D(10), D("12.50")))
+
+
+def variants_enabled() -> bool:
+    import os
+    return str(os.getenv(VARIANTS_ENV) or "").strip().upper() == "YES"
 
 
 def enabled() -> bool:
@@ -1001,6 +1014,9 @@ class ShadowPolicyLog:
                         max_worst_case_loss=max_worst_case_loss)
         self.path = path or store_path()
         self.live: Dict[str, WindowAccumulator] = {}
+        #: slug -> {label: IndependentReplenishSim}, policy-B shadows on the
+        #: SAME stream as the control. Empty unless VARIANTS_ENV is YES.
+        self.variants: Dict[str, Dict[str, Any]] = {}
         self.done: set = set()
         self.settled: set = set()
         self.latest: Dict[str, Any] = {}
@@ -1039,6 +1055,21 @@ class ShadowPolicyLog:
         except (OSError, ValueError):
             pass            # no store yet, or an unusable path, is not a crash
 
+    def _build_variants(self, slug: str) -> Dict[str, Any]:
+        """One policy-B sim per ceiling, sharing the control's venue limits."""
+        out: Dict[str, Any] = {}
+        for label, cap, clip, unm, resid in VARIANT_SPECS:
+            try:
+                out[label] = IndependentReplenishSim(
+                    slug, tick=self.lim["tick"], min_qty=self.lim["min_qty"],
+                    depth_ticks=self.lim["depth_ticks"],
+                    cash_envelope=cap, max_worst_case_loss=cap, clip=clip,
+                    capital_ceiling=cap, max_unmatched_qty=unm,
+                    max_residual_loss_usd=resid)
+            except Exception:
+                self.errors += 1
+        return out
+
     def _append(self, rec: Mapping[str, Any]) -> None:
         import json
         import os
@@ -1059,10 +1090,17 @@ class ShadowPolicyLog:
         if acc is None:
             acc = WindowAccumulator(slug, **self.lim)
             self.live[slug] = acc
+            if variants_enabled():
+                self.variants[slug] = self._build_variants(slug)
         try:
             acc.on_book(snap)
         except Exception:
             self.errors += 1
+        for v in (self.variants.get(slug) or {}).values():
+            try:
+                v.on_book(snap)
+            except Exception:
+                self.errors += 1
 
     def observe_trade(self, slug: str, t: Any, px: Any, qty: Any) -> None:
         acc = self.live.get(str(slug))
@@ -1072,6 +1110,11 @@ class ShadowPolicyLog:
             acc.on_trade(t, px, qty)
         except Exception:
             self.errors += 1
+        for v in (self.variants.get(str(slug)) or {}).values():
+            try:
+                v.on_trade(t, px, qty)
+            except Exception:
+                self.errors += 1
 
     def rollover(self, keep: Any, *, now: Optional[float] = None,
                  settlement: Optional[Mapping[str, Any]] = None) -> list:
@@ -1090,10 +1133,32 @@ class ShadowPolicyLog:
             except Exception:
                 self.errors += 1
                 continue
+            vs = self.variants.pop(slug, None) or {}
+            if vs:
+                rec = dict(rec, variants=self._variant_block(vs))
             self.done.add(slug)
             self.latest[slug] = rec
             self._append(rec)
             out.append(rec)
+        return out
+
+    @staticmethod
+    def _variant_block(vs: Mapping[str, Any]) -> dict:
+        """Each B variant's unsettled result. Residuals stay PENDING here;
+        `reconcile_settlement` prices them when the venue settles."""
+        out = {}
+        for label, sim in vs.items():
+            try:
+                r = sim.result(yes_value=None)
+            except Exception:                              # noqa: BLE001
+                continue
+            out[label] = {k: r[k] for k in (
+                "fills", "up_qty", "dn_qty", "up_avg_px", "dn_avg_px",
+                "matched_qty", "turnover", "peak_unmatched_qty",
+                "worst_case_residual_loss_usd",
+                "max_committed_capital_usd", "cash_out_usd", "fees_usd",
+                "residual_qty", "net_usd", "priced", "refusals",
+                "fill_sequence") if k in r}
         return out
 
     def pending_markets(self) -> list:
@@ -1234,6 +1299,27 @@ def reconcile_settlement(rec: Mapping[str, Any],
         v = nets[p].get("net_usd")
         nets[p]["vs_blind_usd"] = (None if v is None or base is None
                                    else str(D(v) - D(base)))
+    vb = out.get("variants")
+    if isinstance(vb, Mapping):
+        priced_vs = {}
+        for label, v in vb.items():
+            v = dict(v)
+            up = _d(v.get("up_qty")) or D(0); dn = _d(v.get("dn_qty")) or D(0)
+            ua = _d(v.get("up_avg_px")) or D(0)
+            da = _d(v.get("dn_avg_px")) or D(0)
+            cash = _d(v.get("cash_out_usd")) or D(0)
+            fees = _d(v.get("fees_usd")) or D(0)
+            m = min(up, dn); res = up - dn
+            redeem = m + (res * yv if res > 0 else
+                          ((-res) * (D(1) - yv) if res < 0 else D(0)))
+            matched_net = m * (D(1) - ua - da) - fees
+            resid_net = (res * (yv - ua) if res > 0 else
+                         ((-res) * ((D(1) - yv) - da) if res < 0 else D(0)))
+            v.update(net_usd=str(redeem - cash - fees), priced=True,
+                     matched_pair_net_usd=str(matched_net),
+                     residual_settlement_net_usd=str(resid_net))
+            priced_vs[label] = v
+        out["variants"] = priced_vs
     return dict(out, net=nets, reconciled=True, reconcile_reason=None,
                 settlement_evidence={
                     "resolution_source": src, "yes_value": str(yv),
