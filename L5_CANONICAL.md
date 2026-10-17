@@ -2235,3 +2235,110 @@ confirms the gradient (+8.7 pts) but says nothing about D's PMUS economics.
 
 101 tests in file; gate green. `inventory_aware` and `soft_inventory` both
 default False. B remains the offline baseline; nothing deployed.
+
+## 35. Feasibility of $5 matched-pair net per 15m window. 2026-10-17. Offline.
+
+### The arithmetic that frames everything
+
+Margin per matched contract is set by how far BEHIND the touch we rest:
+`pair = 1 - spread - 2*d*tick`, so on a one-tick spread with our 1.454% drag:
+
+| depth d | pair | net margin / contract | contracts for $5 | **capital at risk** |
+|---|---|---|---|---|
+| 1 (today) | 0.97 | +$0.0159 | 315 | **$305** |
+| 2 | 0.95 | +$0.0362 | 138 | **$131** |
+| 3 | 0.93 | +$0.0565 | 89 | **$82** |
+
+Capital is never released before settlement, so these are the full
+committed amounts for one window.
+
+### 1-2. Opportunity by margin and by capital ceiling
+
+Qualifying volume per window that traded through each level, averaged over
+the 6 frozen windows (UP and DOWN sides, minimum of the two):
+
+| d | margin | ORACLE qty | ORACLE net | post-queue qty | post-queue net |
+|---|---|---|---|---|---|
+| 1 | +1.6c | 36,222 | $575.79 | 35,276 | $560.76 |
+| 2 | +3.6c | 30,601 | $1,107.36 | 29,848 | $1,080.12 |
+| 3 | +5.7c | 26,991 | $1,524.38 | 26,393 | $1,490.63 |
+| 4 | +7.7c | 24,509 | $1,881.50 | **0** | **$0.00** |
+| 5+ | +9.7c+ | 21,548 | $2,091.47 | **0** | **$0.00** |
+
+**Both columns are upper bounds and NEITHER is executable.** The second only
+subtracts the displayed queue once and then assumes a single order absorbs
+every later qualifying contract for the rest of the window. A real order of
+size Q fills Q and is done; capturing thousands needs thousands of
+replenishments, each re-joining the queue. **At d>=4 the level was not a
+visible rung at the open, so the conservative rule never fills it at all** --
+deeper quoting stops being executable before it stops being profitable.
+
+Maximum matched net per window under a ceiling, `(C / pair) * margin`:
+
+| ceiling | d=1 | d=2 | d=3 |
+|---|---|---|---|
+| $25 | $0.41 | $0.95 | $1.52 |
+| $50 | $0.82 | $1.90 | $3.04 |
+| **$100** | $1.64 | $3.81 | **$6.07** |
+| **$250** | $4.10 | **$9.52** | $15.18 |
+
+### 3. Opportunity ceiling vs B's actual capture
+
+| ceiling | B matched qty/window | volume-feasible at d=3 | capture |
+|---|---|---|---|
+| $10 | 5.0 | 26,393 | **0.019%** |
+| $25 | 8.3 | 26,393 | **0.031%** |
+| $50 | 11.7 | 26,393 | **0.044%** |
+
+### 5. THE BINDING CONSTRAINT IS CAPITAL, NOT EDGE OR LIQUIDITY
+
+| d | volume available | needed for $5 | volume sufficiency |
+|---|---|---|---|
+| 1 | 35,276 | 315 | **112x** |
+| 2 | 29,848 | 138 | **216x** |
+| 3 | 26,393 | 89 | **298x** |
+
+Volume exceeds what $5 requires by **two to three orders of magnitude**.
+Edge exists, depth exists, timing is not the limit. What is missing is
+**committed capital**: $82-$305 per window against the **$2** authorized
+today, a **40x to 150x** gap. Completion is the secondary limit, and it
+binds through depth: at d>=4 the conservative queue rule yields zero fills.
+
+### 7. Threshold attainment under B, matched-pair net only
+
+| ceiling | per-window matched net | mean | >= $1 | >= $3 | >= $5 |
+|---|---|---|---|---|---|
+| $10 | 0.03 0.28 0.02 0.11 0.09 0.07 | $0.099 | 0% | 0% | 0% |
+| $25 | 0.72 1.04 0.95 0.21 1.25 0.66 | $0.806 | **33%** | 0% | 0% |
+| $50 | 0.64 2.48 2.50 0.21 2.98 0.71 | $1.588 | **50%** | 0% | 0% |
+
+**No window reached $3 or $5 at any tested ceiling.** Residual settlement
+net over the same runs was +$10.75 (A), -$0.02 (B), i.e. a coin flip that
+nets to nothing, and total net is dominated by it rather than by the matched
+edge (section 33).
+
+### 6. L5 for comparison -- and what does NOT transfer
+
+L5 matches a median **1,154 contracts per window** (holdout), deploying
+~$1,143. At our d=1 margin that quantity would be worth ~$18/window; at his
+own achieved pair cost of 0.9898 it is worth **-$0.0042 per contract to us**
+(section 27). He operates at roughly **9x the capital** the $100 row above
+needs. His rebates and liquidity rewards are **not assumed here** and are not
+in any figure in this section.
+
+### VERDICT: $5 is feasible on opportunity, NOT on authorized capital
+
+The smallest change to the existing B engine that would capture it is **not
+a code change at all** -- it is a capital authorization:
+
+| to reach | needs | versus today |
+|---|---|---|
+| ~$3/window | **$50 ceiling at d=3** | 25x the $2 authorized |
+| ~$6/window | **$100 ceiling at d=3** | 50x |
+
+plus one engine parameter already present and unexercised: `depth_ticks`
+from 1 to 3. No new strategy, service or rule is implied.
+
+**The quantified gap is therefore $80-$130 of committed capital per window,
+not missing margin and not missing liquidity.** Everything above is MODELLED;
+no order has ever been submitted, and none of it authorizes live trading.
