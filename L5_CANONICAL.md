@@ -4223,3 +4223,193 @@ Nothing here touches trading. Both defects were in which windows get
 
 MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged; no live orders; no
 capital or limit change; five arms frozen.
+
+---
+
+## 53. The pricing logic is NOT economically justified: it prices against a stale probability
+
+Forward cohort, 10 windows (1130z, 1145z, 1230z, 1245z, 1330z, 1345z, 1430z,
+1445z, 1530z, 1545z), selected by a mechanical every-other-slice rule over
+the clean forward run, not by outcome. Settlement mix 4 UP / 6 DOWN, all
+authoritative. Frozen depth-3 sim, 41 fills. Nothing deployed, nothing
+changed.
+
+### 53.1 Cohort corrections recorded first
+
+The quoted 19-window figures are real (16:45:06Z: B25D3 matched +$28.44,
+residual -$41.55, total -$13.11; now 20 windows at -$15.62). But **no
+historical records have been recovered** -- HEAD is still section 52 and the
+`ARM_UNPRICED` bucket of 14 is still excluded -- so there was no "recovered
+historical" to exclude and **no 14-window cohort exists**. The clean forward
+set is all 19-20 windows, 1130z onward. The two 14s in that scorecard are
+`ARM_UNPRICED: 14` and B25D3's `windows_better: 14`.
+
+### 53.2 What cannot be reconstructed, stated rather than proxied
+
+**BTC distance from strike and realized volatility are not available.** The
+recorder captures PMUS book and trade tape only; there is no underlying feed,
+and outbound crypto price APIs are refused by the environment's network
+policy. The market-implied probability (the contemporaneous mid) is the
+market's joint view of both and is used in their place. Any claim here about
+strike distance or vol would be invented, so none is made.
+
+### 53.3 At placement our price looks right
+
+```
+class       n    price   p@place   EV@place/contract
+OPEN       10   0.4620    0.4990        +0.0370
+EXTEND     27   0.4389    0.4748        +0.0359
+COMPLETE    4   0.3800    0.4150        +0.0350
+ALL        41   0.4388    0.4749        +0.0361
+```
+
+EV is the own-side implied probability at the moment the order is PLACED,
+minus our price, minus the maker fee actually charged. We quote **3.6 cents
+below the market's own probability**, after fees, on every class of fill.
+Judged at decision time, the pricing is locally correct.
+
+### 53.4 And the fill destroys it, in 100% of cases
+
+```
+implied-probability move between PLACING and FILLING
+   OPEN      n=10  mean -0.0515  median -0.0525  adverse 100%
+   EXTEND    n=27  mean -0.0957  median -0.0600  adverse 100%
+   COMPLETE  n= 4  mean -0.0550  median -0.0400  adverse 100%
+   ALL       n=41  mean -0.0810  median -0.0550  adverse 100%
+
+EV@fill/contract:  OPEN -0.0145   EXTEND -0.0598   COMPLETE -0.0200
+                   ALL  -0.0449
+```
+
+**Forty-one fills out of forty-one arrived after the implied probability had
+moved against the side we were buying.** Mean -8.1 cents against a +3.6 cent
+edge. By the moment we own the contract it is worth 4.5 cents less than we
+paid, after fees.
+
+This is not a sampling artifact of a thin cohort; it is structural. A resting
+maker bid is only filled when price comes down to it, and on this venue price
+comes down because the probability fell. The edge is computed on information
+that is already void at the instant it is used.
+
+Executable far-touch move after the fill confirms it, and shows depth makes
+it worse:
+
+```
+class          +5s     +15s     +30s     +60s
+OPEN         -1.30c   -0.80c   -1.00c   -1.60c
+EXTEND       -5.56c   -4.93c   -4.41c   -1.70c
+COMPLETE     -8.00c  -10.25c  -12.25c   +1.67c
+ALL          -4.76c   -4.44c   -4.34c   -1.43c
+```
+
+Section 44 measured -2.69c at +5s at **depth 1**. At depth 3 it is -4.76c --
+roughly double. Quoting further back requires a larger adverse move to get
+filled, so it buys margin and selection in the same stroke. That is the
+mechanism by which depth 3 improves matched economics while worsening total.
+
+### 53.5 Matched versus residual, and which fills cause the loss
+
+```
+cycles 12   contracts 60   matched net $+8.41   median pair 0.9100
+unmatched 17 lots, 85 contracts          residual net $-32.68
+TOTAL $-24.27 over 10 windows = $-2.427/window
+
+residual P&L by the class of the fill that created it:
+   OPEN      20 contracts   $-9.08   (-$0.454/contract)
+   EXTEND    65 contracts  $-23.60   (-$0.363/contract)
+```
+
+Matched pairs survive the adverse selection because both legs lock a
+sub-dollar cost that pays a dollar on either outcome. The unmatched leg has
+nothing to offset it, so it realises the full adverse selection plus the
+outcome. EXTEND fills supply 65 of the 85 stranded contracts and the larger
+share of the loss, but **OPEN fills lose more per contract**, so this is not
+an extension-only problem.
+
+(This sample runs at -$2.427/window against the live 20-window arm's
+-$0.78/window; same sign and structure, worse magnitude, on half the windows.
+The live figure is the authoritative one.)
+
+### 53.6 No entry filter can fix it, and that is now measured twice
+
+```
+became a pair   n=24   EV@place +0.0363/contract   price 0.4333   tte 661s
+stranded        n=17   EV@place +0.0359/contract   price 0.4465   tte 696s
+```
+
+Our own EV calculation, the sharpest decision-time quantity we have,
+**cannot tell the two apart** -- 0.0363 against 0.0359. Section 45 reached
+the same conclusion from book depth, flow and headroom. Selection at entry
+is a dead end because the thing that goes wrong happens after entry.
+
+### 53.7 L5 comparison, and where the evidence runs out
+
+Where equivalent market-state evidence exists (section 37), L5 is adversely
+selected in the **same direction**: his completing pair cost falls to
+0.93-0.94 after a falling move and rises to 1.01 after a rising one, i.e. he
+too is filled into movement. The difference is what he does with it -- he
+completes into the move rather than carrying it, at a median 111-133 fills
+per window against our 4.
+
+**Insufficient evidence, explicitly:** we observe only L5's FILLS. His
+resting orders, his quoted prices before they filled, and his cancels are not
+in any public dataset we have. His EV-at-placement is therefore
+**unobservable**, and no claim about whether his pricing anticipates adverse
+selection can be made from our data. That gap cannot be closed by more
+analysis of the corpus we hold.
+
+### 53.8 Ranked failure mechanisms
+
+1. **Conditional-fill adverse selection.** -8.1 cents of implied-probability
+   move between placement and fill, 100% of fills, against a +3.6 cent
+   quoted edge. Turns +3.6c ex ante into -4.5c ex post. Everything else is
+   downstream of this.
+2. **Residual carry on an adversely selected leg.** -$32.68 of -$24.27 total.
+   The matched book is positive (+$8.41); the unmatched leg is where the
+   selection is realised.
+3. **Depth amplifies mechanism 1.** -2.69c at depth 1 against -4.76c at
+   depth 3, for a margin gain of ~4c per pair. The trade is close to a wash
+   on matched and strictly worse on residual.
+4. **EXTEND volume concentration.** 65 of 85 stranded contracts, though OPEN
+   loses more per contract -- a contributor to size, not the cause.
+
+### 53.9 ONE proposed change, with a falsifiable out-of-sample test
+
+**Change (proposed, NOT implemented, NOT deployed): cancel a resting order
+when its edge is gone.** Today a quote's price is fixed at placement and
+never revised, so it is still resting -- and still fillable -- after the
+probability has moved 5 to 8 cents through it. The rule: if the own-side
+implied probability falls more than **4 cents** below its level when the
+order was placed, cancel. Four cents is not fitted: it is the measured mean
+EV@place of +3.61c rounded to the tick, so the order is withdrawn exactly
+when the edge it was priced on no longer exists.
+
+**Falsifiable predictions, stated before the test is run:**
+- fill count FALLS (fewer fills is the mechanism, not a cost to explain away);
+- EV@fill moves from -0.0449 toward 0;
+- stranded contracts fall from 85;
+- total net per window improves against frozen B25D3.
+
+**Rejected if:** matched net falls by more than the residual improves; or
+fills collapse far enough that matched quantity -- the only thing we have
+shown to be positive -- goes with them.
+
+**Out-of-sample set already in hand and untouched:** the other 10 clean
+forward windows (1200z, 1215z, 1315z, 1400z, 1415z, 1500z, 1515z, 1600z,
+1615z, 1630z) were not used in this section and are not yet harvested.
+Confirmation after that requires forward windows through the deployed
+evaluator, as in section 46.5.
+
+### 53.10 Verdict
+
+**The current pricing logic is not economically justified.** It is correct
+arithmetic on the wrong quantity: it prices the quote against the probability
+at placement, when the only fills it will ever receive are the ones where
+that probability has already moved against it. A +3.6 cent ex-ante edge is
+realised as -4.5 cents. Depth 3's matched-execution advantage is real and
+reproducible, but it is the compensation for a larger adverse selection, not
+a free gain -- which is why matched improves and total does not.
+
+MODELLED, SHADOW ONLY. Nothing submitted, no realized profit, nothing
+deployed, no strategy/capital/limit/arm change. HALT and SHADOW_ONLY
+unchanged.
