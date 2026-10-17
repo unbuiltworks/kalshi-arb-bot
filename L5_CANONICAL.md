@@ -2342,3 +2342,83 @@ from 1 to 3. No new strategy, service or rule is implied.
 **The quantified gap is therefore $80-$130 of committed capital per window,
 not missing margin and not missing liquidity.** Everything above is MODELLED;
 no order has ever been submitted, and none of it authorizes live trading.
+
+## 36. Executable depth/capital test. Section 35's headline is WITHDRAWN. 2026-10-17.
+
+### Section 35 said capital binds. The executable test says it does not.
+
+Section 35 compared aggregate traded volume against the quantity $5 needs and
+concluded volume was "112x to 298x sufficient", so capital must be the
+constraint. **That inference was wrong.** It measured volume availability,
+not the engine's ability to convert volume into fills. Run properly --
+finite 5-contract orders, time-ordered placement, strict queue depletion, no
+reuse of qualifying volume, both sides required to fill before matched
+earnings are credited -- the result inverts.
+
+**At a $100 ceiling the engine never gets near $100:**
+
+| depth | fills | **peak committed of $100** | dominant refusal |
+|---|---|---|---|
+| d=1 | 59 | **$68.70** | `UNMATCHED_INVENTORY_CAP` 16,668 |
+| d=2 | 44 | **$49.80** | `UNMATCHED_INVENTORY_CAP` 15,282 |
+| d=3 | 34 | **$41.85** | `UNMATCHED_INVENTORY_CAP` 14,016 |
+
+`CAPITAL_CEILING` **does not appear in the census at any depth**. The binding
+constraint is **COMPLETION**, enforced through the unmatched-inventory cap:
+the engine cannot add more because the opposite side has not filled. Capital
+sits idle behind that.
+
+### B across depth x ceiling, 6 frozen windows, per window
+
+| depth | ceiling | fills | matched | matched net | residual net | **total net** | peak cap |
+|---|---|---|---|---|---|---|---|
+| 1 | $25 | 6.3 | 13.3 | +$0.806 | +$1.014 | +$1.820 | $24.80 |
+| 1 | $50 | 8.8 | 18.3 | +$1.588 | -$1.126 | +$0.462 | $49.40 |
+| 1 | $100 | 9.8 | 20.8 | +$1.689 | -$1.109 | +$0.580 | $68.70 |
+| 2 | $25 | 5.2 | 10.0 | +$0.989 | -$0.074 | +$0.915 | $24.85 |
+| 2 | $50 | 7.3 | 14.2 | +$1.785 | -$1.578 | +$0.207 | $49.80 |
+| 2 | $100 | 7.3 | 14.2 | +$1.785 | -$1.578 | +$0.207 | **$49.80** |
+| 3 | $25 | 4.7 | 9.2 | +$1.276 | -$0.885 | +$0.392 | $25.00 |
+| 3 | $50 | 5.7 | 10.8 | +$1.825 | -$2.145 | -$0.320 | $41.85 |
+| 3 | $100 | 5.7 | 10.8 | +$1.825 | -$2.145 | **-$0.320** | **$41.85** |
+
+**$50 and $100 are IDENTICAL at d=2 and d=3** -- the extra capital is never
+used. (An "unfilled orders" column in my first run of this table was a
+constant artifact of a broken counter and is withdrawn.)
+
+### Depth buys margin and loses fills, almost exactly offsetting
+
+From d=1 to d=3 at $100: margin per contract rises 1.6c -> 5.7c, but fills
+fall **9.8 -> 5.7** and matched quantity **20.8 -> 10.8**. Matched net moves
+only **+$1.689 -> +$1.825 (+8%)**, while residual net worsens
+**-$1.109 -> -$2.145**, so **total net goes NEGATIVE at d=3**.
+
+### Threshold attainment, matched-pair net
+
+| depth | ceiling | mean | max | >= $1 | >= $3 | >= $5 |
+|---|---|---|---|---|---|---|
+| 1 | $100 | +$1.689 | +$3.590 | 50% | 17% | **0%** |
+| 2 | $50/$100 | +$1.785 | +$3.775 | 50% | 33% | **0%** |
+| 3 | $50/$100 | +$1.825 | +$3.733 | 50% | 33% | **0%** |
+
+**No configuration reaches $5 in any window.** The best single window
+observed is **$3.775**.
+
+### Simulated capture vs the oracle ceiling
+
+At d=3 the oracle said 26,393 contracts were available per window. The
+executable sim matches **10.8** -- **0.04%**. The gap is not capital and not
+volume: it is that a finite order fills once, and the next one cannot be
+placed until the opposite side completes.
+
+### DECISION: depth 3 + $100 cannot produce $5 net in a window
+
+It produces a mean matched-pair net of **$1.825**, a best window of
+**$3.733**, **0%** of windows at $5, and a **negative** total net of
+**-$0.320** once residual settlement is included. The missing factor is
+roughly **2.7x more matched quantity at the same margin**, and that is
+blocked by completion, not by dollars.
+
+**What binds, in order: completion first (via the unmatched-inventory cap),
+then price/depth availability (`PRICE_OUT_OF_BAND` rises 187 -> 452 as depth
+grows), then queue. Capital binds nowhere at $100.**
