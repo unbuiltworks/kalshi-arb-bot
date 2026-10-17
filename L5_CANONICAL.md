@@ -3970,3 +3970,96 @@ the decision rule frozen in 46.5 stands unchanged.
 
 MODELLED, SHADOW ONLY. No live orders, no new service, no capital increase,
 no limit loosened, no settlement rule changed. HALT and SHADOW_ONLY unchanged.
+
+---
+
+## 49. First comparable forward window, and the durable scorecard
+
+### 49.1 The section 48 fixes are live
+
+Settled line at **12:00:47Z** for window `cpc-btc-updown-15m-2026-10-17-1145z`
+carries the variants block with `split_basis: FIFO` on every arm --
+`reconciled: true`, basis `MODELLED_EXECUTION_VENUE_SETTLED_RESIDUAL`,
+2 attempts. Both defects are closed in the running service.
+
+Scope note on the back-history: the 13 windows settled between 23:10Z and
+11:30Z resolved BEFORE the fix and carry no variants block, so they can never
+enter the depth comparison. The scorecard reports them as
+`PRE_FIX_NO_VARIANTS` rather than as missing. Comparable collection starts at
+1145z.
+
+### 49.2 The first comparable window, decomposed
+
+```
+arm      TOTAL$   matched$   residual$   matched_qty  residual_qty
+B10      -2.14      0.26       -2.40          5            5
+B25      -0.51      0.79       -1.30         10            5
+B50      -0.51      0.79       -1.30         10            5
+B25D2    +3.54      1.34       +2.20         10            5
+B25D3    +3.83      2.28       +1.55         10            5
+
+paired difference vs the B25 control, split as required:
+   B25D2   total +4.05   from matched +0.55   from residual +3.50
+   B25D3   total +4.34   from matched +1.49   from residual +2.85
+```
+
+**Two thirds of depth 3's apparent advantage in this window is the residual
+settling favourably, not execution economics.** The residual flips SIGN
+between the arms (-1.30 for the control against +1.55 and +2.20 for the depth
+arms) on the same residual quantity of 5 -- the arms ended holding opposite
+sides, and this window's outcome happened to favour the side the deeper quotes
+accumulated. That is the section 42/43 pattern exactly, and it is why the
+scorecard reports the matched and residual columns separately and treats only
+the matched column as evidence about depth.
+
+The matched column does favour depth, consistently with the section 45/47
+archive work: $0.79 -> $1.34 -> $2.28 on the SAME 10 matched contracts, which
+is margin per contract rising with depth rather than more fills.
+
+**n = 1. This is not evidence of anything.** The best arm's best-looking
+window is $3.83, still short of the $5 objective, and one window cannot
+separate a $1.49 execution effect from a $3.44 standard deviation.
+
+### 49.3 The durable scorecard
+
+`scripts/l5_depth_scorecard.py`, ledger at
+`data/l5/forward/depth_scorecard.jsonl`. Read-only with respect to the venue,
+the recorder and the strategy: it parses log records, appends comparable
+windows to the ledger, and prints the scorecard. It places no order, changes
+no limit, contacts no venue, and is idempotent on market slug so overlapping
+log pulls are safe. Not a watched path, so committing it cannot redeploy
+anything.
+
+It reports, per arm: matched net, residual net, total net, mean per window,
+percent of windows reaching $5, worst window, worst drawdown of the running
+total, and the paired difference against B25 **split into its execution and
+directional components**. Non-comparable windows are bucketed and named
+(`PRE_FIX_NO_VARIANTS`, `ARM_UNPRICED`, `NOT_RECONCILED`, `DUPLICATE`) rather
+than dropped.
+
+### 49.4 Autonomous collection is BLOCKED and needs one owner action
+
+Collection itself is autonomous: the recorder runs 24/7, emits a rollover
+record every 15 minutes and reconciles settlements on the following rollover,
+with no intervention.
+
+What is NOT autonomous is the scorecard. A scheduled task was created to
+ingest, commit and report at the 50- and 100-window marks
+(`trig_01LfFD3b5efKiuzFLUSbo9oc`, every 4 hours) but the API returned a
+warning: **it stores no MCP connectors, so the sessions it fires would run
+without Railway tools** and could not read the recorder's logs at all. It has
+therefore been **disabled rather than left to fail every 4 hours**.
+
+The remedy is the owner's to apply: re-create the same scheduled task from the
+claude.ai routines UI (or from a session that holds the Railway connector) so
+the firing sessions inherit it. The alternative read path, the bounded
+`/shadow-policy` endpoint, is also unavailable: `L5_SHADOW_POLICY_TOKEN` is
+unset, so it 404s by design, and the service has no public domain.
+
+Until one of those is in place, the ledger advances only when a session is run
+manually. No records are lost in the meantime -- the recorder keeps writing to
+its volume and to the log stream, so a later ingest recovers everything still
+inside log retention.
+
+MODELLED, SHADOW ONLY. No figure here is realized profit. HALT and
+SHADOW_ONLY unchanged; all five arms frozen; no limits touched.
