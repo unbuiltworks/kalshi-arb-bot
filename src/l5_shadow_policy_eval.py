@@ -486,7 +486,8 @@ class WindowAccumulator:
                  depth_ticks: int, cash_envelope: Any,
                  max_worst_case_loss: Any, book_age_s: Any = D("0.5"),
                  open_grace_s: float = 30.0,
-                 replenish: bool = False, max_generations: int = 1):
+                 replenish: bool = False, max_generations: int = 1,
+                 fixed_qty: Any = None, capital_ceiling: Any = None):
         self.slug = str(slug)
         self.lim = dict(tick=tick, min_qty=min_qty, depth_ticks=depth_ticks,
                         cash_envelope=cash_envelope,
@@ -503,6 +504,22 @@ class WindowAccumulator:
         self.replenish = bool(replenish)
         self.max_generations = max(1, int(max_generations))
         self.generations: list = []
+        #: a fixed clip size, when the experiment fixes one instead of
+        #: letting build_orders size to the envelope.
+        self.fixed_qty = _d(fixed_qty)
+        #: TOTAL committed capital allowed across the whole window. Charged
+        #: on the engine's OWN basis (`cash_gate_obligation_usd`, which
+        #: prices a resting DOWN leg at a dollar a share) and NEVER released
+        #: by a completed pair: nothing settles until the window ends, so
+        #: this only ever goes up.
+        self.capital_ceiling = _d(capital_ceiling)
+        self.committed = D(0)
+        self.capital_refusals = 0
+        #: set once replenishment has stopped. Without it `on_book` falls
+        #: back into the WINDOW-open path, re-applies the 30s grace check
+        #: mid-window and reports MISSED_WINDOW_OPEN for a window that in
+        #: fact quoted and filled -- which is exactly what it did.
+        self.done_quoting = False
         self.t_start = window_start_epoch(slug)
         self.opened = False
         self.refused: Optional[Dict[str, Any]] = None
@@ -541,6 +558,8 @@ class WindowAccumulator:
             return
         self.books += 1
         if not self.opened and self.refused is None:
+            if self.done_quoting:
+                return            # quoting is over; keep ingesting prints
             self._open(snap)
             return
         if self.refused is not None:
@@ -611,11 +630,30 @@ class WindowAccumulator:
             return
         legs = {str(l.get("side")): l for l in (plan.get("legs") or [])}
         self.qty = _d(plan["qty_per_leg"])
+        if self.fixed_qty is not None:
+            if self.fixed_qty > self.qty:
+                # the experiment's clip does not fit what the engine's own
+                # sizing allows here; refuse rather than quietly oversize.
+                self.refused = {"ok": False, "reason": "CLIP_EXCEEDS_ENGINE_SIZE",
+                                "engine_qty": str(self.qty),
+                                "clip": str(self.fixed_qty)}
+                return
+            self.qty = self.fixed_qty
         self.up_px = _d((legs.get("UP") or {}).get("price"))
         self.dn_px = _d((legs.get("DOWN") or {}).get("price"))
         if self.qty is None or self.up_px is None or self.dn_px is None:
             self.refused = {"ok": False, "reason": "PLAN_UNREADABLE"}
             return
+        oblig = self.qty * (D(1) + self.up_px)      # the engine's cash basis
+        if (self.capital_ceiling is not None
+                and self.committed + oblig > self.capital_ceiling):
+            self.capital_refusals += 1
+            self.refused = {"ok": False, "reason": "CAPITAL_CEILING",
+                            "committed_usd": str(self.committed),
+                            "needed_usd": str(oblig),
+                            "ceiling_usd": str(self.capital_ceiling)}
+            return
+        self.committed += oblig
         self.dn_ask = D(1) - self.dn_px
         self.q_up = rung_depth(snap, "bids", self.up_px)
         self.q_dn = rung_depth(snap, "asks", self.dn_ask)
@@ -652,7 +690,7 @@ class WindowAccumulator:
         cash deployed: the comparison is faithful only if that number is
         read alongside it.
         """
-        if not self.replenish or self.refused is not None:
+        if not self.replenish or self.refused is not None or self.done_quoting:
             return
         if len(self.generations) + 1 >= self.max_generations:
             return
@@ -676,8 +714,10 @@ class WindowAccumulator:
         self.first = {"REPRICE": None, "CROSS": None, "BLIND": None}
         self._open(snap, replenishing=True)
         if self.refused is not None:          # a refusal ENDS replenishment
+            self.last_stop = dict(self.refused)
             self.refused = None               # without voiding the window
             self.opened = False
+            self.done_quoting = True
         self.books = prev_books
 
     def _acquired(self):
@@ -813,6 +853,12 @@ class WindowAccumulator:
                    if g["up_filled"] and g["dn_filled"])
         rec["process"] = {
             "replenish": self.replenish,
+            "committed_capital_usd": str(self.committed),
+            "capital_ceiling_usd": (None if self.capital_ceiling is None
+                                    else str(self.capital_ceiling)),
+            "capital_refusals": self.capital_refusals,
+            "stopped_because": (getattr(self, "last_stop", None) or {}).get("reason"),
+            "gens_detail": gens,
             "generations": len(gens),
             "modelled_legs_filled": legs,
             "matched_qty": str(matched),

@@ -1722,3 +1722,78 @@ deployed**. It needs review before any deployment, and the economics of a
 replenished process remain unmeasured — each generation redeploys the same
 authorized envelope, so `cash_deployed_usd` must be read beside any turnover
 figure.
+
+## 29. Low-capital replication: 5-contract clips under hard capital ceilings. 2026-10-17.
+
+Shadow-only, 6 frozen PMUS windows with ladder coverage from the open, the
+existing engine, conservative queue model (cumulative qualifying executed
+volume must EXCEED displayed depth at join; unknown queue never fills).
+Capital charged on the engine's OWN basis (`qty x (1 + up_px)`, which prices
+a resting DOWN leg at a dollar a share) and **never released by a completed
+pair** -- nothing settles before the window ends, so committed capital only
+rises.
+
+| ceiling | gens/win | legs/win | matched/win | turnover | max committed | stopped by |
+|---|---|---|---|---|---|---|
+| **$10** | 1.0 | 2.0 | 5.00 | 1.0x | $8.00 | CAPITAL_CEILING, every window |
+| **$25** | 2.5 | 4.5 | 10.00 | up to **3.0x** | $24.40 | CAPITAL_CEILING on the 3 that completed |
+| **$50** | 3.3 | 5.7 | 11.67 | up to **4.0x** | $37.25 | **not capital** |
+
+Worst-case residual loss is **$2.50** at every ceiling: one unmatched
+5-contract clip at ~0.50. That is bounded by the clip, not by the ceiling.
+
+### Settlement-adjusted modelled net (fees applied, maker theta)
+
+| ceiling | priced windows | net |
+|---|---|---|
+| $10 | 6 of 6 | **+$1.10** (+$0.183/window) |
+| $25 | 3 of 6 | **+$1.65** (+$0.55 on those) |
+| $50 | 1 of 6 | **-$1.43** |
+
+Only 2030z has venue-confirmed settlement, so windows carrying a residual
+are **pending** and excluded rather than priced. At $10 every window matched
+fully, which is why all six price. The higher ceilings buy turnover and
+re-acquire the residual tail: the single priced $50 window is the one with an
+unmatched clip, and it loses.
+
+### Behavioural comparison with L5
+
+| per window | L5 (median, holdout) | $25 ceiling | $50 ceiling |
+|---|---|---|---|
+| fills | 133 | 4.5 | 5.7 |
+| **turnover (matched / peak)** | **3.9x** | **3.0x** | **4.0x** |
+| residual carried | 159.1 | 0-5 | 0-5 |
+
+**Turnover matches.** At $25-50 the engine recycles inventory 3-4x, which is
+L5's own ratio. Fill COUNT does not: 4.5 against 133, a 30x gap. The process
+shape is reproducible at low capital; the frequency is not.
+
+### Minimum capital for ~90 fills: NOT reachable by capital
+
+90 legs = 45 generations; at ~$7.00 commitment each that implies **~$315 per
+window** if completion kept pace. It does not. At $50 `stopped_because` is
+empty on every window: replenishment stopped because the last generation
+never got BOTH legs filled, not because capital ran out. **Capital binds at
+$10 and $25; the completion rule binds at $50.** Adding capital beyond ~$40
+buys nothing at this clip.
+
+The constraint is the one section 28 named as next and still unimplemented:
+the engine waits for **both** legs before re-quoting, while L5's fills show no
+such coupling. Per-side independent replenishment, not more capital, is what
+would raise the fill count.
+
+### Defects found and fixed while running this
+
+1. After replenishment was refused, `on_book` fell back into the WINDOW-open
+   path and re-applied the 30s grace check mid-window, reporting
+   `MISSED_WINDOW_OPEN` for windows that had in fact quoted and filled. The
+   first run of this experiment was corrupted by it. Fixed with a
+   `done_quoting` latch.
+2. `rec["net"]` models a SINGLE generation and is invalid once replenishment
+   is on. The P&L above is computed from the generations themselves; the
+   record's own net field was not used and must not be, for multi-generation
+   runs.
+
+Not deployed. `replenish`, `fixed_qty` and `capital_ceiling` all default off
+or None, so the deployed evaluator is unchanged; 84 tests in file, money-path
+gate 1,427 passing.
