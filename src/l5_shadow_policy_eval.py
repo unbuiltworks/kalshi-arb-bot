@@ -1596,7 +1596,8 @@ class IndependentReplenishSim:
                  capital_ceiling: Any,
                  max_unmatched_qty: Any,
                  max_residual_loss_usd: Any,
-                 book_age_s: Any = D("0.5")):
+                 book_age_s: Any = D("0.5"),
+                 inventory_aware: bool = False):
         self.slug = str(slug)
         self.lim = dict(tick=tick, min_qty=min_qty, depth_ticks=depth_ticks,
                         cash_envelope=cash_envelope,
@@ -1616,6 +1617,17 @@ class IndependentReplenishSim:
         self.last_t = None
         self.peak_unmatched = D(0)
         self.peak_committed = D(0)
+        #: POLICY C. Suppress a re-quote on the side that is ALREADY long by
+        #: a clip or more, leaving only the deficient side resting.
+        #:
+        #: Derived from L5, not fitted here. Bucketing his fills by SIGNED
+        #: imbalance on the side about to be extended, P(next fill extends
+        #: that side) falls monotonically from ~77-80% when that side is
+        #: short to ~65-68% when it is very long, in BOTH the discovery and
+        #: holdout halves. He extends a long side LESS, though he never stops
+        #: -- so this is a sharper rule than his behaviour, and the ONE clip
+        #: threshold is the engine's own trade unit, not a tuned parameter.
+        self.inventory_aware = bool(inventory_aware)
 
     # ---- helpers
 
@@ -1665,6 +1677,11 @@ class IndependentReplenishSim:
             return self._no("CAPITAL_CEILING")
         # inventory and worst-case bounds, evaluated on the state this fill
         # WOULD create -- the bound must hold before the order rests.
+        if self.inventory_aware:
+            own = self.up_qty if side == "UP" else self.dn_qty
+            other = self.dn_qty if side == "UP" else self.up_qty
+            if own - other >= qty:
+                return self._no("INVENTORY_AWARE_SKIP_LONG_SIDE")
         would = abs((self.up_qty + qty) - self.dn_qty) if side == "UP" \
             else abs(self.up_qty - (self.dn_qty + qty))
         if self.max_unmatched is not None and would > self.max_unmatched:

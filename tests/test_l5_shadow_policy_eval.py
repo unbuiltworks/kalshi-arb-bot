@@ -1172,3 +1172,22 @@ def test_a_fully_matched_book_is_outcome_independent():
     assert a["net_usd"] == b["net_usd"] == c["net_usd"]
     assert c["priced"] is True                       # needs no settlement
     assert D(a["net_usd"]) == D(5) - D("4.85")
+
+
+def test_policy_c_skips_the_long_side_and_keeps_quoting_the_deficient_one():
+    s = _sim(inventory_aware=True)
+    s.up_qty = D(5)                      # long UP by one clip
+    s._place("UP", base_ladder()[0])
+    assert s.resting["UP"] is None
+    assert s.refusals.get("INVENTORY_AWARE_SKIP_LONG_SIDE") == 1
+    s._place("DOWN", base_ladder()[0])
+    assert s.resting["DOWN"] is not None, "the deficient side must still quote"
+
+
+def test_policy_c_is_off_by_default():
+    s = _sim()
+    assert s.inventory_aware is False
+    s.up_qty = D(5)          # the exact state policy C would refuse
+    s._place("UP", base_ladder()[0])
+    assert s.resting["UP"] is not None
+    assert "INVENTORY_AWARE_SKIP_LONG_SIDE" not in s.refusals

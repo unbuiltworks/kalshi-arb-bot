@@ -2058,3 +2058,102 @@ At a residual standard deviation of ~$2 per window and a matched edge of
 ~$0.45, distinguishing a real A/B difference of even $0.20 per window needs
 on the order of **several hundred windows**, not six. The deployed recorder
 and reconciler already generate that stream; nothing new is needed but time.
+
+## 33. The residual mechanism, and policy C. 2026-10-17.
+
+### Cashflow audits -- accounting and caps reconcile exactly
+
+**2215z, policy B, $25 (+$5.68):**
+
+| t | side | price | qty | cash | cum UP | cum DN |
+|---|---|---|---|---|---|---|
+| +15.1s | UP | 0.4500 | 5 | 2.25 | 5 | 0 |
+| +15.1s | UP | 0.4400 | 5 | 2.20 | 10 | 0 |
+| +33.0s | DOWN | 0.5200 | 5 | 2.60 | 10 | 5 |
+| +42.4s | UP | 0.4700 | 5 | 2.35 | 15 | 5 |
+
+Cash $9.40, fees -$0.08 (rebate), matched 5 pairs -> $5, residual **10 UP**
+-> settled 1.0000 -> **$10**. Net **+$5.68**, identical to the sim.
+Committed $16.80 <= $25; peak unmatched 10 = cap; worst-case $4.53 <= $6.25.
+
+**The +$5.68 is a long-UP directional bet that won.** The matched component
+is 5 pairs, worth about $0.21.
+
+**2100z, policy B, $10 (-$2.48):** UP filled at **0.39**, then again at
+**0.11** -- it kept buying UP as UP collapsed -- 0 matched, 10 UP residual,
+settled 0.0000, lost the entire $2.50 outlay. Textbook adverse selection, and
+the mirror image of 2215z.
+
+All three audits reconcile to the cent and every hard cap holds.
+
+### Does L5 replenish differently by inventory? YES -- and this CORRECTS section 14.3
+
+Section 14 bucketed by UNSIGNED imbalance and found the reducing-fill rate
+"flat at ~49%". Bucketing by **SIGNED** imbalance on the side about to be
+extended shows a monotone gradient the unsigned view averaged away:
+
+| signed imbalance on that side | P(next fill extends it) DISCOVERY | HOLDOUT |
+|---|---|---|
+| -0.8 / -0.9 (that side is SHORT) | 77.3% | 80.4% |
+| -0.3 | 73.5% | 77.6% |
+| 0.0 | 71.1% | 73.9% |
+| +0.3 | 70.6% | 69.7% |
+| +0.7 (that side is LONG) | **67.9%** | **65.3%** |
+
+A **10-14 point monotone decline**, replicating across both halves on
+~190k/~495k observations. L5 extends a long side LESS -- but **never stops**:
+it stays at 65-68% even when very long. (The +1.0 bucket rebounds to ~78%;
+that is the degenerate one-sided-window bucket and is excluded from the
+reading.) A run-length table I also produced was an artifact of my own loop
+and is discarded. Inter-fill gap falls from 3s to 1s as the window closes.
+
+### A vs B vs C, matched-pair net separated from directional residual net
+
+C = B plus "do not re-quote a side already long by a clip or more". The
+DIRECTION comes from L5's gradient above; the ONE-CLIP threshold is the
+engine's own trade unit, not a value fitted to these windows.
+
+Aggregate over 18 window-runs (6 windows x 3 ceilings):
+
+| policy | net | = matched | + residual | fills |
+|---|---|---|---|---|
+| **A** coupled | +$16.74 | **+$5.99** | **+$10.75** | 73 |
+| **B** independent | +$14.83 | **+$14.85** | **-$0.02** | 106 |
+| **C** inventory-aware | +$7.66 | **+$7.66** | **+$0.00** | 92 |
+
+**64% of A's apparent profit is directional luck** (+$10.75 of +$16.74). Its
+matched-pair component, the part not decided by settlement, is only +$5.99.
+
+**B earns 2.5x A's matched-pair net (+$14.85 vs +$5.99)** because it trades
+45% more, and **B's residual sums to -$0.02 across 18 runs** -- the
+directional term washing out, as a fair coin should.
+
+C's residual summing to exactly +$0.000 is **coincidental cancellation**
+(+1.20, +1.78, -2.98 by ceiling), NOT elimination by construction. What C
+does reliably is halve the residual RANGE: at $25, B spans -$3.92..+$5.47
+and C spans -$2.08..+$2.70.
+
+### The smallest evidence-supported inventory rule
+
+**Supported:** the DIRECTION -- extend a long side less often than a short
+one. It replicates across both halves of L5's history on hundreds of
+thousands of fills, and it is the only inventory effect that survives proper
+signing.
+
+**NOT supported:** any specific threshold, and C's net benefit. C costs
+about half the matched-pair net (+$7.66 vs +$14.85) to halve residual
+variance, and six windows cannot say whether that trade is worth making. A
+hard block is also SHARPER than L5, who never stops extending.
+
+**So: no threshold rule is promoted.** The defensible statement is that
+matched-pair net -- the component not driven by settlement luck -- favours
+**B**, and that this is the metric future work should track.
+
+### Caveat that bounds all of the above
+
+The 18 window-runs are **not 18 independent observations**: they are the same
+**6 windows** at three ceilings. Effective n is 6. Nothing here is promoted
+to a rule, and no parameter was tuned against these settlements.
+
+98 tests in file; money-path gate green. `inventory_aware` defaults False.
+Nothing deployed.
