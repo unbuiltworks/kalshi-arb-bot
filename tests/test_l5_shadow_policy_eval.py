@@ -1105,3 +1105,70 @@ def test_a_resting_order_never_reuses_volume_from_before_it_joined():
     assert sim.resting["UP"] is not None, "volume at the join must not count"
     sim.on_trade(T0 + 1, "0.60", "9999")
     assert sim.resting["UP"] is None        # strictly later volume fills it
+
+
+# ------------- accounting across multiple same-side clips, pending, settlement
+
+def _sim(**kw):
+    base = dict(tick=D("0.01"), min_qty=D("0.01"), depth_ticks=1,
+                cash_envelope=D(50), max_worst_case_loss=D(50), clip=D(5),
+                capital_ceiling=D(50), max_unmatched_qty=D(50),
+                max_residual_loss_usd=D(50))
+    return E.IndependentReplenishSim(SLUG, **dict(base, **kw))
+
+
+def test_multiple_same_side_clips_at_different_prices_sum_their_cost():
+    s = _sim()
+    s.up_qty = D(5); s.up_cost = D("1.95")          # 5 @ 0.39
+    s.up_qty += D(5); s.up_cost += D("1.25")        # 5 @ 0.25
+    assert s.up_qty == D(10)
+    assert s._residual_cost() == D("3.20")          # NOT 10 x 0.25
+    r = s.result(yes_value=D(0))                    # UP lost
+    assert D(r["up_avg_px"]) == D("0.32")           # blended, not last
+    assert D(r["worst_case_residual_loss_usd"]) == D("3.20")
+    assert D(r["net_usd"]) == D("-3.20")            # whole cost lost
+    won = s.result(yes_value=D(1))                  # UP won
+    assert D(won["net_usd"]) == D(10) - D("3.20")
+
+
+def test_partial_offset_reduces_the_residual_at_blended_cost():
+    s = _sim()
+    s.up_qty = D(10); s.up_cost = D("3.20")         # blended 0.32
+    s.dn_qty = D(4);  s.dn_cost = D("2.40")         # 4 @ 0.60
+    assert s._residual_cost() == D("1.92")          # 6 unmatched x 0.32
+    r = s.result(yes_value=D(1))
+    # 4 matched pairs pay $1 each; 6 residual UP pay $1 each; cost is both legs
+    assert D(r["matched_qty"]) == D(4)
+    assert D(r["residual_qty"]) == D(6)
+    assert D(r["net_usd"]) == (D(4) + D(6)) - (D("3.20") + D("2.40"))
+
+
+def test_a_pending_order_commits_capital_but_is_not_inventory():
+    s = _sim()
+    s.on_book(base_ladder()[0])
+    assert s.resting["UP"] is not None and s.resting["DOWN"] is not None
+    r = s.result(yes_value=D(1))
+    assert D(r["max_committed_capital_usd"]) > 0      # capital is committed
+    assert r["fills"] == 0                            # but nothing is owned
+    assert D(r["up_qty"]) == 0 and D(r["dn_qty"]) == 0
+    assert D(r["worst_case_residual_loss_usd"]) == 0
+    assert D(r["net_usd"]) == 0
+
+
+def test_an_unsettled_residual_is_never_priced_as_zero():
+    s = _sim()
+    s.up_qty = D(5); s.up_cost = D("1.95")
+    r = s.result(yes_value=None)
+    assert r["priced"] is False and r["net_usd"] is None
+    assert D(r["worst_case_residual_loss_usd"]) == D("1.95")
+
+
+def test_a_fully_matched_book_is_outcome_independent():
+    s = _sim()
+    s.up_qty = D(5); s.up_cost = D("3.00")
+    s.dn_qty = D(5); s.dn_cost = D("1.85")
+    a = s.result(yes_value=D(0)); b = s.result(yes_value=D(1))
+    c = s.result(yes_value=None)
+    assert a["net_usd"] == b["net_usd"] == c["net_usd"]
+    assert c["priced"] is True                       # needs no settlement
+    assert D(a["net_usd"]) == D(5) - D("4.85")

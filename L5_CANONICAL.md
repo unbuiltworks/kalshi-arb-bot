@@ -1879,3 +1879,94 @@ already produces exactly this evidence automatically; it needs enough
 windows carrying residual to price A and B on an identical set. Until then
 no deployment of B is justified, and its fill-count advantage must not be
 read as an economic one.
+
+## 31. The A/B economic comparison, and the settlement that blocks it. 2026-10-17.
+
+### A withdrawal first
+
+Sections 29 and 30 priced 2030z with `yes_value = 1`, taken from the
+**expired book** (final bid 0.99, status ONE_SIDED). **That is not a
+settlement**, and every A/B net figure that depended on it is withdrawn. The
+only venue-confirmed settlements this project holds are BTC1d 2100z and the
+2200z shadow window -- **neither is one of the six frozen windows**.
+
+### Settlement availability: 0 of 6, and the exact reason
+
+Queried `GET /v1/markets/<slug>/bbo` on `gateway.polymarket.us` for all six
+slugs. Every one failed identically:
+
+```
+urlopen error Tunnel connection failed: 403 Forbidden
+agentproxy: "gateway answered 403 to CONNECT (policy denial)"  host gateway.polymarket.us:443
+```
+
+This is a **policy denial by the session's network settings**, not an
+outage. Missing slugs and their source:
+
+| slug | source needed | status |
+|---|---|---|
+| cpc-btc-updown-15m-2026-10-16-2030z | `gateway.polymarket.us/v1/markets/<slug>/bbo` -> `marketData.settlementPx` | host denied |
+| ...-2045z | same | host denied |
+| ...-2100z | same | host denied |
+| ...-2215z | same | host denied |
+| ...-2315z | same | host denied |
+| ...-2330z | same | host denied |
+
+**The deployed reconciler will not supply these either.** It queries only
+windows PENDING in its own store; 2030z/2045z/2100z predate the evaluator,
+and 2215z/2315z/2330z resolved BOTH so they were never pending. The
+residuals that need settlement exist only in the offline A/B sims.
+
+### PAIRED A-minus-B, identical windows, both policies priced
+
+| ceiling | paired windows | A | B | **A - B** |
+|---|---|---|---|---|
+| **$10** | 2 of 6 (2030z, 2330z) | +$0.350 | -$0.010 | **+$0.360** (A better) |
+| **$25** | 1 of 6 (2030z) | +$0.520 | +$0.720 | **-$0.200** (B better) |
+| **$50** | **0 of 6** | — | — | **no comparison possible** |
+
+Per window: $10 2030z A +0.180 / B -0.080; 2330z A +0.170 / B +0.070.
+$25 2030z A +0.520 / B +0.720.
+
+**Every unpaired cell is an unsettled residual, not a zero.** These three
+paired observations split 2-1 for A and cannot decide anything. The
+comparison is NOT closed.
+
+Modelled vs venue-confirmed, stated plainly: **all fills above are
+MODELLED**; **zero** of the terminal inventories are venue-confirmed. The
+paired windows are priced only because they finished fully matched, and a
+matched pair pays a dollar on either outcome -- it needs no settlement. That
+is arithmetic, not evidence from the venue.
+
+### Why B is unpriced more often than A -- and why that biases the table
+
+B trades more, so it carries residual more often: at $10 B leaves residual on
+4 of 6 windows against A's 0. The paired subset is therefore exactly the
+windows where B happened to finish flat, which is the subset least
+favourable to the hypothesis that B's extra turnover pays. **The paired
+table understates nothing and proves nothing; it is simply too small and
+selected.**
+
+### Accounting verification -- all six cases pass
+
+| case | verified |
+|---|---|
+| multiple same-side clips at different prices | 5@0.39 + 5@0.25 costs **$3.20**, blended 0.32, NOT 10x0.25 |
+| partial offset | 4 matched + 6 residual at blended 0.32 -> residual cost $1.92 |
+| pending order | commits capital, is NOT inventory, contributes zero residual and zero P&L |
+| unsettled residual | never priced as zero; `priced=False`, `net_usd=None` |
+| fully matched book | identical net at yes=0, yes=1 and None; needs no settlement |
+| per-leg capital | UP charged `qty*up_px`, DOWN charged `qty*$1` (BUY_SHORT), pair `qty*(1+up_px)` charged ONCE |
+
+96 tests in file; money-path gate green.
+
+### What is needed to close this
+
+One of:
+1. **Allow `gateway.polymarket.us`** in the environment's network settings --
+   then this session queries `settlementPx` for all six slugs directly and
+   the table closes in minutes, with no deployment.
+2. `railway ssh` from an operator machine, curling the same endpoint.
+
+Until then the A/B economic question stays **open**, and B must not be
+deployed on a fill-count advantage.
