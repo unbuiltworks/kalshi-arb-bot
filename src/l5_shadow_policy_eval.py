@@ -1507,3 +1507,266 @@ def records_view(log: "ShadowPolicyLog", *, limit: int = 50) -> Dict[str, Any]:
             "labels": ("MODELLED, SHADOW ONLY. No order was submitted, no "
                        "fill occurred and no figure here is realized "
                        "profit.")}
+
+
+def generations_pnl(rec: Mapping[str, Any],
+                    yes_value: Any = None) -> Dict[str, Any]:
+    """Settlement-adjusted P&L across EVERY generation of a window.
+
+    WHY THIS EXISTS. `rec["net"]` models ONE generation -- it was written
+    before replenishment and prices a single quote pair. Reading it for a
+    multi-generation run silently reports the last generation as if it were
+    the window. This accounts for all of them, from `process.gens_detail`.
+
+    A matched generation pays a dollar a pair on either outcome, so it needs
+    no settlement. An unmatched leg cannot be priced without one, and
+    `priced` is False until the venue supplies `yes_value`.
+    """
+    proc = (rec or {}).get("process") or {}
+    gens = proc.get("gens_detail") or []
+    yv = _d(yes_value)
+    net = D(0); unmatched = D(0); unmatched_cost = D(0)
+    matched = D(0); fees = D(0)
+    for g in gens:
+        q = _d(g.get("qty")) or D(0)
+        u = _d(g.get("up_px")); d = _d(g.get("dn_px"))
+        if u is None or d is None or q <= 0:
+            continue
+        if g.get("up_filled") and g.get("dn_filled"):
+            f = fee(TS.MAKER_THETA, q, u) + fee(TS.MAKER_THETA, q, d)
+            net += q * (D(1) - u - d) - f
+            matched += q; fees += f
+        elif g.get("up_filled") or g.get("dn_filled"):
+            px = u if g.get("up_filled") else d
+            unmatched += q; unmatched_cost += q * px
+            f = fee(TS.MAKER_THETA, q, px)
+            fees += f; net -= f
+    priced = True
+    if unmatched > 0:
+        if yv is None:
+            priced = False
+        else:
+            for g in gens:
+                if g.get("up_filled") and g.get("dn_filled"):
+                    continue
+                q = _d(g.get("qty")) or D(0)
+                if g.get("up_filled"):
+                    net += q * (yv - (_d(g.get("up_px")) or D(0)))
+                elif g.get("dn_filled"):
+                    net += q * ((D(1) - yv) - (_d(g.get("dn_px")) or D(0)))
+    return {"generations": len(gens), "matched_qty": str(matched),
+            "unmatched_qty": str(unmatched),
+            "worst_case_residual_loss_usd": str(unmatched_cost),
+            "fees_usd": str(fees),
+            "net_usd": (str(net) if priced else None),
+            "priced": priced,
+            "labels": ("accounts for EVERY generation. rec['net'] models one "
+                       "generation and is invalid for a replenished run.")}
+
+
+def fee(theta: Any, qty: Any, price: Any) -> D:
+    """Thin re-export so this module never grows a second fee table."""
+    return TS.fee(theta, _d(qty) or D(0), _d(price) or D(0))
+
+
+# ------------------------- OFFLINE ONLY: per-side independent replenishment
+
+class IndependentReplenishSim:
+    """Re-quote EACH side the moment it fills, instead of waiting for both.
+
+    OFFLINE EXPERIMENT. Nothing in the deployed path constructs this. It
+    reuses `build_orders` for eligibility and prices, the same fee model and
+    the same conservative queue rule as `WindowAccumulator`.
+
+    VOLUME IS NEVER REUSED. A resting order counts only prints with
+    timestamp STRICTLY AFTER it joined, and the print that fills it is
+    consumed: the replacement order joins at that instant and starts from
+    zero, so the same historical volume cannot fill two orders on one side.
+    The two sides read opposite sides of the book, so they cannot consume
+    each other's prints either.
+
+    CAPITAL NEVER COMES BACK. Charged at placement on the engine's own basis
+    and never released by a completed pair, because nothing settles until the
+    window ends.
+    """
+
+    def __init__(self, slug: str, *, tick: Any, min_qty: Any,
+                 depth_ticks: int, cash_envelope: Any,
+                 max_worst_case_loss: Any, clip: Any,
+                 capital_ceiling: Any,
+                 max_unmatched_qty: Any,
+                 max_residual_loss_usd: Any,
+                 book_age_s: Any = D("0.5")):
+        self.slug = str(slug)
+        self.lim = dict(tick=tick, min_qty=min_qty, depth_ticks=depth_ticks,
+                        cash_envelope=cash_envelope,
+                        max_worst_case_loss=max_worst_case_loss)
+        self.book_age_s = book_age_s
+        self.clip = _d(clip)
+        self.cap = _d(capital_ceiling)
+        self.max_unmatched = _d(max_unmatched_qty)
+        self.max_resid_usd = _d(max_residual_loss_usd)
+        self.t_start = window_start_epoch(slug)
+        self.committed = D(0)
+        self.up_qty = D(0); self.dn_qty = D(0)
+        self.up_cost = D(0); self.dn_cost = D(0)
+        self.fills: list = []          # (t, side, px, qty)
+        self.resting: Dict[str, Any] = {"UP": None, "DOWN": None}
+        self.refusals: Dict[str, int] = {}
+        self.last_t = None
+        self.peak_unmatched = D(0)
+        self.peak_committed = D(0)
+
+    # ---- helpers
+
+    def _no(self, why: str) -> None:
+        self.refusals[why] = self.refusals.get(why, 0) + 1
+
+    def _unmatched(self) -> D:
+        return abs(self.up_qty - self.dn_qty)
+
+    def _residual_cost(self) -> D:
+        """Worst-case settlement loss: the unmatched leg's own cost."""
+        if self.up_qty > self.dn_qty and self.up_qty > 0:
+            return self.up_cost * (self.up_qty - self.dn_qty) / self.up_qty
+        if self.dn_qty > self.up_qty and self.dn_qty > 0:
+            return self.dn_cost * (self.dn_qty - self.up_qty) / self.dn_qty
+        return D(0)
+
+    def _place(self, side: str, snap: Mapping[str, Any]) -> None:
+        t = float(snap["t"])
+        if t >= TS.cancel_cutoff_from_start(float(self.t_start)):
+            return self._no("PAST_CUTOFF")
+        b = _d(snap.get("bid")); a = _d(snap.get("ask"))
+        plan = TS.build_orders(
+            market=self.slug, bid=snap.get("bid"), ask=snap.get("ask"),
+            bid_depth=(rung_depth(snap, "bids", b) if b is not None else None),
+            ask_depth=(rung_depth(snap, "asks", a) if a is not None else None),
+            book_age_s=self.book_age_s, **self.lim)
+        if not plan.get("ok"):
+            return self._no(str(plan.get("reason")))
+        legs = {str(l.get("side")): l for l in (plan.get("legs") or [])}
+        engine_qty = _d(plan.get("qty_per_leg")) or D(0)
+        qty = self.clip if self.clip is not None else engine_qty
+        if qty > engine_qty:
+            return self._no("CLIP_EXCEEDS_ENGINE_SIZE")
+        px = _d((legs.get("UP") if side == "UP" else legs.get("DOWN"))
+                .get("price"))
+        if px is None:
+            return self._no("PRICE_UNREADABLE")
+        # PER-LEG obligation. build_orders' `cash_gate_obligation_usd` is
+        # qty*(1+up_px) for the two-legged PLAN: up_px a share for the UP buy
+        # and a dollar a share for the DOWN buy, which is a BUY_SHORT and
+        # owes a dollar if YES settles 1. Charging each side the whole plan
+        # obligation double-counts and starves the sim of capital -- which is
+        # exactly what it did on the first run of this experiment.
+        oblig = qty * (px if side == "UP" else D(1))
+        if self.cap is not None and self.committed + oblig > self.cap:
+            return self._no("CAPITAL_CEILING")
+        # inventory and worst-case bounds, evaluated on the state this fill
+        # WOULD create -- the bound must hold before the order rests.
+        would = abs((self.up_qty + qty) - self.dn_qty) if side == "UP" \
+            else abs(self.up_qty - (self.dn_qty + qty))
+        if self.max_unmatched is not None and would > self.max_unmatched:
+            return self._no("UNMATCHED_INVENTORY_CAP")
+        # WORST-CASE COST, NOT WORST-CASE QUANTITY AT TODAY'S PRICE. The
+        # first version multiplied the whole resulting imbalance by the NEW
+        # clip's price, so a second clip bought cheaper understated a
+        # position already paid for dearer: 5@0.39 + 5@0.25 scored as
+        # 10x0.25 = $2.50 and passed a $2.50 cap while actually costing
+        # $3.20. The bound is the cost ALREADY sunk in the unmatched leg
+        # plus what this clip would add to it.
+        grows = ((side == "UP" and self.up_qty >= self.dn_qty)
+                 or (side == "DOWN" and self.dn_qty >= self.up_qty))
+        projected = self._residual_cost() + (qty * px if grows else D(0))
+        if self.max_resid_usd is not None and projected > self.max_resid_usd:
+            return self._no("WORST_CASE_RESIDUAL_CAP")
+        rest_px = px if side == "UP" else (D(1) - px)   # where it sits on UP book
+        qa = rung_depth(snap, "bids" if side == "UP" else "asks", rest_px)
+        if qa is None:
+            return self._no("QUEUE_AHEAD_UNREADABLE")
+        self.committed += oblig
+        self.peak_committed = max(self.peak_committed, self.committed)
+        self.resting[side] = {"px": px, "rest_px": rest_px, "qty": qty,
+                              "join_t": t, "queue": qa, "cum": D(0)}
+
+    # ---- the event stream
+
+    def on_book(self, snap: Mapping[str, Any]) -> None:
+        t = snap.get("t")
+        if t is None:
+            return
+        t = float(t)
+        if self.last_t is not None and t < self.last_t:
+            return
+        self.last_t = t
+        for side in ("UP", "DOWN"):
+            if self.resting[side] is None:
+                self._place(side, snap)
+
+    def on_trade(self, t: Any, px: Any, qty: Any) -> None:
+        tt = None if t is None else float(t)
+        p = _d(px); q = _d(qty)
+        if tt is None or p is None or q is None:
+            return
+        if self.last_t is not None and tt < self.last_t:
+            return
+        self.last_t = tt
+        for side in ("UP", "DOWN"):
+            o = self.resting[side]
+            if o is None or tt <= o["join_t"]:
+                continue        # STRICTLY after the join: no volume reuse
+            hit = (p <= o["rest_px"]) if side == "UP" else (p >= o["rest_px"])
+            if not hit:
+                continue
+            o["cum"] += q
+            if o["cum"] > o["queue"]:
+                self.fills.append((tt, side, str(o["px"]), str(o["qty"])))
+                if side == "UP":
+                    self.up_qty += o["qty"]; self.up_cost += o["qty"] * o["px"]
+                else:
+                    self.dn_qty += o["qty"]; self.dn_cost += o["qty"] * o["px"]
+                self.peak_unmatched = max(self.peak_unmatched,
+                                          self._unmatched())
+                self.resting[side] = None      # free to re-quote at once
+
+    # ---- result
+
+    def result(self, yes_value: Any = None) -> Dict[str, Any]:
+        matched = min(self.up_qty, self.dn_qty)
+        yv = _d(yes_value)
+        up_avg = (self.up_cost / self.up_qty) if self.up_qty else D(0)
+        dn_avg = (self.dn_cost / self.dn_qty) if self.dn_qty else D(0)
+        cash = self.up_cost + self.dn_cost
+        fees = sum(fee(TS.MAKER_THETA, _d(q), _d(p))
+                   for _t, _s, p, q in self.fills)
+        res_qty = self._unmatched()
+        res_cost = self._residual_cost()
+        priced = res_qty == 0 or yv is not None
+        net = None
+        if priced:
+            redeem = matched
+            if res_qty > 0:
+                redeem += res_qty * (yv if self.up_qty > self.dn_qty
+                                     else (D(1) - yv))
+            net = redeem - cash - fees
+        return {"market": self.slug, "shadow_only": True, "submitted": False,
+                "fills_are_modelled": True,
+                "fills": len(self.fills),
+                "up_qty": str(self.up_qty), "dn_qty": str(self.dn_qty),
+                "up_avg_px": str(up_avg), "dn_avg_px": str(dn_avg),
+                "matched_qty": str(matched),
+                "turnover": (str(matched / self.peak_unmatched)
+                             if self.peak_unmatched else None),
+                "peak_unmatched_qty": str(self.peak_unmatched),
+                "worst_case_residual_loss_usd": str(res_cost),
+                "max_committed_capital_usd": str(self.peak_committed),
+                "cash_out_usd": str(cash), "fees_usd": str(fees),
+                "residual_qty": str(res_qty),
+                "net_usd": (str(net) if priced else None), "priced": priced,
+                "refusals": dict(self.refusals),
+                "fill_sequence": [(round(t - self.t_start, 1), s, p, q)
+                                  for t, s, p, q in self.fills],
+                "labels": ("MODELLED, OFFLINE. No order was submitted. "
+                           "Capital is charged at placement and never "
+                           "released by a completed pair.")}

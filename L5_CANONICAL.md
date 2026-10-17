@@ -1797,3 +1797,85 @@ would raise the fill count.
 Not deployed. `replenish`, `fixed_qty` and `capital_ceiling` all default off
 or None, so the deployed evaluator is unchanged; 84 tests in file, money-path
 gate 1,427 passing.
+
+## 30. Per-side independent replenishment, A vs B. 2026-10-17. Offline only.
+
+Same 6 frozen PMUS windows, same engine, 5-contract clips, conservative
+queue rule. **A** = replenish only when BOTH legs have filled (section 28).
+**B** = `IndependentReplenishSim`, re-quote each side the moment IT fills.
+
+Capital is charged per LEG at placement on the engine's own basis -- `up_px`
+a share for the UP buy, a DOLLAR a share for the DOWN buy because it is a
+BUY_SHORT -- and is never released by a completed pair.
+
+| ceiling | A fills/win | B fills/win | B gain | B max committed | B max unmatched | B worst-case |
+|---|---|---|---|---|---|---|
+| $10 | 2.0 | **2.5** | +25% | $9.60 | 10 | $2.50 (cap $2.50) |
+| $25 | 4.5 | **6.3** | +40% | $24.80 | 10 (cap) | $4.53 (cap $6.25) |
+| $50 | 5.7 | **8.8** | +54% | $49.40 | 10 (cap) | $4.53 (cap $12.50) |
+
+B reaches a turnover of **3.5x** on one $50 window against L5's median 3.9x,
+and the unmatched-inventory cap binds at $25 and $50, which is the control
+doing its job rather than a coincidence.
+
+### Net expectancy: NOT ESTABLISHED, and not comparable
+
+| ceiling | A net (priced) | B net (priced) |
+|---|---|---|
+| $10 | +$1.10 (6 of 6) | -$0.01 (**2 of 6**) |
+| $25 | +$1.65 (3 of 6) | +$1.38 (**2 of 6**) |
+| $50 | -$1.42 (1 of 6) | -$2.19 (**2 of 6**) |
+
+**These columns cannot be compared.** Only 2030z carries venue-confirmed
+settlement, so every window with a residual is unpriced, A and B leave
+residuals on DIFFERENT windows, and the priced subsets therefore differ. On
+the single window priced under both at $50 (2030z) A is -$1.42 and B is
+-$2.90; at $25 the same window is A +$0.52 and B +$0.72. One each. That is
+not evidence.
+
+**Increased turnover did NOT demonstrably improve net expectancy.** It
+cannot, on this data: B trades more and therefore carries residual more
+often, and residual is exactly what we cannot price.
+
+### Three defects found and fixed in this experiment
+
+1. **Capital double-charged.** Each side was charged the whole two-legged
+   plan obligation `qty*(1+up_px)` instead of its own leg. B looked
+   capital-starved and WORSE than A at $10 and $25; those first-run B rows
+   were wrong and are withdrawn.
+2. **Worst-case residual cap violated.** The bound multiplied the resulting
+   imbalance by the NEW clip's price, so 5@0.39 then 5@0.25 scored as
+   10x0.25 = $2.50 and passed a $2.50 cap while actually costing **$3.20**.
+   Now the bound is cost already sunk plus what the clip adds. Verified: the
+   $10 run now peaks at exactly $2.50.
+3. A test of mine asserted the DOWN leg should be charged its limit price.
+   The engine is right and the test was wrong: a BUY_SHORT owes a dollar a
+   share.
+
+### Regression coverage for the PRIOR defects -- it did not exist
+
+Section 29's two defects had **zero** test references (`done_quoting`,
+`stopped_because`, `gens_detail` all absent). Now covered:
+`test_a_refused_replenishment_does_not_void_the_window`,
+`test_the_capital_ceiling_is_charged_and_never_released`,
+`test_single_generation_net_field_is_not_the_window_pnl`,
+`test_generations_pnl_leaves_an_unmatched_leg_unpriced`. The
+multi-generation accounting also moved out of a scratch script into
+`generations_pnl()` so it is testable and cannot drift.
+
+### VERDICT
+
+**Behaviourally viable; economically unproven.** B is a real behavioural
+improvement -- 25-54% more fills and turnover approaching L5's -- achieved
+inside hard $10-$50 capital ceilings with the inventory and worst-case
+bounds binding correctly. It does NOT yet show better economics, and this
+sample cannot show it either way.
+
+### Next evidence needed before any shadow deployment
+
+**Settlement-resolved windows, on the same window set for both policies.**
+At present 4-5 of every 6 windows are unpriced. The deployed reconciler
+already produces exactly this evidence automatically; it needs enough
+windows carrying residual to price A and B on an identical set. Until then
+no deployment of B is justified, and its fill-count advantage must not be
+read as an economic one.

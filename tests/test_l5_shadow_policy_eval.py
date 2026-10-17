@@ -988,3 +988,120 @@ def test_replenishment_never_quotes_past_the_cancel_cutoff():
     before = len(acc.generations)
     acc.on_book(late)
     assert len(acc.generations) == before
+
+
+# ---------------- regression: the two defects found during the low-capital run
+
+def test_a_refused_replenishment_does_not_void_the_window():
+    """DEFECT 1. After replenishment was refused, `on_book` fell back into
+    the WINDOW-open path, re-applied the 30s grace check mid-window and
+    reported MISSED_WINDOW_OPEN for a window that had quoted and filled.
+    That corrupted the first low-capital run."""
+    lad = base_ladder() + [dict(base_ladder()[0], t=T0 + 90.0),
+                           dict(base_ladder()[0], t=T0 + 150.0)]
+    trs = BOTH_TRADES
+    # $3.00 admits the first generation (~$2.00) and refuses the second
+    acc = E.WindowAccumulator(SLUG, replenish=True, max_generations=8,
+                              capital_ceiling=D("3.00"), **LIM)
+    rec = feed(acc, lad, trs).finish()
+    assert acc.done_quoting is True
+    assert rec["ok"] is True, rec.get("reason")
+    assert rec.get("reason") != "MISSED_WINDOW_OPEN"
+    assert rec["process"]["generations"] >= 1
+    assert rec["process"]["stopped_because"] == "CAPITAL_CEILING"
+
+
+def test_the_capital_ceiling_is_charged_and_never_released():
+    acc = E.WindowAccumulator(SLUG, replenish=True, max_generations=8,
+                              capital_ceiling=D("3.00"), **LIM)
+    rec = feed(acc, base_ladder(), BOTH_TRADES).finish()
+    c = D(rec["process"]["committed_capital_usd"])
+    assert D("0") < c <= D("3.00")
+    # a completed pair must NOT give capital back
+    assert rec["process"]["generations"] >= 1
+    assert c >= D(rec["process"]["matched_qty"]) * D("0.9")
+
+
+def test_single_generation_net_field_is_not_the_window_pnl():
+    """DEFECT 2. rec['net'] prices ONE generation. generations_pnl accounts
+    for all of them; reading the record's own field under replenishment
+    reports the last generation as if it were the window."""
+    lad = base_ladder() + [dict(base_ladder()[0], t=T0 + 90.0),
+                           dict(base_ladder()[0], t=T0 + 120.0)]
+    trs = BOTH_TRADES + [
+        {"t": T0 + 95, "px": "0.63", "qty": "20", "trade_time": "c"},
+        {"t": T0 + 125, "px": "0.60", "qty": "20", "trade_time": "d"}]
+    rec = feed(E.WindowAccumulator(SLUG, replenish=True, max_generations=4,
+                                   **LIM), lad, trs).finish()
+    assert rec["process"]["generations"] >= 2
+    agg = E.generations_pnl(rec)
+    assert agg["generations"] == rec["process"]["generations"]
+    one = D(rec["net"]["HOLD"]["net_usd"])
+    assert D(agg["net_usd"]) > one, (
+        "multi-generation P&L must exceed the single-generation field")
+    assert "invalid for a replenished run" in agg["labels"]
+
+
+def test_generations_pnl_leaves_an_unmatched_leg_unpriced():
+    rec = feed(E.WindowAccumulator(SLUG, replenish=True, max_generations=4,
+                                   **LIM), base_ladder(), ONE_TRADE).finish()
+    agg = E.generations_pnl(rec)
+    assert agg["priced"] is False and agg["net_usd"] is None
+    assert D(agg["unmatched_qty"]) > 0
+    assert D(agg["worst_case_residual_loss_usd"]) > 0
+    won = E.generations_pnl(rec, yes_value=D(0))     # DOWN won
+    lost = E.generations_pnl(rec, yes_value=D(1))
+    assert won["priced"] is True
+    assert D(won["net_usd"]) > D(lost["net_usd"])
+
+
+def test_the_worst_case_residual_cap_counts_cost_already_sunk():
+    """A second clip bought cheaper must not reset the bound. 5@0.39 then
+    5@0.25 costs $3.20, not 10 x 0.25 = $2.50, and a $2.50 cap must refuse
+    the second clip."""
+    sim = E.IndependentReplenishSim(
+        SLUG, tick=D("0.01"), min_qty=D("0.01"), depth_ticks=1,
+        cash_envelope=D(10), max_worst_case_loss=D(10), clip=D(5),
+        capital_ceiling=D(10), max_unmatched_qty=D(10),
+        max_residual_loss_usd=D("2.50"))
+    sim.up_qty = D(5); sim.up_cost = D("1.95")        # 5 @ 0.39 already held
+    assert sim._residual_cost() == D("1.95")
+    before = dict(sim.refusals)
+    sim._place("UP", snap(T0, "0.2600", "0.2700",
+                          bids=(("0.2600", "100"), ("0.2500", "10")),
+                          asks=(("0.2700", "100"), ("0.2800", "10"))))
+    assert sim.resting["UP"] is None, "the second clip must be refused"
+    assert sim.refusals.get("WORST_CASE_RESIDUAL_CAP", 0) > \
+        before.get("WORST_CASE_RESIDUAL_CAP", 0)
+
+
+def test_per_leg_capital_is_not_charged_the_whole_pair_obligation():
+    """Charging each side qty*(1+up_px) double-counts: the DOWN leg owes a
+    dollar a share, the UP leg owes its own price."""
+    sim = E.IndependentReplenishSim(
+        SLUG, tick=D("0.01"), min_qty=D("0.01"), depth_ticks=1,
+        cash_envelope=D(50), max_worst_case_loss=D(50), clip=D(5),
+        capital_ceiling=D(50), max_unmatched_qty=D(50),
+        max_residual_loss_usd=D(50))
+    sim._place("UP", base_ladder()[0])
+    up_only = sim.committed
+    assert up_only == D(5) * D("0.60"), up_only      # qty * up_px
+    sim._place("DOWN", base_ladder()[0])
+    # a resting DOWN leg is a BUY_SHORT and owes a DOLLAR a share, which is
+    # the engine's own conservative cash basis -- not its limit price.
+    assert sim.committed - up_only == D(5) * D(1)
+    # and the pair together is qty*(1+up_px), charged ONCE, not twice
+    assert sim.committed == D(5) * (D(1) + D("0.60"))
+
+
+def test_a_resting_order_never_reuses_volume_from_before_it_joined():
+    sim = E.IndependentReplenishSim(
+        SLUG, tick=D("0.01"), min_qty=D("0.01"), depth_ticks=1,
+        cash_envelope=D(50), max_worst_case_loss=D(50), clip=D(5),
+        capital_ceiling=D(50), max_unmatched_qty=D(50),
+        max_residual_loss_usd=D(50))
+    sim.on_book(base_ladder()[0])
+    sim.on_trade(T0, "0.60", "9999")        # same instant as the join
+    assert sim.resting["UP"] is not None, "volume at the join must not count"
+    sim.on_trade(T0 + 1, "0.60", "9999")
+    assert sim.resting["UP"] is None        # strictly later volume fills it
