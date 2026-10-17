@@ -61,8 +61,13 @@ try:
 except Exception:                               # noqa: BLE001
     A = None                                    # type: ignore
 
-#: the only mutating route this watchdog may ever use.
-CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel$")
+#: the only mutating route this watchdog may ever use. `\Z` not `$`, because
+#: Python's `$` also matches before a trailing newline. Kept BYTE-IDENTICAL to
+#: `l5_pmus_transport.CANCEL_ROUTE`; the constant is duplicated rather than
+#: imported because this image must load without `pmus_auth`, and
+#: test_the_two_cancel_route_patterns_have_not_drifted pins the equality so
+#: one copy cannot be tightened while the other is forgotten.
+CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel\Z")
 
 #: venue states that mean the order is no longer working. Checked against
 #: leavesQuantity first, because "PARTIALLY_FILLED" contains "FILLED" and a
