@@ -1628,3 +1628,36 @@ def test_variants_pending_is_false_once_priced_or_closed():
                                    "residual_qty": "5"}}}
     assert E.variants_pending(closed) is False        # budget already spent
     assert E.variants_pending({}) is False
+
+
+def test_scorecard_names_the_excluded_windows_with_their_cause():
+    """'41 excluded' must be readable as WHICH windows and WHY -- a historical
+    backlog has to be distinguishable from one still accumulating."""
+    good = _settled("cpc-btc-updown-15m-2026-10-17-1230z",
+                    {a: (1, 1, 0) for a in E.SCORECARD_ARMS})
+    prefix = _settled("cpc-btc-updown-15m-2026-10-17-1100z", {}, variants=False)
+    unpriced = _settled("cpc-btc-updown-15m-2026-10-17-1115z",
+                        {a: (1, 1, 0) for a in E.SCORECARD_ARMS}, priced=False)
+    expired = {"ok": True, "market": "cpc-btc-updown-15m-2026-10-17-1045z",
+               "reconcile_closed": True, "reconcile_attempts": 8,
+               "reconcile_reason": "RETRY_BUDGET_EXHAUSTED",
+               "net": {p: {} for p in E.POLICIES}}
+    sc = E.depth_scorecard([good, prefix, unpriced, expired])
+    det = {d["market"][-5:]: d for d in sc["excluded_detail"]}
+    assert set(det) == {"1100z", "1115z", "1045z"}
+    assert det["1100z"]["cause"] == "PRE_FIX_NO_VARIANTS"
+    assert det["1115z"]["cause"] == "ARM_UNPRICED"
+    assert det["1045z"]["cause"] == "UNRESOLVED_EXPIRED"
+    assert det["1045z"]["reason"] == "RETRY_BUDGET_EXHAUSTED"
+    assert det["1045z"]["attempts"] == 8
+    # sorted by market, so the timestamps read in order
+    assert [d["market"] for d in sc["excluded_detail"]] == sorted(
+        d["market"] for d in sc["excluded_detail"])
+
+
+def test_scorecard_detail_is_bounded():
+    rows = [_settled("cpc-btc-updown-15m-2026-10-17-%04dz" % i, {},
+                     variants=False) for i in range(0, E.SCORECARD_DETAIL_MAX + 20)]
+    sc = E.depth_scorecard(rows)
+    assert sc["excluded"]["PRE_FIX_NO_VARIANTS"] == len(rows)
+    assert len(sc["excluded_detail"]) == E.SCORECARD_DETAIL_MAX

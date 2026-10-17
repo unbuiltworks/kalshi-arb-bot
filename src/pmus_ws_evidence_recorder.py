@@ -2262,6 +2262,10 @@ async def run(minutes: Optional[float]) -> int:
     worker = concurrent.futures.ThreadPoolExecutor(
         max_workers=1, thread_name_prefix="pmus-side")
     side_busy = {"status": False, "tick": False, "settle": False}
+    #: the last scorecard body emitted, so an unchanged fold is not reprinted.
+    #: schedule_settlement runs on the status cadence, not only at rollover,
+    #: so an unconditional emit printed the same ~2KB line every ~50 seconds.
+    last_scorecard = {"body": None}
     side_state = {"slugs": [], "discovery": {}, "l5_alloc": None}
 
     def _status_job(snap: dict, connected: bool, msgs_now: int,
@@ -2406,9 +2410,17 @@ async def run(minutes: Optional[float]) -> int:
                 # wrapped separately so a scorecard fault can never cost the
                 # settlement line that was already printed.
                 try:
-                    print("PMUS_SHADOW_SCORECARD " + json.dumps(
+                    body = json.dumps(
                         _SPE.depth_scorecard(list(spl.latest.values())),
-                        separators=(",", ":"), default=str), flush=True)
+                        separators=(",", ":"), default=str, sort_keys=True)
+                    # CHANGE-ONLY. The fold is deterministic, so an identical
+                    # body means nothing has resolved since the last emit and
+                    # reprinting it carries no information. A changed body
+                    # still prints immediately, so the line remains the
+                    # signal that the pipeline advanced.
+                    if body != last_scorecard["body"]:
+                        last_scorecard["body"] = body
+                        print("PMUS_SHADOW_SCORECARD " + body, flush=True)
                 except Exception:                          # noqa: BLE001
                     pass
             except Exception:                              # noqa: BLE001

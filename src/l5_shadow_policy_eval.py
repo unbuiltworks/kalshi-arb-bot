@@ -1404,6 +1404,8 @@ SCORECARD_ARMS = ("B25", "B25D2", "B25D3")
 SCORECARD_CONTROL = "B25"
 #: the owner's per-window objective, in dollars.
 SCORECARD_TARGET_USD = D(5)
+#: how many excluded windows the scorecard names before it stops listing.
+SCORECARD_DETAIL_MAX = 60
 
 
 def depth_scorecard(records: Sequence[Mapping[str, Any]], *,
@@ -1435,30 +1437,48 @@ def depth_scorecard(records: Sequence[Mapping[str, Any]], *,
     buckets = {"PRE_FIX_NO_VARIANTS": 0, "ARM_UNPRICED": 0,
                "NOT_RECONCILED": 0, "PENDING": 0, "UNRESOLVED_EXPIRED": 0,
                "NOT_SCORED": 0}
+    #: per-window exclusion detail, so "41 excluded" can be read as WHICH
+    #: windows and WHY rather than as a number to be taken on trust. Bounded,
+    #: and each entry carries the window's own timestamp so a historical
+    #: backlog can be told apart from one still accumulating.
+    detail = []
+
+    def _exclude(bucket, rec, why=None):
+        buckets[bucket] += 1
+        if len(detail) < SCORECARD_DETAIL_MAX:
+            detail.append({"market": rec.get("market"), "cause": bucket,
+                           "reason": why or rec.get("reconcile_reason"),
+                           "attempts": rec.get("reconcile_attempts")})
+
     rows = []
     for r in records or ():
         if not r.get("ok"):
-            buckets["NOT_SCORED"] += 1
+            _exclude("NOT_SCORED", r, r.get("reason"))
             continue
         basis = settlement_basis(r)
         if basis == BASIS_UNRESOLVED_EXPIRED:
-            buckets["UNRESOLVED_EXPIRED"] += 1
+            _exclude("UNRESOLVED_EXPIRED", r)
             continue
         if basis == BASIS_PENDING:
-            buckets["PENDING"] += 1
+            _exclude("PENDING", r)
             continue
         vs = r.get("variants") or {}
         if not vs:
-            buckets["PRE_FIX_NO_VARIANTS"] += 1
+            _exclude("PRE_FIX_NO_VARIANTS", r)
             continue
         if not all((vs.get(a) or {}).get("priced") for a in arms):
-            buckets["ARM_UNPRICED"] += 1
+            _exclude("ARM_UNPRICED", r,
+                     "reconciled=%s settled_evidence=%s" % (
+                         r.get("reconciled"),
+                         bool(r.get("settlement_evidence"))))
             continue
         rows.append(r)
     rows.sort(key=lambda r: (window_start_epoch(str(r.get("market"))) or 0.0))
     n = len(rows)
     out: Dict[str, Any] = {
         "comparable_windows": n, "excluded": buckets,
+        "excluded_detail": sorted(
+            detail, key=lambda d: str(d.get("market"))),
         "arms": {}, "vs_control": {}, "control": control,
         "target_usd": str(tgt),
         "labels": ("MODELLED fills, venue-confirmed OUTCOME only. Nothing was "
