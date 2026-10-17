@@ -3842,3 +3842,131 @@ SETTLEMENT-RESOLVED records only**, not from rollover records, and one window
 is not a comparison. Collection has started; the decision rule frozen in
 46.5 stands unchanged.
 
+
+---
+
+## 48. Forward accounting path: verified end to end, two defects found and fixed
+
+Read-only verification of the whole forward path, not just rollover logging.
+Nothing about the strategy, the arms, the risk limits or the settlement RULES
+is changed. Two concrete defects were demonstrated first; both fixes are
+confined to accounting and reporting.
+
+### 48.1 What the path does correctly
+
+- `reconcile_pending` is wired and runs: `schedule_settlement(_spl)` is called
+  after each rollover emit and the reconciler runs on the side worker, so a
+  settlement read cannot block websocket capture.
+- It is append-only and idempotent: a resolved record is APPENDED carrying
+  `supersedes`, the original scoring record stays on disk verbatim, and a
+  second pass sees `settlement_evidence` and declines as `ALREADY_RECONCILED`.
+- It fails closed for accounting: only `settlement_from_bbo` evidence with a
+  yes_value of exactly 0 or 1 is accepted; an unsettled window stays PENDING
+  and one past the budget is CLOSED as `UNRESOLVED_EXPIRED`, never priced.
+- **It does reprice the variants.** `reconcile_settlement` walks
+  `out["variants"]` and sets `net_usd`, `priced`, `matched_pair_net_usd` and
+  `residual_settlement_net_usd` per label, so B25/B25D2/B25D3 do get a
+  settlement-resolved total net. That was the first thing checked, because if
+  it repriced only the A policies the whole comparison would be impossible.
+
+Settlement lag is by design, not a fault: the reconciler's pass is scheduled
+at rollover, when the just-closed window has only that instant expired, so a
+window resolves at the FOLLOWING rollover. Verified independently from here:
+at 11:49Z the venue already had 1130z at `MARKET_STATE_EXPIRED`, yes_value 1,
+so the record is resolvable and simply had not been passed yet.
+
+### 48.2 Defect 1 (reporting): the settled line omitted every variant
+
+`PMUS_SHADOW_SETTLED` logged only the four A-policy nets. The variants'
+settlement-resolved net was written to the volume store and **never reached
+any readable surface** -- and `L5_SHADOW_POLICY_TOKEN` is unset, so the
+bounded `/shadow-policy` read path 404s by design (section 46.6). The forward
+depth comparison was therefore being collected into a place nothing could
+read. This is the section 41 observability gap recurring in the settlement
+path.
+
+Fix, in `src/pmus_ws_evidence_recorder.py`, inside the existing
+`PMUS_SHADOW_SETTLED` payload: add a `variants` block carrying per label
+`net_usd`, `matched_pair_net_usd`, `residual_settlement_net_usd`,
+`matched_qty`, `residual_qty`, `split_basis`, `priced`. A summary of figures
+already computed and already persisted -- no new computation, no decision, no
+state, no network call, and `or None` keeps the line unchanged when no
+variants ran.
+
+### 48.3 Defect 2 (accounting): section 38's blended-average split survived here
+
+The variant repricing computed `matched_pair_net_usd` as `m * (1 - ua - da)`
+where `ua`/`da` are blended averages spanning matched AND unmatched fills --
+exactly the defect section 38 found and fixed offline with `fifo_decompose`,
+still live in the forward reconciliation path.
+
+Demonstrated on section 38's own case, run through the deployed function
+(UP 5@0.60 + 5@0.20 against DOWN 5@0.37, settling YES):
+
+```
+deployed variant repricing:  matched $1.15   residual $3.00   TOTAL $4.1500
+corrected FIFO:              matched $0.19   residual $4.00   TOTAL $4.19
+   split error: matched overstated $0.96, residual understated $1.00
+   TOTAL agreement: to the fee term only -- the total was never wrong
+```
+
+Fix, in `reconcile_settlement`: when the record carries a `fill_sequence`
+(the variants persist one), derive the split with `fifo_decompose` and tag
+`split_basis="FIFO"`. A record without a sequence keeps the old arithmetic
+and says so (`split_basis="BLENDED_AVERAGE_NO_FILL_SEQUENCE"`) rather than
+guessing. **`net_usd` is untouched** -- the total was always correct, only the
+split moved, and the two split fields have no consumers anywhere in `src/`,
+so no decision changes.
+
+A first pass at this demonstration wrongly used the $1/share capital
+OBLIGATION as the DOWN leg's cash and manufactured a $3.19 totals mismatch.
+The sim records `cash_out_usd` as `up_cost + dn_cost`, each at its own LEG
+price. There is no totals defect; the corrected demonstration is the one
+above.
+
+Tests: 114 in the evaluator file, two new ones pinning both halves of the
+claim -- that the FIFO split replaces the blended one AND that `net_usd` is
+unchanged -- plus the no-fill-sequence degradation path. 79 recorder and
+two-sided-probe tests green.
+
+### 48.4 The forward scorecard, as of 11:53Z
+
+Built read-only from stored log records; it writes nothing and contacts no
+venue. A window counts as comparable only when all three arms are
+settlement-resolved; everything else goes in its own bucket rather than
+being silently dropped.
+
+```
+windows observed at rollover            1   (cpc-btc-updown-15m-2026-10-17-1130z)
+scored (ok = true)                      1
+not scored                              0
+windows with a settled record           0
+UNRESOLVED_EXPIRED / failed reconcile   0
+duplicate records                       0
+fully resolved for ALL THREE arms       0
+```
+
+**No comparable windows yet, so no arm comparison is computed and no matched
+net, residual net, total net, paired difference, $5 count, worst window or
+settled capital figure is reported.** The one observed window has all five
+arms present with `priced: false`, which is the pending-residual state
+behaving correctly, and its capital exposure at rollover was B25 $23.95,
+B25D2 $24.15, B25D3 $20.65 against the $25.00 ceiling, with worst-case
+residual $2.24 / $4.80 / $2.03 against the $6.25 cap.
+
+### 48.5 Decision
+
+**Neither depth 2 nor depth 3 is approaching the $5/window objective on
+forward evidence, because there is no forward evidence yet: one observed
+window, zero settlement-resolved, zero comparable.** Any number quoted for
+depth 2 or 3 today would be the section 45/47 archive figures, which are
+in-sample and explicitly not validation.
+
+Before this section, the comparison could not have produced forward evidence
+at all -- defect 1 meant the settled variant nets never reached a readable
+surface, and defect 2 would have corrupted the matched/residual split that
+the promotion rule depends on. Both are now fixed, the arms stay frozen, and
+the decision rule frozen in 46.5 stands unchanged.
+
+MODELLED, SHADOW ONLY. No live orders, no new service, no capital increase,
+no limit loosened, no settlement rule changed. HALT and SHADOW_ONLY unchanged.

@@ -1333,12 +1333,34 @@ def reconcile_settlement(rec: Mapping[str, Any],
             m = min(up, dn); res = up - dn
             redeem = m + (res * yv if res > 0 else
                           ((-res) * (D(1) - yv) if res < 0 else D(0)))
-            matched_net = m * (D(1) - ua - da) - fees
-            resid_net = (res * (yv - ua) if res > 0 else
-                         ((-res) * ((D(1) - yv) - da) if res < 0 else D(0)))
+            # THE SPLIT IS FIFO, NOT BLENDED AVERAGES. `ua`/`da` span
+            # matched AND unmatched fills, so m*(1-ua-da) credits the pairs
+            # with the price of inventory that is still unmatched -- the
+            # defect section 38 found and fixed offline, which survived here
+            # in the forward reconciliation path. It overstates matched and
+            # understates residual by the same amount (UP 5@0.60 + 5@0.20 vs
+            # DOWN 5@0.37 settling YES: blended $1.15/$3.00, FIFO
+            # $0.19/$4.00), so the TOTAL was always right and only the split
+            # was wrong. `net_usd` below is therefore unchanged; only the two
+            # reporting fields move. A record with no persisted
+            # `fill_sequence` keeps the old blended split, because FIFO is
+            # not derivable without the sequence.
+            seq = v.get("fill_sequence")
+            if seq:
+                fd = fifo_decompose(seq, yes_value=yv)
+                matched_net = _d(fd.get("matched_pair_net_usd")) or D(0)
+                resid_net = _d(fd.get("residual_net_usd")) or D(0)
+                split_basis = "FIFO"
+            else:
+                matched_net = m * (D(1) - ua - da) - fees
+                resid_net = (res * (yv - ua) if res > 0 else
+                             ((-res) * ((D(1) - yv) - da) if res < 0
+                              else D(0)))
+                split_basis = "BLENDED_AVERAGE_NO_FILL_SEQUENCE"
             v.update(net_usd=str(redeem - cash - fees), priced=True,
                      matched_pair_net_usd=str(matched_net),
-                     residual_settlement_net_usd=str(resid_net))
+                     residual_settlement_net_usd=str(resid_net),
+                     split_basis=split_basis)
             priced_vs[label] = v
         out["variants"] = priced_vs
     return dict(out, net=nets, reconciled=True, reconcile_reason=None,

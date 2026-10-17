@@ -1401,3 +1401,59 @@ def test_depth_variants_actually_quote_at_their_own_depth(tmp_path, monkeypatch)
         assert sims[lbl].max_unmatched == sims["B25"].max_unmatched
         assert sims[lbl].max_resid_usd == sims["B25"].max_resid_usd
         assert sims[lbl].clip == sims["B25"].clip
+
+
+def test_reconciled_variant_split_is_fifo_and_the_total_is_unchanged():
+    """Section 38's defect survived in the FORWARD reconciliation path.
+
+    Blended up/dn averages span matched AND unmatched fills, so the pairs get
+    credited with the price of inventory still unmatched. The total was always
+    right; only the split was wrong. Pin both halves of that statement.
+    """
+    fills = [(1.0, "UP", "0.60", "5"), (2.0, "UP", "0.20", "5"),
+             (3.0, "DOWN", "0.37", "5")]
+    ua = (D(5) * D("0.60") + D(5) * D("0.20")) / D(10)
+    cash = D(5) * D("0.60") + D(5) * D("0.20") + D(5) * D("0.37")
+    rec = {"ok": True, "market": SLUG,
+           "net": {p: {"cash_out_usd": str(cash), "matched_qty": "5",
+                       "residual_up": "5", "residual_dn": "0"}
+                   for p in E.POLICIES},
+           "variants": {"T": {"up_qty": "10", "dn_qty": "5",
+                              "up_avg_px": str(ua), "dn_avg_px": "0.37",
+                              "cash_out_usd": str(cash), "fees_usd": "0",
+                              "fill_sequence": fills,
+                              "net_usd": None, "priced": False}}}
+    out = E.reconcile_settlement(rec, {"resolution_source":
+                                       "VENUE_SETTLEMENT_PX",
+                                       "yes_value": "1.0000", "ok": True})
+    v = out["variants"]["T"]
+    assert v["priced"] is True
+    assert v["split_basis"] == "FIFO"
+    fd = E.fifo_decompose(fills, yes_value=D(1))
+    assert D(v["matched_pair_net_usd"]) == D(fd["matched_pair_net_usd"])
+    assert D(v["residual_settlement_net_usd"]) == D(fd["residual_net_usd"])
+    # the blended figures this replaces, kept here so the regression is legible
+    assert D(v["matched_pair_net_usd"]) < D("1.15")      # was 1.15
+    assert D(v["residual_settlement_net_usd"]) > D("3.0")  # was 3.00
+    # and the TOTAL is the one the record already carried: redeem - cash - fees
+    assert D(v["net_usd"]) == (D(5) + D(5)) - cash - D(0)
+
+
+def test_reconciled_variant_without_a_fill_sequence_keeps_the_blended_split():
+    """FIFO is not derivable without the sequence, so an older record must
+    degrade to the previous arithmetic and SAY so rather than guess."""
+    cash = D(5) * D("0.60") + D(5) * D("0.37")
+    rec = {"ok": True, "market": SLUG,
+           "net": {p: {"cash_out_usd": str(cash), "matched_qty": "5",
+                       "residual_up": "0", "residual_dn": "0"}
+                   for p in E.POLICIES},
+           "variants": {"T": {"up_qty": "5", "dn_qty": "5",
+                              "up_avg_px": "0.60", "dn_avg_px": "0.37",
+                              "cash_out_usd": str(cash), "fees_usd": "0",
+                              "net_usd": None, "priced": False}}}
+    out = E.reconcile_settlement(rec, {"resolution_source":
+                                       "VENUE_SETTLEMENT_PX",
+                                       "yes_value": "1.0000", "ok": True})
+    v = out["variants"]["T"]
+    assert v["split_basis"] == "BLENDED_AVERAGE_NO_FILL_SEQUENCE"
+    assert D(v["matched_pair_net_usd"]) == D(5) * (D(1) - D("0.60") - D("0.37"))

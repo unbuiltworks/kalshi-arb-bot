@@ -2369,7 +2369,23 @@ async def run(minutes: Optional[float]) -> int:
                                           k: (r.get("net") or {}).get(
                                               k, {}).get("net_usd")
                                           for k in ("HOLD", "REPRICE",
-                                                    "CROSS", "BLIND")}}
+                                                    "CROSS", "BLIND")},
+                                      # the variants' SETTLED net. Without
+                                      # this the depth comparison resolves
+                                      # into the volume store and never
+                                      # reaches any readable surface, which
+                                      # is the section 41 observability gap
+                                      # recurring in the settlement path.
+                                      "variants": {
+                                          lbl: {kk: vv.get(kk) for kk in (
+                                              "net_usd",
+                                              "matched_pair_net_usd",
+                                              "residual_settlement_net_usd",
+                                              "matched_qty", "residual_qty",
+                                              "split_basis", "priced")}
+                                          for lbl, vv in (
+                                              r.get("variants") or {}).items()
+                                      } or None}
                                      for r in done],
                          "labels": ("venue-confirmed OUTCOME only; the fills "
                                     "remain MODELLED")},
