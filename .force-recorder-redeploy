@@ -1,2 +1,7 @@
 recorder redeploy marker: 2026-09-05T19:20Z PMUS_WS_L5_ALLOC floor 0 (OWNER 5554106892)
 recorder redeploy marker: 2026-09-06T14:05Z shadow INDEPENDENCE_RULE 2 (unchanged-state de-dup + restore replay); watch patterns now include the shadow modules
+2026-10-17T01:10Z  policy-B shadow variants (B10/B25/B50) alongside the
+  unchanged policy-A control. Recorder code itself is UNCHANGED; this file
+  exists only to rebuild the image so the updated
+  src/l5_shadow_policy_eval.py (not a watched path) reaches the container.
+  Gated behind L5_SHADOW_POLICY_VARIANTS=YES. Shadow only; no order path.
