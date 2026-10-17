@@ -4952,3 +4952,126 @@ unobservable in fills-only data.
 MODELLED, SHADOW ONLY. No deployment, no live orders, no capital increase,
 no new infrastructure; the frozen arms keep collecting. HALT and SHADOW_ONLY
 unchanged.
+
+---
+
+## 58. Order-placement mechanism: the ladder is SUPPORTED. The ladder policy is REJECTED.
+
+### 58.1 What fills alone can and cannot distinguish (2,000 windows sampled)
+
+```
+1. consecutive same-side same-price RUN length
+   median 1   mean 1.37   p90 2   max 36      78% of runs are a single fill
+
+2. DISTINCT prices filling in the SAME SECOND, same side
+   1 price  77.2%   2 prices 17.5%   3 prices 3.6%   4 prices 1.0%
+   5 prices 0.4%    6 prices 0.2%        >=2 prices: 22.8% of fill-seconds
+
+3. price-level persistence (levels with more than one fill)
+   first-to-last fill at a level: median 20s   p90 342s   max 861s
+   gap between fills at the same level: median 2s   p90 120s
+   levels quiet >60s then filling again: 22,620 (34.4% of multi-fill levels)
+
+4. completion timing
+   gap to next OPPOSITE-side fill: median 9s   p25 3s   p75 24s
+   gap to next SAME-side fill:     median 2s   p25 0s   p75 8s
+```
+
+**A single resting order cannot fill at two different prices in the same
+second.** It happens in 22.8% of his fill-seconds, up to six distinct prices
+at once. That is direct evidence of **simultaneous multi-level resting**.
+
+**34.4% of multi-fill levels go quiet for over a minute and then fill
+again** -- price walked away and came back while the order was still there.
+An active re-quoter would have moved that price. Levels persist up to 861
+seconds, essentially a whole window.
+
+**This updates section 26**, which left the multilevel ladder INCONCLUSIVE.
+On these two tests it is **SUPPORTED**, and active re-quoting (hypothesis Q)
+is **refuted as the primary mechanism** -- consistent with section 56, where
+re-quoting destroyed our own book.
+
+**What fills still cannot reveal**, stated plainly: for the other 77% of
+fill-seconds a ladder and repeated replenishment at a fixed level are
+observationally identical; his resting SIZES, his cancels, and every level he
+rested that never filled are invisible. Hypothesis 3 in the brief is
+confirmed -- his execution prices **constrain** the mechanism (they rule out
+one-order-at-a-time) but do not **reveal** his resting prices.
+
+### 58.2 The $25 ladder, tested
+
+Each level is its own order with its own join time, price and `queue_ahead`,
+volume counted strictly after its own join; partial fills modelled; capital
+reserved while resting and never released (a DOWN level reserves qty x $1 as
+a BUY_SHORT); the 10-contract cap enforced by withdrawing a level on a book
+update, never retroactively; fees, FIFO and settlement frozen. Every
+configuration is also run with `queue_ahead` inflated 1.5x.
+
+```
+DISCOVERY -- 20 forward windows
+arm                             place withd fills matchQ matched$   resid$   TOTAL$   $/win  paired
+frozen B25D3 (1 level, replen)      0     0   103    185  $+30.16  $-48.50  $-18.34  -0.917      --
+ladder K=2, 1.0x queue            139    15   106    185  $+16.56  $-49.35  $-32.79  -1.639  -0.723
+ladder K=2, 1.5x queue            139    18   111    175  $+15.06  $-52.65  $-37.59  -1.879  -0.963
+ladder K=3, 1.0x queue            150    21   114    185  $+16.07  $-25.70   $-9.63  -0.482  +0.435
+ladder K=3, 1.5x queue            149    22   119    195  $+16.64  $-38.50  $-21.86  -1.093  -0.176
+
+VALIDATION -- untouched windows after 1630z
+frozen B25D3                        0     0    18     40   $+5.33   $+1.05   $+6.38  +2.127      --
+ladder K=3, 1.0x queue             21     3    20     40   $+4.69   $-1.50   $+3.19  +1.063  -1.063
+ladder K=3, 1.5x queue             21     3    21     40   $+4.69   $-1.50   $+3.19  +1.063  -1.063
+ladder K=2 (both queues)           21     3 18/21     35   $+2.74   $-4.50   $-1.76  -0.587  -2.713
+```
+
+**REJECTED, on the pre-registered criterion.** Only one configuration looked
+better on discovery -- K=3 at face-value queue, +$0.435/window paired -- and
+it fails all three tests that matter:
+
+- it is **not significant** (t = +0.46, better in 8 of 20 windows);
+- it **evaporates under a pessimistic queue**: inflating `queue_ahead` 1.5x
+  turns +$0.435 into **-$0.176**. The brief said reject if the result depends
+  on optimistic queue assumptions, and it does;
+- it is **worse on the untouched validation windows** at both queue
+  assumptions: +$1.063/window against the control's +$2.127, paired -$1.063,
+  better in 1 of 3.
+
+### 58.3 The economic mechanism the evidence supports
+
+Look at matched net, not total: the ladder earns **$+16.07 on 185 matched
+contracts** where frozen B25D3 earns **$+30.16 on the same 185**. Identical
+quantity, half the money.
+
+**Persistence costs price quality.** A level placed at the window open and
+left there fills only when price walks into it -- which is exactly when the
+move has gone against that side. Frozen B25D3 re-derives its price after
+every fill, so its quote tracks the touch and its pairs cost less. The ladder
+buys queue priority and pays for it in pair cost, and on these windows the
+price it pays is larger than the priority is worth.
+
+This confirms hypothesis 2 in the brief: **pair completion depends on
+obtaining realistic fills, and a better-placed quote is not the same thing as
+a better-priced one.** It also qualifies hypothesis 1: the trajectory IS
+fundable at $25 -- a 3-deep two-sided ladder costs about $21.45 to arm
+(an UP level 5 x ~0.43, a DOWN level 5 x $1.00) and peak committed hit the
+$25.00 ceiling in every ladder arm -- but it can be armed roughly **once per
+window**, and arming it does not pay.
+
+### 58.4 Verdict
+
+**Mechanism: SUPPORTED** -- L5 rests multiple levels simultaneously and they
+persist; he is not primarily re-quoting.
+
+**Policy: REJECTED** -- reproducing that shape inside $25 / clip 5 / cap 10
+does not improve settlement-correct net. The one configuration that looked
+better is insignificant, depends on the optimistic queue assumption, and
+loses on the untouched sample.
+
+Five changes have now been rejected on held-out or robustness grounds (43,
+45, 54, 56, 58) and capital has been closed as an explanation (57). The
+surviving economic picture is unchanged: our matched book is positive, the
+residual takes more than it back, and neither price, inventory rules,
+capital, re-quoting nor ladder placement moves the total.
+
+MODELLED, SHADOW ONLY. No deployment, live orders, capital increase or new
+infrastructure; the frozen arms keep collecting. HALT and SHADOW_ONLY
+unchanged.
