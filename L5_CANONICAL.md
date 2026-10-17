@@ -4699,3 +4699,134 @@ tolerance only pays at his volume, and his volume needs his capital.**
 
 MODELLED, SHADOW ONLY. Nothing deployed, no strategy, capital, limit or arm
 change; collection continues. HALT and SHADOW_ONLY unchanged.
+
+---
+
+## 56. Re-quote experiment: FAIL. And L5's full net is unresolvable from public data.
+
+### 56.1 L5's FULL settlement-correct net, with both gaps named
+
+Section 55 priced only his matched book. That was one-sided: he ends a median
+window with unmatched inventory that has to be priced too. Pairing his entire
+corpus FIFO (not per-window medians) also corrects his average pair cost.
+
+```
+matched contracts  6,149,748  (1,113/window)   avg pair cost  0.9864
+residual contracts 1,121,184  (203/window)     avg cost       0.2838
+```
+
+**His average pair costs 0.9864 against our fee-adjusted breakeven of
+0.9857.** On our fee schedule his matched book is, before the maker credit,
+fractionally *under water*. The maker credit is the whole of his matched
+edge.
+
+```
+                              all fills MAKER        all fills TAKER
+matched net                   $+22.12/window         $-23.52/window
+residual, ALL WIN   [bound]  $+145.90/window        $+142.51/window
+residual, ALL LOSE  [bound]   $-57.10/window         $-60.49/window
+residual, price-implied       $+0.52/window          $-2.87/window
+TOTAL at price-implied        $+22.64/window         $-26.39/window
+```
+
+**GAP 1 -- settlement evidence is unavailable.** Both
+`gamma-api.polymarket.com` and `data-api.polymarket.com` now return 403 at
+this environment's egress proxy, so no authoritative outcome can be fetched
+for any of his 5,523 windows. His residual is reported as bounds plus a
+price-implied central estimate, never as a settled figure. The price-implied
+line assumes the residual settles at the price he paid; the only empirical
+check we have for that is section 42 on OUR venue (37.5% realized against
+42.8% implied, z=-0.43, n=16), which is consistent with zero edge but is not
+his venue.
+
+**GAP 2 -- maker versus taker is unobservable.** The public corpus carries no
+liquidity flag. The assumption is worth **$45.64 per window** and flips the
+sign of his entire business. Section 55's "+$18.82/window" should have
+carried this caveat in its headline; it did not, and that was an overstatement.
+
+**We cannot establish that L5's behaviour is profitable under PMUS
+economics.** It is profitable if he is a maker and his residual is fairly
+priced; it loses heavily if he is a taker. Nothing in the data we can reach
+decides which.
+
+### 56.2 The re-quote experiment
+
+Replace a stale resting order at the current depth-3 price, both sides always
+live. Strict timestamp order; no retroactive cancellation (decision at `t`,
+effective at `t+latency`, a print at or before that fills the OLD order at
+the OLD price); **queue priority reset** -- the replacement joins at the BACK
+at the new price with `queue_ahead` read at that moment and volume counted
+strictly after; latency bounded at 0s/1s/5s; no touch=fill; $25 ceiling,
+clip 5, depth 3, 10-contract cap, residual cap, fees and settlement
+accounting all unchanged. No threshold is tuned: a replacement is attempted
+whenever the intended price differs from the resting price.
+
+```
+DISCOVERY -- the 20 analysed forward windows
+arm                  att  acc  fills  matchQ  residQ  matched$   resid$   TOTAL$
+frozen B25D3           0    0    103     185     145   $+30.16  $-48.50  $-18.34
+re-quote, lat 0s     153  101      3       0      15    $+0.05   $-0.70   $-0.65
+re-quote, lat 1s     151   97      4       0      20    $+0.06   $+2.55   $+2.61
+re-quote, lat 5s     136   86     22       5     100    $+0.05  $-15.65  $-15.60
+
+VALIDATION -- untouched windows after 1630z (1645z, 1700z, 1715z)
+frozen B25D3           0    0     18      40      10    $+5.33   $+1.05   $+6.38
+re-quote, lat 0s      22   15      0       0       0    $+0.00   $+0.00   $+0.00
+re-quote, lat 1s      22   14      3       0      15    $+0.05   $+0.95   $+1.00
+re-quote, lat 5s      18   10      6       0      30    $+0.09   $+1.85   $+1.94
+
+paired vs control, validation:  0s $-2.127 (t=-2.43, better 0/3)
+                                1s $-1.793 (t=-1.70, better 1/3)
+                                5s $-1.480 (t=-0.59, better 2/3)
+```
+
+**VERDICT: FAIL.**
+
+On the discovery set the re-quote arm appears to improve total net
+(+$1.047/window paired). It does not. **Matched quantity goes from 185
+contracts to zero**, and matched net from $+30.16 to $+0.06. The apparent
+gain is the arithmetic of a book that has stopped trading: a flat position
+cannot lose on the residual. That is abstention, not edge, and the
+pre-registered rejection criterion -- matched net must not fall -- is
+violated outright.
+
+On the untouched validation windows there is no ambiguity at all: the control
+earns **$+2.127/window** and every re-quote scenario earns less, better in
+0 of 3, 1 of 3 and 2 of 3 windows.
+
+### 56.3 The mechanism, and what it refutes
+
+**Queue priority reset is fatal.** 151 replacement attempts, 97 accepted,
+**4 fills**. Each replacement rejoins behind a queue that section 39 measured
+at a median 840 contracts, and the book moves again before the new order can
+clear it, so it is replaced again. The order never survives at any one price
+long enough to reach the front. This is exactly the cost flagged in 55.7 as
+the thing that could sink the idea, and it sank it.
+
+**It also refutes section 55.6's premise.** Replacements split
+**COMPLETING 2, EXTENDING 95**. The orders that go stale are almost entirely
+on the *extending* side, not the completing side. Our completing-side quotes
+are not sitting parked at dead prices -- they are sitting in a queue, waiting,
+which is a different problem with a different fix. Section 55.6 named quote
+staleness as "the single largest reproducible behavioural difference"; that
+is now measured and wrong.
+
+### 56.4 Where this leaves the programme
+
+Four candidate changes have now been rejected on held-out or
+direction-neutral evidence: side-aware capital budget (43), late-EXTEND veto
+(45), 4c cancellation (54), and re-quote (56). The first three reduced the
+residual and cost more matched profit than they saved. This one destroys the
+matched book outright.
+
+The consistent mechanism across all four: **at our size, every fill we get is
+one we waited in a queue for, and anything that disturbs the wait costs more
+than the inventory it avoids.** Turnover on this venue is bought with queue
+time, and queue time is bought with capital -- L5's median peak committed is
+$938 against our $25.
+
+That is not a behavioural gap we can close by changing behaviour. No further
+rule, threshold, filter or re-quote change is proposed.
+
+MODELLED, SHADOW ONLY. Nothing deployed, no strategy, capital, limit or arm
+change; collection continues. HALT and SHADOW_ONLY unchanged.
