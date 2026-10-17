@@ -6059,3 +6059,106 @@ Tests on the landed tree: **1361** money path plus `test_l5_live_execution.py`,
 **522** cancellation/transport, **915** watchdog/halt/arming, **26** in the new
 file. HALT and `L5_SHADOW_ONLY` remain active and were not part of the
 deployment; no limit raised; the five staged variables still staged.
+
+## 66. HALT_RESET_INSPECT: read-only dry run, digest captured, watchdog restored
+
+Owner-authorised temporary swap of `l5-halt-watchdog` to the one-shot
+`deploy/l5_halt_reset` image to run the READ-ONLY inspect and nothing else.
+**No reset was performed and HALT was not cleared.**
+
+### 66.1 The latch
+
+```
+sha256 / L5_HALT_RESET_EXPECT
+    40f9c34033cced8a1006e0b922d30787735a88749b14e4df0a4442e7a879719e
+reason / L5_HALT_RESET_CONFIRM_REASON
+    UNMANAGED_RESTING_ORDER
+latched at   2026-10-16T03:40:12.037515+00:00   by l5-watchdog
+halt         true          would_clear   false
+labels       "READ-ONLY. Nothing was written."
+```
+
+**The latch evidence names `D4EFZNW00ZZ0`** — the XRP 0330z order. So the HALT
+was asserted at 03:40:12Z on precisely the order whose cancellation failed
+with `PermissionError` and which settled at `-37.9754`. That is independent
+confirmation of §64.2's causal chain, taken from the latch itself rather than
+from the log that first suggested it.
+
+`prior_resets` records exactly one earlier clearing:
+`owner-20261015-1945z-d47r06gg0zrx`, `cleared: true`,
+2026-10-15T23:28:37Z, by "PMUS owner (explicit approval in chat)" — the
+*other* PermissionError order. A new `L5_HALT_RESET_ID` must differ from it,
+since consumed ids are refused.
+
+### 66.2 A NEW BLOCKER the inspect surfaced
+
+```
+preconditions.registry  ok TRUE   readable, age 0.001s, live_orders 0,
+                                  http://l5-pmus-live.railway.internal:8081
+preconditions.venue     ok FALSE  "NO_VENUE_CREDENTIALS: this boot cannot
+                                  perform the authenticated venue checks."
+```
+
+Gate 4(a)/(b) — the venue reporting zero open orders and no non-zero position
+— **cannot be machine-verified in this configuration**, even though
+`PMUS_API_KEY_ID` and `PMUS_API_SECRET_KEY` are present on the service:
+`pmus_auth.has_credentials()` returned false for that boot. So a real RESET
+would be **REFUSED** today regardless of a correct attestation. That must be
+resolved before the ceremony can complete; it was not visible until now.
+
+### 66.3 How RESET was made unreachable
+
+A Railway service variable overrides the image's `ENV
+L5_HALT_RESET_INSPECT=YES`, and this service already carried all seven
+`L5_HALT_RESET_*` variables with values redacted to an OAuth session. Had the
+service value not been `YES`, `main()` would have taken the reset path with a
+pre-populated ceremony of unknown content. So `L5_HALT_RESET_INSPECT` was
+pinned to `YES` (with `skipDeploys`) **before** the image could boot, which
+makes `perform_reset` unreachable: `main()` is `if inspecting: … return 0`,
+and `inspect()` is documented "READ-ONLY. Never writes, never clears."
+
+**Disclosed deviation.** That variable's prior value could not be read and
+therefore cannot be restored. It is inert under the restored credential-free
+watchdog image, which contains no reset script, and `YES` is the image's own
+default — the fail-safe direction. Every other field was restored exactly.
+
+### 66.4 Restoration evidence
+
+Changed, then restored exactly: `dockerfilePath`
+→ `deploy/l5_halt_reset/Dockerfile` → back to
+`deploy/l5_halt_watchdog/Dockerfile`; `startCommand` → `python3 -m
+scripts.l5_halt_reset` → back to `python3 -m scripts.l5_halt_watchdog`;
+`restartPolicyType` → `NEVER` → back to `ALWAYS`.
+
+Untouched throughout: source repo and branch, `builder`, `watchPatterns`,
+`buildEnvironment`, `runtime`, regions and replicas, the volume
+(`l5-halt-watchdog-state`, 1024MB, us-east4-eqdc4a, mounted at `/data`), all
+other variables, tracing. Post-restore `describe-service` matches the
+pre-swap baseline field for field, `state: live`, latest deployment
+`094284d9` SUCCESS. The environment's staged patch `a8fb9c09` is still
+`STAGED` with `changeCount 5` and an unchanged `updatedAt`, so the five
+unverifiable variables were **not** committed.
+
+Sweeps resumed at **21:13:15Z** and are healthy: `cancel_enabled false`,
+`read_error null`, `report_age_s` fresh, `open_orders 0`, `overdue []`,
+`heartbeat_refused "refusing to overwrite a latched HALT"` — the latch
+survived, as expected for a volume-backed file.
+
+**Sweep gap: 21:10:25Z → 21:13:15Z, about 2m50s.** Through it the latch
+persisted on the volume, there were zero open orders and zero exposure, and
+the executor's halt read fails closed, so submission stayed blocked. The old
+container kept sweeping until 21:09:52, i.e. through the entire build.
+
+**My error, recorded.** At 21:13:14 I issued a redeploy of the 2026-10-15
+baseline build after misreading a stale `BUILDING` status; the correct
+restore (`be30d6a6`, current source) had already succeeded at 21:12:57. That
+stray redeploy would have rolled the watchdog back to pre-`\Z` source. I
+superseded it with a redeploy of the correct build, which landed as
+`094284d9` SUCCESS. Net cost: one extra restart. Final state is correct.
+
+### 66.5 State
+
+HALT latched, `SHADOW_ONLY` set, `armed false`, zero open orders, zero
+exposure, cash `$344.41255`. No order, no arming, no reset, no limit change.
+Live eligibility still requires owner approval **and** the §66.2 credential
+blocker resolved.
