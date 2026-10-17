@@ -2948,3 +2948,131 @@ parameter to tune.
 n=7 residuals, of which 3 OOS windows all settled DOWN and are effectively
 one correlated draw. Every statement above is a shadow measurement. Nothing
 was submitted and no figure here is realized profit.
+
+---
+
+## 42. The residual is systematic -- in SIDE, not in outcome. Our own cash rule causes it.
+
+### 42.1 The window set was more than doubled, from existing infrastructure
+
+Section 41 closed at n=7 residual windows, which cannot settle a question with
+the word "systematically" in it. The recorder's own deploy logs carry the full
+`PMUS_LADDER_ROWS` / `PMUS_TRADE_ROWS` tape across deployments, so **11
+additional complete windows** were harvested read-only and replayed:
+2145z, 2200z, 2230z, 2245z, 2300z, 2345z, 0000z, 0015z, 0030z, 0045z, 0200z.
+
+None overlaps the original 9. Settlement for all 11 is authoritative
+(`VENUE_SETTLEMENT_PX`, `MARKET_STATE_EXPIRED`), 5 UP and 6 DOWN -- a far
+better balanced mix than the three all-DOWN OOS windows section 40 warned
+about. 4 of 4,124 log entries were truncated by the log transport and were
+dropped (0.1%); no window lost material tape.
+
+No deployment, no new service, no parameter changed. Frozen B throughout.
+
+### 42.2 Total economics, 20 windows, $25 ceiling
+
+```
+matched  $+20.73     residual  $-12.70     TOTAL  $+8.03
+per window: mean $+0.402   stdev $3.344   mean/stdev 0.12   positive 10/20
+```
+
+The matched edge is real and survives trebling the sample. The residual
+takes 61% of it back. Mean/stdev of 0.12 at n=20 is still indistinguishable
+from zero: **no demonstrated positive total edge.**
+
+### 42.3 Unmatched inventory does NOT systematically land on the losing side
+
+```
+residual side won                            6 of 16  (37.5%)
+quantity-weighted cost-implied probability           0.428
+expected wins 6.85, observed 6                z = -0.43
+```
+
+At n=16, conditional on the price we paid, the residual settles as often as
+its price says it should. Section 41's finding holds at more than double the
+sample: **there is no adverse selection in the outcome.**
+
+### 42.4 It DOES systematically land on one side
+
+```
+residual side was UP in 14 of 16 windows      z = +3.00
+```
+
+That is the finding. The residual is not a fresh coin each window -- it is
+the *same directional bet* repeated. Sixteen long-UP positions in a market
+that settled DOWN 11 times out of 20 do not diversify; they move together.
+This is why -$12.70 did not average away over 20 windows and why section 40's
+"effective n ~ 1" caveat was closer to the truth than the window count.
+
+### 42.5 The cause is our own cash rule, not the market
+
+On this venue the UP leg is an ordinary buy and owes its price; the DOWN leg
+is a `BUY_SHORT` and owes **$1 a share**. At a typical UP price of 0.43:
+
+```
+UP   5-contract clip:  5 x 0.43 = $2.16
+DOWN 5-contract clip:  5 x 1.00 = $5.00      2.3x the cash for the same size
+```
+
+Measured over the 20 windows at $25: **385 UP fills against 285 DOWN**, with
+the DOWN side consuming $285.00 of cash for 285 contracts against the UP
+side's $166.15 for 385. `CAPITAL_CEILING` is the dominant refusal (82,071 of
+146,805). A single shared capital pool therefore rations the DOWN leg about
+twice as hard as the UP leg, and the leftover inventory is long UP by
+construction.
+
+**Causal test, existing knob only, nothing fitted.** If capital rationing is
+the cause, the bias must decay as the ceiling rises. It does, monotonically:
+
+```
+ceiling   UP fills  DN fills   DN/UP   residual UP   z
+  $25        385       285      0.74     14 of 16   +3.00
+  $50        525       470      0.90     13 of 18   +1.89
+ $100        575       540      0.94     12 of 19   +1.15
+```
+
+The explanation is confirmed. Note what it does NOT buy: at $50 total net is
+**-$9.41** and at $100 **+$2.41**. Raising the ceiling relieves the bias by
+funding more of everything, including more residual exposure. Consistent with
+sections 36 and 39, **more capital is not the fix.**
+
+### 42.6 Is a viable reduction mechanism available?
+
+The mechanism rejected in section 41 (taker exit at T-120s) aimed at the
+wrong target: it tried to improve the *outcome* of a fairly priced bet. The
+new evidence points somewhere else -- stop *accumulating* the bet on one side.
+
+The candidate that follows directly from 42.5 is a **side-aware capital
+budget**: give each leg its own share of the ceiling instead of letting them
+draw on one pool. The split must equalize *contracts*, not dollars -- an even
+50/50 dollar split would make the DOWN side scarcer still and make the bias
+worse. The capacity-equalizing split is roughly 1 : 1/E[up_px], about 30/70
+UP:DOWN at today's prices, and it is read off the venue's cash rule rather
+than fitted to any window.
+
+It is not evaluated here, and it is not a tuning knob in disguise: it targets
+the measured bias (z=+3.00) rather than the matched edge, costs no capital,
+and is falsifiable -- if it works, DN/UP fills approach parity at an
+unchanged $25 ceiling and residual-UP frequency falls toward 50% while
+matched net is unharmed. If matched net falls, it is rejected.
+
+### 42.7 Decision and recommended next action
+
+**Unmatched inventory does not systematically end up on the losing side. It
+systematically ends up on the same side -- long UP in 14 of 16 windows,
+z=+3.00 -- because a single capital pool rations our $1-a-share DOWN leg
+roughly twice as hard as our $0.43-a-share UP leg.** The residual loss is
+therefore not an unavoidable tax and not an outcome-prediction problem: it is
+a correlated directional exposure created by our own cash accounting, and
+that is an identifiable and in-principle reducible cause.
+
+**One recommended next action:** evaluate the side-aware capital budget of
+42.6, offline, as a single pre-registered variant on these 20 windows, and
+accept it only on the two-sided criterion already stated (DN/UP fills toward
+parity AND matched net unharmed). Because that criterion is checked on
+windows already used, it establishes sign only; confirmation must come from
+forward windows accumulated by the already-deployed shadow evaluator, which
+now emits A/B10/B25/B50 per rollover. Nothing else should change.
+
+All figures MODELLED, SHADOW ONLY. Nothing was submitted and no figure here
+is realized profit. HALT and SHADOW_ONLY unchanged.
