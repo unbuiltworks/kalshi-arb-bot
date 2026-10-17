@@ -2769,3 +2769,182 @@ which needs roughly 2-3x the matched quantity the flow supports.
 
 More parameter tuning on these windows cannot change this, because the term
 that decides the outcome is not a parameter.
+
+---
+
+## 41. Residual adverse-selection audit: the residual is fairly priced, not adversely selected
+
+### 41.1 Deployment verified (not merely triggered)
+
+Deployment `a3cb5681-0c17-4403-9c8b-545397254d29`, status SUCCESS, built from
+commit `f77d6ae0` on `claude/l5-shadow-mode-deployment-epkz1i`, created
+02:02:38Z, live 02:04:03Z. The immediately-later deployment `9f7177b2` is
+SKIPPED -- that is the section 40 documentation commit `779fd3ef`, which
+touched no watched path, so it did not supersede anything.
+
+The deciding evidence is a live log line, not the deployment status. First
+post-deploy rollover, `PMUS_SHADOW_POLICY` at **02:15:03.483Z**, window
+`cpc-btc-updown-15m-2026-10-17-0200z`:
+
+```
+A  net_usd  HOLD 0.0366  REPRICE 0.0366  CROSS 0.0366  BLIND 0.0366  selected HOLD
+B10  fills 2  matched 5   residual 0   cap $8.30   net $0.0200  priced
+B25  fills 6  matched 15  residual 0   cap $24.05  net $1.2700  priced
+B50  fills 8  matched 15  residual 10  cap $37.40  net null     priced=false
+                                        worst-case residual loss $2.96
+```
+
+A and all three B variants are visible in one forward record. `rows 1`,
+`store_errors 0`, store `/state/pmus-ws/l5_shadow_policy.jsonl`. B50's
+`net_usd` is null and `priced` false because that window's residual is
+unsettled -- the UNRESOLVED path behaving as designed, not a gap. Forward
+observability is restored.
+
+### 41.2 A defect that silently zeroed offline runs
+
+`IndependentReplenishSim` quotes through `l5_two_sided_probe.build_orders`,
+which refuses `NOT_THE_AUTHORIZED_MARKET` unless BOTH `L5_TS_EXPERIMENT_ID`
+and `L5_TS_MARKET` are set in the process environment. Shell state does not
+persist between tool invocations, so an offline replay launched without them
+reports **zero fills for every window and no error**: every column reads
+`$0.000` and the run looks like a flat result rather than an inert one.
+
+Any offline replay of B must be launched as
+`L5_TS_EXPERIMENT_ID=<id> L5_TS_MARKET='cpc-btc-updown-15m-*' python3 ...`
+and must be rejected if `refusals` contains `NOT_THE_AUTHORIZED_MARKET`.
+The gate itself is correct and stays as it is; it is an offline-harness
+footgun, not a policy defect.
+
+### 41.3 The audit: all 9 independent windows, DEV/OOS preserved
+
+Frozen B (clip 5, depth 1, `max_unmatched_qty` 10, `max_residual_loss_usd`
+cap/4), $25 ceiling, corrected FIFO accounting, authoritative settlement
+only. `drift30` is the mid move over the 30s after the LAST fill on the
+residual side, signed in our favour.
+
+```
+win    set  settle side   qty    cost  resid_pnl  total_net  drift30  aligned?
+2030z  DEV  UP     FLAT     0       -    $+0.000    $+0.720        -  n/a
+2045z  DEV  UP     UP       5  0.4600    $+2.350    $+3.740  +0.0400  WITH / WON
+2100z  DEV  DOWN   DOWN     5  0.6325    $+1.150    $+2.790  +0.0100  WITH / WON
+2215z  DEV  UP     UP      10  0.4533    $+5.450    $+5.680  -0.0100  AGAINST / WON
+2315z  DEV  DOWN   UP      10  0.3920    $-3.500    $-2.670  +0.0700  WITH / LOST
+2330z  DEV  DOWN   FLAT     0       -    $+0.000    $+0.660        -  n/a
+0100z  OOS  DOWN   UP       5  0.4750    $-2.400    $-1.660  +0.0000  flat / LOST
+0115z  OOS  DOWN   UP      10  0.3500    $-3.000    $-0.930  +0.0300  WITH / LOST
+0130z  OOS  DOWN   UP      10  0.3460    $-3.100    $-2.040  +0.0300  WITH / LOST
+```
+
+7 of 9 windows end with a residual. Total residual P&L **-$3.05**.
+
+### 41.4 It is not short-horizon adverse selection
+
+If the residual were adversely selected in the market-making sense, the
+price would move AWAY from the inventory right after it is acquired. It
+does not: the 30s drift after the last residual-side fill is in our favour
+in **6 of 7** windows, mean **+0.0243**, median +0.0300, adverse in 1 of 7.
+The imbalance accumulates WITH the recent price movement, not against it.
+
+Nor is terminal settlement skewed against us beyond its price. The
+quantity-weighted cost of the residual side is **0.423**; the observed win
+rate is **3 of 7 = 0.429**. Those agree to within half a percentage point.
+We are not assuming a fair coin -- we measured the realized frequency
+against the price we actually paid, and at n=7 no deviation is detectable.
+
+### 41.5 The one measurable, identifiable component
+
+Marking the residual at the contemporaneous mid at the moment of its last
+acquiring fill:
+
+```
+2045z  +0.12   2100z  +0.71   2215z  +0.32   2315z  -0.47
+0100z  -0.30   0115z  -0.95   0130z  -0.71          total  -$1.28
+```
+
+We pay **$1.28 above the contemporaneous mark** across the 7 windows
+(-$0.18/window) for the clip that becomes the residual. A maker buying at
+the bid should be below the mid; being above it means the book had already
+moved down by the time the fill printed. That is a real, identifiable
+last-clip fill cost, and it accounts for **$1.28 of the $3.05** residual
+loss. The other **$1.77** is unhedged binary variance at a fair price.
+
+### 41.6 The one causal exit mechanism, evaluated and rejected
+
+Tested: at T-120s (after B has stopped quoting, no foresight, fixed clock
+time) unwind the residual as a taker at the then-current far touch, with
+the taker fee charged.
+
+```
+win    hold_pnl  exit_pnl   delta
+2045z    $+2.70    $+2.16   $-0.54
+2100z    $+1.84    $+1.46   $-0.38
+2215z    $+5.47    $-0.01   $-5.48
+2315z    $-3.92    $-3.83   $+0.09
+0100z    $-2.38    $-0.01   $+2.37
+0115z    $-3.50    $+1.42   $+4.92
+0130z    $-3.46    $-1.00   $+2.46
+```
+
+Total +$3.43 over 7 windows, **mean +$0.49/window, stdev $3.28, t = 0.40**.
+That is indistinguishable from zero. It also fails the standard set for it:
+in 3 of 7 windows the exit sacrifices value it does not save, including
+**-$5.48** in 2215z, where the held residual was the eventual winner. The
+mechanism trades one fairly priced binary for another at a taker fee.
+
+**Rejected.** No change to B, to the caps, or to the exit path.
+
+### 41.7 Comparison with L5's own post-fill inventory
+
+Measured over the deduped L5 BTC15m corpus (697,339 fills, 5,523 windows),
+signing DOWN holdings as short UP:
+
+```
+windows ending FLAT                  1 of 5523  (0.0%)
+abs residual, shares                 median 143   p90 466   max 1764
+residual / gross traded              median 0.077  mean 0.113  p90 0.240
+residual side                        UP 2642 / DOWN 2880
+fills per window                     median 111
+```
+
+L5 ends essentially **every** window carrying residual inventory, with no
+directional bias (48/52 UP/DOWN). Carrying residual is his normal state,
+not a failure mode -- which matches the operating model and contradicts any
+reading of B's residual as an error to be engineered away.
+
+The difference is not the residual, it is what the residual is measured
+against. Our ratio: residual/gross median **0.143** (mean 0.187) against his
+**0.077**. In absolute terms the gap is far larger: his gross is ~1,850
+shares/window against our 35, so his matched-to-residual ratio is about
+**13**, ours about **1.5**. With a matched edge near $0.05-0.09/share and a
+residual standard deviation near $0.49/share, the matched edge only
+dominates the residual noise above a ratio of roughly 14. L5 operates at
+that threshold. B operates an order of magnitude below it.
+
+His venue economics are not transferable and nothing here assumes they are;
+the ratio is a structural statement about our own numbers.
+
+### 41.8 Decision
+
+**Residual inventory is not an identifiable, economically reducible source
+of losses in B.** The two reducible hypotheses both fail on the evidence:
+short-horizon adverse selection is absent (drift favourable in 6 of 7), and
+terminal settlement matches the price paid (42.9% realized against 42.3%
+implied). The one causal exit mechanism tested is statistically null
+(t=0.40) and sacrifices more than it saves in 3 of 7 windows.
+
+Only $1.28 of the $3.05 is an identifiable cost -- paying above the mark on
+the last clip -- and it is a fill-quality cost, not an inventory-direction
+cost.
+
+It is also **not an unavoidable tax that makes B unprofitable in principle.**
+B is unprofitable as configured for a different reason: at a
+matched-to-residual ratio of 1.5, a fairly priced residual's variance
+swamps a real matched edge. The binding term is **throughput**, not residual
+selection -- consistent with section 39 (flow-bound completion) and section
+36 (capital is not the constraint). Since available flow bounds throughput
+and B is frozen, this is recorded as the economic reason, not as a
+parameter to tune.
+
+n=7 residuals, of which 3 OOS windows all settled DOWN and are effectively
+one correlated draw. Every statement above is a shadow measurement. Nothing
+was submitted and no figure here is realized profit.
