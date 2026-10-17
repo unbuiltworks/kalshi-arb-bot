@@ -1619,3 +1619,106 @@ reconciler already produce exactly the missing measurement: settlement-
 resolved one-sided windows. Let them run until `alpha` has n > 1 and the
 one-sided frequency has a usable interval. Until then no parameter change,
 size increase or live probe is justified by evidence.
+
+## 28. The behavioural bottleneck: our engine quotes ONCE per window. 2026-10-17.
+
+### Scope correction to section 27
+
+Section 27 measured a **two-quote policy**, not L5's process. A verdict drawn
+from a policy that quotes once per window cannot speak to a strategy that
+trades ~90-133 times per window. Section 27's NOT VIABLE stands **only for
+that policy** and is not evidence about L5 replication.
+
+### L5's actual intrawindow lifecycle (FIFO over 697,339 fills)
+
+| per window, median | DISCOVERY (2,165) | HOLDOUT (3,346) |
+|---|---|---|
+| fills | **84** | **133** |
+| matched quantity | 648.1 | 1,154.5 |
+| peak one-sided imbalance | 227.2 | 291.4 |
+| residual carried to settlement | 120.8 | 159.1 |
+| **turnover (matched / peak imbalance)** | **2.8x** | **3.9x** |
+| completion CYCLES (returns to balance) | **0** | **0** |
+| re-entries after a completion | **0** | **0** |
+| windows with >= 2 cycles | 8.8% | 7.5% |
+
+**This corrects a natural reading of "continuous process".** L5 does NOT
+repeatedly complete and re-enter: the median window contains **zero** returns
+to balance, and only ~8% have two or more. It is **one continuous position,
+never flat, matched incrementally while it keeps growing**, carrying a large
+residual into settlement. Turnover of 2.8-3.9x means matching happens
+*alongside* accumulation, not in discrete cycles.
+
+### Where our engine diverges, exactly
+
+| per window | L5 (median) | our engine | ratio |
+|---|---|---|---|
+| fills | 133 | **2** | 66x |
+| matched quantity | 1,154.5 | 1.4 | 825x |
+| peak one-sided imbalance | 291.4 | 1.4 | 208x |
+| turnover | 3.9x | **1.0x** | 4x |
+| residual carried | 159.1 | 0 | — |
+| **quote generations** | **continuous** | **1** | — |
+
+The mechanism, located in code: `WindowAccumulator._open` calls
+`build_orders` exactly **once**, at the first book of the window
+(`src/l5_shadow_policy_eval.py`). After both legs model a fill the decision
+walk terminates (`if t_second is not None and t > t_second: return`) and the
+window is over for us. On the live path the same shape appears as
+`l5_live_execution.py:473` refusing once `live_order_count >=
+max_live_orders`, which is **1**.
+
+**The behavioural bottleneck is REPLENISHMENT: we never re-quote after a
+fill.** Not pricing — our one-tick-behind pair cost of 0.97 already beats
+L5's holdout 0.9898 (section 26).
+
+### The capital behind his process, stated separately
+
+Matching 1,154 contracts at pair 0.9898 deploys **~$1,143** of cash per
+window, with **~$146** of peak one-sided exposure. Our authorized envelope
+and worst-case ceiling are **$2.00** each: **571x cash, 73x risk**. Behaviour
+and economics are different constraints and this section does not mix them.
+
+### The correction, implemented and OFF by default
+
+`WindowAccumulator(replenish=True, max_generations=N)` opens a **new quote
+generation at the current book** once both legs of the previous one have
+modelled fills, reusing the existing `build_orders`, queue model and fee
+model. Default `replenish=False, max_generations=1`, so the deployed
+evaluator is byte-identical and a test asserts it.
+
+Two defects were found and fixed while wiring it: the 30s **window-open**
+grace check was rejecting every replenishment quote (silently disabling the
+feature), and `finish()` voided a window whose generations had completed.
+
+Measured on the 6 PMUS windows with coverage from the open:
+
+| window | current gens/legs/matched | replenish gens/legs/matched |
+|---|---|---|
+| 2030z | 1 / 2 / 1.25 | 4 / 7 / 3.68 |
+| 2045z | 1 / 2 / 1.36 | 5 / 9 / 5.42 |
+| 2100z | 1 / 2 / 1.43 | 2 / 3 / 1.43 |
+| 2215z | 1 / 2 / 1.37 | 2 / 3 / 1.37 |
+| 2315z | 1 / 2 / 1.38 | 5 / 9 / 5.62 |
+| 2330z | 1 / 2 / 1.49 | 2 / 3 / 1.49 |
+
+**2 legs -> 6 legs per window (2.8x), matched 1.38 -> 3.17 (2.3x).**
+
+### What this does NOT close
+
+6 legs against L5's 133 is still **22x short**. Replenishment closes the gap
+from 66x to 22x; the remainder is not replenishment logic. The next
+behavioural difference, identified but **not implemented**, is that this
+version waits for **both** legs before re-quoting, while L5's fills show no
+such coupling — a side that fills should be re-quoted immediately,
+independently of the other. Size is the third term: his ~8.7 contracts per
+fill against our 1.4.
+
+### Verdict and next action
+
+Behavioural bottleneck: **no replenishment**. Correction: implemented,
+default-off, 84 tests passing, money-path gate 1,427 passing, **not
+deployed**. It needs review before any deployment, and the economics of a
+replenished process remain unmeasured — each generation redeploys the same
+authorized envelope, so `cash_deployed_usd` must be read beside any turnover
+figure.

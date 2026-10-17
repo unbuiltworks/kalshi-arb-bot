@@ -243,8 +243,10 @@ def feed(acc, ladder, trades):
     return acc
 
 
+#: `process` is reported only by the incremental path -- it describes quote
+#: generations, which the one-shot batch evaluation does not model.
 IGNORE = {"incremental", "books_seen", "prints_seen",
-          "out_of_order_dropped", "decisions"}
+          "out_of_order_dropped", "decisions", "process"}
 
 
 @pytest.mark.parametrize("trs", [
@@ -266,6 +268,10 @@ def test_the_accumulator_holds_no_per_snapshot_history():
     acc = feed(E.WindowAccumulator(SLUG, **LIM), base_ladder(),
                [{"t": T0 + 5, "px": "0.63", "qty": "20", "trade_time": "a"}])
     for name, v in vars(acc).items():
+        if name == "generations":
+            # bounded by max_generations, NOT by window length
+            assert len(v) <= acc.max_generations
+            continue
         assert not isinstance(v, list), (
             "%s is a list: the accumulator must stay O(1) in window length"
             % name)
@@ -923,3 +929,62 @@ def test_the_token_is_never_logged_or_echoed():
     for line in added.splitlines():
         if "print(" in line or "wfile.write" in line:
             assert "token" not in line.lower()
+
+
+# ------------------------------------------- replenishment (OFF by default)
+
+def test_replenishment_is_off_by_default_and_changes_nothing():
+    acc = feed(E.WindowAccumulator(SLUG, **LIM), base_ladder(), BOTH_TRADES)
+    assert acc.replenish is False and acc.max_generations == 1
+    rec = acc.finish()
+    assert rec["process"]["replenish"] is False
+    assert rec["process"]["generations"] == 1
+    # identical to the batch evaluation on everything it also reports
+    want = E.evaluate_window(SLUG, base_ladder(), BOTH_TRADES, **LIM)
+    for k in sorted(set(want)):
+        if k in IGNORE:
+            continue
+        assert rec.get(k) == want.get(k), k
+
+
+def test_replenishment_opens_a_new_generation_after_both_legs_fill():
+    lad = base_ladder() + [dict(base_ladder()[0], t=T0 + 90.0),
+                           dict(base_ladder()[0], t=T0 + 120.0)]
+    trs = BOTH_TRADES + [
+        {"t": T0 + 95, "px": "0.63", "qty": "20", "trade_time": "c"},
+        {"t": T0 + 125, "px": "0.60", "qty": "20", "trade_time": "d"}]
+    one = feed(E.WindowAccumulator(SLUG, **LIM), lad, trs).finish()
+    many = feed(E.WindowAccumulator(SLUG, replenish=True, max_generations=4,
+                                    **LIM), lad, trs).finish()
+    assert one["process"]["generations"] == 1
+    assert many["process"]["generations"] > one["process"]["generations"]
+    assert (many["process"]["modelled_legs_filled"]
+            > one["process"]["modelled_legs_filled"])
+    assert D(many["process"]["matched_qty"]) > D(one["process"]["matched_qty"])
+
+
+def test_replenishment_is_bounded_and_reports_cumulative_cash():
+    lad = base_ladder() + [dict(base_ladder()[0], t=T0 + 60.0 * k)
+                           for k in range(2, 12)]
+    trs = []
+    for k in range(12):
+        trs += [{"t": T0 + 60 * k + 5, "px": "0.63", "qty": "20",
+                 "trade_time": "a%d" % k},
+                {"t": T0 + 60 * k + 10, "px": "0.60", "qty": "20",
+                 "trade_time": "b%d" % k}]
+    rec = feed(E.WindowAccumulator(SLUG, replenish=True, max_generations=3,
+                                   **LIM), lad, trs).finish()
+    assert rec["process"]["generations"] <= 3
+    # each generation redeploys the envelope: the cash number must grow
+    assert D(rec["process"]["cash_deployed_usd"]) > D("0")
+    assert "must be read beside the turnover" in rec["process"]["labels"]
+
+
+def test_replenishment_never_quotes_past_the_cancel_cutoff():
+    cut = TS.cancel_cutoff_from_start(E.window_start_epoch(SLUG))
+    late = dict(base_ladder()[0], t=cut + 5.0)
+    acc = E.WindowAccumulator(SLUG, replenish=True, max_generations=5, **LIM)
+    feed(acc, base_ladder(), BOTH_TRADES)
+    before = len(acc.generations)
+    acc.on_book(late)
+    assert len(acc.generations) == before

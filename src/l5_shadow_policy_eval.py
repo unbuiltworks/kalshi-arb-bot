@@ -485,13 +485,24 @@ class WindowAccumulator:
     def __init__(self, slug: str, *, tick: Any, min_qty: Any,
                  depth_ticks: int, cash_envelope: Any,
                  max_worst_case_loss: Any, book_age_s: Any = D("0.5"),
-                 open_grace_s: float = 30.0):
+                 open_grace_s: float = 30.0,
+                 replenish: bool = False, max_generations: int = 1):
         self.slug = str(slug)
         self.lim = dict(tick=tick, min_qty=min_qty, depth_ticks=depth_ticks,
                         cash_envelope=cash_envelope,
                         max_worst_case_loss=max_worst_case_loss)
         self.book_age_s = book_age_s
         self.open_grace_s = float(open_grace_s)
+        #: REPLENISHMENT, off by default so the deployed behaviour is
+        #: unchanged. L5 takes a median 133 fills per BTC15m window; this
+        #: accumulator models 2 and then stops, which is the behavioural
+        #: bottleneck section 28 measures. With replenish on, a new quote
+        #: generation is opened at the CURRENT book once both legs of the
+        #: previous one have modelled fills, so turnover can be compared
+        #: like for like instead of against a single pair.
+        self.replenish = bool(replenish)
+        self.max_generations = max(1, int(max_generations))
+        self.generations: list = []
         self.t_start = window_start_epoch(slug)
         self.opened = False
         self.refused: Optional[Dict[str, Any]] = None
@@ -535,6 +546,7 @@ class WindowAccumulator:
         if self.refused is not None:
             return
         self._decide(snap)
+        self._maybe_replenish(snap)
 
     def on_trade(self, t: Any, px: Any, qty: Any) -> None:
         tt = None if t is None else float(t)
@@ -569,12 +581,18 @@ class WindowAccumulator:
 
     # ----------------------------------------------------------------- stages
 
-    def _open(self, snap: Mapping[str, Any]) -> None:
+    def _open(self, snap: Mapping[str, Any], *,
+              replenishing: bool = False) -> None:
         t = float(snap["t"])
         if self.t_start is None:
             self.refused = {"ok": False, "reason": "WINDOW_START_UNREADABLE"}
             return
-        if t - self.t_start > self.open_grace_s:
+        # THE GRACE CHECK GUARDS THE WINDOW OPEN, NOT A RE-QUOTE. A
+        # replenishment quote is placed mid-window on purpose; applying the
+        # same 30s bound to it refuses every generation after the first and
+        # silently turns replenishment off, which is exactly what it did the
+        # first time this was wired.
+        if not replenishing and t - self.t_start > self.open_grace_s:
             # a restart mid-window: the opening book is gone for good
             self.refused = {"ok": False, "reason": "MISSED_WINDOW_OPEN",
                             "first_book_t_rel_s": round(t - self.t_start, 3),
@@ -613,6 +631,54 @@ class WindowAccumulator:
                          "reason": "QUEUE_AHEAD_UNREADABLE"}
         self.t0 = t
         self.opened = True
+
+    def _close_generation(self) -> dict:
+        """Freeze the generation just completed. Pure bookkeeping."""
+        fu = self.f_up or {}; fd = self.f_dn or {}
+        return {"index": len(self.generations),
+                "qty": str(self.qty),
+                "up_px": str(self.up_px), "dn_px": str(self.dn_px),
+                "up_filled": bool(fu.get("filled")),
+                "dn_filled": bool(fd.get("filled")),
+                "up_t": fu.get("t"), "dn_t": fd.get("t"),
+                "up_queue": fu.get("queue_ahead"),
+                "dn_queue": fd.get("queue_ahead")}
+
+    def _maybe_replenish(self, snap: Mapping[str, Any]) -> None:
+        """Open the next quote generation once this one is fully filled.
+
+        MODELLED, and bounded by `max_generations`. Each generation deploys
+        the SAME authorized envelope again, so `finish()` reports cumulative
+        cash deployed: the comparison is faithful only if that number is
+        read alongside it.
+        """
+        if not self.replenish or self.refused is not None:
+            return
+        if len(self.generations) + 1 >= self.max_generations:
+            return
+        if not ((self.f_up or {}).get("filled")
+                and (self.f_dn or {}).get("filled")):
+            return
+        t = float(snap["t"])
+        if t >= TS.cancel_cutoff_from_start(float(self.t_start)):
+            return
+        self.generations.append(self._close_generation())
+        prev_books = self.books
+        # reset ONLY the per-generation quote state; counters and census
+        # carry across so the window still reads as one window.
+        self.opened = False
+        self.f_up = self.f_dn = None
+        self._cum_up = self._cum_dn = D(0)
+        self._n_up = self._n_dn = 0
+        self._rp_px = self._rp_side = self._rp_from = None
+        self._rp_queue = None; self._rp_cum = D(0); self._rp_n = 0
+        self._rp_fill_t = None; self._rp_exec = None
+        self.first = {"REPRICE": None, "CROSS": None, "BLIND": None}
+        self._open(snap, replenishing=True)
+        if self.refused is not None:          # a refusal ENDS replenishment
+            self.refused = None               # without voiding the window
+            self.opened = False
+        self.books = prev_books
 
     def _acquired(self):
         """(t_acq, t_second, held_is_up) once one leg has modelled a fill."""
@@ -713,7 +779,7 @@ class WindowAccumulator:
             if self.refused.get("reason") == "NOT_ELIGIBLE":
                 rec["eligibility"] = {"ok": False, "reason": self.plan_reason}
             return dict(rec, **self.refused)
-        if not self.opened:
+        if not self.opened and not self.generations:
             return dict(rec, ok=False, reason="MISSED_WINDOW_OPEN")
         rec["eligibility"] = {"ok": True, "reason": self.plan_reason}
         rec["quote"] = {
@@ -736,6 +802,24 @@ class WindowAccumulator:
         rec["resting"] = {"up": f_up, "dn": f_dn}
         rec["refusal_census"] = dict(self.census)
         rec["decisions_evaluated"] = self.evaluated
+        gens = list(self.generations)
+        if self.opened and ((self.f_up or {}).get("filled")
+                            or (self.f_dn or {}).get("filled")):
+            gens = gens + [self._close_generation()]
+        legs = sum(int(g["up_filled"]) + int(g["dn_filled"]) for g in gens)
+        matched = sum(D(g["qty"]) for g in gens
+                      if g["up_filled"] and g["dn_filled"])
+        cash = sum(D(g["qty"]) * (D(g["up_px"]) + D(g["dn_px"])) for g in gens
+                   if g["up_filled"] and g["dn_filled"])
+        rec["process"] = {
+            "replenish": self.replenish,
+            "generations": len(gens),
+            "modelled_legs_filled": legs,
+            "matched_qty": str(matched),
+            "cash_deployed_usd": str(cash),
+            "labels": ("MODELLED turnover. Each generation redeploys the "
+                       "SAME authorized envelope, so cash_deployed_usd is "
+                       "the number that must be read beside the turnover.")}
         acq = self._acquired()
         yv = _d(yes_value)
         if acq is None:
