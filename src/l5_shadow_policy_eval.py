@@ -1262,6 +1262,30 @@ def settlement_basis(rec: Mapping[str, Any]) -> str:
     return BASIS_VENUE_SETTLED
 
 
+def variants_pending(rec: Mapping[str, Any]) -> bool:
+    """Does any policy-B variant still carry an unpriced residual?
+
+    THE DEFECT THIS CLOSES. `settlement_basis` reads the A policy alone, so a
+    window where A ends FLAT reports BASIS_MODELLED_MATCHED -- outcome
+    independent, nothing to settle -- and `_pending_markets` skipped it. But
+    the variants quote their own sizes against their own caps and routinely
+    end with inventory when A does not, so their residual stayed null
+    forever and the window could never enter the depth comparison. Observed
+    live on 1200z and 1215z: A priced, all three compared arms unpriced, both
+    windows settled at the venue the whole time.
+    """
+    if (rec or {}).get("reconcile_closed"):
+        return False
+    for v in ((rec or {}).get("variants") or {}).values():
+        if not isinstance(v, Mapping):
+            continue
+        if v.get("priced"):
+            continue
+        if (_d(v.get("residual_qty")) or D(0)) != 0 or v.get("net_usd") is None:
+            return True
+    return False
+
+
 def reconcile_settlement(rec: Mapping[str, Any],
                          evidence: Optional[Mapping[str, Any]]
                          ) -> Dict[str, Any]:
@@ -1285,7 +1309,8 @@ def reconcile_settlement(rec: Mapping[str, Any],
     if out.get("settlement_evidence"):
         return dict(out, reconciled=False,
                     reconcile_reason="ALREADY_RECONCILED")
-    if settlement_basis(out) != BASIS_PENDING:
+    a_pending = settlement_basis(out) == BASIS_PENDING
+    if not a_pending and not variants_pending(out):
         return dict(out, reconciled=False,
                     reconcile_reason="NOTHING_PENDING")
     ev = dict(evidence or {})
@@ -1299,8 +1324,10 @@ def reconcile_settlement(rec: Mapping[str, Any],
         return dict(out, reconciled=False,
                     reconcile_reason="YES_VALUE_NOT_BINARY",
                     offered_yes_value=ev.get("yes_value"))
-    nets = {}
-    for p, n in (out.get("net") or {}).items():
+    # An A leg that ended flat is outcome-independent arithmetic and is NOT
+    # restated as venue-settled just because the variants needed evidence.
+    nets = dict(out.get("net") or {}) if not a_pending else {}
+    for p, n in ((out.get("net") or {}).items() if a_pending else ()):
         cash = _d(n.get("cash_out_usd"))
         m = _d(n.get("matched_qty"))
         ru = _d(n.get("residual_up")); rd = _d(n.get("residual_dn"))
@@ -1316,7 +1343,7 @@ def reconcile_settlement(rec: Mapping[str, Any],
                        net_usd=re_["net_usd"], settled=True,
                        pending_residual=False)
     base = (nets.get("BLIND") or {}).get("net_usd")
-    for p in nets:
+    for p in (nets if a_pending else ()):
         v = nets[p].get("net_usd")
         nets[p]["vs_blind_usd"] = (None if v is None or base is None
                                    else str(D(v) - D(base)))
@@ -1639,7 +1666,7 @@ def _pending_markets(log: "ShadowPolicyLog") -> list:
             continue
         if not rec.get("ok"):
             continue
-        if settlement_basis(rec) != BASIS_PENDING:
+        if settlement_basis(rec) != BASIS_PENDING and not variants_pending(rec):
             continue
         out.append(mk)
     return sorted(out)

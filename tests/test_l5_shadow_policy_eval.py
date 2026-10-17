@@ -1560,3 +1560,71 @@ def test_depth_scorecard_is_idempotent_and_emits_a_small_line():
     first = E.depth_scorecard(rows)
     assert first == E.depth_scorecard(list(reversed(rows)))   # order-free
     assert len(_j.dumps(first, default=str)) < 3000, "the line must stay small"
+
+
+def test_a_flat_window_with_pending_variants_is_still_queued():
+    """THE DEFECT THAT BLOCKED THE COMPARISON.
+
+    settlement_basis reads the A policy alone. When A ends flat the window
+    reported BASIS_MODELLED_MATCHED -- nothing to settle -- and was skipped,
+    so variants holding their own residual stayed unpriced forever and the
+    window could never become comparable. Observed live on 1200z and 1215z.
+    """
+    rec = {"ok": True, "market": SLUG,
+           "net": {p: {"net_usd": "0.0399", "cash_out_usd": "10",
+                       "matched_qty": "5", "residual_up": "0",
+                       "residual_dn": "0", "pending_residual": False}
+                   for p in E.POLICIES},
+           "variants": {"B25": {"up_qty": "15", "dn_qty": "10",
+                                "up_avg_px": "0.40", "dn_avg_px": "0.55",
+                                "cash_out_usd": "11.5", "fees_usd": "0",
+                                "residual_qty": "5", "net_usd": None,
+                                "priced": False}}}
+    assert E.settlement_basis(rec) == E.BASIS_MODELLED_MATCHED
+    assert E.variants_pending(rec) is True
+    log = type("L", (), {"latest": {SLUG: rec}, "settled": set()})()
+    assert E._pending_markets(log) == [SLUG]
+
+
+def test_reconciling_an_a_flat_window_prices_variants_without_restating_a():
+    """The A leg is outcome-independent arithmetic and must not be relabelled
+    venue-settled just because the variants needed evidence."""
+    rec = {"ok": True, "market": SLUG,
+           "net": {p: {"net_usd": "0.0399", "cash_out_usd": "10",
+                       "matched_qty": "5", "residual_up": "0",
+                       "residual_dn": "0", "pending_residual": False}
+                   for p in E.POLICIES},
+           "variants": {"B25": {"up_qty": "15", "dn_qty": "10",
+                                "up_avg_px": "0.40", "dn_avg_px": "0.55",
+                                "cash_out_usd": "11.5", "fees_usd": "0",
+                                "fill_sequence": [(1.0, "UP", "0.40", "15"),
+                                                  (2.0, "DOWN", "0.55", "10")],
+                                "residual_qty": "5", "net_usd": None,
+                                "priced": False}}}
+    out = E.reconcile_settlement(rec, {"resolution_source":
+                                       "VENUE_SETTLEMENT_PX",
+                                       "yes_value": "1.0000", "ok": True})
+    assert out["reconciled"] is True
+    v = out["variants"]["B25"]
+    assert v["priced"] is True and v["split_basis"] == "FIFO"
+    assert v["net_usd"] is not None
+    # the A nets are byte-identical to what the record already carried
+    assert out["net"] == rec["net"]
+    for p in E.POLICIES:
+        assert "settled" not in out["net"][p]
+
+
+def test_variants_pending_is_false_once_priced_or_closed():
+    priced = {"ok": True, "variants": {"B25": {"priced": True,
+                                               "net_usd": "1",
+                                               "residual_qty": "5"}}}
+    assert E.variants_pending(priced) is False
+    flat = {"ok": True, "variants": {"B25": {"priced": False,
+                                             "net_usd": "0",
+                                             "residual_qty": "0"}}}
+    assert E.variants_pending(flat) is False          # nothing to settle
+    closed = {"ok": True, "reconcile_closed": True,
+              "variants": {"B25": {"priced": False, "net_usd": None,
+                                   "residual_qty": "5"}}}
+    assert E.variants_pending(closed) is False        # budget already spent
+    assert E.variants_pending({}) is False

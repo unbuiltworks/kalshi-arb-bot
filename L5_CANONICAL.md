@@ -4150,3 +4150,76 @@ no capital is increased: that remains the owner's decision.**
 
 MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged; five arms frozen; no
 limits touched; no live orders.
+
+---
+
+## 51. Why the scorecard never emitted: two reporting defects, both closed
+
+Deployment `92050969` (commit `c5b629f5`) went live at 12:22:44Z. The 12:30
+rollover emitted `PMUS_SHADOW_POLICY` for window 1215z with all five arms --
+so capture, scoring and the variants are all healthy -- but **no**
+`PMUS_SHADOW_SETTLED` and **no** `PMUS_SHADOW_SCORECARD`. The joint absence
+is the diagnosis.
+
+### 51.1 Defect A: the scorecard was emitted only when something resolved
+
+The emit sat inside `if done:`. On a pass where `reconcile_pending` resolves
+nothing -- which is most passes -- it printed nothing, so its absence carried
+no information and the first emission could be delayed indefinitely.
+
+Fixed by moving the emit to after the pass, unconditionally, still inside the
+same `try` on the same side worker and still in its own `try/except`. At
+rollover cadence it is now a **heartbeat**: a missing scorecard line means the
+settlement pass itself did not run.
+
+### 51.2 Defect B: a window where policy A ends flat was never reconciled
+
+This is the one that blocked the comparison.
+
+`settlement_basis` reads **the A policy alone**. When A ends flat it returns
+`BASIS_MODELLED_MATCHED` -- outcome-independent arithmetic, nothing to settle
+-- and `_pending_markets` skipped the window entirely. But the variants quote
+their own clips against their own caps and routinely end with inventory when
+A does not. Their residual therefore stayed `null` forever, and the window
+could **never become comparable**.
+
+Live evidence, both windows settled at the venue the whole time:
+
+```
+window  A (HOLD)   B25        B25D2      B25D3      venue
+1200z   0.0399 ok  unpriced   unpriced   unpriced   EXPIRED yes=0
+1215z   0.0405 ok  unpriced   unpriced   unpriced   EXPIRED yes=0
+```
+
+Two of the last two windows, and the last settled record of any kind was
+12:00:47Z. Left alone this would have starved the comparison indefinitely
+while every surface looked healthy.
+
+Fixed with `variants_pending(rec)` -- true when a compared arm is unpriced
+and still carries residual, false once priced or once the retry budget is
+closed -- used in two places:
+
+- `_pending_markets` now queues a window when the A leg is pending **or** a
+  variant is;
+- `reconcile_settlement` accepts such a record instead of refusing it
+  `NOTHING_PENDING`, and when the A leg needed nothing it **leaves the A nets
+  byte-identical** rather than relabelling outcome-independent arithmetic as
+  venue-settled. A test asserts `out["net"] == rec["net"]` and that no
+  `settled` flag is added to the A policies.
+
+Everything else is unchanged: the retry budget, the fail-closed evidence
+bars, the append-only store, `ALREADY_RECONCILED` idempotence, the FIFO
+split, the five frozen arms, every risk limit, and the strategy.
+
+### 51.3 Tests
+
+142 green in the evaluator and recorder files. New: the A-flat-with-pending-
+variants case is queued; reconciling it prices the variants without restating
+A; `variants_pending` is false once priced, false when a variant is genuinely
+flat, false once closed, and false on an empty record.
+
+Nothing here touches trading. Both defects were in which windows get
+*reported*, not in what the policies did.
+
+MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged; no live orders; no
+capital or limit change; five arms frozen.
