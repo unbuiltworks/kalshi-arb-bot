@@ -656,3 +656,13 @@ restatement verb + manifest c, INSPECT dry run, shadow-locked 2026-10-16T18:45Z
 # will PASS on realized alone. HALT and the shadow lock still block every
 # order, and clearing them is a separate decision the owner has not taken.
 apply manifest 20261016d, 23 legs, shadow-locked 2026-10-16T18:55Z
+
+# 2026-10-17: deploy the daily-loss-halt boundary fix ONLY (owner-authorised).
+# The production change set inside this image is exactly ONE source file,
+# src/l5_live_execution.py: InventoryStore.realized_current_utc_day() plus the
+# fail-closed guard that feeds it to daily_realized_loss_halt_usd. No trading
+# logic changed; no limit value changed; both $20 cumulative gates still read
+# the all-time account-wide total. HALT and L5_SHADOW_ONLY remain ACTIVE and
+# are NOT part of this deployment -- no order can reach the venue, and the
+# five staged experimental variables stay staged and uncommitted.
+deploy daily-halt boundary fix, shadow-locked and HALTed 2026-10-17T20:00Z
