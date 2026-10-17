@@ -1630,6 +1630,135 @@ def test_variants_pending_is_false_once_priced_or_closed():
     assert E.variants_pending({}) is False
 
 
+def _arm_backlog(slug=SLUG, yes="1"):
+    """A window shaped like the 0215z-1115z band: A reconciled, arms not.
+
+    The recorder shipped the arms block (section 48) before it learned to
+    queue on a pending arm (section 51), so a window settled in that gap
+    carries A's evidence AND null arms -- and every retry after it was
+    refused `ALREADY_RECONCILED` before `variants_pending` was consulted.
+    """
+    return {"ok": True, "market": slug, "reconciled": True,
+            "reconcile_attempts": 2,
+            "settlement_evidence": {"resolution_source": "VENUE_SETTLEMENT_PX",
+                                    "yes_value": yes,
+                                    "observed_at": 1760000000.0},
+            "net": {p: {"net_usd": "0.0399", "cash_out_usd": "10",
+                        "matched_qty": "5", "residual_up": "0",
+                        "residual_dn": "0", "pending_residual": False}
+                    for p in E.POLICIES},
+            "variants": {"B25": {"priced": True, "residual_qty": "0",
+                                 "net_usd": "0.0399"},
+                         "B25D2": {"up_qty": "14", "dn_qty": "10",
+                                   "up_avg_px": "0.50", "dn_avg_px": "0.47",
+                                   "cash_out_usd": "11.70", "fees_usd": "0",
+                                   "residual_qty": "4", "net_usd": None,
+                                   "priced": False},
+                         "B25D3": {"up_qty": "10", "dn_qty": "16",
+                                   "up_avg_px": "0.50", "dn_avg_px": "0.46",
+                                   "cash_out_usd": "12.36", "fees_usd": "0",
+                                   "residual_qty": "-6", "net_usd": None,
+                                   "priced": False}}}
+
+
+def test_evidence_on_the_record_does_not_strand_an_unpriced_arm():
+    """THE DEFECT THIS CLOSES. `ALREADY_RECONCILED` returned before
+    `variants_pending` was read, so a window whose A leg was reconciled by an
+    older build could never price its arms: `_pending_markets` kept queueing
+    it on the pending arm and the reconciler kept refusing it, spending the
+    retry budget and excluding the window from the depth comparison for good.
+    """
+    rec = _arm_backlog()
+    assert E.variants_pending(rec) is True
+    out = E.reconcile_settlement(rec, {"resolution_source":
+                                       "VENUE_SETTLEMENT_PX",
+                                       "yes_value": "1"})
+    assert out["reconciled"] is True and out["reconcile_reason"] is None
+    for a in E.SCORECARD_ARMS:
+        assert out["variants"][a]["priced"] is True
+        assert out["variants"][a]["net_usd"] is not None
+    # A was NOT re-priced: its nets come through byte-identical, and the
+    # original observation time is preserved rather than restamped.
+    assert out["net"] == rec["net"]
+    assert out["settlement_evidence"]["observed_at"] == 1760000000.0
+    assert E.depth_scorecard([out])["comparable_windows"] == 1
+
+
+def test_arm_re_entry_uses_the_recorded_outcome_not_an_offered_one():
+    """A recovered window can never be restated under a different settlement
+    than the one it was first reconciled against."""
+    on_record = E.reconcile_settlement(
+        _arm_backlog(yes="1"),
+        {"resolution_source": "VENUE_SETTLEMENT_PX", "yes_value": "1"})
+    contradicted = E.reconcile_settlement(
+        _arm_backlog(yes="1"),
+        {"resolution_source": "VENUE_SETTLEMENT_PX", "yes_value": "0"})
+    assert contradicted["settlement_evidence"]["yes_value"] == "1"
+    assert contradicted["variants"] == on_record["variants"]
+
+
+def _store_with(tmp_path, rec):
+    import json as _j
+    path = str(tmp_path / "store.jsonl")
+    with open(path, "w") as fh:
+        fh.write(_j.dumps(rec) + "\n")
+    return E.ShadowPolicyLog(tick="0.01", min_qty="0.01", depth_ticks=1,
+                             cash_envelope="25", max_worst_case_loss="5",
+                             path=path), path
+
+
+def test_arm_re_entry_is_unreachable_while_settled_gates_on_evidence(tmp_path):
+    """CHARACTERISATION, NOT AN ENDORSEMENT. `_load` puts every record
+    carrying `settlement_evidence` into `settled` and `_pending_markets`
+    skips `settled`, so the 0215z-1115z band is never queued and the
+    re-entry above never fires for it. The band stays excluded. This is
+    pinned so the fix is not read as recovering windows it cannot reach.
+    """
+    rec = _arm_backlog()
+    log, _ = _store_with(tmp_path, rec)
+    assert E.variants_pending(log.latest[SLUG]) is True
+    assert SLUG in log.settled
+    assert E._pending_markets(log) == []
+
+
+def test_requeueing_an_evidence_bearing_window_would_pop_its_evidence(tmp_path):
+    """THE HAZARD IN THE OBVIOUS FIX. Dropping the `settled` gate to let the
+    band re-enter does not price its arms -- the window is hours past close,
+    so `_reconcile_pending` takes its `expired` branch first, force-closes
+    it, strips `settlement_evidence` and relabels it UNRESOLVED_EXPIRED.
+    A's venue-confirmed outcome is thrown away to chase its arms, which is
+    strictly worse than leaving the band excluded. Exempt arm-only re-entry
+    from the age budget BEFORE touching the gate.
+    """
+    log, _ = _store_with(tmp_path, _arm_backlog())
+    log.settled.discard(SLUG)                      # the naive 'fix'
+    late = (E.window_start_epoch(SLUG) + float(E.TS.WINDOW_S)
+            + E.RECONCILE_MAX_AGE_S + 1.0)
+
+    def never_called(_path):
+        raise AssertionError("pricing a stored arm needs no venue call")
+
+    out = E._reconcile_pending(log, never_called, now=late)[0]
+    assert out["reconcile_reason"] == "SETTLEMENT_WINDOW_LAPSED"
+    assert out["reconcile_closed"] is True
+    assert out.get("settlement_evidence") is None
+    assert E.settlement_basis(out) == E.BASIS_UNRESOLVED_EXPIRED
+
+
+def test_arm_re_entry_is_idempotent():
+    """Running the reconciler twice over a recovered store is a no-op on the
+    second pass -- the double-count protection still holds."""
+    once = E.reconcile_settlement(
+        _arm_backlog(), {"resolution_source": "VENUE_SETTLEMENT_PX",
+                         "yes_value": "1"})
+    twice = E.reconcile_settlement(
+        once, {"resolution_source": "VENUE_SETTLEMENT_PX", "yes_value": "1"})
+    assert twice["reconcile_reason"] == "ALREADY_RECONCILED"
+    assert twice["reconciled"] is False
+    assert twice["variants"] == once["variants"]
+    assert twice["net"] == once["net"]
+
+
 def test_scorecard_names_the_excluded_windows_with_their_cause():
     """'41 excluded' must be readable as WHICH windows and WHY -- a historical
     backlog has to be distinguishable from one still accumulating."""

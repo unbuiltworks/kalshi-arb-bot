@@ -5423,3 +5423,107 @@ Remaining blockers, in order:
    variable names without values.
 
 Blocker 1 is the gating one and it is not mine to clear.
+
+## 61. The ARM_UNPRICED band: a real defect, an unreachable fix, and a trap
+
+The scorecard materialises autonomously (§52) and the forward cohort has
+grown 26 → 28 comparable windows. Its exclusion detail named a band worth
+investigating: **14 windows, 0215z–1115z, excluded as `ARM_UNPRICED` while
+reporting `reconciled=True settled_evidence=True` with 1–3 attempts spent.**
+A settled; its compared arms never priced. Recovering them would have raised
+the comparable sample 50% at no cost, so the band was worth chasing.
+
+### 61.1 The defect is real and is now closed
+
+`reconcile_settlement` returned `ALREADY_RECONCILED` *before* consulting
+`variants_pending`, so the §51 acceptance was shadowed for precisely the
+records that needed it — A priced, arms not. The recorder shipped the arms
+block (§48) before it learned to queue on a pending arm (§51); a window
+settled in that gap kept its arms null. Reproduced deterministically:
+
+```
+variants_pending      -> True
+reconcile_reason      -> ALREADY_RECONCILED
+arms priced after     -> {'B25': True, 'B25D2': False, 'B25D3': False}
+comparable_windows    -> 0
+```
+
+The guard now defers to `variants_pending`, and re-entry prices arms from
+data **already on the record** — no venue call, since the outcome is in A's
+own `settlement_evidence`. Verified: arms price (B25D2 `+2.30`, B25D3
+`-2.36` on the fixture — recovery is not biased toward a flattering
+answer); A's nets come through byte-identical; `observed_at` is preserved,
+not restamped; a second pass declines `ALREADY_RECONCILED` unchanged, so
+double-count protection holds; the **recorded** outcome wins over a
+contradictory offered one, so a window can never be restated under a
+different settlement than the one it first reconciled against.
+
+### 61.2 The fix cannot reach that band, and the obvious way to make it reach
+is destructive
+
+`_load` puts every record carrying `settlement_evidence` into `settled`, and
+`_pending_markets` skips `settled`. An evidence-bearing window is therefore
+never queued and never reaches the reconciler:
+
+```
+variants_pending(rec) -> True
+in log.settled        -> True
+_pending_markets      -> []
+```
+
+Dropping that gate is **not** the fix. These windows are hours past close,
+so `_reconcile_pending` takes its `expired` branch first:
+
+```
+reconcile_reason      -> SETTLEMENT_WINDOW_LAPSED
+reconcile_closed      -> True
+settlement_evidence   -> None
+basis                 -> UNRESOLVED_EXPIRED
+```
+
+A's venue-confirmed outcome would be **thrown away to chase its arms** —
+strictly worse than leaving the band excluded, and the likely origin of the
+`UNRESOLVED_EXPIRED: 27` bucket (0100z–0945z, `attempts: 0`, force-closed on
+first visit after a restart without any venue call). Anyone making the band
+comparable must exempt arm-only re-entry from the age budget — sound, since
+that budget exists for windows the *venue* has not settled, and these are
+already settled — **before** touching the `settled` gate.
+`test_requeueing_an_evidence_bearing_window_would_pop_its_evidence` pins the
+hazard; a characterisation test pins the unreachability so the fix is not
+misread as recovering windows it cannot reach.
+
+### 61.3 Status and verdict
+
+**The 14 windows stay excluded. The fix is defensive only and changes no
+production behaviour**, so the recorder was deliberately **not redeployed**
+for it: `src/l5_shadow_policy_eval.py` is unwatched, a deploy costs a
+restart, and the benefit here is zero. It ships free with the next change
+that genuinely needs deploying.
+
+No recovery was claimed and no number was restated. Forward collection is
+unaffected and reaches the 50-window mark in roughly six hours and 100 in
+under a day at ~4 windows/hour, so the band was never on the critical path.
+
+Tests: 151 (shadow policy eval + depth comparison), 94 (reconciliation
+suites), 255 (money path — untouched by this change, per the diff), 474
+(watchdog/ownership/halt/deadman/cancel-proof/orphan/disarmed/credential).
+Two failures in `tests/test_spread_scanner.py` are **pre-existing on clean
+HEAD**, in the legacy Kalshi scanner, unrelated to L5 and out of scope.
+
+### 61.4 The cohort reading, unchanged in direction
+
+At 28 comparable windows all three arms remain **net negative**, with the
+matched book positive and the residual taking more than it back — §41–§58's
+mechanism, now on a wider forward sample:
+
+```
+arm      matched    residual     total   mean/window   >= $5 target
+B25      +23.86      -48.15     -24.29      -0.87        2 / 28
+B25D2    +28.97      -72.60     -43.63      -1.56        2 / 28
+B25D3    +40.75      -59.60     -18.85      -0.67        1 / 28
+```
+
+B25D3 still leads the control (`+0.19`/window, better in 20 of 28) and is
+still **losing money absolutely** against a `+$5`/window objective. Nothing
+here is realized profit: fills are MODELLED, only the outcome is
+venue-confirmed.

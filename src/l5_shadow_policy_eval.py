@@ -1306,14 +1306,42 @@ def reconcile_settlement(rec: Mapping[str, Any],
     if not out.get("ok"):
         return dict(out, reconciled=False,
                     reconcile_reason="RECORD_NOT_SCORED")
-    if out.get("settlement_evidence"):
+    prior = out.get("settlement_evidence")
+    if prior and not variants_pending(out):
         return dict(out, reconciled=False,
                     reconcile_reason="ALREADY_RECONCILED")
     a_pending = settlement_basis(out) == BASIS_PENDING
     if not a_pending and not variants_pending(out):
         return dict(out, reconciled=False,
                     reconcile_reason="NOTHING_PENDING")
-    ev = dict(evidence or {})
+    # RE-ENTRY FOR ARMS AN OLDER BUILD LEFT UNPRICED. The guard above used to
+    # refuse every record carrying evidence, which shadowed the section 51
+    # `variants_pending` acceptance for exactly the records that needed it:
+    # A priced and its arms not. The recorder shipped the arms block
+    # (section 48) before it learned to queue on a pending arm (section 51),
+    # so a window settled in that gap kept its arms null -- the 0215z-1115z
+    # band, each reading `reconciled=True settled_evidence=True`. Re-entry
+    # re-prices nothing of A's: `a_pending` is false for these, so A's nets
+    # are copied through untouched. The outcome used is the one ALREADY ON
+    # THE RECORD, never a newly offered one, so a window can never be
+    # restated under a different settlement than the one it first reconciled
+    # against. No venue call is needed: every input is on the record.
+    #
+    # THIS IS DEFENSIVE ONLY -- IT DOES NOT RECOVER THAT BAND, AND THE
+    # OBVIOUS WAY TO MAKE IT DO SO DESTROYS EVIDENCE. `_load` puts every
+    # record carrying `settlement_evidence` into `settled`, and
+    # `_pending_markets` skips `settled`, so an evidence-bearing window is
+    # never queued and never reaches this function. Dropping that gate is
+    # NOT the fix: these windows are hours past close, so `_reconcile_pending`
+    # takes its `expired` branch FIRST and force-closes them, popping
+    # `settlement_evidence` and relabelling them UNRESOLVED_EXPIRED -- A's
+    # venue-confirmed outcome thrown away to chase its arms. Anyone making
+    # the band comparable must exempt arm-only re-entry from the age budget
+    # (sound, since the budget exists for windows the VENUE has not settled,
+    # and these are already settled) BEFORE touching the `settled` gate.
+    # `test_requeueing_an_evidence_bearing_window_would_pop_its_evidence`
+    # pins the hazard.
+    ev = dict(prior or evidence or {})
     src = str(ev.get("resolution_source") or "")
     if src not in POSITIVE_SETTLEMENT_SOURCES:
         return dict(out, reconciled=False,
