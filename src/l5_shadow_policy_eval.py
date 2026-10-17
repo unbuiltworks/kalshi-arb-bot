@@ -1887,3 +1887,60 @@ class IndependentReplenishSim:
                 "labels": ("MODELLED, OFFLINE. No order was submitted. "
                            "Capital is charged at placement and never "
                            "released by a completed pair.")}
+
+
+def fifo_decompose(fill_sequence: Sequence[Any], yes_value: Any = None
+                   ) -> Dict[str, Any]:
+    """Split a fill sequence into matched-pair net and residual net by FIFO.
+
+    WHY NOT BLENDED AVERAGES. The earlier decomposition used
+    `min(up,dn) * (1 - up_avg - dn_avg)`, where the averages span matched AND
+    unmatched fills. That credits the matched pairs with the price of
+    inventory that is still unmatched: UP 5@0.60 then 5@0.20 against DOWN
+    5@0.37 scores $1.15 of "matched" profit where the real pairs earned
+    $0.15. It overstated matched net and understated residual by the same
+    amount, so every TOTAL reconciled -- which is why it survived.
+
+    Pairs are matched FIFO against the legs that actually offset them.
+    """
+    q = {"UP": [], "DOWN": []}
+    matched_net = D(0); matched_qty = D(0); fees = D(0)
+    for row in fill_sequence or ():
+        _t, side, px, qty = row[0], str(row[1]), _d(row[2]), _d(row[3])
+        if px is None or qty is None:
+            continue
+        fees += fee(TS.MAKER_THETA, qty, px)
+        other = "DOWN" if side == "UP" else "UP"
+        left = qty
+        while left > 0 and q[other]:
+            oq, op = q[other][0]
+            take = min(left, oq)
+            matched_net += take * (D(1) - px - op)
+            matched_qty += take
+            left -= take; oq -= take
+            if oq <= 0:
+                q[other].pop(0)
+            else:
+                q[other][0] = (oq, op)
+        if left > 0:
+            q[side].append((left, px))
+    res_up = sum(x for x, _ in q["UP"]); res_dn = sum(x for x, _ in q["DOWN"])
+    res_cost = (sum(x * p for x, p in q["UP"])
+                + sum(x * p for x, p in q["DOWN"]))
+    yv = _d(yes_value)
+    resid_net = None
+    if (res_up == 0 and res_dn == 0):
+        resid_net = D(0)
+    elif yv is not None:
+        resid_net = (sum(x * (yv - p) for x, p in q["UP"])
+                     + sum(x * ((D(1) - yv) - p) for x, p in q["DOWN"]))
+    return {"matched_qty": str(matched_qty),
+            "matched_pair_net_usd": str(matched_net - fees),
+            "matched_gross_usd": str(matched_net),
+            "fees_usd": str(fees),
+            "residual_qty": str(res_up + res_dn),
+            "residual_cost_usd": str(res_cost),
+            "residual_net_usd": (None if resid_net is None else str(resid_net)),
+            "labels": ("FIFO. Pairs are priced against the legs that actually "
+                       "offset them, never against blended averages that "
+                       "include unmatched inventory.")}

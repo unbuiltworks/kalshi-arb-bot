@@ -1300,3 +1300,34 @@ def test_a_failing_variant_cannot_disturb_the_control(tmp_path, monkeypatch):
     assert rec["ok"] is True
     assert "B25" not in rec["variants"]            # dropped, not fatal
     assert log.errors >= 2
+
+
+def test_fifo_decompose_does_not_credit_pairs_with_unmatched_prices():
+    """The blended form scored this at $1.15; the real pairs earned $0.15."""
+    seq = [(0, "UP", "0.60", "5"), (1, "UP", "0.20", "5"),
+           (2, "DOWN", "0.37", "5")]
+    out = E.fifo_decompose(seq, yes_value=D(1))
+    assert D(out["matched_qty"]) == D(5)
+    assert D(out["matched_gross_usd"]) == D(5) * (D(1) - D("0.60") - D("0.37"))
+    assert D(out["residual_qty"]) == D(5)
+    assert D(out["residual_cost_usd"]) == D(5) * D("0.20")
+    blended_up = (D(5) * D("0.60") + D(5) * D("0.20")) / D(10)
+    blended = D(5) * (D(1) - blended_up - D("0.37"))
+    assert D(out["matched_gross_usd"]) < blended
+
+
+def test_fifo_decompose_total_matches_the_blended_total():
+    """The old form mis-SPLIT but the TOTAL was right; FIFO must agree on it."""
+    seq = [(0, "UP", "0.60", "5"), (1, "UP", "0.20", "5"),
+           (2, "DOWN", "0.37", "5")]
+    o = E.fifo_decompose(seq, yes_value=D(1))
+    total = D(o["matched_pair_net_usd"]) + D(o["residual_net_usd"])
+    cash = D(5) * D("0.60") + D(5) * D("0.20") + D(5) * D("0.37")
+    redeem = D(5) + D(5) * D(1)          # 5 pairs + 5 residual UP at yes=1
+    assert total == redeem - cash - D(o["fees_usd"])
+
+
+def test_fifo_decompose_leaves_an_unsettled_residual_unpriced():
+    out = E.fifo_decompose([(0, "UP", "0.60", "5")], yes_value=None)
+    assert out["residual_net_usd"] is None
+    assert D(out["residual_cost_usd"]) == D(3)

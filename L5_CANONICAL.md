@@ -2526,3 +2526,93 @@ What his data DOES establish, and what is worth keeping, is the sign of the
 movement effect: completing into a rising price is where the edge dies
 (-$0.0247). B never does this, and that property should be preserved by any
 future change rather than traded away for more fills.
+
+## 38. What the unmatched cap really blocks, and an accounting defect. 2026-10-17.
+
+### An ACCOUNTING DEFECT in sections 33-37, found here
+
+Since section 33 I decomposed net as
+`matched_net = min(up,dn) * (1 - up_avg - dn_avg) - fees`, where the averages
+blend matched AND unmatched fills. That credits the matched pairs with the
+price of inventory still unmatched. Worked example: UP 5@0.60 then 5@0.20,
+DOWN 5@0.37 -- blended scores **$1.15** of matched profit where the real
+pairs earned **$0.15**.
+
+It overstated matched net and understated residual by exactly the same
+amount, so every **TOTAL** net I reported remains correct and still
+reconciles to the cent. Only the **split** was wrong. `fifo_decompose()` now
+prices pairs against the legs that actually offset them; 3 regression tests
+pin it, including that the FIFO split and the old total agree.
+
+**This reverses a conclusion I was about to report.** On blended figures
+clip 2 looked better than clip 5 ($1.145 vs $0.806). On FIFO it is the
+opposite: **clip 5 $0.912, clip 2 $0.705**.
+
+### 1 & 4. The cap blocks ONLY the long side -- B misses no completion
+
+| observation | count |
+|---|---|
+| refusals with `blocked_side == long_side` | **4,227 of 4,227 (100%)** |
+| refusals where the DEFICIENT side was resting at that moment | **4,227 of 4,227 (100%)** |
+
+Every cap refusal blocks further accumulation on the side already long, and
+in **every single case the completing quote was already working**. **B is
+not missing executable opposite-side fills while blocked**, and the cap is
+not a completion blocker. That corrects the framing in sections 36 and 37,
+which called this "the completion bottleneck": it is an
+ACCUMULATION bound doing exactly its job.
+
+### 2. Completed offsets restore risk capacity immediately
+
+With UP 10 / DOWN 0 the engine refuses another UP clip. The instant a DOWN 10
+offset arrives, unmatched falls to 0 and the next UP clip is permitted --
+while **committed capital stays at $6.00**, unreleased, as required. Netting
+and cash are correctly decoupled.
+
+### 3 & 5. Clip size under UNCHANGED limits ($25, 10-contract cap, $6.25)
+
+| clip | fills | matched | **FIFO matched net** | residual net | peak cap | worst case | cap refusals |
+|---|---|---|---|---|---|---|---|
+| 3 | 8.2 | 10.0 | **$+0.937** | +$0.480 | $24.87 | **$4.05** | 7,023 |
+| 4 | 7.3 | 12.0 | $+0.833 | +$0.113 | $25.00 | $3.63 | 8,266 |
+| **5 (today)** | 6.3 | 13.3 | $+0.912 | +$0.908 | $24.80 | $4.53 | 4,227 |
+| 6 | 4.8 | 12.0 | $+0.503 | +$0.840 | $24.78 | $3.76 | 12,248 |
+| 8 | 4.0 | 13.3 | $+0.533 | +$0.547 | $24.96 | $4.88 | 8,659 |
+| 10 | 3.0 | 10.0 | $+0.407 | +$0.717 | $22.20 | $6.10 | 11,327 |
+
+**Best under unchanged limits is clip 3 at $+0.937/window against today's
+clip 5 at $+0.912 -- a gain of $0.025 per window, 2.7%**, with a LOWER
+worst-case ($4.05 vs $4.53). Clip 3 is not a meaningful improvement: $0.025
+on a 6-window sample whose per-window matched net ranges over dollars.
+
+**Sub-unit clips are strictly worse**, and the reason is structural: in the
+queue model fill TIMING depends only on the depth ahead of us, not on our
+own size, so halving the clip halves matched quantity without buying any
+extra fill. Venue minimum (0.01) is nowhere near binding.
+
+### The limiting calculation
+
+Matched quantity per window is bounded by
+`cycles x clip`, where a cycle needs BOTH sides to clear their queues. We
+observe **6.3 fills/window at clip 5**, i.e. about 3 completed cycles, and
+matched quantity saturates at **10-13 contracts** for every clip from 3 to
+10. Matched net therefore sits in a band of **$0.41-$0.94 per window** no
+matter how the clip is set.
+
+At the observed matched margin, reaching $5 would need roughly **5x the
+matched quantity**, and matched quantity is capped by cycles, not by clip
+size, capital ($25 is never exhausted below clip 4) or venue minimums.
+
+### CONCLUSION: no further improvement is available from clip sizing,
+### partial fills, or replenishment ordering under the current limits
+
+The maximum additional matched-pair net obtainable without touching any cap
+is **$0.025 per window (+2.7%)**, from clip 5 -> 3. That is inside the noise
+of a 6-window sample and is NOT recommended on this evidence.
+
+The binding quantity is **completed cycles per window**, set by how long each
+side's queue takes to clear -- not by the unmatched cap, not by capital, not
+by clip granularity, and not by venue minimums.
+
+108 tests in file; gate green. Nothing deployed; no cap, capital or limit
+changed.
