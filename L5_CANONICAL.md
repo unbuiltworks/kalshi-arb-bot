@@ -4413,3 +4413,122 @@ a free gain -- which is why matched improves and total does not.
 MODELLED, SHADOW ONLY. Nothing submitted, no realized profit, nothing
 deployed, no strategy/capital/limit/arm change. HALT and SHADOW_ONLY
 unchanged.
+
+---
+
+## 54. Holdout test of the 4c cancellation rule: FAIL, and a correction to section 53
+
+Ten windows never used in section 53 (1200z, 1215z, 1315z, 1400z, 1415z,
+1500z, 1515z, 1600z, 1615z, 1630z), 4 UP / 6 DOWN, authoritative settlement,
+frozen depth-3 sim. Threshold fixed at 4c. Nothing swept, nothing deployed.
+
+### 54.1 Execution assumptions, all conservative and stated
+
+- strict timestamp order over the merged book/trade stream; a book update at
+  `t` can only affect fills strictly after `t`;
+- **no retroactive cancellation**: the decision is taken on a book update at
+  `t` and takes effect at `t + latency`; a print at or before that effective
+  time still fills;
+- **cancellation latency is unknown**, so three bounded scenarios are
+  reported rather than one invented number: 0s (instant, optimistic bound),
+  1s, 5s (pessimistic bound);
+- the inherited conservative queue model is untouched: cumulative qualifying
+  volume must still EXCEED displayed depth at join, counted strictly after
+  the join. No touch=fill anywhere;
+- committed capital is NOT released on cancel, matching the frozen sim's
+  convention. This biases **against** the rule and is reported as such.
+
+### 54.2 Result
+
+```
+arm                    fills   qty   matched$   resid$    TOTAL$  worst dd  cancels
+frozen B25D3              62   310    $+21.34  $-15.41   $+5.93     -6.98        0
+4c cancel, latency 0s     23   115     $+1.99   $-5.41   $-3.42    -13.60       47
+4c cancel, latency 1s     31   155     $+5.47  $-13.94   $-8.47    -10.39       35
+4c cancel, latency 5s     40   200    $+10.46  $-21.42  $-10.96    -10.96       27
+
+paired per-window difference vs frozen B25D3:
+   latency 0s   mean $-0.935/win  stdev 3.912  t=-0.76  better 4/10
+   latency 1s   mean $-1.440/win  stdev 2.997  t=-1.52  better 4/10
+   latency 5s   mean $-1.689/win  stdev 3.651  t=-1.46  better 4/10
+```
+
+**Every latency scenario is worse than not cancelling, and worst drawdown
+roughly doubles.** The predictions of section 53.9 are met in their
+mechanical parts and fail where it counts: fills do fall (62 -> 23/31/40),
+stranded contracts do fall, and the residual does improve (-$15.41 ->
+-$5.41 at the optimistic bound) -- but **matched net collapses with it**,
+$+21.34 -> $+1.99.
+
+That is precisely the pre-registered rejection criterion: *matched net falls
+by more than the residual improves*. At the most favourable latency, matched
+gives up $19.35 to save $10.00 of residual. The rule cancels the orders that
+would have completed pairs, because the same price move that makes an order
+look stale is the move that was about to fill its partner.
+
+**VERDICT: FAIL. The 4c cancellation rule is rejected and will not be
+implemented.**
+
+### 54.3 The correction section 53 earned
+
+The holdout also refutes part of section 53's reasoning, and the warning
+that prompted this test was right.
+
+```
+                     place->fill   post-fill +5s   +15s     +30s     +60s
+frozen B25D3           -0.0601       -3.48c      -4.31c   -4.35c   -0.52c
+4c cancel, lat 1s      -0.0439       -3.55c      -3.42c   -3.39c   +3.20c
+```
+
+The rule shrinks the placement-to-fill move from -6.0c to -4.4c, as designed.
+**It does not shrink post-fill drift at 5-30s at all** (-3.48c vs -3.55c at
++5s). If the placement-to-fill move were evidence of information, removing
+most of it should have removed the subsequent drift. It did not.
+
+So section 53.4's headline -- "41 of 41 fills adverse, mean -8.1c, therefore
+a +3.6c edge is realised as -4.5c" -- **overstated the case**. A resting bid
+fills when price comes to it; that the implied probability is lower at the
+fill than at the placement is mechanically near-certain and is **not**
+independent evidence of negative expected value. The honest residue is the
+**post-fill drift of roughly -3.5c to -4.3c at 5-30s**, which is real, is
+present in both arms, and is not addressed by cancelling.
+
+Section 53's verdict is therefore narrowed: the pricing logic is **not shown
+to be economically unjustified**. It prices against a probability that is
+stale by a mechanically-induced amount, and the part of that staleness which
+represents genuine information is about half what section 53 attributed to it.
+
+### 54.4 And the discovery cohort was an unlucky draw
+
+```
+discovery cohort (section 53), 10 windows   total $-24.27   -$2.427/window
+holdout cohort  (this section), 10 windows  total  $+5.93   +$0.593/window
+combined, 20 windows                        total $-18.34   -$0.917/window
+```
+
+The combined figure matches the live 20-window arm (-$0.78/window) closely,
+which is the consistency check that matters. **Frozen B25D3 is positive on
+the holdout.** Section 53 was written on the worse half of the sample and
+read more into it than the data carried; this is the same lesson as sections
+43 and 45, where in-sample results evaporated under a fair control.
+
+Depth 3 remains unproven rather than refuted: matched net is positive in both
+cohorts ($+8.41 and $+21.34), total net is negative overall and
+indistinguishable from zero, and no window has reached the $5 objective
+except one.
+
+### 54.5 What this closes
+
+Three candidate changes have now been tested and rejected on held-out or
+direction-neutral evidence: the side-aware capital budget (section 43), the
+late-EXTEND veto (section 45), and the 4c cancellation rule (here). All three
+reduced the residual and all three cost more matched profit than they saved.
+The pattern is consistent enough to state as a finding: **on this venue, at
+this size, anything that avoids the inventory also avoids the pairs.**
+
+No further parameter or rule changes are proposed. The frozen arms continue
+collecting toward the 50- and 100-window marks.
+
+MODELLED, SHADOW ONLY. Nothing submitted, no realized profit, nothing
+deployed, no strategy/capital/limit/arm change. HALT and SHADOW_ONLY
+unchanged.
