@@ -5114,3 +5114,162 @@ both queue assumptions on discovery (paired -$0.723 / -$0.963, better 5/20)
 and on the untouched validation windows (-$2.713 / -$2.747, better 0/3); K=3
 only looks better at face-value queue and loses that under a 1.5x queue and
 on validation.
+
+---
+
+## 59. Bounded live validation: NOT EXECUTED. Remaining HALTed, with the blockers named.
+
+The owner authorized ONE bounded PMUS BTC15m live window at a $25 maximum
+committed-capital limit, with the standing instruction that if any required
+control cannot be proven the system stays HALTed and the exact blocker is
+identified. **It cannot be proven. Nothing was submitted, nothing was armed,
+and no configuration was changed.**
+
+Evidence below is the executor's own `L5_LIVE_HB` attestation at
+2026-10-17T18:13:38Z, deployment `76ab4914`, plus the Railway staged patch
+`a8fb9c09`.
+
+### 59.1 Current state, verified
+
+```
+preflight PASSED      owner_arm_token true      armed FALSE
+submission_gate: blocked true, reason SHADOW_ONLY_LOCK,
+                 shadow_lock true, halt_latch HALT, halt_why halt_asserted
+available_cash  $344.41255   (source /v1/account/balances, age 0.0s)
+pending_terminal []          order_progress.live_orders 0, parked 0
+quarantined     []           cooloff_remaining_s 0.0
+venue feed      connected, auth ok, lag median 0.038s, gap_suspected false
+```
+
+Effective limits, as the runtime attests them -- not read from variables,
+because this session receives variable NAMES ONLY (`valuesRedacted: true`):
+
+```
+max_usd_per_market            $5        max_total_exposure_usd        $5
+max_abs_residual              10        max_concurrent_markets         1
+max_live_orders                1        daily_realized_loss_halt_usd  $5
+effective_cash_gate: max_cash_deployed_usd $1, NO_RECYCLING,
+                     max_unmatched_contracts 5
+authorization: TTL-bounded (default 900s) AND capped at the venue's own
+               window close less a margin -- sound by construction
+```
+
+### 59.2 BLOCKER 1 -- the realized-loss limit cannot be evaluated
+
+```
+accounting.account_wide_realized          -8.39480000
+accounting.verified_l5_realized            0
+accounting.unknown_unattributed_realized -84.62000000
+realized.verified_l5_status               UNPROVEN_LEGACY_ATTRIBUTION
+realized.verified_l5_realized_net         null
+realized.unknown_basis_keys               non-empty (14+ market|side keys)
+```
+
+**$84.62 of realized P&L sits on the books with unknown cost basis, against
+a daily realized-loss halt of $5.** The system's own label states the
+consequence: *"a possible loss of UNKNOWN size is on the books. realized P&L
+is therefore unknown and the daily and cumulative loss limits cannot be
+evaluated, so live authorization is refused."*
+
+Note an inconsistency between two of its own surfaces:
+`unresolved_accounting.count` is **0** with `blocks_live_authorization:
+false`, while `unknown_unattributed_realized` is **-84.62** and
+`unknown_basis_keys` is non-empty. Either that gate is scoped more narrowly
+than its label implies, or it under-counts and would permit arming while the
+loss limits are unevaluable. **I cannot resolve which from outside the
+process, and the difference is exactly whether a $5 loss halt means
+anything.** Gate 5 ("verify every risk limit") therefore fails on the one
+limit that bounds loss.
+
+### 59.3 BLOCKER 2 -- HALT is latched on the condition cancellation exists to prevent
+
+```
+stats["HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER"]  13,635
+```
+
+The latch is not an idle safety default. The watchdog asserted it because an
+order rested past the executor's own cancellation deadline, and -- per
+`l5_watchdog.py` -- when cancel is unavailable it records *"the halt is
+asserted and the order is STILL RESTING"*. The venue now reports zero open
+orders, so the resting order is gone, but **the halt remains latched on a
+condition whose remedy is still disabled.**
+
+Clearing it requires the deliberate seven-variable reset ceremony
+(`L5_HALT_RESET_ATTEST/CONFIRM/CONFIRM_REASON/EXPECT/ID/INSPECT/WHO`). I did
+not perform it. Resetting a halt asserted for an unmanaged order, while the
+cancel power that was meant to manage it is off, removes the protection
+precisely where it fired.
+
+### 59.4 BLOCKER 3 -- exact-order cancellation cannot be made operational and proven
+
+`L5_WATCHDOG_CANCEL` is **absent** from `l5-halt-watchdog`'s variables, and
+the code reads `cancel_enabled = (L5_WATCHDOG_CANCEL == "YES") and oracle is
+not None`. `L5_ORDER_REGISTRY_URL` IS set, so the oracle would construct --
+the flag is what is missing, not the registry.
+
+I did not set it, for three reasons:
+
+1. **Proving it is circular.** Proving a cancel works requires cancelling a
+   real resting order, which requires placing one first -- the exact action
+   cancellation is supposed to protect. There is no PMUS sandbox in this
+   codebase to prove it against.
+2. **The account is SHARED.** `OwnershipOracle`'s docstring records a real
+   prior incident: account-wide open orders plus an age test *"would have
+   cancelled the owner's manual orders, D23N1EHTTZ7D among them."* Enabling
+   an untested cancel power against an account holding the owner's manual
+   orders is not a safety improvement.
+3. I cannot verify `L5_ORDER_REGISTRY_URL`'s value or that the registry is
+   actually serving the executor's ACKs, because values are redacted to me.
+
+### 59.5 BLOCKER 4 -- the staged patch is unverifiable by construction
+
+Patch `a8fb9c09`, 5 variable additions to `l5-pmus-live`, **all values
+redacted**: `L5_ACC_MAX_ROUNDS`, `L5_MAX_WORST_CASE_DEFICIT_USD`,
+`L5_TS_DEPTH_TICKS`, `L5_TS_EXPERIMENT_ID`, `L5_TS_MARKET`.
+
+Two of these are the probe's arming gate and two alter a risk bound and the
+quote depth. "Never deploy unverified experiment settings" cannot be
+satisfied by inspection, because this session cannot read the values. **Not
+committed.** I also did not discard it: discarding is safe but is still a
+change to the owner's project, and it is not needed to stay HALTed.
+
+### 59.6 What is already correct, and was left alone
+
+The historical retirement is in order and needed no repair. Both drift
+markets the owner named are already retired --
+`cpc-btc-updown-15m-2026-10-12-0030z` and
+`cpc-btc-updown-15m-2026-10-14-2230z` both appear in `retired_markets` --
+and `policy.max_clip_filled` still carries their filled clips (2 and 1.8).
+The unknown-cost records are preserved AS unknown in `unknown_basis_keys`
+rather than erased or defaulted to zero. That is the required treatment, so
+nothing was deleted, no cost basis was fabricated, and no exposure was
+suppressed.
+
+### 59.7 Mandate versus deployment
+
+The authorization is $25 maximum committed capital, 10 unmatched contracts,
+$6.25 modelled residual target. The deployment is **stricter**: $5 total
+exposure, $5 per market, $1 gross cash out, 5 unmatched contracts. Running
+as-deployed would sit well inside the authorization, so this is not itself a
+blocker -- but the mandated configuration is NOT what is deployed, and
+reaching it would mean **raising** limits. I did not raise anything.
+
+### 59.8 Verdict
+
+**NOT EXECUTED. The system remains HALTed and SHADOW_ONLY.** No order was
+submitted, no venue request was made beyond reads, no variable was set, no
+patch was committed, no halt was reset, and no limit was changed. There is
+no realized P&L to report because nothing was traded.
+
+The gating blocker is BLOCKER 1: a $5 daily loss halt cannot be enforced
+while $84.62 of realized P&L has unknown provenance and the system reports
+`UNPROVEN_LEGACY_ATTRIBUTION`. BLOCKERS 2-4 each independently prevent
+proving a required control.
+
+One economic note, stated once because real money is involved: 20
+settlement-correct forward windows measure frozen B25D3 at **-$0.917 per
+window**, and sections 43, 45, 54, 56, 57 and 58 found no mechanism that
+improves it. A bounded live window is expected to lose a small amount. That
+is the owner's call to make and does not change the blockers above.
+
+MODELLED/READ-ONLY. HALT and SHADOW_ONLY unchanged; collection continues.
