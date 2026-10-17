@@ -5075,3 +5075,42 @@ capital, re-quoting nor ladder placement moves the total.
 MODELLED, SHADOW ONLY. No deployment, live orders, capital increase or new
 infrastructure; the frozen arms keep collecting. HALT and SHADOW_ONLY
 unchanged.
+
+### 58.5 Feasibility arithmetic, made exact (addendum)
+
+Section 58 established that a 3-deep ladder is fundable but did not state the
+binding constraint precisely. It is **not capital**.
+
+```
+observed depth-3 UP-leg price, 20 forward windows:  p25 0.250  median 0.440  p75 0.620
+
+CAPITAL RESERVATION per two-sided level, clip 5, reserved while resting
+   at p25     UP 5 x 0.250 = $1.25   DOWN 5 x $1.00 = $5.00   level $6.25
+   at median  UP 5 x 0.440 = $2.20   DOWN 5 x $1.00 = $5.00   level $7.20
+   at p75     UP 5 x 0.620 = $3.10   DOWN 5 x $1.00 = $5.00   level $8.10
+   max simultaneous two-sided levels at $25 = floor(25 / 7.20) = 3
+
+MINIMUM ORDER SIZE
+   engine min_qty 0.01 against a frozen clip of 5 -- never binding
+
+INVENTORY CAP
+   imbalance cap 10 contracts / clip 5 contracts = 2 fills per side
+   levels beyond K=2 on a side cannot fill until the opposite side fills
+   and frees headroom
+```
+
+**Capital permits K=3; the 10-contract imbalance cap permits K=2 useful
+levels.** The binding feasibility constraint is the inventory cap, not the
+$25 ceiling -- which is the same conclusion section 57 reached from the other
+direction, and the reason the K=3 arm recorded 21 withdrawals.
+
+The DOWN leg dominates the reservation: it is a `BUY_SHORT` and reserves
+$1.00 a share whatever it costs, roughly 2.3x the UP leg. A two-sided ladder
+is therefore about 70% DOWN-side capital at any depth.
+
+**Feasible: YES, at K=2 useful levels (K=3 fundable but cap-limited).
+Economic verdict: REJECTED**, per 58.2 -- K=2 is worse than frozen B25D3 at
+both queue assumptions on discovery (paired -$0.723 / -$0.963, better 5/20)
+and on the untouched validation windows (-$2.713 / -$2.747, better 0/3); K=3
+only looks better at face-value queue and loses that under a 1.5x queue and
+on validation.
