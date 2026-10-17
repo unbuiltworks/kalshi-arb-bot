@@ -1190,6 +1190,17 @@ class ShadowPolicyLog:
                         "net_usd") for p in POLICIES},
                     "vs_blind_usd": (r.get("net") or {}).get(
                         "CROSS", {}).get("vs_blind_usd"),
+                    # policy-B variant summaries. Present only when the
+                    # variants ran; a SUMMARY of numbers already persisted,
+                    # so this adds no computation, no decision and no state.
+                    "variants": {
+                        lbl: {k: v.get(k) for k in (
+                            "fills", "matched_qty", "residual_qty",
+                            "max_committed_capital_usd",
+                            "worst_case_residual_loss_usd",
+                            "net_usd", "priced")}
+                        for lbl, v in ((r.get("variants") or {}).items())
+                    } or None,
                 } for r in records],
                 "labels": ("MODELLED, SHADOW ONLY. Nothing was submitted and "
                            "no figure here is realized profit.")}

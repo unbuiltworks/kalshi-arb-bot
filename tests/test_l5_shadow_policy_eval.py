@@ -1331,3 +1331,36 @@ def test_fifo_decompose_leaves_an_unsettled_residual_unpriced():
     out = E.fifo_decompose([(0, "UP", "0.60", "5")], yes_value=None)
     assert out["residual_net_usd"] is None
     assert D(out["residual_cost_usd"]) == D(3)
+
+
+def test_emitted_document_carries_variant_summaries(tmp_path, monkeypatch):
+    """The gap that made the forward variants unverifiable: they were
+    persisted to the store but never reached the log line."""
+    import json as _j
+    monkeypatch.setenv(E.VARIANTS_ENV, "YES")
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0]); log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1]); log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    doc = log.emit_document(log.rollover(keep=[]))
+    v = doc["windows"][0]["variants"]
+    assert set(v) == {"B10", "B25", "B50"}
+    for lbl in v:
+        for k in ("fills", "matched_qty", "max_committed_capital_usd",
+                  "worst_case_residual_loss_usd", "net_usd", "priced"):
+            assert k in v[lbl]
+    blob = _j.dumps(doc)
+    assert len(blob) < 4000, "the line must stay small"
+
+
+def test_emitted_document_omits_variants_when_they_did_not_run(tmp_path,
+                                                               monkeypatch):
+    monkeypatch.delenv(E.VARIANTS_ENV, raising=False)
+    log = _log(tmp_path)
+    lad = base_ladder()
+    log.observe_book(SLUG, lad[0]); log.observe_trade(SLUG, T0 + 5, "0.63", "20")
+    log.observe_book(SLUG, lad[1]); log.observe_trade(SLUG, T0 + 40, "0.60", "20")
+    log.observe_book(SLUG, lad[2])
+    doc = log.emit_document(log.rollover(keep=[]))
+    assert doc["windows"][0]["variants"] is None

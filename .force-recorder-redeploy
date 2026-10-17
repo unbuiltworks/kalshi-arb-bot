@@ -5,3 +5,7 @@ recorder redeploy marker: 2026-09-06T14:05Z shadow INDEPENDENCE_RULE 2 (unchange
   exists only to rebuild the image so the updated
   src/l5_shadow_policy_eval.py (not a watched path) reaches the container.
   Gated behind L5_SHADOW_POLICY_VARIANTS=YES. Shadow only; no order path.
+2026-10-17T02:05Z  expose policy-B variant summaries in PMUS_SHADOW_POLICY.
+  Summary-only of numbers already persisted: no order, credential, network
+  or trading-decision change. Recorder source unchanged; this file exists
+  only to rebuild the image so the updated module ships.
