@@ -1,14 +1,21 @@
 diff --git a/src/l5_pmus_transport.py b/src/l5_pmus_transport.py
-index fc123383..025e4ade 100644
+index fc123383..1f6390b5 100644
 --- a/src/l5_pmus_transport.py
 +++ b/src/l5_pmus_transport.py
-@@ -367,6 +367,51 @@ class _SignedHTTP:
+@@ -367,6 +367,112 @@ class _SignedHTTP:
              return _json.loads(r.read() or b"{}")
  
  
 +#: the ONE mutating route a disarmed process may reach. Anchored: no
 +#: account-wide variant, no second path segment and no query string matches.
-+CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel$")
++#:
++#: `\Z`, NOT `$`. Python's `$` also matches before a trailing newline, so `$`
++#: accepted ".../cancel\n". That was harmless -- urllib strips the newline
++#: from the selector, so it still reached this endpoint and merely signed a
++#: path the venue would 401 -- but the strict anchor is free. The identical
++#: pattern in `src/l5_watchdog.py` is kept in step, and
++#: test_the_two_cancel_route_patterns_have_not_drifted pins that.
++CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel\Z")
 +
 +
 +class _CancelOnlyHTTP(_SignedHTTP):
@@ -35,16 +42,70 @@ index fc123383..025e4ade 100644
 +    ISOLATION IS PRESERVED, NOT TRADED AWAY. This is not a general transport
 +    handed to the cancel path: the refusal lives in the object, exactly as it
 +    does in `ReadOnlyTransport`, so a process holding this cannot be argued
-+    into a submit. Ownership is proved against the durable ledger BEFORE this
-+    is reached, the id is the venue's own, and there is no market-scoped and
-+    no account-wide route here.
++    into a submit. There is no market-scoped and no account-wide route here.
++
++    THE REFUSAL REALLY LIVES HERE, which an earlier draft only claimed. A
++    review found that this object, once cached on the transport, was a
++    POST-capable thing reachable by attribute -- including straight through
++    `ShadowOnlyTransport.__getattr__`, which delegates everything but
++    `submit` -- and that it checked nothing itself: ownership was a property
++    of one caller. So the id is now re-extracted from the path and re-tested
++    against the SAME durable-ledger oracle here, and `base` and `body` are
++    pinned too, because `super()` forwarded both unchecked and would accept
++    an arbitrary body on the real route or an unauthenticated POST to another
++    host.
++
++    WHY AN ABSENT ORACLE STILL PASSES. `cancel()` has a deliberate branch
++    where an ARMED transport with no oracle installed cancels anyway, on the
++    grounds that refusing to withdraw an order is itself the failure being
++    prevented. That branch predates this class and is not narrowed here: an
++    absent oracle means ownership is the caller's to prove, as it was. An
++    oracle that is PRESENT and says no is refused, on every path.
 +    """
++
++    def __init__(self, owns=None) -> None:
++        #: a zero-argument callable returning the transport's LIVE
++        #: `cancel_owner_oracle`, so an oracle installed after this object
++        #: was cached is still honoured, and one removed is not ignored.
++        self._owns = owns
++
++    def _owned(self, path: str) -> bool:
++        if self._owns is None:
++            return True                  # see "WHY AN ABSENT ORACLE" above
++        m = CANCEL_ROUTE.match(str(path) or "")
++        if not m:
++            return False
++        oid = str(path).split("/")[3]
++        try:
++            own = self._owns()
++        except BaseException:                                  # noqa: BLE001
++            return False                 # unreadable oracle is not permission
++        if own is None:
++            return True                  # none installed on the transport
++        try:
++            return bool(own(oid))
++        except BaseException:                                  # noqa: BLE001
++            return False
 +
 +    def request(self, method: str, path: str,
 +                body: Optional[Mapping[str, Any]] = None,
 +                base: str = Q1.API) -> Any:
 +        m = str(method).upper()
-+        if m == "GET" or (m == "POST" and CANCEL_ROUTE.match(str(path) or "")):
++        if m == "GET":
++            return super().request(m, path, body, base)
++        if m == "POST" and CANCEL_ROUTE.match(str(path) or ""):
++            if base != Q1.API:
++                raise PermissionError(
++                    "POST %s refused: this transport cancels only at the "
++                    "venue API, not at %r" % (path, base))
++            if body:
++                raise PermissionError(
++                    "POST %s refused: a cancel carries no body; got %r"
++                    % (path, body))
++            if not self._owned(path):
++                raise PermissionError(
++                    "POST %s refused: the durable ledger does not claim "
++                    "this order" % path)
 +            return super().request(m, path, body, base)
 +        raise PermissionError(
 +            "%s %s refused: this transport may only GET, or POST a single "
@@ -54,18 +115,27 @@ index fc123383..025e4ade 100644
  #: the market slug carries a `cpc-` product prefix that the EVENT slug does
  #: not: market cpc-btc-updown-15m-2026-09-24-1245z belongs to event
  #: btc-updown-15m-2026-09-24-1245z. Derivable, so the event can be addressed
-@@ -504,6 +549,10 @@ class PmusTransport:
+@@ -504,6 +610,19 @@ class PmusTransport:
          self.cancel_owner_oracle = None
          self._injected = http is not None
          self.http = http or Q1.ReadOnlyTransport()
-+        #: built on first disarmed cancel. An injected http is a test's or a
-+        #: wrapper's choice and is honoured for cancel too, so a shadow or
-+        #: fake transport is never bypassed by this repair.
-+        self._cancel_http = self.http if http is not None else None
++        #: built on the first cancel. NAME-MANGLED deliberately: a review
++        #: found that as `_cancel_http` this was a POST-capable object
++        #: reachable by attribute -- including straight through
++        #: `ShadowOnlyTransport.__getattr__`, which delegates everything but
++        #: `submit`. Mangling is not a security boundary against in-process
++        #: code, which could reach it anyway; the real defence is that the
++        #: object now refuses an unowned id, a non-cancel route, a foreign
++        #: base and a non-empty body ITSELF. This just stops it being
++        #: casually exposed on the public surface of the shadow proxy.
++        #:
++        #: An injected http is a test's or a wrapper's choice and is honoured
++        #: for cancel too, so nothing is bypassed by this repair.
++        self.__cancel_http = self.http if http is not None else None
          self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
          self.armed = False
          self.preflight_report: Optional[Dict[str, Any]] = None
-@@ -520,18 +569,24 @@ class PmusTransport:
+@@ -520,18 +639,38 @@ class PmusTransport:
      # ------------------------------------------------------------ read only
  
      def _request(self, method: str, path: str, body=None,
@@ -78,12 +148,26 @@ index fc123383..025e4ade 100644
          how to fail closed. Retrying inside this function would be the
          fastest possible way to deepen a rate limit.
 +
-+        `http` overrides WHICH object sends it, and nothing else. The
-+        disarmed cancel path passes `_CancelOnlyHTTP` so the one route it is
-+        allowed to POST still goes through this door -- sharing the rate
-+        limiter, the cool-off and the 429 accounting rather than opening a
-+        second, unmetered path to the venue.
++        `http` overrides WHICH object sends it, and nothing else. The cancel
++        path passes its route-restricted object so the one route it may POST
++        still goes through this door -- sharing the rate limiter, the
++        cool-off and the 429 accounting rather than opening a second,
++        unmetered path to the venue.
++
++        THE OVERRIDE IS NOT A GENERAL INJECTION POINT. A review observed that
++        an unconstrained `http=` would let any in-process caller pass a
++        general `_SignedHTTP()` and submit while disarmed and shadow-locked,
++        quietly retiring the invariant that this is "the single door every
++        venue request goes through". It adds no capability such a caller did
++        not already have, but it does move the restraint out of the object
++        graph, which is the inversion this file's own transports exist to
++        prevent. So only the transport's OWN cancel object is accepted; any
++        other value is refused.
          """
++        if http is not None and http is not self.__cancel_http:
++            raise PermissionError(
++                "_request http override is limited to this transport's own "
++                "cancel-only object")
          write = str(method).upper() != "GET"
          self.limiter.before(write=write)
          try:
@@ -92,7 +176,7 @@ index fc123383..025e4ade 100644
          except BaseException as exc:                           # noqa: BLE001
              if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                  raise
-@@ -1237,8 +1292,7 @@ class PmusTransport:
+@@ -1237,8 +1376,7 @@ class PmusTransport:
              # that must prove ownership. Without an oracle it cannot, and
              # there it refuses: absent is not permission for a NEW power.
              if self.armed:
@@ -102,7 +186,7 @@ index fc123383..025e4ade 100644
              raise CancelRefused(
                  "OWNERSHIP_UNESTABLISHED: this transport is disarmed and no "
                  "ledger oracle is installed, so it cannot prove the order is "
-@@ -1252,5 +1306,21 @@ class PmusTransport:
+@@ -1252,5 +1390,28 @@ class PmusTransport:
                  "OWNERSHIP_UNREADABLE:%s" % type(exc).__name__)
          if not ours:
              raise CancelRefused("NOT_OUR_ORDER:%s" % oid[:40])
@@ -111,27 +195,54 @@ index fc123383..025e4ade 100644
 +        return self._cancel_post(oid)
 +
 +    def _cancel_post(self, oid: str) -> Dict[str, Any]:
-+        """Send the one cancel POST, by whichever object is allowed to.
++        """Send the one cancel POST, through the route-restricted object.
 +
-+        ARMED is untouched: `self.http` is already `_SignedHTTP` and this is
-+        byte-for-byte the request it always sent. DISARMED is the repair --
-+        `self.http` is GET-only there, so the POST raised PermissionError and
-+        the order stayed resting (see `_CancelOnlyHTTP`). Ownership has
-+        already been proved by the caller; this only decides the sender.
++        BOTH BRANCHES, not just the disarmed one. The first draft sent the
++        ARMED cancel through `self.http`, which is a general `_SignedHTTP`,
++        so the armed path -- the one that runs with the owner's token -- was
++        the LOOSER of the two: a review drove
++        `/v1/order/X/cancel/../../v1/orders/cancel` and `/v1/order/A B/cancel`
++        straight through it. The ledger supplies the id, so that was not
++        reachable in practice, but the fix was already in hand. Routing both
++        through `_CancelOnlyHTTP` makes the docstring's claim -- no
++        market-scoped and no account-wide route -- true of the whole cancel
++        path instead of half of it.
++
++        An INJECTED http (a test fake, or any wrapper that passed one) is
++        still honoured as the sender, so nothing is bypassed by this repair.
 +        """
 +        path = "/v1/order/%s/cancel" % oid
-+        if self.armed:
-+            return self._request("POST", path, {}, Q1.API) or {}
-+        if self._cancel_http is None:
-+            self._cancel_http = _CancelOnlyHTTP()
++        if self.__cancel_http is None:
++            self.__cancel_http = _CancelOnlyHTTP(
++                owns=lambda: getattr(self, "cancel_owner_oracle", None))
 +        return self._request("POST", path, {}, Q1.API,
-+                             http=self._cancel_http) or {}
++                             http=self.__cancel_http) or {}
+diff --git a/src/l5_watchdog.py b/src/l5_watchdog.py
+index b020b322..924e66f2 100644
+--- a/src/l5_watchdog.py
++++ b/src/l5_watchdog.py
+@@ -61,8 +61,13 @@ try:
+ except Exception:                               # noqa: BLE001
+     A = None                                    # type: ignore
+ 
+-#: the only mutating route this watchdog may ever use.
+-CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel$")
++#: the only mutating route this watchdog may ever use. `\Z` not `$`, because
++#: Python's `$` also matches before a trailing newline. Kept BYTE-IDENTICAL to
++#: `l5_pmus_transport.CANCEL_ROUTE`; the constant is duplicated rather than
++#: imported because this image must load without `pmus_auth`, and
++#: test_the_two_cancel_route_patterns_have_not_drifted pins the equality so
++#: one copy cannot be tightened while the other is forgotten.
++CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel\Z")
+ 
+ #: venue states that mean the order is no longer working. Checked against
+ #: leavesQuantity first, because "PARTIALLY_FILLED" contains "FILLED" and a
 diff --git a/tests/test_l5_disarmed_cancel_http_permission.py b/tests/test_l5_disarmed_cancel_http_permission.py
 new file mode 100644
-index 00000000..67eb017d
+index 00000000..626a636f
 --- /dev/null
 +++ b/tests/test_l5_disarmed_cancel_http_permission.py
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,269 @@
 +"""The disarmed cancel must reach the wire, not die inside our own transport.
 +
 +WHY THESE EXIST AND test_l5_disarmed_cancellation.py WAS NOT ENOUGH. That
@@ -271,8 +382,15 @@ index 00000000..67eb017d
 +
 +
 +def test_an_injected_transport_is_honoured_for_cancel_too(wire):
-+    """A wrapper's or a test's injected http is never bypassed by the
-+    repair -- otherwise this would be a hole around ShadowOnlyTransport."""
++    """An injected http stays the sender for cancel as well as for reads.
++
++    A review corrected the rationale originally written here, which claimed
++    this closed "a hole around ShadowOnlyTransport". It does not: that proxy
++    wraps `PmusTransport`, not the `http` object, and is never passed as
++    `http=`. What this actually pins is that a test fake, or any wrapper that
++    supplied its own http, keeps receiving the cancel -- so the repair cannot
++    silently route around an object someone deliberately installed.
++    """
 +    calls = []
 +
 +    class _Inj:
@@ -285,3 +403,112 @@ index 00000000..67eb017d
 +    tp.cancel(VID)
 +    assert calls == [("POST", "/v1/order/%s/cancel" % VID)]
 +    assert wire == [], "the injected object sent it, not a fresh signed one"
++
++
++# ---------------- hardening the review asked for, and its own pins (§65)
++
++def test_the_two_cancel_route_patterns_have_not_drifted():
++    """The regex is duplicated in the transport and the watchdog because the
++    watchdog image must load without `pmus_auth`. Duplicated security
++    constants drift: one gets tightened and the other is forgotten. This
++    fails the moment they differ."""
++    from src import l5_watchdog as W
++    assert T.CANCEL_ROUTE.pattern == W.CANCEL_ROUTE.pattern
++
++
++def test_the_route_is_anchored_against_a_trailing_newline():
++    """`$` also matches before a trailing newline; `\\Z` does not."""
++    assert T.CANCEL_ROUTE.match("/v1/order/%s/cancel" % VID)
++    assert not T.CANCEL_ROUTE.match("/v1/order/%s/cancel\n" % VID)
++
++
++def test_the_object_refuses_a_foreign_base_and_a_non_empty_body(wire):
++    """`super()` forwarded both unchecked: an arbitrary body on the real
++    cancel route, and an unauthenticated POST to any host."""
++    h = T._CancelOnlyHTTP()
++    with pytest.raises(PermissionError):
++        h.request("POST", "/v1/order/%s/cancel" % VID, {},
++                  "https://evil.example")
++    with pytest.raises(PermissionError):
++        h.request("POST", "/v1/order/%s/cancel" % VID, {"cancelAll": True})
++    assert wire == []
++
++
++def test_the_object_itself_refuses_an_unowned_id(wire):
++    """THE REVIEW'S MAIN POINT. Ownership must be a property of the OBJECT,
++    not of one caller, because the object is reachable by attribute."""
++    h = T._CancelOnlyHTTP(owns=lambda: (lambda oid: oid == VID))
++    assert h.request("POST", "/v1/order/%s/cancel" % VID, {})
++    with pytest.raises(PermissionError):
++        h.request("POST", "/v1/order/D23N1EHTTZ7D/cancel", {})
++    assert wire == [("POST", "/v1/order/%s/cancel" % VID)]
++
++
++def test_an_unreadable_oracle_is_not_permission_inside_the_object(wire):
++    def _boom():
++        raise RuntimeError("registry down")
++
++    h = T._CancelOnlyHTTP(owns=_boom)
++    with pytest.raises(PermissionError):
++        h.request("POST", "/v1/order/%s/cancel" % VID, {})
++    assert wire == []
++
++
++def test_the_cached_cancel_object_is_not_exposed_on_the_shadow_proxy(wire):
++    """It used to be reachable as `transport._cancel_http` straight through
++    `ShadowOnlyTransport.__getattr__`, which delegates everything but
++    `submit`. Name-mangled now, and the object checks for itself anyway."""
++    from src import l5_pmus_live_runner as R
++    tp = real_disarmed()
++    tp.cancel(VID)                                  # force it to be built
++    proxy = R.ShadowOnlyTransport(tp)
++    assert getattr(proxy, "_cancel_http", None) is None
++    assert not hasattr(proxy, "_cancel_http")
++
++
++def test_the_request_override_accepts_only_the_transports_own_object(wire):
++    """An unconstrained `http=` would let any caller pass a general
++    _SignedHTTP and submit while disarmed and shadow-locked."""
++    tp = real_disarmed()
++    with pytest.raises(PermissionError):
++        tp._request("POST", "/v1/order", {"x": 1}, T.Q1.API,
++                    http=T._SignedHTTP())
++    assert wire == []
++
++
++def test_the_armed_cancel_is_route_validated_too(wire):
++    """The first draft sent the ARMED cancel through a general _SignedHTTP,
++    making the owner-token path the LOOSER of the two. Both go through the
++    restricted object now."""
++    tp = real_disarmed()
++    tp.armed = True
++    tp.cancel(VID)
++    assert wire == [("POST", "/v1/order/%s/cancel" % VID)]
++    sender = getattr(tp, "_PmusTransport__cancel_http")
++    assert isinstance(sender, T._CancelOnlyHTTP)
++
++
++def test_the_cancel_object_is_built_only_by_an_authorised_cancel(wire):
++    """A POST-capable object must not come into existence until a cancel has
++    actually passed ownership. A refused cancel leaves the graph as it was."""
++    tp = real_disarmed()
++    assert getattr(tp, "_PmusTransport__cancel_http") is None
++    with pytest.raises(T.CancelRefused):
++        tp.cancel("D23N1EHTTZ7D")                   # not ours
++    assert getattr(tp, "_PmusTransport__cancel_http") is None, (
++        "a refused cancel must not construct a POST-capable object")
++    tp.cancel(VID)
++    assert isinstance(getattr(tp, "_PmusTransport__cancel_http"),
++                      T._CancelOnlyHTTP)
++
++
++def test_a_disarm_after_arm_can_still_cancel(wire):
++    """disarm() replaces self.http; the cancel path must survive it, because
++    disarmed is exactly the state the orphan sweeps run in."""
++    tp = real_disarmed()
++    tp.armed = True
++    tp.cancel(VID)
++    tp.armed = False
++    tp.http = T.Q1.ReadOnlyTransport()
++    tp.cancel(VID)
++    assert wire == [("POST", "/v1/order/%s/cancel" % VID)] * 2

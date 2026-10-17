@@ -5939,3 +5939,123 @@ unchanged; no limit raised; the five staged variables still staged.
    terminal, then automatic HALT. That is a live order, so it needs the latch
    cleared and is the owner's call; it doubles as the first act of the
    authorised single-window test under the unchanged `$5`/`$1` limits.
+
+## 65. Independent review of the cancellation repair: APPROVE WITH CHANGES
+
+An independent adversarial review was commissioned on
+`data/l5/ops/disarmed_cancel_repair.patch`, briefed with the code and the
+threat model but not with this session's conclusions. **Verdict: APPROVE WITH
+CHANGES**, five merge conditions, none requiring re-architecture. All five
+were applied before landing.
+
+### 65.1 What it confirmed
+
+- **Q1, route restriction — CONFIRMED-SAFE.** It drove the regex directly:
+  refused `POST /v1/orders`, `/v1/order`, `/v1/order/preview`,
+  `/v1/orders/cancel`, `/v1/order/cancel-all`, trailing slash, `//v1/...`,
+  `?all=1`, `#x`, `/cancel/extra`, `a%2Fb`, `..%2f..%2forders/cancel`, and
+  PUT/PATCH/DELETE/OPTIONS/HEAD/TRACE. Crafted ids cannot escape, because the
+  character class admits no `/ ? # %` or whitespace and `cancel()` strips.
+  **No accepted input reaches a non-cancel endpoint.**
+- **Q2, ownership — CONFIRMED-SAFE for every path the patch adds.** It
+  verified the refusals by execution, and verified that production installs
+  the oracle at `l5_pmus_live_runner.py:591`, before the shadow wrapper and
+  before any arming, with no window, and that `owns_venue_order_id` returns a
+  strict `bool`.
+- **Q3 — CONFIRMED-SAFE.** Shadow lock intact (`submit` still raises,
+  `BLOCKED == ("submit",)` unchanged); HALT untouched; the rate limiter is
+  genuinely shared — it measured a 429 extending the process-wide cool-off
+  and the next cancel refused `VenueThrottled` without sending.
+- **Q4 — CONFIRMED-SAFE.** The watchdog, `HaltAsserter`, `CancelOnlyTransport`,
+  `OwnershipOracle`, the watchdog Dockerfile and the halt-reset entrypoint are
+  all untouched; no new path clears or suppresses a latched HALT.
+- **Q5 — no patch-caused regression.** Money-path gate 1354 passed in both the
+  patched and unpatched copies; the 11 failures it found are identical in both
+  and unrelated. **It independently reproduced the defect**: copying the new
+  tests onto unpatched code fails with the exact production error,
+  `PermissionError: POST /v1/order/.../cancel refused: this transport is
+  read-only` at `src/pmus_auth.py:93`.
+
+### 65.2 What it found that this session had missed
+
+1. **The refusal did not actually live in the object.** Once cached,
+   `_cancel_http` was a POST-capable object reachable by attribute —
+   including straight through `ShadowOnlyTransport.__getattr__`, which
+   delegates everything but `submit` — and it checked *nothing* itself.
+   Ownership was a property of one caller, which is the exact inversion this
+   codebase's transports exist to prevent.
+2. **`base` and `body` were forwarded unchecked**, so the object would accept
+   an arbitrary body on the real cancel route and an unauthenticated POST to
+   another host. Not reachable through `cancel()`, which hardcodes `{}` and
+   `Q1.API`, but a live primitive on the object.
+3. **The armed cancel was the LOOSER path.** The first draft route-validated
+   only the disarmed branch, so the path that runs with the owner's token
+   still accepted `/v1/order/X/cancel/../../v1/orders/cancel` and
+   `/v1/order/A B/cancel` through a general `_SignedHTTP`.
+4. **`$` is not `\Z`.** `.../cancel\n` matched. Harmless — urllib strips the
+   newline from the selector, so it reached the right endpoint and merely
+   signed a path the venue would 401 — but free to fix, and the same laxity
+   sat in `src/l5_watchdog.py`.
+5. **A stated rationale of mine was simply wrong.**
+   `test_an_injected_transport_is_honoured_for_cancel_too` claimed it closed
+   "a hole around ShadowOnlyTransport". It does not: that proxy wraps
+   `PmusTransport`, not the `http` object, and is never passed as `http=`.
+   The behaviour is worth pinning; the reason given was not evidence. Corrected
+   in place.
+
+### 65.3 The five conditions, applied
+
+| condition | applied as |
+|---|---|
+| refusal belongs in the object | `_CancelOnlyHTTP` re-extracts the id from the path and re-tests it against the SAME live ledger oracle, and pins `base` and `body` |
+| use the restricted object for the armed cancel too | `_cancel_post` routes **both** branches through it |
+| `\Z` not `$` | both copies, plus `test_the_two_cancel_route_patterns_have_not_drifted` |
+| constrain the `http=` override | `_request` accepts only the transport's own cancel object; anything else raises |
+| pin the new capability's limits | 10 further tests: name-mangled so it is absent from the shadow proxy's surface, built only by an *authorised* cancel, armed path route-validated, disarm-after-arm still cancels, unreadable oracle is not permission |
+
+One condition was deliberately **not** taken to its strongest form: an ABSENT
+oracle still passes inside the object, because `cancel()` has a pre-existing
+deliberate branch where an armed transport with no oracle cancels anyway, on
+the grounds that refusing to withdraw an order is itself the failure being
+prevented. Narrowing that would have changed behaviour beyond the reviewed
+patch and could strand a resting order in an emergency. An oracle that is
+PRESENT and says no is refused on every path.
+
+### 65.4 Provenance, stated honestly
+
+The reviewer noted it could not corroborate the incident entries
+(`D47R06GG0ZRX`, `D4EFZNW00ZZ0`, `-37.9754`) from anything in `data/` — their
+only in-repo trace is §64.2, which is prose. That is correct. **The primary
+evidence is the Railway production log of `l5-pmus-live`**, which a repo-scoped
+reviewer cannot read; it did not need to take them on trust, because it
+reproduced the mechanism itself. Worth recording so a later reader looks in
+the right place.
+
+### 65.5 Classifier and landing
+
+The harness classifier had refused the commit twice. It accepted the hardened
+change at the first attempt, which supports the reading that it was objecting
+to the *shape* of the original — a POST-capable object whose restraint lived
+outside it, plus an unconstrained injection point into "the single door every
+venue request goes through" — rather than to repairing cancellation. No
+alternate mechanism was used, no permission rule was added, and the denial was
+not routed around; the content changed and the normal path was retried once.
+
+A reviewing agent cannot grant permission, and its APPROVE was not treated as
+owner approval for anything.
+
+### 65.6 Landed and deployed
+
+```
+repair commit          42780446
+deploy trigger commit  fc4640c5
+executor image delta   ONE file, src/l5_pmus_transport.py
+watchdog               src/l5_watchdog.py regex only; NOT in the executor
+                       image, service is trigger-gated, so NOT redeployed --
+                       credential-free image and HALT authority unchanged
+```
+
+Tests on the landed tree: **1361** money path plus `test_l5_live_execution.py`,
+**522** cancellation/transport, **915** watchdog/halt/arming, **26** in the new
+file. HALT and `L5_SHADOW_ONLY` remain active and were not part of the
+deployment; no limit raised; the five staged variables still staged.
