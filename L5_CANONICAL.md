@@ -5273,3 +5273,153 @@ improves it. A bounded live window is expected to lose a small amount. That
 is the owner's call to make and does not change the blockers above.
 
 MODELLED/READ-ONLY. HALT and SHADOW_ONLY unchanged; collection continues.
+
+---
+
+## 60. Safety repair: nothing was broken. The blocker is a working loss gate.
+
+**NO CODE CHANGE WAS MADE.** The investigation found no defect to repair.
+Section 59's accounting "discrepancy" was my own misreading, corrected
+below, and the real blocker is a safety gate functioning exactly as designed.
+
+### 60.1 CORRECTION to section 59: the accounting surfaces are consistent
+
+Section 59 reported `unresolved_accounting.count = 0` against
+`unknown_unattributed_realized = -84.62` as a possible inconsistency and
+said I could not resolve which surface was wrong. **Both are right. They
+measure different things.**
+
+- `unresolved_accounting()` (`l5_pmus_live_runner.py:3208`) filters a
+  hand-curated registry `UNRESOLVED_ACCOUNTING` of specific investigated
+  incidents, returning only rows with no `resolved_utc`. Count 0 means every
+  *investigated incident* has been closed with named authoritative evidence
+  -- and the closed rows are deliberately kept, because "deleting the history
+  of a possible loss is the thing this registry exists to prevent."
+- `unknown_unattributed_realized` is a *computed population* from
+  `InventoryStore.four_bucket_accounting()` -- realized P&L whose cost basis
+  is unknown, held apart under the identity
+  `account_wide = verified_l5 + manual + unknown_unattributed`.
+
+One is a case registry, the other is an attribution bucket. There is no
+contradiction and nothing to repair. Section 59's BLOCKER 1 framing is
+withdrawn.
+
+### 60.2 The ACTUAL blocker, proven deterministically
+
+```python
+SafetyLimits(max_usd_per_market=5, max_abs_residual=10,
+             max_total_exposure_usd=5, max_concurrent_markets=1,
+             max_live_orders=1, daily_realized_loss_halt_usd=5)
+  .refuse(realized_today=D("-8.39480000"), ...)   ->  "DAILY_REALIZED_LOSS_HALT"
+  .refuse(realized_today=D("0"), ...)             ->  None
+```
+
+The predicate is `realized_today <= -daily_realized_loss_halt_usd`, and the
+deployed heartbeat reports `legacy_realized_today = -8.39480000` against a
+`$5` halt. **The daily realized-loss halt is already tripped.** Any
+submission is refused by `SafetyLimits` on its own, independently of HALT
+and SHADOW_ONLY.
+
+This is a gate working correctly, not a fault.
+
+The only thing that would clear it is rescoping the loss gate from
+`account_wide` to `verified_l5`. `L5_LOSS_GATE_RESCOPING_REVIEW.md` states:
+*"Status: BLOCKED pending a human with write access. No code change has been
+made."* and a regression test, `test_gate_input_changes_no_policy_by_itself`,
+guards it by counting the protected call sites in source. **I did not apply
+it.** Doing so is exactly the "reset cumulative loss limits" the brief
+forbids. That review also records the account-wide figure as `-218.99` once
+four post-T settlements priced at the `$1`/share upper bound are included --
+estimates, explicitly not verified realized losses, and attributable to
+neither L5 nor manual.
+
+### 60.3 Watchdog verification -- PASSES, deterministically
+
+```
+tests/test_l5_watchdog.py, _ownership, _halt_end_to_end, _credential_free,
+test_l5_deadman_exact_cancel, _emergency_cancellation_proof,
+_orphan_cancellation, _disarmed_cancellation         142 passed
+money-path: live_execution, live_validation_gates, cost_basis_audit,
+  correct_cost_basis, account_wide_delta_policy, account_wide_exposure,
+  probe_manifest                                     273 passed
+test_gate_input_changes_no_policy_by_itself            1 passed
+```
+
+The named controls are each covered by a passing test:
+
+```
+exact-ID, never account-wide  test_ours_and_the_owners_resting_together_cancels_exactly_one
+ownership, both witnesses     test_a_manual_order_is_not_cancellable_even_if_our_record_claims_it
+                              test_the_owners_manual_order_is_never_cancelled_when_unclaimed
+                              test_a_market_mismatch_between_our_claim_and_the_venue_refuses
+registry freshness            test_the_ownership_registry_is_read_once_per_sweep
+                              test_the_oracle_fails_closed_on_every_transport_error
+                              test_an_unreadable_ledger_publishes_unknown_not_empty
+acknowledgment                test_an_order_in_both_witnesses_is_cancelled_and_verified
+independent HALT              test_without_an_oracle_the_cancel_power_does_not_exist
+                              test_an_unreadable_venue_row_sends_no_post_at_all
+```
+
+**These results verify the DEPLOYED code.** The running executor is SHA
+`9bb7b6c6` from branch `claude/gemini-btc-economic-viability-h3u7zl`, and
+`src/l5_watchdog.py`, `src/l5_live_execution.py` and
+`src/l5_pmus_live_runner.py` are **byte-identical** between that SHA and this
+working tree. No account-wide cancellation exists on the watchdog path; the
+`cancel_all_deadman` helpers that exist elsewhere in the repo
+(`pmus_micro_executor`, `l5_surface_exec/adapter`, `pmus_spring_l5_session`)
+are not reachable from it, and none was introduced.
+
+Live sweeps, every ~20s:
+
+```
+open_orders 0   overdue []   not_ours []   still_open []   read_error null
+cancel_enabled false
+heartbeat_refused "refusing to overwrite a latched HALT: clearing is an
+                   owner action, not an automated one"
+```
+
+`cancel_enabled` is false because `L5_WATCHDOG_CANCEL` is absent from the
+service (the registry URL IS set, so the oracle would construct). **I did not
+set it**: proving a cancel still requires first placing a live resting order,
+there is no PMUS sandbox, and `OwnershipOracle` records the prior incident
+where account-wide cancellation would have taken the owner's manual order
+`D23N1EHTTZ7D` on this shared account.
+
+### 60.4 Staged variables and limits -- untouched
+
+Patch `a8fb9c09`, 5 additions to `l5-pmus-live`, all values redacted to this
+session (`valuesRedacted: true`). Not committed, not discarded. The stricter
+deployed limits are preserved exactly: `$5` per market, `$5` total exposure,
+`$1` gross cash out, `10` max abs residual, `5` max unmatched contracts,
+`1` concurrent market, `1` live order.
+
+### 60.5 Live state at check time
+
+```
+deployed SHA   9bb7b6c6 (l5-pmus-live, SUCCESS 2026-10-16T18:53:51Z)
+frozen_rule    030d8bf
+venue orders   0 (watchdog read, read_error null)
+positions      committed_usd {}, cash_deployed [], account worst case $0
+account cash   $344.41255  (/v1/account/balances, age 0.0s)
+pending_terminal []   quarantined []   cooloff 0.0s
+submission_gate blocked, reason SHADOW_ONLY_LOCK, halt_latch HALT
+loss gate      DAILY_REALIZED_LOSS_HALT (tripped)
+```
+
+### 60.6 Verdict
+
+**NOT EXECUTED. No orders. No venue-acknowledged submissions. No realized
+P&L.** HALT and SHADOW_ONLY remain as found; no variable set, no patch
+committed, no limit changed, no halt reset, no code modified.
+
+Remaining blockers, in order:
+
+1. **`DAILY_REALIZED_LOSS_HALT` is tripped** at account-wide `-8.39` against
+   a `$5` halt. Clearing it requires the loss-gate rescoping, which the repo
+   reserves for a human with write access and a regression test enforces.
+2. **Cancellation is not provable without a live order** on a shared
+   account, and `L5_WATCHDOG_CANCEL` is unset.
+3. **The staged patch is unverifiable** to an OAuth session that receives
+   variable names without values.
+
+Blocker 1 is the gating one and it is not mine to clear.
