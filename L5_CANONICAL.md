@@ -5692,3 +5692,138 @@ end-to-end halt test this change had to update.
    watchdog is given signing code and credentials, which reopens the
    permission-level isolation question settled on 2026-10-14. The executor's
    own exact-id cancellation needs no such decision.
+
+## 63. The daily halt was reading a prior day's losses. Cause proven from production.
+
+The owner asked for the exact trades, cashflows, timestamps and accounting
+population behind `DAILY_REALIZED_LOSS_HALT`, and for the halt to be
+preserved if legitimate. It is not legitimate **as a daily halt**, and the
+losses behind it are real and still restrain. Both statements are evidenced
+below.
+
+### 63.1 The exact cashflows and timestamps
+
+From `L5_LIVE_SETTLED` on `l5-pmus-live`, each row carrying the venue's own
+`settlement_pnl` and the running `realized_today_after`:
+
+| settled (UTC) | market | settlement_pnl | running total after |
+|---|---|---|---|
+| 2026-10-16T03:48:49Z | `cpceth-eth-…-0330z` | **−50.00** | −129.01 |
+| 2026-10-16T03:48:49Z | `cpcxrp-xrp-…-0330z` | **−37.9754** | −166.9854 |
+| 2026-10-16T03:48:51Z | `cpcsol-sol-…-0330z` | **−50.00** | −216.9854 |
+| 2026-10-16T03:51:15Z | `cpc-btc-…-0330z` | −2.00 | −218.9854 |
+| 2026-10-16T12:46:35Z | `cpc-btc-…-1230z` | −5.00 | −223.9854 |
+| 2026-10-16T12:46:35Z | `cpceth-eth-…-1230z` | −5.00 | −228.9854 |
+| 2026-10-16T12:46:36Z | `cpcsol-sol-…-1230z` | −5.00 | −233.9854 |
+| 2026-10-16T21:05:01Z | `cpc-btc-updown-1d-2026-10-15-2100z` | 0 | **−8.39480000** |
+
+The last row is the whole answer to "when did the gate's input last move":
+**2026-10-16T21:05:01Z**, to exactly the `-8.39480000` the halt was refusing
+on. The jump from `−233.99` to `−8.39` is the owner-authorised cost-basis
+batches replacing `$1`/share upper bounds with measured costs.
+
+**A query for `L5_LIVE_SETTLED` over 2026-10-17 returns NOTHING.** The true
+realized P&L for the day the halt was blocking is **$0.00**.
+
+### 63.2 Day and population
+
+Of the 31 settlement events retrievable in the log window, **every one falls
+on 2026-10-16** and they sum to `−182.8454` at settlement-time pricing.
+(Earlier settlements on 10-12/14/15 are outside the retained window and were
+not enumerated; they do not affect the finding, because the input's last
+movement and today's zero are both established directly.)
+
+```
+BTC15m  -- L5's authorised series        -9.88
+ETH / SOL / XRP / BTC-1d -- NOT L5    -172.9654
+```
+
+So **95% of the loss by magnitude is outside L5's risk scope**, and none of
+it is attested to L5: `verified_l5_realized` is `0` and
+`verified_l5_status` is `UNPROVEN_LEGACY_ATTRIBUTION`.
+
+Independent corroboration of the post-baseline portion, from two unrelated
+sources that agree to three cents:
+
+```
+8 post-baseline unattested settlements   -5.61   (heartbeat unknown_detail)
+venue cash  350.05255 -> 344.41255       -5.64   (/v1/account/balances)
+```
+
+Both land entirely on 2026-10-16. Nothing lands on 2026-10-17.
+
+### 63.3 Verdict: a trading-day-boundary defect, and the loss is still real
+
+`realized_today()` returns attributed + unattributed realized P&L over **all
+of history**. Fed to a gate named `daily`, it makes every later day inherit
+every earlier day's losses permanently — a `$5` *lifetime* cap wearing a
+daily label, which also made the separate `$20` cumulative limit read the
+identical number and do nothing.
+
+The losses are **real and are not zeroed**. They keep restraining through the
+untouched `$20` account-wide cumulative gate (`-8.3948` of `$20`, firing at
+`-20.00`), and the `-84.62` / `-79.01` / 42 unknown-basis legs stay recorded.
+
+**The fix is a boundary correction, not a bypass**, and the regression proves
+it on the real production rows:
+
+```
+measured on 2026-10-16 (the day it happened) -> DAILY_REALIZED_LOSS_HALT   FIRES
+measured on 2026-10-17 (nothing settled)     -> passes, day figure $0.00
+```
+
+The gate did not get weaker; it got the right day. The population is still
+account-wide, so a manual loss **today** still halts L5 — deliberately more
+conservative than the attribution evidence would justify, since 95% of the
+historical loss is not L5's.
+
+New coverage in `tests/test_l5_four_bucket_accounting.py` is built from the
+real rows above: `test_the_halt_was_reading_a_prior_days_losses`,
+`test_the_same_fix_WOULD_have_halted_on_the_day_it_happened`, and
+`test_a_settlement_retired_late_counts_on_the_day_it_was_retired` — the last
+pinning that the boundary is the RETIREMENT timestamp, not the window's own
+date (the 10-15 BTC-1d window settled on 10-16 and belongs to 10-16).
+
+### 63.4 Deployment: verified against the executor's own branch, not applied
+
+`l5-pmus-live` deploys from `claude/gemini-btc-economic-viability-h3u7zl`,
+whose tip (`9205ee67`) is **identical to the deployed SHA `9bb7b6c6` across
+all of `src/`**. This branch has **diverged** from it, so pointing the
+service at this branch would add `l5_two_sided_probe.py` (+220, trading
+logic) and `pmus_ws_evidence_recorder.py` (+500) to the live image — 720
+never-deployed lines to ship a 70-line fix. Rejected.
+
+Instead the minimal change is exported as
+`data/l5/ops/daily_halt_fix_for_executor_branch.patch` (314 lines: the fix,
+its tests and the review-doc update). It **applies cleanly to `9205ee67`**
+and is green there:
+
+```
+git apply daily_halt_fix_for_executor_branch.patch
+python3 -m pytest $(money path) tests/test_l5_live_execution.py  ->  1358 passed
+```
+
+Applying it needs a push to that branch, which is outside this session's
+permission. **The fix is therefore verified but NOT deployed**; deployed SHA
+remains `9bb7b6c6`, which contains no `realized_current_utc_day`.
+
+### 63.5 Live eligibility: NO, on the owner's own precondition
+
+The instruction was to verify watchdog cancellation is enabled and all
+preflight gates pass *before* using the authorised bounded test.
+
+- **Watchdog cancellation cannot be enabled.**
+  `deploy/l5_halt_watchdog/Dockerfile` deliberately omits `src/pmus_auth.py`
+  (owner, 2026-10-14), so `from_env` takes the blind branch and hardcodes
+  `cancel_enabled=False`. Live sweeps at 19:40:29Z still read
+  `cancel_enabled: false` with `report_age_s` present, which is the blind
+  branch's signature. `L5_WATCHDOG_CANCEL=YES` remains unset because it
+  would be inert and would misrepresent the system.
+- **HALT is still latched** and clearing it needs the one-shot admin image
+  plus a named human operator's attestation (§62.4).
+- Executor-side exact-id cancellation remains operational and proven, and is
+  not gated by HALT or the shadow lock.
+
+So live execution is **not safely eligible**, and nothing was armed,
+submitted or cancelled. HALT and `SHADOW_ONLY` unchanged; no limit raised,
+no staged variable committed, no service redeployed.

@@ -286,3 +286,87 @@ def test_a_loss_today_halts_through_the_real_executor_path(tmp_path):
     st.state["retired_markets"] = {
         "manual-today": retired(today + "T00:30:00+00:00", "-6.00", False)}
     assert st.realized_current_utc_day() == D("-6.00")
+
+
+# ------------- the production forensics behind DAILY_REALIZED_LOSS_HALT (§63)
+
+#: Real `L5_LIVE_SETTLED` rows from l5-pmus-live, (retirement UTC, market,
+#: settlement_pnl) as the venue settled them. EVERY ONE is 2026-10-16; the
+#: last settlement of any kind was 2026-10-16T21:05:01Z, where the emitted
+#: `realized_today_after` was exactly -8.39480000 -- the figure the daily
+#: halt was refusing on. A query for L5_LIVE_SETTLED on 2026-10-17 returns
+#: NOTHING, so the true daily figure for that day is zero.
+SETTLED_20261016 = [
+    ("2026-10-16T01:15:49+00:00", "cpcsol-sol-updown-15m-2026-10-16-0100z", "-1.73"),
+    ("2026-10-16T01:30:27+00:00", "cpc-btc-updown-15m-2026-10-16-0115z", "-1.09"),
+    ("2026-10-16T02:03:09+00:00", "cpc-btc-updown-15m-2026-10-16-0145z", "-3.39"),
+    ("2026-10-16T03:48:49+00:00", "cpceth-eth-updown-15m-2026-10-16-0330z", "-50.00"),
+    ("2026-10-16T03:48:49+00:00", "cpcxrp-xrp-updown-15m-2026-10-16-0330z", "-37.9754"),
+    ("2026-10-16T03:48:51+00:00", "cpcsol-sol-updown-15m-2026-10-16-0330z", "-50.00"),
+    ("2026-10-16T03:51:15+00:00", "cpc-btc-updown-15m-2026-10-16-0330z", "-2.00"),
+    ("2026-10-16T12:46:35+00:00", "cpc-btc-updown-15m-2026-10-16-1230z", "-5.00"),
+    ("2026-10-16T21:05:01+00:00", "cpc-btc-updown-1d-2026-10-15-2100z", "0"),
+]
+
+#: 2026-10-17T19:00:00Z -- the day the halt was refusing on, one day after
+#: every settlement above.
+TS_17 = 1792263600.0
+#: 2026-10-16T23:00:00Z -- still inside the day those settlements landed on.
+TS_16 = 1792191600.0
+
+
+def _production_store(tmp_path):
+    st = E.InventoryStore(str(tmp_path / "s.json"))
+    st.state["realized_attributed"] = "-8.39480000"
+    st.state["realized_unattributed"] = "0"
+    st.state["retired_markets"] = {
+        m: {"t": t, "settlement_pnl": p,
+            "l5_owner_attribution_verified": False,
+            "pnl_provenance": "UNKNOWN_COST_UPPER_BOUND"}
+        for t, m, p in SETTLED_20261016}
+    return st
+
+
+def test_the_halt_was_reading_a_prior_days_losses(tmp_path):
+    """THE PRODUCTION CAUSE. Every settlement behind -8.39480000 landed on
+    2026-10-16; the last was 21:05:01Z. On 2026-10-17 nothing settled at all,
+    so the day's realized P&L is zero -- yet the all-time total was still
+    being fed to a gate named `daily`, which is why it refused."""
+    st = _production_store(tmp_path)
+    assert st.realized_today() == D("-8.39480000")       # all-time, unchanged
+    assert st.realized_current_utc_day(now=TS_17) == D(0)
+
+
+def test_the_same_fix_WOULD_have_halted_on_the_day_it_happened(tmp_path):
+    """THE PROPERTY THAT MAKES THIS A BOUNDARY FIX AND NOT A BYPASS.
+
+    Measured on 2026-10-16 itself, the day figure is a large loss and the $5
+    halt FIRES. Measured on 2026-10-17 it is zero and the halt passes. The
+    gate did not get weaker; it got the right day.
+    """
+    st = _production_store(tmp_path)
+    day16 = st.realized_current_utc_day(now=TS_16)
+    assert day16 < D("-5")
+    lim = E.SafetyLimits(
+        max_usd_per_market=D("5"), max_abs_residual=D("10"),
+        max_total_exposure_usd=D("5"), max_concurrent_markets=1,
+        daily_realized_loss_halt_usd=D("5"))
+    common = dict(price=D("0.55"), qty=D("1"), market="m",
+                  committed_by_market={}, residual_after=D("0"),
+                  open_markets=[], outstanding_by_market={},
+                  live_order_count=0)
+    assert lim.refuse(realized_today=day16,
+                      **common) == "DAILY_REALIZED_LOSS_HALT"
+    assert lim.refuse(realized_today=st.realized_current_utc_day(now=TS_17),
+                      **common) != "DAILY_REALIZED_LOSS_HALT"
+
+
+def test_a_settlement_retired_late_counts_on_the_day_it_was_retired(tmp_path):
+    """The boundary is the RETIREMENT timestamp, not the window's own date.
+    `cpc-btc-updown-1d-2026-10-15-2100z` is a 10-15 window that settled on
+    10-16, and it belongs to 10-16 -- the day the cash actually moved."""
+    st = _production_store(tmp_path)
+    row = st.state["retired_markets"]["cpc-btc-updown-1d-2026-10-15-2100z"]
+    assert row["t"].startswith("2026-10-16")        # window 10-15, settled 10-16
+    assert st.realized_current_utc_day(now=TS_16) == sum(
+        (D(p) for _t, _m, p in SETTLED_20261016), D(0))
