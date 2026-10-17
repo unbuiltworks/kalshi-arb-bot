@@ -3810,3 +3810,35 @@ and a quarter of his fills are 5 or smaller.
 
 All figures MODELLED, SHADOW ONLY, offline. No live orders, no deployment, no
 capital increase, no limit loosened. HALT and SHADOW_ONLY unchanged.
+
+### 46.7 Deployment verified by a live log line (addendum)
+
+Deployment **`1b6babd8`**, status SUCCESS, commit **`85926762`**, created
+11:34:01Z, live 11:36:26Z. Section 47's documentation commit `1c9b2cf9`
+correctly SKIPPED -- no watched path.
+
+First post-deploy rollover, `PMUS_SHADOW_POLICY` at **11:45:01Z**, window
+`cpc-btc-updown-15m-2026-10-17-1130z`, `rows 1`, `store_errors 0`, carrying
+all five arms:
+
+```
+arm     fills  matched  residual  peak capital  worst-case residual  priced
+B10         3        5         5        $9.70              $2.3500   false
+B25         7       15         5       $23.95              $2.2375   false
+B50        10       20        10       $40.30              $4.8167   false
+B25D2       6       10        10       $24.15              $4.8000   false
+B25D3       5       10         5       $20.65              $2.0333   false
+```
+
+The depth arms are running and their inherited limits hold: peak committed
+$24.15 and $20.65 against the $25.00 ceiling, worst-case residual $4.80 and
+$2.03 against the $6.25 cap, residual quantity within the 10-contract cap.
+
+`priced: false` on every arm is the settlement path behaving as designed --
+the residual is unsettled at rollover and resolves through
+`reconcile_pending` (bounded 8 attempts / 7200s) or terminates as
+UNRESOLVED_EXPIRED. **The forward comparison must therefore be computed from
+SETTLEMENT-RESOLVED records only**, not from rollover records, and one window
+is not a comparison. Collection has started; the decision rule frozen in
+46.5 stands unchanged.
+
