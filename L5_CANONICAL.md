@@ -3076,3 +3076,139 @@ now emits A/B10/B25/B50 per rollover. Nothing else should change.
 
 All figures MODELLED, SHADOW ONLY. Nothing was submitted and no figure here
 is realized profit. HALT and SHADOW_ONLY unchanged.
+
+---
+
+## 43. Side-aware capital budget: a variance reducer, not a completion fix. NOT promoted.
+
+IN-SAMPLE MECHANISM TEST on the same 20 windows of section 42. Not
+validation. No profitability is claimed from these windows and no split was
+searched.
+
+### 43.1 What was changed, and what was not
+
+One change only: which pool a placement draws on. The two budgets are carved
+out of the SAME $25 ceiling and sum to it, so total committed capital cannot
+exceed what the shared pool allowed. Clip 5, depth 1, `max_unmatched_qty` 10,
+`max_residual_loss_usd` cap/4, fees, FIFO accounting, the queue model, the
+cutoff and the settlement source are the inherited ones and were not touched.
+Implemented as a subclass in the offline harness; `src/` is unchanged.
+
+The split is derived, not fitted: a UP clip owes its price (measured mean
+fill 0.4316) and a DOWN clip owes $1, so equal CONTRACT capacity needs
+0.4316 / (0.4316 + 1) = **0.3015** of the dollars on UP. Pre-registered at
+30/70. One split tested.
+
+### 43.2 Aggregate, 20 windows, $25 ceiling
+
+```
+                      SHARED POOL      SIDE BUDGET 30/70
+matched quantity            270               260        -3.7%
+matched net              $+20.73           $+19.93        -$0.80
+residual net             $-12.70            $-3.80        +$8.90
+TOTAL net                 $+8.03           $+16.13        +$8.10
+UP fills                    385               310
+DOWN fills                  285               285          unchanged
+peak committed           $25.00            $22.50
+```
+
+### 43.3 Reserving DOWN capacity did NOT improve completion
+
+This was the question to answer before any other, and the answer is
+unambiguous. **DOWN fills are 285 in both arms -- identical.** Reserving
+capacity for the DOWN leg funded not one additional DOWN contract. The
+mechanism works entirely by *suppressing UP accumulation* (385 -> 310
+fills, 42,082 UP placements refused by their own budget), and the reserved
+DOWN budget goes partly unused (mean $3.00 of $17.50 left at window end).
+
+Completed matched quantity therefore **fell**, 270 -> 260, and matched net
+with it, -$0.80. In 3 windows (2030z, 0030z, 0200z) matched quantity dropped
+15 -> 10 outright. The DOWN leg was never short of dollars; it was short of
+executable flow, exactly as section 39 found.
+
+### 43.4 The +$8.10 is directional luck, and the flip test proves it
+
+The sample settled DOWN 11 times of 20 while the shared pool's residual is
+long UP in 14 of 16 windows. Shrinking a long-UP residual must look good
+here. Flipping every settlement and re-pricing the SAME fills:
+
+```
+                 actual         flipped
+SHARED           $+8.03         $+58.03
+SIDE 30/70      $+16.13         $+51.13
+```
+
+The advantage **reverses sign**. Pooled across both directions, the paired
+per-window difference is:
+
+```
+mean +$0.030   stdev $3.512   t = +0.05      (40 window-outcomes)
+```
+
+**Zero mean effect.** The in-sample +$8.10 is this sample's direction, not
+an edge.
+
+(The flip test is valid ONLY for the paired difference between arms, which
+holds fills and flip constant. Its LEVELS are upward-biased and must not be
+read as expectancy: a residual bought near 0.43 gains under a 50/50 flip
+purely because 0.50 > 0.43, and 0.50 is not the real probability -- the
+price is. Nothing here says total net is positive.)
+
+### 43.5 What it does do: cuts dispersion ~30%
+
+```
+per-window total net, stdev     SHARED     SIDE 30/70
+  actual sample                  $3.344       $2.212
+  pooled over both directions    $3.989       $2.804     -30%
+```
+
+That is the one robust effect, and it is what section 42 predicted a smaller
+correlated exposure would do. It costs 3.9% of matched net and 3.7% of
+completed quantity to buy it.
+
+### 43.6 Risk limits: never exceeded
+
+```
+peak committed capital   $25.00 shared / $22.50 side budget   ceiling $25.00
+max unmatched quantity   10                                   cap 10
+max worst-case residual  $5.025                               cap $6.25
+```
+
+The side budget cannot exceed the total ceiling by construction (the budgets
+sum to it) and in fact peaks $2.50 below it -- which is itself a cost, since
+that is capital the shared pool was using.
+
+### 43.7 Windows made worse: 7 of 20
+
+```
+2030z -1.960 (matched 15->10)   2045z -2.370   2100z -3.040
+2230z -2.870                    2245z -2.870   0000z -2.520
+0200z -2.170 (matched 15->10)
+```
+
+Four of these are windows whose long-UP residual WON. The mechanism gives up
+the upside of the directional exposure as surely as the downside -- which is
+the definition of a variance reducer, not an edge.
+
+### 43.8 Decision: NOT promoted to a forward comparison
+
+The gate set for this test was *improves completed pairs AND total economics
+without increasing risk*. It fails the first two:
+
+- completed matched quantity **falls** (270 -> 260);
+- total economics improve by **zero in mean** (t = +0.05), the in-sample gain
+  being this sample's settlement direction;
+- risk is genuinely not increased, and dispersion falls 30%.
+
+**No forward shadow comparison is prepared and nothing is deployed.** A
+variance reducer that costs matched quantity is not worth a deployment while
+the matched edge is the only thing we have demonstrated.
+
+Section 42's diagnosis survives intact and is sharpened: the long-UP residual
+IS caused by shared-pool capital rationing, but relieving the rationing does
+not convert into DOWN fills, because the DOWN side is bound by available
+executable flow and not by dollars. The residual is a symptom of thin
+two-sided flow at our size, not of the budget.
+
+All figures MODELLED, SHADOW ONLY. Nothing was submitted and no figure here
+is realized profit. HALT and SHADOW_ONLY unchanged; `src/` unchanged.
