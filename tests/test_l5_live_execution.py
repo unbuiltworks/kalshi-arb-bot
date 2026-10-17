@@ -225,8 +225,17 @@ def test_concurrent_market_limit(tmp_path):
 
 
 def test_daily_loss_halt_blocks_everything(tmp_path):
+    # The halt measures the CURRENT UTC DAY, account-wide, so the fixture is
+    # a settlement that lost $6 TODAY rather than a bare all-time scalar. It
+    # is deliberately UNATTESTED: a manual or unknown loss today must trip
+    # the halt exactly as an L5 one would.
     st = store(tmp_path)
-    st.state["realized_today"] = "-6"
+    today = E.dt.datetime.now(E.dt.timezone.utc).strftime("%Y-%m-%d")
+    st.state["realized_unattributed"] = "0"
+    st.state["retired_markets"] = {
+        "loss-today": {"t": today + "T00:30:00+00:00",
+                       "settlement_pnl": "-6",
+                       "l5_owner_attribution_verified": False}}
     ex = E.FaithfulExecutor(st, limits(daily_realized_loss_halt_usd=D("5")),
                             transport=FakeTransport(), now_fn=NOW)
     rec = ex.handle(row(), {}, market="m", window="16:15")
