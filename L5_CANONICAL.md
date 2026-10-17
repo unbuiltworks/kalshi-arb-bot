@@ -2422,3 +2422,107 @@ blocked by completion, not by dollars.
 **What binds, in order: completion first (via the unmatched-inventory cap),
 then price/depth availability (`PRICE_OUT_OF_BAND` rises 187 -> 452 as depth
 grows), then queue. Capital binds nowhere at $100.**
+
+## 37. What L5 does after a one-sided fill. 2026-10-17.
+
+Observed = fills. We see neither his orders nor the Polymarket book, so
+"relative to market" is proxied by his own recent prints on that side, and
+nothing below infers when an order was placed or cancelled. Repeated
+book-update refusals are NOT counted as independent missed opportunities
+anywhere in this section.
+
+### 1. Completion time scales with how much is unmatched
+
+| unmatched contracts | DISCOVERY median (p90) | HOLDOUT median (p90) |
+|---|---|---|
+| 0-50 | **22s** (87s) | **16s** (72s) |
+| 50-100 | 48s (144s) | 30s (116s) |
+| 100-150 | 76s (185s) | 46s (153s) |
+| 150-200 | 102s (220s) | 57s (173s) |
+| 200-250 | **136s** (281s) | **72s** (192s) |
+
+He does not complete FASTER when more imbalanced -- he completes slower,
+roughly in proportion to the size outstanding.
+
+### 3. He sacrifices essentially NOTHING to complete -- waiting IMPROVES his pair
+
+| wait before completion | DISCOVERY median pair | HOLDOUT |
+|---|---|---|
+| 0-15s | 0.9800 | 0.9844 |
+| 30-45s | 0.9700 | 0.9788 |
+| 60-75s | **0.9700** | **0.9700** |
+
+Pair cost **falls** with waiting. And the imbalanced-vs-balanced sacrifice is
+**+0.0047 (discovery)** and **+0.0000 (holdout)** -- essentially nil.
+
+**This contradicts the "pay up to complete" story.** He does not buy
+immediacy; patience is rewarded.
+
+### 2. He completes at the price he was already trading
+
+Completing price minus his own last same-side print: **median +0.0000**
+(n=163,731 discovery / 452,606 holdout). No systematic paying up.
+
+### 4. Time remaining barely matters. RECENT MOVEMENT dominates everything.
+
+| | DISCOVERY | HOLDOUT |
+|---|---|---|
+| time remaining 675-900s -> 0-225s | 0.9800 -> 0.9703 | 0.9800 -> 0.9800 |
+| **recent move DOWN on that side** | **0.9300** | **0.9421** |
+| recent move flat | 0.9800 | 0.9900 |
+| **recent move UP on that side** | **1.0100** | **1.0100** |
+
+An 8-point pair-cost swing driven by direction of recent movement, against a
+1-point swing from time remaining. Completing into a rising price costs him
+a pair **above parity**.
+
+### Would adopting this keep our edge positive after PMUS fees?
+
+| L5 pair observed | our edge/contract | |
+|---|---|---|
+| 0.9300 after a falling move | **+$0.0565** | positive |
+| 0.9700 balanced / long wait | **+$0.0159** | positive |
+| 0.9747 / 0.9800 imbalanced median | **+$0.0111 / +$0.0058** | positive, thin |
+| 0.9900 flat move | **-$0.0044** | **negative** |
+| 1.0100 after a rising move | **-$0.0247** | **negative** |
+
+**Adopting his completion behaviour UNCONDITIONALLY imports the
+rising-move bucket and turns the edge negative there.** Only the patient,
+falling-move part of his behaviour is affordable on our fee schedule.
+
+### 5. Where B diverges -- and the honest conclusion
+
+| | L5 | B |
+|---|---|---|
+| completion price | fixed at the price he was already trading | fixed at quote time |
+| response to waiting | waits; pair IMPROVES | waits; pair fixed at quote |
+| pays up to complete | **no** (sacrifice ~0) | no |
+| tolerated imbalance | **up to 250+ contracts** | **10 (2 clips)** |
+| completion time at its own imbalance | 16-136s | window is 900s |
+
+**B's completion logic already does what L5 does.** It is passive, its pair
+is fixed at quote time so a later adverse move cannot worsen it (a strictly
+better property than L5's 1.0100 bucket), and it waits rather than chasing.
+Sections 22, 24 and 34 each independently found that repricing and crossing
+do not help.
+
+The ONE material divergence is **scale of tolerated imbalance: 10 contracts
+against his 250+**, a 25x gap -- and section 36 showed that cap
+(`UNMATCHED_INVENTORY_CAP`, 14-17k refusals) is exactly what stops B.
+
+### SMALLEST EVIDENCE-SUPPORTED CHANGE: none to completion logic
+
+L5's post-one-sided-fill behaviour supports **no change to B's completion
+logic**, because B already completes the way he does and is better protected
+on the adverse-move bucket. The only lever his data points at is the
+imbalance cap, which is a RISK limit and is explicitly out of scope.
+
+Stated plainly: **the completion bottleneck is not a completion-logic
+defect.** It is the interaction of a 10-contract imbalance cap with a
+completion process that takes 16-136s at L5's scale. Nothing in his
+behaviour fixes that without relaxing the cap.
+
+What his data DOES establish, and what is worth keeping, is the sign of the
+movement effect: completing into a rising price is where the edge dies
+(-$0.0247). B never does this, and that property should be preserved by any
+future change rather than traded away for more fills.
