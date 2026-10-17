@@ -2616,3 +2616,83 @@ by clip granularity, and not by venue minimums.
 
 108 tests in file; gate green. Nothing deployed; no cap, capital or limit
 changed.
+
+## 39. Execution-frequency bottleneck: flow, not quote timing. 2026-10-17.
+
+### Per-quote execution evidence, B as deployed (clip 5, $25, d=1)
+
+| | |
+|---|---|
+| quotes placed, 6 windows | **40** |
+| filled | **38 (95%)** |
+| median wait to fill | **12s** |
+| median displayed queue ahead at join | 839.7 |
+| median qualifying volume that then arrived | 917.0 |
+| unfilled quotes | **2**, both with queue 1,705.5 and **zero** qualifying volume arriving |
+
+**Quote placement is not the problem.** When B quotes, it fills 95% of the
+time, in a median of twelve seconds. The two failures were starved of flow
+entirely, not mispriced.
+
+A causally-chosen alternative rung (visible in the SAME snapshot, no future
+information) would have cleared sooner for 30 of 40 quotes -- but those
+rungs sit at a median own-outcome price of **0.4950**, i.e. closer to the
+touch. Filling sooner there costs margin we already measured as negative at
+the touch (pair 0.99 -> **-$0.0044/contract**, section 37). **There is
+nothing to buy: 95% fill in 12s cannot be meaningfully improved, and the
+only way to fill faster is to pay more than the pair is worth.**
+
+### So why only 40 quotes in 6 windows? Time-weighted occupancy at $25
+
+| side | resting | NOT resting | past cutoff |
+|---|---|---|---|
+| UP | **23.9%** | **58.5%** | 17.6% |
+| DOWN | **19.3%** | **63.1%** | 17.6% |
+
+B is out of the market roughly **60% of every window**. The refusal census
+over distinct book updates says why: **`CAPITAL_CEILING` 14,922** against
+`UNMATCHED_INVENTORY_CAP` 4,227.
+
+### The binding constraint ROTATES with the ceiling -- correcting section 36
+
+| ceiling | quotes/win | UP resting | DOWN resting | matched | CAPITAL refs | UNMATCHED refs | matched net |
+|---|---|---|---|---|---|---|---|
+| $25 | 6.3 | 29.0% | 23.4% | 13.3 | **26,447** | 4,227 | $+0.912 |
+| $50 | 8.8 | 68.3% | 46.7% | 18.3 | 2,797 | 14,864 | $+1.370 |
+| $100 | 9.8 | 69.1% | 50.5% | 20.8 | **0** | **16,668** | $+1.505 |
+| $250 | 9.8 | 69.1% | 50.5% | 20.8 | **0** | **16,668** | $+1.505 |
+
+Section 36 concluded "capital binds nowhere". That was measured at **$100
+only** and is true there; **at $25 capital is the dominant refusal by 6x**.
+The correct statement is that the constraint rotates: **capital binds below
+about $50, the unmatched-inventory cap binds above it, and beyond $100
+nothing further changes** -- $250 is identical to $100 to the cent.
+
+Occupancy is the mechanism: raising $25 -> $50 lifts UP-side resting time
+from 29% to 68% and matched net from $0.912 to $1.370. Raising $50 -> $100
+adds only 0.8 percentage points of occupancy and $0.135 of net. **The
+occupancy ceiling is ~69% / ~51%, set by the inventory cap, and the
+remaining idle time is the engine correctly refusing to go further
+one-sided.**
+
+### DECISION: the low completion count is caused by the AVAILABLE EXECUTABLE
+### FLOW and the risk bounds, NOT by avoidable quote timing or price selection
+
+Three independent facts settle it:
+
+1. **95% of quotes fill, median 12s.** Timing and price selection are
+   already near their ceiling.
+2. **The only faster rungs are closer to the touch**, where the pair is
+   worth less than its fees. Faster fills are available and not worth having.
+3. **Idle time is caused by the bounds, not by hesitation**: capital below
+   $50, the unmatched cap above it. Both are risk limits held fixed by
+   instruction, and above $100 neither moves the result at all.
+
+Matched net saturates at **$1.505 per window** and does not improve with any
+further capital. No bounded, strictly causal re-timing or re-pricing policy
+on this tape improves it, because the binding quantity is **how much
+qualifying flow arrives while we are permitted to be in the market** -- and
+we are already filling nearly everything we quote.
+
+No change to B is recommended. Corrected FIFO accounting and the section 38
+regression tests are preserved; 108 tests, gate green; nothing deployed.
