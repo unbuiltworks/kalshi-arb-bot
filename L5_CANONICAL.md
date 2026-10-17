@@ -2696,3 +2696,76 @@ we are already filling nearly everything we quote.
 
 No change to B is recommended. Corrected FIFO accounting and the section 38
 regression tests are preserved; 108 tests, gate green; nothing deployed.
+
+## 40. Out-of-sample validation of FROZEN B. 2026-10-17.
+
+Policy B frozen (clip 5, depth 1, unchanged caps), corrected FIFO
+accounting, authoritative settlement for all 9 windows. **No parameter was
+fitted to the new windows.**
+
+Coverage: 11 PMUS windows captured since the ladder emitter went live; 9
+have ladder coverage from the open (lag <= 30s) and enough trades. 6 are the
+development set, **3 are genuinely out of sample** (0100z, 0115z, 0130z).
+
+### $25 ceiling
+
+| window | set | settled | fills | matched | FIFO matched net | residual net | total | util |
+|---|---|---|---|---|---|---|---|---|
+| 2030z | DEV | UP | 6 | 15 | +$0.720 | +$0.000 | +$0.720 | 97% |
+| 2045z | DEV | UP | 7 | 15 | +$1.390 | +$2.350 | +$3.740 | 97% |
+| 2100z | DEV | DOWN | 7 | 15 | +$1.640 | +$1.150 | +$2.790 | 99% |
+| 2215z | DEV | UP | 4 | 5 | +$0.230 | +$5.450 | +$5.680 | 67% |
+| 2315z | DEV | DOWN | 8 | 15 | +$0.830 | -$3.500 | -$2.670 | 99% |
+| 2330z | DEV | DOWN | 6 | 15 | +$0.660 | +$0.000 | +$0.660 | 85% |
+| **0100z** | **OOS** | DOWN | 7 | 15 | **+$0.740** | -$2.400 | -$1.660 | 98% |
+| **0115z** | **OOS** | DOWN | 8 | 15 | **+$2.070** | -$3.000 | -$0.930 | 95% |
+| **0130z** | **OOS** | DOWN | 8 | 15 | **+$1.060** | -$3.100 | -$2.040 | 95% |
+
+### The headline: matched edge REPLICATES, total net does not
+
+| | matched net / window | residual / window | **total / window** | matched >= $1 | total > 0 |
+|---|---|---|---|---|---|
+| DEV ($25) | +$0.912 | +$0.908 | +$1.820 | 33% | 83% |
+| **OOS ($25)** | **+$1.290** | **-$2.833** | **-$1.543** | **67%** | **0%** |
+| DEV ($50) | +$1.370 | -$0.908 | +$0.462 | 50% | 50% |
+| **OOS ($50)** | **+$2.050** | **-$2.367** | **-$0.317** | **100%** | 33% |
+| ALL 9 ($50) | +$1.597 | -$1.394 | +$0.202 | 67% | 44% |
+
+**Matched-pair net did not degrade out of sample -- it improved**, from
++$0.912 to +$1.290 at $25 and +$1.370 to +$2.050 at $50, reaching >= $1 in
+**100% of OOS windows at $50**. Capital utilisation is 95-99% at $25. **No
+window, in or out of sample, reached $5 matched net; one OOS window reached
+$3.**
+
+**Total net is negative out of sample** at both ceilings, entirely from the
+residual term.
+
+### THE STATISTICAL CAVEAT THAT GOVERNS THIS
+
+**All three OOS windows settled DOWN.** The residual is one directional
+outcome repeated three times, not three independent draws. On the residual
+dimension the effective sample is **n ~ 1**, so "0% of OOS windows positive"
+reflects a single coin landing the same way, not a repeatable loss.
+
+Across all 9 windows at $50: total +$0.202/window with stdev **$2.446** --
+mean/stdev **0.08**, indistinguishable from zero.
+
+### DECISION
+
+**B has a repeatable positive MATCHED-PAIR edge. It has NO demonstrated
+positive TOTAL net edge.**
+
+The economic reason, not a tuning problem: every window ends with unmatched
+inventory, and that residual is an **unhedged directional position with
+roughly zero expectation and a per-window standard deviation of ~$2.4-2.7**,
+against a matched edge of **$1.0-2.0**. The noise term is larger than the
+signal, so total net is decided by settlement direction rather than by the
+strategy.
+
+Two ways out, neither a parameter: **end each window flat** (complete every
+leg, which section 39 showed is bounded by available flow, not by our
+timing), or **grow the matched edge past the residual's standard deviation**,
+which needs roughly 2-3x the matched quantity the flow supports.
+
+More parameter tuning on these windows cannot change this, because the term
+that decides the outcome is not a parameter.
