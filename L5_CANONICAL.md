@@ -4063,3 +4063,90 @@ inside log retention.
 
 MODELLED, SHADOW ONLY. No figure here is realized profit. HALT and
 SHADOW_ONLY unchanged; all five arms frozen; no limits touched.
+
+---
+
+## 50. Autonomous scorecard materialization inside the existing recorder
+
+### 50.1 The finding that made this small
+
+`ShadowPolicyLog._load()` already rebuilds `self.latest` from the
+append-only store, **last line wins per market**, at construction. After any
+restart the process therefore holds every record in its reconciled form,
+variants and FIFO split included. And `reconcile_pending` already returns the
+records it resolved, in-process, on the side worker.
+
+So the scorecard needed no second store and no read of the growing file. It
+is a **pure fold over records the process already holds**:
+
+- **idempotent** because it is a recomputation, not an accumulation -- running
+  it twice produces the same answer and writes nothing;
+- **restart-safe** because the thing it recomputes from is the append-only
+  store, which `_load` replays;
+- **append-only preserved**: the scorecard writes nothing at all, so the
+  settlement record is untouched by construction;
+- **cannot block capture or settlement**: it runs inside the existing
+  settlement block on the side worker, only when a settlement actually
+  resolved (at most a few per 15 minutes), and is wrapped in its own
+  `try/except` so a scorecard fault cannot cost the settlement line that was
+  already printed.
+
+Writing a derived scorecard file to the volume was considered and rejected:
+the records are already durable there, and a second file on the same volume
+would be equally unreadable from outside. The gap was never materialization --
+it was readout. The log stream is the readable surface that already works, so
+the scorecard is emitted there.
+
+### 50.2 The change
+
+`src/l5_shadow_policy_eval.py`: adds `depth_scorecard(records, ...)`, a pure
+function, plus `SCORECARD_ARMS = ("B25", "B25D2", "B25D3")`,
+`SCORECARD_CONTROL = "B25"` and `SCORECARD_TARGET_USD = D(5)`. It reports per
+arm the total and mean net per window, matched net, residual net, windows and
+percent at or above the $5 objective, worst window, and the worst drawdown of
+the **running total** in window order; and against the control the paired
+advantage **split into its matched and residual components**. Non-comparable
+records go into named buckets -- `PRE_FIX_NO_VARIANTS`, `ARM_UNPRICED`,
+`PENDING`, `UNRESOLVED_EXPIRED`, `NOT_SCORED` -- and gaps in the 15-minute
+sequence across the observed span are counted as `missing_windows`.
+
+`src/pmus_ws_evidence_recorder.py`: 16 added lines that print one
+`PMUS_SHADOW_SCORECARD` line after the existing `PMUS_SHADOW_SETTLED` line,
+computed from `spl.latest`. No new file, no network call, no new state, no
+order path, no credential, no change to any limit, the strategy, the five
+frozen arms, or the settlement rules.
+
+Validated against the real 12:00:47Z record: the fold reproduces section
+49.2 exactly -- B25D2 +$4.05/window (+$0.55 matched, +$3.50 residual), B25D3
++$4.34/window (+$1.49 matched, +$2.85 residual).
+
+Tests: 139 green across the evaluator and recorder files, including the
+execution-versus-direction split, drawdown as peak-to-trough of the
+cumulative curve rather than the worst single window, every exclusion bucket,
+missing-window counting, order-independence of the fold, and a cap on the
+emitted line size.
+
+### 50.3 Runtime risk assessment
+
+Cost per emission is one O(n) pass over an in-memory dict, where n is the
+number of windows ever recorded -- about 96 a day. The dict is pre-existing;
+the fold adds no memory. Emission happens only on a settlement resolution, on
+the worker that already does the settlement read, after the line that matters
+has been flushed. The failure mode is a silently skipped scorecard line, never
+a lost settlement record and never an interruption to capture.
+
+`scripts/l5_depth_scorecard.py` and its ledger stay as they are, for
+reading history out of log pulls; the recorder's own line is now the primary
+surface and needs nothing external.
+
+### 50.4 Reporting
+
+The 50- and 100-window reports are now computable from any single
+`PMUS_SHADOW_SCORECARD` line, which carries the comparable count, mean net
+per window, percent reaching $5, matched versus residual, the paired
+advantage over B25 split into execution and direction, the worst drawdown and
+the unresolved and missing counts. **No variant is promoted automatically and
+no capital is increased: that remains the owner's decision.**
+
+MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged; five arms frozen; no
+limits touched; no live orders.

@@ -1372,6 +1372,126 @@ def reconcile_settlement(rec: Mapping[str, Any],
                                "confirmed by this evidence.")})
 
 
+#: the frozen depth comparison: the control and the two deeper arms.
+SCORECARD_ARMS = ("B25", "B25D2", "B25D3")
+SCORECARD_CONTROL = "B25"
+#: the owner's per-window objective, in dollars.
+SCORECARD_TARGET_USD = D(5)
+
+
+def depth_scorecard(records: Sequence[Mapping[str, Any]], *,
+                    arms: Sequence[str] = SCORECARD_ARMS,
+                    control: str = SCORECARD_CONTROL,
+                    target_usd: Any = SCORECARD_TARGET_USD
+                    ) -> Dict[str, Any]:
+    """The forward depth scorecard, as a PURE FOLD over records in hand.
+
+    WHY THIS IS A FOLD AND NOT A FILE. `ShadowPolicyLog._load` already
+    rebuilds `latest` from the append-only store, last line wins per market,
+    so the process holds every reconciled record after any restart. Deriving
+    the scorecard from those records needs no second file, no read of the
+    growing store, and no state of its own: it is idempotent because it is a
+    recomputation, and restart-safe because the thing it recomputes from is.
+
+    A window COUNTS only when every compared arm is `priced`. Everything else
+    is counted in a named bucket, never silently dropped -- a record settled
+    before the variants were summarised carries no variants block at all, and
+    saying so is the difference between "no evidence yet" and "no data".
+
+    MATCHED AND RESIDUAL ARE KEPT APART. The matched column is execution
+    economics; the residual column is the direction the window happened to
+    settle. The paired advantage over the control is reported split the same
+    way, because a total-net advantage made of residual is not evidence about
+    depth.
+    """
+    tgt = _d(target_usd) or D(0)
+    buckets = {"PRE_FIX_NO_VARIANTS": 0, "ARM_UNPRICED": 0,
+               "NOT_RECONCILED": 0, "PENDING": 0, "UNRESOLVED_EXPIRED": 0,
+               "NOT_SCORED": 0}
+    rows = []
+    for r in records or ():
+        if not r.get("ok"):
+            buckets["NOT_SCORED"] += 1
+            continue
+        basis = settlement_basis(r)
+        if basis == BASIS_UNRESOLVED_EXPIRED:
+            buckets["UNRESOLVED_EXPIRED"] += 1
+            continue
+        if basis == BASIS_PENDING:
+            buckets["PENDING"] += 1
+            continue
+        vs = r.get("variants") or {}
+        if not vs:
+            buckets["PRE_FIX_NO_VARIANTS"] += 1
+            continue
+        if not all((vs.get(a) or {}).get("priced") for a in arms):
+            buckets["ARM_UNPRICED"] += 1
+            continue
+        rows.append(r)
+    rows.sort(key=lambda r: (window_start_epoch(str(r.get("market"))) or 0.0))
+    n = len(rows)
+    out: Dict[str, Any] = {
+        "comparable_windows": n, "excluded": buckets,
+        "arms": {}, "vs_control": {}, "control": control,
+        "target_usd": str(tgt),
+        "labels": ("MODELLED fills, venue-confirmed OUTCOME only. Nothing was "
+                   "submitted and no figure here is realized profit."),
+    }
+    if not n:
+        out["missing_windows"] = 0
+        return out
+    # gaps in the 15-minute sequence across the observed span
+    starts = [window_start_epoch(str(r.get("market"))) for r in rows]
+    starts = [x for x in starts if x is not None]
+    span = 0
+    if len(starts) > 1:
+        span = int(round((starts[-1] - starts[0]) / float(TS.WINDOW_S))) + 1
+    out["missing_windows"] = max(0, span - n)
+    out["first_window"] = rows[0].get("market")
+    out["last_window"] = rows[-1].get("market")
+
+    def col(label, field):
+        return [(_d((r["variants"].get(label) or {}).get(field)) or D(0))
+                for r in rows]
+
+    nets = {a: col(a, "net_usd") for a in arms}
+    mats = {a: col(a, "matched_pair_net_usd") for a in arms}
+    ress = {a: col(a, "residual_settlement_net_usd") for a in arms}
+    for a in arms:
+        tot = sum(nets[a])
+        run = peak = dd = D(0)
+        for x in nets[a]:
+            run += x
+            peak = max(peak, run)
+            dd = min(dd, run - peak)
+        hit = sum(1 for x in nets[a] if x >= tgt)
+        out["arms"][a] = {
+            "total_net_usd": str(tot),
+            "mean_net_usd_per_window": str(tot / D(n)),
+            "matched_net_usd": str(sum(mats[a])),
+            "residual_net_usd": str(sum(ress[a])),
+            "windows_at_or_above_target": hit,
+            "pct_at_or_above_target": str((D(hit) * D(100)) / D(n)),
+            "worst_window_net_usd": str(min(nets[a])),
+            "worst_drawdown_usd": str(dd),
+        }
+    for a in arms:
+        if a == control:
+            continue
+        dt = [y - x for x, y in zip(nets[control], nets[a])]
+        dm = [y - x for x, y in zip(mats[control], mats[a])]
+        dr = [y - x for x, y in zip(ress[control], ress[a])]
+        out["vs_control"][a] = {
+            "total_per_window_usd": str(sum(dt) / D(n)),
+            "from_matched_per_window_usd": str(sum(dm) / D(n)),
+            "from_residual_per_window_usd": str(sum(dr) / D(n)),
+            "windows_better": sum(1 for x in dt if x > 0),
+            "note": ("only the matched component is evidence about depth; "
+                     "the residual component is the settlement direction"),
+        }
+    return out
+
+
 def dashboard(records: Sequence[Mapping[str, Any]],
               live: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """The four figures, kept apart on purpose.

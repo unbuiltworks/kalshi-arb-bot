@@ -2390,6 +2390,22 @@ async def run(minutes: Optional[float]) -> int:
                          "labels": ("venue-confirmed OUTCOME only; the fills "
                                     "remain MODELLED")},
                         separators=(",", ":"), default=str), flush=True)
+                    # THE SCORECARD IS A PURE FOLD, NOT A SECOND STORE.
+                    # spl.latest already holds every record, rebuilt from the
+                    # append-only store at construction (last line wins per
+                    # market), so this needs no file, no network and no state
+                    # of its own: idempotent because it is a recomputation,
+                    # restart-safe because what it recomputes from is. Emitted
+                    # only when a settlement actually resolved, on this same
+                    # side worker, so it is off the capture path; and wrapped
+                    # separately so a scorecard fault can never cost the
+                    # settlement line that was already printed.
+                    try:
+                        print("PMUS_SHADOW_SCORECARD " + json.dumps(
+                            _SPE.depth_scorecard(list(spl.latest.values())),
+                            separators=(",", ":"), default=str), flush=True)
+                    except Exception:                      # noqa: BLE001
+                        pass
             except Exception:                              # noqa: BLE001
                 try:
                     spl.reconcile_errors += 1

@@ -1457,3 +1457,106 @@ def test_reconciled_variant_without_a_fill_sequence_keeps_the_blended_split():
     v = out["variants"]["T"]
     assert v["split_basis"] == "BLENDED_AVERAGE_NO_FILL_SEQUENCE"
     assert D(v["matched_pair_net_usd"]) == D(5) * (D(1) - D("0.60") - D("0.37"))
+
+
+def _settled(mk, nets, *, priced=True, variants=True):
+    """A settlement-resolved record shaped like the ones the store holds."""
+    v = {}
+    for lbl, (tot, mat, res) in nets.items():
+        v[lbl] = {"net_usd": str(tot), "matched_pair_net_usd": str(mat),
+                  "residual_settlement_net_usd": str(res),
+                  "matched_qty": "10", "residual_qty": "5",
+                  "split_basis": "FIFO", "priced": priced}
+    r = {"ok": True, "market": mk,
+         "net": {p: {"net_usd": "0", "settled": True,
+                     "pending_residual": False} for p in E.POLICIES},
+         "settlement_evidence": {"resolution_source": "VENUE_SETTLEMENT_PX",
+                                 "yes_value": "1"}}
+    if variants:
+        r["variants"] = v
+    return r
+
+
+def test_depth_scorecard_separates_execution_from_direction():
+    """The whole point of the scorecard: a total-net advantage made of
+    residual is not evidence about depth, so the paired advantage is split."""
+    a = _settled("cpc-btc-updown-15m-2026-10-17-1145z",
+                 {"B25": (-1, 1, -2), "B25D2": (1, 2, -1),
+                  "B25D3": (3, 2, 1)})
+    b = _settled("cpc-btc-updown-15m-2026-10-17-1200z",
+                 {"B25": (1, 1, 0), "B25D2": (1, 1, 0),
+                  "B25D3": (5, 2, 3)})
+    sc = E.depth_scorecard([a, b])
+    assert sc["comparable_windows"] == 2
+    assert sc["missing_windows"] == 0
+    assert D(sc["arms"]["B25"]["mean_net_usd_per_window"]) == D(0)
+    assert D(sc["arms"]["B25D3"]["mean_net_usd_per_window"]) == D(4)
+    # B25D3 beats the control by $4/window: $1 of execution, $3 of direction
+    vs = sc["vs_control"]["B25D3"]
+    assert D(vs["total_per_window_usd"]) == D(4)
+    assert D(vs["from_matched_per_window_usd"]) == D(1)
+    assert D(vs["from_residual_per_window_usd"]) == D(3)
+    assert vs["windows_better"] == 2
+    # the $5 objective is counted on TOTAL net, and only the 1200z window hits it
+    assert sc["arms"]["B25D3"]["windows_at_or_above_target"] == 1
+    assert D(sc["arms"]["B25D3"]["pct_at_or_above_target"]) == D(50)
+    assert sc["arms"]["B25"]["windows_at_or_above_target"] == 0
+
+
+def test_depth_scorecard_drawdown_is_of_the_running_total():
+    """A worst window is not a drawdown: the drawdown is peak-to-trough of the
+    cumulative curve, in window order."""
+    mk = "cpc-btc-updown-15m-2026-10-17-%sz"
+    rows = [_settled(mk % t, {"B25": (v, 0, v), "B25D2": (0, 0, 0),
+                              "B25D3": (0, 0, 0)})
+            for t, v in (("1145", 5), ("1200", -3), ("1215", -4),
+                         ("1230", 2))]
+    sc = E.depth_scorecard(rows)
+    assert D(sc["arms"]["B25"]["worst_window_net_usd"]) == D(-4)
+    assert D(sc["arms"]["B25"]["worst_drawdown_usd"]) == D(-7)
+    assert D(sc["arms"]["B25"]["total_net_usd"]) == D(0)
+
+
+def test_depth_scorecard_buckets_what_it_cannot_compare():
+    """Nothing is silently dropped: a pre-fix record, an unpriced arm, a
+    pending residual and an unscored window each land in a named bucket."""
+    good = _settled("cpc-btc-updown-15m-2026-10-17-1145z",
+                    {"B25": (1, 1, 0), "B25D2": (1, 1, 0),
+                     "B25D3": (1, 1, 0)})
+    prefix = _settled("cpc-btc-updown-15m-2026-10-17-1100z", {}, variants=False)
+    unpriced = _settled("cpc-btc-updown-15m-2026-10-17-1115z",
+                        {"B25": (1, 1, 0), "B25D2": (1, 1, 0),
+                         "B25D3": (1, 1, 0)}, priced=False)
+    pending = {"ok": True, "market": "cpc-btc-updown-15m-2026-10-17-1130z",
+               "net": {p: {"pending_residual": True} for p in E.POLICIES}}
+    unscored = {"ok": False, "market": "cpc-btc-updown-15m-2026-10-17-1030z",
+                "reason": "MISSED_WINDOW_OPEN"}
+    sc = E.depth_scorecard([good, prefix, unpriced, pending, unscored])
+    assert sc["comparable_windows"] == 1
+    assert sc["excluded"]["PRE_FIX_NO_VARIANTS"] == 1
+    assert sc["excluded"]["ARM_UNPRICED"] == 1
+    assert sc["excluded"]["PENDING"] == 1
+    assert sc["excluded"]["NOT_SCORED"] == 1
+
+
+def test_depth_scorecard_counts_missing_windows_in_the_span():
+    """A gap in the 15-minute sequence is reported, not papered over."""
+    a = _settled("cpc-btc-updown-15m-2026-10-17-1145z",
+                 {k: (1, 1, 0) for k in E.SCORECARD_ARMS})
+    c = _settled("cpc-btc-updown-15m-2026-10-17-1230z",
+                 {k: (1, 1, 0) for k in E.SCORECARD_ARMS})
+    sc = E.depth_scorecard([a, c])
+    assert sc["comparable_windows"] == 2
+    assert sc["missing_windows"] == 2          # 1200z and 1215z absent
+    assert sc["first_window"].endswith("1145z")
+    assert sc["last_window"].endswith("1230z")
+
+
+def test_depth_scorecard_is_idempotent_and_emits_a_small_line():
+    import json as _j
+    rows = [_settled("cpc-btc-updown-15m-2026-10-17-%sz" % t,
+                     {k: (1, 1, 0) for k in E.SCORECARD_ARMS})
+            for t in ("1145", "1200", "1215")]
+    first = E.depth_scorecard(rows)
+    assert first == E.depth_scorecard(list(reversed(rows)))   # order-free
+    assert len(_j.dumps(first, default=str)) < 3000, "the line must stay small"
