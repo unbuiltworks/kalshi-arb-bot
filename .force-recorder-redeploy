@@ -9,3 +9,13 @@ recorder redeploy marker: 2026-09-06T14:05Z shadow INDEPENDENCE_RULE 2 (unchange
   Summary-only of numbers already persisted: no order, credential, network
   or trading-decision change. Recorder source unchanged; this file exists
   only to rebuild the image so the updated module ships.
+
+2026-10-17 section 46: forward depth comparison arms B25D2/B25D3 frozen.
+src/l5_shadow_policy_eval.py is not a watched path, so this trigger is the
+only way the updated module reaches the container. Change is 2 lines plus 2
+VARIANT_SPECS entries: the specs gain a depth_ticks field and _build_variants
+passes it. B10/B25/B50 keep depth 1 so prior forward records stay comparable;
+B25 is the depth-1 control. No order path, credential, network or
+trading-decision change. Full gate: 11,099 passed; the 33 failures are
+pre-existing and reproduce identically with the change reverted. Rollback:
+unset L5_SHADOW_POLICY_VARIANTS, or roll back to deployment a3cb5681.
