@@ -3509,3 +3509,131 @@ such change is prepared or proposed here.
 All figures MODELLED, SHADOW ONLY. Nothing submitted, no realized profit.
 HALT and SHADOW_ONLY unchanged; `src/` unchanged; nothing deployed; no limit
 loosened and no capital added.
+
+---
+
+## 46. Forward depth comparison: the frozen arms, the exact diff, the safety boundary
+
+Section 45's depth result is the only candidate with a positive
+direction-neutral sign, and it was discovered on the same 20 windows it was
+measured on. This section sets up the forward collection that can confirm or
+kill it. **No result is reported here. The arms are frozen before any forward
+window is collected.**
+
+### 46.1 The deployed evaluator already had the infrastructure
+
+`ShadowPolicyLog` is constructed in `src/pmus_ws_evidence_recorder.py:346`
+with `depth_ticks=1`, and `_build_variants` already runs one
+`IndependentReplenishSim` per entry in `VARIANT_SPECS`, on the SAME event
+stream as the A control, behind `L5_SHADOW_POLICY_VARIANTS`. Both that flag
+and `L5_SHADOW_POLICY_EVAL` are already set in production, and the recorder's
+Dockerfile already copies `src/l5_shadow_policy_eval.py` and
+`src/l5_two_sided_probe.py` (the fix from section 41 for the inert
+deployment 5431d872).
+
+So the depth-1 control **already runs forward today**: `B25` is frozen B at
+the $25 ceiling and depth 1. Only the two deeper arms had to be added.
+
+### 46.2 The exact diff: 2 changed lines, 2 added specs
+
+```
+VARIANT_SPECS = (("B10", D(10), D(5), D(10), D("2.50"), 1),
+                 ("B25", D(25), D(5), D(10), D("6.25"), 1),
+                 ("B50", D(50), D(5), D(10), D("12.50"), 1),
+                 ("B25D2", D(25), D(5), D(10), D("6.25"), 2),
+                 ("B25D3", D(25), D(5), D(10), D("6.25"), 3))
+
+-        for label, cap, clip, unm, resid in VARIANT_SPECS:
++        for label, cap, clip, unm, resid, depth in VARIANT_SPECS:
+-                    depth_ticks=self.lim["depth_ticks"],
++                    depth_ticks=depth,
+```
+
+That is the whole change to `src/`. `VARIANT_SPECS` has exactly two
+consumers and both are in this file.
+
+What is NOT changed: the A control, the capital ladder (B10/B25/B50 keep
+depth 1 so every forward record collected before this change stays
+comparable), the clip, the unmatched cap, the residual-loss cap, the fee
+model, FIFO accounting, the conservative finite-order queue model,
+settlement reconciliation, the store path, the order path (there is none in
+this module), credentials, and the recorder's own source.
+
+**Safety boundary.** Scanning every added `src/` line for
+order/submit/credential/network/limit tokens returns nothing. The module has
+no write verb and no order path; it reads books and trades and writes a
+JSONL record. `B25D2`/`B25D3` inherit the control's capital ceiling,
+unmatched cap and residual cap identically -- the only field that differs is
+`depth_ticks`, which selects which rung a MODELLED quote rests on. The cost
+is CPU: 5 sims per window instead of 3, each O(1) per event.
+
+Rollback: unset `L5_SHADOW_POLICY_VARIANTS` (one restart, recorder
+untouched), or revert this commit.
+
+### 46.3 Tests: 112 in file, two new ones pin the wiring
+
+`test_variant_specs_carry_a_depth_and_the_capital_ladder_is_unchanged`
+asserts the three capital specs are byte-identical to before plus depth 1,
+and that the depth arms differ from B25 in `depth_ticks` and nothing else.
+
+`test_depth_variants_actually_quote_at_their_own_depth` builds the variants
+through `ShadowPolicyLog` and asserts the depths reach the sims
+(`{B10:1, B25:1, B50:1, B25D2:2, B25D3:3}`) and that the depth arms' cap,
+clip, unmatched cap and residual cap equal the control's. A spec field that
+never reaches `build_orders` is inert -- that is exactly what made
+deployment 5431d872 a no-op, so the wiring is pinned rather than the
+constant.
+
+### 46.4 Offline dry-run of the frozen table (archive, not forward)
+
+Run through the same `VARIANT_SPECS` table that will run forward, on the 20
+archived windows, to confirm the arms are wired and the control is unmoved:
+
+```
+arm      fills  matched   matched$     resid$     TOTAL$    peak$  worst$  unmX
+B25        134      270    $+20.73    $-12.70     $+8.03   $25.00   $5.03    10
+B25D2      123      240    $+26.25    $-17.70     $+8.55   $25.00   $6.13    10
+B25D3      114      225    $+33.33    $-13.40    $+19.93   $25.00   $4.65    10
+
+paired per-window difference vs the B25 depth-1 control (actual settlement):
+  B25D2   mean $+0.026   stdev 2.531   t=+0.05   better in 12/20
+  B25D3   mean $+0.595   stdev 2.936   t=+0.91   better in 12/20
+```
+
+`B25` reproduces frozen B exactly, so the control is confirmed unmoved.
+Limits hold in every arm: peak committed $25.00 at the $25.00 ceiling, max
+worst-case residual $6.13 against the $6.25 cap, max unmatched 10 against
+the cap of 10.
+
+These are the SAME 20 windows section 45 used and are reported only as a
+wiring check. They are not the comparison.
+
+### 46.5 What the forward comparison will report, and the decision rule
+
+Per arm, from the forward `PMUS_SHADOW_POLICY` records: quotes placed and
+modelled fill rate, completed FIFO matched contracts and matched net after
+fees, residual settlement P&L and total net, peak committed capital,
+unmatched exposure and worst-case residual loss, and the window-by-window
+paired difference against `B25`.
+
+The decision rule is fixed now, before any forward data exists:
+
+> promote a deeper depth only if its paired per-window total-net difference
+> against B25 is positive on forward windows, with matched net per contract
+> AND total net both improved. Higher profit per matched contract alone is
+> not sufficient -- that is already established and is not the question.
+
+Known pitfall this is designed against: every mechanism in sections 43-45
+looked excellent in-sample and evaporated under the direction-neutral
+control. Forward windows must accumulate a settlement mix, not a run.
+
+### 46.6 One unrelated state note
+
+`L5_SHADOW_POLICY_TOKEN` is **not** present in the recorder's variables, so
+the bounded `/shadow-policy` read path is currently disabled and 404s by
+design. The forward comparison does not need it -- the records are read from
+the `PMUS_SHADOW_POLICY` log line, as in section 41. Nothing was redeployed
+to change this.
+
+MODELLED, SHADOW ONLY. HALT and SHADOW_ONLY unchanged. No live orders, no new
+service, no capital increase, no limit loosened.

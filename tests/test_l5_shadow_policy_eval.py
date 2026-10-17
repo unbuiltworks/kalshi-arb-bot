@@ -1254,7 +1254,7 @@ def test_variants_run_on_the_same_stream_as_the_control(tmp_path, monkeypatch):
     log.observe_book(SLUG, lad[2])
     rec = log.rollover(keep=[])[0]
     v = rec["variants"]
-    assert set(v) == {"B10", "B25", "B50"}
+    assert set(v) == {"B10", "B25", "B50", "B25D2", "B25D3"}
     for label, cap in (("B10", D(10)), ("B25", D(25)), ("B50", D(50))):
         assert D(v[label]["max_committed_capital_usd"]) <= cap
         assert D(v[label]["peak_unmatched_qty"]) <= D(10)
@@ -1345,7 +1345,7 @@ def test_emitted_document_carries_variant_summaries(tmp_path, monkeypatch):
     log.observe_book(SLUG, lad[2])
     doc = log.emit_document(log.rollover(keep=[]))
     v = doc["windows"][0]["variants"]
-    assert set(v) == {"B10", "B25", "B50"}
+    assert set(v) == {"B10", "B25", "B50", "B25D2", "B25D3"}
     for lbl in v:
         for k in ("fills", "matched_qty", "max_committed_capital_usd",
                   "worst_case_residual_loss_usd", "net_usd", "priced"):
@@ -1364,3 +1364,40 @@ def test_emitted_document_omits_variants_when_they_did_not_run(tmp_path,
     log.observe_book(SLUG, lad[2])
     doc = log.emit_document(log.rollover(keep=[]))
     assert doc["windows"][0]["variants"] is None
+
+
+def test_variant_specs_carry_a_depth_and_the_capital_ladder_is_unchanged():
+    """The depth comparison must not move the control.
+
+    B10/B25/B50 keep the deployed depth of 1 so their forward records stay
+    comparable with everything collected before this change, and B25 doubles
+    as the depth-1 control for B25D2/B25D3.
+    """
+    by = {spec[0]: spec for spec in E.VARIANT_SPECS}
+    assert len(E.VARIANT_SPECS) == len(by) == 5
+    for spec in E.VARIANT_SPECS:
+        assert len(spec) == 6
+    assert by["B10"][1:] == (D(10), D(5), D(10), D("2.50"), 1)
+    assert by["B25"][1:] == (D(25), D(5), D(10), D("6.25"), 1)
+    assert by["B50"][1:] == (D(50), D(5), D(10), D("12.50"), 1)
+    # the depth arms differ from the B25 control in depth_ticks and NOTHING else
+    for lbl, depth in (("B25D2", 2), ("B25D3", 3)):
+        assert by[lbl][1:5] == by["B25"][1:5]
+        assert by[lbl][5] == depth
+
+
+def test_depth_variants_actually_quote_at_their_own_depth(tmp_path, monkeypatch):
+    """A spec field that never reaches build_orders is inert -- the defect
+    that made deployment 5431d872 a no-op. Pin the wiring, not the constant."""
+    monkeypatch.setenv(E.VARIANTS_ENV, "YES")
+    log = _log(tmp_path)
+    log.observe_book(SLUG, base_ladder()[0])
+    sims = log.variants[SLUG]
+    assert {lbl: s.lim["depth_ticks"] for lbl, s in sims.items()} == {
+        "B10": 1, "B25": 1, "B50": 1, "B25D2": 2, "B25D3": 3}
+    # and the risk limits the depth arms inherit are the control's, unchanged
+    for lbl in ("B25D2", "B25D3"):
+        assert sims[lbl].cap == sims["B25"].cap
+        assert sims[lbl].max_unmatched == sims["B25"].max_unmatched
+        assert sims[lbl].max_resid_usd == sims["B25"].max_resid_usd
+        assert sims[lbl].clip == sims["B25"].clip

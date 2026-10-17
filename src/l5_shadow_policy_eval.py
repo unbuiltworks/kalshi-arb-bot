@@ -973,10 +973,20 @@ ENABLE_ENV = "L5_SHADOW_POLICY_EVAL"
 #: `IndependentReplenishSim` on the SAME event stream as the policy-A
 #: control, at its own simulated committed-capital ceiling.
 VARIANTS_ENV = "L5_SHADOW_POLICY_VARIANTS"
-#: (label, capital ceiling, clip, unmatched cap, residual-loss cap)
-VARIANT_SPECS = (("B10", D(10), D(5), D(10), D("2.50")),
-                 ("B25", D(25), D(5), D(10), D("6.25")),
-                 ("B50", D(50), D(5), D(10), D("12.50")))
+#: (label, capital_ceiling, clip, max_unmatched_qty, max_residual_loss_usd,
+#: depth_ticks). The first three are the capital ladder and all quote at the
+#: deployed depth of 1, so B25 is ALSO the depth-1 control for the last two,
+#: which differ from it in depth_ticks and in nothing else. Section 45 found
+#: deeper passive pricing raises matched net per contract on fewer fills with
+#: the only positive direction-neutral delta measured (+$0.845/window,
+#: t=+1.56 on 20 windows) -- not established, and discovered on the same
+#: windows, so it needs forward evidence. The three depths are frozen here
+#: before any forward result is collected.
+VARIANT_SPECS = (("B10", D(10), D(5), D(10), D("2.50"), 1),
+                 ("B25", D(25), D(5), D(10), D("6.25"), 1),
+                 ("B50", D(50), D(5), D(10), D("12.50"), 1),
+                 ("B25D2", D(25), D(5), D(10), D("6.25"), 2),
+                 ("B25D3", D(25), D(5), D(10), D("6.25"), 3))
 
 
 def variants_enabled() -> bool:
@@ -1058,11 +1068,11 @@ class ShadowPolicyLog:
     def _build_variants(self, slug: str) -> Dict[str, Any]:
         """One policy-B sim per ceiling, sharing the control's venue limits."""
         out: Dict[str, Any] = {}
-        for label, cap, clip, unm, resid in VARIANT_SPECS:
+        for label, cap, clip, unm, resid, depth in VARIANT_SPECS:
             try:
                 out[label] = IndependentReplenishSim(
                     slug, tick=self.lim["tick"], min_qty=self.lim["min_qty"],
-                    depth_ticks=self.lim["depth_ticks"],
+                    depth_ticks=depth,
                     cash_envelope=cap, max_worst_case_loss=cap, clip=clip,
                     capital_ceiling=cap, max_unmatched_qty=unm,
                     max_residual_loss_usd=resid)
