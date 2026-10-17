@@ -5527,3 +5527,168 @@ B25D3 still leads the control (`+0.19`/window, better in 20 of 28) and is
 still **losing money absolutely** against a `+$5`/window objective. Nothing
 here is realized profit: fills are MODELLED, only the outcome is
 venue-confirmed.
+
+## 62. Blocker repair: the loss gate is fixed and cancellation is proven. HALT stays latched.
+
+The owner authorized fixing the blockers and completing the bounded BTC15m
+live validation, with the standing conditions that the historical
+unattributed loss be preserved, cumulative losses not be reset, risk policies
+not be bypassed, and HALT stay active if any required gate is unsatisfied.
+
+**Outcome: two of three blockers are closed. No live order was submitted.**
+The remaining one is mechanical and reserved to a human by construction.
+
+### 62.1 The accounting conflict, named and resolved
+
+`daily_realized_loss_halt_usd` is a **daily** halt. `realized_today()`
+returns attributed + unattributed realized P&L over **all of history**. So
+the `$5` "daily" halt was a `$5` **lifetime** cap that could never reset,
+while the separate `$20` **cumulative** limit read the identical number and
+was dead code. Two limits with different names and different values cannot
+both be policy while both measure one all-time total.
+
+Resolution: `InventoryStore.realized_current_utc_day()`, fed to the daily
+halt alone. It narrows that gate's **WINDOW**, never its **POPULATION**.
+
+```
+all-time (cumulative gates)  -8.39480000   -> DAILY_REALIZED_LOSS_HALT  (before)
+current UTC day (daily halt)  0            -> None                      (after)
+$20 cumulative, still all-time: -8.39 pass | -19.99 pass | -20.00 FIRES
+```
+
+What is preserved, deliberately:
+
+- the historical `-84.62` / `-79.01` / 42 unknown-basis legs, untouched and
+  still reported;
+- **both** `$20` cumulative gates still reading the all-time account-wide
+  total, so cumulative losses are **not** reset;
+- manual trading still under a realized-loss ceiling — the population was
+  not narrowed to L5, so the §1 rescoping in
+  `L5_LOSS_GATE_RESCOPING_REVIEW.md` remains **unapplied** and
+  `gate_input("verified_l5")` remains unused by any gate;
+- fail-closed: an unreadable row, an undated row, or a nonzero undated
+  `realized_unattributed` returns `None` and refuses as
+  `DAY_REALIZED_UNAVAILABLE`. Never zero — zero is the one value that would
+  silently admit an order.
+
+A later cost-basis correction keeps its original settlement day; only
+`cost_corrected_at` moves. Both guard tests were **updated, not deleted**:
+they now assert the cumulative gates stay all-time AND that the L5-scoping
+has not been slipped in.
+
+### 62.2 The baseline: kept, because a fresh strike would delete history
+
+The owner asked for a fresh authoritative baseline. The existing one
+(`2026-10-16T02:45:12.565947+00:00`, cash `350.05255`) already provides every
+property requested: authoritative required reads of cash, L5 open orders,
+positions and obligations; a durable timestamp; forward counting of
+**attested** L5 settlements only; and preserved pre-T history.
+
+Striking a new one was rejected on evidence:
+
+```
+re-strike attempt -> BASELINE_ALREADY_SET
+pre_baseline_realized_total would become -8.39480000, replacing -79.01000000
+```
+
+It would also move T past the 8 unattested post-T settlements, dropping them
+from `post_baseline_settlements_NOT_attested`. That deletes precisely the
+historical record the owner ordered preserved, so the existing baseline
+stands and `BASELINE_ALREADY_SET` is the correct guardrail, not an obstacle.
+
+### 62.3 Cancellation: proven, and the watchdog cannot be the canceller
+
+Ten properties proven deterministically against the real sweep (658 tests
+green across watchdog/ownership/halt/deadman/cancel/orphan/disarmed):
+
+| Property | Result |
+|---|---|
+| our order, both witnesses agree | cancelled by **exact id**, HALT latched first |
+| not in ownership registry | no POST — `NOT_IN_OWNERSHIP_REGISTRY` |
+| venue says MANUAL | no POST — `VENUE_SAYS_MANUAL` |
+| venue names another market | no POST — `MARKET_MISMATCH` |
+| order re-read fails | no POST — `OWNERSHIP_UNCONFIRMED_NO_POST_SENT` |
+| cancel unconfirmed on re-read | never `cancelled`; reported `still_open` |
+| cancel ack throws | recorded, decides nothing; the **re-read** decides |
+| partial fill found while cancelling | booked (`cum_qty`), not discarded |
+| executor report stale | `EXECUTOR_REPORT_STALE` HALT, no cancel attempted |
+| open-orders read fails | no halt, **no heartbeat** — executor stops by omission |
+| empty registry | nothing cancellable, halt still asserted |
+| account-wide route | **none exists**: one POST route, `/v1/order/{id}/cancel`; no `cancel_all` |
+
+**`L5_WATCHDOG_CANCEL=YES` was NOT set, because it would be inert and would
+misrepresent the system.** `deploy/l5_halt_watchdog/Dockerfile` deliberately
+omits `src/pmus_auth.py` (owner decision 2026-10-14), so `A is None`,
+`_blind` is true, and `from_env` hardcodes `cancel_enabled=False,
+oracle=None` — the flag is read only on the other branch. The deployed
+sweeps confirm the blind branch directly: they carry `report_age_s`, which
+only `RegistryOrderSource` provides (`CancelOnlyTransport` has no such
+method). Its `PMUS_API_KEY_ID`/`PMUS_API_SECRET_KEY` variables are therefore
+vestigial — present in the environment, unusable without signing code.
+
+Consequence: **`open_orders: 0` in a watchdog sweep is the executor's own
+report, not a venue read.** Cancellation lives with the executor, which holds
+credentials, cancels by exact venue id from its own ledger (`deadman`), and
+is deliberately not gated by HALT or the shadow lock.
+
+### 62.4 THE REMAINING BLOCKER: clearing HALT is reserved to a human
+
+HALT is latched on `UNMANAGED_RESTING_ORDER`. The underlying condition is
+gone — venue open orders 0, `committed_usd {}`, `cash_deployed []`,
+`account_total_worst_case_usd 0`, capacity `$5`, cash `$344.41255`, and the
+14,605 counter is **refusals, not incidents**. Preflight currently reads
+`PASSED`; the earlier `FAILED` was transient.
+
+Clearing it still cannot be done from here, for two independent reasons:
+
+1. **The reset entrypoint cannot run in the deployed image.**
+   `scripts/l5_halt_reset.py` requires signed venue reads for gates 4(a)/(b)
+   and refuses `NO_VENUE_CREDENTIALS`: *"this entrypoint runs only from the
+   one-shot admin image with TEMPORARY credentials; the ordinary
+   credential-free watchdog image cannot and must not run it."* Running it
+   means redeploying the live safety service to a different image.
+2. **Two of its four gates require a named human.** Gate 1 needs
+   `L5_HALT_RESET_WHO` to name a human; gate 4(d) is an operator attestation
+   of watchdog health and the absence of any unresolved alarm, recorded
+   verbatim for accountability. I am not the operator and will not attest as
+   one. Gate 2 additionally needs the sha256 of the current `halt.json`,
+   obtainable only by an `INSPECT` run inside that service.
+
+**A third, separate blocker stops the fix reaching production even once HALT
+clears:** `l5-pmus-live` deploys from branch
+`claude/gemini-btc-economic-viability-h3u7zl`, not from this work's branch,
+and pushing there is outside this session's permission. Deployed SHA is
+`9bb7b6c6`; `git show 9bb7b6c6:src/l5_live_execution.py` contains no
+`realized_current_utc_day`, so **the fix is committed but NOT deployed.**
+
+### 62.5 State at the end, unchanged
+
+Nothing was armed, submitted, cancelled or settled. **No order IDs, no venue
+acknowledgements, no fills, no fees, no realized P&L — there was no
+execution.** HALT latched and `SHADOW_ONLY` set, both as found; no variable
+set; the 5 staged variables (`a8fb9c09`, including the risk bound
+`L5_MAX_WORST_CASE_DEFICIT_USD`) left staged and uncommitted; no limit
+raised; no service redeployed; no halt reset.
+
+Tests: 11,124 passed across the full suite; 1,374 on the money-path gate plus
+`test_l5_live_execution.py`; 658 on the cancellation and halt suites. The 33
+failures and 14 errors in the full run are **pre-existing and identical on
+clean HEAD** (`spread_scanner`, `orderbook`, `pmus_auth`, `pmus_status_live_handoff`,
+`gemini_*`, `chain_ca_fallback`, `l5_live_runner_graft`, `l5_chain_validation`),
+none in a file this change touches. Noted gap: `test_l5_live_execution.py`
+is **not** in `tests/MONEY_PATH_GATE.txt`, so the gate did not cover the one
+end-to-end halt test this change had to update.
+
+### 62.6 What the owner must do to get the execution
+
+1. Clear the latch via the one-shot `deploy/l5_halt_reset` admin image,
+   supplying `L5_HALT_RESET_WHO`, the retyped latch reason, the `INSPECT`
+   digest and the operator attestation.
+2. Allow this work to reach `claude/gemini-btc-economic-viability-h3u7zl`,
+   or apply §62.1 there, so the daily-halt fix is actually deployed. Read the
+   heartbeat's `accounting` block with `SHADOW_ONLY` still set and confirm
+   the daily gate passes **before** any arming decision.
+3. Decide the watchdog-cancel question: it stays unavailable unless the
+   watchdog is given signing code and credentials, which reopens the
+   permission-level isolation question settled on 2026-10-14. The executor's
+   own exact-id cancellation needs no such decision.

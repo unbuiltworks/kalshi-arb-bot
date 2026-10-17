@@ -1217,6 +1217,63 @@ class InventoryStore:
                     + D(str(self.state.get("realized_unattributed") or 0)))
         return D(str(self.state.get("realized_today") or 0))
 
+    def realized_current_utc_day(self, *, now: Optional[float] = None
+                                 ) -> Optional[D]:
+        """Account-wide settled P&L for the CURRENT UTC DAY, or None.
+
+        THE POLICY CONFLICT THIS RESOLVES. `daily_realized_loss_halt_usd` is
+        a DAILY halt, and `realized_today()` is not a daily figure: it sums
+        attributed plus unattributed realized P&L over ALL of history. So the
+        `$5` "daily" halt was really a `$5` LIFETIME cap that could never
+        reset, while the separate `$20` cumulative limit read the very same
+        number and was therefore dead code. Two limits with different names
+        and different values cannot both be the policy while both measure one
+        all-time total. This measures the window the limit names.
+
+        STILL ACCOUNT-WIDE, DELIBERATELY. Every market that settled today
+        counts, manual and L5 alike. This is NOT the L5-scoped rescoping in
+        L5_LOSS_GATE_RESCOPING_REVIEW.md: narrowing the POPULATION would
+        leave manual trading with no realized-loss ceiling at all. Narrowing
+        the WINDOW leaves every trade on the account restrained, and the
+        all-time account-wide total goes on restraining through the two `$20`
+        cumulative gates, which this change does not touch. Historical losses
+        are preserved and keep counting there.
+
+        A CORRECTION KEEPS ITS ORIGINAL DAY. A later cost-basis correction
+        rewrites an old row's `settlement_pnl` but not its `t`, so the loss
+        stays on the day the position actually settled rather than moving to
+        the day we measured it better. `cost_corrected_at` records the latter.
+
+        FAIL CLOSED, NEVER ZERO. An unreadable row, a row with no timestamp,
+        or a nonzero undated `realized_unattributed` each return None: a
+        day's loss cannot be computed from a residual that belongs to no day,
+        and an undated settlement cannot be ruled out as today's. A ceiling
+        fed an unknown figure is not a ceiling, and the caller must refuse.
+        """
+        ts = (dt.datetime.now(dt.timezone.utc) if now is None
+              else dt.datetime.fromtimestamp(float(now), dt.timezone.utc))
+        day = ts.strftime("%Y-%m-%d")
+        try:
+            resid = D(str(self.state.get("realized_unattributed") or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+        if resid != 0:
+            return None          # belongs to no day: the day is unknown
+        total = D(0)
+        for _mkt, row in (self.state.get("retired_markets") or {}).items():
+            if not isinstance(row, Mapping):
+                return None
+            stamp = str(row.get("t") or "")
+            if not stamp:
+                return None      # undated: cannot be excluded from today
+            if not stamp.startswith(day):
+                continue
+            try:
+                total += D(str(row.get("settlement_pnl") or 0))
+            except (InvalidOperation, TypeError, ValueError):
+                return None
+        return total
+
     def verified_l5_net_for_gates(self) -> Optional[D]:
         """Return verified after-fee L5 net, never legacy estimated gross.
 
@@ -4406,11 +4463,22 @@ class FaithfulExecutor:
         if not acct_risk.get("ok"):
             prov.stage("SAFETY_OVERLAY", {"refused": acct_risk["reason"]})
             return prov.refuse("SAFETY_OVERLAY", acct_risk["reason"])
+        # THE DAILY HALT READS THE DAY, account-wide. `realized_today()` is
+        # an ALL-TIME total, so feeding it to a limit named "daily" made that
+        # limit a lifetime cap and made the separate $20 cumulative limit
+        # dead. The population is unchanged -- every market, manual included
+        # -- and the all-time total still binds at the two cumulative gates
+        # below. None is UNKNOWN and refuses; it is never read as zero.
+        day_realized = self.store.realized_current_utc_day()
+        if day_realized is None:
+            prov.stage("SAFETY_OVERLAY",
+                       {"refused": "DAY_REALIZED_UNAVAILABLE"})
+            return prov.refuse("SAFETY_OVERLAY", "DAY_REALIZED_UNAVAILABLE")
         why = self.limits.refuse(
             price=tr["price"], qty=tr["qty"], market=market,
             committed_by_market=self.store.committed(),
             residual_after=resid_after,
-            realized_today=self.store.realized_today(),
+            realized_today=day_realized,
             open_markets=open_markets,
             outstanding_by_market=outstanding,
             # THE COUNT THAT BINDS THE ONE-ORDER LIMIT, and it fails closed.

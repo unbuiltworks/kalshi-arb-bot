@@ -1,4 +1,40 @@
-# L5 loss-gate rescoping — PROPOSED, NOT APPLIED
+# L5 loss-gate rescoping — STILL NOT APPLIED. A NARROWER FIX WAS.
+
+> **2026-10-17 update (§62).** The owner directed that the historical
+> unattributed loss be preserved and that, if historical uncertainty blocks a
+> mandatory cumulative-loss check, the **exact policy conflict** be named and
+> a **defensible resolution** implemented rather than the gate silently
+> overridden. It was, and it is NOT the change below.
+>
+> **The conflict.** `daily_realized_loss_halt_usd` is a **daily** halt, and
+> `realized_today()` returns attributed + unattributed realized P&L over
+> **all of history**. So the `$5` "daily" halt was a `$5` **lifetime** cap
+> that could never reset, and the separate `$20` **cumulative** limit read
+> the identical number and was therefore dead. Two limits with different
+> names and different values cannot both be the policy while both measure
+> one all-time total.
+>
+> **The resolution applied** (`InventoryStore.realized_current_utc_day()`,
+> fed to the daily halt only): narrow that gate's **WINDOW** to the current
+> UTC day. The **POPULATION is unchanged** — every market that settled
+> today, manual and L5 alike. Fail-closed: an unreadable row, an undated
+> row, or a nonzero undated `realized_unattributed` returns `None` and
+> refuses as `DAY_REALIZED_UNAVAILABLE`; it is never read as zero.
+>
+> **What this deliberately does NOT do**, and why it is not the diff in §1:
+> it does not narrow the population to L5, so manual trading keeps a
+> realized-loss ceiling; and **both `$20` cumulative gates still read the
+> all-time account-wide total**, so historical losses go on restraining and
+> cumulative losses are not reset. At the deployed figures the cumulative
+> gate reads `-8.39480000` against `$20` and still fires at `-20.00`.
+> `gate_input("verified_l5")` remains **unused by any gate**, and
+> `test_gate_input_changes_no_policy_by_itself` now asserts exactly that
+> pair of properties rather than the old call-site counts.
+>
+> **The §1/§8 L5-scoping below remains UNAPPLIED and still needs a human**,
+> for the reason §3 gives: it would leave manual trading with no
+> realized-loss ceiling at all. It was not needed to clear the blocker.
+
 
 **Status: BLOCKED pending a human with write access. No code change has been
 made. The deployed executor enforces every existing loss gate unchanged, and

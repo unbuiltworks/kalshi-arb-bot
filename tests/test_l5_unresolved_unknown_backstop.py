@@ -118,14 +118,22 @@ def test_the_bound_is_inclusive_at_its_own_value():
 
 # ------------------------------------------- it is NOT the rejected change
 
-def test_the_three_protected_call_sites_are_still_unchanged():
+def test_the_protected_call_sites_still_measure_the_whole_account():
     """This backstop is additive. It does not substitute the account-wide
-    realized input, which is the change the classifier refused."""
+    realized POPULATION, which is the change the classifier refused.
+
+    The daily halt now reads `realized_current_utc_day()` -- the same
+    account-wide population over one day instead of over all history, which
+    is the window its own limit name specifies. Both cumulative gates still
+    read the all-time account-wide total, so historical losses keep
+    restraining and nothing is reset.
+    """
     import inspect
     from src import l5_live_execution as E
     src = inspect.getsource(E)
     assert src.count("cumulative_realized=self.store.realized_today()") == 2
-    assert src.count("realized_today=self.store.realized_today()") == 1
+    assert src.count("realized_today=day_realized") == 1
+    assert 'gate_input("verified_l5")' not in src
 
 
 def test_the_backstop_runs_AFTER_the_account_wide_check_in_source_order():

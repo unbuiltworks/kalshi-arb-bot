@@ -175,12 +175,114 @@ def test_gate_input_never_returns_zero_for_an_unknown(tmp_path):
 
 
 def test_gate_input_changes_no_policy_by_itself():
-    """The account-wide gates still read account_wide until the protected
-    rescoping is applied by a human. This is the mechanism, not the change."""
+    """The POPULATION a loss ceiling measures is still account-wide.
+
+    Updated with the daily-window fix, not deleted. Two things are asserted
+    together, because the protection is the pair:
+
+    1. Both `$20` CUMULATIVE gates still read the all-time account-wide
+       total, so historical losses keep restraining and a fresh baseline is
+       not a reset of cumulative losses.
+    2. No gate reads `gate_input("verified_l5")`. The L5-scoped rescoping in
+       L5_LOSS_GATE_RESCOPING_REVIEW.md -- which would leave manual trading
+       with NO realized-loss ceiling -- has NOT been applied, and `gate_input`
+       remains the unused mechanism it was landed as.
+
+    The daily halt is the one site that changed, and it changed WINDOW, not
+    population: `realized_current_utc_day()` is account-wide for one day.
+    """
     import inspect
     src = inspect.getsource(E.InventoryStore.gate_input)
     assert "CHANGES NO POLICY" in src
-    # and the three protected call sites still read realized_today
     whole = inspect.getsource(E)
+    # the cumulative ceilings are untouched: all-time, account-wide
     assert whole.count("cumulative_realized=self.store.realized_today()") == 2
-    assert whole.count("realized_today=self.store.realized_today()") == 1
+    # the daily halt reads the day, and no longer the all-time total
+    assert whole.count("realized_today=self.store.realized_today()") == 0
+    assert whole.count("realized_today=day_realized") == 1
+    # and the L5-scoped rescoping has NOT been slipped in at any gate: the
+    # two loss-gate keywords only ever take a sanctioned right-hand side.
+    import re
+    fed = set(re.findall(r"(?:cumulative_realized|realized_today)=([^,\n]+)",
+                         whole))
+    assert fed == {"self.store.realized_today()", "day_realized"}, fed
+    assert 'gate_input("verified_l5")' not in whole
+
+
+# ------------------------------------- the daily halt measures the DAY only
+
+#: 2026-10-17T12:00:00Z, inside the day the rows below are stamped with.
+TODAY_TS = 1792238400.0
+TODAY = "2026-10-17"
+
+
+def test_the_day_figure_counts_today_and_excludes_history(tmp_path):
+    """The $5 halt is DAILY. An all-time total made it a lifetime cap that
+    could never reset, and made the separate $20 cumulative limit dead."""
+    st = store(tmp_path, realized_attributed="-8.39480000",
+               realized_unattributed="0",
+               retired_markets={
+                   "old-a": retired("2026-10-16T02:00:00+00:00", "-5.00", False),
+                   "old-b": retired("2026-10-11T02:00:00+00:00", "-3.39", False),
+                   "today-a": retired(TODAY + "T09:00:00+00:00", "-1.25", True),
+                   "today-b": retired(TODAY + "T11:00:00+00:00", "0.75", True)})
+    assert st.realized_current_utc_day(now=TODAY_TS) == D("-0.50")
+    # the all-time total is unchanged and still what the cumulative gates read
+    assert st.realized_today() == D("-8.39480000")
+
+
+def test_the_day_figure_is_zero_when_nothing_settled_today(tmp_path):
+    """The deployed shape: 53 retired markets, none of them from today."""
+    st = store(tmp_path, realized_attributed="-8.39480000",
+               realized_unattributed="0",
+               retired_markets={
+                   "old": retired("2026-10-16T12:30:00+00:00", "-8.39", False)})
+    assert st.realized_current_utc_day(now=TODAY_TS) == D(0)
+
+
+@pytest.mark.parametrize("state,why", [
+    ({"realized_unattributed": "-12.00"}, "an undated residual has no day"),
+    ({"realized_unattributed": "0",
+      "retired_markets": {"m": {"settlement_pnl": "-1.00"}}}, "row has no t"),
+    ({"realized_unattributed": "0",
+      "retired_markets": {"m": {"t": TODAY + "T09:00:00+00:00",
+                                "settlement_pnl": "not-a-number"}}},
+     "unreadable settlement_pnl"),
+    ({"realized_unattributed": "0",
+      "retired_markets": {"m": "not-a-row"}}, "unreadable row"),
+])
+def test_the_day_figure_fails_closed_and_is_never_zero(tmp_path, state, why):
+    """A ceiling fed an unknown figure is not a ceiling. None, never D(0) --
+    and D(0) would be the one value that silently admits a live order."""
+    st = store(tmp_path, **state)
+    assert st.realized_current_utc_day(now=TODAY_TS) is None, why
+
+
+def test_the_daily_halt_still_restrains_a_loss_incurred_today():
+    """THE PROPERTY THAT MAKES THIS A FIX AND NOT A BYPASS. Narrowing the
+    WINDOW must not stop the halt firing on a real loss incurred today, by
+    whoever incurred it: the population is still account-wide, so an
+    unattested (manual or unknown) settlement today still trips it."""
+    lim = E.SafetyLimits(
+        max_usd_per_market=D("100"), max_abs_residual=D("100"),
+        max_total_exposure_usd=D("100"), max_concurrent_markets=5,
+        daily_realized_loss_halt_usd=D("5"))
+    common = dict(price=D("0.50"), qty=D("1"), market="m",
+                  committed_by_market={}, residual_after=D("0"),
+                  open_markets=[], outstanding_by_market={},
+                  live_order_count=0)
+    assert lim.refuse(realized_today=D("-5.00"),
+                      **common) == "DAILY_REALIZED_LOSS_HALT"
+    assert lim.refuse(realized_today=D("-4.99"),
+                      **common) != "DAILY_REALIZED_LOSS_HALT"
+
+
+def test_a_loss_today_halts_through_the_real_executor_path(tmp_path):
+    """End to end, through the store the gate actually reads: an unattested
+    settlement today for -6 trips the $5 daily halt."""
+    st = E.InventoryStore(str(tmp_path / "s.json"))
+    st.state["realized_unattributed"] = "0"
+    today = E.dt.datetime.now(E.dt.timezone.utc).strftime("%Y-%m-%d")
+    st.state["retired_markets"] = {
+        "manual-today": retired(today + "T00:30:00+00:00", "-6.00", False)}
+    assert st.realized_current_utc_day() == D("-6.00")
