@@ -8328,3 +8328,153 @@ available at any data quality.
    rather than a restoration of his.
 4. An owner decision to raise authorized capital by ~3 orders of magnitude,
    which the decay evidence argues against.
+
+---
+
+## 89. L5's profitability, reconstructed from the raw feed — and it inverts the premise
+
+Read-only, from `data/l5/raw/activity.jsonl` + `activity_gap.jsonl.gz` only.
+No trading rule of ours imposed on the reconstruction; the decomposition is an
+identity, and it closes **per window to $0.000000**. Nothing deployed, armed
+or ordered; production shadow-only.
+
+### 89.1 The reconstruction, and what the previous corpus could not see
+
+**The sequence corpus kept only `Up`/`Down` per trade. The raw feed carries
+`side: BUY`.** That is why "pair completion" was the default explanation: the
+direction dimension had been collapsed before anyone looked.
+
+Reconstructed over the full record (5,546 windows, 2026-03-19..08-31):
+
+| measure | value |
+|---|---|
+| deduped series rows | **702,595** |
+| TRADE rows | **696,860 — every one `side: BUY`. Zero SELL rows.** |
+| REDEEM rows | 5,735 |
+| `MAKER_REBATE` / `TAKER_REBATE` / `REWARD` in series | **0 / 0 / 0** |
+| buy_out | $6,398,129.92 |
+| sell_in | **$0.00** |
+| redeem_in | $6,415,918.50 |
+| **NET** | **+$17,788.58 = 0.2780% of cost** |
+
+This is a third independent computation agreeing with
+`data/l5_master/btc15m_sequences.jsonl` (+$19,176.71) and **refuting
+`data/l5/l5_btc15m_realized_economics.json` (+$345,525.64)**. §88.0's
+quarantine of that JSON is confirmed.
+
+### 89.2 Where the money comes from — the identity
+
+```
+NET  +$17,788.58
+     matched-pair   +$163,008.78
+     residual       -$145,220.20
+```
+
+**89% of the pairing gross is consumed by the unhedged directional residual.**
+
+- mean pair cost **0.9716** (a **2.84%** gross margin), median 0.9725,
+  p05 0.8776, **p95 1.0609** — he buys pairs *above* $1 in a large minority
+  of windows
+- 6,135,793 matched pairs; 696,860 legs; **125.7 legs/window**
+- |residual| as a share of shares bought: mean **11.33%**, median 7.70%,
+  p95 32.90%
+
+**He is not hedging, and the residual is not an error.** Classifying every
+buy against the inventory before it:
+
+| | rows | share | cash |
+|---|---|---|---|
+| **IMBALANCING** (|residual| rises) | 376,982 | **54.1%** | $3,303,929 (51.6%) |
+| BALANCING (|residual| falls) | 319,852 | 45.9% | $3,093,953 (48.4%) |
+| neutral | 26 | 0.0% | $247 |
+
+More than half his cash deliberately deepens imbalance. In the best decile
+the residual **adds** $46,333; in the worst it costs $93,255. It is a
+high-variance overlay with a negative mean, not a mistake and not a hedge.
+
+### 89.3 Which sequences win and lose
+
+| | net | mean pair cost | mean legs | mean &#124;R&#124;/shares | matched | residual |
+|---|---|---|---|---|---|---|
+| top decile (554) | **+$95,005** | **0.9359** | 170 | 9.57% | +$48,672 | +$46,333 |
+| bottom decile (554) | **−$85,698** | **0.9973** | 179 | 16.04% | +$7,557 | −$93,255 |
+
+The discriminator is **pair cost first, imbalance second.** Leg count barely
+differs (170 vs 179), so this is not a turnover effect.
+
+**Profit source, answered:** pairing. Not incentives (zero rows in series).
+Not execution or spread capture (there are no sells at all, so no exit
+spread is ever earned). Not rebalancing (most buys worsen balance).
+Directional positioning is a negative-mean, high-variance contributor that
+carries the best decile and destroys the worst.
+
+### 89.4 The largest missing behaviour — it is ours, already built
+
+Applying **our own deployed `<= 0.96` pair gate** descriptively to L5's record
+(0.96 is the spring discipline already in the repo, not a threshold fitted
+here):
+
+| population | n | cost | net | matched | residual |
+|---|---|---|---|---|---|
+| pair cost **<= 0.96** (we allow) | 2,151 (38.8%) | $2,204,689 | **+$71,006.06** | +$160,076.52 | −$89,070.46 |
+| pair cost **> 0.96** (we refuse) | 3,353 (60.5%) | $4,191,115 | **−$53,395.94** | +$2,932.26 | −$56,328.20 |
+
+**Our gate separates his winners from his losers.** It keeps 38.8% of windows
+and 36.9% of legs and turns his **+$17,789 (0.278%)** into **+$71,006
+(3.221% of deployed cash)**.
+
+It is monotone, not a knife-edge, and it does not flip sign across a temporal
+split:
+
+```
+gate   n    %win       cost         net   net/cost
+0.90  497   9.0%    367,726    +20,651     5.616%
+0.94 1319  23.8%  1,214,357    +49,054     4.039%
+0.96 2151  38.8%  2,204,689    +71,006     3.221%
+0.98 3094  55.8%  3,465,462    +78,928     2.278%
+1.00 4023  72.5%  4,723,475    +76,162     1.612%
+
+first  half: all +$12,632.65 | <=0.96 +$38,414.77 on $772,794 (4.971%) | >0.96 -$25,722.09
+second half: all  +$5,155.93 | <=0.96 +$32,591.30 on $1,431,894 (2.276%) | >0.96 -$27,673.85
+```
+
+So the economically material difference is **not a behaviour of his that we
+lack.** It is that he accepts a large, loss-making population of pair
+acquisitions at or above $1, and we already refuse exactly those. What we
+lack is **turnover inside the gate-passing population**: 257,070 legs across
+2,151 windows (~120/window) against our **5.15 fills/window** in replay,
+**zero** live, and a **$1/window** mandate.
+
+Quantified at our size, using the gate population's own 3.221%:
+**$1/window → $0.032/window ≈ $3.09/day**; the $5 per-market ceiling →
+**$0.16/window ≈ $15.46/day**. $480/day needs **$14,903/day of deployed
+cash** at that margin.
+
+### 89.5 Transferability: conditional, and the condition is unproven
+
+The gross pair margin is **2.84%**; the gate-selected net margin **3.221%**.
+**One PMUS taker leg costs 3.822% of notional** at p=0.45 — *more than the
+entire margin*. The mechanism therefore transfers **only if both legs are
+passive**, and on L5's own venue he paid **no fee at all**: the feed carries
+no fee row of any kind.
+
+**Whether his legs were passive cannot be established from this evidence.**
+The activity rows carry `side` (BUY/SELL), price, size, outcome and
+timestamp — and **no aggressor flag, no order id and no fee line**. The
+maker/taker classification the question asks for is not in the data.
+
+### 89.6 Exact missing evidence — not another simulation
+
+1. **Aggressor / maker-taker flags for L5's 696,860 fills.** Decides
+   transferability outright, because 2.84% gross cannot pay a 3.822% taker
+   fee. Needs order-level or CLOB trade data carrying the taker side; the
+   public activity feed does not.
+2. **His resting quotes.** §58.1 already establishes these are *not*
+   recoverable from fills for 77% of fill-seconds, so this may be
+   unobservable in principle.
+3. **Our own passive fill rate at ~120 legs/window.** Our live engine's
+   measured fill count is zero; §58's queue sensitivity flips sign at 1.5x
+   `queue_ahead`. Testable with the existing replay and tape.
+4. **Source-confirmed PMUS maker rebate terms for our account.** L5 earned
+   **zero** incentives in this series, so a rebate would be a new economic
+   term for us rather than a restoration of his.
