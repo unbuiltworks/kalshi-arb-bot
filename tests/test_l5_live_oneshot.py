@@ -353,8 +353,27 @@ def test_run_returns_rather_than_looping():
 def test_main_runs_the_probe_once(monkeypatch):
     calls = []
     monkeypatch.setattr(P, "run", lambda **kw: calls.append(kw) or {"ok": 1})
+    # The startup gate now requires BOTH probe-cap variables. A correctly
+    # configured invocation still runs the probe exactly once.
+    monkeypatch.setenv(EX.PROBE_ORDER_CAP_ENV, "0.01")
+    monkeypatch.setenv(EX.PROBE_CAP_REQUIRED_ENV, "YES")
     assert P.main([]) == 0
     assert len(calls) == 1
+
+
+def test_main_refuses_to_start_without_the_probe_cap(monkeypatch):
+    """The other half of the contract above: no cap, no run.
+
+    The cap is enforced at submission, but a service that starts without it
+    would only discover that on its first order. So the same two variables
+    are a precondition of starting at all, and the probe is never reached.
+    """
+    calls = []
+    monkeypatch.setattr(P, "run", lambda **kw: calls.append(kw) or {"ok": 1})
+    monkeypatch.delenv(EX.PROBE_ORDER_CAP_ENV, raising=False)
+    monkeypatch.delenv(EX.PROBE_CAP_REQUIRED_ENV, raising=False)
+    assert P.main([]) == 64
+    assert calls == []
 
 
 # 5 --------------------- concurrent live orders / $5 reservation via partials

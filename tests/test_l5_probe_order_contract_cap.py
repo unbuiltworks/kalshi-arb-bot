@@ -183,3 +183,70 @@ def test_no_cancel_function_anywhere_references_the_cap():
         assert "probe_order_contract_cap" not in names, node.name
         assert "PROBE_ORDER_CAP_ENV" not in names, node.name
     assert checked > 0, "no cancel function found; the check proved nothing"
+
+
+# ------------------------------------------- the startup refusal gate
+
+def _gate(monkeypatch, cap=None, required=None, recover=None):
+    import scripts.l5_pmus_live_oneshot as O
+    for name, val in ((CAP, cap), (REQ, required), ("L5_RECOVER_ONLY", recover)):
+        if val is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, val)
+    return O.probe_cap_startup_gate()
+
+
+def test_startup_refuses_when_nothing_is_configured(monkeypatch):
+    assert _gate(monkeypatch) == "PROBE_ORDER_CAP_NOT_DECLARED"
+
+
+def test_startup_refuses_when_only_the_cap_is_set(monkeypatch):
+    assert _gate(monkeypatch, cap="0.01") == "PROBE_ORDER_CAP_NOT_DECLARED"
+
+
+def test_startup_refuses_when_only_the_declaration_is_set(monkeypatch):
+    assert _gate(monkeypatch, required="YES") == "PROBE_ORDER_CAP_MISSING"
+
+
+@pytest.mark.parametrize("bad,why", [
+    ("abc", "PROBE_ORDER_CAP_UNREADABLE"),
+    ("0", "PROBE_ORDER_CAP_NOT_POSITIVE"),
+    ("-1", "PROBE_ORDER_CAP_NOT_POSITIVE"),
+    ("NaN", "PROBE_ORDER_CAP_NOT_POSITIVE"),
+])
+def test_startup_refuses_an_unusable_cap(monkeypatch, bad, why):
+    assert _gate(monkeypatch, cap=bad, required="YES") == why
+
+
+def test_startup_passes_only_when_both_are_correct(monkeypatch):
+    assert _gate(monkeypatch, cap="0.01", required="YES") is None
+
+
+def test_recover_only_is_never_blocked_by_the_startup_gate(monkeypatch):
+    """Recovery cancels and reconciles; it must not be gated on a cap typo."""
+    assert _gate(monkeypatch, recover="YES") is None
+    assert _gate(monkeypatch, cap="abc", required="YES", recover="YES") is None
+
+
+def test_observe_only_mode_installs_a_transport_that_cannot_transmit():
+    """The structural reason observe-only cannot submit OR cancel."""
+    from src import l5_live_execution as EX
+    t = EX.NullTransport()
+    with pytest.raises(EX.NotArmed):
+        t.submit({"market": "m", "side": "UP", "price": "0.5", "qty": "0.01"})
+    with pytest.raises(EX.NotArmed):
+        t.cancel("any-id")
+    assert t.open_orders() == [] and t.positions() == []
+    assert t.armed is False
+
+
+def test_the_oneshot_refuses_before_claiming_anything(monkeypatch):
+    """The gate is evaluated in main() before any authorization is claimed."""
+    import inspect
+    import scripts.l5_pmus_live_oneshot as O
+    src = inspect.getsource(O.main)
+    gate_at = src.index("probe_cap_startup_gate()")
+    for later in ("claim", "run()", "observe()"):
+        if later in src:
+            assert gate_at < src.index(later), later

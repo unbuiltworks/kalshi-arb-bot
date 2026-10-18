@@ -1303,6 +1303,34 @@ def selected_mode() -> str:
     return "LIVE_PROBE"
 
 
+def probe_cap_startup_gate() -> Optional[str]:
+    """Refuse to start unless BOTH probe-cap variables are usable.
+
+    WHY A STARTUP GATE AS WELL AS THE SUBMISSION ONE. The cap in
+    `l5_live_execution` refuses on the quantity about to be sent, which is the
+    only place that can be authoritative -- but it reports the breach fifteen
+    minutes into a window, after an authorization has been claimed. A
+    misconfigured cap should cost nothing at all, so it is also checked before
+    the process does any work, and the process exits non-zero.
+
+    RECOVER_ONLY IS EXEMPT, DELIBERATELY. Recovery cancels and reconciles; it
+    only ever reduces exposure. Blocking it on a cap typo would strand a
+    resting order, which is the failure this whole programme exists to avoid
+    -- the same reason `PmusTransport.cancel` is not gated by arming.
+    """
+    if recover_only_enabled():
+        return None
+    declared = os.getenv(EX.PROBE_CAP_REQUIRED_ENV, "").strip().upper()
+    if declared not in ("1", "YES", "TRUE"):
+        return "PROBE_ORDER_CAP_NOT_DECLARED"
+    cap, why = EX.probe_order_contract_cap()
+    if why is not None:
+        return why
+    if cap is None:
+        return "PROBE_ORDER_CAP_MISSING"
+    return None
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     print("L5_MODE " + json.dumps({
         "mode": selected_mode(),
@@ -1319,6 +1347,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "armed": os.getenv("PMUS_Q1_ARM", ""),
         "live": os.getenv("PMUS_Q1_LIVE", ""),
     }), flush=True)
+    refused = probe_cap_startup_gate()
+    if refused is not None:
+        print("L5_PROBE_REFUSED " + json.dumps({
+            "refused": refused,
+            "cap_env": EX.PROBE_ORDER_CAP_ENV,
+            "required_env": EX.PROBE_CAP_REQUIRED_ENV,
+            "labels": ("startup refusal: both probe-cap variables must be "
+                       "present and usable before this process does any "
+                       "work. Nothing was claimed, armed or sent."),
+        }), flush=True)
+        return 64
     if recover_only_enabled():
         rep = recover()
         table = rep.pop("order_table", [])
