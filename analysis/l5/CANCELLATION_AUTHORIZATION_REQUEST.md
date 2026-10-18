@@ -93,3 +93,74 @@ Not MPP-1. Not a trading test. No pair acquisition, no inventory, no
 settlement economics, and no new service, branch, strategy or volume. MPP-1
 stays unapproved and unscheduled and will be presented separately, once and
 only once this proof is in hand.
+
+---
+
+# ADDENDUM: the chosen window, for confirmation before any write
+
+Prepared 2026-10-18T22:30:14Z. **Nothing written. Awaiting confirmation.**
+
+## Recommended window
+
+| field | value |
+|---|---|
+| **slug** | **`cpc-btc-updown-15m-2026-10-19-0030z`** |
+| **window open** | **2026-10-19T00:30:00Z** |
+| **window close** | **2026-10-19T00:45:00Z** |
+| **`L5_LIVE_AUTH_NOT_AFTER`** | **`2026-10-19T01:15:00Z`** (open + 45 min) |
+| lead time from preparation | ~120 minutes |
+
+Chosen for margin, and deliberately **after** the current deadline of
+2026-10-18T23:59:00Z so that nothing runs under the expiring authorization.
+Acceptable substitutes if you prefer: `...-0000z`, `...-0015z`, `...-0045z`,
+`...-0100z` — name one and I will re-derive the times and expiry.
+
+## Why this window needs ~2.5 minutes of usable placement band
+
+Measured today on the 2100z window, not assumed:
+
+- the keyless gateway **does not serve a 15m book for the first minutes**
+  (§75). Preflight read `book_readable: HTTP Error 404` at 21:02:39Z and
+  **PASSED at 21:04:49Z — T+4:49** into the window;
+- the mechanism requires **≥450s of window remaining**, so placement must
+  land by **T+7:30**.
+
+So the real placement band is roughly **T+5:00 → T+7:30**. Everything else
+has to be in place and ticking before the window opens.
+
+## Timeline, with the flip deliberately BEFORE the open
+
+| clock | actor | action |
+|---|---|---|
+| 00:10:00Z (T−20) | **you** | write the five authorization variables in one go |
+| 00:11–00:14Z | me | verify deployment SUCCESS and read the boot line back: lock still **ON**, `auth_not_after` **OPEN**, bound market exactly `...-0030z`, all limits unchanged |
+| 00:25:00Z (T−5) | me, **on your go** | flip `L5_CANCEL_MECHANISM=YES` and `L5_SHADOW_ONLY=0` |
+| ~00:27:00Z | me | confirm the service is live, armed-capable and ticking **before** the window opens |
+| 00:30:00Z (T+0) | — | window opens. Preflight retries on its 3/6/12/24s backoff while the book 404s — a WAIT, not a refusal |
+| ~00:35:00Z (T+5) | — | book clears, transport arms, **one** post-only order places; venue id + ownership persisted |
+| ~00:40:20Z | watchdog | cancels at order age 300s (+ up to one 20s sweep) |
+| 00:41:30Z | backstop | executor self-cancel at 390s — **must not fire first**; if it does the proof FAILS as `SELF_FALLBACK` |
+| after | me | re-read venue terminal status, restore the lock, report |
+
+**Flipping at T−5 rather than at T+0 is the whole point of this schedule.**
+Before the window opens the bound market is not yet tradable, so preflight
+simply refuses and retries — harmless — and the service is already running
+when the book clears. Flipping at T+0 would spend ~100s of build inside a
+2.5-minute band, which is how the 20:00z and 21:00z attempts were lost.
+
+The watchdog gets roughly **70 seconds** of margin over the backstop. That
+race is the experiment.
+
+## Standing conditions
+
+- **No automatic retry.** If activation cannot land with ≥450s remaining, or
+  any gate refuses, I stop and report. I will not substitute another window.
+- The October 14 claim lock is **neither reused nor deleted**.
+- **No limit is relaxed.** $5 maximum authorization, $4.65 cash cap, one
+  live order, one-shot claim, HALT, watchdog — all unchanged.
+- Shadow lock stays **ON** and mechanism **OFF** through every step above
+  until the T−5 flip, and is restored immediately after the proof.
+- Maximum gross outflow remains **≤ $0.02** (0.01 contracts, worst-case
+  rounded fee).
+
+**I am writing nothing until you confirm the slug.**
