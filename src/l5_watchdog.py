@@ -395,7 +395,14 @@ class OwnershipOracle:
             else:
                 import urllib.request
                 with urllib.request.urlopen(url, timeout=self.timeout_s) as r:
-                    if getattr(r, "status", 200) != 200:
+                    code = getattr(r, "status", 200)
+                    if code != 200:
+                        # A 2xx that is not 200 does NOT raise in urllib, so
+                        # this returned {} with no refusal recorded -- which
+                        # reads as "we own nothing" when the fact is "we
+                        # could not find out". Those are opposite facts and
+                        # claim_refused exists so they cannot arrive alike.
+                        self.last_refusal = "REGISTRY_HTTP:%s" % code
                         return {}
                     raw = r.read()
             doc = json.loads(raw or b"{}")
