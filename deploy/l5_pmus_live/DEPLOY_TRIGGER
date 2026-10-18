@@ -678,3 +678,37 @@ deploy daily-halt boundary fix, shadow-locked and HALTed 2026-10-17T20:00Z
 # L5_SHADOW_ONLY remain ACTIVE and are not part of this deployment, and the
 # five staged experimental variables stay staged and uncommitted.
 deploy disarmed-cancel repair, shadow-locked and HALTed 2026-10-17T20:30Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-18  THE PLACE-THEN-CANCEL LEG, SHIPPED OFF
+# ---------------------------------------------------------------------------
+# Owner-authorized implementation of the executor's missing mechanism leg:
+# ONE post-only order at the venue minimum, left to rest so the INDEPENDENT
+# watchdog cancels it, proven by a venue terminal-status re-read.
+#
+# WHY THIS DEPLOYMENT IS NEEDED AT ALL, since the mode is off: the runner
+# imports src/l5_cancel_mechanism.py EAGERLY. That module was missing from the
+# image's COPY list, which would have crashlooped this service on boot -- and
+# the closure test that exists to catch exactly that is already red on
+# unrelated config/cost_basis_batch_manifest_*.json entries, so it offered no
+# protection. The COPY line is added here and verified by assembling the COPY
+# list into a tree and importing the entrypoint out of it.
+#
+# NOTHING IS ARMED BY THIS. L5_CANCEL_MECHANISM is UNSET, so selected mode is
+# the ordinary trading tick exactly as before. L5_SHADOW_ONLY stays set, so
+# submit() still raises NotArmed structurally. L5_MAX_LIVE_ORDERS=2 and
+# L5_MAX_CASH_DEPLOYED_USD=5 UNCHANGED from the owner-authorized values set
+# at 16:45Z. No limit, gate, threshold or baseline is touched.
+#
+# The new path is claim-gated: AUTH.claim_submission before the wire, because
+# the one-submission-path test correctly failed on an ungated second route.
+# That test is strengthened, not relaxed -- it now requires the claim in the
+# same module as each submit AND ordered before it.
+#
+# 81 focused tests green (47 mechanism + 12 wiring + 22 claim). Full suite
+# 33 failed / 11307 passed / 14 errors: failure set BYTE-IDENTICAL to the
+# established baseline, +95 passing.
+#
+# NOT RUN: no order has been placed and independent cancellation stays
+# UNPROVEN until PMUS confirms a terminal status.
+place-then-cancel leg shipped OFF, shadow-locked 2026-10-18T17:15Z
