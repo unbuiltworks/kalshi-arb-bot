@@ -6425,3 +6425,119 @@ human `WHO`, a fresh one-time `ID` (the 10-15 one is consumed), the retyped
 reason, and the operator attestation. A fully agent-operated reset is
 therefore impossible, and that is the gate working rather than a gap to close.
 `EXPECT` is valid only while the latch is unchanged.
+
+## 69. Why Railpack won: `redeploy` reuses the stored build plan. The credential-free image is restored.
+
+### 69.1 Root cause
+
+**`redeploy` re-runs an existing deployment and reuses its build plan. It does
+not re-resolve the build configuration.** Every attempt in §68.3 was a
+`redeploy`, so each one inherited the Railpack plan that the first genuine
+rebuild had cached — which is why the config read `DOCKERFILE` with the right
+`dockerfilePath` while the build log said `using build driver
+railpack-v0.42.0`, over and over, including after `RAILWAY_DOCKERFILE_PATH`
+was set both relative and absolute.
+
+A **fresh deployment** re-resolves it. Setting a service variable *without*
+`skipDeploys` makes Railway create one itself: `meta.reason` reads `deploy`
+rather than `redeploy`. That single change was enough:
+
+```
+deployment 2c947469  reason "deploy"   2026-10-18T01:05:12Z
+BUILD  [internal] load build definition from deploy/l5_halt_watchdog/Dockerfile
+```
+
+So the smallest supported change is not a config field at all — it is **how
+the deployment is created**. `RAILWAY_DOCKERFILE_PATH` is the documented
+mechanism (config-as-code is deprecated, and auto-detection only looks for a
+`Dockerfile` at the source root, which this repo does not have), and it works;
+it was simply never consulted, because no build plan was ever recomputed.
+
+**Operational rule from now on:** after any build-configuration change to a
+Railway service, verify the build log names the expected builder. A `redeploy`
+is not a rebuild. Where a fresh deployment is needed, a variable write without
+`skipDeploys` produces one without touching the repository.
+
+### 69.2 Live proof
+
+Deployment `2c947469`, SUCCESS, booted 2026-10-18T01:06:18Z:
+
+```
+L5_WATCHDOG_BOOT  credential_free TRUE   credentials FALSE
+                  order_source REGISTRY_READ_ONLY   cancel_enabled false
+```
+
+`credential_free: true` is `pmus_auth is None` — the import fails because the
+Dockerfile does not copy `src/pmus_auth.py`. The signing capability is
+**unavailable again rather than switched off**, and `src/l5_pmus_transport.py`
+and `src/l5_live_execution.py` are out of the container. The §68.3(b)
+regression is closed.
+
+Sweeps, continuous at 20s, every one clean:
+
+```
+01:07:17  01:07:37  01:07:57  01:08:17
+open_orders 0, read_error null, overdue [], cancelled [], not_ours [],
+unverified [], report_age_s -0.009 (ceiling 120),
+heartbeat_refused "refusing to overwrite a latched HALT"
+```
+
+Executor `l5-pmus-live`, from its own heartbeat at 01:04:22 and 01:05:23 and
+every decision at 01:06–01:07:
+
+```
+armed false   halt true   preflight PASSED
+submission_gate { blocked TRUE, reason "SHADOW_ONLY_LOCK", shadow_lock true,
+                  halt_latch "HALT", halt_why "halt_asserted" }
+L5_LIVE_DECISION key HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER
+                 order null, intent null, armed false
+```
+
+Both conditions hold live: HALTED **and** SHADOW_ONLY, with the submission
+gate reporting `blocked true` so no order can reach the venue. Cancellation is
+deliberately not gated by any of it.
+
+### 69.3 The five staged changes, finally named
+
+`get-staged-changes` enumerates patch `a8fb9c09` in full. The five additions
+the owner has repeatedly forbidden deploying are all on `l5-pmus-live`:
+
+| variable | |
+|---|---|
+| `L5_ACC_MAX_ROUNDS` | value redacted to this client |
+| `L5_MAX_WORST_CASE_DEFICIT_USD` | " |
+| `L5_TS_DEPTH_TICKS` | " |
+| `L5_TS_EXPERIMENT_ID` | " |
+| `L5_TS_MARKET` | " |
+
+They remain `STAGED` and undeployed. Nothing here commits them.
+
+### 69.4 Deletion of the credential variables: NOT achievable from this session
+
+Asked to delete `PMUS_API_KEY_ID` and `PMUS_API_SECRET_KEY` outright, the
+Railway agent **staged** the removals instead, taking patch `a8fb9c09` from 5
+changes to 7. Asked again to apply them live, it answered plainly that it
+could not, and made no further change:
+
+> "Live deletion isn't available to me. Every variable change I can make is
+> staged into the environment's pending patch. ... The only way to make a
+> staged removal take effect is to commit patch `a8fb9c09`, and that also
+> deploys the five `l5-pmus-live` additions. You ruled that out, so I did not
+> commit. ... Removing just the two entries from the patch isn't possible
+> either."
+
+Independently confirmed from this side: this MCP surface has **no
+delete-variables verb** (only `set-variables`), there is **no Railway CLI and
+no Railway token** in the container, and there is **no discard-staged-changes
+verb** — `accept-deploy` commits the whole patch or nothing.
+
+**So the two names still exist on the service with whitespace values, and
+their removal sits inert in a patch that must not be committed.** That is an
+owner dashboard action. It is recorded as open rather than worked around.
+
+What that does and does not mean: the values are whitespace, so
+`has_credentials()` is false; and the running image contains no signing code
+at all, so even a real credential could not be used by this process. The
+remaining exposure is that the names are still defined and still resolve
+through a reference to the executor's secrets, which a future image change
+could make live again. That is the reason to delete them properly.
