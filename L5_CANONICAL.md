@@ -6827,3 +6827,106 @@ whitespace, because this session still has no delete verb. One further
 dashboard deletion is owed — and the reset itself needs those credentials, so
 the economical sequence is to attest and reset inside one credential window
 and delete once afterwards.
+
+## 74. HALT CLEARED by owner reset `owner-20261018-0321z-16309b84365b`. New blocker: preflight `book_readable` 404.
+
+### 74.1 The reset
+
+Owner attestation received 2026-10-18. `L5_HALT_RESET_WHO` arrived as the
+placeholder `[MY NAME]`; that was **refused** rather than filled in, because
+the string is written verbatim into the append-only audit log as the person who
+authorized the clear. The owner then supplied `Brett Cassidy`.
+
+Reset ID generated here, unique against the audit log:
+`owner-20261018-0321z-16309b84365b`.
+
+`L5_HALT_RESET` at 2026-10-18T03:23:41Z, `ok: true`, `outcome: CLEARED`:
+
+```
+cleared          true
+cleared_at       2026-10-18T03:23:40.363288+00:00
+t                2026-10-18T03:23:40.344443+00:00
+who              Brett Cassidy
+reset_id         owner-20261018-0321z-16309b84365b
+confirmed_reason UNMANAGED_RESTING_ORDER
+prior_latch_sha  40f9c34033cced8a1006e0b922d30787735a88749b14e4df0a4442e7a879719e
+machine_verified venue: l5_owned_working_orders 0, venue_working_orders_seen 0,
+                 account_positions [], account_positions_error null,
+                 signed /v1/orders/open + /v1/portfolio/positions
+                 registry: readable, age 0.006s, live_orders 0
+operator_attested "I personally reviewed the evidence above and authorize
+                 clearing this specific latched HALT, provided a fresh
+                 authenticated inspection still confirms the reset
+                 preconditions."
+new record       halt false, cleared_reason UNMANAGED_RESTING_ORDER,
+                 who "owner-reset:Brett Cassidy"
+```
+
+The owner's conditional was satisfied by the code, not by assertion: gate 2
+recomputed the digest and gate 4 re-read venue and registry at reset time,
+with the registry bound at `MAX_REGISTRY_AGE_S = 90.0`.
+
+### 74.2 Stand-down and watchdog health
+
+Deployment `087af309`, booted 03:29:05Z: `credential_free TRUE`,
+`credentials FALSE`, `order_source REGISTRY_READ_ONLY`, `cancel_enabled false`.
+The sweep behaviour changed exactly as designed — `heartbeat_refused` is gone
+and the watchdog now writes the positive attestation:
+
+```
+03:31:44 / 03:32:04 / 03:32:24 / 03:32:45 / 03:33:05
+heartbeat {halt: false, who: l5-watchdog}, open_orders 0, read_error null
+```
+
+Credential references revoked by value; the two names persist with whitespace
+and one dashboard deletion is still owed. The reset gate variables
+(`CONFIRM`, `ID`, `ATTEST`) were also blanked and `L5_HALT_RESET_INSPECT`
+re-pinned to `YES`, so the one-shot image is back to its read-only branch.
+
+### 74.3 Executor after the reset — and the new blocker
+
+```
+armed false   halt_latch CLEAR   halt_why null
+submission_gate  blocked TRUE / SHADOW_ONLY_LOCK / shadow_lock true
+limits           per-market 5, residual 10, total 5, concurrent 1,
+                 live orders 1, daily loss halt 5, cash deployed 1
+live_orders 0    available_cash $344.41255
+preflight        FAILED
+```
+
+**The pipeline is translating again**, which is the §70 prediction coming true
+without any code change: `stats` now carries `PMUS_TRANSLATION:NOT_CURRENT_WINDOW`,
+`SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER` and `ORDER:NOT_ARMED` — the halt gate no
+longer short-circuits, so intents form and are refused at the ORDER stage for
+not being armed. Behavioural comparison on price and aggressiveness is accruing
+again.
+
+**But preflight now FAILS on exactly one check.** `L5_LIVE_PREFLIGHT` at
+03:31:16Z:
+
+| check | result |
+|---|---|
+| `credentials_present` | PASS |
+| `account_binding_proven` | PASS — `keyfp:d51b44a3fa83 \| funded:344.41255` |
+| `slug_is_btc15m_series` | PASS |
+| `market_resolves` | PASS |
+| `market_series_is_btc15m` | PASS |
+| `market_open_tradable` | PASS — `MARKET_STATUS_OPEN, active, not closed` |
+| `outcome_mapping_is_up_down` | PASS |
+| `tick_constraint_known` | PASS — `0.01` |
+| `quantity_constraint_known` | PASS — `0.01` |
+| **`book_readable`** | **FAIL — `HTTPError: HTTP Error 404: Not Found`** |
+
+Not credential-related and not caused by the reset: the same REST 404 on a
+current-window slug appears in the recorder's own cross-check
+(`cpc-btc-updown-15m-2026-10-18-0115z`, `gateway_error HTTPError:HTTP Error
+404: Not Found`) while the authenticated socket served that book normally. Here
+too the WS book is healthy — `connected true`, 1897 updates, live bid/ask — so
+only the REST read is 404ing. Preflight PASSED at 02:55:11Z on the `0245z`
+window, so the condition is window- or timing-dependent rather than persistent.
+
+**Why this blocks the probe:** `arm()` requires a preflight that PASSED, so no
+order can be placed and therefore the 0.01-contract cancellation probe cannot
+run until `book_readable` succeeds. `preflight_attempts` is escalating under
+`PREFLIGHT_BACKOFF_S`, and a FAIL is only re-logged when the blocking set
+changes, so silence here means unchanged, not recovered.
