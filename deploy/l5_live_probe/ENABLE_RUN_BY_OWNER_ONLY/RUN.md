@@ -43,3 +43,25 @@ meaningful live evidence."
 - timed so the container starts with under `OBSERVE_MIN_S` left in the
   0100z window, which rolls the run forward to **0115z** and gives a FULL
   15-minute window directly comparable to the recorder's own 0115z line
+
+### 2026-10-18 — CANCEL_MECHANISM, disarmed precondition verification
+
+Authorized: "I approve preparation of one explicitly labeled PMUS
+cancellation-mechanism test... 1. Include l5_halt_gate.py in the Docker
+image and verify watchdog connectivity... 3. Deploy and verify the hard
+max_live_orders=1 change... No live submission is authorized yet."
+
+- artifact: `5a500ffa`, carrying the per-order cap, the startup refusal, the
+  reconciled one-order limit, `src/l5_halt_gate.py` in the image, and the
+  `CANCEL_MECHANISM` mode
+- `L5_CANCEL_MECHANISM=YES`, `L5_OBSERVE_ONLY=NO`; no `PMUS_Q1_*` variable
+  exists on the service, so `owner_authorization` fails by construction
+- the build contains **no mechanism submit path at all**: the mode refuses
+  `NOT_IMPLEMENTED_WITHOUT_SEPARATE_AUTHORIZATION` even with every other
+  precondition met, so this run cannot place an order whatever is set
+- purpose: measure in the container what cannot be measured locally — that
+  the halt gate imports and the watchdog answers over private networking,
+  that `max_live_orders` resolves to 1, that the cap is declared at 0.01,
+  and whether the authorization ledger is durable on this service
+- expected to exit **65** (refused). A refused money-capable mode is not a
+  success, and the exit code says so
