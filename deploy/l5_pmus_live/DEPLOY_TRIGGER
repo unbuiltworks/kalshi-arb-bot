@@ -740,3 +740,26 @@ place-then-cancel leg shipped OFF, shadow-locked 2026-10-18T17:15Z
 # 115 focused tests green. Full suite 33 failed / 11339 passed / 14 errors:
 # failure set BYTE-IDENTICAL to the established baseline.
 mechanism wait/terminal split, shadow-locked 2026-10-18T18:20Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-18  mechanism_tick RAN THE STRATEGY IT CLAIMED TO REPLACE
+# ---------------------------------------------------------------------------
+# Found live during the authorized 18:30z activation, shadow lock LIFTED. At
+# 18:34:36Z: ORDER:NOT_ARMED UP 0.06 @ 0.31 and DOWN 0.9 @ 0.6 -- the L5
+# strategy, running under the mode that replaces it. mechanism_tick called
+# self.poll(now), and poll -> handle IS the strategy. Only the pending arming
+# kept those orders off the venue.
+#
+# poll removed from both paths. The mechanism needs no action feed; its order
+# is predetermined and the authenticated book is a separate thread.
+# Reconciliation unchanged. The wiring test now pins poll AND handle absent in
+# the ordinary, cool-off and halted paths, with a positive control that tick
+# still calls poll.
+#
+# NOTHING IS ARMED. L5_SHADOW_ONLY=1 and L5_CANCEL_MECHANISM=NO since 18:35Z.
+# Limits unchanged: max_live_orders 1, cap 4.65. Preflight untouched. Zero
+# outflow, one-shot unspent, HALT never latched.
+#
+# 119 focused green. Full suite 33 failed / 11343 passed / 14 errors: failure
+# set BYTE-IDENTICAL to baseline.
+strategy removed from mechanism mode, shadow-locked 2026-10-18T18:47Z
