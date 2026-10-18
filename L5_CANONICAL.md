@@ -6339,10 +6339,66 @@ owner's review:
    `python3 -m scripts.l5_halt_watchdog`, `restartPolicyType ALWAYS`.
 3. The watchdog image was redeployed so independent sweeping resumes.
 
-`describe-service` after the restore matches the §66 baseline field for field,
-and the five unknown staged Railway changes are untouched: patch
-`a8fb9c09-42c4-409c-a2f5-149c68b98216`, `STAGED`, `changeCount 5`,
+`describe-service` after the restore matches the §66 baseline on all three
+config fields, and the five unknown staged Railway changes are untouched:
+patch `a8fb9c09-42c4-409c-a2f5-149c68b98216`, `STAGED`, `changeCount 5`,
 `createdAt 2026-10-16T11:05:21.706Z`.
+
+**Two corrections to the above, found by checking rather than assuming.**
+
+**(a) The first blanking did not take effect.** `set-variables` returned
+success for `PMUS_API_KEY_ID = ""` and `PMUS_API_SECRET_KEY = ""`, but the
+restored watchdog booted at 23:27:08 reporting `"credentials": true` and
+`order_source "CANCEL_ONLY"` — the references were still resolving. An
+empty-string value is evidently not a revocation here. Re-set to a single
+space, which `has_credentials()` rejects on the `.strip()` (verified offline:
+space-only → `False`), the 23:31:39 boot reports:
+
+```
+L5_WATCHDOG_BOOT  credentials false, order_source REGISTRY_READ_ONLY
+L5_WATCHDOG_SWEEP open_orders 0, read_error null, report_age_s -0.047,
+                  report_max_age_s 120.0, cancel_enabled false,
+                  heartbeat_refused "refusing to overwrite a latched HALT"
+```
+
+So the credential grant IS revoked, proven behaviourally rather than by a
+tool's success code. **Never again report a variable change as done on the
+API's acknowledgement alone when a boot line can measure it.**
+
+**(b) The restored image is NOT the credential-free image.** The §66 baseline
+booted `credential_free: true` — `from src import pmus_auth` raised, because
+`deploy/l5_halt_watchdog/Dockerfile` deliberately omits that file. Both my
+restores boot `credential_free: false`. The build logs say why: they are
+**Railpack** builds (`railpack-builder`, `pip install -r requirements.txt`,
+`copy / /app`), not Dockerfile builds, so the whole repository is in the
+image. `builder` reads `DOCKERFILE` and `dockerfilePath` reads
+`deploy/l5_halt_watchdog/Dockerfile` in both `describe-service` and
+`get-service-config`, and that Dockerfile exists at the deployed commit
+`dfbadacb` — the Dockerfile is simply not being honoured on a genuine
+rebuild. The §66 baseline never rebuilt: `094284d9` went from created to
+booted in 36 seconds, reusing a cached image built when the Dockerfile still
+applied.
+
+**What this costs.** Not a live capability: the process still has no
+credentials, `cancel_enabled` is false, the start command runs only
+`scripts.l5_halt_watchdog`, and the halt latch is the only thing it writes.
+What is lost is the stronger property the image was built for — *"the
+capability is unavailable rather than switched off"* — because
+`src/l5_pmus_transport.py`, `src/l5_live_execution.py` and the rest of `src/`
+are now present in the container. That is defence in depth I removed by
+triggering a rebuild, and it is exactly the class of risk
+`test_deploy_fallthrough_guard` exists to prevent.
+
+**Not yet fixed.** `railwayConfigFile` is refused by Railway as deprecated
+("Config as Code ... use .railway/railway.ts"), so pinning
+`deploy/l5_halt_watchdog/railway.json` is not available. The next thing to try
+is the `RAILWAY_DOCKERFILE_PATH` variable set explicitly to
+`deploy/l5_halt_watchdog/Dockerfile`, then re-read the boot line for
+`credential_free: true`; failing that, redeploy an older deployment whose
+cached Dockerfile image is still reusable. The Railway MCP server timed out
+before either could be attempted, so this is **open**, and the owner should
+know the watchdog is sweeping correctly on an image that is broader than the
+one it is supposed to run.
 
 ### 68.4 What remains the owner's
 
