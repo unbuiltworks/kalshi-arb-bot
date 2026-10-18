@@ -7037,3 +7037,76 @@ EFFECTIVE submission gate, not the latch. It reads true because
 1750 records why it was changed to this conservative reading: the heartbeat once
 printed `"halt": false` through thousands of cycles while submission was in fact
 blocked.
+
+## 76. Credential references finally DELETED. Probe readiness, and the one unproven number.
+
+### 76.1 Verified, from source
+
+Deployment `02478322`, SUCCESS 2026-10-18T03:44:31Z.
+
+```
+variableNames   PMUS_API_KEY_ID and PMUS_API_SECRET_KEY are ABSENT
+staged          null, stagedChanges []
+config          deploy/l5_halt_watchdog/Dockerfile,
+                python3 -m scripts.l5_halt_watchdog, ALWAYS,
+                watchPatterns [deploy/l5_halt_watchdog/DEPLOY_TRIGGER]
+L5_WATCHDOG_BOOT 03:45:32Z  credential_free TRUE, credentials FALSE,
+                 order_source REGISTRY_READ_ONLY, cancel_enabled false
+L5_WATCHDOG_SWEEP 03:45:52 / 03:46:12 / 03:46:32 / 03:46:52 / 03:47:12
+                 heartbeat {halt false}, open_orders 0, read_error null,
+                 overdue [], not_ours [], unverified [],
+                 report_age_s -0.008 of 120
+```
+
+The §68–§75 credential loop is closed: the names no longer exist, the image
+contains no signing code, and the watchdog is attesting no-halt on schedule.
+This is the first time since 2026-10-17T23:17Z that all three hold at once.
+
+### 76.2 The one number the probe cannot assume
+
+`orderMinQuantity = 0.01` is read live from this market's metadata, and that
+field's semantics are a FLOOR, not an increment. Two caveats stand:
+
+1. The transport stores that single number as `self.quantity_increment` and
+   uses it for BOTH roles — `min_qty=` and `qty_increment=`
+   (`l5_live_execution.py:4332-4333`). Harmless while the two coincide at
+   0.01, but the codebase does not model them as distinct, so neither is
+   independently confirmed.
+2. **No minimum ORDER VALUE exists anywhere in this codebase.**
+   `l5_cost_basis_audit.py:488` says so outright. At 0.01 contracts the
+   notional is **about $0.0066** — under one cent. An unpublished venue
+   minimum notional would reject the probe.
+
+`smallest_executed_quantity` and `smallest_executed_notional_usd` are already
+implemented (`l5_cost_basis_audit.py:545-546`) and would bound this from
+below, but **no output exists in `data/l5/ops`** — the audit has never been run
+on this account. Recommended as a read-only pre-step. A rejection is itself
+cheap evidence, so the probe is safe either way; the point is to know which
+outcome we are looking at before we see it.
+
+### 76.3 Worst case, both sides, 0.01 contracts
+
+Fee is `Θ·C·p·(1−p)`, taker `Θ = 0.0695`; a maker rebate is never assumed.
+
+| side | cash out | worst-case fee | worst case |
+|---|---|---|---|
+| UP / `BUY_LONG` at p≈0.66 | `$0.0066` | `$0.000156` | **≈ $0.0068** |
+| DOWN / `BUY_SHORT` | `$0.01` — reserves $1.00/share regardless of price | `$0.000156` | **≈ $0.0102** |
+
+So **≈ $0.011 absolute worst case**, about 1% of the binding
+`max_cash_deployed_usd` of `$1`. A fill is the expensive outcome and is still
+near zero.
+
+### 76.4 What the plan does NOT promise
+
+`scripts/l5_pmus_live_oneshot.py` is the only order-capable path, and it does
+not accept a dictated order: side and price come from the frozen `030d8bf`
+rule at the moment a real L5 action arrives. Market and maximum quantity are
+fixed; **side and price cannot be pre-stated** without a bypass mechanism,
+which was not built and was not proposed. The owner was told this rather than
+given invented numbers.
+
+Watchdog coverage, stated as a limit rather than a reassurance: with
+`cancel_enabled false` and no credentials it **cannot cancel** — it can only
+latch. Withdrawal rests entirely on the executor's repaired cancel path, which
+is precisely what this probe exists to prove.
