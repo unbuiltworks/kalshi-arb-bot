@@ -8221,3 +8221,110 @@ the only positive-looking results traced to lookahead.
 not implementation and not infrastructure: a 1c spread plus a 1.74c taker
 fee against a 4c pair target cannot be closed by better engineering, and no
 measurement here supports paying it.
+
+---
+
+## 88. What L5 does that we do not — and a foundational measurement conflict
+
+Read-only. No strategy, service, branch, deployment or order. The maker-only
+/ completion configuration is **retired from live-promotion consideration**;
+its code and evidence are preserved untouched.
+
+### 88.0 A conflict that has to be settled first
+
+Two existing artifacts measure **the same wallet, the same series and the
+same 5,546 windows** and disagree by **18x**:
+
+| artifact | net | edge | mean/window | win rate |
+|---|---|---|---|---|
+| `data/l5/l5_btc15m_realized_economics.json` | **+$345,525.64** | 5.69% of deployed | $62.30 | 73.1% |
+| `data/l5_master/btc15m_sequences.jsonl` | **+$19,176.71** | **0.3007%** of cost | $3.46 | 53.7% |
+
+I recomputed the second from the corpus directly today: 5,546 windows,
+693,711 trades, cost **$6,376,853.08**, redeem **$6,396,029.79**, and
+`redeem − cost = $19,176.71` **to the cent**. It is internally consistent and
+it reproduces the §0 table of `L5_PROFITABILITY_GAP.md` exactly.
+
+The JSON is the outlier: 5.69% of turnover and a 73% per-window win rate on a
+venue whose spread is a measured 1 cent is not economically plausible, and its
+own `sell_rows: []` with `pnl = redeem_in + sell_in − buy_out` is the shape of
+an aggregation that credits redemptions whose buys it did not capture.
+
+**The sequence corpus is the number of record here. The JSON should be
+quarantined from decisions until reconciled** — and reconciling it is the
+single highest-value unfinished measurement in the programme, because if the
+JSON is right the edge is 18x larger and every verdict below re-opens.
+
+### 88.1 The three largest behavioural mismatches, ranked by impact
+
+L5 at its own full size: mean cost **$1,149.81/window**, ~107 legs/window
+(median), mean net **$3.46/window**, **$115.86/day** over 165.5 days, edge
+**0.3007%** of cost — decaying monthly 0.978% → 0.267% → 1.017% → 0.684% →
+0.239% → **−0.059%** (Aug H2, on $2.47M).
+
+**1. Turnover at scale — the whole gap.** L5 fills ~107 legs/window on
+~$1,150 of cost. Our frozen replay fills **5.15/window** (103 fills / 20
+windows), our live engine fills **zero**, and the authorized deployment is
+**$1/window** under `NO_RECYCLING`. The edge is a *rate* on deployed cash, so
+the per-window result scales with it: **$3.46 at his size, $0.003 at ours** —
+a **1,150x** gap, or **$0.29/day** against his $115.86. $480/day at 0.3007%
+requires **$159,500/day of turnover**; at the recent holdout edge (0.170%) it
+requires **$282,000/day**. The account holds **$344.41**.
+
+**2. He never crosses; he exits only by redemption.** Redeem
+($6,396,030) ≈ cost ($6,376,853) + net, and the corpus carries no sell rows —
+essentially every exit is a settlement redemption. A single taker leg costs
+`0.0695·(1−p)` of notional = **3.822%** at p=0.45: **12.7x the full-sample
+edge and 22x the holdout edge.** Our retired configuration's completion
+mechanism *was* that taker leg, which §87 measured as significantly negative
+out of sample. Crossing destroys an order of magnitude more than the edge it
+is meant to capture.
+
+**3. He does not average down into a collapsing side.** Measured at
+**−0.070pp** of edge, and **48.1% of the one live window's realized loss**
+(−$0.2835 of −$0.590000). The one correction that survived a train/holdout
+split — refuse an entry that would drag that side's running average cost
+below 0.35 — is positive on both sides with no sign flip. At our size it is
+worth **−$0.0007/window**: the only one of the three we can act on, and worth
+less than a tenth of a cent.
+
+### 88.2 The largest mismatch, on the owner's three tests
+
+| test | answer |
+|---|---|
+| **Observable?** | **Yes, completely.** 5,546 windows, 693,711 trades, and the identity `redeem − cost = net` closes to the cent |
+| **Executable on PMUS or another lawful venue?** | **No — and not for venue reasons.** Depth is adequate (median min-side 499 shares against our clips) and PMUS serves 96 BTC15m windows/day against L5's 33.5. But **$159,500/day of turnover is not fundable** from $344.41 under `NO_RECYCLING`, and the mandate is $1/window. No other venue changes an arithmetic constraint on capital |
+| **Testable with existing evidence?** | **Already tested, and the answer stands:** "the binding constraint is capital, not behavioural fidelity." Our execution is independently excluded as the gap — every fill we have is venue-attested `role: PASSIVE, aggressor_flag: false`, at exactly the requested price, `leavesQuantity 0`, so maker queue/fill failure costs **$0.00** |
+
+One in-principle limit, from §58.1: for 77% of his fill-seconds a ladder and
+repeated replenishment at a fixed level are **observationally identical**. His
+execution prices constrain the mechanism but do not reveal his resting
+prices, so a faithful per-timestamp replication of his *quoting* is not
+available at any data quality.
+
+### 88.3 Verdict: NO-GO on faithful L5 replication as an economic programme
+
+1. The policy decays monotonically and is **negative in the most recent
+   half-month** at its author's own size (−0.059% on $2.47M, −$97.79/day).
+   We would be replicating something that has stopped working.
+2. The **best month in the entire record is +$297.90/day.** The $480/day
+   target appears nowhere, so even perfect replication at L5's capital misses
+   it.
+3. At the authorized $1/window the edge yields **$0.003/window ≈ $0.29/day**.
+4. Our execution is already excluded as the cause.
+5. His quoting mechanism is partly unobservable in principle.
+
+**What would change the verdict**, in order of value:
+
+1. **Reconcile §88.0's 18x conflict.** Existing data only, no new
+   infrastructure. If the raw-activity figure is correct the edge is 18x
+   larger and every point above re-opens.
+2. **Post-2026-08-31 L5 data showing the edge recovered.** The record ends
+   there; the read-only collectors already run 24/7.
+3. **Source-confirmed incentive terms for our own account.** L5's BTC15m
+   series carries **zero** `MAKER_REBATE`, `TAKER_REBATE` and `REWARD` rows —
+   111/73/20 exist wallet-wide, none in this series — so incentives are *not*
+   where his money came from, and ours would be a genuinely new economic term
+   rather than a restoration of his.
+4. An owner decision to raise authorized capital by ~3 orders of magnitude,
+   which the decay evidence argues against.
