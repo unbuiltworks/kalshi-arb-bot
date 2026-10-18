@@ -8478,3 +8478,127 @@ maker/taker classification the question asks for is not in the data.
 4. **Source-confirmed PMUS maker rebate terms for our account.** L5 earned
    **zero** incentives in this series, so a rebate would be a new economic
    term for us rather than a restoration of his.
+
+---
+
+## 90. The execution waterfall — and §89.4 was selection on a realised outcome
+
+Read-only. Nothing altered, no limit raised, no order, no service.
+
+**First, a correction to my own §89.4.** That split bucketed windows by their
+**final realised pair cost**, which is not knowable at decision time. Asked
+for the causal version, it does not survive.
+
+### 90.1 The prospective policy, evaluated causally
+
+At every L5 fill the only inputs are the inventory already accumulated in
+that window and the price of the fill being judged. Each buy is classed
+against prior inventory — OPEN (opposite side empty), EXTEND (deepens
+imbalance), COMPLETE (pairs FIFO against the oldest unpaired opposite lot) —
+and the policy takes every OPEN/EXTEND as L5 did but **refuses a COMPLETE
+whose incremental FIFO pair cost exceeds $0.96**. Whatever is unpaired at the
+close settles as residual and is charged.
+
+| | windows | cash deployed | matched P&L | residual settle | **NET** | margin |
+|---|---|---|---|---|---|---|
+| ALL | 5,546 | $3,457,645.91 | +$444,009.80 | −$445,235.90 | **−$1,226.09** | −0.0355% |
+| **DEV** (first 70%) | 3,882 | $1,697,338.08 | +$221,659.79 | −$191,556.78 | **+$30,103.02** | **+1.7735%** |
+| **HOLDOUT** (last 30%) | 1,664 | $1,760,307.83 | +$222,350.01 | −$253,679.12 | **−$31,329.11** | **−1.7798%** |
+
+**The sign flips between development and holdout.** §89.4's +$71,006 was the
+artifact; the causal policy is negative out of sample.
+
+The mechanism is now explicit: refusing the dear completion **improves the
+matched line** (+$444,010 against L5's own +$163,009) and **strands the
+exposure** — residual grows to 4,788,357 shares on $1,857,349.72 of cost,
+and settlement takes back −$445,235.90. *The expensive completion is the
+price of closing exposure already taken; declining it converts a known small
+loss into an unhedged directional bet.*
+
+### 90.2 The waterfall (full record; holdout in brackets)
+
+```
+1  L5 observed fills                 696,860   $6,398,129.92   [328,630]
+                                     |
+      -68.7%  478,730 fills lost: 220,102 expensive COMPLETEs refused,
+              the rest OPEN/EXTEND legs carrying no knowable pair cost
+                                     v
+2  economically eligible             218,130   $  447,798.99   [102,403]
+                                     |
+      -84.7%  184,737 lost -- 181,549 CASH-CAPPED by $1/window under
+              NO_RECYCLING, 3,188 below the 0.01 increment        [-88.8%]
+                                     v
+3  orders our engine could submit     33,393   $    4,148.84    [11,488]
+                                     |
+      -100%   queue position at L5's prices is UNKNOWN, and unknown queue
+              is not a fill
+                                     v
+4  defensibly filled (CONSERVATIVE)        0   $        0.00    net $0.00
+     BASE      (a later print THROUGH our price)   13,603 pairs  +$2,322.71
+     OPTIMISTIC (touch=fill -- inadmissible)       15,570 pairs  +$2,731.79
+                                     v
+5  matched inventory      2,030,161 shares paired at <= $0.96
+6  residual settlement    4,788,357 shares, cost $1,857,349.72  -$445,235.90
+7  NET                    -$1,226.09 all / +$30,103.02 DEV / -$31,329.11 HOLDOUT
+```
+
+**Largest loss of economic opportunity at each transition:**
+
+1. **3 → 4 is the largest, and it is total.** Every one of the 33,393 orders
+   our engine could submit becomes **zero defensibly filled**, because the L5
+   corpus carries no book and no aggressor flag. The BASE and OPTIMISTIC rows
+   are shown only as ceilings.
+2. **2 → 3: the $1/window cash cap destroys 181,549 of 184,737 lost actions
+   (98.3%)** — by far the largest *configuration* loss, and the one that is
+   ours to choose.
+3. **1 → 2: 478,730 fills (68.7%)**, the bulk of L5's turnover, is outside
+   the cheap-pair definition at all.
+
+**The BASE and OPTIMISTIC rows are not achievable P&L.** They credit pair
+margin against opening legs **L5 paid for and we never bought**. You cannot
+buy only completions: to be in position for 13,603 cheap pairs you must hold
+the opening legs, and §90.1 — which charges them — is the self-consistent
+answer. That is the one that goes negative out of sample.
+
+### 90.3 Capital, turnover and the risk envelope
+
+The holdout margin is **−1.78% of deployed cash**, so **no quantity of
+capital reaches $5/window**: scaling a negative margin loses more. For
+completeness, if the DEV margin (+1.7735%) were taken at face value:
+
+| target | deployed cash needed | against |
+|---|---|---|
+| $5/window | **$282/window** | mandate $1/window; account $344.41 |
+| $480/day (96 windows) | **$27,119/day** | NO_RECYCLING, so ~79x the account |
+
+And the policy is incompatible with the risk envelope regardless of capital:
+it **requires** carrying the residual it refuses to complete — 863 shares and
+**$334.90 of residual cost per window** against `max_abs_residual` of **10
+contracts** and `max_usd_per_market` of **$5**. That is **86x** the residual
+cap before a single dollar of extra capital is considered.
+
+### 90.4 Conclusion
+
+**No. There is no defensibly executable, positive-net subset of L5's
+cheap-pair behaviour that this system can reproduce.** Three independent
+reasons, any one of which is sufficient:
+
+1. **It is not positive.** The causal prospective-$0.96 policy nets
+   −$1,226.09 over the record and **−$31,329.11 on untouched holdout
+   windows**, with a sign flip from +1.77% to −1.78%. The apparently
+   profitable cheap-pair subset is positive only when the opening legs are
+   inherited free.
+2. **It is not defensibly executable.** All 33,393 submittable orders reduce
+   to **zero** filled under the stated discipline, because the corpus has no
+   book and no aggressor flag. Nothing in this evidence can promote a single
+   order from "submitted" to "filled".
+3. **It does not fit the risk envelope.** 863 residual shares and $334.90 of
+   residual cost per window against a 10-contract residual cap and a $5
+   per-market ceiling.
+
+**The single piece of evidence that would change this** is decision-level
+queue depth on *our own* venue, at the prices we would actually rest at,
+across enough windows to measure a passive fill rate. We have 315 snapshots
+for two windows (1615z/1630z); the rest was lost to Railway log retention.
+The existing recorders already collect it going forward — that is the one
+measurement worth continuing, and it needs no new infrastructure.
