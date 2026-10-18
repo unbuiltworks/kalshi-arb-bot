@@ -221,32 +221,56 @@ def test_the_price_sits_below_the_bid_by_whole_ticks(monkeypatch):
     assert t.submits[0]["price"] == D("0.40") - D("0.01") * M.NONMARKETABLE_TICKS
 
 
-def test_a_marketable_forced_price_is_refused(monkeypatch):
-    """An owner-pinned price is still checked against the ASK, not trusted."""
+def test_a_marketable_forced_price_never_reaches_the_wire(monkeypatch):
+    """An owner-pinned price is still checked against the ASK, not trusted.
+
+    RETARGETED: this is now a WAIT rather than a terminal refusal, because a
+    crossed book is a "not yet" and the price is recomputed from a fresh book
+    on every pass. What must never change -- and is what this test is really
+    for -- is that no marketable order reaches the venue.
+    """
     monkeypatch.setenv(M.MODE_ENV, "YES")
     monkeypatch.setenv(M.PRICE_ENV, "0.99")
     t = Transport()
     m = M.Mechanism(store=Store(), transport=t, book=Book(), market=MARKET,
                     clock=Clock(), window_start=lambda s: WS, window_s=900.0)
     rep = m.step()
-    assert "price_is_nonmarketable" in rep["failed_checks"]
-    assert t.submits == []
+    assert rep["LABEL"] == "L5_MECH_WAIT"
+    assert "price_is_nonmarketable" in rep["waiting_on"]
+    assert t.submits == [], "a marketable order reached the venue"
+    assert m.state == M.Mechanism.INIT, "it must re-evaluate, not give up"
 
 
-def test_a_one_sided_book_refuses(monkeypatch):
+def test_a_one_sided_book_waits_and_never_submits(monkeypatch):
+    """RETARGETED with the wait/terminal split: a one-sided book is a "not
+    yet", re-read on the next pass. Nothing may reach the wire on it."""
     t = Transport()
     m = mech(monkeypatch, transport=t, book=Book(two_sided=False))
     rep = m.step()
-    assert "book_two_sided_authenticated" in rep["failed_checks"]
+    assert rep["LABEL"] == "L5_MECH_WAIT"
+    assert "book_two_sided_authenticated" in rep["waiting_on"]
     assert t.submits == []
+    assert m.state == M.Mechanism.INIT
 
 
-def test_an_unarmed_transport_refuses_and_no_lock_is_lifted(monkeypatch):
+def test_an_unarmed_transport_waits_and_never_submits(monkeypatch):
+    """RETARGETED, and this is the 1800z bug itself.
+
+    `transport_armed` is false for the first seconds of every window by
+    construction -- the transport arms only after preflight passes, and
+    preflight retries on a backoff. Treating it as terminal ended the
+    authorized run on a condition that clears itself. It is now a WAIT.
+
+    The invariant that must NOT move: nothing is submitted while unarmed.
+    """
     t = Transport(armed=False)
     m = mech(monkeypatch, transport=t)
     rep = m.step()
-    assert "transport_armed" in rep["failed_checks"]
-    assert t.submits == []
+    assert rep["LABEL"] == "L5_MECH_WAIT"
+    assert rep["waiting_on"] == ["transport_armed"]
+    assert t.submits == [], "it submitted while unarmed"
+    assert m.state == M.Mechanism.INIT
+    assert m.finished is False
 
 
 def test_existing_exposure_refuses(monkeypatch):
@@ -612,3 +636,247 @@ def test_a_claim_refusal_releases_the_order_reservation(monkeypatch):
     assert "SUBMISSION_CLAIM" in str(rep["refused"])
     assert store.live_order_count() == 0, \
         "the refused attempt left a phantom live order behind"
+
+
+# ================================================================
+# THE WAIT/TERMINAL SPLIT -- the 1800z repair
+# ================================================================
+
+def armed_later(t, after):
+    """A transport that arms on the Nth call, like preflight passing."""
+    calls = {"n": 0}
+
+    class T(type(t)):
+        pass
+
+    t.armed = False
+    orig = t.submit
+
+    def tick():
+        calls["n"] += 1
+        if calls["n"] >= after:
+            t.armed = True
+    t._tick = tick
+    return t
+
+
+def test_the_wait_set_is_exactly_the_transient_conditions():
+    """Pinned explicitly: a future edit that moves a SAFETY gate into the
+    wait set has to change this line and explain itself."""
+    assert M.WAIT_CHECKS == frozenset({
+        "transport_armed",
+        "book_two_sided_authenticated",
+        "price_readable", "price_positive", "price_below_one",
+        "price_is_nonmarketable",
+    })
+
+
+def test_no_safety_gate_is_in_the_wait_set():
+    """These must NEVER be waited out -- each one stops the run dead."""
+    for terminal in ("one_shot_not_already_used", "mode_enabled",
+                     "window_has_room_for_the_watchdog",
+                     "authorization_window_open", "halt_not_engaged",
+                     "book_is_flat_before_the_test", "no_other_live_order",
+                     "qty_is_venue_minimum", "post_only",
+                     "worst_case_total_within_authorization"):
+        assert terminal not in M.WAIT_CHECKS, terminal
+
+
+def test_it_submits_on_a_later_pass_once_arming_completes(monkeypatch):
+    """The whole point of the repair: the run survives to the armed pass."""
+    t = Transport(armed=False)
+    m = mech(monkeypatch, transport=t)
+    ck = m.clock
+
+    rep = m.step()
+    assert rep["LABEL"] == "L5_MECH_WAIT"
+    assert t.submits == []
+
+    for _ in range(3):                      # still arming
+        ck.advance(3.0)
+        m.step()
+    assert t.submits == []
+    assert m.state == M.Mechanism.INIT
+
+    t.armed = True                          # preflight passed
+    ck.advance(3.0)
+    rep = m.step()
+    assert rep["submitted"] == 1, "it never recovered after arming"
+    assert t.submits and t.submits[0]["qty"] == D("0.01")
+    assert m.state == M.Mechanism.RESTING
+
+
+def test_every_gate_is_re_evaluated_on_the_submitting_pass(monkeypatch):
+    """Waiting must not carry a stale verdict forward.
+
+    The book goes BAD while waiting; the pass that would otherwise submit
+    must see the new book and keep waiting instead.
+    """
+    t = Transport(armed=False)
+    book = Book()
+    m = mech(monkeypatch, transport=t, book=book)
+    m.step()
+    t.armed = True
+    book._two = False                       # book dies before the submit
+    m.clock.advance(3.0)
+    rep = m.step()
+    assert rep["LABEL"] == "L5_MECH_WAIT"
+    assert "book_two_sided_authenticated" in rep["waiting_on"]
+    assert t.submits == []
+
+
+def test_the_price_is_recomputed_from_the_fresh_book_not_carried_forward(
+        monkeypatch):
+    t = Transport(armed=False)
+    book = Book(bid="0.40", ask="0.41")
+    m = mech(monkeypatch, transport=t, book=book)
+    m.step()
+    book._bid, book._ask = "0.70", "0.71"   # the book moved while waiting
+    t.armed = True
+    m.clock.advance(3.0)
+    m.step()
+    assert t.submits[0]["price"] == D("0.70") - D("0.01") * M.NONMARKETABLE_TICKS
+
+
+# ------------------------------------------------- the wait is bounded
+
+def test_the_window_draining_below_the_bound_ends_the_wait(monkeypatch):
+    """No timer needed: the window check is TERMINAL, so an unarmed run
+    stops itself rather than holding a lifted lock open."""
+    t = Transport(armed=False)
+    m = mech(monkeypatch, transport=t)
+    assert m.step()["LABEL"] == "L5_MECH_WAIT"
+    # jump to inside the 450s margin
+    m.clock.t = float(WS + 900 - (M.MIN_WINDOW_REMAINING_S - 20))
+    rep = m.step()
+    assert rep["refused"] == "MECHANISM_PRECONDITIONS_NOT_MET"
+    assert "window_has_room_for_the_watchdog" in rep["failed_checks"]
+    assert m.finished is True
+    assert t.submits == []
+
+
+def test_a_terminal_failure_refuses_even_while_a_wait_is_outstanding(
+        monkeypatch):
+    """An expired authorization is not improved by the book recovering."""
+    t = Transport(armed=False)
+    m = mech(monkeypatch, transport=t)
+    monkeypatch.setenv("L5_LIVE_AUTH_NOT_AFTER", "2020-01-01T00:00:00+00:00")
+    rep = m.step()
+    assert rep["refused"] == "MECHANISM_PRECONDITIONS_NOT_MET"
+    assert "authorization_window_open" in rep["failed_checks"]
+    assert t.submits == []
+
+
+# ------------------------------------------------- the two new terminal gates
+
+@pytest.mark.parametrize("value,ok", [
+    ("2099-01-01T00:00:00+00:00", True),
+    ("2020-01-01T00:00:00+00:00", False),
+    ("garbage", False),
+])
+def test_the_authorization_window_gates_the_submit(monkeypatch, value, ok):
+    monkeypatch.setenv("L5_LIVE_AUTH_NOT_AFTER", value)
+    t = Transport()
+    m = mech(monkeypatch, transport=t)
+    rep = m.step()
+    assert (rep.get("submitted") == 1) is ok, value
+    assert (t.submits != []) is ok
+
+
+def test_a_halt_engaged_mid_wait_stops_the_run(monkeypatch):
+    """Waiting happens with the shadow lock LIFTED, so a halt arriving
+    during the wait has to end it."""
+    halt = {"on": False}
+    t = Transport(armed=False)
+    m = M.Mechanism(store=Store(), transport=t, book=Book(), market=MARKET,
+                    clock=Clock(), window_start=lambda s: WS, window_s=900.0,
+                    halted_fn=lambda: halt["on"])
+    monkeypatch.setenv(M.MODE_ENV, "YES")
+    assert m.step()["LABEL"] == "L5_MECH_WAIT"
+    halt["on"] = True
+    rep = m.step()
+    assert "halt_not_engaged" in rep["failed_checks"]
+    assert t.submits == []
+    assert m.finished is True
+
+
+def test_an_unreadable_halt_counts_as_halted(monkeypatch):
+    def boom():
+        raise RuntimeError("halt gate unreachable")
+
+    t = Transport()
+    m = M.Mechanism(store=Store(), transport=t, book=Book(), market=MARKET,
+                    clock=Clock(), window_start=lambda s: WS, window_s=900.0,
+                    halted_fn=boom)
+    monkeypatch.setenv(M.MODE_ENV, "YES")
+    rep = m.step()
+    assert "halt_not_engaged" in rep["failed_checks"]
+    assert t.submits == []
+
+
+def test_the_module_still_cannot_touch_the_latch_it_now_reads():
+    """The halt arrives as an injected predicate, NOT an import."""
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(M))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for a in node.names:
+                imported.add(a.name)
+        if isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+    for forbidden in ("l5_halt_gate", "l5_halt_reset", "l5_halt_server"):
+        assert not any(forbidden in m for m in imported), forbidden
+
+
+# ------------------------------------------------------ wait does not spam
+
+def test_the_wait_is_logged_on_change_not_on_every_pass(monkeypatch):
+    seen = []
+    t = Transport(armed=False)
+    m = mech(monkeypatch, transport=t)
+    m._emit = lambda k, d: seen.append(k)
+    for _ in range(12):
+        m.clock.advance(3.0)
+        m.step()
+    assert seen.count("L5_MECH_WAIT") == 1, seen
+
+
+def test_the_one_shot_is_not_consumed_by_waiting(monkeypatch):
+    """A wait must leave the marker and the claim untouched, or a retry in
+    the next window would find the experiment already spent."""
+    store = Store()
+    t = Transport(armed=False)
+    m = mech(monkeypatch, store=store, transport=t)
+    for _ in range(5):
+        m.clock.advance(3.0)
+        m.step()
+    assert M.MARKER_KEY not in store.state
+    t.armed = True
+    m.clock.advance(3.0)
+    assert m.step()["submitted"] == 1
+
+
+def test_an_unknown_worst_case_total_waits_and_cannot_submit(monkeypatch):
+    """A dead book makes the total UNKNOWN. That is an absent price, not a
+    breach -- but it must still be impossible to submit on it."""
+    t = Transport(armed=True)
+    m = mech(monkeypatch, transport=t, book=Book(two_sided=False))
+    rep = m.step()
+    assert rep["LABEL"] == "L5_MECH_WAIT"
+    for name in ("price_readable", "book_two_sided_authenticated"):
+        assert name in rep["waiting_on"], name
+    assert "worst_case_total_within_authorization" not in rep["waiting_on"]
+    assert t.submits == [], "it submitted with no readable price"
+
+
+def test_a_known_total_over_the_bound_is_still_terminal(monkeypatch):
+    """The relaxation above must not weaken the real bound."""
+    m = mech(monkeypatch)
+    monkeypatch.setattr(M, "MAX_TOTAL_RISK_USD", D("0.001"))
+    rep = m.step()
+    assert rep["refused"] == "MECHANISM_PRECONDITIONS_NOT_MET"
+    assert "worst_case_total_within_authorization" in rep["failed_checks"]
+    assert m.finished is True
+    assert m.transport.submits == []
