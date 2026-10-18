@@ -7425,3 +7425,96 @@ Smallest honest routes, for the owner to choose:
    median `want` — accepting a worst case near `$0.60` instead of `$0.011`.
 
 Nothing deployed, nothing armed, the 24/7 executor untouched and shadow-only.
+
+## 80. A dormant service can be reused. `polymarket-l5-replay-once` is the safe one.
+
+### 80.1 The survey
+
+| candidate | last deployed | variables | volume | restart | verdict |
+|---|---|---|---|---|---|
+| **`polymarket-l5-replay-once`** `c6b5058c` | **never** (`latestDeployment: null`) | **none** | none | **NEVER** | **BEST** |
+| `kalshi-arb-bot` `0967b204` | 2026-09-15 | none | none | **unset** | second |
+| `pmus-spring-l5-probe` `d84d9a68` | 2026-10-14 | 22, incl. credentials + `PMUS_SPRING_ARM`/`LIVE` | 50 GB | ALWAYS | **REJECT** |
+| `l5-r1-probe` `6111a5d4` | 2026-10-14 | 6, incl. credentials + `PMUS_SPRING_ARM`/`LIVE` | none | NEVER | **REJECT** |
+
+`polymarket-l5-replay-once` has **never been deployed**, so repurposing it
+interrupts nothing; it carries no variables, no volume, no domains and no TCP
+proxies, so **nothing is inherited**; and `restartPolicyType` is already
+`NEVER`, which is the single property that matters most for a one-shot.
+
+`kalshi-arb-bot` is also empty and dormant, but its `restartPolicyType` is
+unset and it is a RAILPACK image with **no start command** — the documented
+fall-through hazard. More to change, and a misleading name.
+
+Both spring probes are **rejected on principle**: they are live, hold venue
+credentials, and carry `PMUS_SPRING_ARM` / `PMUS_SPRING_LIVE` whose values this
+session cannot read. Inheriting unknown arming flags into an order-capable
+service is the opposite of a bounded probe.
+
+### 80.2 A one-shot safety property that is easy to miss
+
+With `restartPolicyType NEVER` and a one-shot start command, **any rebuild is
+another run**. So the watch pattern is a safety property, not a build
+preference — the same lesson `deploy/l5_halt_watchdog/railway.json` records for
+the watchdog. Scoping it to
+`deploy/l5_live_probe/ENABLE_RUN_BY_OWNER_ONLY/**` means only an explicit owner
+trigger file can cause a run. The second line of defence is already in the
+design: the authorization is **spent in the ledger**, so a second run refuses
+even if a build somehow fires. Together these are what "no automatic repeat"
+actually rests on.
+
+### 80.3 Outstanding code item — requirement NOT yet met
+
+"Startup refusal unless both probe-cap variables are correctly configured" is
+**not implemented**. The cap gates SUBMISSION, not startup or arming (§79.4).
+Closing it is roughly ten lines at the top of `main()` in
+`scripts/l5_pmus_live_oneshot.py`: refuse and exit non-zero unless
+`probe_order_contract_cap()` returns a usable cap and
+`L5_PROBE_ORDER_CAP_REQUIRED` is declared. **Not written** — it needs approval,
+and it is the only code change still outstanding.
+
+### 80.4 OBSERVE_ONLY makes a no-submission first run possible
+
+`scripts/l5_pmus_live_oneshot.py` already has three modes, selected before
+anything else runs: `L5_OBSERVE_ONLY` (`L5_OBSERVE_ONLY=YES`),
+`L5_RECOVER_ONLY`, and the default `LIVE_PROBE`. So the service can be created
+and exercised end to end — image, preflight, cap wiring, halt URL, limits —
+while submitting nothing, and only a separate, explicitly authorized change
+flips it to `LIVE_PROBE`. That is a materially safer sequence than deploying
+straight to a live probe.
+
+### 80.5 The four outcomes, and which one is a pass
+
+Only the last validates cancellation. The other three must be reported as
+**inconclusive**, never as a successful test:
+
+| outcome | evidence | cancellation proven? |
+|---|---|---|
+| no eligible action | report with zero submissions; no `PROBE_ORDER_CAP_EXCEEDED` either | **no** |
+| cap refusal | `SAFETY_OVERLAY` + `PROBE_ORDER_CAP_EXCEEDED:q>0.01` | **no** |
+| rejection | `ORDER.submitted false` with the venue's error | **no** |
+| immediate fill | ack `cumQuantity == qty`, `leavesQuantity 0` — nothing left to cancel | **no** |
+| **resting then cancelled** | ack leaves > 0, then `POST /v1/order/{venue_id}/cancel`, then a re-read showing it terminal | **YES** |
+
+An immediate fill is the outcome most likely to be mistaken for success. It is
+not: it costs the premium and proves nothing about withdrawal.
+
+### 80.6 Cost
+
+Structural, because this session cannot read the workspace's rates and the
+repo's own audit measures **builds**, not currency:
+
+- **no volume** → no storage cost;
+- **`restartPolicyType NEVER`** and a process that exits → **no standing
+  compute**, unlike every 24/7 service;
+- **watch-pattern scoped** → no push fan-out, the waste the 2026-09-15 audit
+  was written about.
+
+So the incremental cost is **one build plus a few minutes of runtime per
+authorized run**, and zero between runs. Reusing
+`polymarket-l5-replay-once` adds **no new service** and retires an unscoped
+RAILPACK shell in the process.
+
+**Recommendation: reuse `polymarket-l5-replay-once`.** Nothing created,
+nothing deployed, nothing armed; the 24/7 executor, spring probes and all
+unrelated services untouched.
