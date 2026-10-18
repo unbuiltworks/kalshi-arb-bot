@@ -7719,3 +7719,119 @@ weeks: `l5-live-habitat-state` (50 GB, `l5-live-habitat`, crashed
 losing its data and redeploys that service. Which volume to take is the
 owner's call: it changes another service's configuration, and the standing
 rule here is to preserve unrelated services.
+
+---
+
+## 83. Storage decision audit — read-only, and it overturns my own recommendation
+
+§82.4 proposed moving `l5-live-habitat-state` or `l5-research-state`. **The
+audit says do neither.** Both hold irreplaceable recorded observation, and
+the project's own incident record says so in as many words.
+
+### 83.1 The two candidates, measured
+
+| | `l5-live-habitat-state` | `l5-research-state` |
+|---|---|---|
+| provisioned | 50 GB | 256 GB |
+| **used** | **24.82 GB** | **56.19 GB** |
+| flat over | 7 days (10 081 samples, min = max) | 7 days (10 081 samples, min = max) |
+| mounted on | `l5-live-habitat` · `/state/l5-live` | `l5-exec-shadow` · `/state/l5-research` |
+| service state | CRASHED 2026-09-21 | CRASHED 2026-09-19 |
+
+Flat usage with min = max over the whole week is the signature of a stopped
+writer, not of an empty disk. There is 81 GB of data between them.
+
+### 83.2 Is it needed? Yes, and the repository already answered
+
+`VOLUME_INCIDENT_20260919.md`, on `l5-research-state`:
+
+> **"Nothing on this volume is regenerable, and nothing was deleted.** Every
+> byte is recorded market observation — books, surfaces, depth, prints — from
+> venues that serve no history, so a deleted row cannot be re-fetched at any
+> price."
+
+Its streams are `surface_shadow`, `book_context`, `gemdepth`,
+`gemini_surface`, `l5-shadow-state`, `pmus-l5-surface`, `chainval`,
+`l5-window-forensics`, and `deploy/l5_exec_shadow/railway.json` states the
+recorder **resumes against that store on restart** and that nothing
+truncates or rotates. A crashed recorder with an intact append-only store is
+recoverable work; taking its volume strands that recovery.
+
+`src/l5_live_habitat_service.py` (on `claude/l5-execution-instrumentation-io6nzi`,
+the branch that service deploys) is the same case by construction:
+
+> "APPEND-ONLY to `L5_LIVE_ROOT`, which must be a mounted volume to be
+> durable. GAP MARKERS RETAINED. Every thread restart and every process
+> start writes a `COLLECTOR_GAP` marker into the affected stream, so no
+> analysis can ever silently bridge an outage."
+
+It exists *because* a recycled container "cost data the NFL PRE->LIVE
+experiment cannot recover".
+
+So: **neither volume is free to take.** My §82.4 shortlist was wrong, and
+this is what the audit was for.
+
+### 83.3 Can the one-shot reach durable storage without relocating a volume?
+
+Four routes considered; none works without either a weakened guard or an
+attached volume:
+
+| route | verdict |
+|---|---|
+| `/state/pmus-ws`, the path the code already defaults to | that volume belongs to `pmus-ws-evidence-recorder`, a 24/7 collector. **A Railway volume attaches to exactly one service** — this is why the halt latch is read over HTTP in the first place |
+| the watchdog's 1 GB volume through `HttpHaltStore` (an `ObjectStore` with `get`/`put`) | it would put a **write path into the guard**, which `l5_halt_gate`'s own docstring rejects as the arrangement to avoid; and `AUTH.Authorization` takes a filesystem path, so it needs a code change too |
+| run the mechanism test from a service that already has a volume | the only image with a submit path is the one-shot's, and the executor must stay shadow-only. Moving the submit path into a service with a volume is the opposite of the separation this architecture is built on |
+| point the ledger somewhere that satisfies the check | `durability_refusal` tests `nearest_mount(path) != "/"`, so a **tmpfs path such as `/dev/shm` would pass while being ephemeral.** That is a loophole in the check, not a solution: it would satisfy the gate dishonestly. **Recorded here so nobody uses it, including me.** |
+
+### 83.4 The limit and the real cost
+
+| fact | source |
+|---|---|
+| volumes per project, Pro | **20, "can be increased"** — `docs.railway.com/volumes/reference` |
+| volumes in this project | **20** — `describe-environment` |
+| plan is Pro | a 256 GB volume exists; Hobby caps volume storage at 5 GB |
+| volume price | **$0.15 / GB / month** ($0.000003472/GB/min) |
+| billed on | **used** storage, plus 2-3% of volume size as filesystem metadata |
+| **builds** | **free** — "Railway does not charge for build CPU, memory, base-image downloads, image exports, or image storage" |
+
+That last line corrects §81.3 and §80.6: a build costs nothing, so the
+per-run cost is runtime only.
+
+A dedicated **1 GB** volume for a ledger measured in kilobytes bills its
+metadata: ~20-30 MB, or **$0.003-0.005 per month**. Half a cent.
+
+### 83.5 Recommendation: a 1 GB volume of its own, at `/state/pmus-ws`
+
+**Ask Railway to raise this project's volume limit above 20** (Help Station;
+size is self-serve, count is not), then attach a **1 GB** volume to
+`polymarket-l5-replay-once` at **`/state/pmus-ws`**.
+
+Why that path: it is what the code already defaults to —
+`AUTH.DEFAULT_LEDGER` is `/state/pmus-ws/l5_live_authorizations.jsonl`, and
+`L5_SESSION_JOURNAL` and `L5_PROBE_STATE` default alongside it. So the
+option needs **zero new variables**, and the image has nothing at that path
+for an empty volume to hide.
+
+**Impact**
+
+- no existing volume, service, mount or byte is touched;
+- attaching redeploys only this service, which starts **one more disarmed
+  verification run** — the run we want anyway, and it expects 15 of 16
+  checks with `owner_authorization` the only failure;
+- +$0.003-0.005/month; runtime unchanged; builds free.
+
+**Rollback**
+
+1. `update-volume serviceId: null` detaches it, **keeps the data**, and
+   redeploys this service without the mount. The durability check then
+   refuses again — i.e. rollback restores today's exact state, which is a
+   state that cannot place an order.
+2. Or delete the volume: queued for deletion, **restorable for 48 hours**
+   via the emailed link, permanent after that.
+3. Nothing else in the project changes, so there is no second thing to undo.
+
+**If the limit cannot be raised**, the fallback is to free a slot — but a
+usage census says the slots here hold evidence: `kalshi-l5-tape` 1.60 GB,
+`l5-shadow-state` 1.76 GB, `l5-v1-shadow-state` 10.83 GB, both candidates
+above 24.82 and 56.19 GB. No empty volume was found. Which slot to free
+would be the owner's decision, and it is a worse trade than half a cent.
