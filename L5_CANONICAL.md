@@ -7940,3 +7940,31 @@ touches a real venue.
 3. the owner's `PMUS_Q1_ARM`, `PMUS_Q1_LIVE`, `PMUS_Q1_SESSION_ID`, and the
    price confirmed against the book at run time;
 4. one touch of the promote marker.
+
+---
+
+## 85. The volume-limit increase is not reachable from here
+
+Checked, read-only, and the answer is no tool:
+
+- the Railway MCP surface has **no plan, quota or limit verb** — it covers
+  projects, services, variables, volumes, domains, logs, metrics and docs;
+- `list-feature-flags` for this project and its workspace returns exactly
+  one flag, `noop`. There is no volume-limit signal to set;
+- `docs.railway.com/volumes/reference` is explicit that volume **size** is
+  self-serve to 1 TB on Pro while the **count** is not: "Pro users with
+  substantial usage requirements may be eligible for increased volume
+  limits. Please reach out to us on the Railway Help Station."
+
+So the 20 → 21 increase is an owner request to Railway support. Nothing was
+attached, nothing was changed, and no charge was incurred: the request
+itself is free, and the 1 GB volume it would permit bills ~$0.003-0.005 per
+month against the Pro plan's $20 of included usage.
+
+`polymarket-l5-replay-once` stays as the §82 run left it: last deployment
+terminal (exit 65), no `PMUS_Q1_*` variable, and an image carrying no
+mechanism submit path. It is disarmed by construction rather than by flag.
+Its mode variable is still `L5_CANCEL_MECHANISM=YES` with
+`L5_OBSERVE_ONLY=NO`, which is the verification posture and changes nothing
+about what it can do; flipping it back is a configuration change and was
+not authorized.
