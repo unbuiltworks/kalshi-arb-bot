@@ -6389,16 +6389,34 @@ are now present in the container. That is defence in depth I removed by
 triggering a rebuild, and it is exactly the class of risk
 `test_deploy_fallthrough_guard` exists to prevent.
 
-**Not yet fixed.** `railwayConfigFile` is refused by Railway as deprecated
-("Config as Code ... use .railway/railway.ts"), so pinning
-`deploy/l5_halt_watchdog/railway.json` is not available. The next thing to try
-is the `RAILWAY_DOCKERFILE_PATH` variable set explicitly to
-`deploy/l5_halt_watchdog/Dockerfile`, then re-read the boot line for
-`credential_free: true`; failing that, redeploy an older deployment whose
-cached Dockerfile image is still reusable. The Railway MCP server timed out
-before either could be attempted, so this is **open**, and the owner should
-know the watchdog is sweeping correctly on an image that is broader than the
-one it is supposed to run.
+**Not fixed, and not fixable from this session.** Three routes tried:
+
+| route | result |
+|---|---|
+| `update-service dockerfilePath` + redeploy | config reads `DOCKERFILE` and the right path; the build is Railpack anyway |
+| `railwayConfigFile: deploy/l5_halt_watchdog/railway.json` | refused: *"Config as Code (railway.json / railway.toml) is deprecated. Use Infrastructure as Code (.railway/railway.ts)"* |
+| `RAILWAY_DOCKERFILE_PATH = deploy/l5_halt_watchdog/Dockerfile` + redeploy | deployment `aff5a069` SUCCESS, boot 00:50:49Z — still `credential_free: false`, build log still `[railpack]` |
+
+The repository has no `.railway/railway.ts` and no `nixpacks.toml`, and the
+root `railway.json` carries only `$schema`. So the service's Dockerfile is not
+being honoured on a rebuild by any mechanism this session can reach. Closing
+it needs either an owner change in the Railway dashboard or a migration of
+this service to Infrastructure as Code — **a decision, not a repair**, so it
+is left for the owner rather than guessed at.
+
+Current deployment `aff5a069`, SUCCESS, verified healthy:
+
+```
+L5_WATCHDOG_BOOT   credentials false, credential_free false,
+                   order_source REGISTRY_READ_ONLY, cancel_enabled false
+L5_WATCHDOG_SWEEP  every 20s; open_orders 0, read_error null,
+                   report_age_s -0.01 (max 120), overdue [], cancelled [],
+                   heartbeat_refused "refusing to overwrite a latched HALT"
+```
+
+Sweeping, judging the executor from the registry report, and refusing to clear
+the latch — the behaviour the watchdog exists for, on a broader image than
+intended.
 
 ### 68.4 What remains the owner's
 
