@@ -6764,3 +6764,66 @@ restart policy is `ALWAYS`, so a crash would do it too. Until the five are
 deleted, the correct action on the executor is **none**: no variable write, no
 redeploy, no restart, no arming. The running process is still the authorized
 one and its heartbeat continues to show the baseline limits.
+
+## 73. Baseline confirmed, probe inert, fresh INSPECT at 03:06:11Z. Awaiting the owner's attestation.
+
+### 73.1 Cleanup verified from source
+
+| check | result |
+|---|---|
+| five variables on `l5-pmus-live` | **all absent** from `variableNames` |
+| two credential names on `l5-halt-watchdog` | absent at the time of checking |
+| environment staged changes | `staged: null`, `stagedChanges: []` on both services |
+| executor deployment | `de3edd0e` SUCCESS, 02:51:50Z — created AFTER the removal, so it booted on the baseline |
+| watchdog deployment | `e4cce6a4` SUCCESS, 02:52:22Z, `credential_free true`, sweeps clean |
+
+**The probe is provably inert again.** The pre-removal process carried
+`two_sided_awaiting_settlement: 215` and `ts_completion:NO_INVENTORY_TO_COMPLETE: 213`
+in its stats. The new process's stats contain only
+`HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER`. No two-sided counters
+exist, which is what `active()` returning False looks like from the outside.
+
+Executor limits in force on `de3edd0e` (02:55:11Z and 02:56:13Z heartbeats),
+identical to the pre-commit baseline:
+
+```
+armed false   halt true   halt_local_env false   preflight PASSED
+submission_gate  blocked TRUE / SHADOW_ONLY_LOCK / shadow_lock true / halt_latch HALT
+limits           per-market 5, abs residual 10, total exposure 5,
+                 concurrent markets 1, live orders 1, daily loss halt 5
+cash gate        max_cash_deployed_usd 1, NO_RECYCLING, unmatched contracts 5
+policy           RESIDUAL_CAP_k2, residual_cap_k 2, frozen_rule 030d8bf
+order_progress   live_orders 0, parked 0, overdue_s 0
+available_cash   $344.41255
+```
+
+### 73.2 Fresh authenticated INSPECT — deployment `4bb020e0`, 03:06:11Z, read-only
+
+| field | value |
+|---|---|
+| `sha256` / `L5_HALT_RESET_EXPECT` | `40f9c34033cced8a1006e0b922d30787735a88749b14e4df0a4442e7a879719e` — **third consecutive identical reading** (23:17Z, 02:21Z, 03:06Z) |
+| `reason` | `UNMANAGED_RESTING_ORDER` |
+| latch `t` / `who` / `halt` | `2026-10-16T03:40:12.037515+00:00` / `l5-watchdog` / `true` |
+| latch evidence | `D4EFZNW00ZZ0`, `cpcxrp-xrp-updown-15m-2026-10-16-0330z`, `age_known false`, `leaves None` |
+| `preconditions.venue.ok` | **TRUE** — `l5_owned_working_orders 0`, `venue_working_orders_seen 0`, `account_positions []`, `account_positions_error null`, `owner_manual_orders_allowed []`; signed `/v1/orders/open` + `/v1/portfolio/positions` |
+| `preconditions.registry.ok` | **TRUE** — readable, age `0.001s`, `live_orders 0`, `http://l5-pmus-live.railway.internal:8081` |
+| `l5_claimed_order_ids` / `ownership_error` | `[]` / `null` |
+| `prior_resets` | one: `owner-20261015-1945z-d47r06gg0zrx`, cleared, 2026-10-15T23:28:37Z |
+| `would_clear` | **TRUE** |
+
+The registry read is newly meaningful: the executor restarted at 02:51, and the
+registry it now serves still reports zero live orders.
+
+### 73.3 Stand-down verified
+
+Deployment `601f63c5`, booted 03:14:51Z: `credential_free TRUE`,
+`credentials FALSE`, `order_source REGISTRY_READ_ONLY`, `cancel_enabled false`.
+Sweeps clean at 03:17:51, 03:18:11, 03:18:31, 03:18:51 — `open_orders 0`,
+`read_error null`, `report_age_s -0.008` of 120, `heartbeat_refused` on the
+latch each time.
+
+Credential references revoked by value; the two NAMES are present again with
+whitespace, because this session still has no delete verb. One further
+dashboard deletion is owed — and the reset itself needs those credentials, so
+the economical sequence is to attest and reset inside one credential window
+and delete once afterwards.
