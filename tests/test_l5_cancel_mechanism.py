@@ -36,26 +36,41 @@ CAP = "L5_PROBE_MAX_ORDER_CONTRACTS"
 REQ = "L5_PROBE_ORDER_CAP_REQUIRED"
 
 
-class Book:
-    """A transport that answers the book and refuses everything else."""
+class Feed:
+    """The authenticated socket book, stubbed in the shape the real one
+    returns -- `l5_window_actions.book_row`, not the REST ladder."""
 
-    def __init__(self, bid="0.50", ask="0.52", slug=MARKET):
-        self.bid, self.ask, self.slug = bid, ask, slug
-        self.submits = 0
-        self.cancels = 0
+    def __init__(self, bid="0.50", ask="0.52", market=MARKET):
+        self.bid, self.ask, self.market = bid, ask, market
+        self.started = self.stopped = 0
 
-    def book(self, slug):
-        return {"marketSlug": self.slug, "state": "MARKET_STATE_OPEN",
-                "bids": [{"px": {"value": self.bid}}],
-                "offers": [{"px": {"value": self.ask}}]}
+    def start(self):                                 # pragma: no cover
+        self.started += 1
 
-    def submit(self, intent):                        # pragma: no cover
-        self.submits += 1
-        raise AssertionError("the mechanism test submitted while refused")
+    def stop(self):                                  # pragma: no cover
+        self.stopped += 1
 
-    def cancel(self, order_id):                      # pragma: no cover
-        self.cancels += 1
-        raise AssertionError("the mechanism test cancelled while refused")
+    def wait_ready(self, timeout_s=60.0, sleep=None):  # pragma: no cover
+        return True
+
+    def latest(self):
+        if self.bid is None and self.ask is None:
+            return None
+        return {"t": NOW, "bid": self.bid, "ask": self.ask,
+                "bid_qty": "10", "ask_qty": "10",
+                "status": ("OK" if self.bid is not None
+                           and self.ask is not None else "ONE_SIDED")}
+
+    def age_s(self):
+        return 0.5
+
+    def health(self):
+        return {"market": self.market, "frames": 3, "source":
+                "AUTHENTICATED_WS", "errors": []}
+
+
+def top_of(feed):
+    return P.feed_book_top(feed.latest(), feed.market, age_s=feed.age_s())
 
 
 class Latch:
@@ -172,7 +187,7 @@ def test_nothing_is_short_circuited(monkeypatch, tmp_path):
                  "PMUS_Q1_LIVE", "PMUS_Q1_SESSION_ID"):
         monkeypatch.delenv(name, raising=False)
     plan = P.mechanism_plan(clock=lambda: NOW)
-    checks = P.mechanism_checks(plan, transport=None,
+    checks = P.mechanism_checks(plan, book=None,
                                ledger_path=str(tmp_path / "led.jsonl"),
                                clock=lambda: NOW)
     got = named(checks)
@@ -190,7 +205,7 @@ def test_the_happy_path_passes_everything_but_the_owner(monkeypatch,
     for name in ("PMUS_Q1_ARM", "PMUS_Q1_LIVE", "PMUS_Q1_SESSION_ID"):
         monkeypatch.delenv(name, raising=False)
     plan = P.mechanism_plan(clock=lambda: NOW)
-    checks = P.mechanism_checks(plan, transport=Book(),
+    checks = P.mechanism_checks(plan, book=top_of(Feed()),
                                ledger_path=str(tmp_path / "led.jsonl"),
                                clock=lambda: NOW)
     failed = [c["check"] for c in checks if not c["ok"]]
@@ -202,7 +217,7 @@ def test_the_happy_path_passes_everything_but_the_owner(monkeypatch,
 def test_a_cap_other_than_one_hundredth_is_refused(monkeypatch, tmp_path):
     configure(monkeypatch, cap="0.02")
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["probe_cap_is_one_hundredth"]["ok"] is False
@@ -211,7 +226,7 @@ def test_a_cap_other_than_one_hundredth_is_refused(monkeypatch, tmp_path):
 def test_more_than_one_live_order_is_refused(monkeypatch, tmp_path):
     configure(monkeypatch, live="8")
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["one_live_order"]["ok"] is False
@@ -229,7 +244,7 @@ def test_only_a_genuinely_non_marketable_price_passes(monkeypatch, tmp_path,
                                                       price, ok):
     configure(monkeypatch, price=price)
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["price_non_marketable"]["ok"] is ok
@@ -238,7 +253,7 @@ def test_only_a_genuinely_non_marketable_price_passes(monkeypatch, tmp_path,
 def test_an_off_tick_price_is_refused(monkeypatch, tmp_path):
     configure(monkeypatch, price="0.405")
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["price_on_tick"]["ok"] is False
@@ -248,7 +263,7 @@ def test_a_down_side_is_refused(monkeypatch, tmp_path):
     """BUY_SHORT's worst case is the venue's dollar reserve, not the premium."""
     configure(monkeypatch, side="DOWN")
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["side_is_up"]["ok"] is False
@@ -258,7 +273,7 @@ def test_an_unreachable_watchdog_refuses(monkeypatch, tmp_path):
     """Every failure reads as unavailable, and unavailable is not permitted."""
     configure(monkeypatch, latch=Latch(raises=True))
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["halt_gate_permits"]["ok"] is False
@@ -268,7 +283,7 @@ def test_an_unreachable_watchdog_refuses(monkeypatch, tmp_path):
 def test_an_asserted_halt_refuses(monkeypatch, tmp_path):
     configure(monkeypatch, latch=Latch(halt=True))
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["halt_gate_permits"]["ok"] is False
@@ -278,7 +293,7 @@ def test_an_asserted_halt_refuses(monkeypatch, tmp_path):
 def test_a_stale_latch_refuses(monkeypatch, tmp_path):
     configure(monkeypatch, latch=Latch(age_s=10_000.0))
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["halt_gate_permits"]["ok"] is False
@@ -288,7 +303,7 @@ def test_a_stale_latch_refuses(monkeypatch, tmp_path):
 def test_an_unconfigured_halt_url_refuses(monkeypatch, tmp_path):
     configure(monkeypatch, halt_url=None)
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["halt_url_configured"]["ok"] is False
@@ -299,7 +314,7 @@ def test_a_container_local_ledger_refuses(monkeypatch, tmp_path):
     """A claim lock a restart hands back is not a claim lock."""
     configure(monkeypatch)
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["authorization_ledger_durable"]["ok"] is False
@@ -311,47 +326,73 @@ def test_a_window_about_to_close_refuses(monkeypatch, tmp_path):
     configure(monkeypatch)
     late = (START or 0) + P.WINDOW_S - 30.0
     plan = P.mechanism_plan(clock=lambda: late)
-    got = named(P.mechanism_checks(plan, transport=Book(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed()),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: late))
     assert got["window_has_room"]["ok"] is False
 
 
-def test_an_unreadable_book_refuses(monkeypatch, tmp_path):
-    class Dead(Book):
-        def book(self, slug):
-            raise RuntimeError("gateway 404")
-
+def test_a_book_that_never_arrived_refuses(monkeypatch, tmp_path):
+    """No socket book, no claim about where our price sits in it."""
     configure(monkeypatch)
     plan = P.mechanism_plan(clock=lambda: NOW)
-    got = named(P.mechanism_checks(plan, transport=Dead(),
+    got = named(P.mechanism_checks(plan, book=top_of(Feed(bid=None, ask=None)),
                                    ledger_path=str(tmp_path / "l.jsonl"),
                                    clock=lambda: NOW))
     assert got["book_readable"]["ok"] is False
     assert got["price_non_marketable"]["ok"] is False
 
 
+def test_a_one_sided_book_refuses(monkeypatch, tmp_path):
+    """Below the bid proves it rests; below the offer proves it will not
+    cross. One side cannot establish both."""
+    configure(monkeypatch)
+    plan = P.mechanism_plan(clock=lambda: NOW)
+    got = named(P.mechanism_checks(plan, book=top_of(Feed(ask=None)),
+                                   ledger_path=str(tmp_path / "l.jsonl"),
+                                   clock=lambda: NOW))
+    assert got["book_readable"]["ok"] is False
+    assert got["price_non_marketable"]["ok"] is False
+
+
+def test_non_marketability_is_established_on_the_authenticated_book():
+    """Not the REST ladder: the socket row, and the file proves it.
+
+    tests/test_l5_live_book_feed.py walks this module for any `.book(` call
+    precisely so the probe cannot drift back to the unsigned gateway
+    snapshot. This asserts the positive side of that rule.
+    """
+    import inspect
+    src = inspect.getsource(P.mechanism)
+    assert "AuthenticatedBookFeed" in src
+    assert ".book(" not in src
+    assert "AUTHENTICATED_WS" in inspect.getsource(P.mechanism_checks)
+
+
 # 5 ------------------------------------------------- it sends nothing, ever
 
 def test_a_refused_run_contacts_no_write_path(monkeypatch, tmp_path):
     configure(monkeypatch)
-    tp = Book()
-    rep = P.mechanism(clock=lambda: NOW, sleep=lambda s: None, transport=tp,
+    feed = Feed()
+    rep = P.mechanism(clock=lambda: NOW, sleep=lambda s: None,
+                      book_feed=feed,
                       journal_path=str(tmp_path / "j.jsonl"),
                       state_path=str(tmp_path / "i.json"),
                       ledger_path=str(tmp_path / "l.jsonl"))
     assert rep["refused"] == "MECHANISM_PRECONDITIONS_NOT_MET"
     assert rep["submitted"] == 0 and rep["cancelled"] == 0
     assert rep["armed"] is False
-    assert tp.submits == 0 and tp.cancels == 0
     assert rep["LABEL"] == "PMUS_CANCEL_MECHANISM"
     assert "owner_authorization" in rep["failed_checks"]
+    # no transport of any kind was constructed, so nothing capable of a POST
+    # existed in the process at all
+    assert "intent" not in rep and "authorization" not in rep
 
 
 def test_the_report_says_it_is_not_l5_evidence(monkeypatch, tmp_path):
     configure(monkeypatch)
     rep = P.mechanism(clock=lambda: NOW, sleep=lambda s: None,
-                      transport=Book(),
+                      book_feed=Feed(),
                       journal_path=str(tmp_path / "j.jsonl"),
                       state_path=str(tmp_path / "i.json"),
                       ledger_path=str(tmp_path / "l.jsonl"))

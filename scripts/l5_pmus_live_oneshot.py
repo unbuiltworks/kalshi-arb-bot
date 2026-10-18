@@ -1328,26 +1328,29 @@ def mechanism_enabled() -> bool:
     return os.getenv(MECHANISM_ENV, "").strip().upper() in ("1", "YES", "TRUE")
 
 
-def book_top(md: Mapping[str, Any]) -> Dict[str, Any]:
-    """Best bid and offer from the venue's own book, in its proven shape.
+def feed_book_top(row: Optional[Mapping[str, Any]], market: str,
+                  *, age_s: Optional[float] = None) -> Dict[str, Any]:
+    """Best bid and offer from the AUTHENTICATED socket book.
 
-    `/v1/markets/{slug}/book` answers `marketData` with `bids` and `offers`
-    ladders whose rows carry `px.value`; the same extraction the preview
-    one-shot has used against this venue since Probe 03.
+    NOT the REST book, and the distinction is load-bearing: this probe
+    stopped reading `/v1/markets/{slug}/book` because that resource is
+    served unsigned from the public gateway, and
+    tests/test_l5_live_book_feed.py walks this file to keep it that way.
+    Non-marketability is a claim about where our price sits in the book, so
+    it is established against the same authenticated stream the recorder
+    validates every gate against -- never against an unsigned snapshot.
     """
-    def top(rows):
-        rows = rows or []
-        if not rows:
-            return None
-        px = (rows[0].get("px") or {}).get("value")
+    def px(v):
         try:
-            return D(str(px)) if px is not None else None
+            return None if v is None else D(str(v))
         except (InvalidOperation, TypeError, ValueError):
             return None
-    return {"venue_market_slug": md.get("marketSlug"),
-            "state": md.get("state"),
-            "best_bid": top(md.get("bids")),
-            "best_ask": top(md.get("offers"))}
+    row = dict(row or {})
+    return {"market": market,
+            "status": row.get("status"),
+            "best_bid": px(row.get("bid")),
+            "best_ask": px(row.get("ask")),
+            "age_s": None if age_s is None else round(float(age_s), 3)}
 
 
 def mechanism_plan(clock=time.time) -> Dict[str, Any]:
@@ -1398,7 +1401,8 @@ def mechanism_plan(clock=time.time) -> Dict[str, Any]:
     }
 
 
-def mechanism_checks(plan: Mapping[str, Any], *, transport=None,
+def mechanism_checks(plan: Mapping[str, Any], *,
+                     book: Optional[Mapping[str, Any]] = None,
                      ledger_path: Optional[str] = None,
                      clock=time.time) -> List[Dict[str, Any]]:
     """Every precondition, each evaluated and each reported.
@@ -1481,37 +1485,30 @@ def mechanism_checks(plan: Mapping[str, Any], *, transport=None,
     check("window_has_room", rem is not None and rem >= MECH_MIN_REMAINING_S,
           {"remaining_s": rem, "required_s": MECH_MIN_REMAINING_S})
 
-    # --- the live book: identity, tradability, and non-marketability
-    top: Dict[str, Any] = {}
-    if transport is None:
-        check("book_readable", False, {"note": "no transport supplied"})
-        check("price_non_marketable", False, {"book": None})
-    else:
-        try:
-            top = book_top(transport.book(plan["market"]) or {})
-            bid, ask = top.get("best_bid"), top.get("best_ask")
-            check("book_readable", bid is not None or ask is not None,
-                  {"best_bid": None if bid is None else str(bid),
-                   "best_ask": None if ask is None else str(ask),
-                   "venue_market_slug": top.get("venue_market_slug"),
-                   "state": top.get("state")})
-            nm = (price is not None and bid is not None
-                  and price <= bid - MECH_MARGIN
-                  and (ask is None or price < ask))
-            check("price_non_marketable", nm,
-                  {"price": plan.get("price"),
-                   "best_bid": None if bid is None else str(bid),
-                   "required_at_or_below": (None if bid is None
-                                            else str(bid - MECH_MARGIN)),
-                   "margin": str(MECH_MARGIN),
-                   "post_only": True,
-                   "note": ("post_only is the venue-side guarantee; this "
-                            "check is ours, so the order is not merely "
-                            "rejected-if-crossing but chosen not to cross")})
-        except Exception as exc:                               # noqa: BLE001
-            check("book_readable", False,
-                  {"error": "%s: %s" % (type(exc).__name__, str(exc)[:160])})
-            check("price_non_marketable", False, {"book": None})
+    # --- the authenticated book: both sides, and non-marketability
+    top = dict(book or {})
+    bid, ask = top.get("best_bid"), top.get("best_ask")
+    check("book_readable", bid is not None and ask is not None,
+          {"best_bid": None if bid is None else str(bid),
+           "best_ask": None if ask is None else str(ask),
+           "status": top.get("status"), "age_s": top.get("age_s"),
+           "source": "AUTHENTICATED_WS",
+           "note": ("both sides are required: being below the bid proves "
+                    "the order rests, and being below the offer proves it "
+                    "does not cross")})
+    nm = (price is not None and bid is not None and ask is not None
+          and price <= bid - MECH_MARGIN and price < ask)
+    check("price_non_marketable", nm,
+          {"price": plan.get("price"),
+           "best_bid": None if bid is None else str(bid),
+           "best_ask": None if ask is None else str(ask),
+           "required_at_or_below": (None if bid is None
+                                    else str(bid - MECH_MARGIN)),
+           "margin": str(MECH_MARGIN),
+           "post_only": True,
+           "note": ("post_only is the venue-side guarantee; this check is "
+                    "ours, so the order is not merely rejected-if-crossing "
+                    "but chosen not to cross")})
 
     # --- the owner's own authorization, last, because it is the one that
     #     stays absent until the owner decides to run this
@@ -1525,16 +1522,16 @@ def session_id_set() -> bool:
     return bool(str(os.getenv("PMUS_Q1_SESSION_ID", "")).strip())
 
 
-def mechanism(*, clock=time.time, sleep=time.sleep, transport=None,
+def mechanism(*, clock=time.time, sleep=time.sleep, book_feed=None,
               journal_path: Optional[str] = None,
               state_path: Optional[str] = None,
               ledger_path: Optional[str] = None) -> Dict[str, Any]:
     """Verify every precondition; place and cancel ONE order only if all hold.
 
     Disarmed -- which is what it is until the owner authorizes the single
-    live run -- this contacts the keyless book and the watchdog and nothing
-    else. No authorization is claimed, no credentialed write is attempted,
-    and the report names every check.
+    live run -- this opens the authenticated book socket and reads the
+    watchdog's latch, and nothing else. No authorization is claimed, no
+    credentialed write is attempted, and the report names every check.
     """
     plan = mechanism_plan(clock=clock)
     journal = JN.Journal(
@@ -1543,21 +1540,31 @@ def mechanism(*, clock=time.time, sleep=time.sleep, transport=None,
     journal.write("mechanism_plan", dict(plan))
     print("L5_MECH_PLAN " + json.dumps(plan, default=str), flush=True)
 
-    tp = transport
-    if tp is None:
-        try:
-            from src import l5_pmus_transport as TP
-            tp = TP.PmusTransport(market_slug=plan["market"])
-        except Exception as exc:                               # noqa: BLE001
-            tp = None
-            journal.write("mechanism_transport_unavailable",
-                          {"error": type(exc).__name__})
-    checks = mechanism_checks(plan, transport=tp, ledger_path=ledger_path,
+    # The AUTHENTICATED book, for the same reason the probe stopped reading
+    # the REST one: a price's non-marketability is a claim about the real
+    # book, and the gateway snapshot is unsigned.
+    feed = book_feed if book_feed is not None else FEED.AuthenticatedBookFeed(
+        plan["market"], clock=clock)
+    started = book_feed is None
+    try:
+        if started:
+            feed.start()
+            feed.wait_ready(sleep=sleep)
+        top = feed_book_top(feed.latest(), plan["market"], age_s=feed.age_s())
+        health = feed.health()
+    finally:
+        if started:
+            feed.stop()
+    journal.write("mechanism_book_feed", health)
+
+    checks = mechanism_checks(plan, book=top, ledger_path=ledger_path,
                               clock=clock)
     failed = [c["check"] for c in checks if not c["ok"]]
     rep: Dict[str, Any] = {
         "LABEL": "PMUS_CANCEL_MECHANISM",
         "plan": plan,
+        "book": {k: (None if v is None else str(v)) for k, v in top.items()},
+        "book_feed": health,
         "checks": checks,
         "failed_checks": failed,
         "armed": False,
