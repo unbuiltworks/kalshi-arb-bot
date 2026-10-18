@@ -355,13 +355,28 @@ def _copies(path):
              if ln.startswith("COPY ")], df)
 
 
-def test_the_running_watchdog_image_stays_credential_free():
-    """OWNER 2026-10-14, preserved. The reset must not privilege it."""
+def test_the_reset_does_not_privilege_the_running_watchdog_image():
+    """OWNER 2026-10-18 superseded the credential-free rule of 2026-10-14 for
+    the watchdog image, and this test is retargeted rather than deleted
+    because most of what it protected did NOT change.
+
+    What changed, by explicit approval: the image carries `src/pmus_auth.py`
+    and installs cryptography, so it can sign the ONE cancel route. What did
+    NOT change, and is still pinned here: the reset script -- the only code
+    that can CLEAR a halt -- stays out, no submit-capable module is copied,
+    and signing is the only dependency installed. The isolation is now
+    route-based (CancelOnlyTransport) instead of credential-absence, and
+    tests/test_l5_watchdog_cancel_only_boundary.py pins that route matrix.
+    """
     copied, df = _copies("deploy/l5_halt_watchdog/Dockerfile")
-    assert "src/pmus_auth.py" not in copied, copied
+    # THE ASYMMETRY IS THE POINT: it may now cancel, and it still cannot
+    # clear the latch it asserts.
     assert "scripts/l5_halt_reset.py" not in copied, copied
-    assert not [l for l in df.splitlines()
+    assert "src/pmus_auth.py" in copied, copied
+    installs = [l for l in df.splitlines()
                 if l.startswith("RUN") and "pip install" in l]
+    assert len(installs) == 1, installs
+    assert "cryptography" in installs[0], installs[0]
     for forbidden in ("src/l5_pmus_transport.py", "src/l5_live_execution.py",
                       "src/l5_live_authorization.py"):
         assert forbidden not in copied, forbidden
