@@ -7630,3 +7630,92 @@ All three fail **closed**, which is why the observe run was safe:
 Plus the deployment itself: the service is pinned to `0d790f4f`, which still
 reports 8 live orders. The reconciliation in `6e31779a` is committed and
 tested but **not deployed**.
+
+---
+
+## 82. The cancellation-mechanism test: fourteen of sixteen preconditions hold
+
+Run 2026-10-18 12:50:52Z on commit `60b2e800`, disarmed, in the container.
+Three of the four blockers §81.5 named are **closed and verified live**. One
+remains, and it is a Railway plan limit rather than a code defect.
+
+### 82.1 What the run proved
+
+| check | result |
+|---|---|
+| `probe_cap_declared` / `probe_cap_usable` / `probe_cap_is_one_hundredth` | **PASS** — `0.01`, declared |
+| `order_qty_is_the_cap` | **PASS** — `0.01` |
+| **`one_live_order`** | **PASS** — `max_live_orders: 1` in the container |
+| **`halt_gate_module_present`** | **PASS** — `src.l5_halt_gate` imports from the image |
+| **`halt_gate_permits`** | **PASS** — `why: null`, record **10.5 s** old, `reachable: true` |
+| `side_is_up` / `price_stated` / `price_on_tick` | **PASS** — UP, `0.05`, on tick |
+| `window_has_room` | **PASS** — 547.7 s remaining |
+| `book_readable` | **PASS** — authenticated WS, bid `0.5900` / ask `0.6000`, age **0.05 s** |
+| `price_non_marketable` | **PASS** — `0.05` against a required `<= 0.5400`: **54 ticks** below the bid |
+| `authorization_ledger_durable` | **FAIL** — nearest mount `/` |
+| `owner_authorization` | **FAIL** — by design; no `PMUS_Q1_*` exists on the service |
+
+`submitted: 0`, `cancelled: 0`, `armed: false`, exit **65**, deployment
+terminal, no restart. The watchdog answering over private networking with a
+10.5-second-old no-halt record is the connectivity proof that could not be
+obtained locally.
+
+### 82.2 The order, stated before anything is contacted
+
+| field | value |
+|---|---|
+| market | `cpc-btc-updown-15m-2026-10-18-1245z` (the window open at run time) |
+| side | **UP** (BUY). A DOWN leg is `BUY_SHORT`, whose worst case is the venue's $1.00/share reserve rather than the premium |
+| price | `0.05`, on tick, 54 ticks below the bid |
+| quantity | **0.01 contracts** — the cap itself |
+| type | limit, `post_only: true` |
+| cash committed | **$0.0005** |
+| **maximum loss** | **$0.0005**, and never more than $0.01 at any price |
+| expiration | cancelled ~3 s after the ack, hard ceiling 45 s; refuses to start with under 300 s of window left; the window itself expires the order |
+| immediate fill | not reachable — `post_only` cannot cross, the venue rejects instead |
+| partial fill while resting | reported, reconciled from the venue, **left to settle**. No second order flattens it: that would be a trading decision and would breach the one-order limit. Settlement cashflow is labelled mechanism-test cost, never strategy P&L |
+
+### 82.3 What is in the build, and what deliberately is not
+
+The cap is now enforced **at the wire** as well as in the executor:
+`PmusTransport.submit` calls `_require_within_order_cap` before
+serialization and raises `OrderCapExceeded`, because this mode submits
+without passing through the frozen decision path. Both read the same
+`probe_order_contract_cap()`. Unconfigured it is inert, so the 24/7
+executor's wire behaviour is unchanged.
+
+The **place-then-cancel leg is not in this build.** The mode refuses
+`NOT_IMPLEMENTED_WITHOUT_SEPARATE_AUTHORIZATION` even with every
+precondition met, so the deployed image contains no mechanism submit path
+at all while no live submission is authorised. Writing that leg was
+attempted and declined by this session's own action classifier
+(`[Real-World Transactions]`); it was not routed around.
+
+Non-marketability is established on the **authenticated socket book**, not
+the REST one. My first version read `transport.book()` and turned 33 suite
+failures into 34: `tests/test_l5_live_book_feed.py` walks this file for any
+`.book(` call precisely because the gateway snapshot is unsigned. The test
+was right; the code changed. Both sides are now required — below the bid is
+what proves the order rests, below the offer is what proves it cannot
+cross.
+
+### 82.4 The remaining blocker is a plan limit, not a defect
+
+`durability_refusal` refuses any ledger whose nearest mount is `/`, because
+a claim lock a restart hands back is not a claim lock. The one-shot service
+has no volume. And the project **already holds 20 volumes**, which is the
+Pro plan's documented maximum per project, so a 21st may simply be refused.
+
+Railway bills volumes on **storage used**, not provisioned, plus 2-3% of the
+volume's size as filesystem metadata. The ledger, journal and inventory for
+one run are kilobytes, so the incremental storage cost of reuse is
+effectively **zero**, and of a new 1 GB volume roughly **20-30 MB** of
+billable metadata.
+
+Reuse candidates, both attached to services that have been CRASHED for
+weeks: `l5-live-habitat-state` (50 GB, `l5-live-habitat`, crashed
+2026-09-21, **no variables at all**) and `l5-research-state` (256 GB,
+`l5-exec-shadow`, crashed 2026-09-19). Moving one detaches it without
+losing its data and redeploys that service. Which volume to take is the
+owner's call: it changes another service's configuration, and the standing
+rule here is to preserve unrelated services.
