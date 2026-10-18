@@ -8602,3 +8602,133 @@ across enough windows to measure a passive fill rate. We have 315 snapshots
 for two windows (1615z/1630z); the rest was lost to Railway log retention.
 The existing recorders already collect it going forward — that is the one
 measurement worth continuing, and it needs no new infrastructure.
+
+---
+
+## 91. The UNMANAGED_RESTING_ORDER contradiction: a stale counter, not a live order
+
+Read-only investigation plus one observability-only fix. No gate weakened, no
+limit raised, no order, no service, production still `SHADOW_ONLY_LOCK`.
+
+### 91.1 The exact order and its full lifecycle
+
+| when | what |
+|---|---|
+| **2026-10-16T03:40:12.037515Z** | `l5-watchdog` latches HALT, reason `UNMANAGED_RESTING_ORDER`, on **one** order: `venue_order_id` **`D4EFZNW00ZZ0`**, market `cpcxrp-xrp-updown-15m-2026-10-16-0330z`, `age_known: false`, `age_s: null`, `leaves: "None"` |
+| 2026-10-18T02:21:25Z | authenticated INSPECT: `registry_live_orders 0`, `l5_owned_working_orders 0`, `venue_working_orders_seen 0`, `account_positions []` |
+| 2026-10-18T03:06:11Z | same, re-verified |
+| **2026-10-18T03:23:40.344443Z** | owner reset `owner-20261018-0321z-16309b84365b` clears it, machine-verified against the same three reads |
+
+The watchdog was **right to latch**: its stated rule is that an order whose
+creation time cannot be read is treated as overdue, and this row carried
+neither an age nor a `leavesQuantity`. Note the series — `cpcxrp` — which the
+BTC15m executor does not trade, consistent with §89's finding that the
+ETH/SOL/XRP activity is not from this executor's configuration.
+
+### 91.2 The defect: a lifetime counter with no clock on it
+
+`Runner.heartbeat` emits `"stats": dict(self.stats)`, a **process-lifetime**
+`Counter`. The 65 `HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER` and
+30 `halt_state_unavailable` counts were all accumulated between the process
+start at **02:51** and the **03:23:40** clear. The counter then froze.
+
+Measured, from two live heartbeats eight minutes apart:
+
+| stat | 13:19:28Z | 13:27:36Z |
+|---|---|---|
+| `HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER` | 65 | **65** |
+| `HALT_GATE:HALT:halt_state_unavailable` | 30 | **30** |
+| `ORDER:NOT_ARMED` | 1837 | 1851 |
+| `SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER` | 1800 | 1812 |
+
+The halt counters are frozen while the others advance. **So: stale state, and
+specifically a stale report — not an unresolved order.** The venue has said
+zero working orders at three independently signed reads.
+
+This is the *second* time this ambiguity has bitten: the code's own comment
+records that `halt` once printed `false` through **2,939 consecutive
+refusals**. That repair fixed the halt *field* and left the counts ambiguous.
+
+### 91.3 The fix (`TimedCounter`), and what it deliberately does not do
+
+`self.stats` becomes a `Counter` subclass that stamps the time each key last
+advanced, and the heartbeat carries `stats_age_s` beside `stats`. A frozen
+counter now says so.
+
+- **No count changes** — `test_nothing_about_the_counts_changed` pins a
+  TimedCounter against a plain Counter over the same sequence.
+- **No call site changes.** All 24 `self.stats[...] += 1` sites are
+  untouched, because Counter's in-place add routes through `__setitem__`;
+  `test_in_place_add_is_timestamped_not_just_update` pins that.
+- **No gate, limit or latch is touched.** This cannot make anything trade
+  that would otherwise refuse.
+
+7 new tests in `tests/test_l5_stat_staleness.py`; 102 green across the
+staleness, cancellation-proof, disarmed-cancellation, watchdog, ownership and
+order-lifecycle suites.
+
+### 91.4 Cancellation: proven in code, UNPROVEN at the venue
+
+Independently re-verified: §62.3's twelve properties hold, and the suites are
+green — cancel by **exact id** only, `POST /v1/order/{id}/cancel`, **no
+`cancel_all` route exists in the image**, ownership-gated by the registry
+and a venue re-read, with "cancel unconfirmed on re-read" reported as
+`still_open` rather than cancelled.
+
+`cancel_enabled=false` on the watchdog is **correct and not a defect**:
+`deploy/l5_halt_watchdog/Dockerfile` deliberately omits `src/pmus_auth.py`
+(owner decision 2026-10-14), so the watchdog is credential-free and
+`from_env` hardcodes `cancel_enabled=False, oracle=None`. Setting
+`L5_WATCHDOG_CANCEL=YES` would be inert and would misrepresent the system.
+The watchdog latches; the **executor** cancels.
+
+But §62.5 is explicit and still true: *"Nothing was armed, submitted,
+cancelled or settled. No order IDs, no venue acknowledgements, no fills, no
+fees, no realized P&L."* **No exact-ID cancellation has ever been exercised
+against the venue.** By the owner's own rule — no live activation while
+cancellation remains unproven — that alone is decisive.
+
+### 91.5 What the authenticated tape can and cannot reconstruct
+
+**Can (our own quotes, causally):** `src/pmus_book_tape.py` records both full
+ladders as `[price, qty]` per slug every 2s plus BBO and
+`shares_traded_delta_lower_bound`; the authenticated WS carries prints with
+venue timestamps at a measured median lag of **0.039 s**; and our own orders
+carry client id, venue id, ack, `leavesQuantity` and `cumQuantity`.
+`l5_maker_fill_model.depth_at` / `ahead_of_us` turn that into a real
+`queue_ahead` **at placement** with volume counted strictly after the join.
+That is a genuine passive-fill measurement for **our** quotes, and the
+collector (`pmus-btc15m-tape`) is already running.
+
+**Cannot (anyone else's quotes):** the feed is **aggregated depth**. A level
+shrinking is indistinguishable between a cancel and a fill — which is the
+fill model's own stated rule ("`cleared` moves only on prints"). There are no
+per-order events for other participants, so **submissions, amendments and
+cancellations by L5 are not in this evidence at any resolution.** §58.1
+already showed his resting prices are unrecoverable from his fills for 77% of
+fill-seconds. **L5's missing orders stay missing; nothing here infers them.**
+
+### 91.6 Venue economics, against L5's measured 2.84% gross pair margin
+
+| venue | maker | taker (p=0.45) | verdict at our clip |
+|---|---|---|---|
+| **Polymarket** (L5's) | **no fee row of any kind** across 702,595 rows | none | 2.84% survives — this is where the mechanism was observed working, and it is not our authorized venue |
+| **PMUS** | θ = −0.0125, a **rebate** (0.688%) — **never credited on any of our fills** | θ = 0.0695 → **3.82%** | all-passive: 2.84% survives in principle, **unmeasured** (zero fills ever). Any crossing leg: **−0.98% net** |
+| **Kalshi** | **a charge**: `ceil(0.0175·C·P·(1−P))` → 0.96% | `ceil(0.07·C·P·(1−P))` → 3.85% | the **cent ceiling** dominates at our size: a 0.01-contract clip at p=0.45 pays `ceil($0.0000433)` = **$0.01 on $0.0045 of notional = 222%**. Arithmetically excluded below ~100 contracts/order |
+
+No venue in our evidence offers both the passive flow and the net spread
+capture at the authorized clip size. The one that does is the one the
+behaviour was observed on.
+
+### 91.7 NO-GO on the authorized $5 live validation
+
+No candidate passes. The $5 authorization stays **unspent**, and the single
+best use of it remains the §84 cancellation-mechanism test — a **safety**
+validation, not an economic one — which is still blocked on durable storage
+(§83.5, project at the 20-volume Pro limit) and on the submit-leg code.
+
+**The exact missing measurement, unchanged and now sharper:** our own passive
+fill rate at real `queue_ahead`, from the ladder tape, across enough windows
+to bound it. Every economic verdict in §87–§90 turns on it, the code to
+compute it exists, the collector is running, and no new infrastructure is
+required.

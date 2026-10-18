@@ -380,7 +380,7 @@ class Runner:
         self.last_blockers: Any = _BLOCKERS_UNSET
         self.win = collections.Counter()
         self.first_action_t: Optional[float] = None
-        self.stats = collections.Counter()
+        self.stats = TimedCounter(clock=clock)
         self.tape = os.path.join(root, "decisions.jsonl")
         #: the tick's clock; the executor's staleness is judged against it
         self.now_t = clock()
@@ -1758,6 +1758,11 @@ class Runner:
             "auth_book": self.book.status(),
             "book_now": self.book.snapshot(t.market_slug) if t else None,
             "stats": dict(self.stats),
+            # SECONDS SINCE EACH COUNT LAST MOVED. Without this a
+            # lifetime counter reads as a live condition; see
+            # TimedCounter for the 2026-10-18 case that is exactly
+            # why it is here.
+            "stats_age_s": self.stats.ages(),
             "committed_usd": {k: str(v) for k, v in self.store.committed().items()},
             # GROSS CASH OUT, beside the gate and never instead of it. The
             # gate is worst-case loss and is unchanged at $5; this is what
@@ -3203,6 +3208,47 @@ UNRESOLVED_ACCOUNTING: List[Dict[str, Any]] = [
             "only consistent with the answer"),
     },
 ]
+
+
+class TimedCounter(collections.Counter):
+    """A Counter that remembers WHEN each key last moved.
+
+    WHY THIS EXISTS. `heartbeat` emits `dict(self.stats)`, and a
+    process-lifetime count with no clock on it cannot distinguish a
+    condition firing NOW from one that stopped firing ten hours ago. On
+    2026-10-18 the heartbeat carried
+
+        HALT_GATE:HALT:halt_asserted:UNMANAGED_RESTING_ORDER   65
+        halt_latch  CLEAR          open_orders_at_venue  0
+
+    and all three were true at once: the 65 were counted between the
+    process start at 02:51 and the owner's 03:23:40 reset of the latch that
+    order `D4EFZNW00ZZ0` had set on 2026-10-16, and the counter never moved
+    again. Read live, it looks like an unmanaged order right now.
+
+    The same ambiguity already misled an operator once -- see `heartbeat`,
+    where `halt` printed false through 2,939 consecutive refusals. That fix
+    corrected the halt FIELD and left the counts ambiguous.
+
+    Counting is not the problem, so nothing about the counts changes and no
+    gate is touched: each key simply carries the moment it last advanced.
+    Every existing `self.stats[...] += 1` site is unmodified, because
+    Counter's in-place add routes through __setitem__.
+    """
+
+    def __init__(self, *a: Any, clock=time.time, **kw: Any) -> None:
+        self._clock = clock
+        self.last_t: Dict[Any, float] = {}
+        super().__init__(*a, **kw)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        super().__setitem__(key, value)
+        self.last_t[key] = self._clock()
+
+    def ages(self, now: Optional[float] = None) -> Dict[Any, float]:
+        """Seconds since each key last advanced. A frozen counter says so."""
+        t = self._clock() if now is None else now
+        return {k: round(t - v, 1) for k, v in self.last_t.items()}
 
 
 def unresolved_accounting() -> List[Dict[str, Any]]:
