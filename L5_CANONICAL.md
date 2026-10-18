@@ -8082,3 +8082,142 @@ supported: a taker completion costs **$0.0174/contract** at p=0.5
 one leg, 87% if both crossed, before adverse selection. Increasing size is
 refused for the same reason it always is: it would raise risk to make the
 result look better.
+
+---
+
+## 87. Economic close-out and the −$84.62 attribution
+
+Read-only throughout. No code, no service, no strategy, no storage, no order.
+`SHADOW_ONLY_LOCK` in force.
+
+### 87.A The three policies were already measured — and all three lose
+
+Task A asks for maker-only vs taker completion vs selective decline on the
+preregistered windows. **That study exists** and must not be re-run:
+`analysis/pmus/COMPLETION_SIDE_FINDINGS.md`, plus §57.1/§58 for the control
+and `analysis/pmus/evidence/probe08/PROBE_08_FINAL.md` for the live
+completion fills.
+
+**1. Maker-only (B', the frozen control), 20 preregistered windows:**
+
+```
+fills 103   matchQ 185   matched $+30.16   residual $-48.50   TOTAL $-18.34
+            -$0.917/window      drawdown -23.35      5% of windows >= $5
+```
+
+Capital scaling makes it worse, not better: −$0.917/win at a $25 cap,
+−$1.756 at $50, **−$2.502 at $100 and $250** (return on committed −4.80% →
+−8.29%).
+
+**2. Taker completion at the executable price, with fees.** Forward
+simulation, no lookahead, complete exactly the residual held at the trigger
+at the contemporaneous price ± half-spread + taker fee, then continue under
+B'; cluster bootstrap by window, 3 000 resamples; 4 triggers x 3 samples:
+
+| trigger | AUG_DEV | AUG_OOS | SPRING |
+|---|---|---|---|
+| TTE <= 420s | **−0.2503** [−0.4427, −0.0780] | **−0.2562** [−0.4405, −0.0741] | +0.0180 |
+| TTE <= 300s | −0.1203 | −0.0901 | **−0.3859** [−0.7733, −0.0018] |
+| TTE <= 180s | −0.3517 | −0.1530 | +0.2015 |
+| TTE <= 90s | −0.3331 | +0.1659 | +0.0243 |
+
+**Not one positive cell is significant. Three are significantly negative.**
+
+The algebra says why, and it is structural: holding `q` of side S at basis
+`c` against executable complement `a`, Complete − Carry = `q·(1 − a −
+P_true(S))`. For a binary pair `1 − a_~S = bid_S`, so completion pays only
+if `P_true(S) < bid_S` — i.e. only if the residual is adversely selected by
+more than **half-spread + fee**. Measured on 315 authenticated-WS snapshots:
+spread **0.0100** at median, p75 *and* p90; half-spread 0.0050; taker fee
+**0.0174** at p=0.5; **total ≈ $0.022/contract** against a pair edge of
+$0.04/pair at the ≤0.96 target. Depth is not the obstacle — median min-side
+499 shares against a 0.9 clip. And completion is undone by re-accumulation:
+at the strongest trigger, residual P&L moved −1866.99 → −1827.67, a **2.1%
+improvement for $4 880.44 spent** converting 8 006.8 contracts.
+
+Live confirmation of the adverse selection, Probe 08b, one window:
+**3 of 6 repair orders filled (50%), and only the expensive ones** — 0.56,
+0.60 and 0.61 rested unfilled; 0.75, 0.76 and 0.80 filled.
+
+**3. Declining the first leg.** Also already measured, and the finding is
+stated outright: *"neither refusing acquisitions nor time-triggered
+completion improves on B'."* Even a **physically unachievable** optimistic
+bound — maker completion that pays no fee, *earns* the half-spread and
+always fills — fails in **11 of 12 cells**.
+
+**Realistic fill sensitivity.** Every one of these results is modelled, and
+the sign is queue-dependent: §58's one apparently-positive configuration
+(+$0.435/window) became **−$0.176** when `queue_ahead` was inflated 1.5x.
+Maker rebates are counted at **$0 throughout** — confirmed never credited,
+and a zero commission is not a rebate. No L5 rebate was assumed to transfer.
+
+**Two lookahead artifacts, found and corrected in that study**, both of
+which had produced large positive results: completion sized with hindsight
+(end-of-window residual at a mid-window price) read **+$12.65/window** and
+became **−$0.2503** once sized at the trigger; and an adverse-selection edge
+measured on a hindsight-selected side. This is exactly the
+fit-to-the-evaluation-sample failure mode, and it accounted for the entire
+apparent gain.
+
+**Maximum defensible daily opportunity: $0.00/day.** The single cell whose
+CI excludes zero on the positive side (+$0.5997/window, AUG_OOS, TTE≤90s)
+belongs to the unachievable optimistic bound, is not confirmed on DEV, and
+is 1 of 12 — what multiple comparisons produce. Taken at face value anyway
+it is $57.6/day against the $480/day target: **12%**, on an assumption the
+venue's fee schedule forbids.
+
+### 87.B The −$84.62, attributed
+
+Source: the executor's own `accounting` block, 2026-10-18T13:27:36Z, and
+`data/l5/ops/cost_basis_inspect_20261016T1658Z.json` — an authoritative
+account-activity walk of **107 pages, `ended: "eof"`, `complete: true`**.
+
+| population | amount | basis |
+|---|---|---|
+| account-wide realized (ledger) | **−$8.3948** | post-correction, `UNPROVEN_LEGACY_ATTRIBUTION` |
+| **verified L5 realized** | **$0.00** | zero attested L5 settlements since the 2026-10-16T02:45:12Z baseline |
+| manual / owner activity | **UNKNOWN** | a residual, undefined while anything is unattributable |
+| unknown-unattributed | **−$84.62** | = **−$79.01** pre-baseline (42 legs) + **−$5.61** post-baseline (8 markets) |
+
+The two components sum exactly: −79.01 + −5.61 = **−84.62**.
+
+**What the activity walk resolved.** 49 legs seen, **47 resolved from 69
+named trade ids**: cost **$291.05 → $81.3862**, i.e. the $1/share upper
+bound overstated cost by **$209.6638 (3.6x)**, with **$1.14** of fees
+identified. 0 refusals. **2 legs preserved UNKNOWN**, both
+`QUANTITY_MISMATCH`:
+
+- `cpc-btc-updown-15m-2026-10-15-1930z|UP`
+- `cpc-btc-updown-1d-2026-10-15-2100z|DOWN`
+
+So **−$84.62 is not a measured loss.** It is a $1/share worst-case ceiling
+on a population whose costs are now known for 47 of 49 legs, and the walk
+proved that bound overstates cost several-fold.
+
+**What is unrelated to L5.** The 8 post-baseline unattested settlements span
+`cpceth`, `cpcsol`, `cpcxrp` and a BTC **1-day** market; only two are
+BTC15m (0330z −$0.16, 1230z −$0.65). `l5-pmus-live` runs
+`max_concurrent_markets: 1` on `btc-updown-15m`, so the ETH/SOL/XRP and 1d
+settlements cannot come from its configuration.
+
+**Exact remaining unknowns**, and nothing was invented to close them:
+
+1. **Authorship.** The venue does not record who placed a historical fill
+   and the account is shared, so no settlement can be attested to L5 from
+   venue data. This is what holds `verified_l5_realized_net` at `null` and
+   makes `identity_holds: false`.
+2. **Cost basis of 2 legs**, both quantity-mismatched, left UNKNOWN.
+3. **Manual realized** stays undefined until (1) is resolved, because it is
+   computed as a residual.
+
+### 87.C Decision
+
+The rule was: *if taker completion or selective entry remains negative after
+realistic execution costs, close this configuration as economically
+nonviable.* Both are negative, out of sample, under realistic costs, with
+the only positive-looking results traced to lookahead.
+
+**This configuration is closed as economically nonviable.** The obstacle is
+not implementation and not infrastructure: a 1c spread plus a 1.74c taker
+fee against a 4c pair target cannot be closed by better engineering, and no
+measurement here supports paying it.
