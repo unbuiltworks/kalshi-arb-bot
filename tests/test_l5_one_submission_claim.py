@@ -236,27 +236,82 @@ def test_a_restart_cannot_resubmit_through_the_real_executor(tmp_path,
 
 # ------------------------------------------- no bypass around the claim
 
-def test_the_only_reachable_submission_path_goes_through_the_claim():
-    """ONE call site, and the claim gates it.
+#: EVERY route to `transport.submit`, and each one's claim call. A new entry
+#: here is a deliberate act: adding a submission path means gating it, and
+#: this list is what makes "gated" checkable rather than asserted in prose.
+#:
+#: The second entry arrived with the bounded cancellation-mechanism leg, which
+#: submits ONE predetermined order without going through the frozen decision
+#: path at all (see l5_pmus_transport._require_within_order_cap, which
+#: anticipates exactly that caller). It is a real second route, so it carries
+#: a real claim.
+SUBMIT_SITES = {
+    "l5_live_execution.py": "claim_submission",
+    "l5_cancel_mechanism.py": "claim_submission",
+}
 
-    `transport.submit` is the single production route to an order, and the
-    claim sits immediately before it. If a second call site appears, this
-    fails and the new path has to be gated too.
-    """
+
+def _submit_sites():
     import pathlib
     import re
     root = pathlib.Path(__file__).resolve().parents[1]
-    sites = []
+    out = {}
     for py in sorted((root / "src").rglob("*.py")):
-        for n, line in enumerate(py.read_text().splitlines(), 1):
+        text = py.read_text()
+        for n, line in enumerate(text.splitlines(), 1):
             if re.search(r"\btransport\.submit\(", line):
-                sites.append("%s:%d" % (py.name, n))
-    # ONE call site, in the executor. The line number is deliberately NOT
-    # asserted: pinning it makes the test fail whenever the submit path is
-    # edited, which is noise rather than a finding. What must hold is that
-    # there is exactly one route to the venue and the claim guards it.
-    assert len(sites) == 1, sites
-    assert sites[0].startswith("l5_live_execution.py:"), sites
+                out.setdefault(py.name, []).append(n)
+    return out
+
+
+def test_every_reachable_submission_path_goes_through_the_claim():
+    """Not "one call site" -- EVERY call site, and each one claim-gated.
+
+    This used to assert a single route. That was the right invariant stated
+    the wrong way: what protects the account is that no path reaches the wire
+    without spending a single-use claim, not that there happens to be one
+    path. A second route appeared (the cancellation-mechanism leg), so the
+    test now enumerates the routes and requires the claim on each, which is
+    strictly stronger than the count it replaces -- a new ungated path still
+    fails, and so does an existing path that loses its claim.
+
+    Line numbers are deliberately NOT asserted: pinning them makes this fail
+    whenever a submit path is edited, which is noise rather than a finding.
+    """
+    sites = _submit_sites()
+    assert set(sites) == set(SUBMIT_SITES), sites
+    for name in sites:
+        assert len(sites[name]) == 1, (name, sites[name])
+
+
+def test_each_submission_path_calls_the_claim_in_its_own_module():
+    """The claim must be in the SAME module as the submit it guards.
+
+    A claim taken somewhere far away, by a different caller, is not a gate on
+    this path: it is an assumption about call order.
+    """
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1]
+    for name, fn in SUBMIT_SITES.items():
+        text = (root / "src" / name).read_text()
+        assert fn in text, (name, fn)
+
+
+def test_the_claim_precedes_the_wire_in_every_path():
+    """Ordering, not just presence: a claim spent AFTER the POST would let a
+    process that died in between submit twice."""
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    for name, fn in SUBMIT_SITES.items():
+        lines = (root / "src" / name).read_text().splitlines()
+        claims = [n for n, l in enumerate(lines, 1) if fn + "(" in l
+                  and not l.strip().startswith(("#", "*", "def "))]
+        submits = [n for n, l in enumerate(lines, 1)
+                   if re.search(r"\btransport\.submit\(", l)]
+        assert claims, name
+        assert submits, name
+        assert min(claims) < submits[0], (name, claims, submits)
 
 
 def test_no_image_module_the_runner_uses_posts_an_order_directly():

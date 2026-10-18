@@ -53,6 +53,7 @@ from src import l5_live_authorization as AUTH
 from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
 from src import l5_two_sided_shadow as TS
+from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
 from src import l5_pmus_transport as T
@@ -2514,6 +2515,79 @@ class Runner:
         self.reconcile_if_needed(now)
         self.poll(now)
 
+    # ------------------------------------------------------------------
+    # THE BOUNDED CANCELLATION-MECHANISM MODE
+    # ------------------------------------------------------------------
+    def mechanism_tick(self, now: float, mech: Any) -> None:
+        """`tick` with the strategy removed and the two CANCELLERS removed.
+
+        WHY A SEPARATE TICK AT ALL. The experiment is "does the INDEPENDENT
+        watchdog withdraw a real resting order". Run under the ordinary tick,
+        three of our own code paths would reach that order first and we would
+        have measured ourselves:
+
+          * `maybe_cancel_orphans` withdraws anything this ledger owns while
+            NOT armed -- which is precisely the state the halt puts us in;
+          * `maybe_ts_deadline` withdraws at the executor's own cancellation
+            margin;
+          * the halt branch calls `LX.deadman`, which cancels every resting
+            order by venue id -- and the watchdog ASSERTS THE LATCH BEFORE IT
+            CANCELS, so the executor would read that latch and race the very
+            cancel it is supposed to be observing. Both processes would send a
+            cancel for the same id within seconds and neither result would
+            mean anything.
+
+        SO THE ONE TEST ORDER IS EXEMPT FROM OUR OWN CANCELLERS, DELIBERATELY,
+        AND THE EXEMPTION IS BOUNDED. `Mechanism.SELF_CANCEL_AFTER_S` is the
+        backstop: if the watchdog has not cancelled by then this process
+        withdraws the order itself and reports SELF_FALLBACK, which the report
+        explicitly refuses to count as proof. Stranding a real order to keep a
+        measurement clean would be the wrong trade.
+
+        WHAT IS NOT REMOVED, because the owner requires it preserved:
+
+          * AUTOMATIC HALT. The latch still disarms the transport, so no
+            further order can be submitted. Only the CANCELLATION side of the
+            halt response is withheld, and only for this one id.
+          * RECONCILIATION. `poll_orders`, `resolve_pending_terminal`,
+            `sweep_settlements` and `reconcile_if_needed` all still run, so a
+            fill while the order rests is booked with its cost basis instead
+            of becoming quantity without cost.
+          * the authorization's own venue-bounded expiry.
+        """
+        self.now_t = now
+        self.roll(now)
+        # HALT STILL DISARMS. The deadman's CANCEL is what is withheld here,
+        # not the halt itself: a halted executor must stop submitting, and
+        # this does stop it.
+        if self.halted() and self.transport is not None and self.transport.armed:
+            emit("L5_MECH_HALT_DISARM", {
+                "reason": "operator_or_independent_halt",
+                "note": ("disarmed, so nothing further can be submitted. The "
+                         "resting mechanism order is NOT cancelled here: it "
+                         "is the subject of the experiment and the watchdog "
+                         "is the intended canceller. Mechanism's own "
+                         "self_cancel_after_s remains the backstop."),
+                "mechanism_state": getattr(mech, "state", None),
+                "venue_order_id": getattr(mech, "venue_order_id", None)})
+            self.transport.disarm("operator_halt")
+        self.maybe_expire_authorization(now)
+        cooling = self.venue_cooling()
+        if cooling > 0:
+            self.stats["ticks_skipped_in_cooloff"] += 1
+            self.poll(now)
+            return
+        self.maybe_preflight(now)
+        # RECONCILIATION, unchanged. A fill while it rests must be booked.
+        if self.store.live_order_count():
+            self.poll_orders()
+            self.resolve_pending_terminal(now)
+        self.sweep_settlements()
+        self.reconcile_if_needed(now)
+        self.poll(now)
+        # and only then the experiment's own state machine
+        mech.step(now)
+
 
 #: THE STAGE A SETTLEMENT CORRECTION. ONE ENTRY, ONE MARKET, ONCE.
 #:
@@ -3639,11 +3713,52 @@ def main() -> int:
                            "lambda": str(lam), "limits": runner.limits.as_dict(),
                            "worst_case_usd": str(runner.limits.worst_case_loss_usd()),
                            "frozen_rule": "030d8bf"})
+    # THE BOUNDED CANCELLATION-MECHANISM MODE, chosen once and announced.
+    # It REPLACES the trading tick: see Runner.mechanism_tick for why the
+    # strategy and our own two cancellers must be out of the way for the
+    # measurement to be of the watchdog rather than of ourselves. It lifts no
+    # lock -- an unarmed transport simply refuses at `transport_armed`.
+    mech = None
+    if MECH.enabled():
+        mech = MECH.Mechanism(
+            store=runner.store, transport=None, book=book,
+            market=AB.slug_for(AB.window_start()),
+            emit=emit, window_start=AB.slug_start,
+            window_s=float(AB.WINDOW_S),
+            session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None)
+        emit("L5_MECH_MODE", {
+            "mode": MECH.MODE_ENV, "enabled": True,
+            "market": mech.market,
+            "already_ran": mech.already_ran(),
+            "marker": mech.marker(),
+            "max_total_risk_usd": str(MECH.MAX_TOTAL_RISK_USD),
+            "self_cancel_after_s": MECH.SELF_CANCEL_AFTER_S,
+            "labels": ("ONE post-only order at the venue minimum, left to "
+                       "rest so the INDEPENDENT watchdog cancels it. The "
+                       "trading tick is REPLACED, not supplemented. This "
+                       "mode lifts no lock and clears no halt.")})
     last_hb = 0.0
     while not stop["now"]:
         now = time.time()
         try:
-            runner.tick(now)
+            if mech is not None:
+                # the transport is built by preflight inside the tick, so it
+                # is handed over on every pass rather than captured once
+                mech.transport = runner.transport
+                # THE MARKET FOLLOWS THE TRANSPORT UNTIL THE ORDER IS SENT,
+                # and is frozen the instant it is. Re-reading the slug after
+                # placing would point the re-read at a market the order is
+                # not in; before placing, the window may legitimately roll.
+                _slug = getattr(runner.transport, "market_slug", None)
+                if (_slug and mech.state == MECH.Mechanism.INIT
+                        and mech.market != _slug):
+                    mech.market = _slug
+                runner.mechanism_tick(now, mech)
+                if mech.finished and not mech.report.get("announced"):
+                    mech.report["announced"] = True
+                    emit("L5_MECH_FINAL", dict(mech.report))
+            else:
+                runner.tick(now)
         except Exception as exc:                               # noqa: BLE001
             runner.stats["tick_errors"] += 1
             emit("L5_LIVE_ERROR", {"error": T.redact("%s: %s" % (

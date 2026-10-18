@@ -81,6 +81,13 @@ COPY src/l5_pmus_auth_book.py src/l5_pmus_auth_book.py
 # wired. It is read-only and writes nothing.
 COPY src/l5_cost_basis_audit.py src/l5_cost_basis_audit.py
 COPY src/l5_depth_comparison.py src/l5_depth_comparison.py
+# the bounded cancellation-mechanism leg. Imported EAGERLY by the
+# runner, so leaving it out of this list crashloops the executor on
+# boot rather than failing later -- and the closure test that exists
+# to catch exactly that is already red on unrelated config files, so
+# it could not have caught it. The mode is off unless
+# L5_CANCEL_MECHANISM=YES, so shipping it changes nothing by itself.
+COPY src/l5_cancel_mechanism.py src/l5_cancel_mechanism.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
