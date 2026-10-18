@@ -22,9 +22,17 @@ from src import l5_pmus_live_runner as R
 #: every canceller that must not touch the one resting test order
 CANCELLERS = ("maybe_cancel_orphans", "maybe_ts_deadline",
               "maybe_ts_completion", "maybe_qm_deadline")
+#: THE STRATEGY ENTRY POINT. `poll` reads the L5 action feed and hands each
+#: fresh action to `handle`, which builds an intent and submits it. This file
+#: asserted the CANCELLERS were absent and never asserted the STRATEGY was --
+#: so `self.poll(now)` sat in mechanism_tick through a live activation, and at
+#: 18:34:36Z on 2026-10-18, with the shadow lock lifted, produced two
+#: L5_LIVE_DECISION records (UP 0.06 @ 0.31, DOWN 0.9 @ 0.6) that only the
+#: pending arming kept off the venue.
+STRATEGY = ("poll", "handle")
 #: reconciliation and safety that must still run
 PRESERVED = ("roll", "maybe_expire_authorization", "maybe_preflight",
-             "sweep_settlements", "reconcile_if_needed", "poll")
+             "sweep_settlements", "reconcile_if_needed")
 
 
 class Transport:
@@ -70,8 +78,8 @@ class Stub:
         self.store = Store(live=live)
         self.stats = __import__("collections").Counter()
         self.now_t = None
-        for name in CANCELLERS + PRESERVED + ("poll_orders",
-                                              "resolve_pending_terminal"):
+        for name in (CANCELLERS + PRESERVED + STRATEGY
+                     + ("poll_orders", "resolve_pending_terminal")):
             self._install(name)
 
     def _install(self, name):
@@ -143,9 +151,45 @@ def test_reconciliation_still_runs_so_a_fill_is_booked(monkeypatch):
 def test_preflight_and_the_authorization_expiry_still_run(monkeypatch):
     stub = Stub()
     run(stub)
-    for name in ("roll", "maybe_expire_authorization", "maybe_preflight",
-                 "poll"):
+    for name in ("roll", "maybe_expire_authorization", "maybe_preflight"):
         assert name in stub.calls, name
+
+
+# ------------------------------------------- the STRATEGY is absent
+
+def test_the_strategy_entry_point_never_runs(monkeypatch):
+    """THE BUG THIS FILE MISSED. `poll` -> `handle` is the strategy, and it
+    was running under the mode that claims to replace it."""
+    stub = Stub()
+    run(stub)
+    for name in STRATEGY:
+        assert name not in stub.calls, (
+            "%s ran: the L5 strategy is live under the mechanism mode" % name)
+
+
+def test_the_strategy_never_runs_even_in_a_venue_cooloff(monkeypatch):
+    """The cool-off branch had its own `self.poll(now)` call."""
+    stub = Stub(cooling=5.0)
+    run(stub)
+    for name in STRATEGY:
+        assert name not in stub.calls, name
+
+
+def test_the_strategy_never_runs_even_when_halted(monkeypatch):
+    monkeypatch.setattr(R.LX, "deadman", lambda *a, **kw: {})
+    stub = Stub(halted=True)
+    run(stub)
+    for name in STRATEGY:
+        assert name not in stub.calls, name
+
+
+def test_the_ordinary_tick_DOES_run_the_strategy(monkeypatch):
+    """The positive control: `poll` belongs in `tick` and must stay there, or
+    this test would pass against a runner that had simply lost the ability to
+    trade at all."""
+    import inspect
+    src = inspect.getsource(R.Runner.tick)
+    assert "self.poll(now)" in src
 
 
 def test_order_polling_is_skipped_when_nothing_is_live(monkeypatch):
@@ -168,8 +212,10 @@ def test_a_venue_cooloff_skips_the_mechanism_step(monkeypatch):
     stub = Stub(cooling=5.0)
     mech = run(stub)
     assert mech.steps == []
-    assert "poll" in stub.calls
     assert "maybe_preflight" not in stub.calls
+    # and NOT poll: the cool-off branch used to call it, which is how the
+    # strategy ran under this mode. Nothing is polled here at all now.
+    assert "poll" not in stub.calls
 
 
 def test_the_tick_stamps_the_time_like_the_ordinary_one(monkeypatch):
