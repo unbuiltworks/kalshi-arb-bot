@@ -6930,3 +6930,110 @@ order can be placed and therefore the 0.01-contract cancellation probe cannot
 run until `book_readable` succeeds. `preflight_attempts` is escalating under
 `PREFLIGHT_BACKOFF_S`, and a FAIL is only re-logged when the blocking set
 changes, so silence here means unchanged, not recovered.
+
+## 75. `book_readable` root cause: the KEYLESS GATEWAY does not serve a 15m book for its first minutes. No fix needed, no gate touched.
+
+### 75.1 Exact slug and endpoint
+
+| | |
+|---|---|
+| slug | `cpc-btc-updown-15m-2026-10-18-0330z` — the CURRENT window at 03:31 |
+| endpoint | `GET /v1/markets/{slug}/book` on **`Q1.GATEWAY`** (`src/l5_pmus_transport.py:567`) |
+| auth | the **keyless gateway**, not the authenticated API base |
+
+So the failing read is the same keyless route the recorder labels *"DIAGNOSTIC
+ONLY: keyless gateway vs authenticated socket; never evidence"*.
+
+### 75.2 Not a stale-market selection problem
+
+`market_resolves` PASSED and `market_open_tradable` PASSED with
+`{'state': 'MARKET_STATUS_OPEN', 'active': True, 'closed': False,
+'archived': False}` for that exact slug. The market was neither expired nor
+mis-discovered, so **there is nothing in market-discovery to fix** and nothing
+was changed.
+
+### 75.3 Root cause, already documented in-code from a prior observation
+
+`src/l5_pmus_transport.py` around the retry loop:
+
+> Observed live: book_readable raised HTTP 404 at 02:45:02Z and 02:45:13Z on
+> `cpc-btc-updown-15m-2026-10-16-0245z` and then succeeded at 02:48:50Z — **the
+> venue does not serve the book for the first minutes of a window.**
+
+Corroborated independently by the recorder's own cross-check at 01:15:46Z:
+`cpc-btc-updown-15m-2026-10-18-0115z` →
+`gateway_error "HTTPError:HTTP Error 404: Not Found"` while the authenticated
+socket served that same book with `ws_bid 0.6600 / ws_ask 0.6700`.
+
+The mitigation already present is a bounded retry: `BOOK_READ_ATTEMPTS = 3`
+with `BOOK_READ_BACKOFF_S = 1.0` (1s then 2s, ≈3s total). That is far shorter
+than the multi-minute gap, so it exhausts and the preflight correctly FAILS.
+
+### 75.4 Failing request vs the working feed, side by side
+
+| | preflight `book_readable` | executor's live feed |
+|---|---|---|
+| transport | REST `GET /v1/markets/{slug}/book` | authenticated WebSocket |
+| base | `Q1.GATEWAY`, keyless | authenticated socket |
+| slug | `…0330z` | `…0330z`, subscribed |
+| at 03:31 | **HTTP 404** ×3 attempts | `connected true`, 1897 updates, live bid/ask |
+| at 03:37 | answered, but `{'bid': None, 'ask': None}` | 4220 updates, bid `0.6600` / ask `0.6700` |
+
+Note the second row: even when the gateway answers, it answers **empty**.
+`book_readable_now` passes on reachability while
+`book_two_sided_at_preflight` fails NON-blocking, labelled *"informational; the
+binding check is at the decision point"* — `l5_preview_gate.require_fresh_book`
+enforces a fresh two-sided AUTHENTICATED book before anything is transmitted.
+So preflight's book check is reachability only, and executability is gated
+where it belongs.
+
+### 75.5 It resolved itself on the same market
+
+`L5_LIVE_PREFLIGHT` at **03:34:49Z**, `preflight: PASSED`, same slug
+`cpc-btc-updown-15m-2026-10-18-0330z`, with
+`book_read_attempts: ["attempt1:ok"]` — first attempt, ~4.8 minutes into the
+window. Every blocking check green:
+
+```
+credentials_present PASS   account_binding_proven PASS  keyfp:d51b44a3fa83|funded:344.41255
+slug_is_btc15m_series PASS market_resolves PASS         market_series_is_btc15m PASS
+market_open_tradable PASS  outcome_mapping_is_up_down PASS
+tick_constraint_known 0.01 quantity_constraint_known 0.01
+no_unexpected_open_orders PASS "0"   executor_starts_disarmed PASS
+owner_arm_token_present PASS (non-blocking: "arming is a separate owner act;
+                              preflight passing does NOT arm")
+armed_after_preflight FALSE
+worst_case  max_committed 5, fee-max price 0.5, 10 contracts,
+            max taker fee 0.1738, worst case total 5.1738
+```
+
+**Operational consequence for the probe:** `arm()` requires a PASSED preflight,
+and the gateway book is unreliable for roughly the first 3–5 minutes of each
+15-minute window. The cancellation probe must therefore be scheduled
+**mid-window**, not at a window roll, or it will simply wait.
+
+### 75.6 Post-reset verification, all green
+
+Executor heartbeat 03:37:28Z:
+
+```
+preflight PASSED      armed false      halt_latch CLEAR      halt_why null
+submission_gate  blocked TRUE / SHADOW_ONLY_LOCK / shadow_lock true
+live_orders 0    parked_orders 0   account_exposure ok, markets_counted [],
+                 account_total_worst_case_usd 0
+limits   per-market 5, residual 10, total 5, concurrent 1, live orders 1,
+         daily loss halt 5, cash deployed 1, RESIDUAL_CAP_k2, frozen_rule 030d8bf
+cash     $344.41255
+```
+
+Watchdog `087af309`, `credential_free TRUE`, sweeps 03:36:05 / 03:36:25 /
+03:36:45 / 03:37:05, each `heartbeat {halt: false}`, `open_orders 0`,
+`read_error null`, `cancel_enabled false`.
+
+**The heartbeat's top-level `halt: true` is NOT a contradiction.** Line 1755 is
+`"halt": self.submission_gate().get("blocked")` — the field reports the
+EFFECTIVE submission gate, not the latch. It reads true because
+`SHADOW_ONLY_LOCK` is blocking, which is the intended state. A comment at line
+1750 records why it was changed to this conservative reading: the heartbeat once
+printed `"halt": false` through thousands of cycles while submission was in fact
+blocked.
