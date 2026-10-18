@@ -7110,3 +7110,111 @@ Watchdog coverage, stated as a limit rather than a reassurance: with
 `cancel_enabled false` and no credentials it **cannot cancel** — it can only
 latch. Withdrawal rests entirely on the executor's repaired cancel path, which
 is precisely what this probe exists to prove.
+
+## 77. Notional audit: 0.01 contracts is DEMONSTRATED, not assumed. And rebates HAVE been credited.
+
+### 77.1 It did not need a deployment
+
+`L5_COST_BASIS_AUDIT=YES` is already set and the audit runs **at boot**, so it
+had already executed on the live executor. No restart, no new service, no
+credential handling, no strategy change — the result was read out of the
+executor's own logs.
+
+A hazard was checked before relying on that: the same block calls
+`apply_cost_basis_corrections`, which WRITES when `L5_COST_BASIS_APPLY` holds a
+batch id. The emission settles it:
+
+```
+L5_COST_BASIS_APPLY  mode INSPECT, batch_id None, applied 0, refused 0,
+                     legs_seen 49, realized_delta_usd "0"
+                     "mode INSPECT writes NOTHING ... HALT is neither read nor
+                      cleared and no ownership field is written, so verified_l5
+                      and manual are exactly as they were."
+L5_COST_BASIS_AUDIT  ok true, writes NONE
+```
+
+### 77.2 The evidence (`fee_and_notional_evidence`, 03:31:13Z and again 03:46:17Z)
+
+Feed walk: `activity_rows 2129`, `pages 107`, `complete true`, `ended "eof"` —
+a full walk of this account's authenticated activity, **1911 fill rows**.
+
+| measure | value |
+|---|---|
+| **`smallest_executed_quantity`** | **`0.0100`** |
+| **`smallest_executed_notional_usd`** | **`0.00080000`** |
+| `largest_executed_notional_usd` | `93.05010000` |
+| `commission_signs.negative_a_credited_rebate` | **831** |
+| `commission_signs.positive_a_charge` | 105 |
+| `commission_signs.zero` | 975 |
+| `commission_signs.unreadable` | 0 |
+| `commission_sum_usd` | **`-5.8800`** (net credit) |
+| `rebates_ever_credited` | **true** |
+
+### 77.3 0.01 contracts: DEMONSTRABLY VALID
+
+Both floors are now evidenced rather than inferred:
+
+- **Quantity.** The venue has actually executed a fill at **exactly 0.01**
+  contracts on this account. The published `orderMinQuantity = 0.01` is
+  therefore corroborated by execution, not only by metadata.
+- **Notional.** The smallest executed notional is **$0.0008** — an order of
+  0.01 contracts at a price of 0.08. Our probe's notional is **≈ $0.0066**,
+  which is **more than eight times larger** than a value this venue has already
+  filled. The §76 concern about an unpublished minimum order value is
+  **resolved in the probe's favour**.
+
+So the answer to "valid minimum order size, not merely a valid increment" is
+**yes, demonstrated**, from 1911 fills over a complete feed walk.
+
+### 77.4 A second finding that changes a standing assumption
+
+`rebates_ever_credited: true`, on **831** negative-commission fill rows with a
+net **−$5.88** commission across the feed. Under the programme's own rule — *a
+credited maker rebate appears as a NEGATIVE commission; a zero commission is
+NOT a rebate* — the maker rebate mechanism is **proven live on this account**,
+where it had been treated as unproven.
+
+Stated with its limit: this is a **shared** account, so these credits are not
+attributable to L5 strategy activity, and the rule that rebates are never
+assumed in advance of a credit still stands. What changed is that the mechanism
+is no longer hypothetical.
+
+### 77.5 Does executor cancellation suffice without watchdog cancellation?
+
+**Not on proof — on bounded size.** Stated honestly:
+
+- The repaired exact-id cancel path (§64–65) is deployed and covered by 26
+  tests, 11 of which fail without it, and it passed independent review. It has
+  **never been exercised against the live venue**. That is precisely what this
+  probe tests, so it cannot also be the assurance that the probe is safe.
+- The watchdog cannot withdraw anything: `cancel_enabled false`, no
+  credentials. It can only latch HALT, which stops *further* orders and does
+  nothing about one already resting.
+- What actually bounds the risk is **size, not cancellation**. If every
+  withdrawal mechanism fails, a 0.01-contract order either expires or fills,
+  and a filled 0.01 contract that settles worthless loses its premium —
+  **≈ $0.011 worst case**.
+
+The quantified comparison with the incident that motivated all of this:
+`max_clip_filled` for `cpcxrp-xrp-updown-15m-2026-10-16-0330z` is **37.73**
+contracts, and order `D4EFZNW00ZZ0` on that market settled at **−$37.9754**.
+The historical loss scaled with the clip, not with the cancellation defect
+alone. At 0.01 contracts the same total failure costs about **1/3773** of it.
+
+Independent of cancellation, the bound is held by: the one-shot service with
+`restartPolicyType NEVER` and an authorization spent in the ledger; a market
+fixed at claim that cannot roll into the next window; the executor's own
+deadline at `window_end − 180s`; and the watchdog's latch at
+`max_order_age_s 300`.
+
+### 77.6 Recommendation: GO
+
+Conditions, all already in force or specified: one market; 0.01 contracts;
+start **mid-window** (3–5 minutes in, per §75); fresh preflight PASSED; the
+existing limits untouched (`$5` per market, `$5` total, 1 concurrent, 1 live
+order, `$5` daily loss halt, `$1` cash deployed, `residual_cap_k 2`); side and
+price from the frozen `030d8bf` rule, not dictated; arming requires the owner
+token in addition to explicit approval.
+
+`SHADOW_ONLY_LOCK` remains active and the executor remains disarmed until that
+approval. No order has been submitted.
