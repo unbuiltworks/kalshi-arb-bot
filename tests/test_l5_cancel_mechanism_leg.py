@@ -58,7 +58,7 @@ class Transport:
             raise self._submit_raises
         return {"order": {"id": self._vid}} if self._vid else {"order": {}}
 
-    def cancel(self, vid):
+    def cancel(self, vid, market_slug=None):
         self.cancels.append(vid)
         return {"ok": True}
 

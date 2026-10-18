@@ -57,7 +57,7 @@ class RecordingTransport:
         self.submits.append(dict(intent))
         return {"order": {"id": "DSHOULD_NEVER_HAPPEN"}}
 
-    def cancel(self, oid):
+    def cancel(self, oid, market_slug=None):
         return {"ok": True}
 
     def order(self, oid):

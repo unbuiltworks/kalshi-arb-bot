@@ -388,7 +388,7 @@ class _Inner:
         self.submitted.append(intent)
         return {"orderId": "SHOULD-NEVER-EXIST"}
 
-    def cancel(self, oid):
+    def cancel(self, oid, market_slug=None):
         return {"cancelled": oid}
 
     def positions(self):

@@ -52,9 +52,14 @@ OUTCOMES = ("UP", "DOWN")
 #: owner arm token, reusing the existing executor's environment contract
 ARM_ENV, SID_ENV, LIVE_ENV = Q1.ARM_ENV, Q1.SID_ENV, Q1.LIVE_ENV
 
+#: THE VALUE RUNS TO A DELIMITER, NOT TO THE FIRST SPACE. `\S+` stopped at
+#: whitespace, so "Authorization: Bearer abc123" redacted only "Bearer" and
+#: left the credential in the log. Caught by
+#: test_the_detail_redacts_header_and_signature_shaped_text.
 _SECRETISH = re.compile(
-    r"(X-PM-Access-Key|X-PM-Signature|X-PM-Timestamp|Authorization)"
-    r"\s*[:=]\s*\S+", re.I)
+    r"(X-PM-Access-Key|X-PM-Signature|X-PM-Timestamp|Authorization"
+    r"|api[-_]?key|secret|token|bearer|password)"
+    r"\s*[:=]\s*[^\"',}\]\n\r]+", re.I)
 
 
 class VenueThrottled(RuntimeError):
@@ -279,6 +284,47 @@ def redact(text: Any) -> str:
         if v and len(v) > 6:
             s = s.replace(v, "[REDACTED]")
     return s[:600]
+
+
+def http_error_detail(exc: BaseException) -> Dict[str, Any]:
+    """A SANITIZED record of what the venue actually said, or why we cannot.
+
+    `str(HTTPError)` is exactly "HTTP Error 400: Bad Request" and carries
+    neither the path nor the body, so a schema rejection was indistinguishable
+    from any other 400. That is how the cancel 400 of 2026-10-18 stayed
+    undiagnosed through a whole authorized window: the watchdog recorded only
+    `cancel_error: "HTTPError"`.
+
+    THE BODY IS READ ONCE AND REDACTED. Credentials are never in a RESPONSE,
+    but `redact` is applied anyway -- a venue that echoes a request header
+    into an error message must not put it in our logs -- and the result is
+    truncated. Reading the body can itself raise on a closed stream, so every
+    step is guarded: a diagnostic may never replace the error it describes.
+    """
+    out: Dict[str, Any] = {"error": type(exc).__name__}
+    code = getattr(exc, "code", None)
+    if code is not None:
+        out["status"] = code
+    reason = getattr(exc, "reason", None)
+    if reason is not None:
+        out["reason"] = redact(reason)[:120]
+    body = None
+    reader = getattr(exc, "read", None)
+    if callable(reader):
+        try:
+            raw = reader()
+        except BaseException:                                  # noqa: BLE001
+            out["body"] = "[UNREADABLE]"
+            return out
+        try:
+            body = raw.decode("utf-8", "replace") if isinstance(
+                raw, (bytes, bytearray)) else str(raw)
+        except BaseException:                                  # noqa: BLE001
+            out["body"] = "[UNDECODABLE]"
+            return out
+    if body is not None:
+        out["body"] = redact(body)[:400]
+    return out
 
 
 def _as_decimal(v: Any) -> Optional[D]:
@@ -1227,12 +1273,29 @@ class PmusTransport:
             raise OrderCapExceeded(
                 "PROBE_ORDER_CAP_EXCEEDED:%s>%s" % (qty, cap))
 
-    def cancel(self, order_id: str) -> Dict[str, Any]:
+    def cancel(self, order_id: str,
+               market_slug: Optional[str] = None) -> Dict[str, Any]:
         """Cancel by the VENUE order id, via the route the venue serves.
 
         POST /v1/order/{id}/cancel, not DELETE /v1/orders/{id}. The argument
         is the venue's own order id returned by submit, not our deterministic
         client order id -- passing the latter would silently cancel nothing.
+
+        THE BODY MUST CARRY `marketSlug`, AND AN EMPTY BODY IS WHY THE
+        2026-10-18 PROOF FAILED. Order D68KZ0SG10JR rested for 530s while the
+        watchdog and then this process both posted `{}` to the correct route
+        and were both refused with HTTP 400 Bad Request; the order left only
+        when the market expired. `pmus_q1_executor.cancel_exact` -- the only
+        cancel in this repository ever used against a live PMUS order -- has
+        always sent `{"marketSlug": slug}` to the same route with the same
+        method and the same signer. The field was the whole difference.
+
+        THE SLUG IS THE ORDER'S, NOT THE TRANSPORT'S. An orphan sweep runs
+        after `roll` has moved on, so `self.market_slug` can name a different
+        window than the order being cancelled; callers pass the market their
+        ledger row recorded, and `self.market_slug` is only the fallback.
+        An empty slug REFUSES rather than posting `{}`, because posting `{}`
+        is the exact failure this change exists to prevent.
         """
         # CANCEL DOES NOT REQUIRE ARMING, AND THAT IS THE WHOLE POINT.
         #
@@ -1264,6 +1327,9 @@ class PmusTransport:
             raise CancelRefused("NO_VENUE_ORDER_ID")
         if not Q1.has_credentials():
             raise CancelRefused("NO_CREDENTIALS")
+        slug = str(market_slug or getattr(self, "market_slug", "") or "").strip()
+        if not slug:
+            raise CancelRefused("NO_MARKET_SLUG:%s" % oid[:40])
         own = getattr(self, "cancel_owner_oracle", None)
         if own is None:
             # NO ORACLE. An ARMED transport cancels as it always did: it has
@@ -1276,8 +1342,7 @@ class PmusTransport:
             # that must prove ownership. Without an oracle it cannot, and
             # there it refuses: absent is not permission for a NEW power.
             if self.armed:
-                return self._request(
-                    "POST", "/v1/order/%s/cancel" % oid, {}, Q1.API) or {}
+                return self._cancel_request(oid, slug)
             raise CancelRefused(
                 "OWNERSHIP_UNESTABLISHED: this transport is disarmed and no "
                 "ledger oracle is installed, so it cannot prove the order is "
@@ -1291,5 +1356,27 @@ class PmusTransport:
                 "OWNERSHIP_UNREADABLE:%s" % type(exc).__name__)
         if not ours:
             raise CancelRefused("NOT_OUR_ORDER:%s" % oid[:40])
-        return self._request(
-            "POST", "/v1/order/%s/cancel" % oid, {}, Q1.API) or {}
+        return self._cancel_request(oid, slug)
+
+    def _cancel_request(self, oid: str, slug: str) -> Dict[str, Any]:
+        """The one place the cancel body is built, so it cannot drift.
+
+        On failure the SANITIZED venue response is recorded on the instance
+        before the error propagates: callers log only `type(exc).__name__`,
+        which is how a schema rejection read as an opaque "HTTPError".
+        """
+        self.last_cancel_error = None
+        try:
+            return self._request("POST", "/v1/order/%s/cancel" % oid,
+                                 {"marketSlug": slug}, Q1.API) or {}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.last_cancel_error = dict(
+                    http_error_detail(exc),
+                    venue_order_id=oid, market_slug=slug,
+                    endpoint="/v1/order/{id}/cancel", method="POST")
+            except BaseException:                              # noqa: BLE001
+                self.last_cancel_error = {"error": type(exc).__name__}
+            raise

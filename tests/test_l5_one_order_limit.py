@@ -132,7 +132,7 @@ class TestStillFillableCount:
         class Blind:
             armed = True
 
-            def cancel(self, oid):
+            def cancel(self, oid, market_slug=None):
                 return {"cancelled": oid}
 
             def order(self, oid):
@@ -148,7 +148,7 @@ class TestStillFillableCount:
         class StillOpen:
             armed = True
 
-            def cancel(self, oid):
+            def cancel(self, oid, market_slug=None):
                 return {"cancelled": oid}
 
             def order(self, oid):

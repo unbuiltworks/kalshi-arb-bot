@@ -91,7 +91,7 @@ class Venue:
                 "state": "ORDER_STATE_OPEN", "leavesQuantity": "0.01",
                 "cumQuantity": "0"}
 
-    def cancel(self, order_id):
+    def cancel(self, order_id, market_slug=None):
         self.posts.append(order_id)
         return {"ok": True}
 

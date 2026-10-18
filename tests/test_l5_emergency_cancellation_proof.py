@@ -23,7 +23,7 @@ class Venue:
         self.order_raises = set(order_raises)
         self.armed = True
 
-    def cancel(self, venue_order_id):
+    def cancel(self, venue_order_id, market_slug=None):
         self.cancel_calls.append(venue_order_id)
         if venue_order_id in self.cancel_raises:
             raise ConnectionError("network interruption")

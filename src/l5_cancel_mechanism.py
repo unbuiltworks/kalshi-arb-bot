@@ -653,7 +653,7 @@ class Mechanism:
         cancel_error = None
         if vid:
             try:
-                self.transport.cancel(vid)
+                self.transport.cancel(vid, market_slug=self.market)
             except BaseException as exc:                        # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise

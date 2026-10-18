@@ -71,7 +71,7 @@ class FakeTransport:
                 "filled_qty": self.acked_fill[oid],
                 "fill_price": self.fill_price or str(intent["price"])}
 
-    def cancel(self, order_id):
+    def cancel(self, order_id, market_slug=None):
         """The venue cancels by ITS id, so the double must demand one too."""
         self.cancelled.append(order_id)
         self.retired.add(order_id)

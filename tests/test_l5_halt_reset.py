@@ -156,9 +156,13 @@ def test_the_only_post_is_the_single_cancel_route_and_it_signs_correctly():
         return {}
 
     t = W.CancelOnlyTransport(opener=opener)
-    t.cancel("A1")
+    t.cancel("A1", "cpc-btc-updown-15m-X")
     assert seen["method"] == "POST"
     assert seen["path"] == "/v1/order/A1/cancel"
+    # THE BODY CARRIES THE MARKET. An empty body was refused with HTTP 400
+    # for 530s on a real resting order on 2026-10-18; the signature is
+    # unaffected because PMUS signs ts+method+path only.
+    assert seen["body"] == {"marketSlug": "cpc-btc-updown-15m-X"}
 
     # and the headers the real signer would produce for that call
     os.environ[A.KEY_ENV] = "k"
@@ -193,7 +197,7 @@ def test_cancel_requires_both_the_registry_and_the_venue_to_agree():
         def order(self, oid):
             return dict(self.venue_row)
 
-        def cancel(self, oid):
+        def cancel(self, oid, market_slug=None):
             self.cancelled.append(oid)
             return {}
 
@@ -258,7 +262,7 @@ def test_a_market_mismatch_between_our_claim_and_the_venue_cancels_nothing():
         def order(self, oid):
             return {"manualOrderIndicator": AUTOMATIC, "marketSlug": "OTHER",
                     "state": "OPEN", "leavesQuantity": "1"}
-        def cancel(self, oid):
+        def cancel(self, oid, market_slug=None):
             self.cancelled.append(oid)
 
     class Asserter:
@@ -308,7 +312,7 @@ def test_the_halt_is_latched_before_any_cancel_is_attempted():
         def order(self, oid):
             return {"manualOrderIndicator": AUTOMATIC, "marketSlug": "m1",
                     "state": "CANCELED", "leavesQuantity": "0"}
-        def cancel(self, oid):
+        def cancel(self, oid, market_slug=None):
             order.append("cancel")
 
     class Asserter:

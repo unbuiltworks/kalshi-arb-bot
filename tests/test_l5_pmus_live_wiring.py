@@ -147,7 +147,7 @@ class Disarmed:
     def submit(self, intent):
         raise EX.NotArmed("transport is DISARMED")
 
-    def cancel(self, coid):
+    def cancel(self, coid, market_slug=None):
         raise EX.NotArmed("transport is DISARMED")
 
 

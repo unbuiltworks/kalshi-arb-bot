@@ -43,7 +43,7 @@ class Venue:
         self.cancelled = []
         self.read = []
 
-    def cancel(self, order_id):
+    def cancel(self, order_id, market_slug=None):
         self.cancelled.append(order_id)
         if order_id in self.cancel_raises:
             raise RuntimeError("venue said no")
