@@ -7968,3 +7968,117 @@ Its mode variable is still `L5_CANCEL_MECHANISM=YES` with
 `L5_OBSERVE_ONLY=NO`, which is the verification posture and changes nothing
 about what it can do; flipping it back is a configuration change and was
 not authorized.
+
+---
+
+## 86. Economic verdict: NO-GO, and the two "stale records" are not drift
+
+Read-only. No code changed, no offset invented, no balance erased, the
+frozen rule untouched, `SHADOW_ONLY_LOCK` in force throughout.
+
+### 86.1 The Oct 12 and Oct 14 records, reconciled
+
+`L5_LIVE_RECONCILE` at 13:19Z reports:
+
+| key | ours | venue |
+|---|---|---|
+| `cpc-btc-updown-15m-2026-10-12-0030z\|DOWN` | 2 | 0 |
+| `cpc-btc-updown-15m-2026-10-14-2230z\|UP` | 2.9000 | 0 |
+
+**This is not drift.** `venue_net` is `{}` — the venue reports *no row at
+all* for either market, and `reconcile_from_venue` deliberately does not
+treat that silence as divergence:
+
+> "ONLY a market the venue actually reports can contradict us. A market it
+> says nothing about is the ordinary post-settlement state — the venue drops
+> a position the moment the market expires, while our book legitimately
+> still holds it until `retire_settled_market` books the redemption."
+
+Both markets are already in `retired_markets`, so the redemption *was*
+booked. What remains is gross-book residue on two retired markets, and it is
+economically inert: `committed_usd {}`, `cash_deployed []`,
+`account_exposure.markets_counted []`, account worst case **$0.00**, and
+`open_orders_at_venue 0`. It gates nothing and reserves nothing.
+
+The one live consequence is accounting, not risk:
+`cpc-btc-updown-15m-2026-10-14-2230z|UP` is one of the
+`leg_cost_basis_unknown` keys that keep `verified_l5_status` at
+`UNPROVEN_LEGACY_ATTRIBUTION`.
+
+**Nothing was changed.** Zeroing those rows is exactly the invented offset
+the standing rule forbids, and *why* the rows outlived retirement cannot be
+settled from outside the container — the executor's state file is on its
+volume. The audit trail stands as it is.
+
+Separately measured and worth naming: `two_sided_awaiting:SETTLEMENT_NOT_BINARY`
+= 18. The venue's `/bbo` for these expired markets carries a **book price,
+not a binary settlement**, and `binary_settlement` refuses it — the guard
+added after Stage A redeemed 2.90 UP shares at 0.01 for a phantom credit.
+That refusal is correct and is why some books wait.
+
+### 86.2 Six complete windows, measured
+
+| window | actions | `MAKER_ONLY_NO_TAKER` | `ORDER:NOT_ARMED` | other |
+|---|---|---|---|---|
+| 1145z | 98 | 44 | 53 | 1 below-min |
+| 1200z | 179 | 97 | 80 | 1 below-min, 1 cash $1.06>1 |
+| 1215z | 121 | 60 | 61 | — |
+| 1230z | 77 | 19 | 58 | — |
+| 1245z | 74 | 34 | 39 | 1 below-min |
+| 1300z | 57 | 18 | 39 | — |
+| **6 windows** | **606** | **272 (44.9%)** | **330 (54.5%)** | 4 |
+
+**Cross-check that matters:** the 1145z window shows **98 actions**, and the
+independent observe-only one-shot (§81) counted **98 actions admitted** in
+that same window. Two processes, two feeds, same number.
+
+So per eligible window: **~55 would-be maker orders** reaching the wire and
+refused only by the shadow lock, and **~45 actions refused for being
+takers**. Fills: **zero**. Rebates credited to these: **zero**. Settlement
+cashflow attested since the 2026-10-16 baseline: **zero**
+(`attested_l5_settlements_since_baseline: []`), while account cash moved
+**$350.05255 → $344.41255 = −$5.64**, none of it attributable.
+
+### 86.3 The single highest-impact reason
+
+**The residual leg, not the paired one.** §58's pre-registered replay
+measured the frozen control over 20 discovery windows:
+
+```
+matched  $+30.16     residual  $-48.50     total  $-18.34   (-$0.917/window)
+```
+
+Pair economics are **positive**; the unpaired half loses **1.6x** what the
+paired half earns. And the live counters show the mechanism keeping it
+unpaired: **44.9% of all actions are refused `MAKER_ONLY_NO_TAKER`**, and
+the completion leg is the one that typically has to cross. The engine
+acquires first legs and declines the action that would convert them into
+matched pairs, so what it accumulates is precisely the exposure the
+operating model says has no predictive skill.
+
+### 86.4 NO-GO, quantified
+
+Even granting a **100% fill** on every intent — which `l5_maker_fill_model`
+explicitly refuses to grant, since an unknown `queue_ahead` never fills —
+the arithmetic ceiling at today's size is:
+
+| component | basis | per window |
+|---|---|---|
+| maker rebate | 25.6 contracts (the 1145z intent book, $12.78 notional) x $0.0125 x p(1-p)=0.25 | **$0.080** |
+| pair edge | 12.8 pairs max at the <=0.96 fee-safe target, $0.04/pair | **$0.512** |
+| **ceiling** | | **~$0.59** |
+
+$480/day over 96 windows is **$5.00/window**. The ceiling is **8.5x short**,
+on an assumption the model will not make, before any residual loss. The
+measured series is worse than the ceiling: −$0.917/window on §58's 20
+discovery windows, and 0 attested settlements with cash −$5.64 since
+baseline.
+
+**No correction is made.** The only lever the evidence identifies is
+enabling taker completions, and that is (a) a change to the frozen strategy
+and to spring discipline, which requires separate validation, and (b) not
+supported: a taker completion costs **$0.0174/contract** at p=0.5
+(Θ=0.0695) against a **$0.04/pair** edge — 43% of the pair's entire edge for
+one leg, 87% if both crossed, before adverse selection. Increasing size is
+refused for the same reason it always is: it would raise risk to make the
+result look better.
