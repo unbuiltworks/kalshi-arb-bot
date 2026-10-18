@@ -85,8 +85,24 @@ def queue_fill(trades: Sequence[Mapping[str, Any]], *, t_join: float,
     out = {"filled": False, "t": None, "queue_ahead":
            None if queue_ahead is None else str(queue_ahead),
            "cum_qualifying": "0", "prints_counted": 0,
-           "modelled": True}
+           "modelled": True, "fill_known": True}
     if queue_ahead is None:
+        # UNKNOWN IS NOT A NON-FILL, AND IT IS NOT AN EMPTY QUEUE EITHER.
+        # `rung_depth` returns None both for a price the ladder does not
+        # carry (it is capped at a few rungs per side) and for a price with
+        # nothing resting on it. Those are different facts and NEITHER is
+        # evidence about whether we would have filled:
+        #   * reading it as "never fills" is what let a model with no
+        #     information report a measured non-fill, and a <= 0.96 pair must
+        #     quote outside the displayed rungs, so the strategy under test
+        #     was structurally assigned zero fills;
+        #   * reading it as an EMPTY queue would be the opposite error -- it
+        #     would manufacture instant front-of-queue fills at prices the
+        #     tape says nothing about.
+        # So the result is UNKNOWN: `filled` stays False so nothing downstream
+        # can book a fill, and `fill_known` False marks it as carrying no
+        # information, which callers MUST propagate instead of counting.
+        out["fill_known"] = False
         out["reason"] = "QUEUE_AHEAD_UNREADABLE"
         return out
     cum = D(0)
@@ -109,6 +125,28 @@ def queue_fill(trades: Sequence[Mapping[str, Any]], *, t_join: float,
     out.update(cum_qualifying=str(cum), prints_counted=n,
                reason="QUEUE_NEVER_CLEARED")
     return out
+
+
+#: the three states a modelled leg can be in. UNKNOWN is first-class: it is
+#: neither evidence of a fill nor evidence of a non-fill.
+FILL_FILLED = "FILLED"
+FILL_NOT_FILLED = "NOT_FILLED"
+FILL_UNKNOWN = "UNKNOWN"
+
+
+def fill_state(f: Optional[Mapping[str, Any]]) -> str:
+    """FILLED / NOT_FILLED / UNKNOWN for one modelled leg.
+
+    A leg whose queue could not be read is UNKNOWN. Callers must not fold it
+    into NOT_FILLED: that is how an absence of information became a reported
+    non-fill in the 97-window corpus.
+    """
+    if not f:
+        return FILL_UNKNOWN
+    if f.get("filled"):
+        return FILL_FILLED
+    return (FILL_NOT_FILLED if f.get("fill_known", True)
+            else FILL_UNKNOWN)
 
 
 def _leg_cash(qty: D, px: D, *, maker: bool) -> D:
@@ -205,6 +243,24 @@ def evaluate_window(slug: str, ladder: Sequence[Mapping[str, Any]],
     f_dn = queue_fill(trd, t_join=t0, px=dn_ask, side="ask",
                       queue_ahead=rung_depth(s0, "asks", dn_ask))
     rec["resting"] = {"up": f_up, "dn": f_dn}
+    st_up, st_dn = fill_state(f_up), fill_state(f_dn)
+    rec["fill_states"] = {"up": st_up, "dn": st_dn}
+    # UNKNOWN BEFORE NEITHER, and this ordering is the whole fix. A leg whose
+    # queue is unreadable says nothing, so the window is NOT a measured
+    # non-fill and must not be counted as one. ok=False keeps it out of every
+    # aggregate that counts outcomes.
+    if FILL_UNKNOWN in (st_up, st_dn):
+        return dict(rec, ok=False, reason="QUEUE_UNKNOWN",
+                    outcome="UNKNOWN_QUEUE", one_sided_s=None, decisions=[],
+                    decisions_evaluated=0, refusal_census={},
+                    first_action={"REPRICE": None, "CROSS": None,
+                                  "BLIND": None},
+                    net={p: None for p in POLICIES}, selected=None,
+                    labels=("the displayed ladder did not carry one of our "
+                            "resting prices, so whether it would have "
+                            "filled is UNKNOWN. This is NOT a non-fill and "
+                            "NOT an empty queue; the window is excluded "
+                            "from fill statistics rather than scored."))
     if not f_up["filled"] and not f_dn["filled"]:
         return dict(rec, ok=True, outcome="NEITHER",
                     one_sided_s=None, decisions=[],
@@ -581,14 +637,16 @@ class WindowAccumulator:
                 self.f_up = {"filled": True, "t": tt,
                              "queue_ahead": str(self.q_up),
                              "cum_qualifying": str(self._cum_up),
-                             "prints_counted": self._n_up, "modelled": True}
+                             "prints_counted": self._n_up, "modelled": True,
+                             "fill_known": True}
         if self.f_dn is None and p >= self.dn_ask:
             self._cum_dn += q; self._n_dn += 1
             if self._cum_dn > self.q_dn:
                 self.f_dn = {"filled": True, "t": tt,
                              "queue_ahead": str(self.q_dn),
                              "cum_qualifying": str(self._cum_dn),
-                             "prints_counted": self._n_dn, "modelled": True}
+                             "prints_counted": self._n_dn, "modelled": True,
+                             "fill_known": True}
         if (self._rp_px is not None and self._rp_fill_t is None
                 and self._rp_queue is not None and tt >= self._rp_from):
             hit = (p <= self._rp_px) if self._rp_side == "bid" \
@@ -829,17 +887,31 @@ class WindowAccumulator:
             "depth_ticks": int(self.lim["depth_ticks"]),
             "cash_envelope": str(_d(self.lim["cash_envelope"])),
             "worst_case_ceiling": str(_d(self.lim["max_worst_case_loss"]))}
+        # SAME THREE-STATE RULE AS THE BATCH PATH. An unfilled leg whose
+        # join-time queue was unreadable is UNKNOWN, not QUEUE_NEVER_CLEARED:
+        # claiming the queue never cleared asserts a fact about a queue we
+        # never read.
         f_up = self.f_up or {"filled": False, "t": None,
-                             "queue_ahead": str(self.q_up),
+                             "queue_ahead": (None if self.q_up is None
+                                             else str(self.q_up)),
                              "cum_qualifying": str(self._cum_up),
                              "prints_counted": self._n_up, "modelled": True,
-                             "reason": "QUEUE_NEVER_CLEARED"}
+                             "fill_known": self.q_up is not None,
+                             "reason": ("QUEUE_NEVER_CLEARED"
+                                        if self.q_up is not None
+                                        else "QUEUE_AHEAD_UNREADABLE")}
         f_dn = self.f_dn or {"filled": False, "t": None,
-                             "queue_ahead": str(self.q_dn),
+                             "queue_ahead": (None if self.q_dn is None
+                                             else str(self.q_dn)),
                              "cum_qualifying": str(self._cum_dn),
                              "prints_counted": self._n_dn, "modelled": True,
-                             "reason": "QUEUE_NEVER_CLEARED"}
+                             "fill_known": self.q_dn is not None,
+                             "reason": ("QUEUE_NEVER_CLEARED"
+                                        if self.q_dn is not None
+                                        else "QUEUE_AHEAD_UNREADABLE")}
         rec["resting"] = {"up": f_up, "dn": f_dn}
+        st_up, st_dn = fill_state(f_up), fill_state(f_dn)
+        rec["fill_states"] = {"up": st_up, "dn": st_dn}
         rec["refusal_census"] = dict(self.census)
         rec["decisions_evaluated"] = self.evaluated
         gens = list(self.generations)
@@ -868,6 +940,18 @@ class WindowAccumulator:
                        "the number that must be read beside the turnover.")}
         acq = self._acquired()
         yv = _d(yes_value)
+        if acq is None and FILL_UNKNOWN in (st_up, st_dn):
+            # nothing was modelled as filled AND at least one leg's queue was
+            # unreadable, so this is an absence of information, not a
+            # measured non-fill. Excluded from scoring rather than counted.
+            return dict(rec, ok=False, reason="QUEUE_UNKNOWN",
+                        outcome="UNKNOWN_QUEUE", one_sided_s=None,
+                        selected=None, first_action=dict(self.first),
+                        net={p: None for p in POLICIES},
+                        labels=("the displayed ladder did not carry one of "
+                                "our resting prices, so whether it would "
+                                "have filled is UNKNOWN -- neither a "
+                                "non-fill nor an empty queue."))
         if acq is None:
             return dict(rec, ok=True, outcome="NEITHER", one_sided_s=None,
                         selected="HOLD",
