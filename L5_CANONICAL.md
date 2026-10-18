@@ -6602,3 +6602,91 @@ surface, no Railway CLI or token in the container, no discard-staged-changes
 verb, `accept-deploy` is all-or-nothing, and Railway's own agent states it
 cannot apply any variable change live. The minimum owner action is recorded in
 the reply to §70 and in `L5_HALT_RESET_CEREMONY.md`.
+
+## 71. Fresh authenticated INSPECT (02:21:25Z). Digest unchanged. And the five staged variables were COMMITTED.
+
+### 71.1 The cleanup, verified from source rather than taken on report
+
+| check | result |
+|---|---|
+| `PMUS_API_KEY_ID` / `PMUS_API_SECRET_KEY` on `l5-halt-watchdog` | **absent** from `variableNames` |
+| environment staged patch | `staged: null`, `resources: []` — the patch is gone |
+| watchdog deployment `22858ad1` (02:00:13Z) | SUCCESS, built from `deploy/l5_halt_watchdog/Dockerfile` |
+
+### 71.2 But the patch was COMMITTED, not discarded
+
+The five variables are now **live on `l5-pmus-live`**: `L5_ACC_MAX_ROUNDS`,
+`L5_MAX_WORST_CASE_DEFICIT_USD`, `L5_TS_DEPTH_TICKS`, `L5_TS_EXPERIMENT_ID`,
+`L5_TS_MARKET`. "No staged changes remain" is true because the patch was
+applied, not dropped.
+
+**They are NOT yet in effect.** The executor's latest deployment is
+`38162771`, created 2026-10-17T20:43:22Z — before the commit — and nothing
+newer exists. Railway injects variables at container start, so the running
+process (up 19,650s at 02:12) never saw them. They activate on its **next
+restart or redeploy**, and `restartPolicyType` is `ALWAYS`, so a crash would
+do it.
+
+Confirmed from the 02:12:49Z heartbeat that the OLD limits are what is in
+force: `max_usd_per_market 5`, `max_total_exposure_usd 5`,
+`max_concurrent_markets 1`, `max_live_orders 1`,
+`daily_realized_loss_halt_usd 5`, `max_cash_deployed_usd 1`,
+`residual_cap_k 2`, `armed false`, `halt true`,
+`submission_gate blocked true / SHADOW_ONLY_LOCK`, `live_orders 0`.
+
+What each newly-committed variable controls, read from the code (values are
+redacted to this client, so the DIRECTION of each is unknown):
+
+| variable | code | risk if the value is unexpected |
+|---|---|---|
+| `L5_TS_MARKET` | `l5_two_sided_probe.py:127` "the authorized market patterns, in order" | **authorizes markets for the two-sided probe.** A wildcard would widen beyond one-market-at-a-time |
+| `L5_ACC_MAX_ROUNDS` | `l5_live_execution.py:393` default **8**, hard cap **64**, unparseable → 1 | a value above 8 is a FREQUENCY/SIZE promotion that was never approved |
+| `L5_TS_DEPTH_TICKS` | `l5_live_execution.py:3838` default 2 | probe depth tuning, low |
+| `L5_TS_EXPERIMENT_ID` | `l5_two_sided_probe.py:37` | labelling, low |
+| `L5_MAX_WORST_CASE_DEFICIT_USD` | `l5_pmus_live_runner.py:3314` "unset or blank = gate disabled"; a value that will not parse is **fatal, not a fallback** | safe direction: it ADDS a bound, or fails closed |
+
+So four of the five are inert-or-safe and two are capable of widening scope or
+frequency. None can act while HALT and `SHADOW_ONLY` hold.
+
+### 71.3 The fresh authenticated INSPECT
+
+Deployment `b324898d` (reason `deploy`, so the build plan was re-resolved and
+`deploy/l5_halt_reset/Dockerfile` was honoured), emitted 02:21:25Z, read-only.
+
+| field | value |
+|---|---|
+| `sha256` / `L5_HALT_RESET_EXPECT` | `40f9c34033cced8a1006e0b922d30787735a88749b14e4df0a4442e7a879719e` — **identical to the 23:17Z reading** |
+| `reason` | `UNMANAGED_RESTING_ORDER` |
+| latch `t` / `who` / `halt` | `2026-10-16T03:40:12.037515+00:00` / `l5-watchdog` / `true` |
+| latch evidence | order `D4EFZNW00ZZ0`, `cpcxrp-xrp-updown-15m-2026-10-16-0330z`, `age_known false`, `leaves None` |
+| `preconditions.venue.ok` | **TRUE** — `l5_owned_working_orders 0`, `venue_working_orders_seen 0`, `account_positions []`, `account_positions_error null`, `owner_manual_orders_allowed []`; signed `/v1/orders/open` + `/v1/portfolio/positions` |
+| `preconditions.registry.ok` | **TRUE** — readable, age `0.001s`, `live_orders 0`, `http://l5-pmus-live.railway.internal:8081` |
+| `l5_claimed_order_ids` / `ownership_error` | `[]` / `null` |
+| `prior_resets` | one: `owner-20261015-1945z-d47r06gg0zrx`, cleared, 2026-10-15T23:28:37Z |
+| `would_clear` | **TRUE** |
+
+The digest matching the earlier reading is the meaningful part: `halt.json`
+has not been touched in the intervening three hours, which the watchdog's
+per-sweep `heartbeat_refused` independently predicts.
+
+### 71.4 Stand-down, verified
+
+`update-service` restored `deploy/l5_halt_watchdog/Dockerfile`,
+`python3 -m scripts.l5_halt_watchdog`, `ALWAYS`; `RAILWAY_DOCKERFILE_PATH`
+was pointed back at the watchdog Dockerfile and both credential variables set
+to a single space, in one variable write WITHOUT `skipDeploys` so a fresh
+deployment re-resolved the build (the §69.1 rule). Deployment `d40a4a8a`,
+booted 02:30:33Z:
+
+```
+L5_WATCHDOG_BOOT   credential_free TRUE, credentials FALSE,
+                   order_source REGISTRY_READ_ONLY, cancel_enabled false
+L5_WATCHDOG_SWEEP  open_orders 0, read_error null, overdue [], cancelled [],
+                   report_age_s -0.043 of 120,
+                   heartbeat_refused on the latch
+```
+
+**Still owed to the owner:** the two names exist again with whitespace values,
+because this session has no delete verb. One more dashboard deletion is
+required, and this time the staged-removal entanglement does not arise — no
+staged patch exists to pollute.
