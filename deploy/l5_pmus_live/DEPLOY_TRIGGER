@@ -712,3 +712,31 @@ deploy disarmed-cancel repair, shadow-locked and HALTed 2026-10-17T20:30Z
 # NOT RUN: no order has been placed and independent cancellation stays
 # UNPROVEN until PMUS confirms a terminal status.
 place-then-cancel leg shipped OFF, shadow-locked 2026-10-18T17:15Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-18  MECHANISM WAIT/TERMINAL SPLIT (the 1800z repair)
+# ---------------------------------------------------------------------------
+# The authorized one-shot stopped at 18:03:28Z on transport_armed=false with
+# the other 13 checks green. That flag is false for the first seconds of every
+# window -- the transport arms only after preflight passes, and preflight was
+# on retry 2 of its 3/6/12/24s backoff after the venue's intermittent
+# book_readable 404. No order was placed and the one-shot was NOT consumed,
+# but the window was lost.
+#
+# transport_armed and the five book/price checks are now WAITS: state stays
+# INIT and EVERY gate is re-evaluated on the pass that submits, so nothing is
+# placed against a stale verdict. The wait is bounded with no timer, because
+# window_has_room_for_the_watchdog stays TERMINAL at 450s.
+#
+# Two gates ADDED, since a wait holds the shadow lock lifted:
+# authorization_window_open (EXPIRED/UNREADABLE refuses) and halt_not_engaged
+# (injected read-only predicate; this module still cannot assert or clear a
+# latch, and unreadable counts as halted).
+#
+# NOTHING IS ARMED BY THIS DEPLOYMENT. L5_SHADOW_ONLY=1 and
+# L5_CANCEL_MECHANISM=NO were restored at 18:05Z. Limits unchanged:
+# L5_MAX_LIVE_ORDERS=1, L5_MAX_CASH_DEPLOYED_USD=4.65. Preflight untouched.
+#
+# 115 focused tests green. Full suite 33 failed / 11339 passed / 14 errors:
+# failure set BYTE-IDENTICAL to the established baseline.
+mechanism wait/terminal split, shadow-locked 2026-10-18T18:20Z
