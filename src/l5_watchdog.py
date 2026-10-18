@@ -337,17 +337,57 @@ class OwnershipOracle:
 
     DEFAULT_TIMEOUT_S = 3.0
 
+    #: A CLAIM OF UNKNOWN AGE IS NOT OWNERSHIP PROOF. `claimed()` used to
+    #: accept any document whose `readable` was true, at any age. An executor
+    #: that CRASHES takes its registry server with it, so that case already
+    #: failed closed on an unreachable read -- but a WEDGED executor (process
+    #: alive, writer stalled) keeps serving, and its last snapshot would have
+    #: been believed indefinitely. The registry publishes `as_of_utc` for
+    #: exactly this reason, and `RegistryOrderSource` already bounds it at
+    #: DEFAULT_REPORT_MAX_AGE_S before latching EXECUTOR_REPORT_STALE; the
+    #: ownership path simply did not. The two paths now use the same bound,
+    #: because "the executor has stopped publishing" must not be read as
+    #: "the executor confirms these ids are mine".
+    MAX_CLAIM_AGE_S = DEFAULT_REPORT_MAX_AGE_S
+    #: the two services keep their own clocks; a small negative age is skew,
+    #: not a forged future timestamp. The sweep routinely reports -0.011s.
+    CLOCK_SKEW_S = 5.0
+
     def __init__(self, url: str, *, timeout_s: float = DEFAULT_TIMEOUT_S,
-                 opener=None) -> None:
+                 max_claim_age_s: Optional[float] = None,
+                 now_fn=None, opener=None) -> None:
         if not isinstance(url, str) or not url.strip():
             raise ValueError("OwnershipOracle needs a url")
         self.url = url.strip().rstrip("/")
         self.timeout_s = float(timeout_s)
+        self.max_claim_age_s = float(self.MAX_CLAIM_AGE_S
+                                     if max_claim_age_s is None
+                                     else max_claim_age_s)
+        self._now = now_fn
         self._opener = opener
+        #: why the last read yielded nothing, for the sweep to report. A
+        #: silent {} cannot be told apart from "we genuinely own nothing".
+        self.last_refusal: Optional[str] = None
+
+    def _age_s(self, doc: Mapping[str, Any]) -> Optional[float]:
+        """Seconds since the registry built this document, or None."""
+        raw = str(doc.get("as_of_utc") or "").strip()
+        if not raw:
+            return None
+        try:
+            t = dt.datetime.fromisoformat(raw)
+        except BaseException:                                  # noqa: BLE001
+            return None
+        if t.tzinfo is None:
+            return None            # a naive stamp cannot be compared safely
+        now = (self._now() if self._now is not None
+               else dt.datetime.now(dt.timezone.utc))
+        return (now - t).total_seconds()
 
     def claimed(self) -> Dict[str, Dict[str, Any]]:
         """{venue_order_id: row} the executor says it owns. {} on any doubt."""
         from src import l5_order_registry_server as REG
+        self.last_refusal = None
         url = "%s/%s" % (self.url, REG.REGISTRY_KEY)
         try:
             if self._opener is not None:
@@ -359,9 +399,24 @@ class OwnershipOracle:
                         return {}
                     raw = r.read()
             doc = json.loads(raw or b"{}")
-        except BaseException:                                  # noqa: BLE001
+        except BaseException as exc:                           # noqa: BLE001
+            # A CRASHED executor lands here: its registry server dies with
+            # the process, so the read fails and ownership is unknown.
+            self.last_refusal = "REGISTRY_UNREACHABLE:%s" % type(exc).__name__
             return {}
         if not isinstance(doc, dict) or doc.get("readable") is not True:
+            self.last_refusal = "REGISTRY_NOT_READABLE"
+            return {}
+        age = self._age_s(doc)
+        if age is None:
+            self.last_refusal = "CLAIM_AGE_UNREADABLE"
+            return {}
+        if age < -self.CLOCK_SKEW_S:
+            self.last_refusal = "CLAIM_IN_THE_FUTURE:%.1fs" % age
+            return {}
+        if age > self.max_claim_age_s:
+            self.last_refusal = ("CLAIM_STALE:%.1fs>%.1fs"
+                                 % (age, self.max_claim_age_s))
             return {}
         out: Dict[str, Dict[str, Any]] = {}
         for row in (doc.get("orders") or []):
@@ -514,6 +569,9 @@ class Watchdog:
                 "the ownership registry named no ids, so NOTHING is "
                 "cancellable; the halt is asserted and the order is STILL "
                 "RESTING")
+            # WHY it named none. "We own nothing" and "we could not find out"
+            # are opposite facts and must not arrive as the same empty dict.
+            out["claim_refused"] = getattr(self.oracle, "last_refusal", None)
             return out
         for o in overdue:
             vid = o["venue_order_id"]
