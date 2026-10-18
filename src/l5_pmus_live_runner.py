@@ -2553,6 +2553,10 @@ class Runner:
             `sweep_settlements` and `reconcile_if_needed` all still run, so a
             fill while the order rests is booked with its cost basis instead
             of becoming quantity without cost.
+
+        AND `poll` IS NOT CALLED, which is the correction this docstring
+        previously got wrong: `poll` -> `handle` is the strategy itself, not a
+        feed refresh. See the comment at the call site for the live evidence.
           * the authorization's own venue-bounded expiry.
         """
         self.now_t = now
@@ -2575,7 +2579,6 @@ class Runner:
         cooling = self.venue_cooling()
         if cooling > 0:
             self.stats["ticks_skipped_in_cooloff"] += 1
-            self.poll(now)
             return
         self.maybe_preflight(now)
         # RECONCILIATION, unchanged. A fill while it rests must be booked.
@@ -2584,8 +2587,27 @@ class Runner:
             self.resolve_pending_terminal(now)
         self.sweep_settlements()
         self.reconcile_if_needed(now)
-        self.poll(now)
-        # and only then the experiment's own state machine
+        # NO self.poll(). THIS IS THE WHOLE POINT OF THE MODE AND I GOT IT
+        # WRONG THE FIRST TIME.
+        #
+        # `poll` reads the L5 action feed and hands every fresh action to
+        # `handle`, which IS the strategy: it builds an intent, runs the
+        # frozen decision path and calls the executor's submit. It was copied
+        # in from `tick` on the assumption that it merely refreshed a feed,
+        # and the docstring above claimed the strategy was removed while this
+        # line kept it.
+        #
+        # OBSERVED LIVE at 18:34:36Z with the shadow lock LIFTED: two
+        # L5_LIVE_DECISION records, UP 0.06 @ 0.31 and DOWN 0.9 @ 0.6, both
+        # ORDER:NOT_ARMED. Only the pending arming stopped them. Had arming
+        # completed, the strategy would have submitted alongside the ONE
+        # order this test is authorized for, raced it for the single-use
+        # submission claim, and amounted to the recurring live trading the
+        # owner explicitly prohibited.
+        #
+        # The mechanism needs NO action feed: its order is predetermined. The
+        # authenticated book it prices against is a separate thread and is
+        # unaffected.
         mech.step(now)
 
 
