@@ -471,6 +471,142 @@ def money_field_shapes(rows: List[Mapping[str, Any]],
     return dict(acc)
 
 
+#: MARKET LANES. Fee treatment is NOT uniform across them and must never be
+#: pooled: the September PMUS sports ladder was rebated on passive fills
+#: while the crypto 15m lane was charged. Prefix match on the venue's own
+#: slug, longest first, and anything unrecognised stays "other" rather than
+#: being swept into a neighbour.
+LANE_PREFIXES = (
+    ("btc15m", ("cpc-btc-updown-15m-",)),
+    ("eth15m", ("cpceth-eth-updown-15m-",)),
+    ("sol15m", ("cpcsol-sol-updown-15m-",)),
+    ("xrp15m", ("cpcxrp-xrp-updown-15m-",)),
+    ("btc1d", ("cpc-btc-updown-1d-",)),
+    ("sports", ("aec-", "asc-", "tsc-")),
+)
+
+
+def _lane(slug: str) -> str:
+    sl = str(slug or "")
+    for name, prefixes in LANE_PREFIXES:
+        for pre in prefixes:
+            if sl.startswith(pre):
+                return name
+    return "other"
+
+
+def _aggressor_class(body: Mapping[str, Any]) -> str:
+    """TAKER / MAKER / UNKNOWN, from the venue's OWN isAggressor flag.
+
+    NEVER FROM THE FEE. A low or zero commission is not evidence of maker
+    status -- the programme's standing rule -- so this reads only the flag
+    the venue states, and an absent flag yields UNKNOWN rather than a guess.
+    A row carrying exactly one execution object is unambiguous: the object's
+    own key names which party we were.
+    """
+    flag = body.get("isAggressor") if isinstance(body, Mapping) else None
+    if flag is True:
+        return "TAKER"
+    if flag is False:
+        return "MAKER"
+    objs = [k for k in EXEC_KEYS if isinstance(body.get(k), Mapping)]
+    if len(objs) == 1:
+        return "TAKER" if objs[0] == "aggressorExecution" else "MAKER"
+    return "UNKNOWN"
+
+
+def fee_crosstab(rows: List[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Commission and notional by LANE x the venue's own isAggressor.
+
+    THE ONE QUESTION THIS ANSWERS. Account-wide the commission signs read
+    831 credited / 975 zero / 105 charged and the sum is a NET CREDIT, while
+    the crypto 15m lane's 47 established legs were charged 2.2523% of
+    notional. Both are true, and a single blended rate is meaningless. This
+    separates them by the only authoritative classifier available.
+
+    EFFECTIVE RATE IS SIGNED. commission_usd is the venue's own sign
+    convention: POSITIVE is charged to us, NEGATIVE is credited. So a
+    negative effective_fee_rate means that bucket was PAID, and the sign is
+    never flipped or clamped.
+
+    REBATES AND CHARGES ARE REPORTED SEPARATELY as well as netted, because a
+    bucket that is net-zero from offsetting rebates and charges is not the
+    same economic object as one that was never charged.
+
+    READ-ONLY and aggregate. No identifier is reported.
+    """
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        k = str(r.get("kind") or r.get("type") or "").strip().lower()
+        if k not in FILL_KINDS:
+            continue
+        b = _payload(r)
+        if not isinstance(b, Mapping):
+            continue
+        lane = _lane(_row_market(r))
+        cls = _aggressor_class(b)
+        key = "%s|%s" % (lane, cls)
+        acc = buckets.setdefault(key, {
+            "lane": lane, "aggressor": cls, "fills": 0,
+            "qty": D(0), "notional_usd": D(0), "commission_usd": D(0),
+            "charged_usd": D(0), "rebated_usd": D(0),
+            "n_charged": 0, "n_zero": 0, "n_rebated": 0, "n_fee_unreadable": 0,
+            "n_qty_unreadable": 0})
+        acc["fills"] += 1
+        ours = _exec_objects(b)
+        fee = _d(_first_present([b], FEE_KEYS))
+        if fee is None:
+            fee = _d(_first_present(ours, FEE_KEYS, deep=True))
+        if fee is None:
+            acc["n_fee_unreadable"] += 1
+        else:
+            acc["commission_usd"] += fee
+            if fee > 0:
+                acc["charged_usd"] += fee
+                acc["n_charged"] += 1
+            elif fee < 0:
+                acc["rebated_usd"] += fee
+                acc["n_rebated"] += 1
+            else:
+                acc["n_zero"] += 1
+        q = _d(_first_present(ours, EXEC_QTY_KEYS))
+        if q is None:
+            q = _d(_first_present([b], ("qty", "qtyDecimal", "quantity",
+                                        "cumQuantity")))
+        px = _d(_first_present(ours, EXEC_PX_KEYS))
+        if px is None:
+            px = _d(_first_present([b], ("price", "avgPx")))
+        if q is None or q <= 0:
+            acc["n_qty_unreadable"] += 1
+        else:
+            acc["qty"] += q
+            if px is not None and px > 0:
+                acc["notional_usd"] += q * px
+    out = []
+    for key in sorted(buckets):
+        a = buckets[key]
+        n = a["notional_usd"]
+        a["effective_fee_rate_pct"] = (
+            str((a["commission_usd"] / n * D(100)).quantize(D("0.0001")))
+            if n > 0 else None)
+        for f in ("qty", "notional_usd", "commission_usd", "charged_usd",
+                  "rebated_usd"):
+            a[f] = str(a[f])
+        out.append(a)
+    return {
+        "buckets": out,
+        "classifier": "venue isAggressor; absent -> UNKNOWN, never guessed",
+        "labels": ("Commission sign is the VENUE's: positive is charged to "
+                   "us, negative is credited, so a negative "
+                   "effective_fee_rate_pct means the bucket was PAID. "
+                   "LANES ARE NOT INTERCHANGEABLE -- sports rebate "
+                   "economics must NOT be transferred to btc15m, and are "
+                   "reported separately for exactly that reason. A zero "
+                   "commission is NOT a rebate and UNKNOWN is never folded "
+                   "into MAKER or TAKER. Aggregates only; no identifier."),
+    }
+
+
 def fee_and_notional_evidence(rows: List[Mapping[str, Any]]) -> Dict[str, Any]:
     """Were maker rebates ACTUALLY credited, and what is the real minimum?
 
@@ -903,6 +1039,7 @@ def audit(store: Any, transport: Any, *, max_pages: int = MAX_PAGES
         "activity_rows": len(walk["rows"]),
         # ALWAYS computed: the two things that were being assumed.
         "fee_and_notional_evidence": fee_and_notional_evidence(walk["rows"]),
+        "fee_crosstab": fee_crosstab(walk["rows"]),
         "execution_field_inventory": execution_field_inventory(walk["rows"]),
         # computed only on the failing case, same rule as the other
         # diagnostics: a healthy audit does not carry it.
