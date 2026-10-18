@@ -224,7 +224,8 @@ def test_a_delayed_acknowledgement_does_not_free_the_envelope(tmp_path):
 
 # ------------------------------------------------------------ what is preserved
 
-def test_the_stated_envelope_is_unchanged(tmp_path):
+def test_the_stated_envelope_is_unchanged(tmp_path, monkeypatch):
+    monkeypatch.setenv("L5_MAX_LIVE_ORDERS", "8")   # Probe 07, declared
     p = probe_limits()
     assert p.max_usd_per_market == D("5")
     assert p.max_total_exposure_usd == D("5")
@@ -306,10 +307,16 @@ def test_rapid_l5_decisions_are_bounded_by_the_dollars(tmp_path, monkeypatch):
     now the money -- which is the point of the change: the risk engine, not
     the order count, is the hard boundary. 2 shares at 0.60 is $1.20, so four
     orders reach $4.80 and the fifth would breach $5.
+
+    Probe 07's eight is now opted into rather than the default -- the
+    envelope's default was reconciled with the runner's ONE -- so the
+    concurrency this test needs is declared here. The property under test is
+    the same: the money refuses, the count never does.
     """
     import datetime as dt
     import tests.test_l5_live_execution as L
 
+    monkeypatch.setenv("L5_MAX_LIVE_ORDERS", "8")
     t = NeverFills()
     ex = E.FaithfulExecutor(store(tmp_path), probe_limits(),
                             transport=t, now_fn=L.NOW)

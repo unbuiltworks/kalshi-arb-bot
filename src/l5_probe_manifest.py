@@ -20,6 +20,7 @@ arms it.
 """
 from __future__ import annotations
 
+import os
 from decimal import Decimal as D
 from typing import Any, Dict
 
@@ -36,6 +37,35 @@ LAMBDA = D("0.04518752824220514525")
 #: the fee coefficient is maximised at this price
 FEE_MAX_PRICE = D("0.5")
 
+#: PRODUCTION'S OWN MECHANISM, read here rather than kept as a second number.
+MAX_LIVE_ORDERS_ENV = "L5_MAX_LIVE_ORDERS"
+
+
+def max_live_orders() -> int:
+    """How many orders may rest at once -- ONE, unless a deployment says more.
+
+    TWO DEFAULTS FOR ONE ACCOUNT IS NOT A POLICY. Probe 07 raised this
+    envelope's count to 8 on replay evidence: 19 orders rested
+    simultaneously for $4.9983, inside $5, so the dollar engine and not the
+    count was the boundary. The CONTINUOUS runner was later tightened the
+    other way -- `l5_pmus_live_runner.max_live_orders()` defaults to 1,
+    because the bounded pilot's "one outstanding order" restriction was
+    otherwise unenforceable at all: at a 3c quote eight clips rest for under
+    a dollar. Both were right about their own question and they disagreed
+    about the account, which is how an 8 ended up facing a 1.
+
+    So this envelope now carries the runner's answer, read the runner's way:
+    the default is 1, an unreadable value is the tightest one, and Probe 07's
+    8 remains available to a deployment that says it out loud. The two
+    functions are pinned to each other by test, so they cannot drift again.
+    """
+    raw = (os.getenv(MAX_LIVE_ORDERS_ENV) or "").strip()
+    try:
+        n = int(raw) if raw else 1
+    except ValueError:
+        n = 1                      # an unreadable limit is the tightest one
+    return max(1, n)               # zero or negative would refuse everything
+
 
 def probe_limits() -> SafetyLimits:
     """The authorised envelope. Every bound stated, none left to a default."""
@@ -44,18 +74,12 @@ def probe_limits() -> SafetyLimits:
         max_total_exposure_usd=D("5"),
         max_abs_residual=D("10"),
         max_concurrent_markets=1,
-        # EIGHT, not one, and this is a CONCURRENCY change rather than any
-        # additional risk. Replaying the preregistered maker lifecycle over
-        # 12 clean authenticated windows: under one-live-order, 143 of 217
-        # maker intents were lost to the COUNT and ZERO to money, and
-        # concurrent premium never exceeded $4.4198. Remove the count and 19
-        # orders rest simultaneously for $4.9983 -- still inside $5.
-        #
-        # So the dollar engine, not the order count, is the hard boundary.
-        # Eight is deliberately below the 19 the replay reached, so the
-        # aggregate risk bound is what refuses an order and the count never
-        # becomes the reason. Every monetary limit below is UNCHANGED.
-        max_live_orders=8,
+        # ONE by default, 8 only when a deployment says so: see
+        # `max_live_orders` above for why Probe 07's 8 and the runner's 1
+        # both existed, and why the runner's answer wins. Every monetary
+        # limit below is UNCHANGED either way -- the count has never been
+        # what bounds the money.
+        max_live_orders=max_live_orders(),
         daily_realized_loss_halt_usd=D("5"),
         band=None,          # a band is behavioural; the faithful engine has none
     )

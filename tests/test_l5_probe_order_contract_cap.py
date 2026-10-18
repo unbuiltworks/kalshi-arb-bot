@@ -187,9 +187,11 @@ def test_no_cancel_function_anywhere_references_the_cap():
 
 # ------------------------------------------- the startup refusal gate
 
-def _gate(monkeypatch, cap=None, required=None, recover=None):
+def _gate(monkeypatch, cap=None, required=None, recover=None, live=None):
     import scripts.l5_pmus_live_oneshot as O
-    for name, val in ((CAP, cap), (REQ, required), ("L5_RECOVER_ONLY", recover)):
+    for name, val in ((CAP, cap), (REQ, required),
+                      ("L5_RECOVER_ONLY", recover),
+                      ("L5_MAX_LIVE_ORDERS", live)):
         if val is None:
             monkeypatch.delenv(name, raising=False)
         else:
@@ -250,3 +252,66 @@ def test_the_oneshot_refuses_before_claiming_anything(monkeypatch):
     for later in ("claim", "run()", "observe()"):
         if later in src:
             assert gate_at < src.index(later), later
+
+
+# 5 ------------------------------------------- the hard ONE-ORDER limit
+#
+# `l5_probe_manifest.probe_limits()` carried max_live_orders=8 from Probe 07
+# while `l5_pmus_live_runner.max_live_orders()` defaults to 1 for the same
+# account. Two defaults is not a policy, and the bounded cancellation probe
+# needs exactly one order. These pin the reconciliation.
+
+
+def test_the_probe_envelope_defaults_to_one_live_order(monkeypatch):
+    import src.l5_probe_manifest as PM
+    monkeypatch.delenv("L5_MAX_LIVE_ORDERS", raising=False)
+    assert PM.max_live_orders() == 1
+    assert PM.probe_limits().max_live_orders == 1
+
+
+def test_probe_sevens_eight_is_still_available_but_must_be_said_out_loud(
+        monkeypatch):
+    import src.l5_probe_manifest as PM
+    monkeypatch.setenv("L5_MAX_LIVE_ORDERS", "8")
+    assert PM.max_live_orders() == 8
+    assert PM.probe_limits().max_live_orders == 8
+
+
+@pytest.mark.parametrize("raw", ["", "abc", "0", "-3", "1.5", " "])
+def test_an_unreadable_live_order_limit_is_the_tightest_one(monkeypatch, raw):
+    import src.l5_probe_manifest as PM
+    monkeypatch.setenv("L5_MAX_LIVE_ORDERS", raw)
+    assert PM.max_live_orders() == 1
+
+
+@pytest.mark.parametrize("raw", [None, "", "1", "8", "abc", "0", "-3", "1.5",
+                                " 2 ", "19"])
+def test_the_envelope_and_the_runner_cannot_drift_apart(monkeypatch, raw):
+    """One account, one answer: the two functions agree on every input."""
+    import src.l5_probe_manifest as PM
+    import src.l5_pmus_live_runner as R
+    if raw is None:
+        monkeypatch.delenv("L5_MAX_LIVE_ORDERS", raising=False)
+    else:
+        monkeypatch.setenv("L5_MAX_LIVE_ORDERS", raw)
+    assert PM.max_live_orders() == R.max_live_orders()
+
+
+def test_a_declared_probe_refuses_to_start_above_one_live_order(monkeypatch):
+    """The HARD limit: a declared probe cannot raise the count at all."""
+    assert _gate(monkeypatch, cap="0.01", required="YES",
+                 live="8") == "PROBE_LIVE_ORDER_LIMIT_NOT_ONE:8"
+    assert _gate(monkeypatch, cap="0.01", required="YES",
+                 live="2") == "PROBE_LIVE_ORDER_LIMIT_NOT_ONE:2"
+
+
+def test_a_declared_probe_starts_at_exactly_one_live_order(monkeypatch):
+    assert _gate(monkeypatch, cap="0.01", required="YES", live="1") is None
+    assert _gate(monkeypatch, cap="0.01", required="YES") is None
+    # an unreadable value floors to 1, so it starts rather than refusing
+    assert _gate(monkeypatch, cap="0.01", required="YES", live="abc") is None
+
+
+def test_recovery_is_not_blocked_by_the_one_order_limit(monkeypatch):
+    """Recovery only ever cancels; the count must not strand an order."""
+    assert _gate(monkeypatch, recover="YES", live="8") is None

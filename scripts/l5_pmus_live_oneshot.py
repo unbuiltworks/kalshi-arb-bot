@@ -1304,7 +1304,7 @@ def selected_mode() -> str:
 
 
 def probe_cap_startup_gate() -> Optional[str]:
-    """Refuse to start unless BOTH probe-cap variables are usable.
+    """Refuse to start unless both cap variables and a one-order limit hold.
 
     WHY A STARTUP GATE AS WELL AS THE SUBMISSION ONE. The cap in
     `l5_live_execution` refuses on the quantity about to be sent, which is the
@@ -1328,6 +1328,13 @@ def probe_cap_startup_gate() -> Optional[str]:
         return why
     if cap is None:
         return "PROBE_ORDER_CAP_MISSING"
+    # AND A HARD ONE-ORDER LIMIT, not merely a default. `PM.max_live_orders`
+    # now defaults to 1, but a declared probe must not be able to raise it at
+    # all: one bounded order is the whole authorization, so a deployment that
+    # sets L5_MAX_LIVE_ORDERS above 1 is refused rather than honoured.
+    live = PM.max_live_orders()
+    if live != 1:
+        return "PROBE_LIVE_ORDER_LIMIT_NOT_ONE:%d" % live
     return None
 
 

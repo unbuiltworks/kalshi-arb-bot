@@ -5,6 +5,13 @@ of 217 maker intents while the dollar cap excluded none, and 19 orders rested
 simultaneously for $4.9983. The dollar engine -- not the order count -- is
 what must refuse, so these tests push on the money with several orders
 outstanding.
+
+EIGHT IS NOW SAID OUT LOUD. The envelope's default was reconciled with the
+continuous runner's, which is ONE: two defaults for one account is not a
+policy, and the bounded cancellation probe needs exactly one order. Probe
+07's finding is unchanged and still enforced here -- it is simply opted into
+by `L5_MAX_LIVE_ORDERS=8`, the same variable and the same semantics the
+runner reads.
 """
 from __future__ import annotations
 
@@ -19,6 +26,12 @@ from src import l5_probe_manifest as PM
 
 MARKET = "cpc-btc-updown-15m-2026-09-25-1900z"
 SID = "l5probe-20260925-btc15m-07"
+
+
+@pytest.fixture(autouse=True)
+def _probe07_concurrency(monkeypatch):
+    """Probe 07's eight, declared. Every test in this file is about it."""
+    monkeypatch.setenv("L5_MAX_LIVE_ORDERS", "8")
 
 
 def store():
@@ -39,9 +52,12 @@ def rest(st, coid, side="UP", price="0.50", qty="1", session=SID,
 
 # --------------------------------------------------------- the envelope
 
-def test_the_authorised_envelope_changed_only_the_count():
+def test_the_authorised_envelope_changed_only_the_count(monkeypatch):
     lim = PM.probe_limits().as_dict()
-    assert lim["max_live_orders"] == 8
+    assert lim["max_live_orders"] == 8          # declared by the fixture
+    # and UNDECLARED it is one, which is the runner's answer for this account
+    monkeypatch.delenv("L5_MAX_LIVE_ORDERS", raising=False)
+    assert PM.probe_limits().as_dict()["max_live_orders"] == 1
     assert lim["max_usd_per_market"] == "5"
     assert lim["max_total_exposure_usd"] == "5"
     assert lim["max_abs_residual"] == "10"

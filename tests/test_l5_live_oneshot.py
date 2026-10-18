@@ -416,7 +416,8 @@ def test_the_five_dollar_envelope_is_the_probe_envelope(tmp_path, monkeypatch):
     assert lim["max_concurrent_markets"] == 1
     # a CONCURRENCY bound, not a money bound: every dollar limit above is
     # unchanged and the worst case below is still 5.1738
-    assert lim["max_live_orders"] == 8
+    # ONE: reconciled with the runner's default for this account.
+    assert lim["max_live_orders"] == 1
     assert lim["daily_realized_loss_halt_usd"] == "5"
     assert rep["worst_case"]["worst_case_total_usd"] == "5.1738"
 
@@ -1256,7 +1257,7 @@ def test_the_whole_report_survives_a_window_that_actually_did_something(
     assert "UNREADABLE_ROW" not in rep["refused_reason"]
 
     assert rep["live_limits"]["max_usd_per_market"] == "5"
-    assert rep["live_limits"]["max_live_orders"] == 8
+    assert rep["live_limits"]["max_live_orders"] == 1
     assert "OBSERVE ONLY" in rep["labels"]
 
 
