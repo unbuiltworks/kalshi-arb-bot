@@ -40,7 +40,7 @@ import datetime as dt
 import json
 import os
 import time
-from decimal import Decimal as D
+from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 import datetime as _dt
@@ -1287,6 +1287,296 @@ def observe(*, clock=time.time, sleep=time.sleep, book_feed=None,
     return rep
 
 
+# ------------------------------------------- the PMUS cancellation mechanism
+#
+# EXPLICITLY NOT L5, AND NOT PROFITABILITY EVIDENCE. This mode submits ONE
+# predetermined, non-marketable limit order and cancels it by its exact venue
+# id. It never consults the frozen rule, never reads L5's activity and never
+# sizes from lambda. Its only question is whether PMUS honours
+#
+#     place -> rests -> cancel BY ID -> terminal on an authoritative re-read
+#
+# for this account. A fill here would be an accident of the mechanism, not a
+# trade, and is reported as such.
+MECHANISM_ENV = "L5_CANCEL_MECHANISM"
+MECH_MARKET_ENV = "L5_MECH_MARKET"
+MECH_SIDE_ENV = "L5_MECH_SIDE"
+MECH_PRICE_ENV = "L5_MECH_PRICE"
+
+#: the only quantity the cap permits, and the only one this mode will send
+MECH_QTY = D("0.01")
+#: how far BELOW the best bid the predetermined price must sit. One tick is
+#: already non-marketable; five keeps it non-marketable through ordinary book
+#: movement in the few seconds it rests.
+MECH_MARGIN = D("0.05")
+#: refuse to start unless this much of the window remains, so the order is
+#: placed, read back, cancelled and re-read well inside the venue's own
+#: cancellation margin (CANCEL_MARGIN_S = 180s).
+MECH_MIN_REMAINING_S = 300.0
+#: how long the order is left resting before the cancel ...
+MECH_REST_S = 3.0
+#: ... and the hard ceiling on the whole place-to-cancel leg.
+MECH_CANCEL_DEADLINE_S = 45.0
+#: UP only. A DOWN leg is BUY_SHORT, whose worst case is the venue's $1.00
+#: per-share reserve rather than the premium paid; the mechanism question is
+#: identical on either side, so the side with the smaller and simpler worst
+#: case is the one this mode will send.
+MECH_SIDE = "UP"
+
+
+def mechanism_enabled() -> bool:
+    return os.getenv(MECHANISM_ENV, "").strip().upper() in ("1", "YES", "TRUE")
+
+
+def book_top(md: Mapping[str, Any]) -> Dict[str, Any]:
+    """Best bid and offer from the venue's own book, in its proven shape.
+
+    `/v1/markets/{slug}/book` answers `marketData` with `bids` and `offers`
+    ladders whose rows carry `px.value`; the same extraction the preview
+    one-shot has used against this venue since Probe 03.
+    """
+    def top(rows):
+        rows = rows or []
+        if not rows:
+            return None
+        px = (rows[0].get("px") or {}).get("value")
+        try:
+            return D(str(px)) if px is not None else None
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+    return {"venue_market_slug": md.get("marketSlug"),
+            "state": md.get("state"),
+            "best_bid": top(md.get("bids")),
+            "best_ask": top(md.get("offers"))}
+
+
+def mechanism_plan(clock=time.time) -> Dict[str, Any]:
+    """Every field of the one order, stated before anything is contacted."""
+    market = (os.getenv(MECH_MARKET_ENV, "").strip()
+              or os.getenv(AUTH.MARKET_ENV, "").strip()
+              or current_slug(clock()))
+    raw_price = os.getenv(MECH_PRICE_ENV, "").strip()
+    try:
+        price = D(raw_price) if raw_price else None
+    except (InvalidOperation, TypeError, ValueError):
+        price = None
+    side = (os.getenv(MECH_SIDE_ENV, "").strip().upper() or MECH_SIDE)
+    start = window_start(market)
+    remaining = None if start is None else (start + WINDOW_S) - clock()
+    max_loss = None if price is None else price * MECH_QTY
+    return {
+        "market": market,
+        "side": side,
+        "price": None if price is None else str(price),
+        "qty": str(MECH_QTY),
+        "mode": "MAKER",
+        "post_only": True,
+        "time_in_force": "the venue's default; the window itself expires it",
+        "window_start": start,
+        "window_remaining_s": None if remaining is None else round(remaining, 1),
+        "cash_committed_usd": None if price is None else str(price * MECH_QTY),
+        "max_loss_usd": None if max_loss is None else str(max_loss),
+        "max_loss_basis": ("a BUY settles worthless at worst, so the premium "
+                           "paid IS the loss; there is no leverage on this "
+                           "venue. post_only cannot cross, so no taker fee "
+                           "can arise."),
+        "cancel_after_s": MECH_REST_S,
+        "cancel_deadline_s": MECH_CANCEL_DEADLINE_S,
+        "fill_handling": ("a post_only order cannot cross, so an immediate "
+                          "fill is not reachable. A MAKER fill while it "
+                          "rests is reported, reconciled from the venue and "
+                          "left to settle: no second order is placed to "
+                          "flatten it, because that would be a trading "
+                          "decision and would breach the one-order limit. "
+                          "At 0.01 contracts the residual is at most one "
+                          "cent of risk, and any settlement cashflow is "
+                          "labelled mechanism-test cost, never strategy "
+                          "P&L."),
+        "labels": ("PMUS CANCELLATION MECHANISM TEST. Not an L5 action, not "
+                   "an L5 strategy trade, and not evidence about L5 "
+                   "behaviour, expectancy or profitability."),
+    }
+
+
+def mechanism_checks(plan: Mapping[str, Any], *, transport=None,
+                     ledger_path: Optional[str] = None,
+                     clock=time.time) -> List[Dict[str, Any]]:
+    """Every precondition, each evaluated and each reported.
+
+    DELIBERATELY NOT SHORT-CIRCUITED. A gate that returns on its first
+    failure makes one deployment answer one question, and the blockers here
+    are independent -- the image, the latch, the ledger, the cap, the count,
+    the book. Evaluating all of them means a single disarmed run says
+    exactly which remain.
+    """
+    out: List[Dict[str, Any]] = []
+
+    def check(name: str, ok: bool, detail: Any = None) -> None:
+        out.append({"check": name, "ok": bool(ok), "detail": detail})
+
+    # --- the cap, and the one quantity it permits
+    cap, cap_why = EX.probe_order_contract_cap()
+    declared = os.getenv(EX.PROBE_CAP_REQUIRED_ENV, "").strip().upper()
+    check("probe_cap_declared", declared in ("1", "YES", "TRUE"),
+          {"env": EX.PROBE_CAP_REQUIRED_ENV, "value": declared or None})
+    check("probe_cap_usable", cap_why is None and cap is not None,
+          {"cap": None if cap is None else str(cap), "why": cap_why})
+    check("probe_cap_is_one_hundredth", cap == MECH_QTY,
+          {"cap": None if cap is None else str(cap),
+           "required": str(MECH_QTY)})
+    check("order_qty_is_the_cap", MECH_QTY == cap, {"qty": str(MECH_QTY)})
+
+    # --- one resting order, hard
+    live = PM.max_live_orders()
+    check("one_live_order", live == 1,
+          {"max_live_orders": live, "env": PM.MAX_LIVE_ORDERS_ENV})
+
+    # --- the independent halt: the module, the url, and a live read
+    gate = None
+    halt_url = str(os.getenv("L5_HALT_URL", "")).strip()
+    try:
+        from src import l5_halt_gate as HG
+        check("halt_gate_module_present", True, {"module": HG.__name__})
+        check("halt_url_configured", bool(halt_url),
+              {"env": "L5_HALT_URL", "configured": bool(halt_url)})
+        if halt_url:
+            gate = HG.HaltGate(HG.HttpHaltStore(halt_url))
+    except Exception as exc:                                   # noqa: BLE001
+        check("halt_gate_module_present", False,
+              {"error": "%s: %s" % (type(exc).__name__, str(exc)[:120])})
+        check("halt_url_configured", bool(halt_url), {"gate_built": False})
+    if gate is None:
+        check("halt_gate_permits", False, {"gate": None})
+    else:
+        try:
+            st = gate.state()
+            check("halt_gate_permits", bool(st.get("permitted")),
+                  {"why": st.get("why"),
+                   "age_s": (None if st.get("age_s") is None
+                             else round(float(st["age_s"]), 1)),
+                   "reachable": st.get("why") != "halt_state_unavailable"})
+        except Exception as exc:                               # noqa: BLE001
+            check("halt_gate_permits", False,
+                  {"error": "%s: %s" % (type(exc).__name__, str(exc)[:120])})
+
+    # --- durable authorization storage
+    ledger = ledger_path or os.getenv(AUTH.LEDGER_ENV, "") or AUTH.DEFAULT_LEDGER
+    dur = AUTH.durability_refusal(ledger)
+    check("authorization_ledger_durable", dur is None,
+          {"ledger": str(ledger),
+           "nearest_mount": AUTH.nearest_mount(str(ledger)),
+           "refusal": None if dur is None else dur.get("reason")})
+
+    # --- the order itself
+    price = None if plan.get("price") is None else D(str(plan["price"]))
+    check("side_is_up", plan.get("side") == MECH_SIDE,
+          {"side": plan.get("side"), "required": MECH_SIDE})
+    check("price_stated", price is not None, {"env": MECH_PRICE_ENV})
+    on_tick = (price is not None
+               and price == price.quantize(D("0.01"))
+               and D("0") < price < D("1"))
+    check("price_on_tick", on_tick, {"price": plan.get("price"),
+                                     "increment": "0.01"})
+    rem = plan.get("window_remaining_s")
+    check("window_has_room", rem is not None and rem >= MECH_MIN_REMAINING_S,
+          {"remaining_s": rem, "required_s": MECH_MIN_REMAINING_S})
+
+    # --- the live book: identity, tradability, and non-marketability
+    top: Dict[str, Any] = {}
+    if transport is None:
+        check("book_readable", False, {"note": "no transport supplied"})
+        check("price_non_marketable", False, {"book": None})
+    else:
+        try:
+            top = book_top(transport.book(plan["market"]) or {})
+            bid, ask = top.get("best_bid"), top.get("best_ask")
+            check("book_readable", bid is not None or ask is not None,
+                  {"best_bid": None if bid is None else str(bid),
+                   "best_ask": None if ask is None else str(ask),
+                   "venue_market_slug": top.get("venue_market_slug"),
+                   "state": top.get("state")})
+            nm = (price is not None and bid is not None
+                  and price <= bid - MECH_MARGIN
+                  and (ask is None or price < ask))
+            check("price_non_marketable", nm,
+                  {"price": plan.get("price"),
+                   "best_bid": None if bid is None else str(bid),
+                   "required_at_or_below": (None if bid is None
+                                            else str(bid - MECH_MARGIN)),
+                   "margin": str(MECH_MARGIN),
+                   "post_only": True,
+                   "note": ("post_only is the venue-side guarantee; this "
+                            "check is ours, so the order is not merely "
+                            "rejected-if-crossing but chosen not to cross")})
+        except Exception as exc:                               # noqa: BLE001
+            check("book_readable", False,
+                  {"error": "%s: %s" % (type(exc).__name__, str(exc)[:160])})
+            check("price_non_marketable", False, {"book": None})
+
+    # --- the owner's own authorization, last, because it is the one that
+    #     stays absent until the owner decides to run this
+    check("owner_authorization", bool(Q1.armed()) and bool(session_id_set()),
+          {"needs": ["PMUS_Q1_ARM", "PMUS_Q1_LIVE", "PMUS_Q1_SESSION_ID"],
+           "armed": bool(Q1.armed())})
+    return out
+
+
+def session_id_set() -> bool:
+    return bool(str(os.getenv("PMUS_Q1_SESSION_ID", "")).strip())
+
+
+def mechanism(*, clock=time.time, sleep=time.sleep, transport=None,
+              journal_path: Optional[str] = None,
+              state_path: Optional[str] = None,
+              ledger_path: Optional[str] = None) -> Dict[str, Any]:
+    """Verify every precondition; place and cancel ONE order only if all hold.
+
+    Disarmed -- which is what it is until the owner authorizes the single
+    live run -- this contacts the keyless book and the watchdog and nothing
+    else. No authorization is claimed, no credentialed write is attempted,
+    and the report names every check.
+    """
+    plan = mechanism_plan(clock=clock)
+    journal = JN.Journal(
+        journal_path or os.getenv("L5_SESSION_JOURNAL",
+                                  "/state/pmus-ws/l5_mechanism_journal.jsonl"))
+    journal.write("mechanism_plan", dict(plan))
+    print("L5_MECH_PLAN " + json.dumps(plan, default=str), flush=True)
+
+    tp = transport
+    if tp is None:
+        try:
+            from src import l5_pmus_transport as TP
+            tp = TP.PmusTransport(market_slug=plan["market"])
+        except Exception as exc:                               # noqa: BLE001
+            tp = None
+            journal.write("mechanism_transport_unavailable",
+                          {"error": type(exc).__name__})
+    checks = mechanism_checks(plan, transport=tp, ledger_path=ledger_path,
+                              clock=clock)
+    failed = [c["check"] for c in checks if not c["ok"]]
+    rep: Dict[str, Any] = {
+        "LABEL": "PMUS_CANCEL_MECHANISM",
+        "plan": plan,
+        "checks": checks,
+        "failed_checks": failed,
+        "armed": False,
+        "submitted": 0,
+        "cancelled": 0,
+        "labels": plan["labels"],
+    }
+    if failed:
+        rep["refused"] = "MECHANISM_PRECONDITIONS_NOT_MET"
+        journal.write("mechanism_refused", rep)
+        return rep
+    rep["refused"] = "NOT_IMPLEMENTED_WITHOUT_SEPARATE_AUTHORIZATION"
+    rep["note"] = ("every precondition holds; the place-then-cancel leg is "
+                   "deliberately not reached by this build and requires its "
+                   "own authorized change")
+    journal.write("mechanism_ready", rep)
+    return rep
+
+
 def selected_mode() -> str:
     """Which branch this process will take, decided once and announced.
 
@@ -1300,6 +1590,11 @@ def selected_mode() -> str:
         return "RECOVER_ONLY"
     if observe_only_enabled():
         return "OBSERVE_ONLY"
+    # BEFORE LIVE_PROBE, and deliberately: the mechanism test is not the L5
+    # probe and must never be reached by forgetting a variable. Selecting it
+    # takes its own explicit flag.
+    if mechanism_enabled():
+        return "CANCEL_MECHANISM"
     return "LIVE_PROBE"
 
 
@@ -1383,6 +1678,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         rep = observe()
         print("L5_OBSERVE_ONLY " + json.dumps(rep, default=str), flush=True)
         return 0
+    if mechanism_enabled():
+        rep = mechanism()
+        print("L5_CANCEL_MECHANISM " + json.dumps(rep, default=str),
+              flush=True)
+        # a refused mechanism run is a FAILED run: it exits non-zero so the
+        # deployment reads as what it is rather than as a success that did
+        # nothing.
+        return 0 if rep.get("refused") is None else 65
     rep = run()
     print("L5_LIVE_PROBE " + json.dumps(rep, default=str), flush=True)
     # exits either way: one market, then the process is done.

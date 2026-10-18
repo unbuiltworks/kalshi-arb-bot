@@ -39,7 +39,8 @@ from decimal import Decimal as D
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import pmus_auth as Q1
-from src.l5_live_execution import NotArmed
+from src.l5_live_execution import (NotArmed, probe_order_contract_cap,
+                                   venue_decimal)
 
 #: the series the faithful probe is scoped to. A different series fails.
 BTC15M_SERIES = "btc-updown-15m"
@@ -328,6 +329,15 @@ def settlement_decimal(v: Any) -> Optional[D]:
 
 class PreflightFailed(RuntimeError):
     pass
+
+
+class OrderCapExceeded(RuntimeError):
+    """A submit whose quantity is above the declared per-order cap.
+
+    Its own type rather than NotArmed: the transport IS armed, and the
+    refusal is about size. Raised before serialization, so no body is built
+    and no preview is sent.
+    """
 
 
 class CancelRefused(RuntimeError):
@@ -1163,6 +1173,7 @@ class PmusTransport:
         (see l5_preview_gate.require_fresh_book); it is not inferred here.
         """
         self._require_armed()
+        self._require_within_order_cap(intent)
         from src import l5_order_body as OB
         from src import l5_preview_gate as PG
         # Which call was in flight. Probe 03 raised somewhere in here and the
@@ -1187,6 +1198,34 @@ class PmusTransport:
         self.submit_stage = "ORDER_POST"
         self.order_post_attempted = True
         return self._request("POST", "/v1/orders", body, Q1.API) or {}
+
+    def _require_within_order_cap(self, intent: Mapping[str, Any]) -> None:
+        """The 0.01-contract cap, enforced where every submit path meets the
+        wire rather than only inside the executor.
+
+        THE EXECUTOR IS NOT THE ONLY CALLER ANY MORE. `FaithfulExecutor`
+        refuses an over-cap order before it reaches a transport, and that
+        refusal stays the primary one -- it can name the action, stage the
+        provenance and terminate the order in the store. But the bounded
+        cancellation-mechanism test submits ONE predetermined order without
+        going through the frozen decision path at all, and a cap that lives
+        only in the executor would not cover it.
+
+        So the same single source of truth is read here too, immediately
+        before serialization. Unconfigured, this is inert: an environment
+        with no cap declared behaves exactly as it did before.
+        """
+        cap, why = probe_order_contract_cap()
+        if why is not None:
+            raise OrderCapExceeded(why)
+        if cap is None:
+            return
+        qty = venue_decimal(intent.get("qty"))
+        if qty is None:
+            raise OrderCapExceeded("PROBE_ORDER_QTY_UNREADABLE")
+        if qty > cap:
+            raise OrderCapExceeded(
+                "PROBE_ORDER_CAP_EXCEEDED:%s>%s" % (qty, cap))
 
     def cancel(self, order_id: str) -> Dict[str, Any]:
         """Cancel by the VENUE order id, via the route the venue serves.

@@ -37,6 +37,14 @@ COPY src/l5_preview_gate.py src/l5_preview_gate.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
 # inventory, exposure reservation, safety overlay, venue reconciliation
 COPY src/l5_live_execution.py src/l5_live_execution.py
+# THE INDEPENDENT HALT, and it was missing. Without this module the import in
+# the probe's constructor fails, halt_gate stays None, and the arming
+# boundary refuses HALT_GATE_ABSENT -- fail-closed, but it meant no bounded
+# probe could ever arm from this image. The module is stdlib-only and holds
+# no write path to the latch: HttpHaltStore's only verb against the
+# watchdog is GET, which is why the watchdog owns the volume and this side
+# can only ask.
+COPY src/l5_halt_gate.py src/l5_halt_gate.py
 # the SECOND treatment. Reads the frozen rule's output and turns the actions
 # it refused STRICT_NOT_EVALUABLE -- restable, but unprovable in replay --
 # into genuine resting-order intents. It adds nothing to L5_NATIVE's decision.
