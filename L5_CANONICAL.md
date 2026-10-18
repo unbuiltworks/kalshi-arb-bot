@@ -7835,3 +7835,108 @@ usage census says the slots here hold evidence: `kalshi-l5-tape` 1.60 GB,
 `l5-shadow-state` 1.76 GB, `l5-v1-shadow-state` 10.83 GB, both candidates
 above 24.82 and 56.19 GB. No empty volume was found. Which slot to free
 would be the owner's decision, and it is a worse trade than half a cent.
+
+---
+
+## 84. The exact-ID cancellation mechanism, proposed
+
+**Specification only. No code exists for this leg.** Writing it was declined
+by this session's action classifier (`[Real-World Transactions]`), and that
+restriction was not bypassed — not through another tool, not through a test,
+not through a staged file. What follows is the design for review, so that
+whoever is authorized to write it has a contract to write against rather
+than a blank page.
+
+Today the mode refuses `NOT_IMPLEMENTED_WITHOUT_SEPARATE_AUTHORIZATION`
+after all sixteen preconditions pass, so the deployed image contains no
+mechanism submit path at all.
+
+### 84.1 The sequence
+
+Reached only when **every** §82.1 check passes, the owner's arming included.
+
+| # | step | call | what it establishes |
+|---|---|---|---|
+| 1 | claim | `AUTH.Authorization.claim(market, limits=PM.probe_limits())` | one consume-once authorization on the durable ledger, scoped to this market and these limits, written **before** anything can POST |
+| 2 | ownership oracle | `tp.cancel_owner_oracle = store.owns_venue_order_id` | a later cancel can be proved ours while disarmed |
+| 3 | preflight | `tp.preflight(expect_account=expected_account())` | account identity, balances, venue reachability. Anything but `PASSED` → refuse `PREFLIGHT_NOT_PASSED`, consume the claim, exit |
+| 4 | arm | `tp.arm()` | installs the only POST-capable client that exists, and only now |
+| 5 | record | `store.record_submit(coid, intent, session_id, mode="MAKER")` | the order is exposure from before it exists, not from its ack. `coid` carries a `mech-` prefix no L5 order can have |
+| 6 | submit | `tp.submit(intent)` | preview → echo validation → `POST /v1/orders`, one body for both. The wire cap refuses anything above 0.01 before serialization |
+| 7 | name it | `ack.get("order_id") or ack.get("orderId") or ack.get("id")`, then `store.attach_venue_id` | the exact id every later call uses |
+| 8 | read back | `tp.order(vid)` | **the venue's own word that it rests**: `state`, `leavesQuantity`, `cumQuantity`, before anything is cancelled |
+| 9 | rest | `sleep(MECH_REST_S)` = 3 s | that it is a resting order and not a flash |
+| 10 | **cancel by id** | `tp.cancel(vid)` → `POST /v1/order/{id}/cancel` | the mechanism under test. **Never account-wide**, never `DELETE /v1/orders/{id}` (404s), never by client id |
+| 11 | reconcile | `tp.order(vid)` again, then `tp.open_orders()`, then `tp.positions()` | terminal **from the venue**, not from our belief; the open-order list no longer carries it; and whether any quantity traded |
+| 12 | spend | `auth.consume({...})` | the authorization is spent whatever happened, so no next window inherits it |
+| 13 | disarm | `tp.disarm(...)` | the POST-capable client is put away before the process exits |
+
+`PASS` is step 11 showing terminal state with `cumQuantity == 0`. Anything
+else is reported as what it is.
+
+### 84.2 Every way it refuses or reports
+
+| outcome | condition | handling |
+|---|---|---|
+| `MECHANISM_PRECONDITIONS_NOT_MET` | any of the sixteen checks fails | nothing is claimed, armed or built. Exit 65 |
+| `PREFLIGHT_NOT_PASSED` | preflight is not `PASSED` | claim consumed, never armed |
+| `PROBE_ORDER_CAP_EXCEEDED` | the wire cap sees qty > 0.01 | `OrderCapExceeded` before serialization — no body, no preview |
+| `REFUSED_BEFORE_ORDER_POST` | submit raised and `submit_forensics` says `order_post_attempted is False` | **terminal known-no-order.** The venue was never asked; nothing is outstanding |
+| `SUBMIT_OUTCOME_UNKNOWN` | submit raised after the order POST was attempted | `store.mark_uncertain`. The order is **assumed live**. Never assumed absent |
+| `ACK_WITHOUT_VENUE_ID` | the venue acknowledged but named nothing | the worst outcome: it may rest and no cancel can name it. `mark_uncertain`, read `open_orders()`, report loudly. Never assumed cancelled |
+| `CANCELLED_WITH_PARTIAL_FILL` | step 11 shows `cumQuantity > 0` | reported, reconciled, **left to settle**. No flattening order: that is a trading decision and would breach the one-order limit. At most $0.01 at risk, labelled mechanism-test cost |
+| `UNDETERMINED` | the venue will not state a filled quantity | "no fill" and "we do not know" are never collapsed. A missing or unreadable `cumQuantity` is **not** read as zero |
+| `ERROR` with `outstanding_order_possible` | an exception after submit with no completed cancel | the id is printed to stdout as well as journalled, because a container that exits takes its volume's contents out of reach |
+
+### 84.3 The tests it must pass, against fakes
+
+A venue double that records calls and answers from a script — the same
+shape `tests/test_l5_live_execution.py::FakeTransport` already uses. No test
+touches a real venue.
+
+**The happy path**
+1. one submit, one cancel, and the cancel argument is **exactly** the venue
+   id from the ack — not the client id, not a slug;
+2. the read-back at step 8 happens **before** the cancel, and the
+   reconcile read happens **after** it (call order asserted, not just
+   counts);
+3. the report's `mechanism_result` is `CANCELLED_UNFILLED` only when the
+   venue's own terminal row says `cumQuantity == 0`;
+4. the authorization is consumed exactly once, and a second `claim()` on the
+   same ledger refuses.
+
+**The refusals**
+5. qty 0.02 never reaches the wire (cap), and `0.01` does;
+6. a preflight that is not `PASSED` leaves `submitted == 0` and the claim
+   consumed;
+7. an ack with no id sets the store uncertain, reads `open_orders()`, and
+   **does not** report the order as cancelled;
+8. a submit that raises with `order_post_attempted False` reports
+   `REFUSED_BEFORE_ORDER_POST` and releases the reservation;
+9. the same with `order_post_attempted True` reports
+   `SUBMIT_OUTCOME_UNKNOWN` and keeps the reservation;
+10. a cancel that raises leaves `outstanding_order_possible` set to the
+    venue id and prints it;
+11. a partial fill produces `CANCELLED_WITH_PARTIAL_FILL` and **no second
+    submit anywhere in the run**;
+12. an unreadable `cumQuantity` produces `UNDETERMINED`, never
+    `CANCELLED_UNFILLED`.
+
+**The structural guarantees**
+13. an AST walk proving the mechanism path contains **no account-wide
+    cancel** and no `cancel_all`-shaped call;
+14. the cancel call site passes the value returned by `attach_venue_id`'s
+    argument, so a refactor cannot silently start cancelling by client id;
+15. `tp.disarm` runs on every exit path, exception included;
+16. the frozen decision modules are **never imported or called** by this
+    mode — it is not an L5 action, and the test says so in code;
+17. the existing suites stay green, with the full-suite failure set
+    unchanged at 33.
+
+### 84.4 What is still owed before a live run
+
+1. a durable ledger (§83.5);
+2. this leg written, by someone authorized to write it, with 84.3 passing;
+3. the owner's `PMUS_Q1_ARM`, `PMUS_Q1_LIVE`, `PMUS_Q1_SESSION_ID`, and the
+   price confirmed against the book at run time;
+4. one touch of the promote marker.
