@@ -3709,6 +3709,14 @@ def main() -> int:
                            "holder_identity": {
                                k: bool(v) for k, v in
                                sorted(AUTH.holder_identity().items())},
+                           # THE OWNER'S ABSOLUTE DEADLINE, as a STATUS and
+                           # never as a value. authorize_arming evaluates it
+                           # at step 8, which the shadow lock makes
+                           # unreachable, so whether the authorization window
+                           # is still open was not observable from outside
+                           # the container. Same blind spot, same remedy, as
+                           # the auth_ledger line above.
+                           "auth_not_after": AUTH.not_after_status(),
                            "close_margin_s": AUTH.close_margin_s(),
                            "lambda": str(lam), "limits": runner.limits.as_dict(),
                            "worst_case_usd": str(runner.limits.worst_case_loss_usd()),

@@ -265,6 +265,45 @@ SCOPED_LIMIT_FIELDS = ("max_usd_per_market", "max_total_exposure_usd",
                        "daily_realized_loss_halt_usd")
 
 
+def not_after_status(now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+    """Is the owner's absolute deadline still open? WITHOUT emitting it.
+
+    WHY THIS EXISTS. `authorize_arming` evaluates NOT_AFTER at step 8, which
+    is unreachable while either trading lock is engaged -- SHADOW_ONLY_LOCK is
+    step 1 -- so whether the authorization window had already closed was
+    unobservable from outside the container without lifting a lock. That is
+    the same blind spot the `auth_ledger` durability diagnostic was added for,
+    and it is answered the same way: report the STATUS at boot.
+
+    THE VALUE IS NEVER RETURNED. Only the state and the seconds remaining,
+    rounded, so a log line cannot leak a deadline that an operator considers
+    sensitive and cannot be mistaken for the variable itself. The refusal at
+    step 8 still decides; nothing here gates anything.
+    """
+    raw = (os.getenv(NOT_AFTER_ENV) or "").strip()
+    out: Dict[str, Any] = {"env": NOT_AFTER_ENV, "set": bool(raw),
+                           "state": None, "expires_in_s": None,
+                           "labels": ("STATUS ONLY -- the configured value is "
+                                      "never emitted. Diagnostic: "
+                                      "authorize_arming step 8 still decides "
+                                      "and still refuses AUTHORIZATION_EXPIRED")}
+    if not raw:
+        out["state"] = "UNSET"
+        return out
+    try:
+        deadline = dt.datetime.fromisoformat(raw)
+    except ValueError:
+        out["state"] = "UNREADABLE"
+        return out
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=dt.timezone.utc)
+    t = now or dt.datetime.now(dt.timezone.utc)
+    remaining = (deadline - t).total_seconds()
+    out["expires_in_s"] = round(remaining, 1)
+    out["state"] = "OPEN" if remaining > 0 else "EXPIRED"
+    return out
+
+
 def max_windows_env() -> int:
     """The approved window budget. Unreadable is the tightest value."""
     raw = (os.getenv(MAX_WINDOWS_ENV) or "").strip()
