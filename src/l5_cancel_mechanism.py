@@ -91,6 +91,39 @@ MIN_WINDOW_REMAINING_S = SELF_CANCEL_AFTER_S + 60.0
 #: how often the venue is re-read while the order rests
 REREAD_EVERY_S = 10.0
 
+#: CHECKS WHOSE FAILURE IS TRANSIENT, so the mechanism WAITS and retries
+#: instead of refusing for good.
+#:
+#: THE BUG THIS FIXES, from the 1800z attempt. Every precondition failure was
+#: terminal, so `transport_armed: false` ended the run -- and that flag is
+#: false for the first seconds of EVERY window by construction: the transport
+#: arms only after preflight passes, and preflight retries on a 3/6/12/24s
+#: backoff. At 18:03:28Z preflight was on attempt 2, having hit the venue's
+#: intermittent `book_readable` 404, and the mechanism gave up on a condition
+#: that clears itself. `maybe_preflight` in the runner already states the
+#: distinction -- "ARMING IS RETRIED; PREFLIGHT IS NOT ... try_arm can refuse
+#: for reasons that clear on their own a few seconds later" -- and this file
+#: simply failed to honour it.
+#:
+#: WHY WAITING IS SAFE HERE, and this is the part that matters: waiting never
+#: relaxes anything. Every gate is re-evaluated from scratch on the retry
+#: that submits, so an order is placed only against a book, a price, an
+#: authorization and a window that are all good AT THAT MOMENT. The book and
+#: price entries belong here for the same reason as arming: a momentarily
+#: one-sided or crossed book is a "not yet", and the price is RECOMPUTED from
+#: the fresh book each pass rather than carried forward.
+#:
+#: AND THE WAIT IS BOUNDED WITHOUT A TIMER: as the window drains,
+#: `window_has_room_for_the_watchdog` fails, and that is TERMINAL. So a
+#: mechanism that never gets armed stops itself at the 450s mark instead of
+#: holding a lifted lock open indefinitely.
+WAIT_CHECKS = frozenset({
+    "transport_armed",
+    "book_two_sided_authenticated",
+    "price_readable", "price_positive", "price_below_one",
+    "price_is_nonmarketable",
+})
+
 #: the durable one-shot marker. "no automatic repeat after a completed or
 #: crashed probe" is a standing instruction, and a process that crashed
 #: mid-test must not come back and place a second order.
@@ -164,7 +197,8 @@ class Mechanism:
                  window_start: Optional[Callable[[str], Optional[int]]] = None,
                  window_s: float = 900.0,
                  self_cancel_after_s: float = SELF_CANCEL_AFTER_S,
-                 session_id: Optional[str] = None) -> None:
+                 session_id: Optional[str] = None,
+                 halted_fn: Optional[Callable[[], bool]] = None) -> None:
         self.store = store
         self.transport = transport
         self.book = book
@@ -175,6 +209,12 @@ class Mechanism:
         self.window_s = float(window_s)
         self.self_cancel_after_s = float(self_cancel_after_s)
         self.session_id = session_id
+        # READ-ONLY, INJECTED. The halt is consulted as a FACT handed in by
+        # the runner rather than imported: this module must stay unable to
+        # assert or clear a latch, and a predicate can only add a refusal.
+        self._halted_fn = halted_fn
+        self.waits = 0
+        self.last_wait_reason: Optional[List[str]] = None
         self.state = self.INIT
         self.coid: Optional[str] = None
         self.venue_order_id: Optional[str] = None
@@ -284,19 +324,64 @@ class Mechanism:
                                      None)) or D("0.01")),
               plan.get("qty"))
         total = _d(plan.get("worst_case_total_usd"))
+        # TERMINAL ONLY WHEN THE TOTAL IS KNOWN AND TOO BIG.
+        #
+        # An UNKNOWN total is not a breach, it is an absent price -- and a
+        # momentarily dead book is exactly that. Failing terminally here
+        # would re-create the 1800z bug one layer down: found by
+        # test_every_gate_is_re_evaluated_on_the_submitting_pass, where the
+        # book died mid-wait and this check, not the price checks, ended the
+        # run.
+        #
+        # NOTHING CAN SUBMIT ON AN UNKNOWN TOTAL: price_readable,
+        # price_positive, price_below_one and price_is_nonmarketable all fail
+        # as WAITS whenever the price is absent, so the order is held back by
+        # those instead -- and they are re-evaluated on every pass.
         check("worst_case_total_within_authorization",
-              total is not None and total <= MAX_TOTAL_RISK_USD,
+              total is None or total <= MAX_TOTAL_RISK_USD,
               {"worst_case_total_usd": plan.get("worst_case_total_usd"),
-               "max": str(MAX_TOTAL_RISK_USD)})
+               "max": str(MAX_TOTAL_RISK_USD),
+               "note": ("unknown is a WAIT via the price checks, never a "
+                        "pass: an absent price cannot reach the wire")})
         rem = plan.get("window_remaining_s")
         check("window_has_room_for_the_watchdog",
               rem is not None and float(rem) >= MIN_WINDOW_REMAINING_S,
               {"window_remaining_s": rem, "needed_s": MIN_WINDOW_REMAINING_S})
         check("transport_armed", bool(getattr(self.transport, "armed", False)),
-              "the owner's locks are unchanged; this mode does not lift any")
+              "the owner's locks are unchanged; this mode does not lift any. "
+              "A WAIT: false here means preflight/arming is still pending, "
+              "and every gate is re-evaluated before the submit")
         check("book_is_flat_before_the_test", self.flat(), self.exposure())
         check("no_other_live_order", self.live_count() == 0, self.live_count())
+        # TERMINAL, BOTH OF THEM, and both checked HERE rather than trusted of
+        # the caller. Waiting for arming means waiting with a lifted lock, so
+        # the two conditions that must stop the wait dead are checked on every
+        # single pass, not once at the start.
+        auth = self.authorization_status()
+        check("authorization_window_open",
+              str(auth.get("state")) not in ("EXPIRED", "UNREADABLE"), auth)
+        check("halt_not_engaged", not self.halted(),
+              {"halted": self.halted(),
+               "note": ("read-only fact handed in by the runner; this module "
+                        "cannot assert or clear a latch")})
         return out
+
+    def authorization_status(self) -> Dict[str, Any]:
+        """The owner's deadline as a STATUS. Unreadable counts as closed."""
+        try:
+            from src import l5_live_authorization as AUTH
+            return dict(AUTH.not_after_status())
+        except BaseException as exc:                           # noqa: BLE001
+            return {"state": "UNREADABLE", "error": type(exc).__name__}
+
+    def halted(self) -> bool:
+        """Is the latch engaged? UNREADABLE counts as halted."""
+        if self._halted_fn is None:
+            return False          # not wired: the runner's own gates still bind
+        try:
+            return bool(self._halted_fn())
+        except BaseException:                                  # noqa: BLE001
+            return True           # cannot tell means stop
 
     # --------------------------------------------------------- store access
 
@@ -401,12 +486,43 @@ class Mechanism:
         self.emit("L5_MECH_REFUSED", dict(self.report))
         return self.report
 
+    def _wait(self, t: float, failed: List[str], plan: Mapping[str, Any],
+              checks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Not yet. State stays INIT so the next tick re-evaluates EVERYTHING.
+
+        Logged on the first wait and whenever the failing set CHANGES, so a
+        long wait does not spam while a changing one stays visible.
+        """
+        self.waits += 1
+        self.state = self.INIT
+        rep = {"LABEL": "L5_MECH_WAIT", "waiting_on": failed,
+               "waits": self.waits, "submitted": 0,
+               "window_remaining_s": plan.get("window_remaining_s"),
+               "needed_s": MIN_WINDOW_REMAINING_S,
+               "labels": ("TRANSIENT. Every gate is re-evaluated on the next "
+                          "pass and the order is placed only against a book, "
+                          "price, authorization and window that are all good "
+                          "at that moment. The wait is bounded by the window: "
+                          "window_has_room_for_the_watchdog is TERMINAL.")}
+        self.report = rep
+        if failed != self.last_wait_reason:
+            self.last_wait_reason = list(failed)
+            self.emit("L5_MECH_WAIT", dict(rep))
+        return rep
+
     def _place(self, t: float) -> Dict[str, Any]:
         plan = self.plan()
         checks = self.checks(plan)
         failed = [c["check"] for c in checks if not c["ok"]]
+        # TERMINAL FIRST. A terminal failure refuses even if transient ones
+        # are also outstanding -- an expired authorization is not improved by
+        # the book becoming two-sided.
+        terminal = [c for c in failed if c not in WAIT_CHECKS]
+        if terminal:
+            return self._refuse("MECHANISM_PRECONDITIONS_NOT_MET", plan,
+                                checks)
         if failed:
-            return self._refuse("MECHANISM_PRECONDITIONS_NOT_MET", plan, checks)
+            return self._wait(t, failed, plan, checks)
 
         intent = {"market": plan["market"], "side": plan["side"],
                   "price": D(str(plan["price"])), "qty": D(str(plan["qty"])),

@@ -3733,7 +3733,13 @@ def main() -> int:
             market=AB.slug_for(AB.window_start()),
             emit=emit, window_start=AB.slug_start,
             window_s=float(AB.WINDOW_S),
-            session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None)
+            session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,
+            # the latch as a READ-ONLY FACT. Waiting for arming means waiting
+            # with the shadow lock lifted, so the mechanism must be able to
+            # see a halt engage mid-wait and stop. It is handed the predicate
+            # rather than the gate: it can refuse on a halt and can neither
+            # assert nor clear one.
+            halted_fn=runner.halted)
         emit("L5_MECH_MODE", {
             "mode": MECH.MODE_ENV, "enabled": True,
             "market": mech.market,
