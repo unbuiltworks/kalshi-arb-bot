@@ -1,3 +1,8 @@
+> **SUPERSEDED IN PART by `FEE_RECONCILIATION.md` (2026-10-18).** Section 0
+> below generalised a 47-leg cost-basis REPAIR subset to the account and was
+> wrong: account-wide commission is a NET CREDIT of $5.88 over 1,911 fills.
+> The rounding is round-to-NEAREST, not ceiling. Sections 1-4 stand.
+
 # The largest discrepancy is realized fee economics, not behaviour
 
 Read-only measurement plus one refuse-only gate. No order, service,

@@ -8,45 +8,40 @@ WHY THIS EXISTS, in one line: the venue bills commission in WHOLE CENTS,
 and at our authorized clip the rounding alone costs more than the edge the
 strategy harvests.
 
-THE MEASUREMENT THAT MOTIVATES IT. Two numbers from primary sources:
+THE MEASUREMENT THAT MOTIVATES IT, CORRECTED 2026-10-18 against the live
+cost-basis audit. An earlier version of this docstring said our fee load was
+"1.401% of cost, 4.8x L5's entire edge" and generalised it to the account.
+THAT WAS A SELECTED SUBSET. The 47 legs it measured are the cost-basis
+REPAIR population -- legs whose basis was unknown -- and they are not the
+account. Across the account's whole venue history the audit reports 1,911
+fill rows with:
 
-  * L5's whole edge, recomputed from `data/l5_master/btc15m_sequences.jsonl`
-    with each window's cost calibrated to the corpus `cost` field so the
-    baseline reproduces the record (net +$18,717.24 against the corpus's
-    +$19,176.71, the $459 residual being the known redemption mismatch):
-    **0.2935% of cost**, $6,376,853.08 deployed over 5,546 windows.
-  * OUR OWN realized fees, from the 47 venue-confirmed legs in
-    `data/l5/ops/cost_basis_inspect_20261016T1658Z.json`: **1.401% of cost**
-    overall ($1.1400 on $81.3862); of the 38 fee-bearing legs the MEDIAN is
-    **3.67%** and the worst is **7.22%** on a $0.2772 leg.
+    commission_signs: negative_a_credited_rebate 831, zero 975,
+                      positive_a_charge 105, unreadable 0
+    commission_sum_usd: -5.8800        <- a NET CREDIT
+    rebates_ever_credited: true
 
-So our fee load runs 4.8x to 12.5x the entire edge. That is not a fidelity
-gap and no amount of behavioural replication closes it.
+So 94.5% of our fills paid nothing or were CREDITED, and the account is net
+credited $5.88. Within the crypto 15m lane, however, fees are real: the 47
+established legs carry $1.1400 on $50.6148 of notional, 2.2523%.
 
-VIABILITY IS NOT MONOTONE IN SIZE. It is a comb, and this corrects the
-"minimum clip size" framing this module was first written with. At the
-deployed <=0.96 discipline the gross-to-fee gap is 0.70pp of notional while
-ONE CENT of rounding on a ~$1 leg is 1.0pp, so the cent -- not the strategy
--- decides the sign. Measured at pair 0.96: qty 0.51 nets +$0.0004 and
-PASSES, qty 0.75/1.00/1.25/1.50/2.00/2.50 all net <= 0 and REFUSE, and qty
-5 and 10 net +$0.0200 and +$0.0600. The authorized clip range sits inside
-the refusing band.
+THE RATE AND THE ROUNDING ARE NOW IDENTIFIED, not assumed. On the 28
+fee-bearing SINGLE-FILL legs -- quantity and price read off the venue's own
+rows -- `round_half_up(0.0695 * q * p * (1-p))` matches the charged
+commission 28 times out of 28, with ROUND_CEILING matching 17 and
+ROUND_FLOOR 11. Every fee-bearing crypto leg is therefore TAKER-priced.
 
-THE MECHANISM IS ROUNDING, NOT THE RATE. The fee is
-`Theta * C * p * (1-p)` rounded UP to the cent. On a 1.25-contract clip at
-p=0.50 the true fee is 0.55 of a cent and the bill is a full cent -- an 83%
-surcharge. At 10 contracts the same formula rounds 4.4 cents to 5, a 14%
-surcharge. The penalty scales as 1/notional, which is exactly the shape of
-the 1-cent quanta on our own fills.
+MAKER TREATMENT IS REAL AND SEPARATE. The 4 zero-fee and 2 credited legs in
+that same lane are NOT explained by rounding: their raw fees are $0.0057 to
+$0.0174, which round to a cent, and nothing was charged. Maker status is
+never inferred here from a low fee -- the venue states it per fill as
+`isAggressor`, and `l5_cost_basis_audit._exec_objects` already selects our
+own execution object with it.
 
-Verified against those fills: `cpc-btc-updown-15m-2026-10-15-2230z|DOWN`,
-cost 0.2921 in ONE fill, charged $0.0200, and
-`0.0695 * 1 * 0.2921 * 0.7079 = 0.01437 -> ceil = 0.0200`. Exact.
-
-AND THE REAL BILL IS WORSE THAN PER-ORDER. `cpcxrp-...-0330z|UP` carries
-FIVE fills and $0.0500 -- a cent per fill. Cent rounding is super-additive
-across fills, so `fills_per_leg` exists to charge that rather than argue it.
-The default of 1 is the OPTIMISTIC case and is documented as such.
+WHAT THIS COSTS AT THE PAIR LEVEL. At the deployed <= 0.96 discipline gross
+is 4.00% of qty and the taker fee 3.3013%, leaving 0.70pp. At pair 0.97 --
+which the shadow quoted in all three recorded windows -- gross 3.00% is
+below the 3.29% fee, so no size that pays a fee is positive.
 
 WHAT THE GATE ASKS. A pair of one long and one short share pays exactly
 $1.00 at settlement, so the gross margin of `qty` pairs bought at a combined
@@ -61,7 +56,7 @@ profitable; a pair that fails cannot be.
 """
 from __future__ import annotations
 
-from decimal import Decimal as D, ROUND_CEILING
+from decimal import Decimal as D, ROUND_CEILING, ROUND_HALF_UP
 from typing import Any, Dict, Optional
 
 #: PMUS taker Theta, the same conservative constant the deployed gates use.
@@ -71,6 +66,20 @@ FEE_THETA_WORST = D("0.0695")
 
 #: the venue bills in whole cents
 CENT = D("0.01")
+
+#: HOW THE VENUE ROUNDS, IDENTIFIED RATHER THAN ASSUMED. Against the 28
+#: fee-bearing SINGLE-FILL legs in the 2026-10-16 cost-basis audit --
+#: quantity and price read off the venue's own rows, not assumed --
+#: `round_half_up(0.0695 * q * p * (1-p))` matches the charged commission on
+#: 28 of 28 with no exception. ROUND_CEILING matches only 17 and ROUND_FLOOR
+#: 11. The first version of this module assumed CEILING, which overstates
+#: the fee by up to a cent per leg; at our clip that is the whole margin, so
+#: the assumption was not harmless.
+#:
+#: CEILING REMAINS AVAILABLE as the worst case, because a safety bound may
+#: legitimately want it. The DEFAULT is the measured behaviour.
+ROUNDING_IDENTIFIED = ROUND_HALF_UP
+ROUNDING_WORST_CASE = ROUND_CEILING
 
 #: gross margin must exceed the rounded fee by at least this factor. 1 means
 #: "strictly better than break-even after fees" and is the weakest defensible
@@ -94,8 +103,9 @@ def _d(v: Any) -> Optional[D]:
 def leg_fee(qty: Any, price: Any, *,
             theta: D = FEE_THETA_WORST,
             fills_per_leg: int = 1,
-            extra_per_order_usd: Any = D("0")) -> Optional[D]:
-    """`ceil_to_cent(theta * C * p * (1-p))` per FILL, then the allowance.
+            extra_per_order_usd: Any = D("0"),
+            rounding: str = ROUNDING_IDENTIFIED) -> Optional[D]:
+    """`round(theta * C * p * (1-p))` to the cent per FILL, then the allowance.
 
     Returns None when the price is unreadable -- the caller must treat that
     as a refusal, never as a zero fee.
@@ -109,7 +119,7 @@ def leg_fee(qty: Any, price: Any, *,
         # a zero-notional leg still pays nothing, but the allowance stands
         return (_d(extra_per_order_usd) or D(0))
     # charged per FILL, because cent rounding does not pool across fills
-    per_fill = (raw / D(n)).quantize(CENT, rounding=ROUND_CEILING)
+    per_fill = (raw / D(n)).quantize(CENT, rounding=rounding)
     return per_fill * D(n) + (_d(extra_per_order_usd) or D(0))
 
 
@@ -117,7 +127,8 @@ def evaluate(*, up_px: Any, dn_px: Any, qty: Any,
              theta: D = FEE_THETA_WORST,
              fills_per_leg: int = 1,
              extra_per_order_usd: Any = D("0"),
-             required_ratio: D = DEFAULT_REQUIRED_RATIO) -> Dict[str, Any]:
+             required_ratio: D = DEFAULT_REQUIRED_RATIO,
+             rounding: str = ROUNDING_IDENTIFIED) -> Dict[str, Any]:
     """Necessary-condition test on one two-legged pair acquisition.
 
     `ok` False means REFUSE. An unreadable input is a refusal, never a pass.
@@ -130,9 +141,9 @@ def evaluate(*, up_px: Any, dn_px: Any, qty: Any,
     pair_cost = u + d
     gross = (D(1) - pair_cost) * q
     fu = leg_fee(q, u, theta=theta, fills_per_leg=fills_per_leg,
-                 extra_per_order_usd=extra_per_order_usd)
+                 extra_per_order_usd=extra_per_order_usd, rounding=rounding)
     fd = leg_fee(q, d, theta=theta, fills_per_leg=fills_per_leg,
-                 extra_per_order_usd=extra_per_order_usd)
+                 extra_per_order_usd=extra_per_order_usd, rounding=rounding)
     if fu is None or fd is None:
         return _refuse("FEE_UNCOMPUTABLE", pair_cost, gross, None, None, q)
     fee = fu + fd
@@ -155,6 +166,7 @@ def breakeven_qty(*, up_px: Any, dn_px: Any,
                   fills_per_leg: int = 1,
                   extra_per_order_usd: Any = D("0"),
                   required_ratio: D = DEFAULT_REQUIRED_RATIO,
+                  rounding: str = ROUNDING_IDENTIFIED,
                   max_qty: Any = D("100"),
                   step: Any = D("0.01")) -> Optional[D]:
     """Smallest `qty` on the venue's increment that passes, or None.
@@ -175,7 +187,7 @@ def breakeven_qty(*, up_px: Any, dn_px: Any,
         if evaluate(up_px=up_px, dn_px=dn_px, qty=q, theta=theta,
                     fills_per_leg=fills_per_leg,
                     extra_per_order_usd=extra_per_order_usd,
-                    required_ratio=required_ratio)["ok"]:
+                    required_ratio=required_ratio, rounding=rounding)["ok"]:
             return q
         q += inc
     return None
