@@ -7218,3 +7218,89 @@ token in addition to explicit approval.
 
 `SHADOW_ONLY_LOCK` remains active and the executor remains disarmed until that
 approval. No order has been submitted.
+
+## 78. ABORT: there is no 0.01-contract cap. My §76–§77 worst-case figure was wrong.
+
+### 78.1 The abort condition the owner set is met
+
+The owner's instruction: *"If the executor cannot enforce the exact
+0.01-contract cap or the required checks fail, abort."* It cannot. Aborted
+before any preparation step that touches the venue.
+
+### 78.2 What was searched, and what exists
+
+`scripts/l5_pmus_live_oneshot.py` reads no size variable at all — no
+`MAX_CONTRACTS`, no `CLIP`, no `PROBE_QTY`. Nothing in `src/` or `scripts/`
+defines a per-order contract cap (`SIZE_SCALE`, `FIXED_CLIP`,
+`CLIP_CONTRACTS`, `PROBE_CONTRACTS` all absent).
+
+Order quantity originates in the frozen rule and passes through translation
+unscaled: `l5_faithful_translation` returns `"qty": want` for the maker branch,
+and `want` is L5's own observed size. Live decision rows show `l5_size` values
+of `1.36`, `5` and `20`.
+
+The four bounds that do exist, none of which is a contract cap:
+
+| bound | value | what it actually limits |
+|---|---|---|
+| `max_cash_deployed_usd` | `$1` | gross cash out, `committed += price × qty` |
+| `max_usd_per_market` | `$5` | worst-case loss over both settlements |
+| `max_unmatched_contracts` | `5` | inventory **imbalance**, not order size |
+| `residual_cap_k · clip` | `k=2` | residual relative to the largest filled clip |
+
+### 78.3 MY ERROR, explicitly
+
+In §76.3, §77.5 and the probe plan I wrote "quantity: 0.01 contracts" and
+computed a worst case of **≈ $0.011** from it. That premise was never checked.
+The notional audit I ran answered whether the **venue accepts** 0.01 — it did
+not and could not establish that **we can command** 0.01.
+
+Under the configuration as it stands, the binding gate is `$1` cash deployed
+with `committed = price × qty`, so the permitted size is `qty ≤ 1/p`:
+
+```
+p = 0.66  ->  1.5 contracts        p = 0.10  ->  10 contracts
+p = 0.04  ->  25 contracts         worst-case loss ceiling: $5 per market
+```
+
+So the real exposure of the probe as planned was up to **$1 cash out and $5
+worst-case loss**, not $0.011 — between **90× and 450×** the figure I gave the
+owner. The GO recommendation rested on that figure and should not have been
+offered without verifying the cap first.
+
+For scale, this is the same quantity dimension that made the October 16
+incident expensive: `max_clip_filled` on
+`cpcxrp-xrp-updown-15m-2026-10-16-0330z` was **37.73** contracts and
+`D4EFZNW00ZZ0` settled at **−$37.9754**.
+
+### 78.4 Why a dollar cap cannot express a contract cap
+
+Lowering `max_cash_deployed_usd` does not fix it, because `committed` is
+`price × qty`, so the implied contract bound is `cash / p` and moves with
+price:
+
+```
+cash $0.01  ->  qty <= 0.01/p  ->  0.015 contracts at p=0.66
+                                   0.100 contracts at p=0.10
+                                   1.000 contracts at p=0.01
+```
+
+A dollar bound is therefore a dollar bound, never an exact contract bound.
+(The `$1.00`-per-share reservation that applies to a `BUY_SHORT` belongs to the
+worst-case **loss** measure, not to this cash gate, so it does not rescue the
+arithmetic either.)
+
+### 78.5 The three honest options, none taken without instruction
+
+1. **Dollar-bounded probe instead of contract-bounded.** Set
+   `max_cash_deployed_usd` to e.g. `$0.02`: no code change, one variable, and a
+   hard ceiling of `$0.02` cash out — genuinely bounded, in the unit the gates
+   actually express. It is NOT "exactly 0.01 contracts".
+2. **Add a per-order contract cap.** A refusal-only check in `SAFETY_OVERLAY`
+   (`qty > cap` → refuse). Conservative direction, adds no authority, and is
+   what the owner actually asked for — but it is new money-path code and needs
+   tests plus review. **Not written.**
+3. **Abort the probe** until one of the above is chosen.
+
+No order was submitted, nothing was armed, `SHADOW_ONLY_LOCK` stays active and
+no variable was changed.
