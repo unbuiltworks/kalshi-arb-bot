@@ -118,12 +118,21 @@ def test_the_transport_exposes_no_submit_or_arm():
 
 
 def test_the_cancel_route_is_anchored():
-    """An unanchored pattern would admit /v1/orders/x/cancel/and/more."""
-    pat = W.CANCEL_ROUTE.pattern
-    assert pat.startswith("^") and pat.endswith("$"), pat
+    """Asserted on BEHAVIOUR, not on the pattern's text.
+
+    An earlier version of this test asserted the pattern ended in `$`, and
+    failed against a `\\Z` anchor that is in fact STRICTER: `$` also matches
+    immediately before a trailing newline, so `/v1/order/A1/cancel\\n` would
+    be admitted by `$` and refused by `\\Z`. The trailing-newline case is
+    therefore pinned here explicitly rather than inferred from the syntax.
+    """
     assert W.CANCEL_ROUTE.match("/v1/order/A1/cancel")
-    assert not W.CANCEL_ROUTE.match("/v1/order/A1/cancel/extra")
-    assert not W.CANCEL_ROUTE.match("/x/v1/order/A1/cancel")
+    for bad in ("/v1/order/A1/cancel/extra",
+                "/x/v1/order/A1/cancel",
+                "/v1/order/A1/cancel\n",
+                "/v1/order/A1/cancel ",
+                "/v1/order/A1/CANCEL"):
+        assert not W.CANCEL_ROUTE.match(bad), bad
 
 
 # ------------------------------------------------------- fail-closed on build

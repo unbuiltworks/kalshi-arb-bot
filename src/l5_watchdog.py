@@ -62,7 +62,11 @@ except Exception:                               # noqa: BLE001
     A = None                                    # type: ignore
 
 #: the only mutating route this watchdog may ever use.
-CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel$")
+CANCEL_ROUTE = re.compile(r"^/v1/order/[A-Za-z0-9_-]+/cancel\Z")
+#: \Z, not $: `$` also matches immediately BEFORE a trailing newline, so
+#: "/v1/order/A1/cancel\n" would be admitted by `$` and is refused by \Z.
+#: Production (claude/gemini-btc-economic-viability-h3u7zl) already had the
+#: stricter anchor; this brings the two branches together on the tighter one.
 
 #: venue states that mean the order is no longer working. Checked against
 #: leavesQuantity first, because "PARTIALLY_FILLED" contains "FILLED" and a
