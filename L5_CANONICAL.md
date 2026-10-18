@@ -7518,3 +7518,115 @@ RAILPACK shell in the process.
 **Recommendation: reuse `polymarket-l5-replay-once`.** Nothing created,
 nothing deployed, nothing armed; the 24/7 executor, spring probes and all
 unrelated services untouched.
+
+---
+
+## 81. The observe-only one-shot ran in production, and the cap refused every order
+
+Deployed 2026-10-18 11:40Z on the reused dormant service, observed the whole
+`1145z` window, exited at 12:00:09Z. **PASS** on every configuration
+requirement. The behavioural result is the one that matters:
+
+> **45 L5 actions reached the submission path. The 0.01-contract cap refused
+> all 45. Zero orders passed it.**
+
+### 81.1 What ran
+
+| requirement | evidence |
+|---|---|
+| reused dormant service, nothing created | `polymarket-l5-replay-once` `c6b5058c`, previously RAILPACK on `feature/l5-polymarket-replay-main-v1`, **0 variables**, no volume |
+| branch and commit carry cap + startup check | pinned `commitSha 0d790f4f`, branch `claude/l5-shadow-mode-deployment-epkz1i` |
+| source / Dockerfile / start / restart / watch | `DOCKERFILE`, `deploy/l5_live_probe/Dockerfile`, `python3 -m scripts.l5_pmus_live_oneshot`, `NEVER`, `["deploy/l5_live_probe/ENABLE_RUN_BY_OWNER_ONLY/**"]` |
+| observe-only, nothing armed | `L5_MODE {"mode": "OBSERVE_ONLY", ... "armed": "", "live": "", "market_pin": ""}` |
+| startup gate satisfied | no `L5_PROBE_REFUSED` line; both cap variables resolved |
+| minimum credentials | two reference variables only (`${{l5-pmus-live.PMUS_API_KEY_ID}}`, `…SECRET_KEY`); no session id, no arming flag, no inherited unknowns |
+| exits once, never restarts | one deployment, one `Starting Container`, terminal `SUCCESS` at 12:00:08Z |
+
+Eight variables in total, every one named and intended.
+
+### 81.2 The window
+
+| measure | value |
+|---|---|
+| market | `cpc-btc-updown-15m-2026-10-18-1145z` |
+| L5 feed | 177 polls, **0 failed**, 17 700 raw rows, 6 916 in window |
+| actions admitted | **98**, all 98 readable by the frozen rule |
+| identity refusals | 2 `MARKET_IDENTITY_MISMATCH`, `foreign_tokens_admitted: 0` |
+| authenticated book | 10 726 frames, 2 000 book states, `errors: []` |
+| translated to a submittable order | **45** |
+| refused by `SAFETY_OVERLAY` | **45**, every one `PROBE_ORDER_CAP_EXCEEDED` |
+| refused by `PMUS_TRANSLATION` | 53 `STRICT_NOT_EVALUABLE` |
+| `would_submit` / `submitted_live` | **0 / 0** |
+
+The maker-intent sample gives the sizes: **0.36, 0.53, 0.56, 0.80, 0.90**
+contracts — **36× to 90× the cap**. λ = 0.045187…, so passing a 0.01 cap
+needs `l5_size <= 0.2213` shares against a median L5 action of 22.13. The
+natural order size of the frozen rule is roughly two orders of magnitude
+above the cap.
+
+### 81.3 What this proves and what it costs
+
+Proven, in production, on live data: the cap fires on the **final translated
+quantity**, inside `SAFETY_OVERLAY`, before the transport — 45 times, with
+`submitted_live: 0`. That is the mechanism working, not a test fixture.
+
+Also proven: **a 0.01-contract cap and a natural L5 action are incompatible
+in this window.** The earlier read-only audit put cap-passing actions at 1.28
+per window across 66.7% of windows; this window produced **zero**. A
+cancellation test driven by a natural action under this cap is therefore not
+reliably reachable.
+
+Nothing was submitted and nothing was cancelled: `transport: "NULL"`,
+`authorization_claimed: false`, `post_capable: false`, and `NullTransport`
+raises `NotArmed` from both `submit` and `cancel`.
+
+Cost, measured: peak **0.0126 vCPU**, **46.6 MB**, 5.3 MB received, for ~18
+minutes, plus one 80-second build. Fractions of a cent, and **zero standing
+cost** — the deployment is terminal and the service was dormant before.
+
+### 81.4 `max_live_orders`: 8 against production's 1
+
+The report printed `"max_live_orders": 8`, so the collision is now evidenced
+rather than inferred. Both numbers were right about their own question:
+
+- Probe 07 raised the envelope to 8 because replaying 12 windows showed the
+  **count** excluded 143 of 217 maker intents while the **dollars** excluded
+  none, and 19 orders rested simultaneously for $4.9983 — inside $5.
+- `l5_pmus_live_runner.max_live_orders()` was later defaulted to **1**
+  because the bounded pilot's "one outstanding order" restriction was
+  otherwise unenforceable: at a 3c quote, eight clips rest for under a dollar.
+
+Two defaults for one account is not a policy. Commit `6e31779a` gives the
+envelope the runner's answer, read the runner's way — default 1, unreadable
+floors to 1, and Probe 07's 8 only when `L5_MAX_LIVE_ORDERS=8` is said out
+loud — with a parametrised test pinning the two functions to each other
+across the whole input table. **No monetary limit changed**: $5 per market,
+$5 total, $10 residual, 1 market, $5 daily loss halt, worst case $5.1738.
+
+And the declared probe now has a **hard** one-order limit, not a default:
+`probe_cap_startup_gate()` refuses `PROBE_LIVE_ORDER_LIMIT_NOT_ONE:<n>` when
+the resolved count is anything but 1. `RECOVER_ONLY` stays exempt, because
+recovery only ever cancels.
+
+### 81.5 What still blocks one authorized cancellation test
+
+All three fail **closed**, which is why the observe run was safe:
+
+1. **The cap refuses every natural order.** 45 of 45 here. Either the test
+   waits for a window containing an action that floors to exactly 0.01 (not
+   guaranteed to appear), or it stops being a test of L5 behaviour and
+   becomes an explicit mechanism test of place→cancel-by-exact-ID. The second
+   needs authorization; the cap must not be raised and must not resize.
+2. **`src/l5_halt_gate.py` is not in the probe image.** The import fails, so
+   `halt_gate` is `None` and the arming boundary refuses `HALT_GATE_ABSENT`.
+   A one-line `COPY`, plus live proof the watchdog endpoint answers from this
+   service.
+3. **No mounted volume, so the authorization ledger is not durable.**
+   `durability_refusal` returns `AUTHORIZATION_LEDGER_NOT_DURABLE` for any
+   path whose nearest mount is `/`. A claim lock that a restart hands back is
+   not a claim lock, so the probe needs a volume (a storage cost) or it
+   cannot arm.
+
+Plus the deployment itself: the service is pinned to `0d790f4f`, which still
+reports 8 live orders. The reconciliation in `6e31779a` is committed and
+tested but **not deployed**.
