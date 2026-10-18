@@ -6541,3 +6541,64 @@ at all, so even a real credential could not be used by this process. The
 remaining exposure is that the names are still defined and still resolve
 through a reference to the executor's secrets, which a future image change
 could make live again. That is the reason to delete them properly.
+
+## 70. P1 answered: continuous behavioral validation was never stopped. Recommend no money-path change.
+
+### 70.1 What is already running
+
+`l5-fidelity-runner` is accruing prospective, tamper-checked behavioral
+predictions continuously, with no dependence on the halt gate. Two samples
+five minutes apart:
+
+```
+01:12:29Z  frozen 67139  resolved 67111  unresolved 28  tamper_failures 0
+01:17:30Z  frozen 67150  resolved 67125  unresolved 25  tamper_failures 0
+           last freeze 5.6s ago, feed_lag_s 6.3, STALE_ACCUMULATION false
+           cohort BTC15m, fill_anchored 67150, model v0.2-85b4260cc30a
+           per_horizon scored 45211 at 1/5/15/30 min
+           "read-only; no credentials, no order path"
+```
+
+The model's frozen fields are `predicted_outcome` (side),
+`predicted_size_bins` / `predicted_size_mode_bin` (size as a distribution,
+not a point) and `predicted_next_gap_s_p50` (timing). So **three of the
+validation dimensions — side, size, timing — are under continuous comparison
+right now**, at ~67k resolved predictions.
+
+### 70.2 What is not accruing, and why that is by design
+
+Price level, aggressiveness / maker treatment, and pair economics live in the
+executor's `PMUS_TRANSLATION`, `MAKER_TREATMENT` and `SAFETY_OVERLAY` stages,
+behind the halt gate. `handle()` says why, in its own comment:
+
+> INDEPENDENT HALT, read FIRST. Before translation, before the book, before
+> any other gate: a halt must not depend on the rest of this method working.
+> Absent, stale or unreachable all refuse, because a gate that fails open is
+> not a gate.
+
+That ordering is the property, not an oversight.
+
+### 70.3 Recommendation: change nothing in `handle()`
+
+A shadow branch after the refusal is implementable — build the refusal first,
+then compute a read-only translation in a `try` that cannot alter it, under a
+key no gate reads. But weighed honestly:
+
+- the side/size/timing comparison is already accruing, so the marginal gain is
+  price and aggressiveness only;
+- those comparisons come back **for free the moment the halt is cleared**,
+  which is already the plan;
+- the cost is an edit to the single most safety-critical function in the
+  system, which then has to be deployed to the live executor — adding money-path
+  risk to the exact function the bounded cancellation probe depends on.
+
+**So the smallest change is zero.** The blocker on executor-side comparison is
+the latched halt, not the code. No edit is proposed and none was made.
+
+### 70.4 P0: deletion is an owner dashboard action
+
+Established and not re-researched: no delete-variables verb in this MCP
+surface, no Railway CLI or token in the container, no discard-staged-changes
+verb, `accept-deploy` is all-or-nothing, and Railway's own agent states it
+cannot apply any variable change live. The minimum owner action is recorded in
+the reply to §70 and in `L5_HALT_RESET_CEREMONY.md`.
