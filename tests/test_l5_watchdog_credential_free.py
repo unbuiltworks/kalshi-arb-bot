@@ -186,21 +186,32 @@ def _copy_specs():
     return out
 
 
-def test_the_image_copies_no_signing_code():
-    """Not 'the flag is off' -- the file is not in the image."""
+def test_the_image_carries_signing_code_and_still_no_submit_path():
+    """OWNER 2026-10-18: signing is IN, so the boundary is route-based.
+
+    The isolation argument moved from "holds no credential" to "holds a
+    credential that can only reach one route". What must never change is the
+    second half: no module in this image can build or send an order.
+    """
     specs = _copy_specs()
-    assert "src/pmus_auth.py" not in specs, specs
+    assert "src/pmus_auth.py" in specs, "cancel needs a signed request"
     for forbidden in ("src/l5_pmus_transport.py", "src/l5_live_execution.py",
-                      "src/l5_order_body.py", "src/l5_preview_gate.py"):
+                      "src/l5_order_body.py", "src/l5_preview_gate.py",
+                      "src/l5_maker_execution.py", "src/l5_probe_manifest.py",
+                      "scripts/l5_pmus_live_oneshot.py"):
         assert forbidden not in specs, forbidden
 
 
-def test_the_image_installs_no_crypto_library():
+def test_the_image_installs_exactly_the_signing_dependency():
+    """cryptography, and nothing else. pmus_auth signs with Ed25519."""
     import pathlib
     df = pathlib.Path("deploy/l5_halt_watchdog/Dockerfile").read_text()
     installs = [l for l in df.splitlines()
                 if l.startswith("RUN") and "pip install" in l]
-    assert not installs, installs
+    assert len(installs) == 1, installs
+    assert "cryptography" in installs[0], installs[0]
+    for unwanted in ("requests", "httpx", "websockets", "web3", "eth-"):
+        assert unwanted not in installs[0], installs[0]
 
 
 def test_the_entrypoint_boots_with_the_image_closure_only(tmp_path,
@@ -231,11 +242,12 @@ def test_the_entrypoint_boots_with_the_image_closure_only(tmp_path,
     r = subprocess.run([sys.executable, "-c", prog], capture_output=True,
                        text=True, cwd=str(root))
     assert "OK" in r.stdout, r.stdout + r.stderr
-    # and pmus_auth is genuinely unimportable there
-    assert "A_IS True" in r.stdout, r.stdout
+    # ...and the signing module IS importable there now, which is what makes
+    # CancelOnlyTransport constructible. `A_IS` prints `W.A is None`.
+    assert "A_IS False" in r.stdout, r.stdout
 
 
-def test_pmus_auth_is_not_importable_from_the_image_tree(tmp_path):
+def test_pmus_auth_is_importable_from_the_image_tree(tmp_path):
     import pathlib
     import shutil
     import subprocess
@@ -255,7 +267,7 @@ def test_pmus_auth_is_not_importable_from_the_image_tree(tmp_path):
             "    print('REFUSED', type(e).__name__)\n" % str(root))
     r = subprocess.run([sys.executable, "-c", prog], capture_output=True,
                        text=True, cwd=str(root))
-    assert "REFUSED ModuleNotFoundError" in r.stdout, r.stdout + r.stderr
+    assert "IMPORTED" in r.stdout, r.stdout + r.stderr
 
 
 def test_a_credentialed_watchdog_keeps_its_venue_reading_behaviour(

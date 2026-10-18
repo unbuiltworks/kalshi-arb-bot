@@ -6,15 +6,32 @@
 #   src/l5_halt_server.py   GET-only HTTP for the executor to read the latch
 #   src/l5_watchdog.py      RegistryOrderSource + the sweep
 #
-# CREDENTIAL-FREE (OWNER 2026-10-14). src/pmus_auth.py is now DELIBERATELY
-# ABSENT too, which is the whole point: this image contains no request-signing
-# code, so it cannot reach the venue however it is configured. That is
-# permission-level isolation achieved by holding no credential to scope,
-# rather than by restricting routes on a credential it holds. The watchdog
-# judges the executor from the executor's OWN GET-only report over private
-# networking, and cancellation stays with the executor under its own
-# credentials. CancelOnlyTransport refuses to be constructed without
-# pmus_auth, so the capability is unavailable rather than switched off.
+# AUTHENTICATED CANCEL-ONLY (OWNER 2026-10-18). This REVERSES the
+# credential-free rule of 2026-10-14, by explicit owner approval, and the
+# reason is on the record. On 2026-10-16T03:40:12Z order D4EFZNW00ZZ0 rested
+# on cpcxrp-xrp-updown-15m-2026-10-16-0330z with no readable age and no
+# leavesQuantity, and this watchdog could only LATCH it. The latch's own
+# meaning is that the executor was not managing that order -- so leaving
+# cancellation with the executor left exactly one order that nobody present
+# could withdraw. An independent canceller is the hole that incident opened.
+#
+# WHAT CARRIES THE ISOLATION NOW, since it is no longer credential absence:
+#
+#   * CancelOnlyTransport.request refuses every method and route except GET
+#     and a single POST /v1/order/{id}/cancel, raising MutationRefused. The
+#     refusal lives in the transport, not in a caller's flag, so a process
+#     that cannot construct a submit cannot be argued into one.
+#   * Cancel needs BOTH L5_WATCHDOG_CANCEL=YES *and* an OwnershipOracle over
+#     the executor's durable registry, and that claim must be FRESH
+#     (MAX_CLAIM_AGE_S). A stale, unreadable or future-stamped claim yields
+#     no owned ids, so a wedged executor cannot have its last snapshot
+#     believed. No oracle, no POST.
+#   * An id absent from the registry is never cancelled, and the venue must
+#     corroborate market and manualOrderIndicator AUTOMATIC before any POST.
+#     That is what protects the owner's manual orders on a shared account.
+#   * Without credentials the process falls back to the credential-free
+#     registry-only mode and cancels nothing. Fail-closed is unchanged.
+#   * HaltAsserter still has no clear method: this image cannot lift a halt.
 #
 # ALSO DELIBERATELY ABSENT: l5_pmus_transport (it owns _SignedHTTP, which can
 # POST an order), l5_live_execution (the executor and its ledger), every order
@@ -28,10 +45,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# NO cryptography: nothing here signs a request. It was the only compiled
-# dependency, so the image is smaller and the attack surface is the stdlib.
+# cryptography signs the ONE cancel route. pmus_auth imports it lazily inside
+# the signing function, so an image without it still boots and still latches.
+RUN pip install --no-cache-dir "cryptography>=42"
 
 COPY src/__init__.py          src/__init__.py
+# the Ed25519 signature, and nothing else. pmus_auth holds no order body and
+# no submit route; CancelOnlyTransport is what decides which routes exist.
+COPY src/pmus_auth.py         src/pmus_auth.py
 COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 COPY src/l5_halt_server.py    src/l5_halt_server.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
@@ -43,8 +64,10 @@ COPY scripts/l5_halt_watchdog.py scripts/l5_halt_watchdog.py
 
 ENV PYTHONUNBUFFERED=1
 ENV L5_WATCHDOG_STATE_DIR=/data
-# L5_ORDER_REGISTRY_URL names the executor's GET-only report and selects
-# credential-free mode. Cancel is UNAVAILABLE in that mode -- not switched
-# off: there is no signing code to cancel with, and on a shared account
-# nothing but the submitter can tell our order from the owner's manual one.
+# L5_ORDER_REGISTRY_URL names the executor's GET-only report AND is the
+# ownership oracle: an id absent from it is never cancelled, which is how the
+# owner's manual orders stay untouched on a shared account. Losing this
+# variable removes the cancel capability entirely, even with credentials and
+# L5_WATCHDOG_CANCEL=YES. Without PMUS credentials the process takes the
+# credential-free branch and cancels nothing.
 CMD ["python3", "-m", "scripts.l5_halt_watchdog"]
