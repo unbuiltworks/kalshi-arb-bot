@@ -678,6 +678,13 @@ def from_env(*, transport: Any = None, store: Any = None) -> Watchdog:
         asserter_for(st, who=os.getenv("L5_WATCHDOG_WHO", "l5-watchdog")),
         max_order_age_s=float(os.getenv("L5_WATCHDOG_MAX_ORDER_AGE_S",
                                         str(DEFAULT_MAX_ORDER_AGE_S))),
+        # PASSED HERE TOO. The credential-free branch above read
+        # L5_WATCHDOG_REPORT_MAX_AGE_S and this one did not, so a deployment
+        # that tuned the bound had it silently ignored in exactly the mode
+        # that can cancel. Found by testing the whole production variable
+        # set at once rather than the pieces separately.
+        report_max_age_s=float(os.getenv("L5_WATCHDOG_REPORT_MAX_AGE_S",
+                                         str(DEFAULT_REPORT_MAX_AGE_S))),
         cancel_enabled=str(
             os.getenv("L5_WATCHDOG_CANCEL", "")).strip().upper() == "YES",
         oracle=oracle_from_env())
