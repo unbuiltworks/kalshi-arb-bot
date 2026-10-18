@@ -6690,3 +6690,77 @@ L5_WATCHDOG_SWEEP  open_orders 0, read_error null, overdue [], cancelled [],
 because this session has no delete verb. One more dashboard deletion is
 required, and this time the staged-removal entanglement does not arise — no
 staged patch exists to pollute.
+
+## 72. The committed patch ENABLED the two-sided probe. None of the five was in the baseline.
+
+### 72.1 Were they part of the approved baseline? No. All five were additions.
+
+`get-staged-changes` recorded each of the five as `"type": "added"` with
+`"from": ""` on patch `a8fb9c09` (created 2026-10-16T11:05:21Z). An `added`
+change from an empty prior value means the variable **did not exist on
+`l5-pmus-live`** when the patch was built. So the approved baseline — the
+configuration the currently-running deployment `38162771` (2026-10-17T20:43Z)
+was authorized under — contains **none** of them.
+
+Baseline restoration therefore means **deleting all five**, not editing them.
+
+### 72.2 The finding that matters: the probe was INERT by construction and is not any more
+
+`src/l5_two_sided_probe.py:active()`:
+
+> **False unless BOTH an experiment and a market are named AND it matches.
+> INERT IS THE DEFAULT AND THERE IS NO PARTIAL ARMING.** A missing experiment
+> id, a missing market, or a market that no authorized pattern covers all
+> return False, so an incomplete configuration cannot half-enable the probe.
+
+With `L5_TS_EXPERIMENT_ID` and `L5_TS_MARKET` both absent, the two-sided probe
+could not run at all. Both are now present, so the probe is **active at the
+configuration level** from the executor's next restart onward. HALT and
+`SHADOW_ONLY` still block submission, and the executor is `armed false` — but
+the inert-by-construction property is gone, and it was load-bearing.
+
+Worse, `market_patterns()` accepts comma-separated **wildcards**, and its own
+docstring names the consequence:
+
+> an exact-slug authorization expires the moment its window rolls ... That is
+> the second half of the one-shot restriction: continuous accumulation across
+> successive markets is impossible while the authorization names one slug.
+
+So a value like `cpc-btc-updown-15m-*` authorizes continuous accumulation
+across successive windows, defeating the one-market / no-automatic-repeat
+restriction. The value is redacted to this client; **only the owner can read
+which it is.**
+
+### 72.3 Why these must be DELETED and never blanked
+
+Blanking is not equivalent to absence here, and for one of them it is worse
+than either:
+
+| variable | absent (baseline) | blank / whitespace |
+|---|---|---|
+| `L5_TS_DEPTH_TICKS` | `int(os.getenv(..., "2"))` → **2** | `int(" ")` raises **ValueError** at probe construction |
+| `L5_ACC_MAX_ROUNDS` | default **8** (hard cap 64) | unparseable → **1**, the safe reading |
+| `L5_TS_MARKET` | no patterns → probe inert | `.strip()` → no patterns → inert |
+| `L5_TS_EXPERIMENT_ID` | not named → probe inert | not named → inert |
+| `L5_MAX_WORST_CASE_DEFICIT_USD` | blank = **gate disabled** | same, blank = gate disabled |
+
+`L5_TS_DEPTH_TICKS` is the reason blanking is unsafe: a whitespace value would
+raise inside the probe's construction path rather than fall back. This is why
+no attempt was made to neutralise the five from this session even though
+`set-variables` can write live.
+
+**One honest exception.** `L5_MAX_WORST_CASE_DEFICIT_USD` is the only one whose
+PRESENCE is more restrictive than its absence — unset means the deficit gate is
+disabled, and a value only adds a bound (an unparseable one is fatal, not a
+fallback). Strict baseline restoration deletes it; keeping it, after the owner
+reads its value, is defensible on safety grounds. That is the owner's call, not
+a default.
+
+### 72.4 Do not touch `l5-pmus-live` at all until it is cleaned
+
+Any variable write to that service without `skipDeploys` triggers a fresh
+deployment, and a fresh deployment is exactly what activates the five. The
+restart policy is `ALWAYS`, so a crash would do it too. Until the five are
+deleted, the correct action on the executor is **none**: no variable write, no
+redeploy, no restart, no arming. The running process is still the authorized
+one and its heartbeat continues to show the baseline limits.
