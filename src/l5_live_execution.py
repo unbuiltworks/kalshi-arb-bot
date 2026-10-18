@@ -49,7 +49,7 @@ import os
 import pathlib
 import re
 from decimal import ROUND_FLOOR, Decimal as D, InvalidOperation
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from src import pmus_fees as fees
 from src import l5_faithful_translation as FT
@@ -394,6 +394,53 @@ ACC_MAX_ROUNDS_ENV = "L5_ACC_MAX_ROUNDS"
 ACC_MAX_ROUNDS_DEFAULT = 8
 #: no configuration may exceed this, whatever the environment says
 ACC_MAX_ROUNDS_HARD_CAP = 64
+
+#: HARD PER-ORDER CONTRACT CAP for the bounded one-shot probe (OWNER
+#: 2026-10-18). REFUSAL ONLY. It never resizes an order, never rounds, and
+#: never touches the frozen rule's choice of side, price or size: silently
+#: shrinking an order would both alter the strategy and hide the breach.
+PROBE_ORDER_CAP_ENV = "L5_PROBE_MAX_ORDER_CONTRACTS"
+#: PROBE MODE IS DECLARED, NOT INFERRED. An earlier attempt keyed this off
+#: `l5_live_authorization.MARKET_ENV`, but the one-shot ALWAYS pins a market --
+#: that pin is how it bounds itself to one -- so treating the pin as "probe
+#: mode" made every pre-existing one-shot path refuse for want of a cap and
+#: broke five tests in `test_l5_live_oneshot.py`. The requirement to fail
+#: closed belongs to an explicit declaration, set beside the cap on the probe
+#: service, so it cannot silently change any other caller's behaviour.
+PROBE_CAP_REQUIRED_ENV = "L5_PROBE_ORDER_CAP_REQUIRED"
+
+
+def probe_order_contract_cap() -> Tuple[Optional[D], Optional[str]]:
+    """The probe's hard per-order contract cap, or why it cannot be trusted.
+
+    Returns `(cap, None)` when a usable cap is configured, `(None, None)`
+    when none is configured and none is required -- which leaves every
+    pre-existing limit to do its job exactly as before -- and
+    `(None, reason)` when a cap is REQUIRED and cannot be established, which
+    refuses.
+
+    TWO WAYS TO FAIL CLOSED, and both matter:
+
+    * `L5_PROBE_ORDER_CAP_REQUIRED=YES` declares probe mode, so a MISSING cap
+      refuses instead of defaulting to unbounded. The probe service sets it
+      beside the cap; nothing else sets it, so no other caller changes.
+    * a cap that is PRESENT but unparseable, non-finite or non-positive
+      refuses whether or not probe mode is declared. A bound someone typed
+      and we cannot read is never the same as no bound -- that reading is
+      how a typo becomes an unlimited order.
+    """
+    raw = str(os.getenv(PROBE_ORDER_CAP_ENV, "") or "").strip()
+    required = str(os.getenv(PROBE_CAP_REQUIRED_ENV, "") or "").strip().upper()
+    if not raw:
+        return (None, "PROBE_ORDER_CAP_MISSING"
+                if required in ("1", "YES", "TRUE") else None)
+    try:
+        cap = D(raw)
+    except (InvalidOperation, TypeError, ValueError):
+        return (None, "PROBE_ORDER_CAP_UNREADABLE")
+    if not cap.is_finite() or cap <= 0:
+        return (None, "PROBE_ORDER_CAP_NOT_POSITIVE")
+    return (cap, None)
 
 
 def client_order_id(action_key: str, attempt: int = 0) -> str:
@@ -4701,6 +4748,44 @@ class FaithfulExecutor:
                 self.store.mark_uncertain("intent mutated after the gates")
                 return prov.refuse("SAFETY_OVERLAY",
                                    "INTENT_MUTATED_AFTER_GATES")
+            # HARD PER-ORDER CONTRACT CAP, on the quantity ABOUT TO BE SENT.
+            # Placed after the byte-for-byte integrity check and immediately
+            # before the ONLY `transport.submit` call in this module, so no
+            # order path can reach the venue around it: `grep -c
+            # "transport\.submit("` on this file is 1, and every branch above
+            # -- maker, taker, two-sided probe leg, completion -- converges
+            # here. It reads `intent["qty"]`, the wire field itself, not a
+            # gate's copy of it.
+            #
+            # IT REFUSES. It does not resize, round down or re-price, because
+            # shrinking an order silently would alter the frozen rule's choice
+            # and conceal the breach instead of reporting it. The reservation
+            # taken by `record_submit` above is undone exactly as the
+            # NOT_ARMED path undoes it, since nothing was transmitted.
+            cap, cap_why = probe_order_contract_cap()
+            sent_qty = venue_decimal(intent.get("qty"))
+            if cap_why is None and cap is not None and sent_qty is None:
+                cap_why = "PROBE_ORDER_QTY_UNREADABLE"
+            if cap_why is None and cap is not None and sent_qty > cap:
+                cap_why = "PROBE_ORDER_CAP_EXCEEDED:%s>%s" % (sent_qty, cap)
+            if cap_why is not None:
+                self.store.terminate_order(coid, reason="PROBE_ORDER_CAP")
+                prov.stage("SAFETY_OVERLAY", {
+                    "refused": cap_why,
+                    "cap_contracts": (None if cap is None else str(cap)),
+                    "sent_qty": (None if sent_qty is None
+                                 else str(sent_qty)),
+                    "cap_required": str(os.getenv(
+                        PROBE_CAP_REQUIRED_ENV, "") or "").strip(),
+                    "labels": ("a hard per-order contract cap, enforced on "
+                               "the intent about to be sent. Refusal only: "
+                               "no order was resized and nothing was "
+                               "transmitted")})
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "PROBE_ORDER_CAP", "detail": cap_why,
+                    "intent": {k: str(v) for k, v in intent.items()}})
+                return prov.refuse("SAFETY_OVERLAY", cap_why)
             self._probe_leg_pending = None
             self._probe_round_pending = None
             ack = self.transport.submit(intent)
