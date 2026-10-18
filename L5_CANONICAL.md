@@ -7304,3 +7304,124 @@ arithmetic either.)
 
 No order was submitted, nothing was armed, `SHADOW_ONLY_LOCK` stays active and
 no variable was changed.
+
+## 79. Integration review of the cap: NO-GO. Two blockers, and the probe's real feasibility measured.
+
+### 79.1 Does the frozen rule ever produce 0.01 contracts? YES, and here is the rate
+
+`l5_faithful_translation` line 228: **`want = dec["l5_size"] * lam`**, with
+`lambda = 0.04518752824220514525` from the live heartbeat, then quantized to
+the venue grid with **`ROUND_FLOOR`** (`l5_live_execution:326`). So an order
+passes a 0.01 cap exactly when `floor(l5_size · λ / 0.01) · 0.01 == 0.01`,
+i.e. when
+
+```
+l5_size  in  [0.2213, 0.4426)
+```
+
+Measured against **4,247 real L5 TRADE rows** in
+`data/l5/ops/activity_20260901.jsonl` (20.3 windows, min size 0.02, median
+13.24, max 190):
+
+| after `ROUND_FLOOR` to 0.01 | rows | share | per 15-min window |
+|---|---|---|---|
+| **== 0.01 — passes the cap** | **26** | **0.61%** | **1.28** |
+| == 0.00 — floors to nothing, refused elsewhere as sub-minimum | 139 | 3.27% | — |
+| > 0.01 — **refused by the cap** | 4082 | **96.11%** | — |
+
+**14 of 21 windows (66.7%) contained at least one cap-passing action.**
+
+So the refusal-only cap can exercise live cancellation **without resizing
+anything and without a new strategy**: it waits for a naturally small L5
+action and lets that one through. 96% of actions are refused, which is the
+intended behaviour of a bound, not a malfunction.
+
+Two honest qualifications. That 1.28/window is **size eligibility only** — an
+eligible action must still clear MAKER/TAKER classification, strict queue
+classes, depth, the residual cap and the cash gate, and the live stats show
+most decisions refusing for those reasons. And the sample is L5's **public
+Polymarket** feed from 2026-09-01, a proxy for the action stream, not a
+guarantee about today.
+
+### 79.2 BLOCKER 1: there is no one-shot service to receive the variables
+
+`deploy/l5_live_probe/railway.json` describes it — `startCommand
+python3 -m scripts.l5_pmus_live_oneshot`, `restartPolicyType NEVER`,
+watchPattern `deploy/l5_live_probe/ENABLE_RUN_BY_OWNER_ONLY/**` — and its
+Dockerfile **does** copy `src/l5_live_execution.py`, so the cap would ship
+with it. But no deployed Railway service runs that path. The probe-named
+services are something else:
+
+| service | entrypoint | restart | arm vars |
+|---|---|---|---|
+| `pmus-spring-l5-probe` | `src.pmus_l5_continuous_session` | **ALWAYS** | `PMUS_SPRING_ARM`, `PMUS_SPRING_LIVE` |
+| `l5-r1-probe` | `src.pmus_l5_continuous_session` | NEVER | `PMUS_SPRING_ARM`, `PMUS_SPRING_LIVE` |
+
+Both hold `PMUS_API_KEY_ID` / `PMUS_API_SECRET_KEY`. Scope of this check: the
+probe-named candidates, not an exhaustive sweep of all ~49 services.
+
+So "verify the existing one-shot service receives both variables" **cannot be
+satisfied** — the service does not exist, and creating it is a new service,
+which the owner's own constraint excludes.
+
+### 79.3 BLOCKER 2: the cap does NOT cover every reachable submission path
+
+The cap covers the single `transport.submit(` in `src/l5_live_execution.py`.
+The live spring probe's image **does not copy that module at all**. It copies
+its own executors, each containing order-submission code:
+
+```
+pmus_micro_executor     1 submit/order-route match
+pmus_q1_executor        4
+pmus_q1_executor_v4     3
+```
+
+So while `pmus-spring-l5-probe` can arm (`PMUS_SPRING_ARM`, `PMUS_SPRING_LIVE`,
+credentials, `restartPolicyType ALWAYS`), there are submission paths in
+production that the 0.01 cap does not touch. The claim "enforced on every
+reachable submission path" is **true for the one-shot path and false for the
+system as a whole**, and saying otherwise would be the same category of error
+as §78.
+
+### 79.4 Restart survival and the arming boundary
+
+**Survives restarts: yes.** `probe_order_contract_cap()` calls `os.getenv` on
+every submission with no caching, so a restarted container re-reads its
+service variables, and with `L5_PROBE_ORDER_CAP_REQUIRED=YES` a restart that
+lost the cap refuses rather than submitting unbounded.
+
+**But the cap gates SUBMISSION, not ARMING.** "Both variables present before
+any possibility of arming" is therefore **not literally satisfied**: arming can
+succeed and every subsequent order then refuses. The practical effect is the
+same (zero orders), but the ordering the owner asked for would need a startup
+assertion in the one-shot entrypoint — not written.
+
+**One asymmetry worth naming.** If `L5_PROBE_ORDER_CAP_REQUIRED` is itself
+forgotten *and* the cap is absent, there is no cap and no refusal. The system
+cannot fail closed on a missing *declaration* without changing default
+behaviour for every other caller, which requirement 5 forbids. The declaration
+is the single thing that must not be omitted at deploy time.
+
+### 79.5 GO / NO-GO: **NO-GO**
+
+The cap itself is sound, tested and regression-free (§78, `de965f5a`). What is
+not ready is the integration around it.
+
+**Exact remaining blocker to a meaningful live cancellation test:** there is no
+bounded one-shot *service* to run it in, and the one-shot design spends its
+authorization on a **single window** in which a cap-passing action appears only
+~2/3 of the time and must still clear every other gate — so one run is more
+likely to produce no order at all than to produce the resting order that
+cancellation needs. A test that cannot reliably create its own subject does not
+test anything.
+
+Smallest honest routes, for the owner to choose:
+1. **Permit the one-shot service to exist** (`deploy/l5_live_probe/`, NEVER
+   restart, both cap variables set at creation). It is an existing design, but
+   it is a new Railway service.
+2. **Allow the authorization to span more than one window** so the probe can
+   wait for a naturally eligible action instead of burning its one chance.
+3. **Raise the cap** to a value the rule produces often — e.g. `0.60`, near the
+   median `want` — accepting a worst case near `$0.60` instead of `$0.011`.
+
+Nothing deployed, nothing armed, the 24/7 executor untouched and shadow-only.
