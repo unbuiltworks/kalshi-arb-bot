@@ -802,3 +802,28 @@ strategy removed from mechanism mode, shadow-locked 2026-10-18T18:47Z
 # session id is minted, no order is submitted and no capital limit moves.
 # Deploying a cancel that works only ever reduces exposure.
 cancellation repair: send marketSlug, capture the 400 2026-10-19T00:17Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-19T01:41Z: READ-ONLY additions needed BEFORE the owner-authorized
+# HALT reset can run. Nothing here arms anything, lifts a lock, clears a halt
+# or changes a capital limit; L5_SHADOW_ONLY stays 1 and PMUS_Q1_LIVE stays NO.
+#
+# (1) submission_disabled IN THE REGISTRY REPORT. The reset refuses
+# SUBMISSION_NOT_PROVEN_DISABLED unless this executor positively publishes
+# that its submit() is structurally blocked. It is read from the same
+# L5_SHADOW_ONLY that authorize_arming step 1 refuses on, so the published
+# answer cannot drift from the real one, and an ABSENT field refuses too --
+# which is exactly why this deployment has to happen first rather than the
+# gate being softened.
+#
+# (2) HALT DIGEST TELEMETRY. submission_gate.halt_latch_telemetry now carries
+# the sha256 of the latch bytes this process ALREADY reads on every tick,
+# plus kind/halt/reason/record_t. Never the raw contents and never the
+# `evidence` block, which can name venue order ids. This is how the owner
+# obtains the digest that the reset's gate 2 demands without stopping the
+# watchdog -- the failure of 2026-10-19 that cost 5m53s of independent
+# cancellation and produced no digest at all.
+#
+# The watchdog is NOT touched by this deployment: its watch pattern is its own
+# DEPLOY_TRIGGER and this file is not it.
+read-only halt digest telemetry + published submission lock 2026-10-19T01:41Z
