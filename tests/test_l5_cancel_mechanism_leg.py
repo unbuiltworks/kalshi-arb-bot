@@ -343,7 +343,10 @@ def test_a_durable_marker_blocks_a_second_run_after_a_restart(monkeypatch):
     store = Store()
     first = mech(monkeypatch, store=store, transport=Transport())
     first.step()
-    assert store.state[M.MARKER_KEY]["stage"] in ("PLACED", "DONE")
+    # read through the accessor, not the storage shape: the slot now holds
+    # {"v": 2, "runs": {"<experiment>|<market>": doc}} so markers are scoped
+    # to the same identity claim_submission binds its O_EXCL lock to.
+    assert first.marker()["stage"] in ("PLACED", "DONE")
     t2 = Transport()
     second = mech(monkeypatch, store=store, transport=t2)
     rep = second.step()
@@ -358,7 +361,7 @@ def test_the_marker_is_written_before_the_submit(monkeypatch):
     boom = RuntimeError("venue refused")
     m = mech(monkeypatch, store=store, transport=Transport(submit_raises=boom))
     m.step()
-    assert store.state[M.MARKER_KEY]["stage"] == "SUBMITTING"
+    assert m.marker()["stage"] == "SUBMITTING"
     t2 = Transport()
     again = mech(monkeypatch, store=store, transport=t2)
     assert "one_shot_not_already_used" in again.step()["failed_checks"]

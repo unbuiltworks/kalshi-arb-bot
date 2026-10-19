@@ -827,3 +827,47 @@ cancellation repair: send marketSlug, capture the 400 2026-10-19T00:17Z
 # The watchdog is NOT touched by this deployment: its watch pattern is its own
 # DEPLOY_TRIGGER and this file is not it.
 read-only halt digest telemetry + published submission lock 2026-10-19T01:41Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-19T02:40Z: SCOPE the one-shot mechanism marker to (experiment,
+# market), and turn the diagnostic mode back OFF in the same deployment.
+# L5_CANCEL_MECHANISM=NO, L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO. No order.
+#
+# WHAT THE SHADOW-LOCKED DIAGNOSTIC FOUND, read off this service at
+# 02:34:45Z on window 0230z:
+#   already_ran TRUE, marker coid
+#   mech-cpc-btc-updown-15m-2026-10-18-2315z-1792365652, venue order
+#   D68KZ0SG10JR, cancelled_by SELF_FALLBACK,
+#   independent_cancellation_proven false
+# already_ran was TRUE on a market the marker has nothing to do with, so the
+# 2026-10-18 attempt had spent the mechanism PERMANENTLY on this ledger. No
+# later authorized window could ever have run, and nothing in the repository
+# cleared it. Submission was impossible throughout the diagnostic: the shadow
+# lock leaves the transport disarmed so transport_armed fails, and
+# PMUS_Q1_LIVE was NO.
+#
+# NOT A WEAKENING. One authorization still buys exactly one order, and that
+# guarantee lives in claim_submission: an O_CREAT|O_EXCL lock, fsynced before
+# it returns, bound to (experiment, market), never reset automatically. The
+# marker is the SECONDARY crash-safety guard, and its own stated job -- a
+# process that crashed mid-test must not place a second order -- is a
+# statement about ONE experiment and ONE market. It now uses the same
+# identity the atomic claim already uses. A new market authorizes NOTHING by
+# itself: arming still needs PMUS_Q1_LIVE, a matching session id and arm
+# token, L5_LIVE_PROBE_MARKET bound to the slug, an unexpired deadline and
+# the shadow lock lifted.
+#
+# FAIL CLOSED ON AMBIGUITY. The slot is now versioned
+# {"v": 2, "runs": {"<experiment>|<market>": doc}} so history is preserved
+# instead of overwritten. A pre-v2 doc is migrated on READ with its
+# experiment UNKNOWN, which fails ITS OWN market closed. The real production
+# marker is the COMPLETION doc and carries neither `market` nor `plan`, so the
+# market is recovered from `coid`, which is built "mech-<market>-<epoch>" and
+# names it verbatim; anything that does not match that shape fails closed for
+# EVERY market, as does unreadable state and an unparseable runs map.
+#
+# 32 tests in tests/test_l5_mechanism_marker_scope.py, including the real
+# production marker. 1535 focused regressions green. Two existing tests were
+# updated to read through the accessor rather than the storage shape; every
+# behavioural assertion in them is unchanged.
+scope the one-shot marker, diagnostic mode OFF 2026-10-19T02:40Z

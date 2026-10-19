@@ -51,6 +51,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import time
 from decimal import Decimal as D
 from decimal import InvalidOperation
@@ -129,7 +130,75 @@ WAIT_CHECKS = frozenset({
 #: mid-test must not come back and place a second order.
 MARKER_KEY = "mechanism_run"
 
+#: SCOPED TO (experiment, market), matching claim_submission's identity.
+#:
+#: WHY IT WAS RESCOPED (owner 2026-10-19). `already_ran` returned True for a
+#: marker of ANY kind, and the key is a single unscoped slot, so the
+#: 2026-10-18 2315z attempt spent the mechanism PERMANENTLY on this ledger --
+#: no later authorized window could ever run, and nothing in the repository
+#: cleared it.
+#:
+#: WHY THIS IS NOT A WEAKENING. The guarantee that one authorization buys
+#: exactly one order is held by `claim_submission`: an O_CREAT|O_EXCL lock,
+#: fsynced before it returns, bound to (experiment, market) and never reset
+#: automatically. This marker is the SECONDARY guard, and its stated job is
+#: crash safety -- "a process that crashed mid-test must not come back and
+#: place a second order" -- which is a statement about one experiment and one
+#: market. Scoping it to the same identity the atomic claim already uses
+#: preserves that job exactly, and a new market still authorizes NOTHING on
+#: its own: arming needs PMUS_Q1_LIVE, a matching session id and arm token,
+#: L5_LIVE_PROBE_MARKET bound to that slug, an unexpired deadline and the
+#: shadow lock lifted -- all owner actions.
+#:
+#: v2 SHAPE, and why it is versioned rather than sniffed. The slot now holds
+#: {"v": 2, "runs": {"<experiment>|<market>": doc}}, so history is kept
+#: instead of overwritten and the shape is unambiguous. A pre-v2 flat doc is
+#: migrated on READ by attributing it to the market inside its own `plan`,
+#: with the experiment UNKNOWN -- which fails CLOSED for that market.
+MARKER_VERSION = 2
+#: a pre-v2 marker, or any state whose identity cannot be established, is
+#: ambiguous. Ambiguity is always read as USED.
+UNKNOWN = "?"
+
+#: HOW A PRE-v2 MARKER IS ATTRIBUTED TO A MARKET, in order of directness.
+#: The real 2026-10-18 marker, read off production on 2026-10-19, was the
+#: COMPLETION doc and carried neither `market` nor `plan` -- those belong to
+#: the earlier SUBMITTING doc that it overwrote:
+#:
+#:   {"t": "2026-10-18T23:27:34.440380+00:00", "stage": "DONE",
+#:    "coid": "mech-cpc-btc-updown-15m-2026-10-18-2315z-1792365652",
+#:    "venue_order_id": "D68KZ0SG10JR", "cancelled_by": "SELF_FALLBACK",
+#:    "independent_cancellation_proven": false}
+#:
+#: The market is still recoverable EXACTLY, because `coid` is built as
+#: "mech-%s-%d" % (market, epoch) and therefore contains it verbatim. Reading
+#: it back is not a guess; failing to match this shape IS, and falls through
+#: to UNKNOWN, which fails closed for every market.
+_COID_MARKET = re.compile(r"\Amech-(?P<market>.+)-\d+\Z")
+
 TERMINAL_HINTS = ("FILLED", "CANCEL", "REJECT", "EXPIR", "DONE")
+
+
+def _legacy_market(doc: Mapping[str, Any]) -> str:
+    """The market a pre-v2 marker belongs to, or UNKNOWN (which fails closed).
+
+    Three sources, most direct first: an explicit `market`; the `market`
+    inside a `plan` (present on a SUBMITTING doc); and the `coid`, which is
+    built as "mech-<market>-<epoch>" and so names the market verbatim even on
+    the COMPLETION doc that overwrote the plan -- which is exactly the shape
+    production turned out to hold.
+    """
+    mkt = doc.get("market")
+    if not mkt:
+        plan = doc.get("plan")
+        if isinstance(plan, Mapping):
+            mkt = plan.get("market")
+    if not mkt:
+        m = _COID_MARKET.match(str(doc.get("coid") or ""))
+        if m:
+            mkt = m.group("market")
+    mkt = str(mkt).strip() if mkt else ""
+    return mkt or UNKNOWN
 
 
 def enabled() -> bool:
@@ -385,22 +454,89 @@ class Mechanism:
 
     # --------------------------------------------------------- store access
 
+    @staticmethod
+    def _legacy_market(doc: Mapping[str, Any]) -> str:
+        return _legacy_market(doc)
+
+    def marker_identity(self) -> str:
+        """The key this run occupies: "<experiment>|<market>".
+
+        The SAME identity `claim_submission` binds its O_EXCL lock to, read
+        from the same place, so the two cannot disagree about what "already
+        attempted" means.
+        """
+        from src import l5_live_authorization as AUTH
+        exp = (AUTH.experiment_id() or "").strip() or UNKNOWN
+        return "%s|%s" % (exp, str(self.market or "").strip() or UNKNOWN)
+
+    def markers(self) -> Dict[str, Any]:
+        """Every recorded run, keyed by identity. Raises on unreadable state.
+
+        A pre-v2 flat doc is migrated HERE, on read, and never written back:
+        its market comes from the `plan` it carried, and its experiment is
+        UNKNOWN, so it lands under "?|<market>" and fails that market closed.
+        State that is present but not understood lands under "?|?", which
+        fails EVERYTHING closed.
+        """
+        raw = self.store.state.get(MARKER_KEY)
+        if not raw:
+            return {}
+        if isinstance(raw, Mapping) and raw.get("v") == MARKER_VERSION:
+            runs = raw.get("runs")
+            return dict(runs) if isinstance(runs, Mapping) else {
+                "%s|%s" % (UNKNOWN, UNKNOWN): {"unparseable_runs": True}}
+        if isinstance(raw, Mapping):
+            return {"%s|%s" % (UNKNOWN, _legacy_market(raw)): dict(raw)}
+        return {"%s|%s" % (UNKNOWN, UNKNOWN): {"unparseable_marker": True}}
+
     def marker(self) -> Optional[Dict[str, Any]]:
+        """This run's own marker, or None. Diagnostic only."""
         try:
-            return (self.store.state.get(MARKER_KEY) or None)
+            return self.markers().get(self.marker_identity()) or None
         except BaseException:                                  # noqa: BLE001
             return None
 
     def already_ran(self) -> bool:
-        """A marker of ANY kind means this has been attempted. Unreadable
-        counts as used: the safe direction is never to place a second."""
+        """True when THIS (experiment, market) has already been attempted.
+
+        FAIL CLOSED on anything ambiguous: unreadable state, a marker whose
+        identity cannot be established, and a pre-v2 marker for THIS market
+        all count as USED. Only a positively different identity is unspent.
+        """
         try:
-            return bool(self.store.state.get(MARKER_KEY))
+            runs = self.markers()
         except BaseException:                                  # noqa: BLE001
+            return True                 # unreadable is not unused
+        if not runs:
+            return False
+        if self.marker_identity() in runs:
             return True
+        _exp, _, mkt = self.marker_identity().partition("|")
+        # a pre-v2 or unattributable entry for this MARKET: the experiment is
+        # unknown, so it may be ours. Never guessed away.
+        if "%s|%s" % (UNKNOWN, mkt) in runs:
+            return True
+        # state present but not understood at all
+        if "%s|%s" % (UNKNOWN, UNKNOWN) in runs:
+            return True
+        return False
 
     def write_marker(self, doc: Mapping[str, Any]) -> None:
-        self.store.state[MARKER_KEY] = dict(doc)
+        """Record this run under its identity, PRESERVING every other.
+
+        Written before the submit, as before. Migrated pre-v2 entries are
+        carried forward so an old attempt keeps failing its own market
+        closed.
+        """
+        try:
+            runs = self.markers()
+        except BaseException:                                  # noqa: BLE001
+            runs = {"%s|%s" % (UNKNOWN, UNKNOWN): {"unreadable_prior": True}}
+        ident = self.marker_identity()
+        runs[ident] = dict(doc, identity=ident,
+                           experiment=ident.split("|", 1)[0],
+                           market=ident.split("|", 1)[1])
+        self.store.state[MARKER_KEY] = {"v": MARKER_VERSION, "runs": runs}
         self.store.save()
 
     def live_count(self) -> int:
