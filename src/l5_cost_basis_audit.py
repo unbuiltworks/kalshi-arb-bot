@@ -582,17 +582,30 @@ def fee_crosstab(rows: List[Mapping[str, Any]]) -> Dict[str, Any]:
             acc["qty"] += q
             if px is not None and px > 0:
                 acc["notional_usd"] += q * px
+    # BUILT, NOT MUTATED. test_the_audit_module_calls_no_write_or_order_verb
+    # proves this module never assigns into a subscript, which is how it
+    # demonstrates it writes no store or state. Finalising by mutating the
+    # accumulators broke that proof, so each row is CONSTRUCTED instead.
     out = []
     for key in sorted(buckets):
         a = buckets[key]
         n = a["notional_usd"]
-        a["effective_fee_rate_pct"] = (
-            str((a["commission_usd"] / n * D(100)).quantize(D("0.0001")))
-            if n > 0 else None)
-        for f in ("qty", "notional_usd", "commission_usd", "charged_usd",
-                  "rebated_usd"):
-            a[f] = str(a[f])
-        out.append(a)
+        rate = (str((a["commission_usd"] / n * D(100)).quantize(D("0.0001")))
+                if n > 0 else None)
+        out.append({
+            "lane": a["lane"], "aggressor": a["aggressor"],
+            "fills": a["fills"],
+            "qty": str(a["qty"]),
+            "notional_usd": str(a["notional_usd"]),
+            "commission_usd": str(a["commission_usd"]),
+            "charged_usd": str(a["charged_usd"]),
+            "rebated_usd": str(a["rebated_usd"]),
+            "n_charged": a["n_charged"], "n_zero": a["n_zero"],
+            "n_rebated": a["n_rebated"],
+            "n_fee_unreadable": a["n_fee_unreadable"],
+            "n_qty_unreadable": a["n_qty_unreadable"],
+            "effective_fee_rate_pct": rate,
+        })
     return {
         "buckets": out,
         "classifier": "venue isAggressor; absent -> UNKNOWN, never guessed",
