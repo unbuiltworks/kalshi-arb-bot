@@ -871,3 +871,34 @@ read-only halt digest telemetry + published submission lock 2026-10-19T01:41Z
 # updated to read through the accessor rather than the storage shape; every
 # behavioural assertion in them is unchanged.
 scope the one-shot marker, diagnostic mode OFF 2026-10-19T02:40Z
+
+# ---------------------------------------------------------------------------
+# PLACEMENT-TIME GATE (commit 10cbbf6b). Submission is now permitted only
+# between T+5:00 and T+7:30, measured from the VENUE's own confirmed window
+# open (runner.venue_window_bounds -> verify_alignment, source VENUE), never
+# from our 900-second slug grid and never from process start.
+#
+# WHY. On 2026-10-19 the 0330z attempt reached the submit at 03:33:50Z, which
+# is T+3:50 -- seventy seconds BEFORE the authorized 03:35:00-03:37:30 band.
+# Nothing reached the venue only because the submission claim was spent. Every
+# gate was about the ORDER and none about the CLOCK, so the mechanism
+# submitted the instant arming completed.
+#
+# placement_band_reached is a WAIT (early cures itself, so a boot at T+1:00
+# now waits and places inside the band). placement_band_not_expired is
+# TERMINAL (late never cures). The upper edge is DERIVED as
+# span - MIN_WINDOW_REMAINING_S, so the band can never permit a placement
+# that window_has_room_for_the_watchdog would refuse.
+#
+# Also: AUTH.submission_claim_state, a read-only probe of the one-submission
+# lock, with a terminal submission_claim_not_already_spent gate. SPENT refuses
+# in preflight before an order is even reserved; UNKNOWN is REPORTED and does
+# not refuse, because the atomic O_EXCL claim at the wire is still the
+# guarantee and a failed stat() must not cost an authorized window. Both the
+# band and the claim state are announced in L5_MECH_MODE at boot.
+#
+# 51 + 18 new tests; 1666 green across all 59 files touching the three changed
+# modules. THIS DEPLOYMENT CHANGES NO VARIABLE: SHADOW_ONLY stays enabled, the
+# cancellation mechanism stays OFF, PMUS_Q1_LIVE stays NO, and no order is
+# authorized. Code only.
+deploy the placement-time gate, shadow-locked, mechanism OFF 2026-10-19T12:20Z
