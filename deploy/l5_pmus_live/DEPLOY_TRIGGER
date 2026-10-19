@@ -984,3 +984,30 @@ deploy Phase A shadow decision source, shadow-locked, mechanism OFF 2026-10-19T1
 # NO VARIABLE CHANGES. SHADOW_ONLY stays enabled, mechanism stays OFF,
 # PMUS_Q1_LIVE stays NO, every risk limit unchanged, no order authorized.
 deploy the string-price fix, shadow-locked, mechanism OFF 2026-10-19T16:05Z
+
+# ===================================================================
+# P1: three decision policies in continuous shadow, baseline preserved.
+#
+# Promotes the policy selector. ARGMAX (the deployed baseline),
+# RESIDUAL_URGENCY and PAIR_AVAILABLE each run every tick over their OWN
+# simulated inventory in their OWN state file, fed ONE book snapshot per
+# tick. Each record names its policy and carries the model's argmax beside
+# the policy's choice, so a departure from the baseline is visible rather
+# than inferred.
+#
+# WHY: replayed over L5's own 5,546 BTC15m windows the argmax baseline
+# refuses 56.3%/73.5% (older/newer half) of all decision opportunities and
+# EVERY refusal is residual_cap:3>=3. It walks inventory to the cap and
+# parks. Production showed exactly that through 1600z.
+#
+# ADDS NO CAPABILITY. Still no transport, no credentials, no executor, no
+# order path; three controllers instead of one, all equally unable to
+# submit. One public settlement read still settles every policy's copy of
+# a window at the same venue price.
+#
+# NO VARIABLE CHANGES. SHADOW_ONLY enabled, mechanism OFF, PMUS_Q1_LIVE NO,
+# every risk limit unchanged, no order authorized.
+#
+# TESTS: 11,492 passed; 24 failed / 14 errors, an ID set byte-identical to
+# the previous deployment and a strict subset of the b838a78e baseline.
+deploy three-policy shadow, shadow-locked, mechanism OFF 2026-10-19T16:27Z
