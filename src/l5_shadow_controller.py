@@ -241,6 +241,27 @@ def normalise_book(book: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]
 #:   pair_cap / plan refusals     completion above the fee-safe cap
 #: POSSIBLE_MISS means the model had somewhere to go and the policy declined,
 #: which is the only bucket that can contain forgone profit.
+#: WHERE WE REST RELATIVE TO THE TOUCH. Pre-registered in
+#: analysis/l5/TICK_DEPTH_PREREGISTRATION.md.
+#:
+#: AT_TOUCH is what the three deployed policies do and what the loss
+#: decomposition measured: 63 of 69 fills at ticks_behind_touch 0, sitting
+#: behind a median 1,500 contracts, so fills arrive almost only when a
+#: print sweeps the level -- which is when the market is leaving. 70%
+#: adverse at -$0.0467 a unit against +$0.0050 of captured spread.
+#:
+#: ONE_TICK_BEHIND tests whether paying ourselves a wider spread beats
+#: filling less. The offset is EXACTLY one tick and is not a free
+#: parameter: it is not searched, not tuned, and not re-chosen after
+#: results.
+AT_TOUCH = "AT_TOUCH"
+ONE_TICK_BEHIND = "ONE_TICK_BEHIND"
+PLACEMENTS = (AT_TOUCH, ONE_TICK_BEHIND)
+
+#: offset in ticks, by placement
+PLACEMENT_TICKS = {AT_TOUCH: 0, ONE_TICK_BEHIND: 1}
+
+
 def _utc_now() -> str:
     import datetime
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -256,6 +277,8 @@ JUSTIFIED_REFUSALS = (
     "complete_without_surplus", "no_legal_maker_complement",
     "no_priceable_side", "one_sided_book", "no_fresh_book",
     "l5_sell_is_noop",
+    # the placement arm admitting its own depth is not priceable here
+    "offset_not_priceable",
 )
 
 #: reasons whose text carries a value, matched by PREFIX.
@@ -265,6 +288,50 @@ JUSTIFIED_REFUSALS = (
 #: possible miss overstated forgone profit by more than half.
 JUSTIFIED_REFUSAL_PREFIXES = ("residual_cap", "pair_cap")
 
+#: THE TAXONOMY'S OWN VERSION. Bumped whenever a reason moves between the
+#: justified and possible-miss buckets.
+#:
+#: WHY THIS EXISTS. Persisting the tally and then changing the
+#: classification is a trap: the restored counts were bucketed by the OLD
+#: rules, so the report adds them to counts bucketed by the new ones and
+#: presents the sum as one measurement. Production showed it immediately --
+#: 202 `residual_cap:3>=3` still sitting in possible_misses after the fix,
+#: restored from a state file written before it, with a `counters_since`
+#: stamped AFTER the restart and therefore describing the wrong period.
+#:
+#: So a tally whose taxonomy version does not match is DISCARDED rather
+#: than merged, and the discard is reported.
+TALLY_TAXONOMY = 2
+
+
+def variant_label(policy: str, placement: str) -> str:
+    """The name an arm is reported under.
+
+    AT_TOUCH arms keep their bare policy name, so the three deployed
+    simulations are labelled exactly as they were before the placement
+    dimension existed and nothing downstream has to learn a new name.
+    """
+    return policy if placement == AT_TOUCH else "%s@%s" % (policy, placement)
+
+
+def variant_state_filename(label: str) -> str:
+    """One definition of the durable filename, used by the runner that
+    writes it and the test that asserts where it lands -- so the two can
+    never drift into disagreeing about the same file."""
+    return "shadow_controller_%s.json" % label.lower().replace("@", "_at_")
+
+
+#: THE CANONICAL ARM SET: (label, policy, placement).
+#:
+#: Three policies at the touch, plus the one pre-registered placement arm
+#: on the BASELINE policy, so a difference between it and ARGMAX is a
+#: difference in RESTING DEPTH alone. Twelve simulations in all: four arms
+#: times three fill scenarios.
+SHADOW_VARIANTS = tuple(
+    [(p, p, AT_TOUCH) for p in sorted(POLICIES)]
+    + [(variant_label(BASELINE_POLICY, ONE_TICK_BEHIND),
+        BASELINE_POLICY, ONE_TICK_BEHIND)])
+
 
 class ShadowController:
     """One inventory-driven decision per tick, for one market at a time."""
@@ -273,11 +340,32 @@ class ShadowController:
                  model: Optional[Mapping[str, Any]] = None,
                  pair_cap: Optional[D] = None,
                  policy: str = BASELINE_POLICY,
+                 placement: str = AT_TOUCH,
                  emit: Optional[Callable[[str, Mapping[str, Any]], None]] = None
                  ) -> None:
         self.state_path = str(state_path)
         if policy not in POLICIES:
             raise ValueError("unknown policy: %r" % (policy,))
+        if placement not in PLACEMENTS:
+            raise ValueError("unknown placement: %r" % (placement,))
+        #: AT_TOUCH by default, so the three deployed arms are unchanged by
+        #: the existence of this dimension. The comparison arm is a FOURTH
+        #: controller with its own durable state, not a new axis threaded
+        #: through theirs.
+        self.placement = str(placement)
+        self.offset_ticks = PLACEMENT_TICKS[self.placement]
+        #: THE VARIANT'S OWN NAME, on every record. `policy` alone cannot
+        #: identify a variant once two share a policy: the placement
+        #: variant IS ARGMAX, and a consumer filtering on policy would
+        #: silently merge it with the touch variant and compare the
+        #: comparison against itself.
+        #:
+        #: NOT CALLED `arm`. In this codebase "arm" means arming the
+        #: transport, and FORBIDDEN_ATTRS reserves the word on this object
+        #: precisely so that an order-path capability cannot hide behind
+        #: it. An experiment arm is a different thing wearing the same
+        #: word, so it gets a different one. The prose still says "arm".
+        self.variant = variant_label(str(policy), self.placement)
         #: named on every record, and each policy keeps its OWN inventory in
         #: its OWN state file, so two of these can run side by side without
         #: one's simulated fills contaminating the other's decisions.
@@ -288,7 +376,8 @@ class ShadowController:
         # near-$1 tolerance. None would mean the sports cap.
         self.pair_cap = l5d.BTC15M_PAIR_CAP if pair_cap is None else pair_cap
         self._emit = emit
-        self.state: Dict[str, Any] = {"v": STATE_VERSION, "markets": {}}
+        self.state: Dict[str, Any] = {"v": STATE_VERSION, "markets": {},
+                                      "tally_taxonomy": TALLY_TAXONOMY}
         self.decisions = 0
         self.records = 0
         self.counts: Dict[str, int] = {}
@@ -335,6 +424,24 @@ class ShadowController:
                     self.state[k] = dict(doc[k])
                 elif k == "counters_since" and doc.get(k):
                     self.state[k] = doc[k]
+            if int(doc.get("tally_taxonomy") or 0) != TALLY_TAXONOMY:
+                # counts bucketed by a different taxonomy are not comparable
+                # with counts bucketed by this one, and summing them would
+                # present two definitions as one number.
+                dropped = self.state.pop("tally", None)
+                self.state.pop("counters_since", None)
+                self.state["tally_reset"] = {
+                    "from_taxonomy": int(doc.get("tally_taxonomy") or 0),
+                    "to_taxonomy": TALLY_TAXONOMY,
+                    "dropped_scenarios": sorted(dropped or {}),
+                    "reason": ("the refusal taxonomy changed, so restored "
+                               "counts were bucketed by rules this build no "
+                               "longer uses. Discarded rather than merged. "
+                               "Settled-window economics are unaffected: "
+                               "they are priced from inventory, not from "
+                               "these counters."),
+                }
+            self.state["tally_taxonomy"] = TALLY_TAXONOMY
             self.state["boot"] = self._drop_stale_resting()
             return
         # A STATE DISCONTINUITY, RECORDED RATHER THAN ABSORBED.
@@ -598,7 +705,9 @@ class ShadowController:
         Never raises into the runner.
         """
         base = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
-                "policy": self.policy,
+                "variant": self.variant,
+                "policy": self.policy, "placement": self.placement,
+                "offset_ticks": self.offset_ticks,
                 "fill_rule": FILL_RULE, "window_source": window_source}
         try:
             book = normalise_book(book)
@@ -659,9 +768,29 @@ class ShadowController:
         rec = {**rec, **l5d._public(plan)}
         if plan.get("decision") != "quote":
             return self._out(rec)
+        # ----------------------------------------------------- placement
+        # The ONE pre-registered change: rest one tick worse in our own
+        # outcome. Applied AFTER plan_action so the decision -- side,
+        # relation, cap arithmetic -- is identical to AT_TOUCH's and only
+        # the resting price differs. A cheaper price can only LOWER pair
+        # cost, so the 0.96 cap stays satisfied; and it rests further from
+        # crossing, so `restable` cannot be made worse by it.
+        px = plan["_px"]
+        if self.offset_ticks:
+            px = px - (l5d.TICK * self.offset_ticks)
+            if px < l5d.TICK:
+                # NEVER rounded back to the touch: an arm that cannot quote
+                # at its own depth must be visible as that, not as a low
+                # fill rate.
+                return self._out({**rec, "decision": "no_action",
+                                  "relation": plan.get("relation"),
+                                  "reason": "offset_not_priceable",
+                                  "target_price": str(plan["_px"])})
+            rec["target_price"] = str(px)
+            rec["at_touch_price"] = str(plan["_px"])
         order = FM.HypoOrder(
             slug, FM.UP if plan["_side_yes"] else FM.DOWN,
-            plan["_px"], D(1), float(now), ladder=ladder,
+            px, D(1), float(now), ladder=ladder,
             bid=book.get("bid"), ask=book.get("ask"),
             coid="%s|%s|%s" % (self.policy, scenario, now))
         # A PASSIVE ORDER THAT WOULD CROSS IS NOT A MAKER ORDER. The model
@@ -672,7 +801,7 @@ class ShadowController:
                               "relation": plan.get("relation"),
                               "reason": "would_cross_not_a_maker_quote"})
         self._orders.setdefault(slug, {})[scenario] = order
-        sc["resting"] = {"side": plan["side"], "price": str(plan["_px"]),
+        sc["resting"] = {"side": plan["side"], "price": str(px),
                          "relation": plan.get("relation"), "t": now}
         sc["last_rel"] = str(plan.get("relation") or "")
         rec["queue_ahead_at_placement"] = (
@@ -691,8 +820,9 @@ class ShadowController:
         """
         slot = self._slot(slug)
         out = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
-               "policy": self.policy, "fill_rule": FILL_RULE,
-               "scenarios": {},
+               "variant": self.variant,
+               "policy": self.policy, "placement": self.placement,
+               "fill_rule": FILL_RULE, "scenarios": {},
                "labels": ("STRANDED and PENDING SETTLEMENT, per scenario. "
                           "Matched pairs redeem $1 each whatever the "
                           "outcome; the residual is UNKNOWN until the venue "
@@ -765,7 +895,9 @@ class ShadowController:
         """
         slot = self._slot(slug)
         out = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
-               "policy": self.policy, "yes_value": str(yes_value),
+               "variant": self.variant,
+               "policy": self.policy, "placement": self.placement,
+               "yes_value": str(yes_value),
                "fill_rule": FILL_RULE, "scenarios": {},
                "maker_fee_usd": "0.0000",
                "maker_fee_provenance": ("CONFIRMED zero over 293 actual "
@@ -1135,6 +1267,9 @@ class ShadowController:
                 "counts": dict(self.counts),
                 "markets": len(self.state.get("markets") or {}),
                 "pair_cap": str(self.pair_cap),
+                "variant": self.variant,
+                "placement": self.placement,
+                "offset_ticks": self.offset_ticks,
                 "fill_rule": FILL_RULE,
                 "state_path": self.state_path,
                 "scenarios": list(SCENARIOS),
@@ -1143,6 +1278,7 @@ class ShadowController:
                 "stranded": self.stranded(cap=STRANDED_REPORT_CAP),
                 "state_discontinuity": self.discontinuity(),
                 "boot": self.state.get("boot"),
+                "tally_reset": self.state.get("tally_reset"),
                 "resting_now": {sc: bool((self._orders.get(k) or {}).get(sc))
                                 for sc in SCENARIOS
                                 for k in list(self._orders)[:1]} or None,

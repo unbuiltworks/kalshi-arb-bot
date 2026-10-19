@@ -1064,3 +1064,171 @@ def test_the_execution_block_names_its_own_period(tmp_path):
     # cover it, and the report says so rather than implying they do
     assert ex["counters_cover_all_settled_windows"] is False
     assert "counters_since" in ex
+
+
+# --------------------------------------------------------------------------
+# THE PRE-REGISTERED PLACEMENT VARIANT (analysis/l5/TICK_DEPTH_PREREGISTRATION.md)
+#
+# One tick worse in our own outcome, nothing else different. These tests
+# guard the ways a deeper quote could be flattered into looking better than
+# it is.
+def _two_variants(tmp_path):
+    a = sc.ShadowController(state_path=str(tmp_path / "touch.json"),
+                            policy=sc.BASELINE_POLICY,
+                            placement=sc.AT_TOUCH)
+    b = sc.ShadowController(state_path=str(tmp_path / "deep.json"),
+                            policy=sc.BASELINE_POLICY,
+                            placement=sc.ONE_TICK_BEHIND,
+                            model=a.model)
+    return a, b
+
+
+def test_the_deep_variant_rests_exactly_one_tick_worse(tmp_path):
+    a, b = _two_variants(tmp_path)
+    book = _book("0.45", "0.46")
+    ra = a.step(WS, slug=SLUG, book=book, window_end_ts=WS + 900.0,
+                window_source="VENUE", prints=[], ladder=None)
+    rb = b.step(WS, slug=SLUG, book=book, window_end_ts=WS + 900.0,
+                window_source="VENUE", prints=[], ladder=None)
+    if ra.get("decision") != "quote":
+        pytest.skip("the baseline did not quote on this state")
+    assert rb["decision"] == "quote", rb
+    # same side and same relation: only the resting price differs
+    assert rb["side"] == ra["side"]
+    assert rb["relation"] == ra["relation"]
+    assert D(rb["target_price"]) == D(ra["target_price"]) - l5d.TICK
+    assert D(rb["at_touch_price"]) == D(ra["target_price"])
+    assert rb["variant"] == "%s@%s" % (sc.BASELINE_POLICY,
+                                       sc.ONE_TICK_BEHIND)
+    assert rb["offset_ticks"] == 1 and ra["offset_ticks"] == 0
+
+
+def test_a_depth_it_cannot_price_is_refused_not_rounded_back(tmp_path):
+    """An arm that cannot quote at its own depth must be VISIBLE as that.
+    Rounding back to the touch would silently turn the deep arm into the
+    touch arm and make the comparison measure nothing."""
+    a, b = _two_variants(tmp_path)
+    # a book where our own-outcome price is one tick, so one deeper is zero
+    book = _book("0.01", "0.02")
+    rb = b.step(WS, slug=SLUG, book=book, window_end_ts=WS + 900.0,
+                window_source="VENUE", prints=[], ladder=None)
+    if rb.get("reason") == "offset_not_priceable":
+        assert rb["decision"] == "no_action"
+        # and it is a JUSTIFIED refusal, not a missed opportunity
+        t = b._tally(sc.HEADLINE_SCENARIO)
+        assert t["possible_misses"] == 0
+        assert t["refusal_reasons"].get("offset_not_priceable") == 1
+    else:
+        # the model declined earlier for its own reasons; the refusal path
+        # is still asserted directly
+        assert "offset_not_priceable" in sc.JUSTIFIED_REFUSALS
+
+
+def test_the_deep_quote_is_never_credited_a_fill_it_did_not_earn(tmp_path):
+    """The deep variant sits behind MORE queue, so it is the variant most
+    likely to be flattered by a loose fill rule. A print that merely
+    reaches our price, with volume below the queue ahead of us, fills
+    nothing."""
+    a, b = _two_variants(tmp_path)
+    book = _book("0.45", "0.46")
+    lad = _ladder(bid="0.45", ask="0.46", bid_qty="900", ask_qty="900")
+    rb = b.step(WS, slug=SLUG, book=book, window_end_ts=WS + 900.0,
+                window_source="VENUE", prints=[], ladder=lad)
+    if rb.get("decision") != "quote":
+        pytest.skip("no quote to test the fill rule against")
+    px = D(rb["target_price"])
+    # a print AT our price, but with volume far below the queue ahead
+    rb2 = b.step(WS + 5.0, slug=SLUG, book=book, window_end_ts=WS + 900.0,
+                 window_source="VENUE",
+                 prints=[_print(px, 5, t=WS + 4.0)], ladder=lad)
+    assert rb2.get("modelled_fill") is None, rb2["modelled_fill"]
+    inv = b.inventory_for(SLUG)
+    assert (inv.yes, inv.no) == (0, 0), "a touch became a fill"
+
+
+def test_the_two_variants_keep_separate_books_and_files(tmp_path):
+    a, b = _two_variants(tmp_path)
+    assert a.state_path != b.state_path
+    assert a.variant != b.variant
+    assert a.policy == b.policy == sc.BASELINE_POLICY
+    inv = a.inventory_for(SLUG)
+    inv.record(True, D("0.40"))
+    a._store_inventory(SLUG, inv)
+    assert b.inventory_for(SLUG).yes == 0, "the books are shared"
+
+
+def test_the_canonical_variant_set_is_four_and_names_the_depth_arm():
+    labels = [v[0] for v in sc.SHADOW_VARIANTS]
+    assert len(labels) == 4, labels
+    assert labels.count("ARGMAX") == 1
+    deep = [v for v in sc.SHADOW_VARIANTS if v[2] == sc.ONE_TICK_BEHIND]
+    assert len(deep) == 1
+    assert deep[0] == ("ARGMAX@ONE_TICK_BEHIND", sc.BASELINE_POLICY,
+                       sc.ONE_TICK_BEHIND)
+    # distinct durable files, so no two variants can share state
+    files = {sc.variant_state_filename(l) for l in labels}
+    assert len(files) == 4, files
+
+
+def test_a_tally_from_an_older_taxonomy_is_discarded_not_merged(tmp_path):
+    """PRODUCTION FOUND THIS. Persisting the tally and then changing the
+    classification merged counts bucketed by two different sets of rules
+    and presented the sum as one measurement: 202 `residual_cap:3>=3`
+    still sitting in possible_misses after the fix that moved it, restored
+    from a state file written before it.
+
+    Worse, `counters_since` was stamped at the restart, so the block
+    claimed a period that did not contain most of its own counts."""
+    p = str(tmp_path / "s.json")
+    old = {"v": sc.STATE_VERSION, "markets": {},
+           "tally_taxonomy": 1,                      # an older taxonomy
+           "counters_since": "2026-01-01T00:00:00+00:00",
+           "tally": {sc.HEADLINE_SCENARIO: dict(
+               sc.ShadowController._fresh_tally(),
+               possible_misses=202,
+               refusal_reasons={"residual_cap:3>=3": 202})}}
+    io.open(p, "w", encoding="utf-8").write(json.dumps(old))
+
+    c = sc.ShadowController(state_path=p)
+    r = c.state.get("tally_reset")
+    assert r, "the stale tally was merged in silence"
+    assert r["from_taxonomy"] == 1 and r["to_taxonomy"] == sc.TALLY_TAXONOMY
+    assert sc.HEADLINE_SCENARIO in r["dropped_scenarios"]
+    # the mis-bucketed counts are GONE, not carried
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["possible_misses"] == 0, t
+    assert t["refusal_reasons"] == {}
+    # and the period is restamped, not inherited from the discarded counts
+    assert c.state["counters_since"] != "2026-01-01T00:00:00+00:00"
+    # the reset is visible in the heartbeat
+    assert c.report()["tally_reset"]["to_taxonomy"] == sc.TALLY_TAXONOMY
+
+
+def test_a_tally_from_the_CURRENT_taxonomy_still_survives_a_restart(tmp_path):
+    """The discard must be keyed on the taxonomy CHANGING, not on every
+    restart -- otherwise the persistence fix is undone."""
+    p = str(tmp_path / "s.json")
+    c = sc.ShadowController(state_path=p)
+    for _ in range(5):
+        c._tally_record({"scenario": sc.HEADLINE_SCENARIO,
+                         "decision": "quote"})
+    since = c.state["counters_since"]
+    c._save()
+    again = sc.ShadowController(state_path=p)
+    assert again.state.get("tally_reset") is None
+    assert again._tally(sc.HEADLINE_SCENARIO)["quotes_placed"] == 5
+    assert again.state["counters_since"] == since
+
+
+def test_the_residual_cap_really_does_land_in_justified_now():
+    """The production report still showed it as a miss AFTER the fix,
+    because of the stale tally above. Asserted directly on the classifier
+    so the two failure modes stay distinguishable."""
+    c = sc.ShadowController(state_path="/dev/null")
+    for _ in range(202):
+        c._tally_record({"scenario": sc.HEADLINE_SCENARIO,
+                         "decision": "no_action",
+                         "reason": "residual_cap:3>=3"})
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["possible_misses"] == 0
+    assert t["justified_refusals"] == 202

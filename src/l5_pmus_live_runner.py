@@ -1944,13 +1944,26 @@ class Runner:
         try:
             model = None
             built: Dict[str, Any] = {}
-            for name in sorted(SHADOW.POLICIES):
+            # THREE POLICIES AT THE TOUCH, plus ONE placement arm.
+            #
+            # The fourth is the pre-registered AT_TOUCH versus
+            # ONE_TICK_BEHIND comparison
+            # (analysis/l5/TICK_DEPTH_PREREGISTRATION.md). It is a SEPARATE
+            # controller with its own durable state, deliberately not a new
+            # axis inside the other three: that way the nine existing
+            # simulations keep their exact state layout and behaviour, and
+            # the arm can be removed by deleting one entry.
+            #
+            # Its policy is the BASELINE, so a difference between it and
+            # ARGMAX is a difference in RESTING DEPTH alone.
+            for label, name, placement in SHADOW.SHADOW_VARIANTS:
                 c = SHADOW.ShadowController(
                     state_path=os.path.join(
-                        self.root, "shadow_controller_%s.json" % name.lower()),
-                    model=model, policy=name, emit=self._shadow_emit)
+                        self.root, SHADOW.variant_state_filename(label)),
+                    model=model, policy=name, placement=placement,
+                    emit=self._shadow_emit)
                 model = c.model               # load once, fail once, share
-                built[name] = c
+                built[label] = c
             self._shadow = built
             for name in sorted(built):
                 emit("L5_SHADOW_READY", built[name].report())

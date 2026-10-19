@@ -77,15 +77,20 @@ def capture(monkeypatch):
     return out
 
 
-def decisions(out, policy=None, scenario=SC.HEADLINE_SCENARIO):
+def decisions(out, variant=None, scenario=SC.HEADLINE_SCENARIO):
     """Decision records, filtered to ONE scenario by default.
 
-    Every tick now emits one record per scenario, so an unfiltered count
+    Every tick emits one record per scenario, so an unfiltered count
     trebles. The headline scenario is the one promotion is judged on, so it
-    is the default unit of "a decision" here."""
+    is the default unit of "a decision" here.
+
+    FILTERED BY ARM, NOT BY POLICY. Two arms now share the policy ARGMAX --
+    the touch arm and the placement arm -- so a policy filter would merge
+    them and compare the comparison against itself.
+    """
     recs = [d for k, d in out if k == "L5_SHADOW_DECISION"]
     return [d for d in recs
-            if (policy is None or d.get("policy") == policy)
+            if (variant is None or d.get("variant") == variant)
             and (scenario is None or d.get("scenario") == scenario)]
 
 
@@ -279,8 +284,7 @@ def test_the_state_file_lands_under_the_live_root(tmp_path, monkeypatch):
     capture(monkeypatch)
     runner.tick(NOW)
     for name, c in runner.shadow_controller().items():
-        want = os.path.join(runner.root,
-                            "shadow_controller_%s.json" % name.lower())
+        want = os.path.join(runner.root, SC.variant_state_filename(name))
         assert c.state_path == want, name
         assert os.path.exists(want), name
 
@@ -327,13 +331,13 @@ def test_the_heartbeat_carries_the_shadow_report(tmp_path, monkeypatch):
     hb = [d for k, d in out if k == "L5_LIVE_HB"]
     assert hb
     block = hb[0]["shadow_controller"]
-    assert set(block) == set(SC.POLICIES), block
-    for name in SC.POLICIES:
+    assert set(block) == {a[0] for a in SC.SHADOW_VARIANTS}, block
+    for name in (a[0] for a in SC.SHADOW_VARIANTS):
         assert block[name]["decisions"] >= 1, name
         assert block[name]["scenarios"] == list(SC.SCENARIOS)
         assert block[name]["headline_scenario"] == SC.HEADLINE_SCENARIO
         assert block[name]["provenance"] == "CONTROLLER_GENERATED"
-        assert block[name]["policy"] == name
+        assert block[name]["variant"] == name
 
 
 # ===================================================== WINDOW CLOSE
@@ -591,11 +595,17 @@ def test_both_policies_run_with_separate_inventories(tmp_path, monkeypatch):
     out = capture(monkeypatch)
     runner.tick(NOW)
     cs = runner.shadow_controller()
-    assert set(cs) == set(SC.POLICIES)
+    assert set(cs) == {a[0] for a in SC.SHADOW_VARIANTS}
     assert SC.BASELINE_POLICY in cs
+    # the placement arm is present, is the baseline policy, and is the only
+    # arm resting away from the touch
+    deep = [lbl for lbl, c in cs.items() if c.placement != SC.AT_TOUCH]
+    assert deep == ["%s@%s" % (SC.BASELINE_POLICY, SC.ONE_TICK_BEHIND)], deep
+    assert cs[deep[0]].policy == SC.BASELINE_POLICY
+    assert cs[deep[0]].offset_ticks == 1
     paths = {c.state_path for c in cs.values()}
     assert len(paths) == len(cs), paths
-    for name in SC.POLICIES:
+    for name in (a[0] for a in SC.SHADOW_VARIANTS):
         assert decisions(out, name), name
     # distinct objects, distinct state dicts
     objs = list(cs.values())
@@ -609,8 +619,8 @@ def test_every_policy_decides_on_the_same_book_and_instant(tmp_path,
     runner = build(tmp_path, monkeypatch, feed=lambda: [])
     out = capture(monkeypatch)
     runner.tick(NOW)
-    recs = {d["policy"]: d for d in decisions(out)}
-    assert len(recs) == len(SC.POLICIES)
+    recs = {(d["policy"], d.get("placement")): d for d in decisions(out)}
+    assert len(recs) == len(SC.SHADOW_VARIANTS)
     ttes = {d["tte_s"] for d in recs.values()}
     ends = {d.get("window_end_ts") for d in recs.values()}
     assert len(ttes) == 1 and len(ends) == 1, (ttes, ends)
@@ -627,7 +637,7 @@ def test_one_policys_chatter_cannot_mute_the_other(tmp_path, monkeypatch):
     runner.roll(NOW)
     for i in range(6):
         runner.shadow_tick(NOW + i * 3.0)
-    for name in SC.POLICIES:
+    for name in (a[0] for a in SC.SHADOW_VARIANTS):
         assert decisions(out, name), name
 
 
