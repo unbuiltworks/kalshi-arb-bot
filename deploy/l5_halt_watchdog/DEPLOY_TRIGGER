@@ -113,3 +113,24 @@ restore the watchdog after an aborted one-shot 2026-10-19T01:10Z
 # NOTHING IS ARMED. L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO, L5_CANCEL_MECHANISM=NO,
 # the authorization is EXPIRED, and no limit moves.
 read-only pre-deploy volume probe, nothing cleared 2026-10-19T01:45Z
+
+# 2026-10-19T01:56Z: STEP 1 OF 2 -- ship the startup hook DISARMED.
+# L5_HALT_RESET_AT_BOOT=NO, so this deployment clears NOTHING. It exists to
+# prove in production what the unit tests assert: that a normal deployment of
+# the hook-carrying image boots, sweeps, and leaves the latch alone. Only the
+# literal "YES" arms the hook.
+#
+# WHY THE HOOK IS AT STARTUP (owner chose Option A). preDeployCommand was
+# probed on 2026-10-19 (deployment 8d2a37bc) and refused NO_LATCH_PRESENT
+# while the latch demonstrably existed: Railway does NOT mount the volume for
+# the pre-deploy step. This process's volume IS mounted, so startup is the
+# only place the clear can run, and it costs the ordinary ~1s handover.
+#
+# THE SWEEP LOOP STILL CANNOT CLEAR. The hook runs ONCE before `while True:`,
+# and a test now asserts the loop body contains none of l5_halt_reset,
+# boot_reset, perform_reset, heartbeat_no_halt or clear -- a stronger and
+# checkable statement than the old "the file never mentions it".
+# HaltAsserter still has no clear method.
+#
+# NOTHING IS ARMED. L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO, mechanism OFF.
+ship the startup reset hook DISARMED, nothing cleared 2026-10-19T01:56Z
