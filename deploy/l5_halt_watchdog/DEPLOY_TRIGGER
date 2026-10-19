@@ -134,3 +134,32 @@ read-only pre-deploy volume probe, nothing cleared 2026-10-19T01:45Z
 #
 # NOTHING IS ARMED. L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO, mechanism OFF.
 ship the startup reset hook DISARMED, nothing cleared 2026-10-19T01:56Z
+
+# 2026-10-19T02:04Z: STEP 2 OF 2 -- ARMED. Owner Authorization A.
+# L5_HALT_RESET_AT_BOOT=YES for this one deployment. The startup hook runs the
+# existing owner-gated reset ONCE, before the sweep loop, and then this
+# process sweeps normally.
+#
+# THE LATCH BEING CLEARED, named so this is not a blind clear:
+#   sha256 583e54a7eb879e2ee74af3b370c392e49f3998922d5f720b6fe87d7efe4e4042
+#   reason UNMANAGED_RESTING_ORDER, record_t 2026-10-18T23:29:43.844688+00:00
+# read from the executor's own halt_latch_telemetry and identical across two
+# consecutive heartbeats (01:54:32Z, 01:55:33Z). If the watchdog re-latched
+# since, the digest moved and gate 2 REFUSES -- which is the point of pinning.
+#
+# PRECONDITIONS AT 02:03:36Z: watchdog deployment 6a757478 sweeping on its 20s
+# cadence with open_orders 0, not_ours [], still_open [], unverified [],
+# read_error null, no alarm. Executor ed487599 shadow_lock true,
+# owner_arm_token false, authorization EXPIRED, live_orders 0, worst-case
+# exposure $0, limits unchanged. Step 1 (6a757478) proved the hook-carrying
+# image boots and sweeps while DISARMED and cleared nothing.
+#
+# ONE FRESH RESET ID: halt-reset-20261019-508bdf1a7596, unspent. It is spent
+# by the ATTEMPT, so a later deployment that still carries AT_BOOT=YES clears
+# nothing -- and AT_BOOT is set back to NO immediately after regardless.
+#
+# SUBMISSION STAYS DISABLED. L5_SHADOW_ONLY=1 throughout, PMUS_Q1_LIVE=NO,
+# mechanism OFF, authorization EXPIRED. Clearing the HALT does not arm
+# anything: the shadow lock is authorize_arming step 1 and refuses first.
+# NO ORDER IS PLACED BY THIS DEPLOYMENT.
+ARMED: owner-gated latch clear at startup, Authorization A 2026-10-19T02:04Z
