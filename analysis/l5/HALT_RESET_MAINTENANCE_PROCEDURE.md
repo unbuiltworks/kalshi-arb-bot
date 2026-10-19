@@ -1,7 +1,8 @@
 # Owner HALT reset: standalone maintenance procedure
 
-Status: **READY, NOT RUN.** Production is shadow-locked with the latch held.
-Nothing here has been executed against production.
+Status: **EXECUTED 2026-10-19T02:07:38.833Z. HALT IS CLEAR.**
+Production remains shadow-locked; the clear armed nothing.
+See §8 for the result.
 
 ---
 
@@ -211,3 +212,61 @@ no digest while staying blocked.
 
 Regressions: **1420 passed, 0 failed** across halt, watchdog, cancel, shadow,
 registry, one-shot, ported-safety, live-execution and wiring.
+
+
+---
+
+## 8. RESULT: executed 2026-10-19, Authorization A
+
+Option A (watchdog startup hook) after `preDeployCommand` was ruled out in
+§2a. Deployment `6b19187c`, commit `62ccd1bf`.
+
+```
+02:07:38.391  Stopping Container
+02:07:38.833  latch CLEARED
+02:07:39.356  L5_WATCHDOG_BOOT          <- handover 0.97s
+02:17:40      L5_WATCHDOG_SWEEP heartbeat {"halt": false}
+02:18:21      executor submission_gate halt_latch CLEAR, shadow_lock true
+```
+
+**Audit entry**, written before the clear:
+
+| field | value |
+|---|---|
+| `outcome` | `CLEARED`, `cleared: true` |
+| `reset_id` | `halt-reset-20261019-508bdf1a7596` (now spent) |
+| `prior_latch_sha256` | `583e54a7eb879e2ee74af3b370c392e49f3998922d5f720b6fe87d7efe4e4042` |
+| `confirmed_reason` | `UNMANAGED_RESTING_ORDER` |
+| `who` | `owner (Authorization A, 2026-10-19)` |
+| `t` / `cleared_at` | `02:07:38.821637Z` / `02:07:38.833035Z` |
+
+`prior_latch_sha256` equals the digest staged from the executor's own
+telemetry, so gate 2 cleared THE reviewed latch and no other. The prior
+latch's evidence names order **D68KZ0SG10JR** resting **530.69s** on
+`cpc-btc-updown-15m-2026-10-18-2315z` -- the order from the failed 2026-10-18
+cancellation proof, which is what latched this HALT in the first place.
+
+**Machine-verified at the moment of the clear** (not attested, measured):
+
+* registry readable, age **0.002s**, `registry_live_orders: 0`,
+  **`submission_disabled: true`**
+* venue `l5_owned_working_orders: 0`, `venue_working_orders_seen: 0`,
+  `owner_manual_orders_allowed: []`, `account_positions: []`
+
+**Maximum interruption: 0.97s**, against the ~2s budget and the 5m53s the
+image swap cost.
+
+**Post-reset state.** Watchdog sweeping on its 20s cadence and now ATTESTING
+`heartbeat {"halt": false}` instead of refusing; `open_orders: 0`,
+`not_ours: []`, `still_open: []`, `unverified: []`, `read_error: null`. The
+latch digest moved to `a949a722...` with `halt: false`, as it must. The
+executor reads `halt_latch: CLEAR`, `halt_why: null`, and is STILL BLOCKED on
+`SHADOW_ONLY_LOCK` with `shadow_lock: true`, `owner_arm_token: false`,
+`armed: false`, `live_orders: 0`, worst-case exposure `$0`, limits unchanged.
+Clearing the HALT armed nothing, because the shadow lock is step 1 and
+refuses before the halt gate is consulted.
+
+**Disarmed afterwards**: `L5_HALT_RESET_AT_BOOT=NO`, and CONFIRM, EXPECT,
+CONFIRM_REASON, ATTEST, WHO and PRE_DEPLOY emptied, `INSPECT` back to its
+safe `YES`. `preDeployCommand` stays `[]`. The durable guarantee is the spent
+reset id in the audit log, not the variables.
