@@ -61,3 +61,27 @@ restore the credential-free watchdog image 2026-10-17T21:12Z
 # HALT authority, and still fails closed. The latch lives on the volume at
 # /data and survives this deployment; it is NOT cleared here.
 watchdog cancel sends marketSlug, records the venue detail 2026-10-19T00:17Z
+
+# 2026-10-19T01:10Z: RESTORE the watchdog image after an ABORTED one-shot
+# attempt. The service was temporarily pointed at deploy/l5_halt_reset for the
+# READ-ONLY INSPECT that gate 2 of the HALT reset requires (it needs the
+# sha256 of the current halt.json, readable nowhere else). The reset image
+# exits by design under restartPolicyType NEVER, so the watchdog STOPPED
+# SWEEPING at 01:00:12Z and stayed down.
+#
+# WHAT WENT WRONG, recorded so it is not repeated. `redeploy` reuses the
+# previous BUILD, so it restarted the WATCHDOG rather than building the reset
+# image, and the swap only took effect on the rebuild that followed. The
+# INSPECT output never reached the logs, so NO DIGEST WAS OBTAINED and NO
+# RESET WAS PERFORMED. Restoring the three fields alone did not redeploy
+# either -- a variable write on this service did not create a deployment.
+# This trigger file is the mechanism that does, which is what it exists for.
+#
+# NOTHING WAS CLEARED AND NOTHING WAS ARMED. The halt latch is untouched: the
+# reset requires four fail-closed gates and never got past the dry run. No
+# order was submitted, the shadow lock was never lifted, and the executor is
+# back to PMUS_Q1_LIVE=NO. dockerfilePath, startCommand and restartPolicyType
+# are already set back to deploy/l5_halt_watchdog/Dockerfile,
+# python3 -m scripts.l5_halt_watchdog and ALWAYS; this rebuilds that image so
+# independent sweeping and independent cancellation resume.
+restore the watchdog after an aborted one-shot 2026-10-19T01:10Z
