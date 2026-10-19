@@ -191,9 +191,23 @@ class Run:
         return out
 
 
-def replay(windows, policy_fn, run, model, fill_mode):
+def replay(windows, policy_fn, run, model, fill_mode, veto=None):
     """Walk each window's prints, decide, and settle. fill_mode is
-    'cons' (a later print at/through us) or 'opt' (strictly through)."""
+    'cons' (a later print at/through us) or 'opt' (strictly through).
+
+    `veto(rel, prop, inv, book, tte)` is an optional hook called AFTER the
+    policy picks a relation and BEFORE `plan_action`. Returning True skips
+    the tick and tallies it as a refusal.
+
+    WHY A HOOK AND NOT A POLICY THAT DECLINES. `plan_action` has no input
+    meaning "do nothing": an unrecognised relation -- None, "wait",
+    "no_action", anything -- falls through to a QUOTE at an open-like
+    price. A candidate rule expressed as a policy returning None would
+    therefore have quoted instead of refusing, and produced a
+    plausible-looking result that measured nothing. The veto is the
+    explicit refusal that layer cannot express. Default None, so every
+    existing run is byte-for-byte unchanged.
+    """
     for w in windows:
         prints = w["prints"]
         inv = l5d.Inventory()
@@ -233,6 +247,10 @@ def replay(windows, policy_fn, run, model, fill_mode):
                 run.rel["none"] += 1
                 continue
             rel = policy_fn(prop, inv, book, tte)
+            if veto is not None and veto(rel, prop, inv, book, tte):
+                run.refused["vetoed:%s" % (rel or "none")] += 1
+                run.rel["refused"] += 1
+                continue
             plan = l5d.plan_action(rel, inv, book,
                                    pair_cap=l5d.BTC15M_PAIR_CAP)
             # THE CORRECTION. An earlier version counted plan["relation"]
