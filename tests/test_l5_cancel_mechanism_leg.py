@@ -43,11 +43,15 @@ class Transport:
     quantity_increment = D("0.01")
     market_slug = MARKET
 
-    def __init__(self, *, armed=True, vid=VID, rows=None, submit_raises=None):
+    def __init__(self, *, armed=True, vid=VID, rows=None, submit_raises=None,
+                 cancel_raises=None, last_cancel_error=None):
         self.armed = armed
         self._vid = vid
+        self._cancel_raises = cancel_raises
+        self.last_cancel_error = last_cancel_error
         self.submits = []
         self.cancels = []
+        self.cancel_args = []
         self.reads = []
         self._rows = list(rows or [])
         self._submit_raises = submit_raises
@@ -58,8 +62,14 @@ class Transport:
             raise self._submit_raises
         return {"order": {"id": self._vid}} if self._vid else {"order": {}}
 
-    def cancel(self, vid):
+    def cancel(self, vid, market_slug=None):
         self.cancels.append(vid)
+        #: the SLUG as well as the id. The venue refuses a cancel whose body
+        #: does not name the market (HTTP 400, 2026-10-18, D68KZ0SG10JR), so
+        #: a mechanism that cancels without one cannot withdraw its order.
+        self.cancel_args.append((vid, market_slug))
+        if self._cancel_raises:
+            raise self._cancel_raises
         return {"ok": True}
 
     def order(self, vid):
@@ -482,6 +492,31 @@ def test_the_self_cancel_fallback_is_never_proof(monkeypatch):
     assert m.report["independent_cancellation_proven"] is False
     assert "NOT PROOF" in m.report["proof"]
     assert m.report["self_cancel_why"] == "WATCHDOG_DID_NOT_CANCEL_IN_TIME"
+    assert t.cancel_args == [(VID, MARKET)], (
+        "the fallback must name the mechanism's own market: a cancel with an "
+        "empty body is refused HTTP 400 and the order stays resting")
+    assert m.report["self_cancel_error"] is None
+    assert m.report["self_cancel_detail"] is None
+
+
+def test_a_refused_self_cancel_reports_the_sanitized_venue_detail(monkeypatch):
+    """`str(HTTPError)` is only "HTTP Error 400: Bad Request", so the error
+    line alone could not distinguish a schema rejection from anything else.
+    That is how the 2026-10-18 cancel 400 survived a whole authorized window
+    recorded as nothing but "HTTPError"."""
+    detail = {"error": "HTTPError", "status": 400,
+              "body": '{"message":"marketSlug is required"}',
+              "venue_order_id": VID, "market_slug": MARKET,
+              "endpoint": "/v1/order/{id}/cancel", "method": "POST"}
+    t = Transport(cancel_raises=RuntimeError("HTTP Error 400: Bad Request"),
+                  last_cancel_error=detail)
+    m = mech(monkeypatch, transport=t)
+    m.step()
+    m.clock.advance(M.SELF_CANCEL_AFTER_S + 1.0)
+    m.step()                                   # must not raise
+    assert "RuntimeError" in m.report["self_cancel_error"]
+    assert m.report["self_cancel_detail"] == detail
+    assert m.report["independent_cancellation_proven"] is False
 
 
 def test_a_fill_is_reported_as_a_fill_not_as_a_cancellation(monkeypatch):

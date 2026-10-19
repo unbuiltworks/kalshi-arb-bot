@@ -46,9 +46,15 @@ ORDER_IDS = [x.strip() for x in
 MARKET = os.getenv("RECOVERY_MARKET",
                    "cpc-btc-updown-15m-2026-09-25-1300z").strip()
 
+#: THE VALUE RUNS TO A DELIMITER, NOT TO THE FIRST SPACE. `\S+` stopped at
+#: whitespace, so "Authorization: Bearer abc123" redacted only "Bearer" and
+#: left the credential in the log. Kept in lockstep with
+#: src.l5_pmus_transport._SECRETISH by
+#: test_the_local_scrubber_matches_the_shared_one.
 _SECRETISH = re.compile(
-    r"(X-PM-Access-Key|X-PM-Signature|X-PM-Timestamp|Authorization)"
-    r"\s*[:=]\s*\S+", re.I)
+    r"(X-PM-Access-Key|X-PM-Signature|X-PM-Timestamp|Authorization"
+    r"|api[-_]?key|secret|token|bearer|password)"
+    r"\s*[:=]\s*[^\"',}\]\n\r]+", re.I)
 
 
 def redact(text: Any) -> str:

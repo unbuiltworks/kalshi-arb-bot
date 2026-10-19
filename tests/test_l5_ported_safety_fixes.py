@@ -240,7 +240,7 @@ class Armed:
         self.armed = False
         self.disarmed = reason
 
-    def cancel(self, order_id):
+    def cancel(self, order_id, market_slug=None):
         self.cancelled.append(order_id)
         self.retired.add(order_id)
         return {"cancelled": order_id}

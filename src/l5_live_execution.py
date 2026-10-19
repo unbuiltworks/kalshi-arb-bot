@@ -4969,7 +4969,9 @@ def deadman(store: InventoryStore, transport: Any, *,
             continue
         ack_error = None
         try:
-            transport.cancel(vid)
+            # the ORDER's market, not the transport's current one: an
+            # orphan sweep runs after roll has moved on.
+            transport.cancel(vid, market_slug=market)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

@@ -266,7 +266,7 @@ class AckZeroThenFilled:
         self.order_reads.append(order_id)
         return dict(PROBE_04_ORDER)
 
-    def cancel(self, order_id):
+    def cancel(self, order_id, market_slug=None):
         self.cancels.append(order_id)
         raise RuntimeError("cannot cancel a filled order")
 

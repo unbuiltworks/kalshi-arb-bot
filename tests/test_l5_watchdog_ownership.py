@@ -54,7 +54,7 @@ class Venue:
     def order(self, oid):
         return self._reads[oid]
 
-    def cancel(self, oid):
+    def cancel(self, oid, market_slug=None):
         self.cancelled.append(oid)
         return {"ok": True}
 

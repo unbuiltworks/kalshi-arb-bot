@@ -45,7 +45,7 @@ class Venue:
             raise OSError("network")
         return list(self._open)
 
-    def cancel(self, oid):
+    def cancel(self, oid, market_slug=None):
         self.cancelled.append(oid)
         if oid in self.cancel_raises:
             raise RuntimeError("venue said no")
@@ -144,7 +144,15 @@ def test_the_account_wide_sweep_is_not_merely_disabled_it_is_absent():
 def test_a_cancel_without_an_id_is_refused_before_any_request():
     t = W.CancelOnlyTransport(opener=lambda *a: pytest.fail("sent"))
     with pytest.raises(W.MutationRefused):
-        t.cancel("")
+        t.cancel("", "cpc-btc-updown-15m-X")
+
+
+def test_a_cancel_without_a_market_slug_is_refused_before_any_request():
+    """An empty cancel body is what the venue refused with HTTP 400 on
+    2026-10-18, so an absent slug must refuse rather than post `{}`."""
+    t = W.CancelOnlyTransport(opener=lambda *a: pytest.fail("sent"))
+    with pytest.raises(W.MutationRefused):
+        t.cancel("D1", "")
 
 
 # --------------------------------------------------------------- the latch
@@ -274,7 +282,7 @@ def test_the_halt_is_asserted_before_the_cancel_is_attempted(tmp_path):
     order_of_events = []
 
     class Noisy(Venue):
-        def cancel(self, oid):
+        def cancel(self, oid, market_slug=None):
             order_of_events.append("cancel")
             raise RuntimeError("died here")
 

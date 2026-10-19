@@ -372,15 +372,28 @@ class Probe:
                                              str(vid), "why": "TERMINAL"})
                     continue
                 try:
-                    self.tp.cancel(str(vid))
+                    # THE ORDER'S market, not the transport's current one: a
+                    # sweep can run after roll has moved on, and the venue
+                    # refuses a cancel whose body does not name the market.
+                    self.tp.cancel(str(vid),
+                                   market_slug=str(o.get("market") or "")
+                                   or None)
                     cancelled.append(vid)
                 except BaseException as exc:                   # noqa: BLE001
                     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                         raise
                     # a cancel whose outcome we cannot establish leaves the
                     # exposure exactly where it was; reconciliation decides.
-                    cancel_errors.append({"order": vid,
-                                          "error": type(exc).__name__})
+                    #
+                    # THE SANITIZED VENUE DETAIL, not just the class name.
+                    # "HTTPError" alone is what let an HTTP 400 schema
+                    # rejection survive the whole 2026-10-18 window
+                    # undiagnosed on order D68KZ0SG10JR.
+                    row = {"order": vid, "error": type(exc).__name__}
+                    detail = getattr(self.tp, "last_cancel_error", None)
+                    if detail:
+                        row["detail"] = detail
+                    cancel_errors.append(row)
 
         # Reconciliation is the only thing allowed to release exposure. A
         # cancel we believe succeeded is not evidence that it did.

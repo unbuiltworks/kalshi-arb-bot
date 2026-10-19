@@ -40,3 +40,24 @@ inspect the latched halt, read-only, owner-authorised 2026-10-17T21:06Z
 # independent sweeping resumes. The latch was NOT cleared: INSPECT reported
 # would_clear false and wrote nothing, and the latch digest is unchanged.
 restore the credential-free watchdog image 2026-10-17T21:12Z
+
+# 2026-10-19: THE CANCELLATION REPAIR reaches the watchdog, which is the half
+# that matters: independent cancellation is the watchdog's job, and on
+# 2026-10-18 its cancel of D68KZ0SG10JR was refused HTTP 400 on every sweep for
+# 530s because CancelOnlyTransport.cancel posted an empty body. It now sends
+# {"marketSlug": slug}, matching pmus_q1_executor.cancel_exact -- the only
+# cancel ever to work against a live PMUS order -- and takes the slug from the
+# venue's own preflight row, falling back to the durable claim. An absent slug
+# REFUSES rather than restoring the empty body.
+#
+# Each sweep row now carries cancel_slug and a SANITIZED cancel_detail: status,
+# reason and a redacted, truncated response body. Previously the sweep could
+# only ever record cancel_error "HTTPError".
+#
+# THE CREDENTIAL-FREE CLOSURE IS PRESERVED, and that is why http_error_detail
+# and the redactor are LOCAL COPIES here. This image copies six src/ files and
+# deliberately excludes l5_pmus_transport; importing it would break the
+# closure. The watchdog still cannot submit an order, still holds independent
+# HALT authority, and still fails closed. The latch lives on the volume at
+# /data and survives this deployment; it is NOT cleared here.
+watchdog cancel sends marketSlug, records the venue detail 2026-10-19T00:17Z

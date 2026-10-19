@@ -27,7 +27,7 @@ class FakeTransport:
         self.cancelled = []
         self.reread = 0
 
-    def cancel(self, venue_order_id):
+    def cancel(self, venue_order_id, market_slug=None):
         self.cancelled.append(venue_order_id)
         return {"ok": True, "venue_order_id": venue_order_id}
 

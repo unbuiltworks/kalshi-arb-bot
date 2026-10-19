@@ -763,3 +763,42 @@ mechanism wait/terminal split, shadow-locked 2026-10-18T18:20Z
 # 119 focused green. Full suite 33 failed / 11343 passed / 14 errors: failure
 # set BYTE-IDENTICAL to baseline.
 strategy removed from mechanism mode, shadow-locked 2026-10-18T18:47Z
+
+# ---------------------------------------------------------------------------
+# 2026-10-19: THE CANCELLATION REPAIR. The empty cancel body is why the
+# 2026-10-18 2315z proof failed. Order D68KZ0SG10JR rested 530s while the
+# watchdog and then the executor both posted `{}` to the correct route with a
+# correct signature and were both refused HTTP 400 Bad Request. The order left
+# only when the market expired -- nothing of ours withdrew it.
+#
+# pmus_q1_executor.cancel_exact -- the only cancel in this repository ever used
+# against a live PMUS order -- has always sent {"marketSlug": slug} to the same
+# route, with the same method, the same identifier and the same signer. The
+# field was the whole difference. Signing is untouched: PMUS signs
+# ts+method+path and does NOT sign the body, so carrying a field changes
+# nothing about authentication.
+#
+# All four cancel call sites now send the ORDER's market, not the process's:
+# an orphan sweep runs after roll has moved on, so the transport's current slug
+# can name a different window. An absent slug REFUSES rather than posting `{}`.
+# _CancelOnlyHTTP's body pin MOVED, it did not loosen: {"marketSlug": <slug>}
+# is the only body admitted, and `{}`, {"cancelAll": true}, an extra key, a
+# blank slug and a non-mapping are all still refused inside the object.
+#
+# SANITIZED ERROR CAPTURE, the other half. str(HTTPError) is only "HTTP Error
+# 400: Bad Request", which is how this 400 survived a whole authorized window
+# recorded as nothing but `cancel_error: "HTTPError"`. http_error_detail reads
+# the body once, redacts it, truncates it, and records status and reason, every
+# step guarded so a diagnostic can never replace the error it describes.
+#
+# A PRE-EXISTING CREDENTIAL LEAK, found by the new tests. Both redactors
+# matched a value with \S+, which stops at the first space, so
+# "Authorization: Bearer abc123" redacted only "Bearer" and left abc123 in the
+# log. Fixed in the transport and in scripts/pmus_readonly_recovery, kept in
+# lockstep by the parity test. This ran on EVERY error path, not only cancels.
+#
+# NOTHING IS ARMED BY THIS DEPLOYMENT. L5_SHADOW_ONLY stays 1,
+# L5_CANCEL_MECHANISM stays NO, the HALT latch is untouched and still held, no
+# session id is minted, no order is submitted and no capital limit moves.
+# Deploying a cancel that works only ever reduces exposure.
+cancellation repair: send marketSlug, capture the 400 2026-10-19T00:17Z

@@ -651,13 +651,21 @@ class Mechanism:
     def _self_cancel(self, t: float, *, why: str) -> None:
         vid = self.venue_order_id
         cancel_error = None
+        cancel_detail = None
         if vid:
             try:
-                self.transport.cancel(vid)
+                self.transport.cancel(vid, market_slug=self.market)
             except BaseException as exc:                        # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
                 cancel_error = "%s: %s" % (type(exc).__name__, str(exc)[:120])
+                # WHAT THE VENUE ACTUALLY SAID, sanitized by the transport.
+                # `str(HTTPError)` is only "HTTP Error 400: Bad Request", so
+                # the line above cannot distinguish a schema rejection from
+                # anything else -- which is how the 400 of 2026-10-18 went
+                # undiagnosed for a whole authorized window.
+                cancel_detail = getattr(
+                    self.transport, "last_cancel_error", None)
         row: Dict[str, Any] = {}
         if vid:
             try:
@@ -668,6 +676,7 @@ class Mechanism:
                 row = {"read_error": type(exc).__name__}
         self.report["self_cancel_why"] = why
         self.report["self_cancel_error"] = cancel_error
+        self.report["self_cancel_detail"] = cancel_detail
         self._finish(t, row, cancelled_by="SELF_FALLBACK",
                      proof=("NOT PROOF of independent cancellation: this "
                             "process withdrew its own order"))

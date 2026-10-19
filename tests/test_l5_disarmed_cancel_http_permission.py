@@ -111,14 +111,15 @@ def test_the_disarmed_cancel_still_refuses_without_credentials(monkeypatch,
 ])
 def test_the_cancel_only_http_refuses_everything_but_one_route(method, path):
     """The refusal lives in the OBJECT, so this cannot be argued into a
-    submit or into an account-wide cancellation."""
+    submit or into an account-wide cancellation. Sent with the body a REAL
+    cancel now carries, so the route is what refuses, not the body."""
     with pytest.raises(PermissionError):
-        T._CancelOnlyHTTP().request(method, path, {})
+        T._CancelOnlyHTTP().request(method, path, {"marketSlug": SLUG})
 
 
 def test_the_cancel_only_http_permits_exactly_the_one_route(wire):
     sent = T._CancelOnlyHTTP().request(
-        "POST", "/v1/order/%s/cancel" % VID, {})
+        "POST", "/v1/order/%s/cancel" % VID, {"marketSlug": SLUG})
     assert sent.get("state") == "ORDER_STATE_CANCELED"
     assert wire == [("POST", "/v1/order/%s/cancel" % VID)]
 
@@ -177,15 +178,24 @@ def test_the_route_is_anchored_against_a_trailing_newline():
     assert not T.CANCEL_ROUTE.match("/v1/order/%s/cancel\n" % VID)
 
 
-def test_the_object_refuses_a_foreign_base_and_a_non_empty_body(wire):
+def test_the_object_refuses_a_foreign_base_and_any_other_body(wire):
     """`super()` forwarded both unchecked: an arbitrary body on the real
-    cancel route, and an unauthenticated POST to any host."""
+    cancel route, and an unauthenticated POST to any host.
+
+    THE BODY PIN MOVED, IT DID NOT LOOSEN. The venue requires `marketSlug`,
+    so the one admitted body is `{"marketSlug": <non-empty slug>}` and the
+    EMPTY body this object used to require is now refused as the 2026-10-18
+    defect it was. Every widening that mattered is still refused: an extra
+    key, an account-wide flag, a blank slug, a non-mapping."""
     h = T._CancelOnlyHTTP()
+    route = "/v1/order/%s/cancel" % VID
     with pytest.raises(PermissionError):
-        h.request("POST", "/v1/order/%s/cancel" % VID, {},
-                  "https://evil.example")
-    with pytest.raises(PermissionError):
-        h.request("POST", "/v1/order/%s/cancel" % VID, {"cancelAll": True})
+        h.request("POST", route, {"marketSlug": SLUG}, "https://evil.example")
+    for body in ({}, {"cancelAll": True}, {"marketSlug": SLUG, "all": True},
+                 {"marketSlug": ""}, {"marketSlug": "   "},
+                 {"marketSlug": None}, None, "marketSlug=%s" % SLUG):
+        with pytest.raises(PermissionError):
+            h.request("POST", route, body)
     assert wire == []
 
 
@@ -193,9 +203,11 @@ def test_the_object_itself_refuses_an_unowned_id(wire):
     """THE REVIEW'S MAIN POINT. Ownership must be a property of the OBJECT,
     not of one caller, because the object is reachable by attribute."""
     h = T._CancelOnlyHTTP(owns=lambda: (lambda oid: oid == VID))
-    assert h.request("POST", "/v1/order/%s/cancel" % VID, {})
+    assert h.request("POST", "/v1/order/%s/cancel" % VID,
+                     {"marketSlug": SLUG})
     with pytest.raises(PermissionError):
-        h.request("POST", "/v1/order/D23N1EHTTZ7D/cancel", {})
+        h.request("POST", "/v1/order/D23N1EHTTZ7D/cancel",
+                  {"marketSlug": SLUG})
     assert wire == [("POST", "/v1/order/%s/cancel" % VID)]
 
 
@@ -205,7 +217,7 @@ def test_an_unreadable_oracle_is_not_permission_inside_the_object(wire):
 
     h = T._CancelOnlyHTTP(owns=_boom)
     with pytest.raises(PermissionError):
-        h.request("POST", "/v1/order/%s/cancel" % VID, {})
+        h.request("POST", "/v1/order/%s/cancel" % VID, {"marketSlug": SLUG})
     assert wire == []
 
 

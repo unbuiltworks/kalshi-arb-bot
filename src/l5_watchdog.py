@@ -180,12 +180,80 @@ class CancelOnlyTransport:
         row = body.get("order") if isinstance(body, Mapping) else None
         return dict(row) if isinstance(row, Mapping) else dict(body or {})
 
-    def cancel(self, order_id: str) -> Any:
-        """By the VENUE's id. There is no market-scoped route on this class."""
+    def cancel(self, order_id: str, market_slug: str) -> Any:
+        """By the VENUE's id, with the order's own market in the body.
+
+        THE EMPTY BODY WAS THE DEFECT. On 2026-10-18 this method posted `{}`
+        to the correct route with a correct signature and the venue refused
+        every attempt with HTTP 400 Bad Request, for 530 seconds, on a real
+        resting order. `pmus_q1_executor.cancel_exact` -- the only cancel in
+        this repository ever used against a live PMUS order -- sends
+        `{"marketSlug": slug}` to the same route. Route, method, identifier
+        and signer were already identical; the field was the difference.
+
+        THE SIGNATURE IS NOT AFFECTED. PMUS signs ts+method+path and does NOT
+        sign the body (see `_send`), so carrying a field changes nothing about
+        how this request is authenticated.
+
+        An absent slug REFUSES. Falling back to `{}` would silently restore
+        the exact failure this change removes.
+        """
         oid = str(order_id or "").strip()
         if not oid:
             raise MutationRefused("cancel needs a venue order id")
-        return self.request("POST", "/v1/order/%s/cancel" % oid, {})
+        slug = str(market_slug or "").strip()
+        if not slug:
+            raise MutationRefused(
+                "cancel needs the order's market slug: the venue refuses an "
+                "empty cancel body with HTTP 400")
+        return self.request("POST", "/v1/order/%s/cancel" % oid,
+                            {"marketSlug": slug})
+
+
+#: header- or signature-shaped text, redacted out of any venue response we
+#: log. A RESPONSE should never carry a credential; this exists so that a
+#: venue which echoes a request header into an error message cannot put it
+#: in our logs either.
+#: THE VALUE RUNS TO A DELIMITER, NOT TO THE FIRST SPACE: "authorization:
+#: Bearer abc123" must not leave abc123 behind.
+_SECRETISH = re.compile(
+    r"(?i)\b(authorization|x-pm-access-key|x-pm-key|x-pm-signature"
+    r"|x-pm-timestamp|api[-_]?key|secret|signature|token|bearer|password)"
+    r"\b\s*[:=]\s*[^\"',}\]\n\r]+")
+
+
+def http_error_detail(exc: BaseException) -> Dict[str, Any]:
+    """A SANITIZED record of what the venue actually said, or why we cannot.
+
+    `str(HTTPError)` is exactly "HTTP Error 400: Bad Request" and carries
+    neither path nor body, so this sweep could only ever record
+    `cancel_error: "HTTPError"` -- which is what left the 2026-10-18 cancel
+    400 undiagnosed for a whole authorized window.
+
+    Every step is guarded: reading a response body can raise on a closed
+    stream, and a diagnostic must never replace the error it describes.
+    """
+    out: Dict[str, Any] = {"error": type(exc).__name__}
+    code = getattr(exc, "code", None)
+    if code is not None:
+        out["status"] = code
+    body = None
+    reader = getattr(exc, "read", None)
+    if callable(reader):
+        try:
+            raw = reader()
+        except BaseException:                                  # noqa: BLE001
+            out["body"] = "[UNREADABLE]"
+            return out
+        try:
+            body = raw.decode("utf-8", "replace") if isinstance(
+                raw, (bytes, bytearray)) else str(raw)
+        except BaseException:                                  # noqa: BLE001
+            out["body"] = "[UNDECODABLE]"
+            return out
+    if body is not None:
+        out["body"] = _SECRETISH.sub(r"\1: [REDACTED]", body)[:400]
+    return out
 
 
 def is_terminal(row: Mapping[str, Any]) -> bool:
@@ -623,22 +691,36 @@ class Watchdog:
                          claimed_market=claim_slug))
                 continue
             ack_error = None
+            ack_detail = None
+            # THE ORDER'S OWN MARKET, from the venue row first and the claim
+            # second. Never this process's idea of a current market: it has
+            # none, and an order from another window must still be cancelled
+            # with ITS slug.
+            cancel_slug = venue_slug or claim_slug
             try:
-                self.t.cancel(vid)
+                self.t.cancel(vid, cancel_slug)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
                 ack_error = type(exc).__name__
+                try:
+                    ack_detail = http_error_detail(exc)
+                except BaseException:                          # noqa: BLE001
+                    ack_detail = {"error": ack_error}
             # the ack decides nothing; the re-read does
             try:
                 row = self.t.order(vid)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
-                out["unverified"].append(dict(o, cancel_error=ack_error,
-                                              verify_error=type(exc).__name__))
+                out["unverified"].append(dict(
+                    o, cancel_error=ack_error, cancel_detail=ack_detail,
+                    verify_error=type(exc).__name__))
                 continue
-            rec = dict(o, cancel_error=ack_error,
+            # cancel_detail carries the SANITIZED venue response. Without it a
+            # schema rejection and a transport failure both read "HTTPError".
+            rec = dict(o, cancel_error=ack_error, cancel_detail=ack_detail,
+                       cancel_slug=cancel_slug,
                        venue_state=row.get("state"),
                        cum_qty=str(row.get("cumQuantity")),
                        leaves_qty=str(row.get("leavesQuantity")))

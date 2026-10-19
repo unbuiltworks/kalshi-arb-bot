@@ -146,7 +146,7 @@ class Venue:
         return {"order_id": "v%d" % len(self.posts), "filled_qty": self._fill,
                 "fill_price": str(intent["price"])}
 
-    def cancel(self, order_id):
+    def cancel(self, order_id, market_slug=None):
         if not self.armed:
             raise EX.NotArmed("DISARMED")
         self.cancels.append(order_id)

@@ -149,7 +149,7 @@ def test_a_real_deadman_record_classifies(tmp_path):
         def __init__(self):
             self.retired = set()
 
-        def cancel(self, oid):
+        def cancel(self, oid, market_slug=None):
             self.retired.add(oid)
             return {"cancelled": oid}
 
