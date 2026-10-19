@@ -58,6 +58,49 @@ resume within 60s, follow §6.
 
 ---
 
+## 2a. MEASURED RESULT: preDeployCommand has NO volume access
+
+**The pre-deploy approach is RULED OUT.** Probed on production 2026-10-19
+under Authorization A's volume-access condition, read-only, clearing nothing.
+
+Deployment `8d2a37bc`, `preDeployCommand = python3 -m scripts.l5_halt_reset`
+with `L5_HALT_RESET_INSPECT=YES`:
+
+```
+01:47:49Z  L5_HALT_RESET_REFUSED {"pre_deploy": true, "ok": false,
+           "refused": "NO_LATCH_PRESENT: there is nothing to reset..."}
+01:47:50Z  Starting Container
+01:48:06Z  Stopping Container
+01:48:07Z  Starting Container
+01:48:07.86 L5_WATCHDOG_BOOT
+01:48:27Z  L5_WATCHDOG_SWEEP ... heartbeat_refused: "refusing to overwrite
+           a latched HALT"
+```
+
+| Condition | Result |
+|---|---|
+| Command executes | **PASS** — output exists |
+| Watchdog preserved | **PASS** — handover 01:48:06 → 01:48:07.86, ~1.0s |
+| Exit 0 on refusal | **PASS** — deployment completed; the bricking fix works live |
+| **Mounted-volume access** | **FAIL** — `NO_LATCH_PRESENT` |
+
+**The latch exists.** The watchdog, which has the volume, kept refusing the
+heartbeat over it seconds later. Both processes resolve the same
+`L5_WATCHDOG_STATE_DIR` (`/data/live`, inside the `/data` mount), so a path
+mismatch is not the explanation. The pre-deploy container saw the image's
+filesystem, not the volume.
+
+So Railway mounts volumes for the deployed process, NOT for the pre-deploy
+step on this service. The clear cannot run there.
+
+WHAT THIS LEAVES. The volume is demonstrably mounted for the watchdog's own
+process -- it reads and writes the latch every 20s. The remaining
+volume-based option is therefore the watchdog's own STARTUP, before the sweep
+loop begins, which costs the same ~1s handover measured above. That requires
+the sweep ENTRYPOINT to invoke the gated reset once, which the isolation test
+currently pins out, and is an owner decision rather than mine. The
+alternative remains migrating the latch off the volume.
+
 ## 3. Submission is independently blocked throughout (item 4)
 
 Three protections, none of which depends on the watchdog running:
