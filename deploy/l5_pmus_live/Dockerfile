@@ -92,6 +92,17 @@ COPY src/l5_cancel_mechanism.py src/l5_cancel_mechanism.py
 # by the runner. It holds no transport and defines no order path, so shipping
 # it cannot place an order; leaving it out would crashloop the executor on
 # boot, which is why it is listed rather than left to the closure test.
+# The shared intent-level safety boundary (Phase B). Imported eagerly by
+# the runner, so the image needs it to boot at all.
+#
+# IT CHANGES THE MONEY PATH. `Runner.handle`'s three refusals -- window,
+# sell scope, operator halt -- are now DECIDED by this module instead of
+# inline, in the same order and with the same layer and reason strings
+# (tests/test_l5_intent_gate.py pins both). Shipping it is therefore a
+# money-path promotion and needs its own approval, separate from any
+# shadow-only deployment. It adds no capability: a controller-generated
+# intent is refused at EXECUTOR_BOUNDARY and is never given an L5 row.
+COPY src/l5_intent_gate.py src/l5_intent_gate.py
 COPY src/l5_shadow_controller.py src/l5_shadow_controller.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py

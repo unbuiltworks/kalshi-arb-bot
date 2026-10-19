@@ -57,6 +57,7 @@ from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
 from src import l5_pmus_transport as T
+from src import l5_intent_gate as GATE
 from src import l5_shadow_controller as SHADOW
 from src import pmus_q1_executor as Q1
 
@@ -381,6 +382,9 @@ class Runner:
         #: position against. None means unknown queue, which the fill
         #: model refuses to fill except on a sweep.
         self.shadow_ladder: Optional[Any] = None
+        #: the shared intent-level boundary. Holds nothing of its own: every
+        #: safety fact it reads comes from this runner's own objects.
+        self.intent_gate = GATE.IntentGate(self)
         # THE INDEPENDENT SHADOW DECISION SOURCE. Built lazily, holds no
         # transport, and is consulted by nothing on the money path -- see
         # `shadow_tick`. Named with a leading underscore so no existing
@@ -1359,41 +1363,49 @@ class Runner:
         book = self.book.snapshot(slug) if slug else None
         row = engine_row(r, book, recv)
         act = row["l5"]
-        if ws != self.ws or t is None or ex is None:
+        # THE SHARED BOUNDARY, in front of an unchanged executor.
+        #
+        # These three refusals are the ones this method has always made, in
+        # the order it always made them, producing the same layer, the same
+        # reason and the same record shape -- the tape, the stats keys and
+        # the dashboards all read those strings. What changed is only that
+        # the DECISION about them now comes from `l5_intent_gate`, so a
+        # controller-generated intent is subject to the identical chain
+        # instead of to a second copy of it that could drift.
+        #
+        # L5's path below still calls `ex.handle(row, {}, ...)` with the
+        # same arguments. The executor is not refactored and not wrapped.
+        intent = GATE.Intent(provenance=GATE.L5_FOLLOWED, market=slug,
+                             window=None if ws is None else str(ws),
+                             side=act.get("pmus_side"),
+                             row={"is_sell": act.get("is_sell")},
+                             source_ref=row["action_key"])
+        pre = self.intent_gate.evaluate_prefix(
+            intent, upto="OPERATOR_HALT")
+        if not pre["admissible"]:
             rec = {"action_key": row["action_key"], "market": slug,
-                   "refused_by_layer": "PMUS_TRANSLATION",
-                   "refused_reason": "NOT_CURRENT_WINDOW",
-                   "L5_NATIVE": FT.l5_native(row)}
-        elif act.get("is_sell"):
-            # L5's BTC15m corpus holds ZERO sells; the probe does not
-            # translate one. Our choice, so it is filed against SAFETY.
-            rec = {"action_key": row["action_key"], "market": slug,
-                   "refused_by_layer": "SAFETY_OVERLAY",
-                   "refused_reason": "SELL_NOT_IN_PROBE_SCOPE",
+                   "refused_by_layer": pre["layer"],
+                   "refused_reason": pre["reason"],
+                   "refused_by_gate": pre["blocked_by"],
+                   "intent_provenance": GATE.L5_FOLLOWED,
                    "L5_NATIVE": FT.l5_native(row)}
         else:
-            if self.halted():
-                rec = {"action_key": row["action_key"], "market": slug,
-                       "refused_by_layer": "SAFETY_OVERLAY",
-                       "refused_reason": "OPERATOR_HALT",
-                       "L5_NATIVE": FT.l5_native(row)}
-            else:
-                if self.first_action_t is None:
-                    self.first_action_t = float(r.get("timestamp") or recv)
-                # NO intra-window cancel-and-replace. The P39 harness ended
-                # every resting order that L5's next action no longer matched,
-                # which the canonical core has no method for -- deliberately.
-                # The lifecycle Probes 04-08 actually traded is: rest at L5's
-                # price, and let the venue answer; orders that never fill are
-                # cancelled by the deadman at window end, which close_window
-                # already calls. Probe 08's three cheapest repairs rested to
-                # the end exactly that way, and that is the evidence we have.
-                # Re-pricing a resting order toward L5's newer price is
-                # chasing under another name, and it has never been tested
-                # with money. The 8-live-order cap and the $5 exposure bound
-                # are what keep unfilled orders from accumulating.
-                rec = ex.handle(row, {}, market=slug, window=str(ws),
-                                open_markets=self.open_markets())
+            if self.first_action_t is None:
+                self.first_action_t = float(r.get("timestamp") or recv)
+            # NO intra-window cancel-and-replace. The P39 harness ended
+            # every resting order that L5's next action no longer matched,
+            # which the canonical core has no method for -- deliberately.
+            # The lifecycle Probes 04-08 actually traded is: rest at L5's
+            # price, and let the venue answer; orders that never fill are
+            # cancelled by the deadman at window end, which close_window
+            # already calls. Probe 08's three cheapest repairs rested to
+            # the end exactly that way, and that is the evidence we have.
+            # Re-pricing a resting order toward L5's newer price is
+            # chasing under another name, and it has never been tested
+            # with money. The 8-live-order cap and the $5 exposure bound
+            # are what keep unfilled orders from accumulating.
+            rec = ex.handle(row, {}, market=slug, window=str(ws),
+                            open_markets=self.open_markets())
         layer = rec.get("refused_by_layer")
         order = rec.get("ORDER") or {}
         key = ("ORDER:%s" % (order.get("reason") or
