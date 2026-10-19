@@ -170,7 +170,7 @@ def test_a_coverage_hole_is_declared_not_smoothed_over(tmp_path):
 # ----------------------------------------------------- queue uncertainty
 
 def test_the_queue_estimate_is_a_bound_with_its_provenance(tmp_path):
-    r = _rec(tmp_path)
+    r = _rec(tmp_path, clock=lambda: T0)
     r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
                  book=_book(), ladder=_ladder(bid="0.45", bid_qty="900"),
                  now=T0)
@@ -184,13 +184,129 @@ def test_the_queue_estimate_is_a_bound_with_its_provenance(tmp_path):
 
 
 def test_a_stale_frame_is_marked_stale(tmp_path):
-    r = _rec(tmp_path)
+    r = _rec(tmp_path, clock=lambda: T0)
     r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
                  book=_book(),
                  ladder=_ladder(t=T0 - CAL.STALE_FRAME_S - 1.0), now=T0)
     q = r.record("c1")["pre_submit"]["queue"]
     assert q["stale"] is True
     assert q["frame_age_s"] > CAL.STALE_FRAME_S
+
+
+def test_freshness_is_measured_against_the_read_instant_not_the_caller(
+        tmp_path):
+    """The defect this guards: the caller's `now` can be a whole window
+    behind the instant we actually read the ladder, and measuring against
+    it produced frame_age_s = -75.5 reported as stale=False."""
+    r = _rec(tmp_path, clock=lambda: T0 + 60.0)
+    r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
+                 book=_book(), ladder=_ladder(t=T0 + 59.0),
+                 # the caller is a minute behind the read instant
+                 now=T0)
+    q = r.record("c1")["pre_submit"]["queue"]
+    assert q["frame_age_s"] == 1.0 and q["stale"] is False
+    # and the caller's own timestamp is still the record's identity
+    assert r.record("c1")["pre_submit"]["t"] == T0
+    assert r.record("c1")["pre_submit"]["read_t"] == T0 + 60.0
+
+
+def test_a_frame_newer_than_the_read_instant_is_not_called_fresh(tmp_path):
+    """A frame AHEAD of the read instant by more than a thread race means
+    the two timestamps are not on one clock. Freshness is then unknown --
+    never False, which is what a negative age used to report."""
+    r = _rec(tmp_path, clock=lambda: T0)
+    r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
+                 book=_book(), ladder=_ladder(t=T0 + 75.5), now=T0)
+    q = r.record("c1")["pre_submit"]["queue"]
+    assert q["frame_age_s"] == -75.5
+    assert q["stale"] is None, "an impossible age must read unknown"
+    assert q["why"] == "frame_clock_mismatch"
+    assert "not" in q["clock_note"] and "one clock" in q["clock_note"]
+
+
+def test_a_frame_inside_the_race_tolerance_is_not_stale_and_says_why(
+        tmp_path):
+    r = _rec(tmp_path, clock=lambda: T0)
+    r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
+                 book=_book(), ladder=_ladder(t=T0 + 0.06), now=T0)
+    q = r.record("c1")["pre_submit"]["queue"]
+    assert q["frame_age_s"] == -0.06
+    assert q["stale"] is False
+    assert "frame_newer_than_read" in q["clock_note"]
+    assert "why" not in q
+
+
+# ------------------------------------------------- the book, and WHEN it was
+
+
+class _Mirror:
+    """The authenticated mirror's shape: snapshot(slug) read on demand."""
+
+    def __init__(self, bid="0.45", ask="0.46", last=T0, calls=None):
+        self.bid, self.ask, self.last = bid, ask, last
+        self.calls = calls if calls is not None else []
+
+    def snapshot(self, slug):
+        self.calls.append(slug)
+        if self.bid is None:
+            return None
+        return {"bid": self.bid, "ask": self.ask, "last_update_t": self.last,
+                "stream_age_s": 0.1, "book_updates": 12,
+                "source": "authenticated_ws"}
+
+
+def test_the_mirror_is_snapshotted_at_the_submission_instant(tmp_path):
+    """The money path's hook used to receive a snapshot taken earlier in
+    the tick, or None on the first tick of a process. Given the mirror,
+    the recorder reads it itself, at the wire."""
+    mir = _Mirror()
+    r = _rec(tmp_path, clock=lambda: T0 + 2.0)
+    r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
+                 book=mir, ladder=_ladder(), now=T0)
+    assert mir.calls == [SLUG], "the mirror must be read, once, here"
+    b = r.record("c1")["pre_submit"]["book"]
+    assert b["capture_source"] == "mirror_snapshot_at_read"
+    assert b["observed_t"] == T0 + 2.0
+    assert b["last_update_t"] == T0 and b["age_s"] == 2.0
+    assert r.completeness("c1")["capture"]["pre_submit_book"] == CAL.PRESENT
+
+
+def test_a_book_block_always_carries_when_it_was_true(tmp_path):
+    """Without a timestamp a book one tick old is indistinguishable from
+    one read at the wire, so book staleness was unmeasurable."""
+    r = _rec(tmp_path, clock=lambda: T0 + 0.5)
+    snap = {"bid": "0.45", "ask": "0.46", "last_update_t": T0 - 3.0,
+            "stream_age_s": 0.2, "book_updates": 7,
+            "source": "authenticated_ws"}
+    r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
+                 book=snap, ladder=_ladder(), now=T0)
+    b = r.record("c1")["pre_submit"]["book"]
+    assert b["capture_source"] == "caller_supplied_mapping"
+    assert b["observed_t"] == T0 + 0.5
+    assert b["age_s"] == 3.5 and b["last_update_t"] == T0 - 3.0
+    assert b["feed_source"] == "authenticated_ws" and b["book_updates"] == 7
+
+
+def test_an_empty_mirror_reads_as_a_missing_book_not_an_empty_one(tmp_path):
+    r = _rec(tmp_path)
+    r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
+                 book=_Mirror(bid=None), ladder=_ladder(), now=T0)
+    comp = r.completeness("c1")
+    assert comp["capture"]["pre_submit_book"] == "MISSING:no_book_snapshot"
+    assert comp["usable_for_calibration"] is False
+
+
+def test_a_mirror_that_raises_cannot_reach_the_order_path(tmp_path):
+    class _Angry:
+        def snapshot(self, slug):
+            raise RuntimeError("feed is down")
+
+    r = _rec(tmp_path)
+    r.pre_submit("c1", slug=SLUG, side=FM.UP, own_px="0.45", qty="1",
+                 book=_Angry(), ladder=_ladder(), now=T0)
+    assert r.record("c1")["pre_submit"]["book"] is None
+    assert any(k.startswith("book_read_failed") for k in r.errors)
+    assert r.completeness("c1")["usable_for_calibration"] is False
 
 
 def test_a_price_outside_published_depth_says_so(tmp_path):
@@ -457,6 +573,33 @@ def test_the_runner_builds_the_recorder_and_hands_it_to_the_executor(
         for a in ("fill_calibration", "calib_book", "calib_ladder"):
             assert hasattr(ex, a), a
             assert getattr(ex, a) is None, (a, "must default to absent")
+
+
+def test_the_money_paths_first_intent_is_not_blind(tmp_path, monkeypatch):
+    """THE DEFECT THIS GUARDS. `shadow_tick` runs LAST in the tick, and the
+    money path's pre-submit hook fires earlier, so the first intents of a
+    process were captured with `book: null` and `queue: no_ladder`. `roll`
+    now points the executor at the mirror and the window's ladder, so the
+    capture is armed before anything can submit.
+    """
+    from collections.abc import Mapping as _Map
+    from tests.test_l5_shadow_controller_wiring import build, NOW
+    runner = build(tmp_path, monkeypatch)
+    # the window roll builds the executor; NO shadow tick has run yet, which
+    # is exactly the state the money path's first intent would fire in
+    runner.roll(NOW)
+    assert runner.executor is not None
+    ex = runner.executor
+    assert ex.calib_book is not None, "the first intent would capture no book"
+    assert not isinstance(ex.calib_book, _Map), (
+        "a snapshot goes stale; the hook needs the mirror itself")
+    assert callable(getattr(ex.calib_book, "snapshot", None))
+    assert ex.calib_book is runner.book
+    assert ex.calib_ladder is runner.shadow_ladder
+    # and a tick does not replace them with a snapshot
+    runner.tick(NOW)
+    assert runner.executor.calib_book is runner.book
+    assert not isinstance(runner.executor.calib_book, _Map)
 
 
 def test_the_shadow_path_records_real_market_data_but_never_looks_complete(

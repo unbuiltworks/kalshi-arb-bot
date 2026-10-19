@@ -858,8 +858,18 @@ class Runner:
         # recorder (`getattr(..., None)` at the call site) rather than a
         # different constructor.
         self.executor.fill_calibration = self.fill_calibration
-        self.executor.calib_book = None
-        self.executor.calib_ladder = None
+        # THE MIRROR ITSELF, not a snapshot of it. A snapshot refreshed in
+        # `shadow_tick` -- which runs LAST in the tick -- left the money
+        # path's first intents after any start with `book: null` and
+        # `queue: no_ladder`, and thereafter with a book one tick old that
+        # the record could not distinguish from a book read at the wire.
+        # The recorder snapshots the mirror at the submission instant.
+        #
+        # Set HERE rather than at `__init__` because `roll` rebuilds both
+        # the executor and the window's ladder, in that order, so both
+        # already exist and neither reference can go stale mid-window.
+        self.executor.calib_book = self.book
+        self.executor.calib_ladder = self.shadow_ladder
         # DISARMED-SHADOW VALIDATION PROTECTIONS, attached after construction
         # so the executor's own signature is unchanged.
         #
@@ -2087,11 +2097,14 @@ class Runner:
                 raise
             prints = []
             self.stats["shadow_prints_error:%s" % type(exc).__name__] += 1
-        # THE EXECUTOR'S PRE-SUBMIT HOOK READS THESE. Refreshed on the
-        # same tick that already reads them, so the capture sees the book
-        # and ladder the decision saw rather than re-reading them later.
+        # THE EXECUTOR'S PRE-SUBMIT HOOK READS THESE. The MIRROR and the
+        # ladder, not this tick's snapshot: the hook fires on the money
+        # path earlier in the tick than this, so a snapshot left here is
+        # always at best one tick stale and, on the first tick of a
+        # process, absent. `roll` sets both too; this re-points the ladder
+        # if a window attached one after the executor was built.
         if self.executor is not None:
-            self.executor.calib_book = book
+            self.executor.calib_book = self.book
             self.executor.calib_ladder = self.shadow_ladder
         out = None
         for name in sorted(cs):

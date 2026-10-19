@@ -53,6 +53,7 @@ import datetime as dt
 import json
 import os
 import tempfile
+import time
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -76,6 +77,14 @@ RECORD_VERSION = 1
 #: marked stale: a position derived from a book we have not seen refreshed
 #: is a guess about the past.
 STALE_FRAME_S = 5.0
+
+#: a frame timestamped AFTER the instant we read the ladder is ordinarily
+#: a thread race: the websocket observer ingested a frame between our clock
+#: read and our ladder read. Within this tolerance the frame is certainly
+#: not stale. Beyond it, the two timestamps are not on one clock and the
+#: freshness of the frame is UNKNOWN -- which is what the record then says,
+#: rather than reporting a negative age as "fresh".
+FRAME_RACE_TOLERANCE_S = 1.0
 
 #: lifetime coverage: if the gap between consecutive observations of a
 #: resting order exceeds this, the record says its coverage has a hole
@@ -109,8 +118,15 @@ class CalibrationRecorder:
 
     def __init__(self, root: str,
                  emit: Optional[Any] = None,
-                 path: Optional[str] = None) -> None:
+                 path: Optional[str] = None,
+                 clock: Any = time.time) -> None:
         self.root = str(root)
+        #: the READ instant, which is not the caller's `now`. Freshness has
+        #: to be measured against the moment we actually read the book and
+        #: the ladder; a caller's tick timestamp can be a whole window
+        #: behind that, and measuring against it produced negative frame
+        #: ages reported as not stale. Injectable so tests are deterministic.
+        self._clock = clock
         self.path = path or os.path.join(self.root, "fill_calibration.jsonl")
         self._emit = emit
         #: coid -> folded record
@@ -224,6 +240,7 @@ class CalibrationRecorder:
         try:
             own = _d(own_px)
             n = float(now) if now is not None else 0.0
+            read_t = float(self._clock())
             wire = own if side == FM.UP else (
                 None if own is None else (D(1) - own))
             resting = FM.BID if side == FM.UP else FM.ASK
@@ -233,8 +250,10 @@ class CalibrationRecorder:
                   "wire_px": None if wire is None else str(wire),
                   "qty": None if _d(qty) is None else str(_d(qty)),
                   "resting_side": resting,
-                  "book": self._book_block(book),
-                  "queue": self._queue_block(ladder, slug, resting, wire, n),
+                  "read_t": read_t,
+                  "book": self._book_block(book, slug, read_t),
+                  "queue": self._queue_block(ladder, slug, resting, wire,
+                                             read_t),
                   "fees": self._fee_block(own, _d(qty), when)}
             self._fold(ev)
             self._append(ev)
@@ -244,19 +263,55 @@ class CalibrationRecorder:
                 raise
             self._bump("pre_submit:%s" % type(exc).__name__)
 
-    def _book_block(self, book: Any) -> Optional[Dict[str, Any]]:
+    def _book_block(self, book: Any, slug: str,
+                    read_t: float) -> Optional[Dict[str, Any]]:
+        """The top of book AND when it was last true.
+
+        `book` may be the authenticated mirror itself, in which case the
+        snapshot is taken HERE, at the submission instant. The money path
+        used to hand over a snapshot taken earlier in the tick, and the
+        block carried no timestamp, so a book one tick old was
+        indistinguishable from a book read at the wire. A mirror is read
+        now; a Mapping is recorded as supplied, and says so.
+        """
+        src = "caller_supplied_mapping"
         if not isinstance(book, Mapping):
-            return None
+            snap = getattr(book, "snapshot", None)
+            if not callable(snap):
+                return None
+            try:
+                book = snap(slug)
+            except BaseException as exc:                      # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self._bump("book_read_failed:%s" % type(exc).__name__)
+                return None
+            if not isinstance(book, Mapping):
+                return None
+            src = "mirror_snapshot_at_read"
         bid, ask = _d(book.get("bid")), _d(book.get("ask"))
         if bid is None and ask is None:
             return None
+        last = book.get("last_update_t")
+        try:
+            age = None if last is None else round(read_t - float(last), 3)
+        except (TypeError, ValueError):
+            last, age = None, None
         return {"bid": None if bid is None else str(bid),
                 "ask": None if ask is None else str(ask),
                 "spread": None if (bid is None or ask is None)
-                else str(ask - bid)}
+                else str(ask - bid),
+                # WHEN, which the first version omitted entirely
+                "observed_t": read_t,
+                "last_update_t": last,
+                "age_s": age,
+                "stream_age_s": book.get("stream_age_s"),
+                "book_updates": book.get("book_updates"),
+                "feed_source": book.get("source"),
+                "capture_source": src}
 
     def _queue_block(self, ladder: Any, slug: str, resting_side: str,
-                     wire_px: Optional[D], now: float) -> Dict[str, Any]:
+                     wire_px: Optional[D], read_t: float) -> Dict[str, Any]:
         """The aggregate depth ahead of our price, with its provenance and
         what it cannot tell us."""
         base = {"provenance": "authenticated_ladder_aggregate_depth",
@@ -282,14 +337,37 @@ class CalibrationRecorder:
             self._bump("queue_block:%s" % type(exc).__name__)
             return dict(base, why="ladder_read_failed:%s" % type(exc).__name__)
         ft = None if not isinstance(bk, Mapping) else bk.get("t")
-        age = None if ft is None else round(now - float(ft), 3)
+        age = None if ft is None else round(read_t - float(ft), 3)
+        # A NEGATIVE AGE IS NOT FRESHNESS. Within the race tolerance the
+        # frame simply landed between our clock read and our ladder read,
+        # and it is certainly not stale. Beyond it the two timestamps are
+        # not on one clock, so whether the frame is current is UNKNOWN --
+        # and the record says unknown rather than False.
+        if age is None:
+            stale: Optional[bool] = None
+        elif age >= 0.0:
+            stale = bool(age > STALE_FRAME_S)
+        elif age >= -FRAME_RACE_TOLERANCE_S:
+            stale = False
+        else:
+            stale = None
         out = dict(base,
                    queue_ahead=None if q is None else str(q),
                    level_depth=None if dep is None else str(dep),
                    frame_t=ft, frame_age_s=age,
                    frame_updates=(None if not isinstance(bk, Mapping)
                                   else bk.get("updates")),
-                   stale=(None if age is None else bool(age > STALE_FRAME_S)))
+                   stale=stale)
+        if age is not None and -FRAME_RACE_TOLERANCE_S <= age < 0.0:
+            out["clock_note"] = ("frame_newer_than_read_by_%ss: the feed "
+                                 "ingested between the clock read and the "
+                                 "ladder read" % abs(age))
+        elif age is not None and age < -FRAME_RACE_TOLERANCE_S:
+            out["why"] = "frame_clock_mismatch"
+            out["clock_note"] = ("the frame is %ss AHEAD of the read "
+                                 "instant, so the two timestamps are not "
+                                 "on one clock and freshness is unknown"
+                                 % abs(age))
         if q is None:
             out["why"] = "price_outside_published_depth"
         return out
@@ -391,6 +469,7 @@ class CalibrationRecorder:
         """
         try:
             want = [c for c in (open_coids or []) if c in self.orders]
+            read_t = float(self._clock())
             n = 0
             for coid in want:
                 r = self.orders[coid]
@@ -403,10 +482,10 @@ class CalibrationRecorder:
                             for o in (r.get("observations") or [])),
                            default=float(pre.get("t") or 0.0))
                 ev = {"kind": "observation", "coid": coid, "t": float(now),
-                      "utc": _utc(), "slug": slug,
-                      "book": self._book_block(book),
+                      "utc": _utc(), "slug": slug, "read_t": read_t,
+                      "book": self._book_block(book, slug, read_t),
                       "queue": self._queue_block(ladder, slug, rs, wire,
-                                                 float(now)),
+                                                 read_t),
                       "prints_at_our_price": self._prints_at(prints, wire,
                                                              last, float(now))}
                 self._fold(ev)
