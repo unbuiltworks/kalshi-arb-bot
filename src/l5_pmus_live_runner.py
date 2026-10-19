@@ -3767,6 +3767,13 @@ def main() -> int:
             market=AB.slug_for(AB.window_start()),
             emit=emit, window_start=AB.slug_start,
             window_s=float(AB.WINDOW_S),
+            # THE PLACEMENT BAND'S ONLY CLOCK. The same venue-confirmed
+            # bounds the arming boundary already refuses without
+            # (WINDOW_BOUNDS_UNCONFIRMED), reused rather than re-read: one
+            # confirmation per window, cached, and never confirmed by
+            # retrying. Passing the bound method rather than its result is
+            # what lets the mechanism re-evaluate the clock on every pass.
+            window_bounds=runner.venue_window_bounds,
             session_id=os.getenv("PMUS_Q1_SESSION_ID", "").strip() or None,
             # the latch as a READ-ONLY FACT. Waiting for arming means waiting
             # with the shadow lock lifted, so the mechanism must be able to
@@ -3779,6 +3786,11 @@ def main() -> int:
             "market": mech.market,
             "already_ran": mech.already_ran(),
             "marker": mech.marker(),
+            # ANNOUNCED AT BOOT, before anything is armed, so a spent
+            # authorization is visible in the log that starts the run rather
+            # than in the refusal that ends it.
+            "submission_claim": mech.submission_claim_state(),
+            "placement_band": mech.placement_band(),
             "max_total_risk_usd": str(MECH.MAX_TOTAL_RISK_USD),
             "self_cancel_after_s": MECH.SELF_CANCEL_AFTER_S,
             "labels": ("ONE post-only order at the venue minimum, left to "

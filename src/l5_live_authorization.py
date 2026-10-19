@@ -575,6 +575,79 @@ def claim_held(sid: str, path: Optional[str] = None) -> bool:
     return _lock_path(path or ledger_path(), str(sid)).exists()
 
 
+def submission_claim_state(experiment: Optional[str] = None, *,
+                           path: Optional[str] = None) -> Dict[str, Any]:
+    """Whether this authorization's ONE submission has already been taken.
+
+    READ-ONLY, and it must stay that way: it stats the lock and never
+    creates, truncates or removes one. `claim_submission` remains the only
+    writer and its O_CREAT|O_EXCL open remains the only guarantee. This
+    answers the question EARLY so that a spent authorization is visible in
+    preflight instead of being discovered at the wire -- which is exactly how
+    the 2026-10-19 0330z attempt failed: all sixteen gates passed, the plan
+    was fully formed, and then the claim refused
+    AUTHORIZATION_ALREADY_USED naming no experiment at all, because the
+    report's `submission_claim` is only populated AFTER a successful claim.
+
+    UNKNOWN IS NOT UNUSED. A directory we cannot read is reported as UNKNOWN
+    with its reason, never as an absence: an absence we cannot see is not an
+    absence. `lock_dir` is reported so the directory actually inspected can
+    be checked against the one the executor says it is using, because a
+    misconfigured ledger path would otherwise look like a clean experiment.
+    """
+    exp = (experiment if experiment is not None else experiment_id())
+    exp = str(exp or "").strip()
+    out: Dict[str, Any] = {
+        "experiment": exp or None, "sid": None, "lock_dir": None,
+        "state": "UNKNOWN", "why": None,
+        "labels": ("read-only. UNUSED means the one-submission lock is "
+                   "absent from the directory named here; UNKNOWN means we "
+                   "could not establish it and is NEVER to be read as an "
+                   "absence. The atomic O_EXCL claim, not this, is what "
+                   "makes the submission single-use."),
+    }
+    if not exp:
+        out["why"] = "NO_EXPERIMENT_NAMED"
+        return out
+    sid = submission_sid(exp)
+    out["sid"] = sid
+    try:
+        lock = _lock_path(path or ledger_path(), sid)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        out["why"] = "LOCK_PATH_UNRESOLVABLE:%s" % type(exc).__name__
+        return out
+    out["lock_dir"] = str(lock.parent)
+    try:
+        if lock.exists():
+            out["state"] = "SPENT"
+            out["why"] = "THE_ONE_SUBMISSION_LOCK_ALREADY_EXISTS"
+            try:
+                out["lock_mtime_utc"] = dt.datetime.fromtimestamp(
+                    lock.stat().st_mtime, dt.timezone.utc).isoformat()
+            except OSError:
+                pass
+            return out
+        # THE PARENT IS CHECKED ONLY AFTER a negative existence read, and it
+        # is what distinguishes the two negatives. An absent directory CANNOT
+        # contain the lock, so that is a real UNUSED; a present directory
+        # with no lock is the same answer by the same reasoning.
+        if not lock.parent.is_dir():
+            out["state"] = "UNUSED"
+            out["why"] = "LEDGER_DIRECTORY_DOES_NOT_EXIST_YET"
+            return out
+        out["state"] = "UNUSED"
+        out["why"] = "NO_SUCH_LOCK_IN_THE_LEDGER_DIRECTORY"
+        return out
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        out["state"] = "UNKNOWN"
+        out["why"] = "LEDGER_UNREADABLE:%s" % type(exc).__name__
+        return out
+
+
 def claim_submission(market: str, payload: Mapping[str, Any],
                      path: Optional[str] = None) -> Dict[str, Any]:
     """Consume THE one submission claim, or raise. Never auto-resets.

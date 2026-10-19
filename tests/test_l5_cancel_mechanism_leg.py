@@ -135,8 +135,25 @@ class Store:
         self.save()
 
 
+def venue_bounds(ws=WS, span=900):
+    """The shape `l5_pmus_realtime_observer.venue_window_bounds` returns.
+
+    Supplied to every mechanism here because production supplies it: the
+    placement band is measured from the venue's OWN confirmed open and an
+    absent confirmation is a WAIT, so a harness without this would be
+    modelling a mechanism that can never place.
+    """
+    import datetime as _dt
+    start = _dt.datetime.fromtimestamp(ws, _dt.timezone.utc)
+    return {"source": "VENUE", "start": start.isoformat(),
+            "end": (start + _dt.timedelta(seconds=span)).isoformat(),
+            "confirmed_by": "verify_alignment"}
+
+
 class Clock:
-    def __init__(self, t=float(WS + 60)):
+    #: T+330, i.e. INSIDE the [T+300, T+450] placement band. It was T+60
+    #: before the band existed, which is now correctly a WAIT.
+    def __init__(self, t=float(WS + 330)):
         self.t = float(t)
 
     def __call__(self):
@@ -148,7 +165,7 @@ class Clock:
 
 
 def mech(monkeypatch, *, store=None, transport=None, book=None, clock=None,
-         enabled=True):
+         enabled=True, window_bounds=venue_bounds):
     monkeypatch.setenv(M.MODE_ENV, "YES" if enabled else "NO")
     monkeypatch.delenv(M.PRICE_ENV, raising=False)
     monkeypatch.delenv(M.SIDE_ENV, raising=False)
@@ -156,7 +173,8 @@ def mech(monkeypatch, *, store=None, transport=None, book=None, clock=None,
     return M.Mechanism(
         store=store or Store(), transport=transport or Transport(),
         book=book or Book(), market=MARKET, clock=ck,
-        window_start=lambda slug: WS, window_s=900.0, session_id="s-mech")
+        window_start=lambda slug: WS, window_s=900.0, session_id="s-mech",
+        window_bounds=window_bounds)
 
 
 # ------------------------------------------------------------ the mode switch
@@ -643,6 +661,14 @@ def test_a_spent_claim_refuses_even_when_the_store_marker_is_gone(monkeypatch):
     store.state["live_orders"].clear()
     t2 = Transport()
     second = mech(monkeypatch, store=store, transport=t2)
+    # THE RACE THE ATOMIC CLAIM EXISTS FOR, forced deliberately. Preflight
+    # now also probes the lock (`submission_claim_not_already_spent`) and
+    # would refuse this earlier by name; pinning the probe to UNUSED keeps
+    # this test pointed at the gate it is about -- the O_EXCL claim AT THE
+    # WIRE, which is the only thing that can decide a lock taken between
+    # preflight and the POST, by a peer or after a restart.
+    second.submission_claim_state = lambda: {
+        "state": "UNUSED", "why": "PINNED_BY_THE_TEST_TO_FORCE_THE_RACE"}
     rep = second.step()
     assert str(rep["refused"]).startswith("SUBMISSION_CLAIM:")
     assert "AUTHORIZATION_ALREADY_USED" in rep["refused"]
@@ -670,6 +696,10 @@ def test_a_claim_refusal_releases_the_order_reservation(monkeypatch):
     store.state.pop(M.MARKER_KEY, None)
     store.state["live_orders"].clear()
     second = mech(monkeypatch, store=store, transport=Transport())
+    # as above: the reservation is only created on the way to the wire, so
+    # the preflight probe is pinned UNUSED to reach the path being tested.
+    second.submission_claim_state = lambda: {
+        "state": "UNUSED", "why": "PINNED_BY_THE_TEST_TO_FORCE_THE_RACE"}
     rep = second.step()
     assert "SUBMISSION_CLAIM" in str(rep["refused"])
     assert store.live_order_count() == 0, \
@@ -706,6 +736,14 @@ def test_the_wait_set_is_exactly_the_transient_conditions():
         "book_two_sided_authenticated",
         "price_readable", "price_positive", "price_below_one",
         "price_is_nonmarketable",
+        # ADDED WITH THE PLACEMENT BAND, and here is the explanation this
+        # test demands. Being EARLY is transient by construction -- it is
+        # cured by the clock advancing -- so refusing on it would kill a run
+        # that is about to be perfectly valid, which is what a boot at
+        # T+1:00 is. It is not a safety gate waived: the order still cannot
+        # be sent while it fails, and the LATE edge
+        # (`placement_band_not_expired`) is terminal and NOT in this set.
+        "placement_band_reached",
     })
 
 
@@ -713,6 +751,7 @@ def test_no_safety_gate_is_in_the_wait_set():
     """These must NEVER be waited out -- each one stops the run dead."""
     for terminal in ("one_shot_not_already_used", "mode_enabled",
                      "window_has_room_for_the_watchdog",
+                     "placement_band_not_expired",
                      "authorization_window_open", "halt_not_engaged",
                      "book_is_flat_before_the_test", "no_other_live_order",
                      "qty_is_venue_minimum", "post_only",

@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import os
 import re
 import time
@@ -89,6 +90,31 @@ SELF_CANCEL_AFTER_S = WATCHDOG_AGE_S + SWEEP_SLACK_S
 #: the window must have at least this much left when the order is sent
 MIN_WINDOW_REMAINING_S = SELF_CANCEL_AFTER_S + 60.0
 
+#: THE PLACEMENT BAND, measured from the venue's OWN confirmed window open.
+#:
+#: WHY A LOWER EDGE EXISTS AT ALL. On 2026-10-19 the 0330z attempt reached the
+#: submit at T+3:50 -- seventy seconds BEFORE the placement window the owner
+#: had authorized. Nothing reached the venue, because the submission claim was
+#: already spent, but the cause was structural rather than lucky: every gate
+#: here was about the ORDER and none was about the CLOCK, so the mechanism
+#: submitted the instant arming completed. An authorization that names a
+#: placement window is not honoured by a process whose placement time is
+#: whatever the deployment schedule happened to produce.
+#:
+#: WHY MEASURED FROM THE VENUE'S OPEN AND NOT OUR SLUG GRID. The slug is built
+#: from a 900-second clock grid, so "T" on that grid is OUR convention and not
+#: the venue's statement. `l5_pmus_realtime_observer.verify_alignment` reads
+#: the venue's own startTime back and `venue_window_bounds` offers bounds ONLY
+#: when it confirms. A band measured off the grid would be a band measured off
+#: an assumption, which is the thing this check exists to stop.
+PLACEMENT_EARLIEST_S = 300.0
+
+#: mirrors `l5_live_authorization.WINDOW_SOURCE_VENUE`. Not imported: this
+#: module takes that module lazily, inside `_place`, and a per-tick gate must
+#: not depend on an import succeeding. `test_venue_source_matches_the_authorization_module`
+#: asserts the two are equal, so drift fails a test rather than a window.
+VENUE_SOURCE = "VENUE"
+
 #: how often the venue is re-read while the order rests
 REREAD_EVERY_S = 10.0
 
@@ -123,6 +149,14 @@ WAIT_CHECKS = frozenset({
     "book_two_sided_authenticated",
     "price_readable", "price_positive", "price_below_one",
     "price_is_nonmarketable",
+    # TOO EARLY IS A "NOT YET", NEVER A REFUSAL. A boot at T+1:00
+    # must wait for the band and then place, not kill the run. An
+    # UNCONFIRMED window lands here too, so it holds the order back
+    # without refusing on a read that might yet confirm -- and the
+    # wait stays bounded, because `placement_band_not_expired` and
+    # `window_has_room_for_the_watchdog` are both TERMINAL and both
+    # end it at the band's upper edge.
+    "placement_band_reached",
 })
 
 #: the durable one-shot marker. "no automatic repeat after a completed or
@@ -213,6 +247,32 @@ def _d(v: Any) -> Optional[D]:
         return None
 
 
+def _epoch(value: Any) -> Optional[float]:
+    """Epoch seconds from an ISO-8601 string, a number or a datetime.
+
+    A naive datetime or a naive ISO string is read as UTC, matching
+    `l5_live_authorization._ts`, because every window bound in this system is
+    stated in UTC. Anything unparseable is None, and None never passes a gate.
+    """
+    if isinstance(value, dt.datetime):
+        d = value if value.tzinfo else value.replace(tzinfo=dt.timezone.utc)
+        return d.timestamp()
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        d = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=dt.timezone.utc)
+    return d.timestamp()
+
+
 def is_terminal(row: Mapping[str, Any]) -> bool:
     """Venue-terminal, by the venue's own row. Identical reading to the
     watchdog's, so the two cannot disagree about what terminal means."""
@@ -265,6 +325,8 @@ class Mechanism:
                  emit: Optional[Callable[[str, Mapping[str, Any]], None]] = None,
                  window_start: Optional[Callable[[str], Optional[int]]] = None,
                  window_s: float = 900.0,
+                 window_bounds: Optional[
+                     Callable[[], Optional[Mapping[str, Any]]]] = None,
                  self_cancel_after_s: float = SELF_CANCEL_AFTER_S,
                  session_id: Optional[str] = None,
                  halted_fn: Optional[Callable[[], bool]] = None) -> None:
@@ -276,6 +338,12 @@ class Mechanism:
         self._emit = emit
         self._window_start = window_start
         self.window_s = float(window_s)
+        # THE VENUE'S OWN WINDOW, injected as a callable rather than read
+        # here: the confirmation is an authenticated venue round-trip that
+        # the runner already makes and caches once per window, and this
+        # module must stay testable without one. None means "no venue
+        # window is available", which is a WAIT and never a pass.
+        self._window_bounds = window_bounds
         self.self_cancel_after_s = float(self_cancel_after_s)
         self.session_id = session_id
         # READ-ONLY, INJECTED. The halt is consulted as a FACT handed in by
@@ -352,6 +420,117 @@ class Mechanism:
                        "and not evidence about L5 economics."),
         }
 
+    def submission_claim_state(self) -> Dict[str, Any]:
+        """The one-submission claim's state, read-only, before the wire.
+
+        Taken lazily, like the claim itself in `_place`, so a per-tick gate
+        never depends on an import succeeding: a failed probe is UNKNOWN,
+        which is reported and never read as an absence.
+        """
+        try:
+            from src import l5_live_authorization as AUTH
+            return dict(AUTH.submission_claim_state())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"state": "UNKNOWN",
+                    "why": "PROBE_FAILED:%s" % type(exc).__name__,
+                    "labels": ("UNKNOWN is never an absence. The atomic "
+                               "O_EXCL claim still decides at the wire.")}
+
+    def placement_band(self) -> Dict[str, Any]:
+        """How far into the VENUE's own window we are, or why we cannot tell.
+
+        `elapsed_s` is None whenever the answer is not ESTABLISHED: no bounds
+        were supplied, the venue did not confirm them, they are unreadable,
+        the window is too short to contain the band, or they describe a
+        DIFFERENT window than the one this mechanism is bound to. None never
+        passes a gate -- it fails `placement_band_reached`, which is a WAIT,
+        so the order is held back while a read might still confirm, and the
+        terminal gates end that wait at the band's upper edge.
+
+        THE IDENTITY CLAUSE IS THE POINT OF THE LAST CASE. The runner's
+        `venue_window_bounds` answers for the RUNNER's current window and
+        caches per window, while this object carries its own `market` and is
+        re-bound only while the state is INIT. A stale pairing would measure
+        the band from the wrong open, which is precisely the error this whole
+        check exists to prevent -- so the confirmed start must equal this
+        market's own grid start. `verify_alignment` has already proved that
+        grid start equal to the venue's startTime for the window it
+        confirmed, so an inequality here does not mean the venue disagrees
+        with us: it means these bounds are not this market's.
+
+        THE UPPER EDGE IS DERIVED, NOT DECLARED: span minus
+        MIN_WINDOW_REMAINING_S, so the band can never permit a placement that
+        `window_has_room_for_the_watchdog` would have to refuse. On a
+        900-second window that is T+7:30.
+        """
+        out: Dict[str, Any] = {
+            "elapsed_s": None,
+            "earliest_s": PLACEMENT_EARLIEST_S,
+            "latest_s": None,
+            "source": None,
+            "why": None,
+            "venue_start_utc": None,
+            "market": self.market,
+            "labels": ("the band is measured from the venue's OWN confirmed "
+                       "window open, never from our slug grid and never from "
+                       "process start. An unestablished elapsed_s is a WAIT "
+                       "and never a pass."),
+        }
+        if self._window_bounds is None:
+            out["why"] = "NO_BOUNDS_SUPPLIED"
+            return out
+        try:
+            bounds = self._window_bounds()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["why"] = "BOUNDS_READ_FAILED:%s" % type(exc).__name__
+            return out
+        if not bounds:
+            out["why"] = "WINDOW_NOT_VENUE_CONFIRMED"
+            return out
+        src = str(bounds.get("source") or "").strip().upper()
+        out["source"] = src or None
+        if src != VENUE_SOURCE:
+            out["why"] = "WINDOW_BOUNDS_NOT_VENUE_SOURCED"
+            return out
+        start = _epoch(bounds.get("start"))
+        end = _epoch(bounds.get("end"))
+        if start is None or end is None or end <= start:
+            out["why"] = "WINDOW_BOUNDS_UNREADABLE"
+            return out
+        out["venue_start_utc"] = str(bounds.get("start"))
+        grid = (self._window_start(self.market)
+                if self._window_start is not None else None)
+        out["grid_start"] = None if grid is None else int(grid)
+        if grid is None or int(grid) != int(round(start)):
+            out["why"] = "VENUE_BOUNDS_ARE_NOT_THIS_MARKETS"
+            return out
+        latest = (end - start) - MIN_WINDOW_REMAINING_S
+        out["latest_s"] = round(latest, 3)
+        if latest < PLACEMENT_EARLIEST_S:
+            # A window too short to contain the band at all. NOT a pass and
+            # not a silent narrowing: elapsed_s stays unestablished, so the
+            # WAIT holds and the terminal gates end the run.
+            out["why"] = "WINDOW_TOO_SHORT_FOR_THE_BAND"
+            return out
+        # ONE NUMBER DECIDES AND IS RECORDED, and it is FLOORED rather than
+        # rounded. Rounded to a tenth, as this first was, 299.999 became
+        # 300.0 and the band opened up to 50ms early: a value rounded for the
+        # REPORT was deciding the GATE. Flooring to the millisecond keeps a
+        # single number for both -- so the audit record can never disagree
+        # with the gate that used it -- while guaranteeing the recorded
+        # elapsed never EXCEEDS the real one, which is what makes the opening
+        # edge strictly fail-closed. The closing edge is correspondingly
+        # permissive by under a millisecond, on the same side as
+        # `window_has_room_for_the_watchdog` and far below the venue's
+        # one-second statement of its own open.
+        out["elapsed_s"] = math.floor((self.clock() - start) * 1000.0) / 1000.0
+        out["why"] = "OK"
+        return out
+
     def checks(self, plan: Mapping[str, Any]) -> List[Dict[str, Any]]:
         """Every precondition, each evaluated and each reported.
 
@@ -367,6 +546,22 @@ class Mechanism:
         check("mode_enabled", enabled(), MODE_ENV)
         check("one_shot_not_already_used", not self.already_ran(),
               self.marker())
+        # THE SAME ONE-SHOT, ASKED OF THE FILESYSTEM RATHER THAN THE STORE.
+        # The marker above is a key in a JSON document; this is the O_EXCL
+        # lock that actually makes a submission single-use. Asking here turns
+        # the 0330z failure -- sixteen green gates, a formed plan, then
+        # AUTHORIZATION_ALREADY_USED at the wire naming no experiment -- into
+        # a named preflight refusal.
+        #
+        # SPENT REFUSES; UNKNOWN DOES NOT. A spent claim is certain to refuse
+        # at the wire, so refusing here only moves the same answer earlier.
+        # UNKNOWN is a reading we could not establish, and the atomic claim
+        # still decides, so it is REPORTED rather than treated as a verified
+        # absence in either direction -- it neither passes as unused nor
+        # refuses a window on a stat() that failed.
+        claim_state = self.submission_claim_state()
+        check("submission_claim_not_already_spent",
+              str(claim_state.get("state")) != "SPENT", claim_state)
         price = _d(plan.get("price"))
         qty = _d(plan.get("qty"))
         bid = _d((plan.get("book") or {}).get("bid"))
@@ -416,6 +611,26 @@ class Mechanism:
         check("window_has_room_for_the_watchdog",
               rem is not None and float(rem) >= MIN_WINDOW_REMAINING_S,
               {"window_remaining_s": rem, "needed_s": MIN_WINDOW_REMAINING_S})
+        # THE CLOCK, not the order -- and TWO checks, because the two
+        # directions are not alike. Too early resolves itself by waiting;
+        # too late never does, so only the late edge is terminal.
+        #
+        # FAIL CLOSED WITHOUT BRICKING: an unestablished elapsed_s fails
+        # `placement_band_reached` (a WAIT), so no order can be sent, while
+        # the terminal late edge passes on None rather than refusing a window
+        # on a venue read that may still confirm. Nothing submits in that
+        # state, and the wait is ended by this check's late edge or by
+        # `window_has_room_for_the_watchdog` above.
+        band = self.placement_band()
+        check("placement_band_reached",
+              band.get("elapsed_s") is not None
+              and float(band["elapsed_s"]) >= float(band["earliest_s"]),
+              band)
+        check("placement_band_not_expired",
+              band.get("elapsed_s") is None
+              or band.get("latest_s") is None
+              or float(band["elapsed_s"]) <= float(band["latest_s"]),
+              band)
         check("transport_armed", bool(getattr(self.transport, "armed", False)),
               "the owner's locks are unchanged; this mode does not lift any. "
               "A WAIT: false here means preflight/arming is still pending, "
