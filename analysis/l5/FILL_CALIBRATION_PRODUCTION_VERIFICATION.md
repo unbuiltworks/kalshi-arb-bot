@@ -67,3 +67,69 @@ NOT usable for calibration.
   `stream_age_s`, `book_updates`, `feed_source` and `capture_source`.
 
 Eight new tests, including one that fails against the deployed wiring.
+
+---
+
+# Post-fix verification: deployment 104f1959, commit 778222e0
+
+SUCCESS 2026-10-19T21:29:09Z. Regression on this tree: 26 failed / 11,649
+passed / 14 errors = the SAME 40 IDs as the clean baseline, zero NEW, zero
+GONE; the +8 passed are the 8 new tests. (A first attempt segfaulted at 55%
+with dozens of leaked `gemini_ws` websocket threads because I had concurrent
+pytest sessions in the same container; re-run alone, it completed.)
+The code commit `c11c55d0` was SKIPPED by Railway and only the
+`DEPLOY_TRIGGER` commit built, which is the watch pattern behaving correctly.
+
+## Durable persistence across a restart: proven
+
+First heartbeat after boot, 21:30:38Z:
+`orders: 79, events_appended: 0, errors: {}`. Seventy-nine records folded off
+the Railway volume, none written by this process yet. Pre-restart the count
+was 75 and climbing. Nothing lost, nothing stitched over. By 21:33:59Z:
+`orders: 84, events_appended: 47, errors: {}` -- 47 appends for 5 new
+pre-submits, so the lifetime-observation path is appending too.
+
+## The three defects, re-checked on real records
+
+1. **First record of the new process**, 21:31:52Z, a real money-path intent
+   (`l5f-c2f62492...`, two minutes after boot): `book` POPULATED,
+   `capture_source: "mirror_snapshot_at_read"`, `queue_ahead: 1954.52`. Not
+   `book: null`, not `no_ladder`.
+2. **The same shape of record that produced -75.496** now reads correctly:
+   `t: 1792445436.52` against `read_t: 1792445512.777` -- the caller is 76s
+   behind the read instant, exactly the mixed-clock case -- and
+   `frame_age_s: 0.088, stale: false`. Every observed age is positive and
+   small: 0.066, 0.088, 0.022, 0.008.
+3. **The book block carries time**: `observed_t`, `last_update_t`,
+   `age_s` (0.066 / 0.088 / 0.125 / 0.111), `stream_age_s`, `book_updates`,
+   `feed_source: authenticated_ws`, `capture_source`. The money path reads
+   `mirror_snapshot_at_read`; the shadow path `caller_supplied_mapping`.
+
+## Safety invariants at 21:33:59Z
+
+`submission_gate`: blocked true, reason `SHADOW_ONLY_LOCK`, shadow_lock true,
+armed false, owner_arm_token false. `live_orders: 0`, `parked_orders: 0`,
+`quarantined: []`, `cash_deployed: []`. Account exposure total `0` against an
+unchanged `max_total_exposure_usd: 5` and `max_usd_per_market: 5`.
+`realized_total: -8.4013`, unchanged across the deployment -- no accounting
+discontinuity. Four shadow controllers running: ARGMAX, PAIR_AVAILABLE,
+RESIDUAL_URGENCY, ARGMAX@ONE_TICK_BEHIND. Recorder errors empty.
+
+## Verdict: GO for the instrumentation, with its limit stated
+
+Verified on production records: the PRE-submission half of the capture --
+book with its timestamp, queue bound with provenance and its stated
+unknown, fee schedule estimate with provenance, order-ID linkage, durable
+append, restart fold, and the containment (no veto, `precapture_ok` never
+called by the submission path, a recorder fault counted and swallowed).
+
+NOT verified, and not verifiable in shadow: acknowledgment, partial fills,
+cancellation, venue-confirmed terminal state, settlement reconciliation, and
+`venue_actual` fees/rebates. Every one of those needs a real resting order;
+`transport.submit` raises `NotArmed`, so no shadow record can reach them. All
+84 records report `usable_for_calibration: false`, which is the correct
+answer and not a defect. Those five paths have unit coverage only.
+
+That gap is the reason to run a bounded live calibration, not a reason to
+withhold one. The instrumentation is ready; what it has not yet done is
+record a real fill, because it has never been allowed one.
