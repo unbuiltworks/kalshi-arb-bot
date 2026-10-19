@@ -57,6 +57,7 @@ from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
 from src import l5_pmus_transport as T
+from src import l5_shadow_controller as SHADOW
 from src import pmus_q1_executor as Q1
 
 SERVICE_ROLE = "l5-pmus-live"
@@ -151,6 +152,17 @@ ORDER_POLL_RATE = 0.5
 #: how often ONE market's settlement may be re-read. A market that has not
 #: expired will not have expired 3 seconds later either.
 SETTLEMENT_POLL_S = 10.0
+#: how often the shadow controller may REPEAT an unchanged decision. Every
+#: tick is still evaluated -- the modelled fill rule has to see every book
+#: change -- but 300 identical NO_ACTION lines per window bury the record
+#: instead of making it. Suppressed evaluations are counted, so nothing is
+#: lost; a modelled fill is never suppressed.
+SHADOW_EMIT_S = 60.0
+#: how long after a window's stated end the shadow may ask the venue for a
+#: settlement price. The venue publishes `settlementPx` after expiry, not at
+#: it -- that gap is exactly what the money path's SETTLEMENT_POLL_S loop
+#: exists for -- so asking at the boundary reads NOT_TERMINAL every time.
+SHADOW_SETTLE_GRACE_S = 60.0
 
 def settle_error_class(exc: BaseException) -> str:
     """Why a settlement read failed, in terms that distinguish the cases
@@ -309,6 +321,15 @@ class Runner:
         #: did not confirm, which refuses arming rather than falling back.
         self.window_bounds: Dict[int, Optional[Dict[str, Any]]] = {}
         self.arm_claim: Optional[Dict[str, Any]] = None
+        # THE INDEPENDENT SHADOW DECISION SOURCE. Built lazily, holds no
+        # transport, and is consulted by nothing on the money path -- see
+        # `shadow_tick`. Named with a leading underscore so no existing
+        # code path can reach it by guessing an attribute name.
+        self._shadow: Optional[SHADOW.ShadowController] = None
+        self._shadow_off = False
+        self._shadow_last_key: Any = None
+        self._shadow_last_emit_t = 0.0
+        self._shadow_settle_t: Dict[str, float] = {}
         self.last_orphan_sweep_t = 0.0
         self.feed = feed
         self.clock = clock
@@ -562,6 +583,9 @@ class Runner:
         if self.ws is not None:
             self.model_close()
             self.close_window()
+            # the shadow's own window close. After close_window, which must
+            # not be delayed by it, and before self.ws moves.
+            self.shadow_close()
         # a claim is for ONE window; it does not carry into the next one.
         self.arm_claim = None
         self.ws = ws
@@ -1750,6 +1774,190 @@ class Runner:
     def open_markets(self) -> List[str]:
         return [m for m, v in self.store.committed().items() if v > 0]
 
+    # ================================================= SHADOW CONTROLLER
+    #
+    # An INDEPENDENT decision source. The money path above translates L5's
+    # observed trades -- side, price and size all come from L5's action --
+    # so it cannot answer what our own policy would do from our own
+    # inventory. This block does, and reaches no order path at all:
+    # `l5_shadow_controller` holds no transport, no credentials and no
+    # executor, and nothing on the money path reads what it emits.
+    #
+    # It is NOT gated on the safety chain, and that is deliberate rather
+    # than an omission: the chain exists to stop submissions, and there is
+    # no submission here to stop. Gating it on HALT would only stop the
+    # record, which is the one thing Phase A is for.
+
+    def shadow_controller(self) -> Optional[Any]:
+        """Built once, lazily, and never allowed to fail the tick.
+
+        A missing or unreadable v2 artifact must stop THIS and nothing
+        else, so a construction failure disables the controller for the
+        life of the process, is reported by name, and leaves every other
+        path exactly as it was. The model is loaded here, at construction,
+        so the failure surfaces once rather than on every tick.
+        """
+        if self._shadow_off:
+            return None
+        if self._shadow is None:
+            try:
+                c = SHADOW.ShadowController(
+                    state_path=os.path.join(self.root,
+                                            "shadow_controller.json"),
+                    emit=self._shadow_emit)
+                _ = c.model                       # load now, fail now
+                self._shadow = c
+                emit("L5_SHADOW_READY", c.report())
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self._shadow, self._shadow_off = None, True
+                emit("L5_SHADOW_DISABLED",
+                     {"why": "%s" % type(exc).__name__,
+                      "detail": T.redact("%s" % exc)[:300],
+                      "labels": ("the independent shadow decision source is "
+                                 "OFF for this process. Nothing else is "
+                                 "affected: it gates nothing and no money "
+                                 "path reads it.")})
+        return self._shadow
+
+    def _shadow_emit(self, kind: str, doc: Mapping[str, Any]) -> None:
+        """Print a decision when it SAYS something new, and at least once a
+        minute regardless.
+
+        Every tick is evaluated; only repetition is suppressed, and the
+        suppressed count is carried in `stats` and in the controller's own
+        report so the record is complete without being 300 lines a window.
+        A modelled fill is never suppressed -- it is the only event here
+        that changes state.
+        """
+        key = (doc.get("decision"), doc.get("relation"), doc.get("side"),
+               doc.get("target_price"), doc.get("reason"))
+        t = float(self.now_t or 0.0)
+        if (key == self._shadow_last_key
+                and (t - self._shadow_last_emit_t) < SHADOW_EMIT_S
+                and not doc.get("modelled_fill")):
+            self.stats["shadow_repeat_suppressed"] += 1
+            return
+        self._shadow_last_key = key
+        self._shadow_last_emit_t = t
+        emit(kind, doc)
+
+    def shadow_window(self) -> Dict[str, Any]:
+        """The window clock a shadow decision is dated against, and its
+        source.
+
+        PREFERS THE VENUE, and reads it ONLY from the cache the money path
+        has already filled. `venue_window_bounds()` performs a venue read
+        and caches a failure as permanent for that window, so calling it
+        from here could change what the arming boundary later sees -- and
+        shadow code must not be able to move a money-path gate. Falling
+        back to our own 900s grid is right for a decision that cannot
+        place an order, where the arming boundary refuses outright; the
+        source is carried on every record so the two are never confused.
+        """
+        ws = self.ws
+        if ws is None:
+            return {"window_end_ts": None, "window_source": "NO_WINDOW"}
+        cached = self.window_bounds.get(ws)
+        if cached and cached.get("end"):
+            try:
+                end = dt.datetime.fromisoformat(str(cached["end"]))
+                if end.tzinfo is None:
+                    end = end.replace(tzinfo=dt.timezone.utc)
+                return {"window_end_ts": end.timestamp(),
+                        "window_source": MECH.VENUE_SOURCE}
+            except BaseException:                              # noqa: BLE001
+                pass
+        return {"window_end_ts": float(ws) + float(AB.WINDOW_S),
+                "window_source": "CLOCK_GRID"}
+
+    def shadow_tick(self, now: float) -> Optional[Dict[str, Any]]:
+        """ONE independent inventory-driven decision, every tick.
+
+        Runs whatever the money path is doing -- cooling off, halted,
+        disarmed, shadow-locked -- because it costs the venue nothing: the
+        book it reads is the websocket mirror already running, and the only
+        thing it writes is its own state file. Continuous emission is the
+        deliverable, so any failure here degrades to a counted error and
+        never to a raise.
+        """
+        c = self.shadow_controller()
+        if c is None or self.ws is None:
+            return None
+        slug = AB.slug_for(int(self.ws))
+        win = self.shadow_window()
+        try:
+            rec = c.step(now, slug=slug, book=self.book.snapshot(slug),
+                         window_end_ts=win["window_end_ts"],
+                         window_source=win["window_source"])
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_error:%s" % type(exc).__name__] += 1
+            return None
+        self.stats["shadow_decisions"] += 1
+        self.stats["shadow:%s" % str(rec.get("relation")
+                                     or rec.get("decision") or "?")] += 1
+        if rec.get("modelled_fill"):
+            self.stats["shadow_modelled_fills"] += 1
+        return rec
+
+    def shadow_close(self) -> None:
+        """Report what a rolling window leaves the shadow holding."""
+        c = self._shadow
+        if c is None or self.ws is None:
+            return
+        try:
+            emit("L5_SHADOW_WINDOW_CLOSE",
+                 c.window_close(AB.slug_for(int(self.ws))))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_error:%s" % type(exc).__name__] += 1
+
+    def shadow_settle(self, now: float) -> None:
+        """Settle a closed shadow window at the VENUE's own price.
+
+        A PUBLIC read, with no credentials and no authenticated quota: the
+        same /v1/markets/{slug}/bbo document the observer already uses
+        carries `settlementPx` beside `state`. Terminal state AND a binary
+        price, or it is not settled -- an expired book's last price
+        reaching a ledger as a payout is a defect this venue has already
+        produced here once, and `settlement_decimal` plus
+        TERMINAL_MARKET_STATES are the existing tested reads for it.
+
+        Nothing is inferred. Without the venue's own number the window
+        stays unsettled and is reported as stranded inventory.
+        """
+        c = self._shadow
+        if c is None:
+            return
+        for slug in c.pending_settlement(now,
+                                         grace_s=SHADOW_SETTLE_GRACE_S):
+            if now - self._shadow_settle_t.get(slug, 0.0) < SETTLEMENT_POLL_S:
+                continue
+            self._shadow_settle_t[slug] = now
+            try:
+                md = OBS.pmus_bbo(slug) or {}
+                state = str(md.get("state") or "")
+                px = T.settlement_decimal(md.get("settlementPx"))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["shadow_settle_read_error"] += 1
+                continue
+            if state not in T.TERMINAL_MARKET_STATES or px not in (D(0), D(1)):
+                self.stats["shadow_awaiting_settlement"] += 1
+                continue
+            try:
+                emit("L5_SHADOW_SETTLED",
+                     dict(c.settle(slug, px), venue_state=state))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["shadow_error:%s" % type(exc).__name__] += 1
+
     def heartbeat(self) -> None:
         t = self.transport
         emit("L5_LIVE_HB", {
@@ -1769,6 +1977,11 @@ class Runner:
             "halt_local_env": self.halted(),
             "submission_gate": self.submission_gate(),
             "auth_book": self.book.status(),
+            # THE INDEPENDENT DECISION SOURCE, on every heartbeat. Phase A's
+            # deliverable is that it emits continuously, and a counter an
+            # operator has to go looking for does not demonstrate that.
+            "shadow_controller": (self._shadow.report() if self._shadow
+                                  else {"off": self._shadow_off}),
             "book_now": self.book.snapshot(t.market_slug) if t else None,
             "stats": dict(self.stats),
             # SECONDS SINCE EACH COUNT LAST MOVED. Without this a
@@ -2494,6 +2707,9 @@ class Runner:
             self.stats["ticks_skipped_in_cooloff"] += 1
             self.win["ticks_skipped_in_cooloff"] += 1
             self.poll(now)          # the websocket feed costs the venue nothing
+            # SAME REASON, and it must not stall in a cool-off: the shadow
+            # reads the running websocket book and writes one local file.
+            self.shadow_tick(now)
             return
         self.maybe_preflight(now)
         if self.store.live_order_count():
@@ -2526,6 +2742,11 @@ class Runner:
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)
         self.poll(now)
+        # LAST, and gating nothing. An independent decision source: it reads
+        # our own simulated inventory, the live book and the real clock, and
+        # it is structurally unable to submit -- see the block above.
+        self.shadow_tick(now)
+        self.shadow_settle(now)
 
     # ------------------------------------------------------------------
     # THE BOUNDED CANCELLATION-MECHANISM MODE
@@ -2620,6 +2841,13 @@ class Runner:
         # The mechanism needs NO action feed: its order is predetermined. The
         # authenticated book it prices against is a separate thread and is
         # unaffected.
+        #
+        # AND NO `shadow_tick` EITHER, deliberately rather than by omission.
+        # This mode is a bounded one-shot experiment on one predetermined
+        # order; the shadow controller is the CONTINUOUS operating mode and
+        # runs in `tick`. A mechanism session is minutes long, so the gap in
+        # the shadow record is minutes long and is visible as such in the
+        # heartbeat's decision count. Nothing here is gated on it.
         mech.step(now)
 
 

@@ -268,14 +268,53 @@ def test_the_image_copies_every_module_the_entrypoint_can_reach():
     assert needed - copied == set(), sorted(needed - copied)
 
 
+#: DATA the image needs and no import closure can see. Enumerated, so
+#: adding one is a visible act rather than something that disappears into a
+#: permanently-red assertion -- which is what happened: this test went red
+#: on the cost-basis manifests and stayed red, and so could not catch the
+#: module it exists to catch.
+ALLOWED_DATA = {
+    # inspected cost-basis batches; the apply aborts without them
+    "config/cost_basis_batch_manifest_20261016.json",
+    "config/cost_basis_batch_manifest_20261016b.json",
+    "config/cost_basis_batch_manifest_20261016c.json",
+    "config/cost_basis_batch_manifest_20261016d.json",
+    # the frozen v2 action model the shadow controller loads at construction
+    "analysis/l5/l5_action_model_v2.json",
+}
+
+
+def _copied():
+    with open(DOCKERFILE, encoding="utf-8") as fh:
+        return {ln.split()[1] for ln in fh if ln.startswith("COPY ")}
+
+
 def test_the_image_carries_no_module_outside_that_closure():
     """Reviewability: the list is the closure, not a pile."""
-    with open(DOCKERFILE, encoding="utf-8") as fh:
-        copied = {ln.split()[1] for ln in fh if ln.startswith("COPY ")}
-    needed = {os.path.relpath(p, ROOT) for _, p in _closure(ENTRY)}
     # config.py is imported lazily inside a function; P39 shipped it too.
-    allowed = needed | {"src/polymarket_l5/config.py"}
-    assert copied - allowed == set(), sorted(copied - allowed)
+    allowed = {os.path.relpath(p, ROOT) for _, p in _closure(ENTRY)} \
+        | {"src/polymarket_l5/config.py"}
+    modules = {c for c in _copied() if c.endswith(".py")}
+    assert modules - allowed == set(), sorted(modules - allowed)
+
+
+def test_the_image_carries_no_unaccounted_data_file():
+    """The same claim for the files the ast closure cannot see. A data
+    dependency that is missing fails at RUNTIME and looks like health --
+    without the v2 artifact the shadow controller self-disables and the
+    service emits no decisions while every gauge reads fine."""
+    data = {c for c in _copied() if not c.endswith(".py")}
+    assert data == ALLOWED_DATA, {"unexpected": sorted(data - ALLOWED_DATA),
+                                  "missing": sorted(ALLOWED_DATA - data)}
+
+
+def test_the_v2_artifact_the_shadow_controller_loads_is_in_the_image():
+    """Named directly, because it is the one data file whose absence is
+    silent: `load_v2` raises, the controller turns itself off, and nothing
+    else in the image notices."""
+    from src import pmus_l5_persistence_v2 as pv2
+    rel = os.path.relpath(str(pv2.ARTIFACT), ROOT)
+    assert rel in _copied(), rel
 
 
 # ------------------------------------------------------------------- disarm

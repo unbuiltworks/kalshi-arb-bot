@@ -88,6 +88,11 @@ COPY src/l5_depth_comparison.py src/l5_depth_comparison.py
 # it could not have caught it. The mode is off unless
 # L5_CANCEL_MECHANISM=YES, so shipping it changes nothing by itself.
 COPY src/l5_cancel_mechanism.py src/l5_cancel_mechanism.py
+# The INDEPENDENT inventory-driven shadow decision source, imported eagerly
+# by the runner. It holds no transport and defines no order path, so shipping
+# it cannot place an order; leaving it out would crashloop the executor on
+# boot, which is why it is listed rather than left to the closure test.
+COPY src/l5_shadow_controller.py src/l5_shadow_controller.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py
 COPY src/l5_pmus_transport.py src/l5_pmus_transport.py
@@ -116,6 +121,13 @@ COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.
 # The cost-basis apply reads its inspected batch manifest from this path.
 # Without it the apply aborts BATCH_MANIFEST_MISSING (safe, but it writes
 # nothing). This image COPYs per file, so the manifest must be named.
+# THE FROZEN v2 ACTION MODEL, which the shadow controller loads at
+# construction. A DATA dependency the ast closure test cannot see: without
+# this file `load_v2` raises, the controller self-disables with
+# L5_SHADOW_DISABLED, and the service would look healthy while emitting no
+# decisions at all -- the whole deliverable, absent and quiet.
+COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
+
 COPY config/cost_basis_batch_manifest_20261016.json config/cost_basis_batch_manifest_20261016.json
 COPY config/cost_basis_batch_manifest_20261016b.json config/cost_basis_batch_manifest_20261016b.json
 COPY config/cost_basis_batch_manifest_20261016c.json config/cost_basis_batch_manifest_20261016c.json
