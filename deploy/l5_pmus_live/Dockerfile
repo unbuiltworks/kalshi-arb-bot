@@ -103,6 +103,9 @@ COPY src/l5_cancel_mechanism.py src/l5_cancel_mechanism.py
 # shadow-only deployment. It adds no capability: a controller-generated
 # intent is refused at EXECUTOR_BOUNDARY and is never given an L5 row.
 COPY src/l5_intent_gate.py src/l5_intent_gate.py
+# Order-ID-linked calibration capture. Observational: holds no transport,
+# no credentials and no executor, and cannot submit, cancel or amend.
+COPY src/l5_fill_calibration.py src/l5_fill_calibration.py
 COPY src/l5_shadow_controller.py src/l5_shadow_controller.py
 COPY src/l5_pmus_live_runner.py src/l5_pmus_live_runner.py
 COPY src/l5_pmus_realtime_observer.py src/l5_pmus_realtime_observer.py

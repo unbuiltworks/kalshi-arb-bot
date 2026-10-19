@@ -3735,6 +3735,18 @@ class FaithfulExecutor:
         self.halt_gate: Optional[Any] = None
         self.validation_gates: Optional[Any] = None
         self.available_cash_usd: Optional[D] = None
+        #: ORDER-ID-LINKED CALIBRATION CAPTURE, attached by the runner like
+        #: the gates above. Declared here so the executor's surface states
+        #: what may be attached to it: the graft guard checks every
+        #: `self.executor.X` the runner touches against a freshly built
+        #: instance, and an attribute the runner invents is exactly the
+        #: class of bug that guard exists to catch.
+        #:
+        #: Absent (None) means no capture and changes nothing else: the
+        #: recorder has no veto and the submission path does not consult it.
+        self.fill_calibration: Optional[Any] = None
+        self.calib_book: Optional[Any] = None
+        self.calib_ladder: Optional[Any] = None
         #: MAKER_TREATMENT: an action the frozen rule called MAKER and then
         #: refused STRICT_NOT_EVALUABLE is RESTED at L5's own price instead of
         #: dropped. That refusal is about replay evidence -- whether a
@@ -4703,6 +4715,31 @@ class FaithfulExecutor:
                                    "INTENT_MUTATED_AFTER_GATES")
             self._probe_leg_pending = None
             self._probe_round_pending = None
+            # PRE-SUBMISSION CALIBRATION CAPTURE, immediately before the
+            # wire and after every gate. Observational only: it holds no
+            # transport, cannot refuse, cannot alter `intent`, and swallows
+            # its own faults. It exists because record_submit persists
+            # price and quantity but not the queue our order met, which is
+            # the one field a fill model has to be checked against.
+            #
+            # NOT A GATE. A capture failure does NOT stop this submission --
+            # letting a recorder veto the money path is the more dangerous
+            # coupling. It instead marks the record unusable, and
+            # `precapture_ok` lets a probe decline an uncalibratable order
+            # before it ever gets here.
+            cal = getattr(self, "fill_calibration", None)
+            if cal is not None:
+                try:
+                    cal.pre_submit(
+                        coid, slug=str(intent.get("market")),
+                        side=str(intent.get("_side") or intent.get("side")),
+                        own_px=intent.get("price"), qty=intent.get("qty"),
+                        book=getattr(self, "calib_book", None),
+                        ladder=getattr(self, "calib_ladder", None),
+                        now=dt.datetime.now(dt.timezone.utc).timestamp())
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
             ack = self.transport.submit(intent)
         except NotArmed as exc:
             # DISARMED never reached the venue, so the reservation is undone.

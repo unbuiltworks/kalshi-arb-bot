@@ -57,6 +57,7 @@ from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
 from src import l5_pmus_transport as T
+from src import l5_fill_calibration as CALIB
 from src import l5_intent_gate as GATE
 from src import l5_shadow_controller as SHADOW
 from src import pmus_q1_executor as Q1
@@ -385,6 +386,19 @@ class Runner:
         #: the shared intent-level boundary. Holds nothing of its own: every
         #: safety fact it reads comes from this runner's own objects.
         self.intent_gate = GATE.IntentGate(self)
+        #: ORDER-ID-LINKED CALIBRATION LEDGER. Observational: holds no
+        #: transport and cannot refuse a submission. Built here so the
+        #: executor can be handed it, and so the shadow path can exercise
+        #: the capture mechanism against REAL venue data before any live
+        #: order depends on it.
+        self.fill_calibration = None
+        try:
+            self.fill_calibration = CALIB.CalibrationRecorder(
+                self.root, emit=emit)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["fill_calib_init_error:%s" % type(exc).__name__] += 1
         # THE INDEPENDENT SHADOW DECISION SOURCE. Built lazily, holds no
         # transport, and is consulted by nothing on the money path -- see
         # `shadow_tick`. Named with a leading underscore so no existing
@@ -398,6 +412,8 @@ class Runner:
         self._shadow_last_key: Dict[str, Any] = {}
         self._shadow_last_emit_t: Dict[str, float] = {}
         self._shadow_settle_t: Dict[str, float] = {}
+        #: shadow calibration records this process opened, by coid
+        self._calib_shadow_seen: Dict[str, str] = {}
         self._shadow_last_rec: Optional[Dict[str, Any]] = None
         self._shadow_last_rec_t = 0.0
         self.last_orphan_sweep_t = 0.0
@@ -836,6 +852,14 @@ class Runner:
             # or unreadable is OFF, so a typo cannot silently half-enable a
             # policy, and OFF is byte-for-byte the frozen behaviour.
             residual_cap_k=residual_cap_k())
+        # THE CALIBRATION LEDGER, attached after construction for the same
+        # reason the validation gates are: the executor's own signature
+        # stays unchanged, and an executor built without it simply has no
+        # recorder (`getattr(..., None)` at the call site) rather than a
+        # different constructor.
+        self.executor.fill_calibration = self.fill_calibration
+        self.executor.calib_book = None
+        self.executor.calib_ladder = None
         # DISARMED-SHADOW VALIDATION PROTECTIONS, attached after construction
         # so the executor's own signature is unchanged.
         #
@@ -2063,6 +2087,12 @@ class Runner:
                 raise
             prints = []
             self.stats["shadow_prints_error:%s" % type(exc).__name__] += 1
+        # THE EXECUTOR'S PRE-SUBMIT HOOK READS THESE. Refreshed on the
+        # same tick that already reads them, so the capture sees the book
+        # and ladder the decision saw rather than re-reading them later.
+        if self.executor is not None:
+            self.executor.calib_book = book
+            self.executor.calib_ladder = self.shadow_ladder
         out = None
         for name in sorted(cs):
             try:
@@ -2088,6 +2118,12 @@ class Runner:
                 # which is what the money path would have done.
                 self._shadow_last_rec, self._shadow_last_rec_t = rec, now
             out = rec
+        # AFTER the variants have decided, so the resting quote this tick
+        # placed exists to be captured -- and captured against the SAME
+        # book snapshot the decision used, which is what makes it a
+        # pre-submission observation rather than a later re-read.
+        self.calibration_shadow_tick(now, slug=slug, book=book,
+                                     prints=prints)
         return out
 
     def shadow_compare(self, r: Mapping[str, Any], now: float) -> None:
@@ -2149,6 +2185,72 @@ class Runner:
                     raise
                 self.stats["shadow_error:%s:%s"
                            % (name, type(exc).__name__)] += 1
+
+    def calibration_shadow_tick(self, now: float, *, slug: str,
+                                book: Any = None,
+                                prints: Any = None) -> None:
+        """Exercise the capture mechanism against REAL venue data, with no
+        order and no venue call.
+
+        WHY THIS EXISTS AND WHAT IT CANNOT PROVE. The recorder's purpose is
+        to make a live order calibratable, and that cannot be verified by
+        first discovering a problem during a money-moving probe. So the
+        BASELINE shadow variant's modelled resting quotes are run through
+        the same pre_submit / observe path, on the same authenticated
+        ladder, book and prints the executor's hook would see.
+
+        What this verifies: the ladder read, the queue bound and its
+        provenance, the per-level print attribution, lifetime coverage
+        accounting, durability across restarts, and the completeness
+        verdict.
+
+        What it CANNOT verify, by construction: the ack, fill and terminal
+        halves, because there is no venue order. Every shadow record
+        therefore reports `usable_for_calibration: false` with
+        `terminal_state` missing -- and that is the anti-false-completeness
+        guarantee showing itself in production rather than only in a test.
+        """
+        cal = self.fill_calibration
+        if cal is None or self._shadow_off:
+            return
+        try:
+            c = (self._shadow or {}).get(SHADOW.BASELINE_POLICY)
+            if c is None:
+                return
+            sc = ((c.state.get("markets") or {}).get(slug)
+                  or {}).get("scen") or {}
+            rest = (sc.get(SHADOW.HEADLINE_SCENARIO) or {}).get("resting")
+            seen = self._calib_shadow_seen
+            if rest:
+                coid = "shadow|%s|%s|%s" % (SHADOW.BASELINE_POLICY, slug,
+                                            rest.get("t"))
+                if coid not in seen:
+                    seen[coid] = slug
+                    cal.pre_submit(
+                        coid, slug=slug,
+                        side=(FM.UP if str(rest.get("side")) == "YES"
+                              else FM.DOWN),
+                        own_px=rest.get("price"), qty="1", book=book,
+                        ladder=self.shadow_ladder, now=now)
+                cal.observe(now, slug=slug, book=book,
+                            ladder=self.shadow_ladder, prints=prints,
+                            open_coids=[coid])
+            else:
+                # the modelled quote is gone: close every open shadow record
+                # for this market, NEVER venue-confirmed, because no venue
+                # was asked.
+                for coid, s2 in list(seen.items()):
+                    if s2 != slug:
+                        continue
+                    cal.on_terminal(coid, state="SHADOW_QUOTE_WITHDRAWN",
+                                    reason="modelled_only",
+                                    venue_confirmed=False, now=now)
+                    seen.pop(coid, None)
+            self.stats["calib_shadow_records"] = len(cal.orders)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["calib_shadow_error:%s" % type(exc).__name__] += 1
 
     def shadow_settle(self, now: float) -> None:
         """Settle a closed shadow window at the VENUE's own price.
@@ -2228,6 +2330,8 @@ class Runner:
             "halt_local_env": self.halted(),
             "submission_gate": self.submission_gate(),
             "auth_book": self.book.status(),
+            "fill_calibration": (None if self.fill_calibration is None
+                                 else self.fill_calibration.report()),
             "frame_fanout": (self.fanout.status() if self.fanout else None),
             # THE INDEPENDENT DECISION SOURCE, on every heartbeat. Phase A's
             # deliverable is that it emits continuously, and a counter an
