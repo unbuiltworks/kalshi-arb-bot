@@ -1011,3 +1011,33 @@ deploy the string-price fix, shadow-locked, mechanism OFF 2026-10-19T16:05Z
 # TESTS: 11,492 passed; 24 failed / 14 errors, an ID set byte-identical to
 # the previous deployment and a strict subset of the b838a78e baseline.
 deploy three-policy shadow, shadow-locked, mechanism OFF 2026-10-19T16:27Z
+
+# ===================================================================
+# QUEUE-AWARE SHADOW FILLS. Replaces the touch-through upper bound with
+# l5_maker_fill_model's CONSERVATIVE/BASE/OPTIMISTIC scenarios, fed the
+# authenticated ladder through a new observer fan-out.
+#
+# THE MONEY PATH'S OBSERVER IS UNCHANGED. FrameFanout holds it as its
+# PRIMARY, calls it FIRST and UNWRAPPED, and its exceptions reach AuthBook
+# exactly as before. The shadow's one extra observer is isolated from it.
+# model_close detaches only its own observer now rather than nulling the
+# slot. No new service, no new variable, no money-path refactor.
+#
+# Each policy now runs three scenarios with THEIR OWN inventories, so a
+# fill only the optimistic case earns cannot create matched inventory in
+# the conservative one. Promotion is judged on CONSERVATIVE.
+#
+# STATE DISCONTINUITY, DELIBERATE AND REPORTED: the v2 single-inventory
+# state is discarded rather than carried into the per-scenario v3, because
+# it was credited by the touch-through rule and would overstate the
+# conservative column. The prior state is preserved as a summary and
+# `state_discontinuity` ships in every heartbeat.
+#
+# ADDS NO CAPABILITY: still no transport, no credentials, no executor, no
+# order path; the transitive import closure is clean of all of them and of
+# every HTTP client. SHADOW_ONLY stays enabled, mechanism OFF,
+# PMUS_Q1_LIVE NO, every risk limit unchanged.
+#
+# TESTS: 11,504 passed; 24 failed / 14 errors, an ID set byte-identical to
+# the previous deployment and a strict subset of the b838a78e baseline.
+deploy queue-aware shadow fills, shadow-locked, mechanism OFF 2026-10-19T17:05Z
