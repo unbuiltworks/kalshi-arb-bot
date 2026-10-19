@@ -407,3 +407,106 @@ def test_a_still_open_window_is_not_asked_about_at_all(tmp_path, monkeypatch):
     assert asked["n"] == 0, "the shadow asked about a live market"
     runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
     assert asked["n"] == 1
+
+
+# ================================================== COMPARISON AGAINST L5
+
+def _growing_feed():
+    """A feed yielding a NEW row each call. `poll` treats its first read as
+    history and dedupes, so a repeating feed never reaches `handle` and
+    every assertion below would pass for the wrong reason."""
+    # the FIRST row is consumed as history by `poll`'s seeding read, so the
+    # first comparison is against the SECOND row. Three rows, so a test can
+    # see more than one handled action.
+    rows = [
+        {"slug": SLUG, "timestamp": 1792348857, "side": "BUY",
+         "outcome": "Up", "price": "0.31", "size": "1.449274",
+         "transactionHash": "0x" + "a" * 64, "conditionId": "0x" + "b" * 64},
+        {"slug": SLUG, "timestamp": 1792348870, "side": "BUY",
+         "outcome": "Down", "price": "0.60", "size": "20",
+         "transactionHash": "0x" + "c" * 64, "conditionId": "0x" + "d" * 64},
+        {"slug": SLUG, "timestamp": 1792348880, "side": "BUY",
+         "outcome": "Up", "price": "0.42", "size": "11",
+         "transactionHash": "0x" + "e" * 64, "conditionId": "0x" + "f" * 64},
+    ]
+    n = {"i": 0}
+
+    def feed():
+        n["i"] += 1
+        return rows[:min(n["i"], len(rows))]
+    return feed
+
+
+def test_l5s_action_is_compared_against_the_decision_that_predates_it(
+        tmp_path, monkeypatch):
+    """The validation standard: at this state, what did L5 do and what would
+    we have done. Our decision must PREDATE the action -- a decision taken
+    after seeing L5's trade is hindsight."""
+    runner = build(tmp_path, monkeypatch, feed=_growing_feed())
+    out = capture(monkeypatch)
+    runner.tick(NOW)                      # seeds the feed, decides once
+    runner.tick(NOW + 3.0)                # acts on the new row
+    cmp = [d for k, d in out if k == "L5_SHADOW_COMPARE"]
+    assert cmp, [k for k, _ in out]
+    c0 = cmp[0]
+    assert c0["l5"]["side"] == "NO" and c0["l5"]["price"] == "0.60"
+    assert c0["ours"]["decision"] in ("quote", "no_action")
+    assert c0["ours"]["decision_age_s"] >= 0.0
+    assert c0["same_side"] in (True, False)
+    assert "PREDATES" in c0["labels"]
+    assert c0["provenance"] == "CONTROLLER_GENERATED_VS_L5_OBSERVED"
+
+
+def test_a_comparison_failure_never_costs_the_strategy_an_action(
+        tmp_path, monkeypatch):
+    """A raise in the comparison would abandon the rest of the batch. The
+    money path must be untouched by a record-keeping fault."""
+    runner = build(tmp_path, monkeypatch, feed=_growing_feed())
+    seen = {"n": 0}
+    real = runner.handle
+
+    def handle(r, recv):
+        seen["n"] += 1
+        return real(r, recv)
+    runner.handle = handle
+
+    def boom(*_a, **_kw):
+        raise RuntimeError("record keeping")
+    monkeypatch.setattr(runner, "shadow_compare", boom)
+    capture(monkeypatch)
+    for i in range(4):
+        runner.tick(NOW + i * 3.0)
+    assert seen["n"] >= 2, "a comparison fault stole the strategy's actions"
+    assert any(k.startswith("shadow_compare_error")
+               for k in runner.stats.keys())
+
+
+def test_no_comparison_is_emitted_before_we_have_decided_anything(
+        tmp_path, monkeypatch):
+    """A comparison against no decision would be a fabricated NO_ACTION."""
+    runner = build(tmp_path, monkeypatch, feed=_growing_feed())
+    out = capture(monkeypatch)
+    assert runner._shadow_last_rec is None
+    runner.shadow_compare({"slug": SLUG, "outcome": "Up", "side": "BUY",
+                           "price": "0.31", "size": "1"}, NOW)
+    assert not [d for k, d in out if k == "L5_SHADOW_COMPARE"]
+
+
+def test_the_comparison_never_feeds_l5s_action_back_into_our_decision(
+        tmp_path, monkeypatch):
+    """INDEPENDENCE. The record pairs the two; it must not join them. The
+    decision after a comparison must be identical to the decision a runner
+    that never saw the feed would take, from the same book and clock."""
+    with_feed = build(tmp_path, monkeypatch, feed=_growing_feed())
+    capture(monkeypatch)
+    with_feed.tick(NOW)
+    with_feed.tick(NOW + 3.0)
+    mine = dict(with_feed._shadow_last_rec or {})
+    blind = build(tmp_path, monkeypatch, root=tmp_path / "blind",
+                  feed=lambda: [])
+    blind.tick(NOW)
+    blind.tick(NOW + 3.0)
+    theirs = dict(blind._shadow_last_rec or {})
+    for k in ("decision", "relation", "side", "target_price", "state",
+              "tte_s", "inventory"):
+        assert mine.get(k) == theirs.get(k), (k, mine.get(k), theirs.get(k))

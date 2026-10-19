@@ -330,6 +330,8 @@ class Runner:
         self._shadow_last_key: Any = None
         self._shadow_last_emit_t = 0.0
         self._shadow_settle_t: Dict[str, float] = {}
+        self._shadow_last_rec: Optional[Dict[str, Any]] = None
+        self._shadow_last_rec_t = 0.0
         self.last_orphan_sweep_t = 0.0
         self.feed = feed
         self.clock = clock
@@ -1262,6 +1264,17 @@ class Runner:
         for r in sorted(fresh, key=lambda x: float(x.get("timestamp") or 0)):
             if str(r.get("slug") or "").startswith("btc-updown-15m-"):
                 self.handle(r, now)
+                # ADDITIVE, AFTER, AND UNABLE TO AFFECT IT. A raise here
+                # would abandon the remaining rows of this batch, so the
+                # wrap is total -- the comparison is a record, and a record
+                # must never cost the strategy an action.
+                try:
+                    self.shadow_compare(r, now)
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    self.stats["shadow_compare_error:%s"
+                               % type(exc).__name__] += 1
 
     def handle(self, r: Mapping[str, Any], recv: float) -> None:
         ws = OBS.l5_window_start(r.get("slug", ""))
@@ -1896,12 +1909,57 @@ class Runner:
                 raise
             self.stats["shadow_error:%s" % type(exc).__name__] += 1
             return None
+        self._shadow_last_rec, self._shadow_last_rec_t = rec, now
         self.stats["shadow_decisions"] += 1
         self.stats["shadow:%s" % str(rec.get("relation")
                                      or rec.get("decision") or "?")] += 1
         if rec.get("modelled_fill"):
             self.stats["shadow_modelled_fills"] += 1
         return rec
+
+    def shadow_compare(self, r: Mapping[str, Any], now: float) -> None:
+        """What L5 just did, beside what WE had decided at that moment.
+
+        This is the programme's validation standard -- "at this exact market
+        state, what did L5 do next, and what would our clone have done" --
+        and it is the one comparison the money path cannot make, because
+        there our action IS L5's action restated.
+
+        OUR DECISION IS THE ONE FROM BEFORE THIS ACTION ARRIVED, and its age
+        is reported. `shadow_tick` runs at the end of the tick, so the
+        decision in hand predates this row by at most one poll interval.
+        That is the honest direction: a decision taken AFTER seeing L5's
+        trade would be hindsight, which is the leak this programme has
+        guarded against throughout.
+
+        NOT a score. One row is one coincidence; the aggregate is what the
+        record is for, and agreement on side is not agreement on policy.
+        """
+        rec = self._shadow_last_rec
+        if rec is None:
+            return
+        act = OBS.l5_to_pmus_action(r)
+        ours = rec.get("side")
+        theirs = ("YES" if act.get("pmus_side") == "UP"
+                  else "NO" if act.get("pmus_side") == "DOWN" else None)
+        emit("L5_SHADOW_COMPARE", {
+            "provenance": "%s_VS_L5_OBSERVED" % SHADOW.CONTROLLER_PROVENANCE,
+            "market": rec.get("market"),
+            "l5": {"side": theirs, "price": act.get("l5_price"),
+                   "size": act.get("l5_size"), "is_sell": act.get("is_sell"),
+                   "tx": r.get("transactionHash")},
+            "ours": {"decision": rec.get("decision"),
+                     "relation": rec.get("relation"), "side": ours,
+                     "price": rec.get("target_price"),
+                     "state": rec.get("state"), "tte_s": rec.get("tte_s"),
+                     "inventory": rec.get("inventory"),
+                     "decision_age_s": round(now - self._shadow_last_rec_t, 3)},
+            "same_side": (None if (ours is None or theirs is None)
+                          else ours == theirs),
+            "we_would_have_acted": rec.get("decision") == "quote",
+            "labels": ("our decision PREDATES this action by decision_age_s; "
+                       "nothing of L5's informed it. Side agreement is not "
+                       "policy agreement and a single row is not evidence.")})
 
     def shadow_close(self) -> None:
         """Report what a rolling window leaves the shadow holding."""
