@@ -71,6 +71,17 @@ FORBIDDEN_ATTRS = ("submit", "place", "cancel", "amend", "transport",
 
 STATE_VERSION = 2
 
+#: stranded markets named individually in a report. The COUNT is always
+#: exact; the list is capped because this report goes in every heartbeat and
+#: a long run of failed settlement reads would otherwise grow it without
+#: bound -- a diagnostic that drowns the log it lives in stops being one.
+STRANDED_REPORT_CAP = 5
+#: settled windows kept in the state file. Their TOTALS are folded into a
+#: running carry before the oldest are dropped, so the net is preserved
+#: exactly and only the per-window detail ages out. 96 windows is a day of
+#: BTC15m, so four days of individual windows stay readable.
+SETTLED_KEEP = 384
+
 
 def _d(v: Any) -> Optional[D]:
     try:
@@ -117,10 +128,51 @@ class ShadowController:
         if isinstance(doc, Mapping) and doc.get("v") == STATE_VERSION:
             self.state = {"v": STATE_VERSION,
                           "markets": dict(doc.get("markets") or {})}
+            if isinstance(doc.get("carry"), Mapping):
+                self.state["carry"] = dict(doc["carry"])
+
+    def _prune(self) -> None:
+        """Keep the state file bounded WITHOUT losing a dollar of the net.
+
+        One slot per 15-minute window is 96 a day forever. Dropping the
+        oldest settled windows outright would quietly shrink the modelled
+        net toward zero -- the same class of error as zeroing a stale
+        record -- so each dropped window's totals are first added to a
+        CARRY that `economics` counts alongside the windows still held.
+        Only per-window detail is lost, and the record says how much.
+        """
+        mk = self.state.get("markets") or {}
+        settled = [(k, v) for k, v in mk.items() if v.get("settled")]
+        if len(settled) <= SETTLED_KEEP:
+            return
+        # chronological by the window's own end, with the slug as the
+        # tiebreak -- a BTC15m slug embeds its date and so sorts in time
+        # anyway. No new timestamp field: the window clock is already
+        # stored beside the inventory it dates.
+        settled.sort(key=lambda kv: (float(kv[1].get("window_end_ts") or 0.0),
+                                     kv[0]))
+        carry = self.state.setdefault(
+            "carry", {"windows": 0, "cost_total": "0", "redemption_total": "0",
+                      "matched_units": 0, "residual_units_abs": 0})
+        for key, slot in settled[:len(settled) - SETTLED_KEEP]:
+            x = slot.get("settled") or {}
+            carry["windows"] = int(carry["windows"]) + 1
+            carry["cost_total"] = str(D(carry["cost_total"])
+                                      + D(str(x.get("cost_total") or 0)))
+            carry["redemption_total"] = str(
+                D(carry["redemption_total"])
+                + D(str(x.get("redemption_total") or 0)))
+            carry["matched_units"] = (int(carry["matched_units"])
+                                      + int(x.get("matched_units") or 0))
+            carry["residual_units_abs"] = (
+                int(carry["residual_units_abs"])
+                + abs(int(x.get("residual_units") or 0)))
+            mk.pop(key, None)
 
     def _save(self) -> None:
         """Atomic: a crash mid-write must not leave unreadable state, which
         would silently reset simulated inventory and flatter the record."""
+        self._prune()
         d = os.path.dirname(self.state_path) or "."
         try:
             os.makedirs(d, exist_ok=True)
@@ -331,10 +383,15 @@ class ShadowController:
             out.append(slug)
         return sorted(out)
 
-    def stranded(self) -> Dict[str, Any]:
-        """Inventory on the books with no settlement applied, by market."""
+    def stranded(self, *, cap: Optional[int] = None) -> Dict[str, Any]:
+        """Inventory on the books with no settlement applied, by market.
+
+        `cap` limits how many are NAMED, for a report that ships in every
+        heartbeat. The count is always exact; see `stranded_count`.
+        """
         out = {}
-        for slug, s in (self.state.get("markets") or {}).items():
+        for slug in sorted(self.state.get("markets") or {}):
+            s = (self.state.get("markets") or {})[slug]
             if s.get("settled"):
                 continue
             inv = self.inventory_for(slug)
@@ -342,7 +399,15 @@ class ShadowController:
                 out[slug] = {"inventory": inv.snapshot(),
                              "cost_total": str(inv.yes_cost + inv.no_cost),
                              "window_end_ts": s.get("window_end_ts")}
+        if cap is not None and len(out) > cap:
+            keep = sorted(out)[-cap:]
+            trimmed = {k: out[k] for k in keep}
+            trimmed["_not_shown"] = len(out) - cap
+            return trimmed
         return out
+
+    def stranded_count(self) -> int:
+        return len(self.stranded())
 
     def economics(self) -> Dict[str, Any]:
         """MODELLED economics across settled windows. Never realized P&L.
@@ -354,9 +419,12 @@ class ShadowController:
         """
         settled = [s["settled"] for s in (self.state.get("markets") or {}).values()
                    if s.get("settled")]
-        tot = {"windows_settled": len(settled),
-               "cost_total": D(0), "redemption_total": D(0),
-               "matched_units": 0, "residual_units_abs": 0}
+        carry = self.state.get("carry") or {}
+        tot = {"windows_settled": len(settled) + int(carry.get("windows") or 0),
+               "cost_total": D(str(carry.get("cost_total") or 0)),
+               "redemption_total": D(str(carry.get("redemption_total") or 0)),
+               "matched_units": int(carry.get("matched_units") or 0),
+               "residual_units_abs": int(carry.get("residual_units_abs") or 0)}
         for x in settled:
             tot["cost_total"] += D(str(x.get("cost_total") or 0))
             tot["redemption_total"] += D(str(x.get("redemption_total") or 0))
@@ -368,7 +436,8 @@ class ShadowController:
                 "cost_total": str(tot["cost_total"]),
                 "redemption_total": str(tot["redemption_total"]),
                 "modelled_net": str(tot["redemption_total"] - tot["cost_total"]),
-                "stranded_markets": len(self.stranded()),
+                "stranded_markets": self.stranded_count(),
+                "windows_folded_into_carry": int(carry.get("windows") or 0),
                 "fill_rule": FILL_RULE,
                 "labels": ("MODELLED under an UPPER-BOUND fill rule, from "
                            "venue settlement prices. NOT realized, NOT "
@@ -396,6 +465,6 @@ class ShadowController:
                 "fill_rule": FILL_RULE,
                 "state_path": self.state_path,
                 "economics": self.economics(),
-                "stranded": self.stranded(),
+                "stranded": self.stranded(cap=STRANDED_REPORT_CAP),
                 "labels": ("independent inventory-driven decision source; "
                            "holds no transport and defines no order path")}

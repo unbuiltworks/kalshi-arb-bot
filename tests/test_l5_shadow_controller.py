@@ -452,3 +452,63 @@ def test_the_spring_pair_cap_is_what_binds_the_completion(tmp_path):
 def test_the_default_cap_is_the_btc15m_spring_target(tmp_path):
     assert ctl(tmp_path).pair_cap == D("0.96")
     assert sc.l5d.BTC15M_PAIR_CAP == D("0.96")
+
+
+# ======================================== THE STATE FILE STAYS BOUNDED
+
+def _settle_n(c, n, *, start=0):
+    for i in range(start, start + n):
+        slug = "w%04d" % i
+        inv = c.inventory_for(slug)
+        inv.record(True, D("0.40"))
+        inv.record(False, D("0.50"))
+        c._store_inventory(slug, inv)
+        c._slot(slug)["window_end_ts"] = WS + i * 900.0
+        c.settle(slug, D(1))
+
+
+def test_pruning_drops_detail_but_never_a_cent_of_the_net(tmp_path):
+    """One slot per 15-minute window is 96 a day forever. Dropping the
+    oldest outright would shrink the modelled net toward zero -- the same
+    error as zeroing a stale record -- so the totals are folded into a
+    carry first and the net is identical either side of the prune."""
+    c = ctl(tmp_path)
+    _settle_n(c, sc.SETTLED_KEEP)
+    before = c.economics()
+    assert before["windows_settled"] == sc.SETTLED_KEEP
+    assert before["windows_folded_into_carry"] == 0
+    _settle_n(c, 50, start=sc.SETTLED_KEEP)
+    after = c.economics()
+    assert after["windows_settled"] == sc.SETTLED_KEEP + 50
+    assert after["windows_folded_into_carry"] == 50
+    assert len([k for k in c.state["markets"] if k.startswith("w")]) \
+        == sc.SETTLED_KEEP
+    # each window: cost 0.90, redemption 1.00 (one matched pair)
+    assert D(after["cost_total"]) == D("0.90") * (sc.SETTLED_KEEP + 50)
+    assert D(after["redemption_total"]) == D(sc.SETTLED_KEEP + 50)
+
+
+def test_the_carry_survives_a_restart(tmp_path):
+    c = ctl(tmp_path)
+    _settle_n(c, sc.SETTLED_KEEP + 10)
+    net = c.economics()["modelled_net"]
+    again = ctl(tmp_path)
+    assert again.economics()["modelled_net"] == net
+    assert again.economics()["windows_folded_into_carry"] == 10
+
+
+def test_the_reported_stranded_list_is_capped_but_the_count_is_exact(tmp_path):
+    """This report ships in every heartbeat; a long run of failed settlement
+    reads must not grow it without bound."""
+    c = ctl(tmp_path)
+    for i in range(12):
+        slug = "stranded%02d" % i
+        inv = c.inventory_for(slug)
+        inv.record(True, D("0.40"))
+        c._store_inventory(slug, inv)
+    assert c.stranded_count() == 12
+    assert len(c.stranded()) == 12
+    capped = c.stranded(cap=sc.STRANDED_REPORT_CAP)
+    assert len(capped) == sc.STRANDED_REPORT_CAP + 1      # +_not_shown
+    assert capped["_not_shown"] == 12 - sc.STRANDED_REPORT_CAP
+    assert c.report()["economics"]["stranded_markets"] == 12
