@@ -525,3 +525,156 @@ def test_an_open_l5_order_blocks_the_clear_in_pre_deploy_mode(tmp_path,
             registry_url="http://registry.local",
             registry_opener=fresh_registry(rows=[{"venue_order_id": "D1"}]))
     assert json.loads(st.get(HG.HALT_KEY))["halt"] is True
+
+
+# --------------------------------------------------------------------------
+# READ-ONLY DIGEST TELEMETRY from the executor's EXISTING halt reads
+# --------------------------------------------------------------------------
+def test_the_gate_reports_the_digest_of_the_latch_it_just_read(tmp_path):
+    """Obtaining the digest must cost no extra read and no watchdog
+    interruption: the executor already fetches these bytes every tick."""
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    reads = []
+
+    def opener(url, timeout_s):
+        reads.append(url)
+        return served_bytes(st)[1]
+
+    gate = HG.HaltGate(HG.HttpHaltStore("http://halt.internal:8080",
+                                        opener=opener))
+    assert gate.submissions_permitted() is False        # latched
+    assert len(reads) == 1, "exactly the read the gate already performs"
+    t = gate.telemetry()
+    assert t["sha256"] == digest
+    assert t["kind"] == HG.PRESENT
+    assert t["halt"] is True
+    assert t["reason"] == "UNMANAGED_RESTING_ORDER"
+
+
+def test_the_telemetry_never_carries_raw_contents_or_evidence(tmp_path):
+    """The owner's constraint, pinned: no raw latch, no evidence block."""
+    st = volume_store(tmp_path)
+    rec = {"halt": True, "t": R._utc().isoformat(), "who": "l5-watchdog",
+           "reason": "UNMANAGED_RESTING_ORDER",
+           "evidence": {"orders": ["D68KZ0SG10JR"], "secret": "sk-DO-NOT-LOG"}}
+    raw = json.dumps(rec, sort_keys=True).encode()
+    st.put(HG.HALT_KEY, raw)
+    gate = HG.HaltGate(HG.HttpHaltStore(
+        "http://halt.internal:8080", opener=lambda u, t: served_bytes(st)[1]))
+    gate.submissions_permitted()
+    tel = gate.telemetry()
+    assert "evidence" not in tel, "the evidence block must not be a field"
+    # the prose in `labels` legitimately mentions the word, so assert on the
+    # DATA: no evidence key, and none of its values anywhere in the payload.
+    blob = json.dumps({k: v for k, v in tel.items() if k != "labels"})
+    assert "D68KZ0SG10JR" not in blob
+    assert "sk-DO-NOT-LOG" not in blob
+    assert raw.decode() not in blob
+    assert gate.telemetry()["sha256"] == hashlib.sha256(raw).hexdigest()
+
+
+def test_the_digest_matches_what_gate_two_demands(tmp_path, monkeypatch):
+    """END TO END: the digest the EXECUTOR logs is accepted by the reset."""
+    st = volume_store(tmp_path)
+    _, digest = file_latch(st)
+    gate = HG.HaltGate(HG.HttpHaltStore(
+        "http://halt.internal:8080", opener=lambda u, t: served_bytes(st)[1]))
+    gate.submissions_permitted()
+    observed = gate.telemetry()["sha256"]
+
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG)
+    for k, v in env(**{R.EXPECT_ENV: observed}).items():
+        monkeypatch.setenv(k, v)
+    out = R.perform_reset(store=st, transport=FakeTransport(),
+                          registry_url="http://registry.local",
+                          registry_opener=fresh_registry())
+    assert out["ok"] is True
+    assert out["entry"]["prior_latch_sha256"] == digest
+
+
+def test_an_unreachable_watchdog_reports_no_digest_and_stays_blocked():
+    """The outage case. No digest is invented, and the gate refuses."""
+    def boom(url, timeout_s):
+        raise OSError("watchdog down")
+
+    gate = HG.HaltGate(HG.HttpHaltStore("http://halt.internal:8080",
+                                        opener=boom))
+    assert gate.submissions_permitted() is False
+    assert gate.refuse_reason() == "halt_state_unavailable"
+    t = gate.telemetry()
+    assert t["sha256"] is None and t["kind"] == HG.UNREADABLE
+
+
+# --------------------------------------------------------------------------
+# ITEM 4: submission must be PROVEN disabled across the outage
+# --------------------------------------------------------------------------
+def test_a_watchdog_outage_is_itself_a_submission_block():
+    """The independent protection that holds THROUGHOUT the restart, and it
+    needs no configuration: the gate fails closed when the latch cannot be
+    read, so a watchdog that is down halts the executor by construction."""
+    def boom(url, timeout_s):
+        raise HG.HaltReadUnavailable("watchdog restarting")
+
+    gate = HG.HaltGate(HG.HttpHaltStore("http://halt.internal:8080",
+                                        opener=boom))
+    assert gate.submissions_permitted() is False
+    assert gate.refuse_reason() == "halt_state_unavailable"
+
+
+def test_the_reset_refuses_while_the_executor_could_still_submit(tmp_path,
+                                                                 monkeypatch):
+    st = volume_store(tmp_path)
+    _, digest = file_latch(st)
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG)
+    for k, v in env(**{R.EXPECT_ENV: digest}).items():
+        monkeypatch.setenv(k, v)
+    with pytest.raises(R.ResetRefused, match="SUBMISSION_NOT_PROVEN_DISABLED"):
+        R.perform_reset(
+            store=st, transport=FakeTransport(),
+            registry_url="http://registry.local",
+            registry_opener=fresh_registry(submission_disabled=False))
+    assert json.loads(st.get(HG.HALT_KEY))["halt"] is True
+
+
+def test_a_missing_submission_field_is_refused_not_assumed(tmp_path,
+                                                           monkeypatch):
+    """ABSENT IS NOT PERMISSION. An executor too old to publish the field is
+    one whose lock cannot be established."""
+    st = volume_store(tmp_path)
+    _, digest = file_latch(st)
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG)
+    for k, v in env(**{R.EXPECT_ENV: digest}).items():
+        monkeypatch.setenv(k, v)
+    with pytest.raises(R.ResetRefused, match="SUBMISSION_NOT_PROVEN_DISABLED"):
+        R.perform_reset(
+            store=st, transport=FakeTransport(),
+            registry_url="http://registry.local",
+            registry_opener=fresh_registry(submission_disabled=None))
+    assert json.loads(st.get(HG.HALT_KEY))["halt"] is True
+
+
+def test_the_published_lock_tracks_the_same_variable_the_gate_refuses_on(
+        monkeypatch):
+    """The published answer must not drift from the real one."""
+    from src import l5_order_registry_server as REG
+    from src import l5_pmus_live_runner as RUN
+    for raw, expect in (("1", True), ("", True), ("0", False)):
+        monkeypatch.setenv("L5_SHADOW_ONLY", raw)
+        assert REG.submission_disabled() is expect
+        assert RUN.shadow_only() is expect
+    monkeypatch.delenv("L5_SHADOW_ONLY", raising=False)
+    assert REG.submission_disabled() is True, "unset must read as LOCKED"
+    assert RUN.shadow_only() is True
+
+
+def test_the_registry_publishes_the_lock_even_on_an_unreadable_ledger():
+    from src import l5_order_registry_server as REG
+
+    class Broken:
+        def live_orders(self):
+            raise OSError("ledger unreadable")
+
+    doc = REG.registry(Broken())
+    assert doc["readable"] is False
+    assert doc["submission_disabled"] is True

@@ -34,6 +34,7 @@ NOTHING HERE PLACES, CANCELS OR PRICES ANYTHING. It answers one question.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
 from typing import Any, Mapping, Optional, Protocol
@@ -150,25 +151,47 @@ PRESENT = "PRESENT"
 UNREADABLE = "UNREADABLE"
 
 
-def _classify(store: ObjectStore) -> tuple:
-    """(kind, record). Only PRESENT carries a record."""
+def _classify_bytes(store: ObjectStore) -> tuple:
+    """(kind, record, raw_bytes). Only PRESENT carries a record.
+
+    The RAW BYTES are returned so a caller can digest them without a SECOND
+    read. The owner-gated reset pins the exact latch by sha256 of these
+    bytes, and the executor already fetches them on every tick -- so the
+    digest is free telemetry rather than new load on the watchdog.
+    """
     try:
         raw = store.get(HALT_KEY)
     except BaseException:                                      # noqa: BLE001
-        return (UNREADABLE, None)
+        return (UNREADABLE, None, None)
     if raw is None:
         # a store that cannot distinguish "no object" from "read failed"
         # must report the failure as UNREADABLE, not as None -- see
         # FileStore.get, which narrows its except to FileNotFoundError for
         # exactly this reason.
-        return (ABSENT, None)
+        return (ABSENT, None, None)
     try:
         rec = json.loads(raw)
     except BaseException:                                      # noqa: BLE001
-        return (UNREADABLE, None)
+        return (UNREADABLE, None, raw)
     if not isinstance(rec, dict):
-        return (UNREADABLE, None)
-    return (PRESENT, rec)
+        return (UNREADABLE, None, raw)
+    return (PRESENT, rec, raw)
+
+
+def _classify(store: ObjectStore) -> tuple:
+    """(kind, record). The two-value view every existing caller uses."""
+    kind, rec, _raw = _classify_bytes(store)
+    return (kind, rec)
+
+
+def digest_of(raw: Optional[bytes]) -> Optional[str]:
+    """sha256 hex of the latch bytes, or None. NEVER the bytes themselves."""
+    if raw is None:
+        return None
+    try:
+        return hashlib.sha256(raw).hexdigest()
+    except BaseException:                                      # noqa: BLE001
+        return None
 
 
 def _read(store: ObjectStore) -> Optional[dict]:
@@ -193,12 +216,42 @@ class HaltGate:
         #: the owner's existing L5_LIVE_HALT, kept as an independent OR so the
         #: env-var kill switch never stops working.
         self.env_halt = env_halt
+        #: SAFE TELEMETRY from the most recent read, refreshed by state().
+        #: The digest is what the owner-gated reset pins the latch by, and it
+        #: is obtainable here because the executor already performs this read
+        #: -- so the operator never has to stop the watchdog to learn it.
+        #: Only the DIGEST and a few labels are kept; see telemetry().
+        self.last_sha256: Optional[str] = None
+        self.last_kind: Optional[str] = None
+        self._last_rec: Optional[dict] = None
+
+    def telemetry(self) -> dict:
+        """What is safe to LOG about the latch. Never its raw contents.
+
+        The digest identifies the latch without disclosing it. `reason` is a
+        short label the reset gate requires the owner to retype, and carries
+        no secret. `evidence` is DELIBERATELY EXCLUDED: it can name venue
+        order ids, and nothing here needs them.
+        """
+        rec = self._last_rec or {}
+        return {"sha256": self.last_sha256, "kind": self.last_kind,
+                "halt": rec.get("halt") if self._last_rec else None,
+                "reason": (str(rec.get("reason"))[:80]
+                           if rec.get("reason") else None),
+                "record_t": str(rec.get("t")) if rec.get("t") else None,
+                "labels": ("digest of the latch bytes the executor already "
+                           "reads; raw contents and `evidence` are never "
+                           "logged. Pass sha256 as L5_HALT_RESET_EXPECT to "
+                           "clear THIS latch and no other.")}
 
     def state(self) -> dict:
         if str(self.env_halt or "").strip():
             return {"permitted": False, "why": "env_halt", "record": None}
-        rec = _read(self.store)
-        if rec is None:
+        kind, rec, raw = _classify_bytes(self.store)
+        self.last_kind = kind
+        self.last_sha256 = digest_of(raw)
+        self._last_rec = rec if kind == PRESENT else None
+        if kind != PRESENT or rec is None:
             return {"permitted": False, "why": "halt_state_unavailable",
                     "record": None}
         if rec.get("halt") is not False:

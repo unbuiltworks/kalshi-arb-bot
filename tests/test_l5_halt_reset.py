@@ -80,11 +80,18 @@ def latch(store, reason="UNMANAGED_RESTING_ORDER"):
     return hashlib.sha256(raw).hexdigest()
 
 
-def fresh_registry(rows=(), age_s=1.0):
-    """An opener for RegistryOrderSource returning a fresh readable report."""
+def fresh_registry(rows=(), age_s=1.0, submission_disabled=True):
+    """An opener for RegistryOrderSource returning a fresh readable report.
+
+    `submission_disabled` defaults True because that is production's resting
+    state (L5_SHADOW_ONLY unset reads as locked). Pass False or None to
+    exercise the gate that refuses a clear while the executor could submit.
+    """
     t = R._utc() - dt.timedelta(seconds=age_s)
     doc = {"readable": True, "as_of_utc": t.isoformat(),
            "orders": [dict(r) for r in rows]}
+    if submission_disabled is not None:
+        doc["submission_disabled"] = submission_disabled
     body = json.dumps(doc).encode()
 
     def opener(url, timeout_s):

@@ -490,6 +490,18 @@ class Runner:
                     why = hg.refuse_reason()
                     out["halt_latch"] = "CLEAR" if why is None else "HALT"
                     out["halt_why"] = why
+                    # THE LATCH'S DIGEST, FREE. refuse_reason() just read the
+                    # latch over HTTP; telemetry() reports the sha256 of those
+                    # same bytes and a few labels, never the raw contents and
+                    # never `evidence`. This is how the owner obtains the
+                    # digest that the reset's gate 2 demands WITHOUT stopping
+                    # the watchdog -- the failure of 2026-10-19, which cost
+                    # 5m53s of independent cancellation and produced no
+                    # digest at all.
+                    try:
+                        out["halt_latch_telemetry"] = hg.telemetry()
+                    except Exception:                          # noqa: BLE001
+                        out["halt_latch_telemetry"] = None
                 except Exception as exc:                       # noqa: BLE001
                     out["halt_latch"] = "UNREADABLE"
                     out["halt_error"] = "%s: %s" % (type(exc).__name__,

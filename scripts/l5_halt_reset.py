@@ -461,7 +461,7 @@ def registry_evidence(url: str, *, opener=None) -> Dict[str, Any]:
     from src import l5_watchdog as W
     src = W.RegistryOrderSource(url, opener=opener)
     try:
-        src.fetch()
+        doc = src.fetch()
     except BaseException as exc:                               # noqa: BLE001
         raise ResetRefused(
             "REGISTRY_UNREADABLE: %s -- a report that stopped arriving is "
@@ -480,8 +480,30 @@ def registry_evidence(url: str, *, opener=None) -> Dict[str, Any]:
         raise ResetRefused(
             "EXECUTOR_STILL_CLAIMS_LIVE_ORDERS: %r"
             % ([str(r.get("id") or "") for r in rows][:8],))
+    # SUBMISSION MUST BE PROVEN DISABLED, not assumed, and this is the one
+    # check that holds THROUGHOUT the clear rather than at an instant.
+    #
+    # Zero open orders says what is RESTING now. It does not say that nothing
+    # new can be sent while the latch is being cleared and the watchdog
+    # briefly restarts. `submission_disabled` is the executor publishing its
+    # own structural lock, read from the same L5_SHADOW_ONLY that
+    # authorize_arming step 1 refuses on, so the published answer cannot
+    # drift from the real one.
+    #
+    # ABSENT IS NOT PERMISSION. An executor too old to publish the field is
+    # an executor whose lock cannot be established, and that refuses -- the
+    # same rule this module applies to an unreadable registry and an
+    # unattributed venue order.
+    locked = (doc or {}).get("submission_disabled")
+    if locked is not True:
+        raise ResetRefused(
+            "SUBMISSION_NOT_PROVEN_DISABLED: the executor reports "
+            "submission_disabled=%r. A halt is never cleared while the "
+            "executor could send a new order; set L5_SHADOW_ONLY=1 and "
+            "confirm the field before retrying." % (locked,))
     return {"registry_readable": True, "registry_age_s": round(age, 3),
-            "registry_live_orders": 0, "registry_url": url}
+            "registry_live_orders": 0, "registry_url": url,
+            "submission_disabled": True}
 
 
 def _append_audit(store: Any, prior: List[Dict[str, Any]],

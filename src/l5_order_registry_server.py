@@ -48,6 +48,25 @@ REGISTRY_KEY = "l5/live_orders.json"
 PORT_ENV = "L5_ORDER_REGISTRY_PORT"
 
 
+def submission_disabled() -> bool:
+    """True when this executor's submit() is STRUCTURALLY blocked.
+
+    THE SAME PREDICATE THE AUTHORIZATION USES, read from the same variable,
+    so the published answer cannot drift from the real one:
+    `authorize_arming` step 1 refuses SHADOW_ONLY_LOCK on exactly this, and
+    the default is LOCKED (unset reads as "1").
+
+    WHY IT IS PUBLISHED. The owner-gated HALT reset must be able to VERIFY --
+    not assume -- that nothing can submit while it runs, including across the
+    brief watchdog restart the clear costs. The venue's open-order count says
+    what is resting NOW; this says nothing new can be sent. The reset refuses
+    if this field is missing, because an executor too old to publish it is an
+    executor whose lock cannot be established.
+    """
+    import os
+    return str(os.getenv("L5_SHADOW_ONLY", "1")).strip() != "0"
+
+
 def registry(store: Any) -> Dict[str, Any]:
     """The ids this executor ACKed, with the market each belongs to.
 
@@ -62,6 +81,7 @@ def registry(store: Any) -> Dict[str, Any]:
         # A ledger we cannot read publishes NOTHING, never an empty claim
         # dressed up as a complete one.
         return {"readable": False, "orders": [],
+                "submission_disabled": submission_disabled(),
                 "labels": ("the ledger could not be read, so ownership is "
                            "UNKNOWN; an empty list here would read as 'we "
                            "own nothing', which is a different claim")}
@@ -75,6 +95,10 @@ def registry(store: Any) -> Dict[str, Any]:
                      "session_id": str(row.get("session_id") or ""),
                      "t": str(row.get("t") or "")})
     return {"readable": True, "orders": rows,
+            # THE LOCK, PUBLISHED. Read by the owner-gated HALT reset, which
+            # refuses unless this is true: a clear must never run while this
+            # executor could send a new order.
+            "submission_disabled": submission_disabled(),
             # THE REPORT'S OWN AGE, so a credential-free watchdog can tell a
             # STALE report from a fresh empty one. Those are opposite facts:
             # "the executor publishes nothing because it owns nothing" is
