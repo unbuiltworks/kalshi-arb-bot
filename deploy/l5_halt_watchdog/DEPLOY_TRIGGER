@@ -85,3 +85,31 @@ watchdog cancel sends marketSlug, records the venue detail 2026-10-19T00:17Z
 # python3 -m scripts.l5_halt_watchdog and ALWAYS; this rebuilds that image so
 # independent sweeping and independent cancellation resume.
 restore the watchdog after an aborted one-shot 2026-10-19T01:10Z
+
+# 2026-10-19T01:45Z: PROBE ONLY -- READ-ONLY, NOTHING IS CLEARED.
+# Owner Authorization A is granted but made conditional on a POSITIVE
+# verification that Railway's preDeployCommand really has mounted-volume
+# access, really executes, and really preserves the current watchdog until
+# handover. This deployment is that verification and nothing else.
+#
+# L5_HALT_RESET_INSPECT=YES, so main() takes the read-only branch: it builds
+# FileStore(/data), READS the latch, prints its sha256 and every precondition,
+# and returns before perform_reset is reachable. inspect() never writes --
+# pinned by test_inspect_over_http_wrote_nothing_to_the_volume and by
+# `store.puts == []`. L5_HALT_RESET_PRE_DEPLOY=YES so a refusal exits 0 and
+# cannot block this deployment.
+#
+# WHAT THIS PROVES, and why each matters: a digest in the output means the
+# VOLUME WAS MOUNTED during pre-deploy (the thing I must not assume); output
+# existing at all means the COMMAND RAN; and sweeps continuing across the
+# handover means the watchdog was PRESERVED. If any of the three is missing or
+# the sweep gap exceeds ~5s, the operation stops here and is reported.
+#
+# This rebuild also puts scripts/l5_halt_reset.py into the watchdog image for
+# the first time (owner 2026-10-19). The SWEEP still cannot reach it: the
+# platform invokes it as a separate pre-deploy process, HaltAsserter still has
+# no clear method, and heartbeat_no_halt still refuses over a latch.
+#
+# NOTHING IS ARMED. L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO, L5_CANCEL_MECHANISM=NO,
+# the authorization is EXPIRED, and no limit moves.
+read-only pre-deploy volume probe, nothing cleared 2026-10-19T01:45Z
