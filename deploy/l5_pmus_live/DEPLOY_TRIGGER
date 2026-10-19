@@ -1041,3 +1041,83 @@ deploy three-policy shadow, shadow-locked, mechanism OFF 2026-10-19T16:27Z
 # TESTS: 11,504 passed; 24 failed / 14 errors, an ID set byte-identical to
 # the previous deployment and a strict subset of the b838a78e baseline.
 deploy queue-aware shadow fills, shadow-locked, mechanism OFF 2026-10-19T17:05Z
+
+# ----------------------------------------------------------------------------
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT, 2026-10-19. Promotes d1d4a079:
+# the settlement-read fix, the corrected Phase B intent gate, and the restart
+# boot report. Authorization was conditional on six verifications; all six
+# were performed and all six pass.
+#
+# V1 NO NEW FAILURES OR ERRORS. Baseline run at the deployed commit 23c45806
+# in THIS directory with identical flags (-p no:randomly) and environment:
+# 31 failed, 14 errors, 45 IDs. This tree: 26 failed, 14 errors, 40 IDs.
+# NEW: none. GONE: five test_gemini_* tests, which fail at BOTH baselines,
+# pass in isolation, and have no dependency path from this diff -- so they
+# are pre-existing cross-test pollution in the favourable direction, not a
+# claim about this change. An earlier stored baseline list was incomplete and
+# is what let the section-0 regression through; it is not used again.
+#
+# V2 BOTH SUBMISSION-PATH INVARIANTS PASS. 30 tests across
+# test_l5_one_submission_claim.py and test_l5_mechanism_strategy_isolation.py.
+# They FAILED on the first Phase B tree, which is how the defect below was
+# found.
+#
+# V3 NO CONTROLLER-GENERATED INTENT CAN REACH THE WIRE OR BYPASS THE CLAIM.
+# An earlier draft of the adapter ended in a transport send of its own and was
+# a second UNCLAIMED route to the wire. It is removed, not registered.
+# SUBMIT_SITES stays at its two entries. Proven four ways:
+#   - exactly two transport send sites in all of src/, at
+#     l5_live_execution.py:4706 and l5_cancel_mechanism.py:927;
+#   - claim_submission precedes each, in the same module (4657 < 4706,
+#     167 < 927);
+#   - l5_intent_gate.py has none, asserted by a test that scans the module;
+#   - nothing in src/ calls the adapter or constructs an authorization, and
+#     the runner builds only L5_FOLLOWED intents.
+# submit_controller_intent runs every precondition and then refuses:
+# CONTROLLER_SUBMISSION_HAS_NO_CLAIM_GATED_ROUTE. There is no route, rather
+# than a withheld permission.
+#
+# V4 EXISTING L5 SUBMISSION BEHAVIOUR AND SAFETY GATES UNCHANGED.
+# src/l5_live_execution.py, src/l5_cancel_mechanism.py,
+# src/l5_live_validation_gates.py and src/l5_pmus_transport.py are
+# BYTE-IDENTICAL to 23c45806. The runner's only substantive change is that
+# its three refusals are decided in the gate, in the same order, with the
+# same layer and reason strings, and the executor call is unchanged:
+# ex.handle(row, {}, market=slug, window=str(ws), open_markets=...).
+#
+# V5 THE SETTLEMENT FIX PROCESSES REAL EXPIRED-MARKET RESPONSES.
+# shadow_settle read OBS.pmus_bbo, a BOOK reader: an expired market answers
+# /bbo with settlementPx present and bestBid/bestAsk BOTH NULL, which it
+# treats as empty and falls back to /book, a route carrying no settlementPx
+# at all. 760 polls, 0 settlements, six stranded windows, against a venue
+# that had already published every number. Now OBS.pmus_settlement, no book
+# fallback. Verified live 2026-10-19T18:15Z:
+#   1700z EXPIRED 0.0000 -> SETTLES      1745z EXPIRED 0.0000 -> SETTLES
+#   1715z EXPIRED 1.0000 -> SETTLES      1800z CLOSED  0.9900 -> REFUSED
+#   1730z EXPIRED 0.0000 -> SETTLES      missing slug  -> None, stays stranded
+# The 1800z case is the one that matters: a NON-BINARY price on a
+# NON-TERMINAL state, the exact defect class this venue has produced here
+# before, and both guards refuse it instead of booking $0.99 as a payout.
+#
+# V6 NO HIDDEN INVENTORY OR ACCOUNTING DISCONTINUITY. STATE_VERSION stays 3,
+# so the state on the volume loads as a same-version load: nothing migrated,
+# nothing discarded, inventory carried. One real defect was found and fixed:
+# the per-scenario `resting` record outlived the order object a restart
+# cannot reconstruct, so the next window_close would have published a
+# restart-dropped quote as `dropped_resting`, blaming expiry. _load now
+# clears it and publishes a `boot` report in every heartbeat. I also expected
+# a frozen scenario slot and was wrong -- already_resting keys on _orders,
+# not the record, so the next tick quotes afresh, now asserted by test.
+#
+# ADDS NO CAPABILITY: SHADOW_ONLY stays enabled, mechanism OFF, PMUS_Q1_LIVE
+# NO, owner arm token unset, every risk limit unchanged ($5/market, $5 total,
+# 1 market, 1 live order, $5 daily realized loss halt). No live controller
+# submissions and no new claim-gated route are authorized by this.
+#
+# FALSIFIABLE POST-DEPLOY CHECK: four windows have authoritative settlement
+# prices and identical inventory across all three policies, so the deployed
+# process must report, over 1700z/1715z/1730z/1745z, exactly
+#   ARGMAX +$0.67   RESIDUAL_URGENCY +$0.37   PAIR_AVAILABLE -$0.75
+# derived independently from the production fill records. Anything else means
+# the settlement path is wrong.
+deploy the settlement fix + corrected intent gate, shadow-locked 2026-10-19T18:42Z
