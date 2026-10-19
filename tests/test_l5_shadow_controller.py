@@ -46,7 +46,15 @@ def _model():
 
 
 def _book(bid="0.50", ask="0.51"):
-    return {"bid": D(bid), "ask": D(ask)}
+    """STRINGS, because that is what the venue hands us.
+
+    `AuthBook.snapshot` returns bid/ask as str -- the recorder's `_px` ends
+    in `str(value)`. This fixture used Decimals, which is why the whole file
+    was green while production raised TypeError on every tick of the first
+    window whose band the model covers. A fixture that is kinder than the
+    real contract tests nothing.
+    """
+    return {"bid": bid, "ask": ask}
 
 
 def ctl(tmp_path, **kw):
@@ -234,9 +242,9 @@ def _book_against(rest, *, through):
     px = D(rest["price"])
     if rest["side"] == "YES":
         ask = px - D("0.01") if through else px
-        return {"bid": ask - D("0.01"), "ask": ask}
+        return {"bid": str(ask - D("0.01")), "ask": str(ask)}
     bid = (D(1) - px) + (D("0.01") if through else D(0))
-    return {"bid": bid, "ask": bid + D("0.01")}
+    return {"bid": str(bid), "ask": str(bid + D("0.01"))}
 
 
 def test_a_touch_at_our_price_is_not_a_fill(tmp_path):
@@ -512,3 +520,103 @@ def test_the_reported_stranded_list_is_capped_but_the_count_is_exact(tmp_path):
     assert len(capped) == sc.STRANDED_REPORT_CAP + 1      # +_not_shown
     assert capped["_not_shown"] == 12 - sc.STRANDED_REPORT_CAP
     assert c.report()["economics"]["stranded_markets"] == 12
+
+
+# ================================== THE VENUE'S ACTUAL BOOK CONTRACT
+
+def test_a_string_valued_book_decides_normally(tmp_path):
+    """THE PRODUCTION DEFECT, pinned. `AuthBook.snapshot` returns str
+    prices; `plan_action` does Decimal arithmetic (`ONE - ask`,
+    `_floor_tick(bid)`). Passing the snapshot through raised TypeError on
+    every tick of the first covered-band window."""
+    from src import pmus_l5_persistence_v2 as pv2
+    c = sc.ShadowController(state_path=str(tmp_path / "s.json"),
+                            model=pv2.load_v2())
+    rec = c.step(WS + 60.0, slug=SLUG, window_end_ts=WEND,
+                 book={"bid": "0.4800", "ask": "0.5000",
+                       "bid_shares": "100", "ask_shares": "80",
+                       "market_state": "MARKET_STATE_OPEN",
+                       "source": "authenticated_ws"})
+    assert rec["decision"] == "quote", rec
+    assert rec["relation"] == "open" and rec["side"] == "YES"
+    assert rec["target_price"] == "0.48"
+    assert not str(rec.get("reason") or "").startswith("controller_error")
+
+
+def test_the_snapshot_shape_is_taken_from_the_real_auth_book(tmp_path):
+    """Not from my assumption about it. Builds the dict `AuthBook.snapshot`
+    actually returns, from the module's own storage types, so a change to
+    that contract fails here rather than in production."""
+    from src import l5_pmus_auth_book as AB
+    from src import pmus_ws_evidence_recorder as REC
+    # the stored price is whatever _px produces, which is where str() enters
+    assert isinstance(REC._px({"value": "0.4800"}), str)
+    assert isinstance(REC._px(0.48), str)
+    book = AB.AuthBook()
+    book.connected = True
+    book.last_frame_t = 1.0
+    book.state[SLUG] = {"bid": REC._px(0.48), "ask": REC._px(0.50),
+                        "bid_qty": "100", "ask_qty": "80",
+                        "bbo_history": [], "book_updates": 3,
+                        "market_state": "MARKET_STATE_OPEN"}
+    snap = book.snapshot(SLUG)
+    assert isinstance(snap["bid"], str) and isinstance(snap["ask"], str)
+    from src import pmus_l5_persistence_v2 as pv2
+    c = sc.ShadowController(state_path=str(tmp_path / "r.json"),
+                            model=pv2.load_v2())
+    rec = c.step(WS + 60.0, slug=SLUG, book=snap, window_end_ts=WEND)
+    assert rec["decision"] == "quote", rec
+
+
+@pytest.mark.parametrize("bad", [
+    {"bid": "notanumber", "ask": "0.50"},
+    {"bid": "0.48", "ask": "notanumber"},
+    {"bid": None, "ask": "0.50"},
+    {"bid": "0.48", "ask": None},
+    {"bid": "", "ask": ""},
+])
+def test_an_unparseable_price_is_no_action_never_a_raise(tmp_path, bad):
+    from src import pmus_l5_persistence_v2 as pv2
+    c = sc.ShadowController(state_path=str(tmp_path / "b.json"),
+                            model=pv2.load_v2())
+    rec = c.step(WS + 60.0, slug=SLUG, book=bad, window_end_ts=WEND)
+    assert rec["decision"] == "no_action"
+    assert not str(rec.get("reason") or "").startswith("controller_error"), rec
+
+
+def test_normalise_book_leaves_the_other_fields_alone(tmp_path):
+    out = sc.normalise_book({"bid": "0.48", "ask": "0.50", "source": "ws",
+                             "stream_age_s": 0.02})
+    assert out["bid"] == D("0.48") and out["ask"] == D("0.50")
+    assert out["source"] == "ws" and out["stream_age_s"] == 0.02
+    assert sc.normalise_book(None) is None and sc.normalise_book({}) is None
+
+
+def test_a_one_sided_book_is_refused_by_name(tmp_path):
+    """This controller's decisions are all about PAIR economics, so a quote
+    whose complement has no price is refused rather than taken on the one
+    side that happens to be priceable -- which is what the shared sports
+    layer would do, correctly, for a different purpose."""
+    from src import pmus_l5_persistence_v2 as pv2
+    c = sc.ShadowController(state_path=str(tmp_path / "o.json"),
+                            model=pv2.load_v2())
+    for bk in ({"bid": "0.48", "ask": None}, {"bid": None, "ask": "0.50"},
+               {"bid": "0.48"}, {"ask": "0.50"}):
+        rec = c.step(WS + 60.0, slug=SLUG, book=bk, window_end_ts=WEND)
+        assert rec["decision"] == "no_action"
+        assert rec["reason"] == "no_two_sided_book", (bk, rec)
+
+
+def test_the_venue_itself_never_hands_us_a_one_sided_book(tmp_path):
+    """The guard above refuses a state the venue already refuses to report,
+    so it changes no production behaviour. Pinned, because that is the
+    reason it is safe."""
+    from src import l5_pmus_auth_book as AB
+    book = AB.AuthBook()
+    book.connected = True
+    book.last_frame_t = 1.0
+    for st in ({"bid": "0.48", "ask": None}, {"bid": None, "ask": "0.50"},
+               {"bid": None, "ask": None}):
+        book.state[SLUG] = dict(st, bid_qty="1", ask_qty="1",
+                                bbo_history=[], book_updates=1)
+        assert book.snapshot(SLUG) is None, st

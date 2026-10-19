@@ -53,8 +53,12 @@ def build(tmp_path, monkeypatch, *, feed=None, root=None, bid="0.50",
           ask="0.51"):
     monkeypatch.delenv("L5_ORDER_REGISTRY_PORT", raising=False)
     book = mock.MagicMock()
+    # STRINGS: `AuthBook.snapshot` returns str prices, and a mock that
+    # returns Decimals is a mock that cannot reproduce production. It did
+    # not, and production raised TypeError on every tick of the first
+    # covered-band window.
     book.snapshot.return_value = {
-        "bid": D(bid), "ask": D(ask), "stream_age_s": 0.02,
+        "bid": str(bid), "ask": str(ask), "stream_age_s": 0.02,
         "market_state": "MARKET_STATE_OPEN", "source": "authenticated_ws"}
     book.resub_due.return_value = []
     book.stall_due.return_value = False
@@ -510,3 +514,22 @@ def test_the_comparison_never_feeds_l5s_action_back_into_our_decision(
     for k in ("decision", "relation", "side", "target_price", "state",
               "tte_s", "inventory"):
         assert mine.get(k) == theirs.get(k), (k, mine.get(k), theirs.get(k))
+
+
+def test_the_runner_produces_a_real_quote_not_a_controller_error(
+        tmp_path, monkeypatch):
+    """THE PRODUCTION REGRESSION. With the venue's own string-valued book
+    and a price band the model covers, the runner's shadow tick must emit a
+    QUOTE -- not the `controller_error:TypeError` it emitted in production
+    on the 1545z window."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [], bid="0.48",
+                   ask="0.50")
+    out = capture(monkeypatch)
+    runner.tick(NOW)
+    recs = decisions(out)
+    assert recs, [k for k, _ in out]
+    assert recs[0]["decision"] == "quote", recs[0]
+    assert recs[0]["relation"] == "open" and recs[0]["side"] == "YES"
+    for r in recs:
+        assert not str(r.get("reason") or "").startswith("controller_error"), r
+    assert not [k for k in runner.stats.keys() if k.startswith("shadow_error")]

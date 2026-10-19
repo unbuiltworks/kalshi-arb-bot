@@ -90,6 +90,30 @@ def _d(v: Any) -> Optional[D]:
         return None
 
 
+def normalise_book(book: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Coerce a venue book snapshot to Decimal prices.
+
+    THE ADAPTER BOUNDARY, AND A PRODUCTION DEFECT THIS FIXES.
+    `AuthBook.snapshot` returns `bid`/`ask` as STRINGS -- the recorder's
+    `_px` ends in `str(value)` -- while `plan_action` does Decimal
+    arithmetic on them (`ONE - ask`, `_floor_tick(bid)`). Handing the raw
+    snapshot through raised TypeError on every tick of the first window
+    whose price band the model actually covers; the window before it was
+    off-distribution and returned before `plan_action`, so the fault was
+    invisible for eleven minutes of green-looking operation.
+
+    Coercing HERE and not in `plan_action` is deliberate: that layer is
+    shared with the sports path, whose callers already pass Decimals, and
+    widening its contract would hide which side of the boundary owns the
+    conversion. This is the side that reads the venue.
+    """
+    if not book:
+        return None
+    out = dict(book)
+    out["bid"], out["ask"] = _d(book.get("bid")), _d(book.get("ask"))
+    return out
+
+
 class ShadowController:
     """One inventory-driven decision per tick, for one market at a time."""
 
@@ -256,14 +280,25 @@ class ShadowController:
         base = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
                 "fill_rule": FILL_RULE, "window_source": window_source}
         try:
-            if not book or book.get("bid") is None:
+            book = normalise_book(book)
+            # BOTH SIDES REQUIRED, and that is this module's own choice.
+            # `plan_action` is shared with the sports path and documents
+            # opening whichever side is priceable, which is right there.
+            # Here it is not: every decision this controller makes is
+            # about PAIR economics, and a quote whose complement has no
+            # price has no pair to evaluate against the cap. The venue
+            # agrees -- `AuthBook.snapshot` already returns None unless
+            # both sides are present -- so this refuses a book that cannot
+            # arrive through the runner, and says so by name instead of
+            # quoting into the dark.
+            if not book or book.get("bid") is None or book.get("ask") is None:
                 return self._out({**base, "decision": "no_action",
                                   "reason": "no_two_sided_book"})
             fill = self._advance_resting(slug, book)
             inv = self.inventory_for(slug)
             s = self._slot(slug)
             tte = l5d.tte_at(window_end_ts, now)
-            prop = l5d._proposal(self.model, float(_d(book["bid"]) or 0),
+            prop = l5d._proposal(self.model, float(book["bid"]),
                                  inv, str(s.get("last_rel") or ""),
                                  tte_s=tte)
             # the window clock is kept with the inventory it dates, so
