@@ -1303,3 +1303,53 @@ deploy the measurement-defect fixes, shadow-locked 2026-10-19T19:33Z
 # TESTS: 26 failed, 11,610 passed, 14 errors -- 40 IDs, NEW: none, against the
 # 45-ID baseline. Invariants: 571 tests across the fifteen named suites.
 deploy the taxonomy version + ONE_TICK_BEHIND variant, shadow-locked 2026-10-19T19:50:59Z
+
+# ----------------------------------------------------------------------------
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT. Promotes e3c7a574: order-ID-linked
+# fill-calibration capture. RECORDER ONLY.
+#
+# THE COMMIT IS PURELY ADDITIVE: 1,150 insertions, ZERO deletions across all
+# five files. The executor gains exactly three None-defaulted attribute
+# declarations and one contained pre-submission capture call sited inside a
+# try/except and BEFORE the wire (both proved by AST test). No gate, limit,
+# arming path, claim_submission or SUBMIT_SITES line is touched. The
+# Dockerfile adds one COPY.
+#
+# WHY IT EXISTS. record_submit persists price and quantity but not the queue
+# our order met, so no past order of ours can be used to check the fill
+# model. This records, keyed by client order id and durable by append:
+# pre-submission book and ladder with timestamp; aggregate depth at our exact
+# limit price with provenance, frame age and a staleness flag; book and
+# AT-OUR-LEVEL prints through the resting life; submission, ack, partial
+# fills, cancellation, terminal state and settlement; and fees as TWO columns
+# -- schedule estimate beside a venue_actual that starts PENDING and is only
+# ever filled from a venue statement.
+#
+# QUEUE POSITION IS A BOUND, NOT A MEASUREMENT. The venue publishes no
+# per-order queue, so every record carries our_position_within_level =
+# UNKNOWN alongside the aggregate.
+#
+# IT CANNOT INTERFERE AND CANNOT FLATTER. Every entry point swallows
+# BaseException, returns None, and mutates nothing the executor reads, so a
+# recorder fault cannot reach the order path. It is also NOT a gate: it never
+# refuses a submission whose pre-capture failed, because letting a recorder
+# veto the money path is the more dangerous coupling -- a test asserts the
+# submission path never calls precapture_ok. And completeness is accounted
+# rather than assumed: every required category reads PRESENT or
+# MISSING:<reason>, and usable_for_calibration is true only when all five are
+# PRESENT, so a truncated record cannot read as complete.
+#
+# EXPECTED IN SHADOW, AND NOT A FAULT: every shadow record will report
+# usable_for_calibration FALSE with terminal_state MISSING, because no venue
+# confirms a modelled quote. That is the anti-false-completeness guarantee
+# visible in production. The ack, partial-fill and venue-confirmed-terminal
+# categories stay UNEXERCISED until a real order exists.
+#
+# REGRESSION: baseline at 23c45806, same directory, identical flags: 31
+# failed, 14 errors, 45 IDs. This tree: 26 failed, 14 errors, 40 IDs. NEW:
+# NONE. Invariants: 602 tests across the sixteen named suites.
+#
+# ADDS NO CAPABILITY. SHADOW_ONLY stays enabled, mechanism OFF, PMUS_Q1_LIVE
+# NO, arm token unset, every risk limit unchanged. No live orders authorized
+# by this, and no exposure limit changed.
+deploy order-ID-linked fill-calibration capture, shadow-locked 2026-10-19T20:53:22Z
