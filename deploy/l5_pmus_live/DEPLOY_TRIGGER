@@ -904,3 +904,44 @@ scope the one-shot marker, diagnostic mode OFF 2026-10-19T02:40Z
 deploy the placement-time gate, shadow-locked, mechanism OFF 2026-10-19T12:20Z
 live 1315z cancellation verification, owner FINAL GO 2026-10-19T13:15Z
 RESTORE: shadow lock back on, mechanism OFF after the 1315z fill 2026-10-19T13:23Z
+
+# ===================================================================
+# PHASE A: the independent inventory-driven shadow decision source.
+#
+# Promotes 3ae69693. Adds one module (src/l5_shadow_controller.py), its
+# wiring in tick(), and the frozen v2 action-model artifact the controller
+# loads. ADDS NO CAPABILITY: the controller holds no transport, no
+# credentials and no executor, and defines no method that could place,
+# cancel or amend an order. Verified four ways -- on the class, on the
+# instance with every arming variable set to its live value and the shadow
+# lock lifted, on the AST's imports, and on the whole transitive import
+# closure in a clean interpreter (no transport, no HTTP client, no auth
+# module is loaded by importing it).
+#
+# NO VARIABLE CHANGES WITH THIS DEPLOYMENT. L5_SHADOW_ONLY stays enabled,
+# L5_CANCEL_MECHANISM stays OFF, PMUS_Q1_LIVE stays NO, every risk limit
+# is unchanged, and no order is authorized. Code and one data file only.
+#
+# WHY THE DATA FILE IS LISTED IN THE IMAGE. analysis/l5/l5_action_model_v2
+# .json is a DATA dependency no ast closure can see. Without it load_v2
+# raises, the controller self-disables with L5_SHADOW_DISABLED, and the
+# service would look perfectly healthy while emitting nothing at all --
+# the entire deliverable, absent and quiet. The image-closure test now
+# names it directly; that test had been red on the cost-basis manifests
+# since they shipped and so could not have caught a missing module, which
+# is the one thing it exists for.
+#
+# TESTS. 11,469 passed, 24 failed, 14 errors on the deployed tree. Every
+# one of those 38 is PRE-EXISTING: the failing-ID set was diffed against a
+# full-suite run at b838a78e and is a strict subset of it -- zero new
+# failures. They sit in legacy Kalshi arb (orderbook, spread_scanner),
+# pmus_auth signature parity, r1/lane-a lineage, chain validation, window
+# forensics and the status live-handoff collection errors. None is in the
+# PMUS executor path. 109 green across the four files covering this change.
+#
+# EMISSION. L5_SHADOW_READY at boot, L5_SHADOW_DECISION continuously (one
+# line per changed decision and at least one a minute; every tick is still
+# evaluated and repetition is counted), L5_SHADOW_COMPARE on each of L5's
+# observed BTC15m actions, L5_SHADOW_WINDOW_CLOSE on each roll,
+# L5_SHADOW_SETTLED when the venue states a binary settlement price.
+deploy Phase A shadow decision source, shadow-locked, mechanism OFF 2026-10-19T15:33Z
