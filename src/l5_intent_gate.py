@@ -68,6 +68,73 @@ GATE_ORDER: Tuple[str, ...] = (
     "EXECUTOR_BOUNDARY",
 )
 
+#: WHAT THIS CHAIN IS NOT: the complete executor chain.
+#:
+#: `l5_live_execution.handle` is 979 lines with THIRTY refusal sites. The
+#: gates below are the runner's real pre-executor chain (exact), plus a
+#: READ-ONLY SNAPSHOT of four facts the transport and halt gate enforce
+#: themselves, plus two preconditions the runner owns. Everything in this
+#: list is enforced elsewhere whether or not it is read here; nothing in
+#: this list REPLACES an executor gate.
+#:
+#: These are the executor's own refusals, in its order, and this module
+#: does NOT evaluate them. They are enumerated so that "cleared here" can
+#: never be mistaken for "would submit", and so that a refusal added to
+#: the executor shows up as a mismatch in
+#: tests/test_l5_intent_gate.py::test_the_executor_refusal_inventory_is_
+#: still_complete rather than silently widening the gap.
+EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
+    "HALT_GATE:HALT",                 # durable latch, read FIRST in handle
+    "L5_NATIVE:UNREADABLE_ROW",
+    "PMUS_TRANSLATION:STALE_ACTION",
+    "SAFETY_OVERLAY:TICK_SIZE_UNKNOWN",
+    "PMUS_TRANSLATION:PRICE_BELOW_MIN_TICK",
+    "PMUS_TRANSLATION:QUANTITY_BELOW_MIN_INCREMENT",
+    "PMUS_TRANSLATION:TRANSLATION_REASON",
+    "SAFETY_OVERLAY:CONFLICTING_EXPERIMENTS_TS_AND_QM",
+    "TWO_SIDED_PROBE:WINDOW_START_UNKNOWN",
+    "TWO_SIDED_PROBE:MAY_PLACE_LATE",
+    "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED",
+    "TWO_SIDED_PROBE:PLAN_REASON",
+    "TWO_SIDED_PROBE:LEG_INVALID",
+    "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED_2",
+    "QUEUE_MEASUREMENT:BUILD_REASON",
+    "SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER",
+    "SAFETY_OVERLAY:QUANTITY_INCREMENT_UNKNOWN",
+    "SAFETY_OVERLAY:QUANTITY_BELOW_MIN_INCREMENT_CMP",
+    "SAFETY_OVERLAY:IMBALANCE_INCREASE_SUPPRESSED",
+    "VALIDATION_GATES:RUN_SCOPED",
+    "SAFETY_OVERLAY:ACCOUNT_RISK_REASON",
+    "SAFETY_OVERLAY:DAY_REALIZED_UNAVAILABLE",
+    "SAFETY_OVERLAY:SAFETY_LIMITS_REFUSE",
+    "SAFETY_OVERLAY:RESIDUAL_ABOVE_CAP",
+    "SUBMISSION_CLAIM:CLAIM_REASON",
+    "SAFETY_OVERLAY:INTENT_MUTATED_AFTER_GATES",
+    "SAFETY_OVERLAY:REFUSED_BEFORE_ORDER_POST",
+    "SAFETY_OVERLAY:SUBMIT_OUTCOME_UNKNOWN",
+    "SAFETY_OVERLAY:ACK_WITHOUT_VENUE_ID",
+    "SAFETY_OVERLAY:ACK_NOT_PERSISTED",
+)
+
+#: WHERE THIS LIST'S ORDER COMES FROM, so it is not invented here. Gates
+#: 1-4 are `Runner.handle`'s own order, unchanged. Gates 5-8 are the order
+#: `Runner.submission_gate` already reports -- its docstring says "in the
+#: order the decision path applies them" -- and that is the deployed
+#: definition, so matching it is the conservative choice. NOTE THE ONE
+#: DIVERGENCE: inside `l5_live_execution.handle` the DURABLE latch is read
+#: FIRST of all, before translation, whereas this list reads the shadow
+#: lock before it. That can only change WHICH reason is reported when both
+#: are tripped, never whether the intent is refused, because the shadow
+#: lock is applied structurally at `roll()` before the executor is reached
+#: at all.
+GATE_ORDER_PROVENANCE = (
+    "1-4: Runner.handle, unchanged",
+    "5-8: Runner.submission_gate's own documented order",
+    "9-11: runner-owned preconditions (exposure reader, registry, "
+    "reconciliation)",
+    "12: this module's own boundary",
+)
+
 #: the layer label a refusal is filed against, kept identical to the
 #: deployed strings so the tape, the stats keys and every existing
 #: dashboard keep meaning what they meant.
@@ -124,6 +191,19 @@ class Intent:
                 "carries_l5_row": self.row is not None}
 
 
+def controller_coid(intent: Intent) -> str:
+    """The deterministic client order id for a generated decision.
+
+    DETERMINISTIC ON PURPOSE: the same decision retried produces the same
+    id, so `already_submitted` can refuse the duplicate instead of placing
+    a second order. The `ctl-` prefix means a human reading the venue's
+    open orders can tell our own decision from an L5-followed one without
+    consulting the ledger.
+    """
+    return "ctl-%s-%s-%s" % (intent.policy or "p", intent.scenario or "s",
+                             intent.source_ref or "x")
+
+
 def _blocked(gate: str, reason: str, detail: Any = None) -> Dict[str, Any]:
     return {"gate": gate, "passed": False, "reason": reason,
             "detail": detail, "layer": LAYER.get(gate, "SAFETY_OVERLAY")}
@@ -132,6 +212,58 @@ def _blocked(gate: str, reason: str, detail: Any = None) -> Dict[str, Any]:
 def _ok(gate: str, detail: Any = None) -> Dict[str, Any]:
     return {"gate": gate, "passed": True, "reason": None, "detail": detail,
             "layer": LAYER.get(gate, "SAFETY_OVERLAY")}
+
+
+class ControllerLiveAuthorization:
+    """EXPLICIT, UNFORGEABLE PERMISSION for a controller-generated intent to
+    reach the executor. NOTHING IN PRODUCTION CONSTRUCTS ONE.
+
+    THIS IS NOT AN ENVIRONMENT VARIABLE, and that is the whole point. Every
+    other switch in this system is a string someone can set --
+    L5_SHADOW_ONLY, PMUS_Q1_LIVE, L5_CANCEL_MECHANISM -- and each of those
+    is a thing that can be flipped by accident, by a copied deploy
+    template, or by a well-meaning operator who did not know what it
+    guarded. A capability that only exists when a CALLER PASSES AN OBJECT
+    cannot be turned on by configuration at all: `Runner` passes nothing,
+    so in production the adapter is not disabled, it is absent.
+    `tests/test_l5_intent_gate.py` asserts that no module under src/ ever
+    constructs one.
+    """
+
+    __slots__ = ("granted_by", "market", "max_size", "note")
+
+    def __init__(self, *, granted_by: str, market: str, max_size: D,
+                 note: str = "") -> None:
+        if not granted_by or not market:
+            raise ValueError("an authorization must name its grantor and "
+                             "its single market")
+        if max_size <= 0:
+            raise ValueError("an authorization must bound size")
+        self.granted_by = str(granted_by)
+        self.market = str(market)
+        self.max_size = D(max_size)
+        self.note = str(note)
+
+    def covers(self, intent: "Intent") -> Optional[str]:
+        """None when this authorization covers the intent, else why not.
+
+        BOUND TO ONE MARKET AND ONE SIZE. An authorization that travelled
+        to another market, or grew a size, would be a different grant than
+        the one that was given.
+        """
+        if intent.provenance != CONTROLLER_GENERATED:
+            return "AUTHORIZATION_IS_FOR_CONTROLLER_INTENTS_ONLY"
+        if intent.market != self.market:
+            return "AUTHORIZATION_BOUND_TO_MARKET"
+        if intent.size is None or D(intent.size) <= 0:
+            return "INTENT_HAS_NO_SIZE"
+        if D(intent.size) > self.max_size:
+            return "INTENT_EXCEEDS_AUTHORIZED_SIZE"
+        return None
+
+    def describe(self) -> Dict[str, Any]:
+        return {"granted_by": self.granted_by, "market": self.market,
+                "max_size": str(self.max_size), "note": self.note}
 
 
 class IntentGate:
@@ -144,8 +276,15 @@ class IntentGate:
     can disagree with the one that actually refuses.
     """
 
-    def __init__(self, runner: Any) -> None:
+    def __init__(self, runner: Any,
+                 controller_auth: Optional[ControllerLiveAuthorization] = None
+                 ) -> None:
         self.runner = runner
+        #: ABSENT IN PRODUCTION. `Runner` constructs the gate with one
+        #: argument, so this is None there and the adapter below cannot
+        #: run at all. It is a constructor argument rather than a setting
+        #: so that no configuration change can supply it.
+        self.controller_auth = controller_auth
 
     # ------------------------------------------------------- read-only view
     def evaluate(self, intent: Intent) -> Dict[str, Any]:
@@ -175,17 +314,27 @@ class IntentGate:
                 res = _blocked(gate, "UNREADABLE:%s" % type(exc).__name__)
             gates.append(res)
             if not res["passed"]:
-                return {"admissible": False, "blocked_by": gate,
+                return {"cleared_here": False, "blocked_by": gate,
                         "reason": res["reason"], "layer": res["layer"],
                         "gates": gates, "intent": intent.describe(),
-                        "labels": ("READ-ONLY evaluation. Nothing was "
-                                   "submitted, reserved or registered.")}
-        return {"admissible": True, "blocked_by": None, "reason": None,
+                        "complete_chain": False,
+                        "not_evaluated_here":
+                            list(EXECUTOR_GATES_NOT_EVALUATED_HERE),
+                        "labels": ("READ-ONLY. Nothing was submitted, "
+                                   "reserved or registered.")}
+        return {"cleared_here": True, "blocked_by": None, "reason": None,
                 "layer": None, "gates": gates, "intent": intent.describe(),
-                "labels": ("READ-ONLY evaluation. Admissible means every "
-                           "gate in GATE_ORDER passed, NOT that an order "
-                           "was placed: `admit` is the only path to the "
-                           "venue and it applies these again.")}
+                "complete_chain": False,
+                "not_evaluated_here":
+                    list(EXECUTOR_GATES_NOT_EVALUATED_HERE),
+                "labels": ("READ-ONLY, and NOT a verdict that an order "
+                           "would be placed. `cleared_here` means only the "
+                           "gates in GATE_ORDER passed; the executor's own "
+                           "%d refusals listed in not_evaluated_here are "
+                           "applied by the executor and are NOT checked "
+                           "here. `admit` is the only path toward the "
+                           "venue."
+                           % len(EXECUTOR_GATES_NOT_EVALUATED_HERE))}
 
     def evaluate_prefix(self, intent: Intent, *, upto: str) -> Dict[str, Any]:
         """The chain up to and including one named gate.
@@ -209,10 +358,10 @@ class IntentGate:
                 res = _blocked(gate, "UNREADABLE:%s" % type(exc).__name__)
             gates.append(res)
             if not res["passed"]:
-                return {"admissible": False, "blocked_by": gate,
+                return {"cleared_here": False, "blocked_by": gate,
                         "reason": res["reason"], "layer": res["layer"],
                         "gates": gates, "intent": intent.describe()}
-        return {"admissible": True, "blocked_by": None, "reason": None,
+        return {"cleared_here": True, "blocked_by": None, "reason": None,
                 "layer": None, "gates": gates, "intent": intent.describe()}
 
     # ------------------------------------------------------------ one gate
@@ -233,6 +382,13 @@ class IntentGate:
                                  "current_window": cur,
                                  "transport": t is not None,
                                  "executor": ex is not None})
+            # AN ADDED CHECK, AND A DECLARED ONE. `Runner.handle` compared
+            # only the window; this also compares the market against the
+            # transport's own slug. On the L5 path it is provably a no-op
+            # because `OBS.pmus_slug_for(ws)` and `AB.slug_for(ws)` return
+            # the same string -- pinned by
+            # test_the_added_market_check_is_a_no_op_on_the_l5_path -- and
+            # it is a tightening, never a loosening, for any other caller.
             if intent.market and intent.market != getattr(
                     t, "market_slug", None):
                 return _blocked(gate, "NOT_CURRENT_WINDOW",
@@ -310,18 +466,26 @@ class IntentGate:
                 if intent.row is None:
                     return _blocked(gate, "L5_INTENT_WITHOUT_ROW")
                 return _ok(gate, {"adapter": "l5_live_execution.handle"})
-            # THE REMAINING BLOCKER, NAMED. Reaching the venue from a
-            # generated decision needs an adapter the registry, the
-            # reconciler and the watchdog all understand. Until that exists
-            # and is authorized, this refuses -- it does NOT fabricate an
-            # L5 row to get through, because our decision must never be
-            # indistinguishable from L5's actual order.
-            return _blocked(gate, "CONTROLLER_INTENT_HAS_NO_AUTHORIZED_"
-                                  "ADAPTER",
-                            {"why": ("submission from a generated decision "
-                                     "is a money-path change and is not "
-                                     "authorized"),
-                             "never": "no L5 row is fabricated for it"})
+            # A GENERATED DECISION NEEDS AN EXPLICIT GRANT, and in
+            # production there is none to have: `Runner` constructs this
+            # gate without one, so this refuses by absence rather than by
+            # a setting. It does NOT fabricate an L5 row to get through,
+            # because our decision must never be indistinguishable from
+            # L5's actual order.
+            auth = self.controller_auth
+            if auth is None:
+                return _blocked(gate, "CONTROLLER_INTENT_HAS_NO_AUTHORIZED_"
+                                      "ADAPTER",
+                                {"why": ("no ControllerLiveAuthorization was "
+                                         "supplied; production supplies "
+                                         "none"),
+                                 "never": "no L5 row is fabricated for it"})
+            why = auth.covers(intent)
+            if why is not None:
+                return _blocked(gate, why, auth.describe())
+            return _ok(gate, {"adapter": "l5_intent_gate.submit_controller_"
+                                         "intent",
+                              "authorization": auth.describe()})
 
         return _blocked(gate, "UNKNOWN_GATE")
 
@@ -336,7 +500,7 @@ class IntentGate:
         so never reaches a submission path at all.
         """
         ev = self.evaluate(intent)
-        if not ev["admissible"]:
+        if not ev["cleared_here"]:
             return {"submitted": False, "refused_by_layer": ev["layer"],
                     "refused_reason": ev["reason"],
                     "blocked_by": ev["blocked_by"],
@@ -351,3 +515,189 @@ class IntentGate:
             intent.row, {}, market=intent.market, window=intent.window,
             open_markets=tuple(open_markets))
         return dict(rec, intent=ev["intent"])
+
+    # ------------------------------------------------ the controller adapter
+    #: THE STORE API THIS ADAPTER NEEDS, checked before it is used. An
+    #: earlier draft of this method invented `reserve`/`release`/
+    #: `record_submitted`/`owns_client_order_id`, none of which exist on
+    #: `l5_live_execution.InventoryStore`. It was unreachable in production
+    #: so it would never have raised -- which is exactly why code like that
+    #: is dangerous: it reads as ready. The names below are the REAL ones,
+    #: and the precondition refuses by name if any goes missing.
+    REQUIRED_STORE_API: Tuple[str, ...] = (
+        "already_submitted",      # the one-shot guard against duplicates
+        "record_submit",          # durable record BEFORE the wire
+        "attach_venue_id",        # what a cancel is named by
+        "mark_uncertain",         # a possibly-resting order poisons the book
+        "owns_venue_order_id",    # the watchdog's ownership oracle
+        "terminate_order",        # release on a venue-terminal state
+        "save",
+    )
+
+    def submit_controller_intent(self, intent: Intent) -> Dict[str, Any]:
+        """Route a GENERATED decision toward the venue. UNREACHABLE IN
+        PRODUCTION: `Runner` supplies no authorization, so `evaluate`
+        refuses at EXECUTOR_BOUNDARY before this can be called, and calling
+        it anyway refuses again here.
+
+        WHY NOT `ex.handle`. The executor derives side, price and size from
+        L5's row and stamps the record L5_NATIVE. Feeding it a generated
+        decision needs a fabricated row and would file our own order under
+        L5's name in the tape, the ledger and the registry. So this uses the
+        SAME downstream machinery -- the same store, the same deterministic
+        client order id, the same registry oracle, the same transport, the
+        same exact-order cancel route -- while stamping
+        CONTROLLER_GENERATED throughout.
+
+        ORDER OF OPERATIONS, each step the fail-closed one:
+
+          1. the full chain again, including the authorization;
+          2. the store API precondition -- a missing method refuses;
+          3. the DUPLICATE guard, on the deterministic coid;
+          4. `record_submit` BEFORE the wire, so a crash between send and
+             ack leaves a durable record reconciliation and the watchdog
+             can both find;
+          5. send;
+          6. ambiguity is POSSIBLY RESTING, never "probably fine": the
+             book is marked uncertain and the caller is told to halt.
+        """
+        ev = self.evaluate(intent)
+        if not ev["cleared_here"]:
+            return {"submitted": False, "provenance": CONTROLLER_GENERATED,
+                    "refused_by_layer": ev["layer"],
+                    "refused_reason": ev["reason"],
+                    "blocked_by": ev["blocked_by"],
+                    "intent": ev["intent"], "gates": ev["gates"]}
+        r, auth = self.runner, self.controller_auth
+        if auth is None:                      # unreachable; belt and braces
+            return {"submitted": False, "provenance": CONTROLLER_GENERATED,
+                    "refused_by_layer": "SAFETY_OVERLAY",
+                    "refused_reason": "CONTROLLER_INTENT_HAS_NO_AUTHORIZED_"
+                                      "ADAPTER",
+                    "blocked_by": "EXECUTOR_BOUNDARY",
+                    "intent": ev["intent"]}
+
+        coid = controller_coid(intent)
+        base = {"provenance": CONTROLLER_GENERATED, "client_order_id": coid,
+                "intent": ev["intent"], "authorization": auth.describe(),
+                "labels": ("a CONTROLLER-GENERATED order. It is NOT one of "
+                           "L5's actions and must never be counted as "
+                           "one.")}
+
+        missing = [m for m in self.REQUIRED_STORE_API
+                   if not callable(getattr(r.store, m, None))]
+        if missing:
+            return dict(base, submitted=False,
+                        refused_by_layer="SAFETY_OVERLAY",
+                        refused_reason="STORE_API_INCOMPLETE",
+                        detail={"missing": missing}, halt_required=False)
+
+        try:
+            if r.store.already_submitted(coid):
+                return dict(base, submitted=False,
+                            refused_by_layer="SUBMISSION_CLAIM",
+                            refused_reason="DUPLICATE_INTENT",
+                            halt_required=False)
+        except BaseException as exc:                            # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return dict(base, submitted=False,
+                        refused_by_layer="SUBMISSION_CLAIM",
+                        refused_reason="DUPLICATE_CHECK_UNREADABLE:%s"
+                                       % type(exc).__name__,
+                        halt_required=False)
+
+        wire = {"client_order_id": coid, "market": intent.market,
+                "side": intent.side, "price": str(intent.price),
+                "qty": str(intent.size), "provenance": CONTROLLER_GENERATED}
+        try:
+            r.store.record_submit(coid, wire, mode=CONTROLLER_GENERATED)
+        except BaseException as exc:                            # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # NOTHING WAS SENT, so nothing is resting. Refuse without a
+            # halt: an unrecorded order that never left is not a risk.
+            return dict(base, submitted=False,
+                        refused_by_layer="SAFETY_OVERLAY",
+                        refused_reason="PRE_SEND_RECORD_FAILED:%s"
+                                       % type(exc).__name__,
+                        halt_required=False)
+
+        try:
+            ack = r.transport.submit(wire)
+        except BaseException as exc:                            # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            cls = type(exc).__name__
+            # DID IT REACH THE VENUE? Only the transport can say, and when
+            # it cannot the answer is UNKNOWN, which is a halt.
+            refused_before_post = False
+            try:
+                refused_before_post = bool(
+                    r.transport.refused_before_post(exc)
+                    if hasattr(r.transport, "refused_before_post") else False)
+            except BaseException:                              # noqa: BLE001
+                refused_before_post = False
+            if refused_before_post:
+                return dict(base, submitted=False,
+                            refused_by_layer="SAFETY_OVERLAY",
+                            refused_reason="REFUSED_BEFORE_ORDER_POST:%s"
+                                           % cls, halt_required=False)
+            self._mark_uncertain("SUBMIT_OUTCOME_UNKNOWN:%s:%s" % (coid, cls))
+            return dict(base, submitted=None,
+                        refused_by_layer="SAFETY_OVERLAY",
+                        refused_reason="SUBMIT_OUTCOME_UNKNOWN:%s" % cls,
+                        halt_required=True)
+
+        vid = (ack or {}).get("order_id") or ((ack or {}).get("order")
+                                              or {}).get("id")
+        if not vid:
+            # AN ACK WITHOUT AN ID IS AN ORDER WE CANNOT CANCEL. The venue
+            # cancels by its own id; ours names nothing.
+            self._mark_uncertain("ACK_WITHOUT_VENUE_ID:%s" % coid)
+            return dict(base, submitted=None,
+                        refused_by_layer="SAFETY_OVERLAY",
+                        refused_reason="ACK_WITHOUT_VENUE_ID",
+                        halt_required=True)
+        try:
+            r.store.attach_venue_id(coid, vid)
+        except BaseException as exc:                            # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self._mark_uncertain("ACK_NOT_PERSISTED:%s:%s"
+                                 % (coid, type(exc).__name__))
+            return dict(base, submitted=None, venue_order_id=vid,
+                        refused_by_layer="SAFETY_OVERLAY",
+                        refused_reason="ACK_NOT_PERSISTED",
+                        halt_required=True)
+
+        # OWNERSHIP, PROVED AFTER THE ID EXISTS. Before the venue gives us
+        # an id there is nothing for the oracle to recognise; the moment
+        # there is, the watchdog must be able to prove the order is ours or
+        # it cannot withdraw it on a shared account.
+        try:
+            owned = bool(r.store.owns_venue_order_id(vid))
+        except BaseException:                                   # noqa: BLE001
+            owned = False
+        if not owned:
+            self._mark_uncertain("OWNERSHIP_NOT_SERVABLE:%s" % coid)
+            return dict(base, submitted=True, venue_order_id=vid,
+                        refused_by_layer="SAFETY_OVERLAY",
+                        refused_reason="OWNERSHIP_NOT_SERVABLE_AFTER_ACK",
+                        halt_required=True)
+        return dict(base, submitted=True, venue_order_id=vid, owned=True,
+                    cancel_route=("transport.cancel(venue_order_id) with "
+                                  "store.owns_venue_order_id as the oracle "
+                                  "-- the same route the deadman uses"))
+
+    def _mark_uncertain(self, why: str) -> None:
+        """A possibly-resting order makes our OWN book uncertain, and an
+        uncertain book must refuse further submissions until the venue
+        settles the question. Failing to mark it is worse than the
+        ambiguity itself."""
+        try:
+            # the REAL signature: one reason string. The coid is folded
+            # into it so an operator can find the order it refers to.
+            self.runner.store.mark_uncertain(why)
+        except BaseException:                                   # noqa: BLE001
+            pass

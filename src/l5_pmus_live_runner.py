@@ -1382,7 +1382,7 @@ class Runner:
                              source_ref=row["action_key"])
         pre = self.intent_gate.evaluate_prefix(
             intent, upto="OPERATOR_HALT")
-        if not pre["admissible"]:
+        if not pre["cleared_here"]:
             rec = {"action_key": row["action_key"], "market": slug,
                    "refused_by_layer": pre["layer"],
                    "refused_reason": pre["reason"],
