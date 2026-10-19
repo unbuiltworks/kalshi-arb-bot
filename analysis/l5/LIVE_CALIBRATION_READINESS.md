@@ -169,3 +169,79 @@ L5-following path.** It needs no new submission route, no third
 whether a resting maker order of ours fills, and from what queue position.
 Our decision logic can be calibrated afterwards, against a fill model that
 has actually been checked.
+
+---
+
+# Execution runbook (2026-10-19T21:50Z) — blocked on two owner-held controls
+
+Blocker 1 of the original check (no calibration capture) is **CLOSED**:
+`778222e0` is deployed and verified on production records, including a real
+money-path intent on the L5-following path captured at the wire with
+`capture_source: mirror_snapshot_at_read`, a timestamped book and a queue
+bound. See `FILL_CALIBRATION_PRODUCTION_VERIFICATION.md`.
+
+Blocker 2 (no controller submission route) is **AVOIDED** by running the
+probe on the existing L5-following claim-gated path, as recommended.
+
+## What the live state says, read-only, at 21:29:07Z boot and after
+
+| fact | value | source |
+|---|---|---|
+| account balance | **$344.40605**, `read_ok: true` | `L5_LIVE_CASH` 21:46:19Z |
+| limits | $5/market, $5 total, 1 market, 1 live order, **$5 daily realized-loss halt** | `L5_LIVE_START` |
+| worst case | `worst_case_usd: 5` | `L5_LIVE_START` |
+| credentials | `credentials_present: true` | `L5_LIVE_START` |
+| claim durability | `auth_ledger.durable: true`, holder identity all five true | `L5_LIVE_START` |
+| money path reaches the decision | `key: "ORDER:NOT_ARMED"` | `L5_LIVE_DECISION` 21:46:16Z |
+| exposure now | $0 of $5, 0 live, 0 parked | heartbeat |
+
+## BLOCKER A — the owner's absolute authorization deadline expired
+
+`L5_LIVE_AUTH_NOT_AFTER`: `set: true, state: "EXPIRED",
+expires_in_s: -28807.8` at boot, i.e. it lapsed at approximately
+**2026-10-19T13:29:00Z, about eight hours ago**. `authorize_arming` step 8
+refuses `AUTHORIZATION_EXPIRED`. This refusal stands no matter what else is
+set, and reissuing the deadline is the owner's act, not mine.
+
+## BLOCKER B — the arm handshake is the owner's, by design
+
+`armed()` requires all three: `PMUS_Q1_LIVE == "YES"`,
+`PMUS_Q1_SESSION_ID` non-empty, and `PMUS_Q1_ARM` **equal to**
+`PMUS_Q1_SESSION_ID`. All three variables exist on the service and their
+values are **not readable by me** (`valuesRedacted: true` — this client gets
+names only), so I cannot set `PMUS_Q1_ARM` to match the session id.
+
+I could overwrite BOTH to a value of my own choosing. That is exactly why I
+will not: it would be me issuing the owner's arm token to myself, which is
+the single thing this control exists to prevent.
+
+## The ordered steps, once the owner reissues A and B
+
+1. **Owner** sets `L5_LIVE_AUTH_NOT_AFTER` to a fresh ISO-8601 deadline
+   covering the intended probe window.
+2. **Owner** sets `PMUS_Q1_ARM` equal to the current `PMUS_Q1_SESSION_ID`
+   (or sets both to a fresh id), and `PMUS_Q1_LIVE=YES`.
+3. Set `L5_LIVE_PROBE_MARKET` and `PMUS_Q1_GATE_EVIDENCE` to the SAME live
+   BTC15m slug, and a fresh `L5_EXPERIMENT_ID`. I can do these.
+4. `L5_SHADOW_ONLY=0` **last**, so the lock is lifted for the shortest
+   possible interval. I can do this on the owner's word.
+5. Leave every limit as it stands. Arming refuses if the running limits are
+   LOOSER than the approved envelope recorded in the claim, so widening a cap
+   invalidates the authorization rather than inheriting it.
+
+Revert, in one step: `L5_SHADOW_ONLY=1`. The watchdog retains independent
+HALT authority and exact-ID cancellation throughout and cannot submit.
+
+## What the probe will and will not do
+
+It runs on the **L5-following** path, so it submits only when L5 itself acts
+in the armed window — it is opportunistic, and a window where L5 does
+nothing produces no order and no data. Size comes from L5's action scaled
+into the $5 envelope; the venue minimum is 0.01 contracts, so q is bounded
+by the cap, not by a floor.
+
+Its purpose is one record carried end to end: submission → ack → resting,
+with the book and queue bound already captured at the wire → fill or
+cancellation at the deadline → venue-confirmed terminal state → settlement →
+`venue_actual` fees and credited rebate. Those five categories have unit
+coverage only and cannot be exercised any other way.
