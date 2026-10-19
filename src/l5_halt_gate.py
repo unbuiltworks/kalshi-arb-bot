@@ -306,6 +306,22 @@ class HttpHaltStore:
     def get(self, key: str) -> Optional[bytes]:
         import urllib.request
 
+        # THIS STORE SERVES EXACTLY ONE KEY, and every other key is
+        # UNREADABLE here rather than ABSENT.
+        #
+        # WHY THIS GUARD EXISTS. `l5_halt_server` 404s every path but
+        # HALT_KEY, and `get` maps a 404 to None -- a POSITIVE absence. So an
+        # admin caller that asked this store for some OTHER durable object on
+        # the watchdog's volume would be told it is EMPTY by a server that
+        # does not serve it at all. A one-time guard keyed on such an object
+        # would then pass on a key it cannot see. That is the same
+        # false-permissive read this module warns about for the latch itself,
+        # one key over: absence and "not served here" must not arrive as the
+        # same None.
+        if str(key) != HALT_KEY:
+            raise HaltReadUnavailable(
+                "HttpHaltStore serves only %r: %r is not absent here, it is "
+                "unreadable" % (HALT_KEY, str(key)[:60]))
         url = "%s/%s" % (self.url, str(key).lstrip("/"))
         # 404 is the ONE answer that means "there is no halt record". Every
         # other outcome is "I could not find out", and the two must not

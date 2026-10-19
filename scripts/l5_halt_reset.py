@@ -78,6 +78,23 @@ INSPECT_ENV = "L5_HALT_RESET_INSPECT"
 REGISTRY_ENV = "L5_ORDER_REGISTRY_URL"
 STATE_ENV = "L5_WATCHDOG_STATE_DIR"
 
+#: the watchdog's GET-only halt server. Set this (and L5_HALT_RESET_VIA_HTTP)
+#: to run the READ-ONLY inspect from a process that does NOT hold the volume,
+#: so obtaining the digest never requires stopping the production watchdog.
+#: `l5_halt_server.do_GET` returns the stored bytes VERBATIM, so the sha256 of
+#: the HTTP body is the sha256 of the file -- the digest gate 2 demands. The
+#: clear cannot work this way; see _require_clearable_store.
+HALT_URL_ENV = "L5_HALT_URL"
+VIA_HTTP_ENV = "L5_HALT_RESET_VIA_HTTP"
+
+#: baked into deploy/l5_halt_reset/Dockerfile and present in NO other image.
+#: A reset refuses without it, because on 2026-10-19 a `redeploy` silently
+#: reused the WATCHDOG build after dockerfilePath had been pointed at the
+#: reset image: the config said one thing and the running container was
+#: another. An image that cannot name itself does not clear a halt.
+IMAGE_MARKER_ENV = "L5_RESET_IMAGE"
+IMAGE_MARKER_VALUE = "l5_halt_reset"
+
 #: the audit log, beside the latch on the same volume so they cannot be
 #: separated by a redeploy.
 AUDIT_KEY = "l5/halt_resets.jsonl"
@@ -119,6 +136,48 @@ def _require_intent() -> Tuple[str, str, str, str]:
             "NO_EXPECTED_DIGEST: %s must be the sha256 hex of the halt "
             "record you reviewed" % EXPECT_ENV)
     return who, rid, expect, _env(ATTEST_ENV)
+
+
+def _require_reset_image() -> str:
+    """The running image must be the reset image. Raises ResetRefused.
+
+    THE FAILURE THIS CATCHES, observed 2026-10-19. `redeploy` reuses the
+    previous BUILD, so pointing dockerfilePath at deploy/l5_halt_reset and
+    redeploying restarted the WATCHDOG instead; the swap landed only on the
+    rebuild that followed. Service config is therefore NOT evidence of what
+    is running. This marker is, because it travels inside the image.
+    """
+    got = _env(IMAGE_MARKER_ENV)
+    if got != IMAGE_MARKER_VALUE:
+        raise ResetRefused(
+            "WRONG_IMAGE: %s must be %r and is %r. The running container is "
+            "not the reset image, whatever the service config says -- a "
+            "redeploy reuses the previous build."
+            % (IMAGE_MARKER_ENV, IMAGE_MARKER_VALUE, got or None))
+    return got
+
+
+def _require_clearable_store(store: Any) -> None:
+    """A clear needs the VOLUME. Raises ResetRefused for a remote store.
+
+    A Railway volume attaches to exactly one service, so only a process in
+    the watchdog's own service can write the latch or append the audit log.
+    `HttpHaltStore` has no write path by design. Refusing EARLY and by name
+    beats failing later inside the audit append: the ordering guarantee is
+    that the audit entry is fsynced BEFORE the latch is cleared, and a store
+    that cannot do either must never get that far.
+    """
+    from src import l5_halt_gate as HG
+    if isinstance(store, HG.HttpHaltStore):
+        raise ResetRefused(
+            "RESET_REQUIRES_VOLUME_BACKED_STORE: this process reached the "
+            "latch over HTTP, which is READ-ONLY. The inspect phase may run "
+            "anywhere; the clear must run where the volume is mounted.")
+    for verb in ("get", "put"):
+        if not callable(getattr(store, verb, None)):
+            raise ResetRefused(
+                "RESET_REQUIRES_VOLUME_BACKED_STORE: the store cannot %s"
+                % verb)
 
 
 def read_latch(store: Any) -> Tuple[bytes, Dict[str, Any], str]:
@@ -561,12 +620,29 @@ def read_only_transport():
     return A.ReadOnlyTransport()
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def build_store(*, inspecting: bool) -> Tuple[Any, str]:
+    """The latch's medium for this run, and a word naming it.
+
+    INSPECT may read over the watchdog's GET-only HTTP server, which is what
+    lets the digest be obtained WITHOUT stopping the production watchdog. The
+    bytes are served verbatim, so the digest is identical to the file's.
+    A CLEAR always uses the mounted volume.
+    """
     from src import l5_halt_gate as HG
-    store = HG.FileStore(os.getenv(STATE_ENV, "/data"))
+    url = _env(HALT_URL_ENV)
+    if inspecting and _env(VIA_HTTP_ENV).upper() == "YES":
+        if not url:
+            raise ResetRefused(
+                "NO_HALT_URL: %s=YES needs %s" % (VIA_HTTP_ENV, HALT_URL_ENV))
+        return HG.HttpHaltStore(url), "http_read_only"
+    return HG.FileStore(os.getenv(STATE_ENV, "/data")), "volume"
+
+
+def main(argv: Optional[List[str]] = None) -> int:
     out: Dict[str, Any]
     inspecting = _env(INSPECT_ENV).upper() == "YES"
     try:
+        store, medium = build_store(inspecting=inspecting)
         if inspecting:
             # READ-ONLY, so a missing credential must not hide the digest:
             # obtaining it is the whole reason the inspect phase exists.
@@ -576,8 +652,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                 transport = None
             out = inspect(store=store, transport=transport,
                           registry_url=_env(REGISTRY_ENV))
+            out["medium"] = medium
             print("L5_HALT_RESET_INSPECT " + json.dumps(out, sort_keys=True))
             return 0
+        # THE CLEAR PATH. Both guards precede every other gate: if the wrong
+        # image is running, or the latch is only reachable read-only, nothing
+        # else about this run is meaningful.
+        _require_reset_image()
+        _require_clearable_store(store)
         transport = read_only_transport()
         out = perform_reset(store=store, transport=transport,
                             registry_url=_env(REGISTRY_ENV))

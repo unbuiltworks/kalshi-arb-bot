@@ -64,4 +64,11 @@ ENV L5_WATCHDOG_STATE_DIR=/data
 # the READ-ONLY dry run and writes nothing. Clearing requires the confirm
 # phrase, the digest, the latch's own reason, an operator and a fresh id.
 ENV L5_HALT_RESET_INSPECT=YES
+# THE IMAGE NAMES ITSELF, and no other image carries this. scripts.l5_halt_reset
+# refuses to CLEAR without it. On 2026-10-19 a `redeploy` reused the previous
+# WATCHDOG build after dockerfilePath had been pointed here, so the service
+# config claimed the reset image while the watchdog was what actually ran.
+# Service config is not evidence of what is running; a marker inside the image
+# is. See _require_reset_image.
+ENV L5_RESET_IMAGE=l5_halt_reset
 CMD ["python3", "-m", "scripts.l5_halt_reset"]
