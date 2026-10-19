@@ -77,8 +77,16 @@ def capture(monkeypatch):
     return out
 
 
-def decisions(out):
-    return [d for k, d in out if k == "L5_SHADOW_DECISION"]
+def decisions(out, policy=None):
+    recs = [d for k, d in out if k == "L5_SHADOW_DECISION"]
+    return [d for d in recs
+            if policy is None or d.get("policy") == policy]
+
+
+def ctl(runner, policy=SC.BASELINE_POLICY):
+    """One named controller. There is one PER POLICY now, and the baseline
+    is the one the money path would have used."""
+    return runner.shadow_controller()[policy]
 
 
 # ============================================== IT IS ACTUALLY CONNECTED
@@ -171,8 +179,8 @@ def test_it_decides_with_no_l5_feed_at_all(tmp_path, monkeypatch):
     assert recs and runner.stats["feed_errors"] >= 1
 
 
-def test_a_controller_failure_disables_only_the_controller(tmp_path,
-                                                           monkeypatch):
+def test_a_controller_failure_disables_every_policy_and_nothing_else(
+        tmp_path, monkeypatch):
     """A missing model artifact must stop this and nothing else."""
     runner = build(tmp_path, monkeypatch)
     monkeypatch.setattr(SC.pv2, "load_v2",
@@ -182,7 +190,7 @@ def test_a_controller_failure_disables_only_the_controller(tmp_path,
     runner.tick(NOW)
     assert any(k == "L5_SHADOW_DISABLED" for k, _ in out)
     assert not decisions(out)
-    assert runner._shadow_off is True
+    assert runner._shadow_off is True and runner._shadow == {}
     # and the tick itself completed: the money path is untouched
     runner.tick(NOW + 3.0)
 
@@ -210,7 +218,7 @@ def test_no_arming_variable_makes_the_shadow_submit(tmp_path, monkeypatch):
         runner.shadow_tick(NOW + i * 3.0)
     assert decisions(out), "no decision was taken, so nothing was proved"
     assert sent["n"] == 0
-    c = runner.shadow_controller()
+    c = ctl(runner)
     for attr in SC.FORBIDDEN_ATTRS:
         assert not hasattr(c, attr), attr
 
@@ -220,7 +228,7 @@ def test_the_runner_hands_the_controller_no_transport(tmp_path, monkeypatch):
     of it is the transport, the executor or the store."""
     runner = build(tmp_path, monkeypatch)
     runner.tick(NOW)
-    c = runner.shadow_controller()
+    c = ctl(runner)
     held = [v for v in vars(c).values()]
     for v in held:
         assert not isinstance(v, R.T.PmusTransport), vars(c)
@@ -247,13 +255,13 @@ def test_simulated_inventory_survives_a_restart(tmp_path, monkeypatch):
     runner = build(tmp_path, monkeypatch, root=root)
     capture(monkeypatch)
     runner.tick(NOW)
-    c = runner.shadow_controller()
+    c = ctl(runner)
     inv = c.inventory_for(PMUS)
     inv.record(True, D("0.47"))
     c._store_inventory(PMUS, inv)
     c._save()
     again = build(tmp_path, monkeypatch, root=root)
-    assert again.shadow_controller().inventory_for(PMUS).snapshot() == {
+    assert ctl(again).inventory_for(PMUS).snapshot() == {
         "yes": 1, "no": 0, "matched": 0, "residual": 1}
 
 
@@ -263,9 +271,11 @@ def test_the_state_file_lands_under_the_live_root(tmp_path, monkeypatch):
     runner = build(tmp_path, monkeypatch)
     capture(monkeypatch)
     runner.tick(NOW)
-    path = runner.shadow_controller().state_path
-    assert path == os.path.join(runner.root, "shadow_controller.json")
-    assert os.path.exists(path)
+    for name, c in runner.shadow_controller().items():
+        want = os.path.join(runner.root,
+                            "shadow_controller_%s.json" % name.lower())
+        assert c.state_path == want, name
+        assert os.path.exists(want), name
 
 
 # ================================================== EMISSION IS CONTINUOUS
@@ -280,9 +290,10 @@ def test_repetition_is_throttled_but_every_tick_is_still_evaluated(
     runner.roll(NOW)
     for i in range(20):
         runner.shadow_tick(NOW + i * 3.0)
-    assert runner.stats["shadow_decisions"] == 20
-    assert 1 <= len(decisions(out)) < 20
-    assert runner.stats["shadow_repeat_suppressed"] > 0
+    for name in SC.POLICIES:
+        assert runner.stats["shadow_decisions:%s" % name] == 20, name
+        assert 1 <= len(decisions(out, name)) < 20, name
+        assert runner.stats["shadow_repeat_suppressed:%s" % name] > 0, name
 
 
 def test_an_unchanged_decision_reappears_within_the_emit_interval(
@@ -292,7 +303,8 @@ def test_an_unchanged_decision_reappears_within_the_emit_interval(
     runner.roll(NOW)
     runner.shadow_tick(NOW)
     runner.shadow_tick(NOW + R.SHADOW_EMIT_S + 1.0)
-    assert len(decisions(out)) == 2
+    for name in SC.POLICIES:
+        assert len(decisions(out, name)) == 2, name
 
 
 def test_the_heartbeat_carries_the_shadow_report(tmp_path, monkeypatch):
@@ -302,8 +314,13 @@ def test_the_heartbeat_carries_the_shadow_report(tmp_path, monkeypatch):
     out = capture(monkeypatch)
     runner.heartbeat()
     hb = [d for k, d in out if k == "L5_LIVE_HB"]
-    assert hb and hb[0]["shadow_controller"]["decisions"] >= 1
-    assert hb[0]["shadow_controller"]["provenance"] == "CONTROLLER_GENERATED"
+    assert hb
+    block = hb[0]["shadow_controller"]
+    assert set(block) == set(SC.POLICIES), block
+    for name in SC.POLICIES:
+        assert block[name]["decisions"] >= 1, name
+        assert block[name]["provenance"] == "CONTROLLER_GENERATED"
+        assert block[name]["policy"] == name
 
 
 # ===================================================== WINDOW CLOSE
@@ -313,16 +330,18 @@ def test_rolling_the_window_reports_what_the_shadow_is_left_holding(
     runner = build(tmp_path, monkeypatch, feed=lambda: [])
     capture(monkeypatch)
     runner.tick(NOW)
-    c = runner.shadow_controller()
+    c = ctl(runner)
     inv = c.inventory_for(PMUS)
     inv.record(True, D("0.47"))
     c._store_inventory(PMUS, inv)
     out = capture(monkeypatch)
     runner.tick(NOW + 900.0)              # next window
     close = [d for k, d in out if k == "L5_SHADOW_WINDOW_CLOSE"]
-    assert close and close[0]["market"] == PMUS
-    assert close[0]["inventory"]["residual"] == 1
-    assert "STRANDED" in close[0]["labels"]
+    assert {d["policy"] for d in close} == set(SC.POLICIES), close
+    mine = [d for d in close if d["policy"] == SC.BASELINE_POLICY]
+    assert mine and mine[0]["market"] == PMUS
+    assert mine[0]["inventory"]["residual"] == 1
+    assert "STRANDED" in mine[0]["labels"]
     assert c._slot(PMUS)["resting"] is None, \
         "a resting order must not survive expiry"
 
@@ -332,7 +351,7 @@ def test_rolling_the_window_reports_what_the_shadow_is_left_holding(
 def _closed_window(runner, monkeypatch, tmp_path):
     capture(monkeypatch)
     runner.tick(NOW)
-    c = runner.shadow_controller()
+    c = ctl(runner)
     inv = c.inventory_for(PMUS)
     inv.record(True, D("0.47"))
     inv.record(False, D("0.49"))
@@ -350,7 +369,8 @@ def test_settlement_uses_the_venues_own_price_and_nothing_else(
         "state": "MARKET_STATE_EXPIRED", "settlementPx": "1.0000"})
     out = capture(monkeypatch)
     runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
-    rec = [d for k, d in out if k == "L5_SHADOW_SETTLED"]
+    rec = [d for k, d in out if k == "L5_SHADOW_SETTLED"
+           and d["policy"] == SC.BASELINE_POLICY]
     assert rec, [k for k, _ in out]
     assert rec[0]["matched_units"] == 1 and rec[0]["residual_units"] == 1
     # one matched pair redeems $1; the residual YES redeems $1 at px 1.0
@@ -375,7 +395,8 @@ def test_an_expired_books_last_price_is_never_a_settlement(tmp_path,
     monkeypatch.setattr(R.OBS, "pmus_bbo", lambda slug: dict(md))
     out = capture(monkeypatch)
     runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
-    assert not [d for k, d in out if k == "L5_SHADOW_SETTLED"]
+    assert not [d for k, d in out if k == "L5_SHADOW_SETTLED"
+                and d["policy"] == SC.BASELINE_POLICY]
     assert c.inventory_for(PMUS).snapshot()["residual"] == 1
     assert PMUS in c.stranded()
 
@@ -490,7 +511,7 @@ def test_no_comparison_is_emitted_before_we_have_decided_anything(
     """A comparison against no decision would be a fabricated NO_ACTION."""
     runner = build(tmp_path, monkeypatch, feed=_growing_feed())
     out = capture(monkeypatch)
-    assert runner._shadow_last_rec is None
+    assert not runner._shadow
     runner.shadow_compare({"slug": SLUG, "outcome": "Up", "side": "BUY",
                            "price": "0.31", "size": "1"}, NOW)
     assert not [d for k, d in out if k == "L5_SHADOW_COMPARE"]
@@ -533,3 +554,108 @@ def test_the_runner_produces_a_real_quote_not_a_controller_error(
     for r in recs:
         assert not str(r.get("reason") or "").startswith("controller_error"), r
     assert not [k for k in runner.stats.keys() if k.startswith("shadow_error")]
+
+
+# ===================================== TWO POLICIES, ONE BOOK, ONE INSTANT
+
+def test_both_policies_run_with_separate_inventories(tmp_path, monkeypatch):
+    """THE P1 DELIVERABLE. The baseline keeps running beside the candidate,
+    each over its OWN simulated inventory in its OWN file, so a candidate
+    can never be credited with the baseline's fills."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [], bid="0.48",
+                   ask="0.50")
+    out = capture(monkeypatch)
+    runner.tick(NOW)
+    cs = runner.shadow_controller()
+    assert set(cs) == set(SC.POLICIES)
+    assert SC.BASELINE_POLICY in cs
+    paths = {c.state_path for c in cs.values()}
+    assert len(paths) == len(cs), paths
+    for name in SC.POLICIES:
+        assert decisions(out, name), name
+    # distinct objects, distinct state dicts
+    objs = list(cs.values())
+    assert objs[0].state is not objs[1].state
+
+
+def test_every_policy_decides_on_the_same_book_and_instant(tmp_path,
+                                                           monkeypatch):
+    """A comparison across policies means nothing if they are fed different
+    books, so the snapshot is taken ONCE per tick."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [])
+    out = capture(monkeypatch)
+    runner.tick(NOW)
+    recs = {d["policy"]: d for d in decisions(out)}
+    assert len(recs) == len(SC.POLICIES)
+    ttes = {d["tte_s"] for d in recs.values()}
+    ends = {d.get("window_end_ts") for d in recs.values()}
+    assert len(ttes) == 1 and len(ends) == 1, (ttes, ends)
+    # and the book was read once, not once per policy
+    assert runner.book.snapshot.call_count <= 3
+
+
+def test_one_policys_chatter_cannot_mute_the_other(tmp_path, monkeypatch):
+    """The emit throttle is keyed per policy. Shared, whichever decided
+    first would suppress the other's identical-looking record and the pair
+    would stop being comparable."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [])
+    out = capture(monkeypatch)
+    runner.roll(NOW)
+    for i in range(6):
+        runner.shadow_tick(NOW + i * 3.0)
+    for name in SC.POLICIES:
+        assert decisions(out, name), name
+
+
+def test_the_record_carries_the_model_argmax_beside_the_policys_choice(
+        tmp_path, monkeypatch):
+    """So a reader can see where a policy DEPARTED from the baseline rather
+    than having to infer it."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [], bid="0.48",
+                   ask="0.50")
+    out = capture(monkeypatch)
+    runner.tick(NOW)
+    for d in decisions(out):
+        if d.get("decision") == "quote":
+            assert "model_argmax" in d, d
+    base = decisions(out, SC.BASELINE_POLICY)
+    assert base and base[0]["relation"] == base[0]["model_argmax"], \
+        "the baseline IS the argmax; if these differ it is not the baseline"
+
+
+def test_one_venue_read_settles_every_policys_copy(tmp_path, monkeypatch):
+    """Both policies hold the same window; settling it must cost ONE public
+    read, not one per policy."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [])
+    capture(monkeypatch)
+    runner.tick(NOW)
+    for name, c in runner.shadow_controller().items():
+        inv = c.inventory_for(PMUS)
+        inv.record(True, D("0.47"))
+        inv.record(False, D("0.49"))
+        c._store_inventory(PMUS, inv)
+        c._save()
+    reads = {"n": 0}
+
+    def bbo(_slug):
+        reads["n"] += 1
+        return {"state": "MARKET_STATE_EXPIRED", "settlementPx": "1.0000"}
+    monkeypatch.setattr(R.OBS, "pmus_bbo", bbo)
+    out = capture(monkeypatch)
+    runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
+    settled = [d for k, d in out if k == "L5_SHADOW_SETTLED"]
+    assert {d["policy"] for d in settled} == set(SC.POLICIES), settled
+    assert reads["n"] == 1, reads
+
+
+def test_l5_is_compared_against_the_baseline_not_the_candidate(tmp_path,
+                                                               monkeypatch):
+    """The question is what the DEPLOYED policy would have done at L5's
+    moment. Comparing against a candidate would flatter the candidate."""
+    runner = build(tmp_path, monkeypatch, feed=_growing_feed())
+    out = capture(monkeypatch)
+    runner.tick(NOW)
+    runner.tick(NOW + 3.0)
+    cmp = [d for k, d in out if k == "L5_SHADOW_COMPARE"]
+    assert cmp
+    assert cmp[0]["compared_policy"] == SC.BASELINE_POLICY, cmp[0]

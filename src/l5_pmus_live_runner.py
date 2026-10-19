@@ -325,10 +325,14 @@ class Runner:
         # transport, and is consulted by nothing on the money path -- see
         # `shadow_tick`. Named with a leading underscore so no existing
         # code path can reach it by guessing an attribute name.
-        self._shadow: Optional[SHADOW.ShadowController] = None
+        #: ONE CONTROLLER PER POLICY, each with its own inventory in its own
+        #: state file. The baseline is kept running beside any candidate so
+        #: the comparison is live rather than remembered, and so a candidate
+        #: cannot be credited with the baseline's fills.
+        self._shadow: Dict[str, SHADOW.ShadowController] = {}
         self._shadow_off = False
-        self._shadow_last_key: Any = None
-        self._shadow_last_emit_t = 0.0
+        self._shadow_last_key: Dict[str, Any] = {}
+        self._shadow_last_emit_t: Dict[str, float] = {}
         self._shadow_settle_t: Dict[str, float] = {}
         self._shadow_last_rec: Optional[Dict[str, Any]] = None
         self._shadow_last_rec_t = 0.0
@@ -1801,37 +1805,45 @@ class Runner:
     # no submission here to stop. Gating it on HALT would only stop the
     # record, which is the one thing Phase A is for.
 
-    def shadow_controller(self) -> Optional[Any]:
+    def shadow_controller(self) -> Dict[str, Any]:
         """Built once, lazily, and never allowed to fail the tick.
 
-        A missing or unreadable v2 artifact must stop THIS and nothing
-        else, so a construction failure disables the controller for the
-        life of the process, is reported by name, and leaves every other
-        path exactly as it was. The model is loaded here, at construction,
-        so the failure surfaces once rather than on every tick.
+        ONE PER POLICY. The baseline (the argmax the money path would have
+        used) runs alongside the candidate, each over its own simulated
+        inventory in its own file, sharing one loaded model. A difference in
+        their records is therefore a difference in the policy choice alone.
+
+        A missing or unreadable v2 artifact must stop THIS and nothing else,
+        so a construction failure disables the whole block for the life of
+        the process, is reported by name, and leaves every other path
+        exactly as it was.
         """
-        if self._shadow_off:
-            return None
-        if self._shadow is None:
-            try:
+        if self._shadow_off or self._shadow:
+            return self._shadow
+        try:
+            model = None
+            built: Dict[str, Any] = {}
+            for name in sorted(SHADOW.POLICIES):
                 c = SHADOW.ShadowController(
-                    state_path=os.path.join(self.root,
-                                            "shadow_controller.json"),
-                    emit=self._shadow_emit)
-                _ = c.model                       # load now, fail now
-                self._shadow = c
-                emit("L5_SHADOW_READY", c.report())
-            except BaseException as exc:                       # noqa: BLE001
-                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                    raise
-                self._shadow, self._shadow_off = None, True
-                emit("L5_SHADOW_DISABLED",
-                     {"why": "%s" % type(exc).__name__,
-                      "detail": T.redact("%s" % exc)[:300],
-                      "labels": ("the independent shadow decision source is "
-                                 "OFF for this process. Nothing else is "
-                                 "affected: it gates nothing and no money "
-                                 "path reads it.")})
+                    state_path=os.path.join(
+                        self.root, "shadow_controller_%s.json" % name.lower()),
+                    model=model, policy=name, emit=self._shadow_emit)
+                model = c.model               # load once, fail once, share
+                built[name] = c
+            self._shadow = built
+            for name in sorted(built):
+                emit("L5_SHADOW_READY", built[name].report())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self._shadow, self._shadow_off = {}, True
+            emit("L5_SHADOW_DISABLED",
+                 {"why": "%s" % type(exc).__name__,
+                  "detail": T.redact("%s" % exc)[:300],
+                  "labels": ("the independent shadow decision source is "
+                             "OFF for this process. Nothing else is "
+                             "affected: it gates nothing and no money "
+                             "path reads it.")})
         return self._shadow
 
     def _shadow_emit(self, kind: str, doc: Mapping[str, Any]) -> None:
@@ -1844,16 +1856,20 @@ class Runner:
         A modelled fill is never suppressed -- it is the only event here
         that changes state.
         """
+        pol = str(doc.get("policy") or "?")
         key = (doc.get("decision"), doc.get("relation"), doc.get("side"),
                doc.get("target_price"), doc.get("reason"))
         t = float(self.now_t or 0.0)
-        if (key == self._shadow_last_key
-                and (t - self._shadow_last_emit_t) < SHADOW_EMIT_S
+        # KEYED PER POLICY. A shared key would let whichever policy decided
+        # first mute the other's identical-looking record, and the pair
+        # would stop being comparable.
+        if (key == self._shadow_last_key.get(pol)
+                and (t - self._shadow_last_emit_t.get(pol, 0.0)) < SHADOW_EMIT_S
                 and not doc.get("modelled_fill")):
-            self.stats["shadow_repeat_suppressed"] += 1
+            self.stats["shadow_repeat_suppressed:%s" % pol] += 1
             return
-        self._shadow_last_key = key
-        self._shadow_last_emit_t = t
+        self._shadow_last_key[pol] = key
+        self._shadow_last_emit_t[pol] = t
         emit(kind, doc)
 
     def shadow_window(self) -> Dict[str, Any]:
@@ -1895,27 +1911,38 @@ class Runner:
         deliverable, so any failure here degrades to a counted error and
         never to a raise.
         """
-        c = self.shadow_controller()
-        if c is None or self.ws is None:
+        cs = self.shadow_controller()
+        if not cs or self.ws is None:
             return None
         slug = AB.slug_for(int(self.ws))
         win = self.shadow_window()
-        try:
-            rec = c.step(now, slug=slug, book=self.book.snapshot(slug),
-                         window_end_ts=win["window_end_ts"],
-                         window_source=win["window_source"])
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            self.stats["shadow_error:%s" % type(exc).__name__] += 1
-            return None
-        self._shadow_last_rec, self._shadow_last_rec_t = rec, now
-        self.stats["shadow_decisions"] += 1
-        self.stats["shadow:%s" % str(rec.get("relation")
-                                     or rec.get("decision") or "?")] += 1
-        if rec.get("modelled_fill"):
-            self.stats["shadow_modelled_fills"] += 1
-        return rec
+        # ONE snapshot for all policies: they must decide on the SAME book
+        # and the SAME instant or the comparison means nothing.
+        book = self.book.snapshot(slug)
+        out = None
+        for name in sorted(cs):
+            try:
+                rec = cs[name].step(now, slug=slug, book=book,
+                                    window_end_ts=win["window_end_ts"],
+                                    window_source=win["window_source"])
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["shadow_error:%s:%s"
+                           % (name, type(exc).__name__)] += 1
+                continue
+            self.stats["shadow_decisions:%s" % name] += 1
+            self.stats["shadow:%s:%s" % (name, str(rec.get("relation")
+                                                   or rec.get("decision")
+                                                   or "?"))] += 1
+            if rec.get("modelled_fill"):
+                self.stats["shadow_modelled_fills:%s" % name] += 1
+            if name == SHADOW.BASELINE_POLICY:
+                # L5's observed action is compared against the BASELINE,
+                # which is what the money path would have done.
+                self._shadow_last_rec, self._shadow_last_rec_t = rec, now
+            out = rec
+        return out
 
     def shadow_compare(self, r: Mapping[str, Any], now: float) -> None:
         """What L5 just did, beside what WE had decided at that moment.
@@ -1954,6 +1981,7 @@ class Runner:
                      "state": rec.get("state"), "tte_s": rec.get("tte_s"),
                      "inventory": rec.get("inventory"),
                      "decision_age_s": round(now - self._shadow_last_rec_t, 3)},
+            "compared_policy": rec.get("policy"),
             "same_side": (None if (ours is None or theirs is None)
                           else ours == theirs),
             "we_would_have_acted": rec.get("decision") == "quote",
@@ -1963,16 +1991,18 @@ class Runner:
 
     def shadow_close(self) -> None:
         """Report what a rolling window leaves the shadow holding."""
-        c = self._shadow
-        if c is None or self.ws is None:
+        if not self._shadow or self.ws is None:
             return
-        try:
-            emit("L5_SHADOW_WINDOW_CLOSE",
-                 c.window_close(AB.slug_for(int(self.ws))))
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            self.stats["shadow_error:%s" % type(exc).__name__] += 1
+        slug = AB.slug_for(int(self.ws))
+        for name in sorted(self._shadow):
+            try:
+                emit("L5_SHADOW_WINDOW_CLOSE",
+                     self._shadow[name].window_close(slug))
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["shadow_error:%s:%s"
+                           % (name, type(exc).__name__)] += 1
 
     def shadow_settle(self, now: float) -> None:
         """Settle a closed shadow window at the VENUE's own price.
@@ -1988,11 +2018,15 @@ class Runner:
         Nothing is inferred. Without the venue's own number the window
         stays unsettled and is reported as stranded inventory.
         """
-        c = self._shadow
-        if c is None:
+        if not self._shadow:
             return
-        for slug in c.pending_settlement(now,
-                                         grace_s=SHADOW_SETTLE_GRACE_S):
+        # the union across policies, so ONE venue read settles every
+        # policy's copy of the same window at the same price
+        want = set()
+        for c in self._shadow.values():
+            want.update(c.pending_settlement(now,
+                                             grace_s=SHADOW_SETTLE_GRACE_S))
+        for slug in sorted(want):
             if now - self._shadow_settle_t.get(slug, 0.0) < SETTLEMENT_POLL_S:
                 continue
             self._shadow_settle_t[slug] = now
@@ -2008,13 +2042,16 @@ class Runner:
             if state not in T.TERMINAL_MARKET_STATES or px not in (D(0), D(1)):
                 self.stats["shadow_awaiting_settlement"] += 1
                 continue
-            try:
-                emit("L5_SHADOW_SETTLED",
-                     dict(c.settle(slug, px), venue_state=state))
-            except BaseException as exc:                       # noqa: BLE001
-                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                    raise
-                self.stats["shadow_error:%s" % type(exc).__name__] += 1
+            for name in sorted(self._shadow):
+                try:
+                    emit("L5_SHADOW_SETTLED",
+                         dict(self._shadow[name].settle(slug, px),
+                              venue_state=state))
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    self.stats["shadow_error:%s:%s"
+                               % (name, type(exc).__name__)] += 1
 
     def heartbeat(self) -> None:
         t = self.transport
@@ -2038,7 +2075,9 @@ class Runner:
             # THE INDEPENDENT DECISION SOURCE, on every heartbeat. Phase A's
             # deliverable is that it emits continuously, and a counter an
             # operator has to go looking for does not demonstrate that.
-            "shadow_controller": (self._shadow.report() if self._shadow
+            "shadow_controller": ({n: c.report()
+                                   for n, c in self._shadow.items()}
+                                  if self._shadow
                                   else {"off": self._shadow_off}),
             "book_now": self.book.snapshot(t.market_slug) if t else None,
             "stats": dict(self.stats),

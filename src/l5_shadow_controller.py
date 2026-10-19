@@ -71,6 +71,95 @@ FORBIDDEN_ATTRS = ("submit", "place", "cancel", "amend", "transport",
 
 STATE_VERSION = 2
 
+#: ============================ THE DECISION POLICIES ============================
+#:
+#: The deployed controller consulted the frozen v2 model by ARGMAX. The
+#: model's mean probabilities across its on-distribution states are extend
+#: 0.541 / complete 0.459, so the argmax turns a near-coin-flip into a
+#: MONOTONE run: each extend sets last_rel=extend, which keeps extend as the
+#: argmax until the tte bucket itself changes. Measured in replay over L5's
+#: own 5,546 BTC15m windows, that gives an extend share of 0.90 with runs of
+#: median 5, p90 63 and max 154 -- against L5's own 0.52 and median 2, p90 8,
+#: p99 18. That gap is the defect.
+#:
+#: NO POLICY HERE TARGETS L5'S RATIO. Matching a summary statistic is not a
+#: profit mechanism, and forcing one would be fitting the diagnostic. The
+#: run-length distribution is reported beside the economics as a BEHAVIOURAL
+#: DIAGNOSTIC and is never optimised toward.
+#:
+#: NO FREE PARAMETERS. Both policies are deterministic and use only
+#: constants already in the codebase, so there is nothing to tune on an
+#: evaluation sample -- which is what the COMPLETE re-quote campaign was
+#: NO-GO'd for.
+
+
+def policy_argmax(prop, inv, book, tte):
+    """BASELINE, preserved for comparison: the model's argmax relation."""
+    return prop.get("recommended_relation")
+
+
+def policy_pair_available(prop, inv, book, tte):
+    """CANDIDATE: complete whenever the pair can be locked, else extend.
+
+    The only action that converts inventory into a determinate $1
+    redemption is a completion whose combined pair cost clears the cap. So
+    this asks the economic question directly -- is a fee-safe completion
+    priceable from OUR OWN average cost against the deficit side's touch
+    right now? -- and takes it when the answer is yes, whatever the argmax
+    says. It never completes because a clock moved and never extends
+    because a tte bucket boundary was crossed.
+
+    It is NOT a claim that such a completion FILLS. Whether a patient quote
+    inside the touch is ever executed is a queue question this controller
+    cannot answer on a BBO feed; see FILL_RULE.
+    """
+    if inv.residual == 0:
+        return "open"
+    side_yes = inv.residual < 0                   # the DEFICIT side
+    surplus_avg = inv.avg(not side_yes)
+    if surplus_avg is None:
+        return prop.get("recommended_relation")
+    touch = l5d._touch_for(side_yes, book)
+    px, _ = l5d.complement_target(surplus_avg, touch,
+                                  pair_cap=l5d.BTC15M_PAIR_CAP)
+    return "complete" if px is not None else "extend"
+
+
+def policy_residual_urgency(prop, inv, book, tte):
+    """CANDIDATE: never let inventory reach the cap; otherwise the model.
+
+    THIS IS THE DEFECT, MEASURED. Replayed over L5's own 5,546 BTC15m
+    windows, the argmax baseline refuses 56% (older half) to 74% (newer
+    half) of all its decision opportunities, and EVERY refusal is
+    `residual_cap:3>=3` -- 3,219 of 3,219 and 22,311 of 22,323. The argmax
+    walks inventory up to the cap and then parks, because at the cap it can
+    neither extend nor open and the model keeps recommending extend.
+    Production shows exactly that, parked at 3>=3 through the 1600z window.
+
+    So this completes ONE STEP BEFORE the cap and otherwise defers to the
+    model. It is the smaller of the two corrections: it keeps EXTEND as a
+    first-class action -- a 35% extend share in replay, against the
+    operating model's "same-side EXTEND is not an error to flatten
+    immediately" -- where `policy_pair_available` extends 0.1% of the time
+    and is therefore a different strategy rather than a replication.
+
+    The threshold is not tuned. It is MAX_RESIDUAL_UNITS - 1: the last
+    state from which an extend is still legal.
+    """
+    if inv.residual == 0:
+        return "open"
+    if abs(inv.residual) >= l5d.MAX_RESIDUAL_UNITS - 1:
+        return "complete"
+    return prop.get("recommended_relation")
+
+
+POLICIES = {"ARGMAX": policy_argmax,
+            "PAIR_AVAILABLE": policy_pair_available,
+            "RESIDUAL_URGENCY": policy_residual_urgency}
+
+#: what the deployed money path would do, kept running beside any candidate
+BASELINE_POLICY = "ARGMAX"
+
 #: stranded markets named individually in a report. The COUNT is always
 #: exact; the list is capped because this report goes in every heartbeat and
 #: a long run of failed settlement reads would otherwise grow it without
@@ -120,9 +209,17 @@ class ShadowController:
     def __init__(self, *, state_path: str,
                  model: Optional[Mapping[str, Any]] = None,
                  pair_cap: Optional[D] = None,
+                 policy: str = BASELINE_POLICY,
                  emit: Optional[Callable[[str, Mapping[str, Any]], None]] = None
                  ) -> None:
         self.state_path = str(state_path)
+        if policy not in POLICIES:
+            raise ValueError("unknown policy: %r" % (policy,))
+        #: named on every record, and each policy keeps its OWN inventory in
+        #: its OWN state file, so two of these can run side by side without
+        #: one's simulated fills contaminating the other's decisions.
+        self.policy = str(policy)
+        self.policy_fn = POLICIES[self.policy]
         self._model = model
         # BTC15m completes at the spring target, not the incentive-era
         # near-$1 tolerance. None would mean the sports cap.
@@ -278,6 +375,7 @@ class ShadowController:
         assume which one was used.
         """
         base = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
+                "policy": self.policy,
                 "fill_rule": FILL_RULE, "window_source": window_source}
         try:
             book = normalise_book(book)
@@ -314,7 +412,12 @@ class ShadowController:
             if prop.get("off_distribution"):
                 return self._out({**rec, "decision": "no_action",
                                   "reason": "v2_off_distribution"})
-            rel = prop.get("recommended_relation")
+            # the ONE line the policy changes. Everything else -- the
+            # inventory, the pricing from our own average cost, the residual
+            # cap, the fill rule -- is identical across policies, so a
+            # difference in outcome is a difference in this choice alone.
+            rel = self.policy_fn(prop, inv, book, tte)
+            rec["model_argmax"] = prop.get("recommended_relation")
             plan = l5d.plan_action(rel, inv, book, pair_cap=self.pair_cap)
             rec = {**rec, **l5d._public(plan)}
             if plan.get("decision") == "quote":
@@ -352,7 +455,7 @@ class ShadowController:
         resid_redeem = (D(abs(resid)) * (yes_value if resid > 0
                                          else (D(1) - yes_value)))
         out = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
-               "yes_value": str(yes_value),
+               "policy": self.policy, "yes_value": str(yes_value),
                "matched_units": matched, "residual_units": resid,
                "cost_total": str(cost),
                "redemption_total": str(matched_redeem + resid_redeem),
@@ -386,6 +489,7 @@ class ShadowController:
         dropped, s["resting"] = s.get("resting"), None
         self._save()
         return {"provenance": CONTROLLER_PROVENANCE, "market": slug,
+                "policy": self.policy,
                 "inventory": inv.snapshot(),
                 "cost_total": str(inv.yes_cost + inv.no_cost),
                 "dropped_resting": dropped,
@@ -493,6 +597,7 @@ class ShadowController:
 
     def report(self) -> Dict[str, Any]:
         return {"provenance": CONTROLLER_PROVENANCE,
+                "policy": self.policy,
                 "decisions": self.decisions,
                 "counts": dict(self.counts),
                 "markets": len(self.state.get("markets") or {}),

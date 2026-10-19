@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 import json
 import os
+from collections import Counter
 from decimal import Decimal as D
 
 import pytest
@@ -620,3 +621,112 @@ def test_the_venue_itself_never_hands_us_a_one_sided_book(tmp_path):
         book.state[SLUG] = dict(st, bid_qty="1", ask_qty="1",
                                 bbo_history=[], book_updates=1)
         assert book.snapshot(SLUG) is None, st
+
+
+# ===================================== THE POLICIES THEMSELVES
+
+def test_every_policy_is_registered_and_the_baseline_is_the_argmax():
+    assert sc.BASELINE_POLICY == "ARGMAX"
+    assert set(sc.POLICIES) == {"ARGMAX", "PAIR_AVAILABLE",
+                                "RESIDUAL_URGENCY"}
+    assert sc.POLICIES[sc.BASELINE_POLICY] is sc.policy_argmax
+
+
+def test_an_unknown_policy_is_refused_at_construction(tmp_path):
+    with pytest.raises(ValueError):
+        sc.ShadowController(state_path=str(tmp_path / "x.json"),
+                            model=_model(), policy="WISHFUL")
+
+
+def test_the_baseline_is_the_models_argmax_up_to_the_canonical_override(
+        tmp_path):
+    """If the baseline ever departs from the argmax it has stopped being the
+    thing the candidates are measured against -- with ONE documented
+    exception that belongs to the shared layer, not to the policy:
+    `plan_action` canonicalises any relation to `open` from flat inventory,
+    because "any buy from |residual| < 1 IS an open, whatever label the
+    model emitted". So the override is asserted, not excused.
+    """
+    c = ctl(tmp_path, policy="ARGMAX")
+    overrides = 0
+    for i in range(40):
+        resid_before = c.inventory_for(SLUG).residual
+        rec = c.step(WS + i * 20.0, slug=SLUG, book=_book(),
+                     window_end_ts=WEND)
+        if rec.get("decision") != "quote":
+            continue
+        if rec["relation"] == rec["model_argmax"]:
+            continue
+        # the only legal divergence
+        assert resid_before == 0, rec
+        assert rec["relation"] == "open", rec
+        overrides += 1
+    assert overrides, "the canonical override never fired, so it is untested"
+
+
+def test_residual_urgency_completes_one_step_before_the_cap(tmp_path):
+    """The whole correction: at |residual| == MAX_RESIDUAL_UNITS - 1 it
+    completes regardless of the model, so the cap is never reached and the
+    controller never parks."""
+    from src import pmus_l5_persistence_v2 as pv2
+    inv = l5d.Inventory()
+    for _ in range(l5d.MAX_RESIDUAL_UNITS - 1):
+        inv.record(True, D("0.40"))
+    prop = {"recommended_relation": "extend"}
+    book = sc.normalise_book(_book("0.40", "0.42"))
+    assert sc.policy_residual_urgency(prop, inv, book, 500.0) == "complete"
+    # and one step below it still defers to the model
+    lo = l5d.Inventory()
+    lo.record(True, D("0.40"))
+    if l5d.MAX_RESIDUAL_UNITS - 1 > 1:
+        assert sc.policy_residual_urgency(prop, lo, book, 500.0) == "extend"
+
+
+def test_residual_urgency_keeps_extend_as_a_first_class_action(tmp_path):
+    """Unlike PAIR_AVAILABLE, which flattens immediately. The operating
+    model is explicit that same-side EXTEND is not an error to flatten, so
+    a candidate that never extends is a different strategy and not a
+    replication."""
+    from src import pmus_l5_persistence_v2 as pv2
+    seen = {}
+    for pol in ("RESIDUAL_URGENCY", "PAIR_AVAILABLE"):
+        c = sc.ShadowController(state_path=str(tmp_path / (pol + ".json")),
+                                model=pv2.load_v2(), policy=pol)
+        rels = Counter()
+        bk = _book("0.48", "0.50")
+        for i in range(400):
+            rec = c.step(WS + i * 2.0, slug=SLUG, book=bk, window_end_ts=WEND)
+            if rec.get("decision") == "quote":
+                rels[rec["relation"]] += 1
+            rest = c._slot(SLUG).get("resting")
+            if rest:                      # let it fill so inventory moves
+                c.step(WS + i * 2.0 + 1.0, slug=SLUG, window_end_ts=WEND,
+                       book=_book_against(rest, through=True))
+        seen[pol] = rels
+    assert seen["RESIDUAL_URGENCY"]["extend"] > 0, seen
+    assert (seen["RESIDUAL_URGENCY"]["extend"]
+            > seen["PAIR_AVAILABLE"]["extend"]), seen
+
+
+def test_no_policy_ever_reaches_the_residual_cap_except_the_baseline(tmp_path):
+    """The baseline parks at `residual_cap`; the candidates must not. This
+    is the measurable improvement, and it does not depend on the fill rule:
+    it is about inventory, not about execution."""
+    from src import pmus_l5_persistence_v2 as pv2
+    capped = {}
+    for pol in sorted(sc.POLICIES):
+        c = sc.ShadowController(state_path=str(tmp_path / (pol + "c.json")),
+                                model=pv2.load_v2(), policy=pol)
+        n = 0
+        bk = _book("0.48", "0.50")
+        for i in range(400):
+            rec = c.step(WS + i * 2.0, slug=SLUG, book=bk, window_end_ts=WEND)
+            if "residual_cap" in str(rec.get("reason") or ""):
+                n += 1
+            rest = c._slot(SLUG).get("resting")
+            if rest:
+                c.step(WS + i * 2.0 + 1.0, slug=SLUG, window_end_ts=WEND,
+                       book=_book_against(rest, through=True))
+        capped[pol] = n
+    assert capped["RESIDUAL_URGENCY"] == 0, capped
+    assert capped["PAIR_AVAILABLE"] == 0, capped
