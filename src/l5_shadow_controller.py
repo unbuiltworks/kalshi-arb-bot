@@ -227,6 +227,26 @@ def normalise_book(book: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]
     return out
 
 
+#: WHY A DECISION DID NOT BECOME A QUOTE, split by whether the refusal is
+#: ECONOMICALLY JUSTIFIED or a POSSIBLE MISS. The split is the point: a
+#: controller that refuses 95% of ticks looks identical in the counts whether
+#: it is declining bad prices or failing to find good ones, and only one of
+#: those is a problem to fix.
+#:
+#: JUSTIFIED means the refusal protects money or admits ignorance:
+#:   no_two_sided_book            no complement price, so no pair to price
+#:   v2_off_distribution          the frozen model has no state here
+#:   would_cross_not_a_maker_quote  resting there would pay the spread
+#:   already_resting              one outstanding order per scenario, by design
+#:   pair_cap / plan refusals     completion above the fee-safe cap
+#: POSSIBLE_MISS means the model had somewhere to go and the policy declined,
+#: which is the only bucket that can contain forgone profit.
+JUSTIFIED_REFUSALS = (
+    "no_two_sided_book", "v2_off_distribution",
+    "would_cross_not_a_maker_quote", "already_resting",
+)
+
+
 class ShadowController:
     """One inventory-driven decision per tick, for one market at a time."""
 
@@ -386,6 +406,9 @@ class ShadowController:
                                           "redemption_total": "0",
                                           "matched_units": 0,
                                           "residual_units_abs": 0})
+                for k in ("pair_net", "residual_net"):
+                    c.setdefault(k, "0")
+                    c[k] = str(D(c[k]) + D(str(line.get(k) or 0)))
                 c["windows"] = int(c["windows"]) + 1
                 c["cost_total"] = str(D(c["cost_total"])
                                       + D(str(line.get("cost_total") or 0)))
@@ -651,6 +674,18 @@ class ShadowController:
             sc = slot["scen"][scenario]
             inv = self.inventory_for(slug, scenario)
             dropped, sc["resting"] = sc.get("resting"), None
+            t = self._tally(scenario)
+            t["windows_observed"] += 1
+            if dropped is not None:
+                # A quote that never filled and cannot survive expiry. This
+                # is the denominator half of the fill rate: counting fills
+                # without counting these would read as a 100% fill rate.
+                t["unfilled_at_expiry"] += 1
+            if not (inv.yes or inv.no):
+                # A ZERO-TRADE WINDOW, counted so the per-window average is
+                # taken over every window we watched and not only the ones
+                # where something happened.
+                t["windows_zero_trade"] += 1
             out["scenarios"][scenario] = {
                 "inventory": inv.snapshot(),
                 "cost_total": str(inv.yes_cost + inv.no_cost),
@@ -723,10 +758,33 @@ class ShadowController:
             cost = inv.yes_cost + inv.no_cost
             redeem = (D(matched) + D(abs(resid))
                       * (yes_value if resid > 0 else (D(1) - yes_value)))
+            # SEPARATED, NEVER SUMMED INTO ONE NUMBER. A matched pair
+            # redeems $1 whatever happens; the residual is a bet with no
+            # demonstrated skill behind it. The AVERAGE-COST basis is used
+            # because that is what `complement_target` prices against, so
+            # the split and the decisions agree with each other. FIFO
+            # re-pairing moves the split and not the total; the total is
+            # the number that does not depend on the convention.
+            ay = (inv.yes_cost / D(inv.yes)) if inv.yes else D(0)
+            an = (inv.no_cost / D(inv.no)) if inv.no else D(0)
+            pair_cost = D(matched) * (ay + an)
+            resid_cost = D(abs(resid)) * (ay if resid > 0 else an)
+            resid_redeem = (D(abs(resid))
+                            * (yes_value if resid > 0 else (D(1) - yes_value)))
             line = {"matched_units": matched, "residual_units": resid,
                     "cost_total": str(cost),
                     "redemption_total": str(redeem),
-                    "modelled_net": str(redeem - cost)}
+                    "modelled_net": str(redeem - cost),
+                    "pair_cost": str(pair_cost),
+                    "pair_redemption": str(D(matched)),
+                    "pair_net": str(D(matched) - pair_cost),
+                    "residual_cost": str(resid_cost),
+                    "residual_redemption": str(resid_redeem),
+                    "residual_net": str(resid_redeem - resid_cost),
+                    "capital_deployed": str(cost),
+                    "avg_yes_cost": str(ay), "avg_no_cost": str(an),
+                    "window_end_ts": slot.get("window_end_ts"),
+                    "basis": "AVERAGE_COST"}
             out["scenarios"][scenario] = line
             sc["settled"] = line
             sc.update(self._fresh_scenario())
@@ -789,9 +847,111 @@ class ShadowController:
                 tot["redeem"] += D(str(line.get("redemption_total") or 0))
                 tot["matched"] += int(line.get("matched_units") or 0)
                 tot["resid"] += abs(int(line.get("residual_units") or 0))
+            # PER-WINDOW LINES, EVERY SETTLED WINDOW, ordered by the
+            # venue's own window end. Not a sample and not the favourable
+            # ones: the list is every window still held in state, and
+            # `windows_folded_into_carry` says how many older ones are
+            # represented only by their totals.
+            lines = []
+            for slug, slot in (self.state.get("markets") or {}).items():
+                ln = ((slot.get("scen") or {}).get(scenario)
+                      or {}).get("settled")
+                if ln:
+                    lines.append((float(slot.get("window_end_ts") or 0.0),
+                                  slug, ln))
+            lines.sort()
+            per_window = [
+                {"market": slug,
+                 "net": str(D(str(ln.get("modelled_net") or 0))),
+                 "pair_net": str(D(str(ln.get("pair_net") or 0))
+                                 .quantize(D("0.0001"))),
+                 "residual_net": str(D(str(ln.get("residual_net") or 0))
+                                     .quantize(D("0.0001"))),
+                 "capital_deployed": str(D(str(ln.get("cost_total") or 0))),
+                 "matched_units": int(ln.get("matched_units") or 0),
+                 "residual_units": int(ln.get("residual_units") or 0)}
+                for _, slug, ln in lines]
+            # DRAWDOWN over the settled sequence. Peak-to-trough of the
+            # cumulative modelled net, which is what a run of losing
+            # windows would cost before any recovery.
+            run = D(str(c.get("pair_net") or 0)) + D(str(c.get("residual_net")
+                                                         or 0))
+            peak, dd = run, D(0)
+            for w in per_window:
+                run += D(w["net"])
+                peak = max(peak, run)
+                dd = max(dd, peak - run)
+            pair_net = D(str(c.get("pair_net") or 0)) + sum(
+                (D(w["pair_net"]) for w in per_window), D(0))
+            resid_net = D(str(c.get("residual_net") or 0)) + sum(
+                (D(w["residual_net"]) for w in per_window), D(0))
+            t = (self.state.get("tally") or {}).get(scenario) or {}
+            quotes = int(t.get("quotes_placed") or 0)
+            fills = int(t.get("fills") or 0)
+            nfill = fills + int(t.get("unfilled_at_expiry") or 0)
+            refusals = (int(t.get("justified_refusals") or 0)
+                        + int(t.get("possible_misses") or 0))
+            net_total = tot["redeem"] - tot["cost"]
             per[scenario] = {
                 "windows_settled": tot["windows_settled"],
                 "windows_folded_into_carry": int(c.get("windows") or 0),
+                "per_window": per_window,
+                "windows_observed": int(t.get("windows_observed") or 0),
+                "windows_zero_trade": int(t.get("windows_zero_trade") or 0),
+                # quantized: an average cost is a repeating decimal and a
+                # P&L line with 27 places reads as precision it has not got
+                "pair_net": str(pair_net.quantize(D("0.0001"))),
+                "residual_net": str(resid_net.quantize(D("0.0001"))),
+                "max_drawdown": str(dd),
+                "capital_deployed_total": str(tot["cost"]),
+                "capital_efficiency": (
+                    None if tot["cost"] == 0
+                    else str((net_total / tot["cost"]).quantize(D("0.0001")))),
+                "net_per_settled_window": (
+                    None if not tot["windows_settled"]
+                    else str((net_total / D(tot["windows_settled"]))
+                             .quantize(D("0.0001")))),
+                "execution": {
+                    "quotes_placed": quotes,
+                    "filled": fills,
+                    "unfilled_at_expiry": int(t.get("unfilled_at_expiry")
+                                              or 0),
+                    "fill_rate": (None if not nfill
+                                  else str((D(fills) / D(nfill))
+                                           .quantize(D("0.0001")))),
+                    "adverse_fills": int(t.get("adverse_fills") or 0),
+                    "adverse_rate": (None if not fills
+                                     else str((D(int(t.get("adverse_fills")
+                                                     or 0)) / D(fills))
+                                              .quantize(D("0.0001")))),
+                    "adverse_usd": str(t.get("adverse_usd") or "0"),
+                    "swept_fills": int(t.get("swept_fills") or 0),
+                    "controller_errors": int(t.get("controller_errors") or 0)},
+                "opportunities": {
+                    "justified_refusals": int(t.get("justified_refusals")
+                                              or 0),
+                    "possible_misses": int(t.get("possible_misses") or 0),
+                    "possible_miss_rate": (
+                        None if not refusals
+                        else str((D(int(t.get("possible_misses") or 0))
+                                  / D(refusals)).quantize(D("0.0001")))),
+                    "reasons": dict(t.get("refusal_reasons") or {}),
+                    "labels": ("a JUSTIFIED refusal protects money or admits "
+                               "ignorance; a POSSIBLE MISS is the only "
+                               "bucket that can hold forgone profit. "
+                               "Neither is a loss until priced.")},
+                "data_completeness": {
+                    "records": int(t.get("records") or 0),
+                    "ticks_with_book": int(t.get("ticks_with_book") or 0),
+                    "ticks_without_book": int(t.get("ticks_without_book")
+                                              or 0),
+                    "fills_with_known_queue": int(t.get("queue_known_fills")
+                                                  or 0),
+                    "fills_with_unknown_queue": int(
+                        t.get("queue_unknown_fills") or 0),
+                    "labels": ("an unknown queue can only fill on a sweep, "
+                               "so the known/unknown split is the width of "
+                               "our ignorance about execution")},
                 "matched_units": tot["matched"],
                 "residual_units_abs": tot["resid"],
                 "cost_total": str(tot["cost"]),
@@ -808,6 +968,74 @@ class ShadowController:
                            "%s." % HEADLINE_SCENARIO)}
 
     # ---------------------------------------------------------- reporting
+    # ------------------------------------------------- execution quality
+    @staticmethod
+    def _fresh_tally() -> Dict[str, Any]:
+        return {"records": 0, "quotes_placed": 0, "fills": 0,
+                "unfilled_at_expiry": 0,
+                "justified_refusals": 0, "possible_misses": 0,
+                "refusal_reasons": {}, "controller_errors": 0,
+                "adverse_fills": 0, "adverse_usd": "0",
+                "queue_known_fills": 0, "queue_unknown_fills": 0,
+                "swept_fills": 0,
+                "ticks_with_book": 0, "ticks_without_book": 0,
+                "windows_observed": 0, "windows_zero_trade": 0}
+
+    def _tally(self, scenario: str) -> Dict[str, Any]:
+        t = self.state.setdefault("tally", {})
+        cur = t.setdefault(scenario, self._fresh_tally())
+        for k, v in self._fresh_tally().items():       # forward-compatible
+            cur.setdefault(k, v)
+        return cur
+
+    def _tally_record(self, d: Mapping[str, Any]) -> None:
+        """Tally ONE decision record, at the single funnel every record
+        passes through, so no branch can be missed by being forgotten."""
+        scen = d.get("scenario")
+        if scen not in SCENARIOS:
+            return
+        t = self._tally(scen)
+        t["records"] += 1
+        reason = str(d.get("reason") or "")
+        if reason == "no_two_sided_book":
+            t["ticks_without_book"] += 1
+        else:
+            t["ticks_with_book"] += 1
+        if reason.startswith("controller_error"):
+            t["controller_errors"] += 1
+        elif d.get("decision") == "quote":
+            t["quotes_placed"] += 1
+        elif reason in JUSTIFIED_REFUSALS:
+            t["justified_refusals"] += 1
+            t["refusal_reasons"][reason] = \
+                int(t["refusal_reasons"].get(reason, 0)) + 1
+        else:
+            # The model had somewhere to go and no protective reason fired.
+            # This is the only bucket that can hold forgone profit.
+            t["possible_misses"] += 1
+            key = reason or "policy_declined"
+            t["refusal_reasons"][key] = \
+                int(t["refusal_reasons"].get(key, 0)) + 1
+        f = d.get("modelled_fill")
+        if isinstance(f, Mapping):
+            t["fills"] += 1
+            if f.get("swept"):
+                t["swept_fills"] += 1
+            if f.get("queue_ahead_at_placement") in (None, ""):
+                t["queue_unknown_fills"] += 1
+            else:
+                t["queue_known_fills"] += 1
+            adv = f.get("adverse_selection") or {}
+            if isinstance(adv, Mapping):
+                if adv.get("adverse"):
+                    t["adverse_fills"] += 1
+                try:
+                    t["adverse_usd"] = str(D(t["adverse_usd"])
+                                           + D(str(adv.get("moved_against_us")
+                                                   or 0)))
+                except (ArithmeticError, ValueError, TypeError):
+                    pass
+
     def _out(self, rec: Mapping[str, Any]) -> Dict[str, Any]:
         d = dict(rec)
         scen = d.get("scenario")
@@ -815,6 +1043,10 @@ class ShadowController:
                          str(d.get("relation") or d.get("decision")
                              or "?").upper())
         self.counts[key] = self.counts.get(key, 0) + 1
+        try:
+            self._tally_record(d)
+        except BaseException:                              # noqa: BLE001
+            pass          # a counter must never cost a decision
         # DECISIONS COUNTS TICKS, not scenario-records. Every tick produces
         # one record per scenario; counting all of them would treble the
         # headline number for no gain. The per-scenario detail is in
