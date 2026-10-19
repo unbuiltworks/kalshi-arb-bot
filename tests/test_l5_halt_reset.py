@@ -343,6 +343,10 @@ def test_a_credentialed_watchdog_still_cannot_clear_its_own_latch():
 
 
 def test_the_reset_module_is_not_reachable_from_the_sweep_entrypoint():
+    """The script now SHIPS in the watchdog image (owner 2026-10-19), so the
+    property that matters is that the SWEEP never reaches it: the platform
+    invokes it as a separate pre-deploy process, the watchdog process does
+    not. If this ever fails, an automated sweep has gained a clear path."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sweep = open(os.path.join(root, "scripts/l5_halt_watchdog.py")).read()
     assert "l5_halt_reset" not in sweep
@@ -373,9 +377,21 @@ def test_the_reset_does_not_privilege_the_running_watchdog_image():
     tests/test_l5_watchdog_cancel_only_boundary.py pins that route matrix.
     """
     copied, df = _copies("deploy/l5_halt_watchdog/Dockerfile")
-    # THE ASYMMETRY IS THE POINT: it may now cancel, and it still cannot
-    # clear the latch it asserts.
-    assert "scripts/l5_halt_reset.py" not in copied, copied
+    # OWNER 2026-10-19 superseded one line of this test, and ONLY that line.
+    # The reset script is now copied here, because the latch is a file on
+    # THIS service's volume, a Railway volume attaches to exactly one
+    # service, and the previous arrangement -- swapping this service to a
+    # one-shot image -- took the independent watchdog offline for 5m53s.
+    # Railway runs preDeployCommand with the volume mounted while the current
+    # watchdog keeps sweeping, so the clear costs no watchdog downtime.
+    #
+    # WHAT DID NOT CHANGE, and is what the assertion below really protects:
+    # the SWEEP has no clear path. The image already held permissive-write
+    # capability via HaltAsserter.heartbeat_no_halt, so "cannot clear" was
+    # always a GUARD rather than an absence of code, and that guard is
+    # untouched -- see test_a_credentialed_watchdog_still_cannot_clear_its
+    # _own_latch, which still passes.
+    assert "scripts/l5_halt_reset.py" in copied, copied
     assert "src/pmus_auth.py" in copied, copied
     installs = [l for l in df.splitlines()
                 if l.startswith("RUN") and "pip install" in l]

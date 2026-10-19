@@ -61,9 +61,29 @@ COPY src/l5_watchdog.py       src/l5_watchdog.py
 COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
 COPY scripts/__init__.py      scripts/__init__.py
 COPY scripts/l5_halt_watchdog.py scripts/l5_halt_watchdog.py
+# THE OWNER-GATED HALT RESET, and why it is HERE rather than in a one-shot
+# image. The latch is a file on this service's volume and a Railway volume
+# attaches to exactly one service, so no other process can write it. Railway
+# runs `preDeployCommand` in the NEW deployment's container with the volume
+# mounted while the CURRENT watchdog keeps sweeping, so the clear happens
+# WITHOUT the independent watchdog ever going offline -- which is the whole
+# point, and the opposite of the image swap that took it down for 5m53s on
+# 2026-10-19.
+#
+# THIS DOES NOT GIVE THE SWEEP A CLEAR PATH. The sweep loop never calls it;
+# `HaltAsserter` still has no clear method; `heartbeat_no_halt` still refuses
+# over a latch. This image ALREADY held permissive-write capability through
+# that method -- "cannot clear" was always a GUARD, never an absence of code.
+# What is added is a SEPARATE process, invoked by the platform, behind four
+# fail-closed owner gates, whose reset id is spent by the ATTEMPT so a
+# leftover pre-deploy command clears nothing on any later deployment.
+COPY scripts/l5_halt_reset.py scripts/l5_halt_reset.py
 
 ENV PYTHONUNBUFFERED=1
 ENV L5_WATCHDOG_STATE_DIR=/data
+# the image names itself, so a redeploy that silently reused another build is
+# detectable. Deliberately NOT the one-shot image's value.
+ENV L5_RESET_IMAGE=l5_halt_watchdog
 # L5_ORDER_REGISTRY_URL names the executor's GET-only report AND is the
 # ownership oracle: an id absent from it is never cancelled, which is how the
 # owner's manual orders stay untouched on a shared account. Losing this

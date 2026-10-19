@@ -94,6 +94,26 @@ VIA_HTTP_ENV = "L5_HALT_RESET_VIA_HTTP"
 #: another. An image that cannot name itself does not clear a halt.
 IMAGE_MARKER_ENV = "L5_RESET_IMAGE"
 IMAGE_MARKER_VALUE = "l5_halt_reset"
+#: the watchdog image is the SECOND legitimate home, and only because the
+#: latch lives on its volume and a Railway volume attaches to exactly one
+#: service. Railway runs `preDeployCommand` in the NEW deployment's container
+#: with the volume mounted while the CURRENT watchdog keeps sweeping, so the
+#: clear happens without the independent watchdog ever going offline. Kept a
+#: DISTINCT value so a wrong image is still detectable and the audit entry
+#: records which image performed the clear.
+IMAGE_MARKER_WATCHDOG = "l5_halt_watchdog"
+ACCEPTED_IMAGE_MARKERS = (IMAGE_MARKER_VALUE, IMAGE_MARKER_WATCHDOG)
+
+#: PRE-DEPLOY MODE: a refusal must EXIT 0.
+#:
+#: Railway fails a deployment whose preDeployCommand exits non-zero. A spent
+#: reset id refusing RESET_ID_ALREADY_CONSUMED is the NORMAL steady state once
+#: a reset has been used, so a leftover pre-deploy command returning 2 would
+#: block every future watchdog deployment -- the watchdog could never be
+#: updated or restarted again. In this mode every refusal is logged loudly and
+#: exits 0: the deployment proceeds, the latch stays latched, and nothing is
+#: cleared. Refusing is the expected outcome here, not an error.
+PRE_DEPLOY_ENV = "L5_HALT_RESET_PRE_DEPLOY"
 
 #: the audit log, beside the latch on the same volume so they cannot be
 #: separated by a redeploy.
@@ -148,12 +168,12 @@ def _require_reset_image() -> str:
     is running. This marker is, because it travels inside the image.
     """
     got = _env(IMAGE_MARKER_ENV)
-    if got != IMAGE_MARKER_VALUE:
+    if got not in ACCEPTED_IMAGE_MARKERS:
         raise ResetRefused(
-            "WRONG_IMAGE: %s must be %r and is %r. The running container is "
-            "not the reset image, whatever the service config says -- a "
-            "redeploy reuses the previous build."
-            % (IMAGE_MARKER_ENV, IMAGE_MARKER_VALUE, got or None))
+            "WRONG_IMAGE: %s must be one of %r and is %r. The running "
+            "container is not a reset-capable image, whatever the service "
+            "config says -- a redeploy reuses the previous build."
+            % (IMAGE_MARKER_ENV, list(ACCEPTED_IMAGE_MARKERS), got or None))
     return got
 
 
@@ -638,9 +658,19 @@ def build_store(*, inspecting: bool) -> Tuple[Any, str]:
     return HG.FileStore(os.getenv(STATE_ENV, "/data")), "volume"
 
 
+def _refusal_label(pre_deploy: bool) -> str:
+    if pre_deploy:
+        return ("PRE-DEPLOY: refused and exiting 0 so the watchdog "
+                "deployment is NOT blocked. Nothing was cleared and the "
+                "latch is untouched. A spent reset id refusing here is the "
+                "expected steady state.")
+    return "Nothing was written. The latch is untouched."
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     out: Dict[str, Any]
     inspecting = _env(INSPECT_ENV).upper() == "YES"
+    pre_deploy = _env(PRE_DEPLOY_ENV).upper() == "YES"
     try:
         store, medium = build_store(inspecting=inspecting)
         if inspecting:
@@ -667,14 +697,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     except ResetRefused as exc:
         print("L5_HALT_RESET_REFUSED " + json.dumps(
-            {"ok": False, "refused": str(exc)}, sort_keys=True))
-        return 2
+            {"ok": False, "refused": str(exc),
+             "pre_deploy": pre_deploy,
+             "labels": _refusal_label(pre_deploy)}, sort_keys=True))
+        return 0 if pre_deploy else 2
     except BaseException as exc:                               # noqa: BLE001
         print("L5_HALT_RESET_REFUSED " + json.dumps(
             {"ok": False, "refused": "%s: %s" % (type(exc).__name__,
-                                                 str(exc)[:200])},
-            sort_keys=True))
-        return 3
+                                                 str(exc)[:200]),
+             "pre_deploy": pre_deploy,
+             "labels": _refusal_label(pre_deploy)}, sort_keys=True))
+        return 0 if pre_deploy else 3
 
 
 if __name__ == "__main__":

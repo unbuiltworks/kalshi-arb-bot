@@ -216,10 +216,25 @@ def test_a_reset_refuses_when_the_image_marker_is_absent(monkeypatch):
         R._require_reset_image()
 
 
-def test_a_reset_refuses_on_a_foreign_image_marker(monkeypatch):
-    monkeypatch.setenv(R.IMAGE_MARKER_ENV, "l5_halt_watchdog")
+@pytest.mark.parametrize("marker", [
+    "l5_pmus_live",              # the money-capable executor
+    "pmus_ws_evidence_recorder",
+    "l5_halt_resetX", "", "   ", "L5_HALT_RESET",
+])
+def test_a_reset_refuses_on_a_foreign_image_marker(monkeypatch, marker):
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, marker)
     with pytest.raises(R.ResetRefused, match="WRONG_IMAGE"):
         R._require_reset_image()
+
+
+def test_both_reset_capable_images_are_accepted_and_name_themselves(
+        monkeypatch):
+    """Two legitimate homes, DISTINCT values, so the audit entry records
+    which image performed the clear and a wrong image is still detectable."""
+    assert R.IMAGE_MARKER_VALUE != R.IMAGE_MARKER_WATCHDOG
+    for marker in R.ACCEPTED_IMAGE_MARKERS:
+        monkeypatch.setenv(R.IMAGE_MARKER_ENV, marker)
+        assert R._require_reset_image() == marker
 
 
 def test_the_reset_image_marker_is_accepted(monkeypatch):
@@ -227,19 +242,45 @@ def test_the_reset_image_marker_is_accepted(monkeypatch):
     assert R._require_reset_image() == R.IMAGE_MARKER_VALUE
 
 
-def test_the_marker_is_baked_into_the_reset_image_and_no_other():
+def test_each_image_declares_its_OWN_marker_and_not_the_others():
     """Read as text because it is a property of the Dockerfiles."""
     reset = io.open("deploy/l5_halt_reset/Dockerfile", encoding="utf-8").read()
+    wd = io.open("deploy/l5_halt_watchdog/Dockerfile", encoding="utf-8").read()
     assert "ENV %s=%s" % (R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_VALUE) in reset
-    wd = io.open("deploy/l5_halt_watchdog/Dockerfile", encoding="utf-8").read()
-    assert R.IMAGE_MARKER_ENV not in wd, (
-        "the watchdog image must NOT be able to claim to be the reset image")
+    assert "ENV %s=%s" % (R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG) in wd
+    # neither may claim to be the other
+    assert "ENV %s=%s" % (R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG) \
+        not in reset
+    assert "ENV %s=%s" % (R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_VALUE) not in wd
 
 
-def test_the_watchdog_image_still_cannot_run_the_reset_at_all():
-    """Defence in depth behind the marker: the script is not even present."""
+def test_the_watchdog_SWEEP_has_no_clear_path_even_though_the_script_ships():
+    """SUPERSEDES "the script is not even present" (owner 2026-10-19).
+
+    The script now ships in the watchdog image, because the latch is on that
+    service's volume and nothing else can write it. The property that still
+    holds -- and is the one that was ever load-bearing -- is that the SWEEP
+    cannot reach it: the platform invokes it as a separate pre-deploy
+    process. The sweep entrypoint must never import or call it.
+    """
     wd = io.open("deploy/l5_halt_watchdog/Dockerfile", encoding="utf-8").read()
-    assert "scripts/l5_halt_reset.py" not in wd
+    assert "scripts/l5_halt_reset.py" in wd
+    sweep = io.open("scripts/l5_halt_watchdog.py", encoding="utf-8").read()
+    assert "l5_halt_reset" not in sweep
+    for verb in ("perform_reset", "_require_clearable_store"):
+        assert verb not in sweep
+
+
+def test_the_asserter_still_cannot_clear_a_latch_in_that_image():
+    """The guard that "cannot clear" always actually rested on. The image
+    held permissive-write capability before this change too."""
+    st = FakeStore()
+    a = HG.HaltAsserter(st, who="l5-watchdog")
+    a.assert_halt(reason="UNMANAGED_RESTING_ORDER", evidence={"o": 1})
+    with pytest.raises(PermissionError):
+        a.heartbeat_no_halt()
+    assert not hasattr(a, "clear") and not hasattr(a, "clear_halt")
+    assert HG.HaltGate(st).submissions_permitted() is False
 
 
 # --------------------------------------------------------------------------
@@ -373,4 +414,114 @@ def test_a_stale_digest_refuses_after_the_latch_moved(tmp_path, monkeypatch):
         R.perform_reset(store=st, transport=FakeTransport(),
                         registry_url="http://registry.local",
                         registry_opener=fresh_registry())
+    assert json.loads(st.get(HG.HALT_KEY))["halt"] is True
+
+
+# --------------------------------------------------------------------------
+# PRE-DEPLOY MODE: a refusal must never block a watchdog deployment
+# --------------------------------------------------------------------------
+def _reset_env(monkeypatch, tmp_path, digest, **over):
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG)
+    monkeypatch.setenv(R.INSPECT_ENV, "NO")
+    monkeypatch.setenv(R.STATE_ENV, str(tmp_path))
+    monkeypatch.setenv(R.REGISTRY_ENV, "")
+    for k, v in env(**{R.EXPECT_ENV: digest}).items():
+        monkeypatch.setenv(k, v)
+    for k, v in over.items():
+        monkeypatch.setenv(k, v)
+
+
+def test_a_refused_pre_deploy_reset_exits_zero_and_clears_nothing(
+        monkeypatch, capsys, tmp_path):
+    """THE BRICKING FAILURE THIS PREVENTS. Railway fails a deployment whose
+    preDeployCommand exits non-zero. A spent reset id refusing is the NORMAL
+    steady state, so returning 2 would block every future watchdog
+    deployment -- the watchdog could never be updated or restarted again."""
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    # no credentials in this container, so the venue gate refuses
+    _reset_env(monkeypatch, tmp_path, digest,
+               **{R.PRE_DEPLOY_ENV: "YES"})
+    rc = R.main([])
+    out = capsys.readouterr().out
+    assert rc == 0, "a refusal must not fail the deployment"
+    assert "L5_HALT_RESET_REFUSED" in out
+    body = json.loads(out.split(" ", 1)[1])
+    assert body["ok"] is False
+    assert body["pre_deploy"] is True
+    assert "NOT blocked" in body["labels"]
+    assert st.get(HG.HALT_KEY) == raw, "the latch must be untouched"
+    assert st.get(R.AUDIT_KEY) is None
+
+
+def test_the_same_refusal_still_exits_nonzero_outside_pre_deploy(
+        monkeypatch, capsys, tmp_path):
+    """Run by hand, a refusal should be a loud non-zero: there is no
+    deployment to protect and an operator wants the failure."""
+    st = volume_store(tmp_path)
+    _, digest = file_latch(st)
+    _reset_env(monkeypatch, tmp_path, digest)
+    monkeypatch.delenv(R.PRE_DEPLOY_ENV, raising=False)
+    rc = R.main([])
+    assert rc != 0
+    body = json.loads(capsys.readouterr().out.split(" ", 1)[1])
+    assert body["pre_deploy"] is False
+
+
+def test_a_wrong_image_in_pre_deploy_mode_also_exits_zero(
+        monkeypatch, capsys, tmp_path):
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    _reset_env(monkeypatch, tmp_path, digest,
+               **{R.PRE_DEPLOY_ENV: "YES"})
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, "l5_pmus_live")
+    rc = R.main([])
+    out = capsys.readouterr().out
+    assert rc == 0 and "WRONG_IMAGE" in out
+    assert st.get(HG.HALT_KEY) == raw
+
+
+def test_a_spent_reset_id_is_inert_on_every_later_deployment(tmp_path,
+                                                             monkeypatch):
+    """"Do not automatically clear a safety HALT merely because a new window
+    starts." A leftover pre-deploy command must clear NOTHING the second
+    time, and the id is spent by the ATTEMPT rather than by its success."""
+    st = volume_store(tmp_path)
+    _, digest = file_latch(st)
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG)
+    for k, v in env(**{R.EXPECT_ENV: digest}).items():
+        monkeypatch.setenv(k, v)
+    first = R.perform_reset(store=st, transport=FakeTransport(),
+                            registry_url="http://registry.local",
+                            registry_opener=fresh_registry())
+    assert first["ok"] is True
+
+    # the watchdog re-latches for a genuinely new hazard
+    _, d2 = file_latch(st, reason="A_NEW_UNRELATED_HAZARD")
+    # the SAME id, exactly as a leftover pre-deploy command would present it
+    monkeypatch.setenv(R.EXPECT_ENV, d2)
+    with pytest.raises(R.ResetRefused, match="RESET_ID_ALREADY_CONSUMED"):
+        R.perform_reset(store=st, transport=FakeTransport(),
+                        registry_url="http://registry.local",
+                        registry_opener=fresh_registry())
+    assert json.loads(st.get(HG.HALT_KEY))["halt"] is True, (
+        "the new hazard's latch must survive a replayed reset id")
+
+
+def test_an_open_l5_order_blocks_the_clear_in_pre_deploy_mode(tmp_path,
+                                                              monkeypatch):
+    """Zero open and unverified orders, enforced. An L5-owned working order
+    means the hazard that latched the halt has NOT gone."""
+    st = volume_store(tmp_path)
+    _, digest = file_latch(st)
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG)
+    for k, v in env(**{R.EXPECT_ENV: digest}).items():
+        monkeypatch.setenv(k, v)
+    rows = [{"id": "D1", "marketSlug": "cpc-btc-updown-15m-x",
+             "leavesQuantity": "0.01", "manualOrderIndicator": ""}]
+    with pytest.raises(R.ResetRefused):
+        R.perform_reset(
+            store=st, transport=FakeTransport(open_rows=rows),
+            registry_url="http://registry.local",
+            registry_opener=fresh_registry(rows=[{"venue_order_id": "D1"}]))
     assert json.loads(st.get(HG.HALT_KEY))["halt"] is True
