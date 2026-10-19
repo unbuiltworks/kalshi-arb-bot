@@ -54,22 +54,46 @@ import tempfile
 from decimal import Decimal as D
 from typing import Any, Callable, Dict, Mapping, Optional
 
+from src import l5_maker_fill_model as FM
 from src import pmus_l5_persistence_v2 as pv2
 from src import pmus_sports_l5_decision as l5d
 
 #: never L5_NATIVE. The two populations must stay separable at a glance.
 CONTROLLER_PROVENANCE = "CONTROLLER_GENERATED"
 
-#: the only rule by which simulated inventory advances, named in every
-#: record so a reader can never mistake it for a measured fill rate
-FILL_RULE = "TOUCH_THROUGH_OPTIMISTIC"
+#: the rule by which simulated inventory advances, named in every record
+#: so a reader can never mistake it for a measured fill rate.
+#:
+#: REPLACED THE TOUCH-THROUGH GUESS. The first version credited a fill
+#: whenever the opposite side printed strictly through our resting price,
+#: on a BBO feed with no queue information at all. That is an upper bound
+#: and it was labelled one, but an upper bound cannot support an economic
+#: claim: replayed against L5's own history it manufactured a >=4%-per-pair
+#: locked gain, 80-110x L5's measured 0.30% edge. The queue-aware model in
+#: `l5_maker_fill_model` is now the source of fills, with its own three
+#: scenarios, and it is fed the SAME authenticated ladder the executor's
+#: modelling uses.
+FILL_RULE = "QUEUE_AWARE_THREE_SCENARIO"
+
+#: CONSERVATIVE, BASE, OPTIMISTIC -- taken from the fill model rather than
+#: redefined here, so the two can never drift apart.
+SCENARIOS = FM.SCENARIOS
+
+#: the scenario whose economics are the headline. The owner's standard:
+#: conservative net reported separately from optimistic, and promotion
+#: decided on the conservative column.
+HEADLINE_SCENARIO = FM.CONSERVATIVE
 
 #: attribute names this class must NEVER acquire. Asserted by test, so a
 #: future edit that wires an order path in has to delete this line first.
 FORBIDDEN_ATTRS = ("submit", "place", "cancel", "amend", "transport",
                    "executor", "credentials", "arm", "disarm")
 
-STATE_VERSION = 2
+#: v3 splits each market's inventory BY SCENARIO. A fill that happens only
+#: in the optimistic case must not create matched inventory in the
+#: conservative one -- and because inventory drives the next decision, each
+#: scenario is a separate trajectory, not a separate accounting view of one.
+STATE_VERSION = 3
 
 #: ============================ THE DECISION POLICIES ============================
 #:
@@ -227,7 +251,17 @@ class ShadowController:
         self._emit = emit
         self.state: Dict[str, Any] = {"v": STATE_VERSION, "markets": {}}
         self.decisions = 0
+        self.records = 0
         self.counts: Dict[str, int] = {}
+        #: LIVE ORDER OBJECTS, DELIBERATELY NOT PERSISTED. A HypoOrder's
+        #: value is its queue position as captured at placement, and that
+        #: cannot be reconstructed after a restart. Persisting a summary and
+        #: resuming it would mean crediting a fill against a queue we can no
+        #: longer see, so a restart drops every resting order instead and
+        #: the next tick quotes afresh. Dropping is the conservative
+        #: direction: a dropped order can never become a fill.
+        self._orders: Dict[str, Dict[str, Any]] = {}
+        self._seen: Dict[str, set] = {}
         self._load()
 
     # ------------------------------------------------------------ the model
@@ -246,48 +280,89 @@ class ShadowController:
                 doc = json.load(fh)
         except (OSError, ValueError):
             return
-        if isinstance(doc, Mapping) and doc.get("v") == STATE_VERSION:
+        if not isinstance(doc, Mapping):
+            return
+        if doc.get("v") == STATE_VERSION:
             self.state = {"v": STATE_VERSION,
                           "markets": dict(doc.get("markets") or {})}
-            if isinstance(doc.get("carry"), Mapping):
-                self.state["carry"] = dict(doc["carry"])
+            for k in ("carry", "discontinuity"):
+                if isinstance(doc.get(k), Mapping):
+                    self.state[k] = dict(doc[k])
+            return
+        # A STATE DISCONTINUITY, RECORDED RATHER THAN ABSORBED.
+        #
+        # v2 kept ONE inventory per market under the touch-through rule.
+        # Carrying it into v3 would mean seeding the CONSERVATIVE column
+        # with inventory that only an OPTIMISTIC rule ever credited --
+        # overstating exactly the number promotion is decided on. Seeding
+        # only OPTIMISTIC would leave the three scenarios measured over
+        # different window sets, which breaks the comparison the owner
+        # asked for.
+        #
+        # So all three scenarios start empty, and what was there is
+        # preserved as a summary so nothing is destroyed silently.
+        if doc.get("v") == 2:
+            prior = {}
+            for slug, slot in (doc.get("markets") or {}).items():
+                prior[slug] = {
+                    "yes": slot.get("yes"), "no": slot.get("no"),
+                    "yes_cost": slot.get("yes_cost"),
+                    "no_cost": slot.get("no_cost"),
+                    "settled": bool(slot.get("settled"))}
+            self.state["discontinuity"] = {
+                "from_version": 2, "to_version": STATE_VERSION,
+                "reason": ("v2 inventory was credited by the touch-through "
+                           "upper bound; seeding the conservative scenario "
+                           "from it would overstate the column promotion is "
+                           "decided on, and seeding only optimistic would "
+                           "leave the scenarios non-comparable"),
+                "markets_discarded": len(prior),
+                "prior_state": prior,
+                "carry_discarded": dict(doc.get("carry") or {}),
+                "labels": ("simulated inventory only. Nothing realized, "
+                           "submitted or owned was affected: this object "
+                           "has never held a position.")}
 
     def _prune(self) -> None:
-        """Keep the state file bounded WITHOUT losing a dollar of the net.
+        """Keep the state file bounded WITHOUT losing a cent of any
+        scenario's net.
 
         One slot per 15-minute window is 96 a day forever. Dropping the
-        oldest settled windows outright would quietly shrink the modelled
-        net toward zero -- the same class of error as zeroing a stale
-        record -- so each dropped window's totals are first added to a
-        CARRY that `economics` counts alongside the windows still held.
-        Only per-window detail is lost, and the record says how much.
+        oldest outright would quietly shrink every scenario's modelled net
+        toward zero -- the same error as zeroing a stale record -- so each
+        dropped window's totals are folded into a PER-SCENARIO carry that
+        `economics` counts alongside the windows still held. Only
+        per-window detail ages out, and the report says how much.
         """
         mk = self.state.get("markets") or {}
-        settled = [(k, v) for k, v in mk.items() if v.get("settled")]
-        if len(settled) <= SETTLED_KEEP:
+        done = [(k, v) for k, v in mk.items()
+                if all(((v.get("scen") or {}).get(sc) or {}).get("settled")
+                       for sc in SCENARIOS)]
+        if len(done) <= SETTLED_KEEP:
             return
-        # chronological by the window's own end, with the slug as the
-        # tiebreak -- a BTC15m slug embeds its date and so sorts in time
-        # anyway. No new timestamp field: the window clock is already
-        # stored beside the inventory it dates.
-        settled.sort(key=lambda kv: (float(kv[1].get("window_end_ts") or 0.0),
-                                     kv[0]))
-        carry = self.state.setdefault(
-            "carry", {"windows": 0, "cost_total": "0", "redemption_total": "0",
-                      "matched_units": 0, "residual_units_abs": 0})
-        for key, slot in settled[:len(settled) - SETTLED_KEEP]:
-            x = slot.get("settled") or {}
-            carry["windows"] = int(carry["windows"]) + 1
-            carry["cost_total"] = str(D(carry["cost_total"])
-                                      + D(str(x.get("cost_total") or 0)))
-            carry["redemption_total"] = str(
-                D(carry["redemption_total"])
-                + D(str(x.get("redemption_total") or 0)))
-            carry["matched_units"] = (int(carry["matched_units"])
-                                      + int(x.get("matched_units") or 0))
-            carry["residual_units_abs"] = (
-                int(carry["residual_units_abs"])
-                + abs(int(x.get("residual_units") or 0)))
+        done.sort(key=lambda kv: (float(kv[1].get("window_end_ts") or 0.0),
+                                  kv[0]))
+        carry = self.state.setdefault("carry", {})
+        for key, slot in done[:len(done) - SETTLED_KEEP]:
+            for sc in SCENARIOS:
+                line = ((slot.get("scen") or {}).get(sc) or {}).get("settled")
+                if not line:
+                    continue
+                c = carry.setdefault(sc, {"windows": 0, "cost_total": "0",
+                                          "redemption_total": "0",
+                                          "matched_units": 0,
+                                          "residual_units_abs": 0})
+                c["windows"] = int(c["windows"]) + 1
+                c["cost_total"] = str(D(c["cost_total"])
+                                      + D(str(line.get("cost_total") or 0)))
+                c["redemption_total"] = str(
+                    D(c["redemption_total"])
+                    + D(str(line.get("redemption_total") or 0)))
+                c["matched_units"] = (int(c["matched_units"])
+                                      + int(line.get("matched_units") or 0))
+                c["residual_units_abs"] = (
+                    int(c["residual_units_abs"])
+                    + abs(int(line.get("residual_units") or 0)))
             mk.pop(key, None)
 
     def _save(self) -> None:
@@ -307,237 +382,343 @@ class ShadowController:
             pass                      # state is a diagnostic, never a gate
 
     # ---------------------------------------------------------- inventory
+    @staticmethod
+    def _fresh_scenario() -> Dict[str, Any]:
+        return {"yes": 0, "no": 0, "yes_cost": "0", "no_cost": "0",
+                "last_rel": "", "resting": None, "settled": None}
+
     def _slot(self, slug: str) -> Dict[str, Any]:
         m = self.state.setdefault("markets", {})
-        return m.setdefault(slug, {"yes": 0, "no": 0, "yes_cost": "0",
-                                   "no_cost": "0", "last_rel": "",
-                                   "resting": None, "settled": None})
+        slot = m.setdefault(slug, {"window_end_ts": None,
+                                   "window_source": None, "scen": {}})
+        scen = slot.setdefault("scen", {})
+        for sc in SCENARIOS:
+            scen.setdefault(sc, self._fresh_scenario())
+        return slot
 
-    def inventory_for(self, slug: str) -> l5d.Inventory:
-        s = self._slot(slug)
+    def _scen(self, slug: str, scenario: str) -> Dict[str, Any]:
+        return self._slot(slug)["scen"][scenario]
+
+    def inventory_for(self, slug: str,
+                      scenario: str = HEADLINE_SCENARIO) -> l5d.Inventory:
+        s = self._scen(slug, scenario)
         inv = l5d.Inventory()
         inv.yes, inv.no = int(s["yes"]), int(s["no"])
         inv.yes_cost, inv.no_cost = D(s["yes_cost"]), D(s["no_cost"])
         return inv
 
-    def _store_inventory(self, slug: str, inv: l5d.Inventory) -> None:
-        s = self._slot(slug)
+    def _store_inventory(self, slug: str, inv: l5d.Inventory,
+                         scenario: str = HEADLINE_SCENARIO) -> None:
+        s = self._scen(slug, scenario)
         s["yes"], s["no"] = inv.yes, inv.no
         s["yes_cost"], s["no_cost"] = str(inv.yes_cost), str(inv.no_cost)
 
     # ------------------------------------------------------- the fill rule
-    def _advance_resting(self, slug: str, book: Mapping[str, Any]) -> Optional[dict]:
-        """Did the opposite side trade strictly THROUGH our resting price?
+    def _consume_prints(self, slug: str, prints: Any) -> list:
+        """New trade prints since our last read, by ROW IDENTITY.
 
-        Strictly through, never at: arriving at our price is executability,
-        and crediting it would be crediting a touch as a fill.
+        Both obvious cursors are wrong and `l5_maker_fill_model` documents
+        why: an INDEX cursor freezes once the recorder's rolling 500-row
+        list hits its cap, and a TIMESTAMP cursor drops every print after
+        the first in each frame because the recorder stamps frame arrival.
+        So rows are identified, and `FM.ModelSession.row_id` is reused
+        rather than a second identity function invented here.
+
+        A seen-set cannot detect a buffer that rolled past us, so coverage
+        is not claimed to be complete; what it does guarantee is that no
+        print is counted twice, which is the direction that matters for a
+        fill.
         """
-        s = self._slot(slug)
-        rest = s.get("resting")
-        if not rest:
+        if not prints:
+            return []
+        seen = self._seen.setdefault(slug, set())
+        fresh = []
+        for row in prints:
+            try:
+                rid = FM.ModelSession.row_id(row)
+            except BaseException:                              # noqa: BLE001
+                continue
+            if rid in seen:
+                continue
+            seen.add(rid)
+            fresh.append(row)
+        if len(seen) > 4000:                 # bounded; oldest identity wins
+            self._seen[slug] = set(list(seen)[-2000:])
+        return fresh
+
+    def _advance_resting(self, slug: str, scenario: str, book: Mapping,
+                         prints: list) -> Optional[dict]:
+        """Does THIS scenario's resting order fill, per the queue model?
+
+        The order object is held in memory and carries its queue position
+        AS CAPTURED AT PLACEMENT. Only trade volume advances it: a level
+        shrinking is not advancement, because a cancellation ahead of us is
+        indistinguishable from a fill ahead of us in the data we get, and
+        assuming cancels help us is the easiest way to manufacture a fill.
+        An unknown queue NEVER fills except on a sweep.
+        """
+        order = (self._orders.get(slug) or {}).get(scenario)
+        if order is None:
             return None
-        px = _d(rest.get("price"))
-        if px is None:
-            s["resting"] = None
+        if prints:
+            order.advance(prints)
+        if not order.filled.get(scenario):
             return None
-        # our BUY of YES rests as a bid at px; it is taken out when the
-        # ask comes strictly below it. Our BUY of NO rests as an ask at
-        # 1-px; it is taken out when the bid goes strictly above that.
-        if rest.get("side") == "YES":
-            opp = _d(book.get("ask"))
-            through = opp is not None and opp < px
-        else:
-            bid = _d(book.get("bid"))
-            through = bid is not None and bid > (D(1) - px)
-        if not through:
-            return None
-        inv = self.inventory_for(slug)
-        inv.record(rest.get("side") == "YES", px)
-        self._store_inventory(slug, inv)
-        s["resting"] = None
-        s["last_rel"] = str(rest.get("relation") or s.get("last_rel") or "")
-        return {"filled_by": FILL_RULE, "side": rest.get("side"),
-                "price": str(px), "relation": rest.get("relation"),
+        sc = self._scen(slug, scenario)
+        inv = self.inventory_for(slug, scenario)
+        inv.record(order.side == FM.UP, order.own_px)
+        self._store_inventory(slug, inv, scenario)
+        rest = sc.get("resting") or {}
+        sc["resting"] = None
+        sc["last_rel"] = str(rest.get("relation") or sc.get("last_rel") or "")
+        self._orders.setdefault(slug, {})[scenario] = None
+        rec = order.record()
+        return {"filled_by": FILL_RULE, "scenario": scenario,
+                "side": "YES" if order.side == FM.UP else "NO",
+                "price": str(order.own_px),
+                "relation": rest.get("relation"),
+                "queue_ahead_at_placement": rec["queue_ahead_at_placement"],
+                "volume_through_level": rec["volume_through_level"],
+                "ticks_behind_touch": rec["ticks_behind_touch"],
+                "swept": rec["swept"],
+                "adverse_selection": FM.adverse_selection(
+                    order, scenario, _d(book.get("bid"))),
                 "inventory_after": inv.snapshot(),
-                "labels": ("UPPER BOUND. Queue position is unmodelled on a "
-                           "BBO feed; a touch is not a fill and this rule "
-                           "credits only a print strictly through us.")}
+                "labels": ("MODELLED by the queue-aware model on the "
+                           "authenticated ladder. Queue position frozen at "
+                           "placement; only prints advance it; an unknown "
+                           "queue fills only on a sweep. Still NOT a "
+                           "confirmed fill and NOT realized P&L.")}
 
     # ------------------------------------------------------------- the tick
     def step(self, now: float, *, slug: str, book: Optional[Mapping[str, Any]],
              window_end_ts: Optional[float],
-             window_source: Optional[str] = None) -> Dict[str, Any]:
-        """One decision. Returns the record; never raises into the runner.
+             window_source: Optional[str] = None,
+             prints: Any = None,
+             ladder: Any = None) -> Dict[str, Any]:
+        """One decision PER SCENARIO. Returns the headline record.
 
-        `window_source` names where the clock came from (the venue, or our
-        own grid). It decides nothing here and is carried because a tte is
-        only as good as the clock under it, and a reader must not have to
-        assume which one was used.
+        THREE TRAJECTORIES, NOT THREE VIEWS. Each scenario keeps its own
+        inventory, because inventory drives the next decision: a fill that
+        happens only optimistically must not make the conservative
+        trajectory choose a completion it never earned. So the scenarios
+        diverge in what they hold AND in what they do, and only the
+        conservative one is used to judge the policy.
+
+        `ladder` and `prints` are the authenticated book's own ladder and
+        trade prints. WITHOUT THEM NOTHING DEGRADES SILENTLY: a missing
+        ladder leaves queue_ahead None, and the fill model never fills an
+        unknown queue except on a sweep. That is the model's rule, not a
+        fallback invented here.
+
+        Never raises into the runner.
         """
         base = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
                 "policy": self.policy,
                 "fill_rule": FILL_RULE, "window_source": window_source}
         try:
             book = normalise_book(book)
-            # BOTH SIDES REQUIRED, and that is this module's own choice.
-            # `plan_action` is shared with the sports path and documents
-            # opening whichever side is priceable, which is right there.
-            # Here it is not: every decision this controller makes is
-            # about PAIR economics, and a quote whose complement has no
-            # price has no pair to evaluate against the cap. The venue
-            # agrees -- `AuthBook.snapshot` already returns None unless
-            # both sides are present -- so this refuses a book that cannot
-            # arrive through the runner, and says so by name instead of
-            # quoting into the dark.
             if not book or book.get("bid") is None or book.get("ask") is None:
-                return self._out({**base, "decision": "no_action",
+                return self._out({**base, "scenario": None,
+                                  "decision": "no_action",
                                   "reason": "no_two_sided_book"})
-            fill = self._advance_resting(slug, book)
-            inv = self.inventory_for(slug)
-            s = self._slot(slug)
+            fresh = self._consume_prints(slug, prints)
+            slot = self._slot(slug)
+            slot["window_end_ts"] = window_end_ts
+            slot["window_source"] = window_source
             tte = l5d.tte_at(window_end_ts, now)
-            prop = l5d._proposal(self.model, float(book["bid"]),
-                                 inv, str(s.get("last_rel") or ""),
-                                 tte_s=tte)
-            # the window clock is kept with the inventory it dates, so
-            # settlement can find a closed window later without reparsing a
-            # slug and without a second source of truth for the same fact.
-            s["window_end_ts"] = window_end_ts
-            s["window_source"] = window_source
-            rec = {**base, "tte_s": round(float(tte), 1),
-                   "state": prop.get("state"),
-                   "inventory": inv.snapshot(),
-                   "window_end_ts": window_end_ts,
-                   "modelled_fill": fill}
-            if prop.get("off_distribution"):
-                return self._out({**rec, "decision": "no_action",
-                                  "reason": "v2_off_distribution"})
-            # the ONE line the policy changes. Everything else -- the
-            # inventory, the pricing from our own average cost, the residual
-            # cap, the fill rule -- is identical across policies, so a
-            # difference in outcome is a difference in this choice alone.
-            rel = self.policy_fn(prop, inv, book, tte)
-            rec["model_argmax"] = prop.get("recommended_relation")
-            plan = l5d.plan_action(rel, inv, book, pair_cap=self.pair_cap)
-            rec = {**rec, **l5d._public(plan)}
-            if plan.get("decision") == "quote":
-                # recorded as RESTING, not as inventory: nothing is owned
-                # until the fill rule above says a print went through us.
-                s["resting"] = {"side": plan["side"],
-                                "price": str(plan["_px"]),
-                                "relation": plan.get("relation"),
-                                "t": now}
-                s["last_rel"] = str(plan.get("relation") or "")
+            out = None
+            for scenario in SCENARIOS:
+                rec = self._step_one(now, slug, scenario, book, fresh,
+                                     ladder, tte, base, window_end_ts)
+                if scenario == HEADLINE_SCENARIO:
+                    out = rec
             self._save()
-            return self._out(rec)
-        except BaseException as exc:                        # noqa: BLE001
+            return out if out is not None else self._out(
+                {**base, "scenario": HEADLINE_SCENARIO,
+                 "decision": "no_action", "reason": "no_scenario_decided"})
+        except BaseException as exc:                            # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
-            return self._out({**base, "decision": "no_action",
+            return self._out({**base, "scenario": None,
+                              "decision": "no_action",
                               "reason": "controller_error:%s"
                                         % type(exc).__name__})
 
-    # ------------------------------------------------------- settlement
-    def settle(self, slug: str, yes_value: D) -> Dict[str, Any]:
-        """Matched and residual economics at the venue's settlement price.
-
-        Separate lines, never summed: a matched pair redeems $1 whatever
-        happens; residual pays 1 or 0. PMUS maker fees are $0.0000 CONFIRMED
-        over 293 fills and the rebate quantises to zero at this size, so
-        both are reported as zero rather than modelled.
-        """
-        inv = self.inventory_for(slug)
-        s = self._slot(slug)
-        matched = inv.matched
-        resid = inv.residual
-        cost = inv.yes_cost + inv.no_cost
-        matched_redeem = D(matched)
-        resid_redeem = (D(abs(resid)) * (yes_value if resid > 0
-                                         else (D(1) - yes_value)))
-        out = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
-               "policy": self.policy, "yes_value": str(yes_value),
-               "matched_units": matched, "residual_units": resid,
-               "cost_total": str(cost),
-               "redemption_total": str(matched_redeem + resid_redeem),
-               "modelled_net": str(matched_redeem + resid_redeem - cost),
-               "maker_fee_usd": "0.0000", "maker_rebate_usd": "0.0000",
-               "fill_rule": FILL_RULE,
-               "labels": ("MODELLED under an UPPER-BOUND fill rule. NOT "
-                          "realized P&L: no order was ever submitted. Fees "
-                          "confirmed zero for maker fills; the rebate "
-                          "quantises to $0.00 below ~1.6 contracts.")}
-        s["settled"] = out
-        s["yes"], s["no"] = 0, 0
-        s["yes_cost"], s["no_cost"] = "0", "0"
-        s["last_rel"], s["resting"] = "", None
-        self._save()
-        return out
+    def _step_one(self, now, slug, scenario, book, fresh, ladder, tte,
+                  base, window_end_ts) -> Dict[str, Any]:
+        """This scenario's own decision, over its own inventory."""
+        fill = self._advance_resting(slug, scenario, book, fresh)
+        sc = self._scen(slug, scenario)
+        inv = self.inventory_for(slug, scenario)
+        rec = {**base, "scenario": scenario,
+               "tte_s": round(float(tte), 1),
+               "inventory": inv.snapshot(),
+               "window_end_ts": window_end_ts,
+               "modelled_fill": fill}
+        prop = l5d._proposal(self.model, float(book["bid"]), inv,
+                             str(sc.get("last_rel") or ""), tte_s=tte)
+        rec["state"] = prop.get("state")
+        if prop.get("off_distribution"):
+            return self._out({**rec, "decision": "no_action",
+                              "reason": "v2_off_distribution"})
+        # ONE OUTSTANDING ORDER PER SCENARIO, as live allows one live order.
+        # A scenario already resting does not re-quote: re-pricing a
+        # resting maker order toward a newer price is chasing under another
+        # name, and the deployed engine has no method for it.
+        if (self._orders.get(slug) or {}).get(scenario) is not None:
+            return self._out({**rec, "decision": "no_action",
+                              "reason": "already_resting"})
+        rel = self.policy_fn(prop, inv, book, tte)
+        rec["model_argmax"] = prop.get("recommended_relation")
+        plan = l5d.plan_action(rel, inv, book, pair_cap=self.pair_cap)
+        rec = {**rec, **l5d._public(plan)}
+        if plan.get("decision") != "quote":
+            return self._out(rec)
+        order = FM.HypoOrder(
+            slug, FM.UP if plan["_side_yes"] else FM.DOWN,
+            plan["_px"], D(1), float(now), ladder=ladder,
+            bid=book.get("bid"), ask=book.get("ask"),
+            coid="%s|%s|%s" % (self.policy, scenario, now))
+        # A PASSIVE ORDER THAT WOULD CROSS IS NOT A MAKER ORDER. The model
+        # answers that directly, and a non-restable quote is refused rather
+        # than modelled as if it had rested.
+        if not order.restable:
+            return self._out({**rec, "decision": "no_action",
+                              "relation": plan.get("relation"),
+                              "reason": "would_cross_not_a_maker_quote"})
+        self._orders.setdefault(slug, {})[scenario] = order
+        sc["resting"] = {"side": plan["side"], "price": str(plan["_px"]),
+                         "relation": plan.get("relation"), "t": now}
+        sc["last_rel"] = str(plan.get("relation") or "")
+        rec["queue_ahead_at_placement"] = (
+            None if order.queue_ahead is None else str(order.queue_ahead))
+        rec["ticks_behind_touch"] = order.ticks_behind_touch()
+        return self._out(rec)
 
     # ------------------------------------------------------- window close
     def window_close(self, slug: str) -> Dict[str, Any]:
-        """The window has rolled. Report what it leaves behind.
+        """The window has rolled. Report what each scenario is left holding.
 
-        A resting order does not survive expiry, so it is dropped -- NOT
-        credited: an order that was never proved filled is not inventory.
-        Whatever inventory the window accumulated stays on the books,
-        unsettled, until the VENUE prices it. That is the stranded-inventory
-        line Phase A asks for, and it is the honest one: nothing here is
-        marked to an expired book.
+        A resting order does not survive expiry, so every scenario's order
+        is dropped -- NOT credited. Whatever inventory a scenario
+        accumulated stays on its books, unsettled, until the VENUE prices
+        it. Nothing here is marked to an expired book.
         """
-        s = self._slot(slug)
-        inv = self.inventory_for(slug)
-        dropped, s["resting"] = s.get("resting"), None
-        self._save()
-        return {"provenance": CONTROLLER_PROVENANCE, "market": slug,
-                "policy": self.policy,
+        slot = self._slot(slug)
+        out = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
+               "policy": self.policy, "fill_rule": FILL_RULE,
+               "scenarios": {},
+               "labels": ("STRANDED and PENDING SETTLEMENT, per scenario. "
+                          "Matched pairs redeem $1 each whatever the "
+                          "outcome; the residual is UNKNOWN until the venue "
+                          "states a settlement price.")}
+        for scenario in SCENARIOS:
+            sc = slot["scen"][scenario]
+            inv = self.inventory_for(slug, scenario)
+            dropped, sc["resting"] = sc.get("resting"), None
+            out["scenarios"][scenario] = {
                 "inventory": inv.snapshot(),
                 "cost_total": str(inv.yes_cost + inv.no_cost),
                 "dropped_resting": dropped,
-                "settled": bool(s.get("settled")),
-                "fill_rule": FILL_RULE,
-                "labels": ("STRANDED and PENDING SETTLEMENT. Matched pairs "
-                           "redeem $1 each whatever the outcome; the residual "
-                           "is UNKNOWN until the venue states a settlement "
-                           "price. Not marked to the expired book.")}
+                "settled": bool(sc.get("settled"))}
+        self._orders.pop(slug, None)
+        self._seen.pop(slug, None)
+        self._save()
+        return out
 
     def pending_settlement(self, now: float, *,
                            grace_s: float = 60.0) -> list:
-        """Closed windows still holding simulated inventory, for the CALLER
-        to price from the venue.
+        """Closed windows where ANY scenario still holds inventory, for the
+        CALLER to price from the venue.
 
         This object reads no price and guesses none. Without the venue's own
         number the window stays unsettled and is reported stranded, because
         an expired book's last price reaching a ledger as a payout is a
-        defect this programme has already paid for once.
+        defect this programme has already paid for.
         """
         out = []
-        for slug, s in (self.state.get("markets") or {}).items():
-            if s.get("settled"):
-                continue
-            if not (int(s.get("yes") or 0) or int(s.get("no") or 0)):
-                continue
-            end = s.get("window_end_ts")
+        for slug, slot in (self.state.get("markets") or {}).items():
+            end = slot.get("window_end_ts")
             if end is None or float(now) < float(end) + float(grace_s):
                 continue
-            out.append(slug)
+            for scenario in SCENARIOS:
+                sc = (slot.get("scen") or {}).get(scenario) or {}
+                if sc.get("settled"):
+                    continue
+                if int(sc.get("yes") or 0) or int(sc.get("no") or 0):
+                    out.append(slug)
+                    break
         return sorted(out)
 
+    def settle(self, slug: str, yes_value: D) -> Dict[str, Any]:
+        """Each scenario's matched and residual economics, at the VENUE's
+        settlement price.
+
+        SEPARATE LINES, NEVER SUMMED. A matched pair redeems $1 whatever
+        happens; a residual pays 1 or 0 and is a bet. Collapsing them is
+        how a directional loss hides inside a pair profit.
+
+        FEES AND REBATES ARE REPORTED, NOT MODELLED. The PMUS maker fee is
+        CONFIRMED $0.0000 across 293 actual fills on this account, so zero
+        is a measurement here and not an assumption. The maker rebate is a
+        credited line on the venue's schedule, but at q=1 it has never been
+        observed to credit anything on this account, so it is reported as
+        UNCREDITED rather than accrued: a rebate is not income until the
+        venue pays it.
+        """
+        slot = self._slot(slug)
+        out = {"provenance": CONTROLLER_PROVENANCE, "market": slug,
+               "policy": self.policy, "yes_value": str(yes_value),
+               "fill_rule": FILL_RULE, "scenarios": {},
+               "maker_fee_usd": "0.0000",
+               "maker_fee_provenance": ("CONFIRMED zero over 293 actual "
+                                        "maker fills on this account"),
+               "maker_rebate_usd": "0.0000",
+               "maker_rebate_provenance": ("UNCREDITED: never observed to "
+                                           "credit at q=1 on this account; "
+                                           "not accrued until the venue "
+                                           "pays it"),
+               "labels": ("MODELLED per scenario under the queue-aware "
+                          "model. NOT realized P&L: no order was ever "
+                          "submitted, and no fill was ever confirmed.")}
+        for scenario in SCENARIOS:
+            sc = slot["scen"][scenario]
+            inv = self.inventory_for(slug, scenario)
+            matched, resid = inv.matched, inv.residual
+            cost = inv.yes_cost + inv.no_cost
+            redeem = (D(matched) + D(abs(resid))
+                      * (yes_value if resid > 0 else (D(1) - yes_value)))
+            line = {"matched_units": matched, "residual_units": resid,
+                    "cost_total": str(cost),
+                    "redemption_total": str(redeem),
+                    "modelled_net": str(redeem - cost)}
+            out["scenarios"][scenario] = line
+            sc["settled"] = line
+            sc.update(self._fresh_scenario())
+            sc["settled"] = line
+        self._orders.pop(slug, None)
+        self._save()
+        return out
+
     def stranded(self, *, cap: Optional[int] = None) -> Dict[str, Any]:
-        """Inventory on the books with no settlement applied, by market.
+        """Inventory on the books with no settlement applied, by market, for
+        the HEADLINE scenario -- the one promotion is judged on.
 
         `cap` limits how many are NAMED, for a report that ships in every
         heartbeat. The count is always exact; see `stranded_count`.
         """
         out = {}
         for slug in sorted(self.state.get("markets") or {}):
-            s = (self.state.get("markets") or {})[slug]
-            if s.get("settled"):
+            slot = (self.state.get("markets") or {})[slug]
+            sc = (slot.get("scen") or {}).get(HEADLINE_SCENARIO) or {}
+            if sc.get("settled"):
                 continue
-            inv = self.inventory_for(slug)
+            inv = self.inventory_for(slug, HEADLINE_SCENARIO)
             if inv.yes or inv.no:
                 out[slug] = {"inventory": inv.snapshot(),
                              "cost_total": str(inv.yes_cost + inv.no_cost),
-                             "window_end_ts": s.get("window_end_ts")}
+                             "window_end_ts": slot.get("window_end_ts")}
         if cap is not None and len(out) > cap:
             keep = sorted(out)[-cap:]
             trimmed = {k: out[k] for k in keep}
@@ -549,45 +730,64 @@ class ShadowController:
         return len(self.stranded())
 
     def economics(self) -> Dict[str, Any]:
-        """MODELLED economics across settled windows. Never realized P&L.
+        """MODELLED economics across settled windows, PER SCENARIO.
 
-        Matched and residual are kept on separate lines because they are
-        different claims: a matched pair's $1 redemption is determinate,
-        the residual's is a bet. Summing them into one number is how a
-        directional loss hides inside a pair profit.
+        Conservative is reported beside optimistic and never merged with
+        it: the spread between them is the honest width of our ignorance
+        about queue position, and a single blended number would hide it.
         """
-        settled = [s["settled"] for s in (self.state.get("markets") or {}).values()
-                   if s.get("settled")]
         carry = self.state.get("carry") or {}
-        tot = {"windows_settled": len(settled) + int(carry.get("windows") or 0),
-               "cost_total": D(str(carry.get("cost_total") or 0)),
-               "redemption_total": D(str(carry.get("redemption_total") or 0)),
-               "matched_units": int(carry.get("matched_units") or 0),
-               "residual_units_abs": int(carry.get("residual_units_abs") or 0)}
-        for x in settled:
-            tot["cost_total"] += D(str(x.get("cost_total") or 0))
-            tot["redemption_total"] += D(str(x.get("redemption_total") or 0))
-            tot["matched_units"] += int(x.get("matched_units") or 0)
-            tot["residual_units_abs"] += abs(int(x.get("residual_units") or 0))
-        return {"windows_settled": tot["windows_settled"],
-                "matched_units": tot["matched_units"],
-                "residual_units_abs": tot["residual_units_abs"],
-                "cost_total": str(tot["cost_total"]),
-                "redemption_total": str(tot["redemption_total"]),
-                "modelled_net": str(tot["redemption_total"] - tot["cost_total"]),
+        per = {}
+        for scenario in SCENARIOS:
+            c = carry.get(scenario) or {}
+            tot = {"windows_settled": int(c.get("windows") or 0),
+                   "cost": D(str(c.get("cost_total") or 0)),
+                   "redeem": D(str(c.get("redemption_total") or 0)),
+                   "matched": int(c.get("matched_units") or 0),
+                   "resid": int(c.get("residual_units_abs") or 0)}
+            for slot in (self.state.get("markets") or {}).values():
+                line = ((slot.get("scen") or {}).get(scenario)
+                        or {}).get("settled")
+                if not line:
+                    continue
+                tot["windows_settled"] += 1
+                tot["cost"] += D(str(line.get("cost_total") or 0))
+                tot["redeem"] += D(str(line.get("redemption_total") or 0))
+                tot["matched"] += int(line.get("matched_units") or 0)
+                tot["resid"] += abs(int(line.get("residual_units") or 0))
+            per[scenario] = {
+                "windows_settled": tot["windows_settled"],
+                "windows_folded_into_carry": int(c.get("windows") or 0),
+                "matched_units": tot["matched"],
+                "residual_units_abs": tot["resid"],
+                "cost_total": str(tot["cost"]),
+                "redemption_total": str(tot["redeem"]),
+                "modelled_net": str(tot["redeem"] - tot["cost"])}
+        return {"per_scenario": per,
+                "headline_scenario": HEADLINE_SCENARIO,
+                "headline_net": per[HEADLINE_SCENARIO]["modelled_net"],
                 "stranded_markets": self.stranded_count(),
-                "windows_folded_into_carry": int(carry.get("windows") or 0),
                 "fill_rule": FILL_RULE,
-                "labels": ("MODELLED under an UPPER-BOUND fill rule, from "
-                           "venue settlement prices. NOT realized, NOT "
-                           "filled, NOT submitted: no order was ever sent.")}
+                "labels": ("MODELLED by the queue-aware model from venue "
+                           "settlement prices. NOT realized, NOT filled, "
+                           "NOT submitted. Promotion is judged on "
+                           "%s." % HEADLINE_SCENARIO)}
 
     # ---------------------------------------------------------- reporting
     def _out(self, rec: Mapping[str, Any]) -> Dict[str, Any]:
         d = dict(rec)
-        key = str(d.get("relation") or d.get("decision") or "?").upper()
+        scen = d.get("scenario")
+        key = "%s|%s" % (scen or "-",
+                         str(d.get("relation") or d.get("decision")
+                             or "?").upper())
         self.counts[key] = self.counts.get(key, 0) + 1
-        self.decisions += 1
+        # DECISIONS COUNTS TICKS, not scenario-records. Every tick produces
+        # one record per scenario; counting all of them would treble the
+        # headline number for no gain. The per-scenario detail is in
+        # `counts`, keyed by scenario.
+        self.records += 1
+        if scen is None or scen == HEADLINE_SCENARIO:
+            self.decisions += 1
         if self._emit is not None:
             try:
                 self._emit("L5_SHADOW_DECISION", d)
@@ -595,16 +795,33 @@ class ShadowController:
                 pass
         return d
 
+    def discontinuity(self) -> Optional[Dict[str, Any]]:
+        """Any recorded break in durable simulated inventory, or None.
+
+        Reported on every heartbeat rather than only at the boot that
+        caused it: a discontinuity an operator has to catch in one log line
+        is one that gets missed.
+        """
+        d = self.state.get("discontinuity")
+        return dict(d) if isinstance(d, Mapping) else None
+
     def report(self) -> Dict[str, Any]:
         return {"provenance": CONTROLLER_PROVENANCE,
                 "policy": self.policy,
                 "decisions": self.decisions,
+                "scenario_records": self.records,
                 "counts": dict(self.counts),
                 "markets": len(self.state.get("markets") or {}),
                 "pair_cap": str(self.pair_cap),
                 "fill_rule": FILL_RULE,
                 "state_path": self.state_path,
+                "scenarios": list(SCENARIOS),
+                "headline_scenario": HEADLINE_SCENARIO,
                 "economics": self.economics(),
                 "stranded": self.stranded(cap=STRANDED_REPORT_CAP),
+                "state_discontinuity": self.discontinuity(),
+                "resting_now": {sc: bool((self._orders.get(k) or {}).get(sc))
+                                for sc in SCENARIOS
+                                for k in list(self._orders)[:1]} or None,
                 "labels": ("independent inventory-driven decision source; "
                            "holds no transport and defines no order path")}

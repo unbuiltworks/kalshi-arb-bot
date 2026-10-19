@@ -46,7 +46,7 @@ import os
 import signal
 import time
 from decimal import Decimal as D
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from src import l5_faithful_translation as FT
 from src import l5_live_authorization as AUTH
@@ -309,6 +309,59 @@ def engine_row(r: Mapping[str, Any], book: Optional[Mapping[str, Any]],
     }
 
 
+class FrameFanout:
+    """Deliver one authenticated book frame to SEVERAL observers.
+
+    `AuthBook.frame_observer` is a single slot, already held by the
+    executor's own `FM.ModelSession.ingest_frame` whenever `model_fills()`
+    is on -- which is the default. The shadow policies need the same
+    ladder, and the ladder is the only honest source of queue position.
+
+    THE MONEY PATH'S OBSERVER KEEPS ITS EXACT BEHAVIOUR. It is held
+    separately from the rest, called FIRST, and its exceptions propagate to
+    `AuthBook` precisely as they did when it was the only observer -- so
+    `observer_errors` still counts what it always counted. The additional
+    observers are each wrapped individually, so one of them raising can
+    neither stop the others nor reach the money path's.
+
+    Order is not an implementation detail here: a shadow observer that
+    somehow consumed time or raised must never come between the book and
+    the modelling the executor depends on.
+    """
+
+    __slots__ = ("primary", "extra", "errors")
+
+    def __init__(self, primary: Optional[Callable[[Any, float], None]] = None
+                 ) -> None:
+        self.primary = primary
+        self.extra: List[Callable[[Any, float], None]] = []
+        self.errors: Dict[str, int] = {}
+
+    def add(self, fn: Callable[[Any, float], None]) -> None:
+        self.extra.append(fn)
+
+    def __call__(self, msg: Any, now: float) -> None:
+        if self.primary is not None:
+            self.primary(msg, now)          # unwrapped, exactly as before
+        for fn in self.extra:
+            try:
+                fn(msg, now)
+            except BaseException as exc:                        # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                k = type(exc).__name__
+                self.errors[k] = self.errors.get(k, 0) + 1
+
+    def status(self) -> Dict[str, Any]:
+        return {"primary": self.primary is not None,
+                "extra_observers": len(self.extra),
+                "extra_errors": dict(self.errors),
+                "labels": ("the money path's observer is called first and "
+                           "unwrapped, so its behaviour is unchanged; the "
+                           "shadow observers are isolated from it and from "
+                           "each other")}
+
+
 class Runner:
     def __init__(self, *, root: str, book: AB.AuthBook,
                  http: Optional[Any] = None, lam: D = MANIFEST_LAMBDA,
@@ -321,6 +374,13 @@ class Runner:
         #: did not confirm, which refuses arming rather than falling back.
         self.window_bounds: Dict[int, Optional[Dict[str, Any]]] = {}
         self.arm_claim: Optional[Dict[str, Any]] = None
+        #: fans one book frame out to the money path's observer and the
+        #: shadow policies' ladder; see FrameFanout.
+        self.fanout: Optional[FrameFanout] = None
+        #: the authenticated ladder the shadow policies price queue
+        #: position against. None means unknown queue, which the fill
+        #: model refuses to fill except on a sweep.
+        self.shadow_ladder: Optional[Any] = None
         # THE INDEPENDENT SHADOW DECISION SOURCE. Built lazily, holds no
         # transport, and is consulted by nothing on the money path -- see
         # `shadow_tick`. Named with a leading underscore so no existing
@@ -616,10 +676,22 @@ class Runner:
             # either limit if either is reconfigured.
             self.model = FM.ModelSession(
                 slug, max_abs_residual=self.effective_residual_cap())
-            self.book.frame_observer = self.model.ingest_frame
+            primary = self.model.ingest_frame
         else:
             self.model = None
-            self.book.frame_observer = None
+            primary = None
+        # THE FAN-OUT. The money path's observer above is handed to the
+        # fanout as its PRIMARY and is called first and unwrapped, so its
+        # behaviour is byte-for-byte what it was when it owned the slot.
+        # The shadow policies then attach their own ladder observer, which
+        # is what gives a shadow quote a real queue position instead of a
+        # touch-through guess. A fanout with no observers at all behaves
+        # like the None it replaces.
+        self.fanout = FrameFanout(primary)
+        self.shadow_attach_ladder(slug)
+        self.book.frame_observer = (self.fanout
+                                    if (primary is not None
+                                        or self.fanout.extra) else None)
         # THE SAME LIMITER, explicitly. PmusTransport would reach for the
         # process-wide one anyway; naming it here is the point -- this line
         # is where the old code silently created a fresh token bucket and a
@@ -1592,7 +1664,18 @@ class Runner:
         if m is None:
             return
         self.model = None
-        self.book.frame_observer = None
+        # DETACH ITS OWN OBSERVER ONLY. This used to null the whole slot,
+        # which was right when the slot held exactly this session; with the
+        # fanout in place it would also silently detach the shadow
+        # policies' ladder. The money-path semantics are unchanged: the
+        # closed session stops receiving frames the instant it closes.
+        fan = getattr(self, "fanout", None)
+        if fan is None:
+            self.book.frame_observer = None
+        else:
+            fan.primary = None
+            if not fan.extra:
+                self.book.frame_observer = None
         try:
             snap = self.book.snapshot(m.slug) or {}
             bid, ask = FM._d(snap.get("bid")), FM._d(snap.get("ask"))
@@ -1805,6 +1888,32 @@ class Runner:
     # no submission here to stop. Gating it on HALT would only stop the
     # record, which is the one thing Phase A is for.
 
+    def shadow_attach_ladder(self, slug: str) -> None:
+        """Give the shadow policies the authenticated LADDER for this window.
+
+        ONE ladder, shared by every policy and every scenario: it is the
+        venue's book, so there is nothing to keep separate, and feeding it
+        once keeps the fan-out at a single extra observer.
+
+        Built here, on the window roll, for the same reason the executor's
+        own model session is: queue position is only meaningful for the
+        market we are actually watching. Failure to build it is not fatal
+        -- a missing ladder leaves queue_ahead None, and the fill model
+        never fills an unknown queue except on a sweep.
+        """
+        self.shadow_ladder = None
+        if self._shadow_off:
+            return
+        try:
+            self.shadow_ladder = FM.Ladder()
+            if self.fanout is not None:
+                self.fanout.add(self.shadow_ladder.ingest)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.shadow_ladder = None
+            self.stats["shadow_ladder_error:%s" % type(exc).__name__] += 1
+
     def shadow_controller(self) -> Dict[str, Any]:
         """Built once, lazily, and never allowed to fail the tick.
 
@@ -1856,7 +1965,7 @@ class Runner:
         A modelled fill is never suppressed -- it is the only event here
         that changes state.
         """
-        pol = str(doc.get("policy") or "?")
+        pol = "%s|%s" % (doc.get("policy") or "?", doc.get("scenario"))
         key = (doc.get("decision"), doc.get("relation"), doc.get("side"),
                doc.get("target_price"), doc.get("reason"))
         t = float(self.now_t or 0.0)
@@ -1919,12 +2028,24 @@ class Runner:
         # ONE snapshot for all policies: they must decide on the SAME book
         # and the SAME instant or the comparison means nothing.
         book = self.book.snapshot(slug)
+        # ONE read of each, shared by every policy: they must decide on the
+        # same book, the same prints and the same ladder or the comparison
+        # means nothing. `trades` returns a copy under the book's lock.
+        try:
+            prints = self.book.trades(slug)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            prints = []
+            self.stats["shadow_prints_error:%s" % type(exc).__name__] += 1
         out = None
         for name in sorted(cs):
             try:
                 rec = cs[name].step(now, slug=slug, book=book,
                                     window_end_ts=win["window_end_ts"],
-                                    window_source=win["window_source"])
+                                    window_source=win["window_source"],
+                                    prints=prints,
+                                    ladder=self.shadow_ladder)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
@@ -2072,6 +2193,7 @@ class Runner:
             "halt_local_env": self.halted(),
             "submission_gate": self.submission_gate(),
             "auth_book": self.book.status(),
+            "frame_fanout": (self.fanout.status() if self.fanout else None),
             # THE INDEPENDENT DECISION SOURCE, on every heartbeat. Phase A's
             # deliverable is that it emits continuously, and a counter an
             # operator has to go looking for does not demonstrate that.

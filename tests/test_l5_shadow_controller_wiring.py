@@ -77,10 +77,16 @@ def capture(monkeypatch):
     return out
 
 
-def decisions(out, policy=None):
+def decisions(out, policy=None, scenario=SC.HEADLINE_SCENARIO):
+    """Decision records, filtered to ONE scenario by default.
+
+    Every tick now emits one record per scenario, so an unfiltered count
+    trebles. The headline scenario is the one promotion is judged on, so it
+    is the default unit of "a decision" here."""
     recs = [d for k, d in out if k == "L5_SHADOW_DECISION"]
     return [d for d in recs
-            if policy is None or d.get("policy") == policy]
+            if (policy is None or d.get("policy") == policy)
+            and (scenario is None or d.get("scenario") == scenario)]
 
 
 def ctl(runner, policy=SC.BASELINE_POLICY):
@@ -101,7 +107,7 @@ def test_the_real_tick_emits_an_inventory_driven_decision(tmp_path,
     assert recs, [k for k, _ in out]
     assert recs[0]["provenance"] == "CONTROLLER_GENERATED"
     assert recs[0]["market"] == PMUS
-    assert recs[0]["fill_rule"] == "TOUCH_THROUGH_OPTIMISTIC"
+    assert recs[0]["fill_rule"] == "QUEUE_AWARE_THREE_SCENARIO"
 
 
 def test_the_decision_is_dated_against_the_real_window_clock(tmp_path,
@@ -256,9 +262,10 @@ def test_simulated_inventory_survives_a_restart(tmp_path, monkeypatch):
     capture(monkeypatch)
     runner.tick(NOW)
     c = ctl(runner)
-    inv = c.inventory_for(PMUS)
-    inv.record(True, D("0.47"))
-    c._store_inventory(PMUS, inv)
+    for scen in SC.SCENARIOS:
+        inv = c.inventory_for(PMUS, scen)
+        inv.record(True, D("0.47"))
+        c._store_inventory(PMUS, inv, scen)
     c._save()
     again = build(tmp_path, monkeypatch, root=root)
     assert ctl(again).inventory_for(PMUS).snapshot() == {
@@ -293,7 +300,11 @@ def test_repetition_is_throttled_but_every_tick_is_still_evaluated(
     for name in SC.POLICIES:
         assert runner.stats["shadow_decisions:%s" % name] == 20, name
         assert 1 <= len(decisions(out, name)) < 20, name
-        assert runner.stats["shadow_repeat_suppressed:%s" % name] > 0, name
+        # the throttle is keyed per (policy, scenario) so neither a policy
+        # nor a scenario can mute another
+        sup = [k for k in runner.stats.keys()
+               if k.startswith("shadow_repeat_suppressed:%s|" % name)]
+        assert sup, (name, sorted(runner.stats.keys()))
 
 
 def test_an_unchanged_decision_reappears_within_the_emit_interval(
@@ -319,6 +330,8 @@ def test_the_heartbeat_carries_the_shadow_report(tmp_path, monkeypatch):
     assert set(block) == set(SC.POLICIES), block
     for name in SC.POLICIES:
         assert block[name]["decisions"] >= 1, name
+        assert block[name]["scenarios"] == list(SC.SCENARIOS)
+        assert block[name]["headline_scenario"] == SC.HEADLINE_SCENARIO
         assert block[name]["provenance"] == "CONTROLLER_GENERATED"
         assert block[name]["policy"] == name
 
@@ -331,19 +344,22 @@ def test_rolling_the_window_reports_what_the_shadow_is_left_holding(
     capture(monkeypatch)
     runner.tick(NOW)
     c = ctl(runner)
-    inv = c.inventory_for(PMUS)
-    inv.record(True, D("0.47"))
-    c._store_inventory(PMUS, inv)
+    for scen in SC.SCENARIOS:
+        inv = c.inventory_for(PMUS, scen)
+        inv.record(True, D("0.47"))
+        c._store_inventory(PMUS, inv, scen)
     out = capture(monkeypatch)
     runner.tick(NOW + 900.0)              # next window
     close = [d for k, d in out if k == "L5_SHADOW_WINDOW_CLOSE"]
     assert {d["policy"] for d in close} == set(SC.POLICIES), close
     mine = [d for d in close if d["policy"] == SC.BASELINE_POLICY]
     assert mine and mine[0]["market"] == PMUS
-    assert mine[0]["inventory"]["residual"] == 1
+    line = mine[0]["scenarios"][SC.HEADLINE_SCENARIO]
+    assert line["inventory"]["residual"] == 1
     assert "STRANDED" in mine[0]["labels"]
-    assert c._slot(PMUS)["resting"] is None, \
-        "a resting order must not survive expiry"
+    for scen in SC.SCENARIOS:
+        assert c._scen(PMUS, scen)["resting"] is None, \
+            "a resting order must not survive expiry"
 
 
 # ======================================================= SETTLEMENT
@@ -352,11 +368,13 @@ def _closed_window(runner, monkeypatch, tmp_path):
     capture(monkeypatch)
     runner.tick(NOW)
     c = ctl(runner)
-    inv = c.inventory_for(PMUS)
-    inv.record(True, D("0.47"))
-    inv.record(False, D("0.49"))
-    inv.record(True, D("0.46"))
-    c._store_inventory(PMUS, inv)
+    for scen in SC.SCENARIOS:
+        inv = c.inventory_for(PMUS, scen)
+        inv.record(True, D("0.47"))
+        inv.record(False, D("0.49"))
+        inv.record(True, D("0.46"))
+        c._store_inventory(PMUS, inv, scen)
+    c._slot(PMUS)["window_end_ts"] = WS + 900.0
     c._save()
     return c
 
@@ -372,11 +390,17 @@ def test_settlement_uses_the_venues_own_price_and_nothing_else(
     rec = [d for k, d in out if k == "L5_SHADOW_SETTLED"
            and d["policy"] == SC.BASELINE_POLICY]
     assert rec, [k for k, _ in out]
-    assert rec[0]["matched_units"] == 1 and rec[0]["residual_units"] == 1
+    line = rec[0]["scenarios"][SC.HEADLINE_SCENARIO]
+    assert line["matched_units"] == 1 and line["residual_units"] == 1
     # one matched pair redeems $1; the residual YES redeems $1 at px 1.0
-    assert D(rec[0]["redemption_total"]) == D(2)
-    assert D(rec[0]["cost_total"]) == D("1.42")
+    assert D(line["redemption_total"]) == D(2)
+    assert D(line["cost_total"]) == D("1.42")
     assert "NOT realized" in rec[0]["labels"]
+    # fees and rebates are reported with their provenance, not modelled
+    assert rec[0]["maker_fee_usd"] == "0.0000"
+    assert "CONFIRMED" in rec[0]["maker_fee_provenance"]
+    assert rec[0]["maker_rebate_usd"] == "0.0000"
+    assert "UNCREDITED" in rec[0]["maker_rebate_provenance"]
 
 
 @pytest.mark.parametrize("md", [
@@ -630,10 +654,12 @@ def test_one_venue_read_settles_every_policys_copy(tmp_path, monkeypatch):
     capture(monkeypatch)
     runner.tick(NOW)
     for name, c in runner.shadow_controller().items():
-        inv = c.inventory_for(PMUS)
-        inv.record(True, D("0.47"))
-        inv.record(False, D("0.49"))
-        c._store_inventory(PMUS, inv)
+        for scen in SC.SCENARIOS:
+            inv = c.inventory_for(PMUS, scen)
+            inv.record(True, D("0.47"))
+            inv.record(False, D("0.49"))
+            c._store_inventory(PMUS, inv, scen)
+        c._slot(PMUS)["window_end_ts"] = WS + 900.0
         c._save()
     reads = {"n": 0}
 
@@ -659,3 +685,165 @@ def test_l5_is_compared_against_the_baseline_not_the_candidate(tmp_path,
     cmp = [d for k, d in out if k == "L5_SHADOW_COMPARE"]
     assert cmp
     assert cmp[0]["compared_policy"] == SC.BASELINE_POLICY, cmp[0]
+
+
+# ================================== THE OBSERVER FAN-OUT (money path)
+
+def test_the_money_paths_observer_is_called_first_and_unwrapped():
+    """ITS BEHAVIOUR MUST BE BYTE-FOR-BYTE WHAT IT WAS when it owned the
+    slot alone. So it is called FIRST, and its exceptions propagate to
+    `AuthBook` exactly as before -- which is what keeps `observer_errors`
+    counting what it always counted."""
+    order = []
+    fan = R.FrameFanout(lambda m, t: order.append("primary"))
+    fan.add(lambda m, t: order.append("shadow"))
+    fan({}, 1.0)
+    assert order == ["primary", "shadow"]
+
+    def boom(m, t):
+        raise RuntimeError("money path")
+    fan2 = R.FrameFanout(boom)
+    fan2.add(lambda m, t: order.append("should not matter"))
+    with pytest.raises(RuntimeError):
+        fan2({}, 1.0)
+
+
+def test_a_shadow_observer_raising_cannot_reach_the_money_path():
+    """One shadow observer failing must neither stop the others nor touch
+    the primary. Counted, not swallowed silently."""
+    seen = []
+    fan = R.FrameFanout(lambda m, t: seen.append("primary"))
+
+    def boom(m, t):
+        raise ValueError("shadow")
+    fan.add(boom)
+    fan.add(lambda m, t: seen.append("second shadow"))
+    fan({}, 1.0)
+    assert seen == ["primary", "second shadow"]
+    assert fan.errors == {"ValueError": 1}
+    assert fan.status()["extra_errors"] == {"ValueError": 1}
+
+
+def test_a_fanout_with_no_observers_is_inert():
+    R.FrameFanout(None)({}, 1.0)          # must not raise
+
+
+def test_the_roll_hands_the_ladder_to_the_shadow_and_keeps_the_primary(
+        tmp_path, monkeypatch):
+    """The real wiring: after a roll the book's observer is the fanout, the
+    executor's own model session is its primary, and the shadow policies'
+    ladder is attached beside it."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [])
+    capture(monkeypatch)
+    runner.tick(NOW)
+    fan = runner.fanout
+    assert fan is not None
+    assert runner.book.frame_observer is fan
+    assert runner.shadow_ladder is not None
+    assert fan.extra, "the shadow ladder was never attached"
+    # model_fills() is on by default, so the executor's session is primary
+    assert fan.primary is not None
+    assert runner.model is not None
+
+
+def test_closing_the_model_session_detaches_only_its_own_observer(
+        tmp_path, monkeypatch):
+    """This used to null the whole slot, which was right when the slot held
+    exactly that session. With the fanout it would silently detach the
+    shadow's ladder too."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [])
+    capture(monkeypatch)
+    runner.tick(NOW)
+    fan, lad = runner.fanout, runner.shadow_ladder
+    runner.model_close()
+    assert fan.primary is None, "the closed session still receives frames"
+    assert runner.book.frame_observer is fan, "the shadow was detached too"
+    assert runner.shadow_ladder is lad
+
+
+def test_the_ladder_actually_receives_authenticated_frames(tmp_path,
+                                                           monkeypatch):
+    """End to end: a frame pushed through the fanout reaches the shadow's
+    ladder and produces a queue position, which is the whole reason the
+    fan-out exists."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [])
+    capture(monkeypatch)
+    runner.tick(NOW)
+    runner.fanout({"market_events": [
+        {"marketSlug": PMUS,
+         "bids": [{"px": "0.48", "qty": "250"}],
+         "asks": [{"px": "0.50", "qty": "120"}]}]}, NOW)
+    lad = runner.shadow_ladder
+    assert lad.status()["slugs"] == 1, lad.status()
+    assert lad.ahead_of_us(PMUS, "BID", D("0.48")) == D("250")
+
+
+def test_the_shadow_quote_gets_a_real_queue_position_in_the_runner(
+        tmp_path, monkeypatch):
+    """The payoff: a quote taken through the runner carries queue_ahead
+    from the authenticated ladder instead of the None that made
+    conservative and base unmeasurable."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [], bid="0.48",
+                   ask="0.50")
+    capture(monkeypatch)
+    # ROLL FIRST, then feed the ladder, then decide -- all at the SAME
+    # instant. Decide on a later tick and the tte bucket moves, which on
+    # the real frozen model can land off-distribution and prove nothing.
+    runner.roll(NOW)
+    runner.fanout({"market_events": [
+        {"marketSlug": PMUS,
+         "bids": [{"px": "0.48", "qty": "7"}],
+         "asks": [{"px": "0.50", "qty": "9"}]}]}, NOW)
+    out = capture(monkeypatch)
+    runner.shadow_tick(NOW)
+    quoted = [d for d in decisions(out) if d.get("decision") == "quote"]
+    assert quoted, [d.get("reason") for d in decisions(out)]
+    assert quoted[0]["queue_ahead_at_placement"] is not None, quoted[0]
+    assert quoted[0]["ticks_behind_touch"] is not None, quoted[0]
+
+
+def test_a_restart_drops_resting_orders_rather_than_resuming_a_queue(
+        tmp_path, monkeypatch):
+    """A HypoOrder's value is its queue position AS CAPTURED AT PLACEMENT,
+    and that cannot be reconstructed after a restart. Resuming one would
+    credit a fill against a queue we can no longer see, so the order is
+    dropped -- which can only ever lose a fill, never invent one."""
+    root = tmp_path / "live"
+    runner = build(tmp_path, monkeypatch, root=root, bid="0.48", ask="0.50",
+                   feed=lambda: [])
+    capture(monkeypatch)
+    runner.tick(NOW)
+    c = ctl(runner)
+    resting = [scen for scen in SC.SCENARIOS
+               if c._scen(PMUS, scen).get("resting")]
+    assert resting, "nothing rested, so the restart proves nothing"
+    again = build(tmp_path, monkeypatch, root=root, feed=lambda: [])
+    c2 = ctl(again)
+    assert c2._orders == {}, c2._orders
+    # the persisted description survives for the record, but no live order
+    # object does, so no fill can be credited against it
+    assert (c2._orders.get(PMUS) or {}).get(SC.HEADLINE_SCENARIO) is None
+
+
+def test_the_state_discontinuity_is_reported_not_absorbed(tmp_path):
+    """v2 inventory was credited by the touch-through upper bound. Carrying
+    it into v3 would overstate the conservative column promotion is judged
+    on, so it is discarded -- and SAID so, on every heartbeat."""
+    import json as _json
+    path = tmp_path / "shadow_controller_argmax.json"
+    path.write_text(_json.dumps({
+        "v": 2, "markets": {PMUS: {"yes": 3, "no": 1, "yes_cost": "1.11",
+                                   "no_cost": "0.49", "settled": None}},
+        "carry": {"windows": 7}}))
+    c = SC.ShadowController(state_path=str(path), policy="ARGMAX",
+                            model={"full": {}, "base": {}, "marginal": {},
+                                   "cadence_modal": {}})
+    d = c.discontinuity()
+    assert d and d["from_version"] == 2 and d["to_version"] == 3
+    assert d["markets_discarded"] == 1
+    assert d["prior_state"][PMUS]["yes"] == 3
+    assert d["carry_discarded"] == {"windows": 7}
+    assert "overstate" in d["reason"]
+    for scen in SC.SCENARIOS:
+        assert c.inventory_for(PMUS, scen).snapshot()["residual"] == 0, scen
+    assert c.report()["state_discontinuity"]["from_version"] == 2

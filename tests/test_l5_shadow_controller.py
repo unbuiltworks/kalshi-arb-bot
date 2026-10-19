@@ -17,6 +17,7 @@ from decimal import Decimal as D
 
 import pytest
 
+from src import l5_maker_fill_model as FM
 from src import l5_shadow_controller as sc
 from src import pmus_sports_l5_decision as l5d
 
@@ -44,6 +45,31 @@ def _model():
     return {"full": full, "base": {},
             "marginal": {"complete|q<5": 5, "extend|q<5": 3, "open|q<5": 2},
             "cadence_modal": {}, "_sha256_16": "btc15mshadow0000"}
+
+
+def _ladder(slug=None, bid="0.50", ask="0.51", bid_qty="0", ask_qty="0",
+            t=WS):
+    """A REAL `FM.Ladder`, folded through the recorder's own envelope walker.
+
+    `bid_qty`/`ask_qty` are the volume AHEAD of us at that rung. Zero means
+    we are at the front of a served queue -- known, not unknown -- which is
+    what lets CONSERVATIVE fill at all. Omitting the ladder entirely leaves
+    queue_ahead None, which the model refuses to fill except on a sweep.
+    """
+    lad = FM.Ladder()
+    lad.ingest({"market_events": [{"marketSlug": slug or SLUG,
+                                   "bids": [{"px": bid, "qty": bid_qty}],
+                                   "asks": [{"px": ask, "qty": ask_qty}]}]},
+               t)
+    return lad
+
+
+def _print(px, qty="1", dir_=None, t=WS + 1.0, seq=0):
+    """One trade print in the recorder's shape. `dir` unlabelled is the
+    conservative reading: price alone decides, which can only count MORE
+    volume against us."""
+    return {"t": t, "trade_time": t + seq * 1e-6, "px": str(px),
+            "qty": str(qty), "dir": dir_}
 
 
 def _book(bid="0.50", ask="0.51"):
@@ -229,77 +255,187 @@ def test_the_state_key_moves_across_the_window(tmp_path):
 
 # ===================================================== THE FILL RULE
 
-def _book_against(rest, *, through):
-    """A book that trades THROUGH our resting order, or arrives exactly AT
-    it, in whichever side's own price it rests.
+def _drive(c, t, bk, lad, scenario=None):
+    """ONE step that also clears whatever was resting.
 
-    The side is not ours to assume: an open from flat inventory takes the
-    cheaper maker join, which on a 0.50/0.51 book is NO at `1 - ask`. Our
-    YES buy rests as a bid at px and is taken out by an ask strictly BELOW
-    px; our NO buy at NO-price px rests as a YES ask at `1 - px` and is
-    taken out by a bid strictly ABOVE that. A test that hard-codes the YES
-    branch passes the other side's case for the wrong reason.
+    `already_resting` is a real rule -- the deployed engine has no
+    cancel-and-replace and does not chase a resting order with a newer
+    price -- so a test loop that never fills can only ever produce one
+    quote. This passes the volume that clears the current order into the
+    same step, which is how a sequence actually advances.
     """
+    sc_name = scenario or sc.HEADLINE_SCENARIO
+    rest = c._scen(SLUG, sc_name).get("resting")
+    prints = []
+    if rest:
+        px = D(rest["price"])
+        hit = px if rest["side"] == "YES" else D(1) - px
+        prints = [_print(hit, qty="9", t=t - 1.0)]
+    return c.step(t, slug=SLUG, book=bk, window_end_ts=WEND,
+                  prints=prints, ladder=lad)
+
+
+def _fill_resting(c, t, scenario=None):
+    """Clear whatever this scenario has resting, by trading enough volume
+    through its level. Requires a served queue; `_ladder` with qty 0 puts
+    us at the front of a KNOWN queue, which is the only honest way to make
+    a conservative fill happen in a test."""
+    sc_name = scenario or sc.HEADLINE_SCENARIO
+    rest = c._scen(SLUG, sc_name).get("resting")
+    if not rest:
+        return None
     px = D(rest["price"])
-    if rest["side"] == "YES":
-        ask = px - D("0.01") if through else px
-        return {"bid": str(ask - D("0.01")), "ask": str(ask)}
-    bid = (D(1) - px) + (D("0.01") if through else D(0))
-    return {"bid": str(bid), "ask": str(bid + D("0.01"))}
+    hit = px if rest["side"] == "YES" else D(1) - px
+    lad = _ladder(bid=str(px) if rest["side"] == "YES" else "0.50",
+                  ask="0.51" if rest["side"] == "YES" else str(D(1) - px),
+                  bid_qty="0", ask_qty="0", t=t)
+    return c.step(t, slug=SLUG, book=_book(), window_end_ts=WEND,
+                  ladder=lad, prints=[_print(hit, qty="9", t=t - 1.0)])
 
 
-def test_a_touch_at_our_price_is_not_a_fill(tmp_path):
+def _rest_one(c, t=WS + 310.0, bid="0.50", ask="0.51", qty_ahead="0",
+              scenario=None):
+    """Quote once, with a served queue, and hand back that scenario's
+    resting order description."""
+    lad = _ladder(bid=bid, ask=ask, bid_qty=qty_ahead, ask_qty=qty_ahead)
+    c.step(t, slug=SLUG, book=_book(bid, ask), window_end_ts=WEND,
+           prints=[], ladder=lad)
+    sc_name = scenario or sc.HEADLINE_SCENARIO
+    return c._scen(SLUG, sc_name)["resting"], lad
+
+
+def test_a_touch_at_our_price_without_volume_is_not_a_fill(tmp_path):
+    """TOUCH IS NOT FILL, and now it is the queue model saying so rather
+    than a price comparison: reaching our level advances nothing. Only
+    trade volume through the level moves the queue."""
     c = ctl(tmp_path)
-    c.step(WS + 310.0, slug=SLUG, book=_book(), window_end_ts=WEND)
-    rest = c._slot(SLUG)["resting"]
+    rest, lad = _rest_one(c)
     assert rest is not None
-    # the touch arrives exactly AT us: executability, not execution
-    rec = c.step(WS + 320.0, slug=SLUG, book=_book_against(rest, through=False),
-                 window_end_ts=WEND)
+    px = D(rest["price"])
+    # the book arrives AT our price and nothing trades
+    rec = c.step(WS + 320.0, slug=SLUG, book=_book(str(px), str(px + D("0.01"))),
+                 window_end_ts=WEND, prints=[], ladder=lad)
     assert rec.get("modelled_fill") is None
-    assert c.inventory_for(SLUG).snapshot() == {"yes": 0, "no": 0,
-                                                "matched": 0, "residual": 0}
+    for scen in sc.SCENARIOS:
+        assert c.inventory_for(SLUG, scen).snapshot()["residual"] == 0, scen
 
 
-def test_a_print_strictly_through_us_advances_inventory(tmp_path):
+def test_an_unknown_queue_never_fills_except_on_a_sweep(tmp_path):
+    """NO LADDER MEANS UNKNOWN QUEUE, and unknown is not zero. Treating it
+    as zero would put us at the front of a queue we cannot see."""
     c = ctl(tmp_path)
-    c.step(WS + 310.0, slug=SLUG, book=_book(), window_end_ts=WEND)
-    rest = c._slot(SLUG)["resting"]
-    rec = c.step(WS + 320.0, slug=SLUG, book=_book_against(rest, through=True),
-                 window_end_ts=WEND)
-    fill = rec.get("modelled_fill")
-    assert fill is not None
-    assert fill["filled_by"] == sc.FILL_RULE
-    assert fill["side"] == rest["side"]
-    assert fill["price"] == rest["price"]
-    assert "UPPER BOUND" in fill["labels"]
-    snap = c.inventory_for(SLUG).snapshot()
-    assert snap["yes" if rest["side"] == "YES" else "no"] == 1
-
-
-@pytest.mark.parametrize("bid,ask,side", [("0.50", "0.51", "NO"),
-                                          ("0.48", "0.50", "YES")])
-def test_the_fill_rule_holds_on_both_resting_sides(tmp_path, bid, ask, side):
-    """Both branches of the rule exercised on a book that actually produces
-    that side, so neither is covered only by accident."""
-    c = ctl(tmp_path)
-    c.step(WS + 310.0, slug=SLUG, book=_book(bid, ask), window_end_ts=WEND)
-    rest = c._slot(SLUG)["resting"]
-    assert rest["side"] == side, rest
-    at = c.step(WS + 320.0, slug=SLUG, book=_book_against(rest, through=False),
-                window_end_ts=WEND)
+    c.step(WS + 310.0, slug=SLUG, book=_book(), window_end_ts=WEND,
+           prints=[], ladder=None)          # no ladder at all
+    rest = c._scen(SLUG, sc.HEADLINE_SCENARIO)["resting"]
+    assert rest is not None
+    px = D(rest["price"])
+    # volume AT our level: with an unknown queue this must not fill
+    at = c.step(WS + 320.0, slug=SLUG, book=_book(), window_end_ts=WEND,
+                ladder=None,
+                prints=[_print(px if rest["side"] == "YES" else D(1) - px,
+                               qty="999", t=WS + 315.0)])
     assert at.get("modelled_fill") is None
-    through = c.step(WS + 330.0, slug=SLUG,
-                     book=_book_against(c._slot(SLUG)["resting"] or rest,
-                                        through=True),
-                     window_end_ts=WEND)
-    assert (through.get("modelled_fill") or {}).get("filled_by") == sc.FILL_RULE
+    assert c.inventory_for(SLUG).snapshot()["residual"] == 0
+
+
+def test_volume_through_a_served_queue_fills_conservatively(tmp_path):
+    """The one case CONSERVATIVE accepts: the queue ahead of us was SERVED
+    (so it is known), and enough volume traded through our level to clear
+    it and our own size as well."""
+    c = ctl(tmp_path)
+    rest, lad = _rest_one(c, qty_ahead="0")
+    px = D(rest["price"])
+    hit = px if rest["side"] == "YES" else D(1) - px
+    rec = c.step(WS + 320.0, slug=SLUG, book=_book(), window_end_ts=WEND,
+                 ladder=lad,
+                 prints=[_print(hit, qty="5", t=WS + 315.0)])
+    fill = rec.get("modelled_fill")
+    assert fill is not None, rec
+    assert fill["filled_by"] == sc.FILL_RULE
+    assert fill["scenario"] == sc.HEADLINE_SCENARIO
+    assert fill["queue_ahead_at_placement"] == "0"
+    assert "NOT a confirmed fill" in fill["labels"]
+    assert c.inventory_for(SLUG).snapshot()["residual"] != 0
+
+
+def test_a_deep_served_queue_does_not_fill_the_conservative_scenario(tmp_path):
+    """Behind real resting volume, a print that clears less than the queue
+    plus our own size fills nothing conservatively."""
+    c = ctl(tmp_path)
+    rest, lad = _rest_one(c, qty_ahead="500")
+    px = D(rest["price"])
+    hit = px if rest["side"] == "YES" else D(1) - px
+    rec = c.step(WS + 320.0, slug=SLUG, book=_book(), window_end_ts=WEND,
+                 ladder=lad,
+                 prints=[_print(hit, qty="1", t=WS + 315.0)])
+    assert rec.get("modelled_fill") is None, rec
+    assert c.inventory_for(SLUG, sc.FM.CONSERVATIVE).snapshot()["residual"] == 0
 
 
 def test_the_fill_rule_is_named_in_every_record(tmp_path):
     c = ctl(tmp_path)
     rec = c.step(WS + 310.0, slug=SLUG, book=_book(), window_end_ts=WEND)
-    assert rec["fill_rule"] == "TOUCH_THROUGH_OPTIMISTIC"
+    assert rec["fill_rule"] == "QUEUE_AWARE_THREE_SCENARIO"
+
+
+def test_a_quote_that_would_cross_is_refused_not_modelled(tmp_path):
+    """A passive order that crosses is not a maker order, and modelling it
+    as if it had rested would credit a fill no maker could earn."""
+    c = ctl(tmp_path)
+    inv = c.inventory_for(SLUG, sc.FM.CONSERVATIVE)
+    inv.record(False, D("0.10"))            # NO at 0.10 -> deficit is YES
+    c._store_inventory(SLUG, inv, sc.FM.CONSERVATIVE)
+    # a YES completion priced through the ask would cross
+    rec = c.step(WS + 310.0, slug=SLUG, book=_book("0.10", "0.11"),
+                 window_end_ts=WEND, prints=[],
+                 ladder=_ladder(bid="0.10", ask="0.11"))
+    assert rec["decision"] in ("quote", "no_action")
+    if rec["decision"] == "no_action":
+        assert rec.get("reason") in ("would_cross_not_a_maker_quote",
+                                     "v2_off_distribution",
+                                     "no_legal_maker_complement",
+                                     "already_resting")
+
+
+def test_each_scenario_keeps_its_own_inventory_and_trajectory(tmp_path):
+    """THE POINT OF THREE SCENARIOS. A fill that only the optimistic case
+    earns must not create matched inventory in the conservative one -- and
+    because inventory drives the next decision, the trajectories diverge in
+    what they DO as well as in what they hold."""
+    c = ctl(tmp_path)
+    rest, lad = _rest_one(c, qty_ahead="500")
+    px = D(rest["price"])
+    # VOLUME EXACTLY EQUAL TO THE QUEUE AHEAD. That clears everyone in
+    # front of us but not our own size, so BASE and OPTIMISTIC fill and
+    # CONSERVATIVE does not. A sweep would NOT do this and must not: with a
+    # known queue the model refuses sweeps outright, because a thin print
+    # through a deep level means the levels above thinned by CANCELLATION,
+    # and crediting that is crediting a cancel as queue advancement.
+    hit = px if rest["side"] == "YES" else D(1) - px
+    c.step(WS + 320.0, slug=SLUG, book=_book(), window_end_ts=WEND,
+           ladder=lad, prints=[_print(hit, qty="500", t=WS + 315.0)])
+    opt = c.inventory_for(SLUG, sc.FM.OPTIMISTIC).snapshot()
+    base = c.inventory_for(SLUG, sc.FM.BASE).snapshot()
+    cons = c.inventory_for(SLUG, sc.FM.CONSERVATIVE).snapshot()
+    assert opt["residual"] != 0, opt
+    assert base["residual"] != 0, base
+    assert cons["residual"] == 0, cons
+
+
+def test_a_sweep_through_a_KNOWN_queue_fills_nothing(tmp_path):
+    """Pinned because it is counter-intuitive and was once wrong. A thin
+    print through a deep level is evidence of CANCELLATION above us, not of
+    our queue clearing, so with a served queue the sweep allowance does not
+    apply in any scenario."""
+    c = ctl(tmp_path)
+    rest, lad = _rest_one(c, qty_ahead="9586")
+    px = D(rest["price"])
+    through = (px - D("0.02") if rest["side"] == "YES"
+               else (D(1) - px) + D("0.02"))
+    c.step(WS + 320.0, slug=SLUG, book=_book(), window_end_ts=WEND,
+           ladder=lad, prints=[_print(through, qty="12", t=WS + 315.0)])
+    for scen in sc.SCENARIOS:
+        assert c.inventory_for(SLUG, scen).snapshot()["residual"] == 0, scen
 
 
 # ====================================================== PERSISTENCE
@@ -339,10 +475,10 @@ def test_settlement_separates_matched_from_residual(tmp_path):
     inv.record(True, D("0.50"))           # plus one YES residual
     c._store_inventory(SLUG, inv)
     out = c.settle(SLUG, D("1"))          # YES wins
-    assert out["matched_units"] == 1 and out["residual_units"] == 1
-    assert out["cost_total"] == "1.46"
-    assert out["redemption_total"] == "2"
-    assert out["modelled_net"] == "0.54"
+    assert out["scenarios"][sc.HEADLINE_SCENARIO]["matched_units"] == 1 and out["scenarios"][sc.HEADLINE_SCENARIO]["residual_units"] == 1
+    assert out["scenarios"][sc.HEADLINE_SCENARIO]["cost_total"] == "1.46"
+    assert out["scenarios"][sc.HEADLINE_SCENARIO]["redemption_total"] == "2"
+    assert out["scenarios"][sc.HEADLINE_SCENARIO]["modelled_net"] == "0.54"
     assert out["maker_fee_usd"] == "0.0000"
     assert "NOT realized P&L" in out["labels"]
 
@@ -353,9 +489,9 @@ def test_a_losing_residual_settles_worthless(tmp_path):
     inv.record(True, D("0.65"))
     c._store_inventory(SLUG, inv)
     out = c.settle(SLUG, D("0"))          # YES loses
-    assert out["residual_units"] == 1
-    assert out["redemption_total"] == "0"
-    assert out["modelled_net"] == "-0.65"
+    assert out["scenarios"][sc.HEADLINE_SCENARIO]["residual_units"] == 1
+    assert out["scenarios"][sc.HEADLINE_SCENARIO]["redemption_total"] == "0"
+    assert out["scenarios"][sc.HEADLINE_SCENARIO]["modelled_net"] == "-0.65"
 
 
 def test_settlement_clears_the_market_for_the_next_window(tmp_path):
@@ -418,44 +554,66 @@ def test_a_complete_is_reachable_and_prices_from_OUR_cost(tmp_path):
     c = sc.ShadowController(state_path=str(tmp_path / "s.json"),
                             model=pv2.load_v2())
     bk = _book("0.37", "0.38")
-    c.step(WS + 3.0, slug=SLUG, book=bk, window_end_ts=WEND)
-    fill = _fill_the_resting(c, WS + 6.0, SLUG)["modelled_fill"]
-    assert fill and fill["side"] == "YES" and fill["price"] == "0.37"
+    lad = _ladder(bid="0.37", ask="0.38", bid_qty="0", ask_qty="0")
+    c.step(WS + 3.0, slug=SLUG, book=bk, window_end_ts=WEND, prints=[],
+           ladder=lad)
+    got = _fill_resting(c, WS + 6.0)
+    fill = (got or {}).get("modelled_fill")
+    assert fill and fill["side"] == "YES" and fill["price"] == "0.37", got
     completes = []
     for i in range(3, 300):
-        rec = c.step(WS + i * 3.0, slug=SLUG, book=bk, window_end_ts=WEND)
+        rec = _drive(c, WS + i * 3.0, bk, lad)
         if rec.get("relation") == "complete" and rec.get("decision") == "quote":
             completes.append(rec)
     assert completes, "no inventory-driven COMPLETE was ever produced"
     rec = completes[0]
-    # the DEFICIT side, from our residual -- we hold YES, so we buy NO
-    assert rec["side"] == "NO"
-    # priced from OUR average cost under the pair cap, NOT at the touch.
-    # the NO touch here is 1 - 0.38 = 0.62; a pair at the touch would cost
-    # 0.99, which the 0.96 spring cap refuses.
-    assert D(rec["target_price"]) == D("0.59")
-    assert D("0.37") + D(rec["target_price"]) <= sc.l5d.BTC15M_PAIR_CAP
-    assert D(rec["target_price"]) < D(1) - D("0.38")
+    # THE DEFICIT SIDE, derived from the residual the record itself carries
+    # rather than assumed: a trajectory that happens to end up short NO
+    # completes in NO, and one short YES completes in YES.
+    resid = rec["inventory"]["residual"]
+    assert resid != 0, rec
+    assert rec["side"] == ("NO" if resid > 0 else "YES"), rec
+    # PRICED FROM OUR OWN AVERAGE COST UNDER THE CAP, and the record proves
+    # it: observation_cap_px is `cap - our_avg_surplus`, and the quote is
+    # the tightest of that, the hard >=1c bound, and the deficit touch.
+    px = D(rec["target_price"])
+    assert px == min(D(rec["hard_bound_px"]), D(rec["observation_cap_px"]))
+    # the resulting pair clears the spring cap
+    assert D(rec["max_pair_cost"]) <= sc.l5d.BTC15M_PAIR_CAP
+    # and it is strictly INSIDE the touch -- patient, not marketable
+    touch = (D(1) - D("0.38")) if rec["side"] == "NO" else D("0.37")
+    assert px < touch, (px, touch)
 
 
 def test_the_spring_pair_cap_is_what_binds_the_completion(tmp_path):
     """0.96, not the sports 0.98 and not the incentive-era near-$1: the
     completion price moves with the cap, so the cap is what sets it."""
     from src import pmus_l5_persistence_v2 as pv2
-    seen = {}
+    seen, at = {}, {}
     for cap in (D("0.96"), D("0.92")):
         c = sc.ShadowController(state_path=str(tmp_path / ("s%s.json" % cap)),
                                 model=pv2.load_v2(), pair_cap=cap)
         bk = _book("0.37", "0.38")
-        c.step(WS + 3.0, slug=SLUG, book=bk, window_end_ts=WEND)
-        _fill_the_resting(c, WS + 6.0, SLUG)
+        lad = _ladder(bid="0.37", ask="0.38", bid_qty="0", ask_qty="0")
+        c.step(WS + 3.0, slug=SLUG, book=bk, window_end_ts=WEND, prints=[],
+               ladder=lad)
+        _fill_resting(c, WS + 6.0)
         for i in range(3, 300):
-            rec = c.step(WS + i * 3.0, slug=SLUG, book=bk, window_end_ts=WEND)
-            if rec.get("relation") == "complete" and rec.get("decision") == "quote":
+            rec = _drive(c, WS + i * 3.0, bk, lad)
+            if (rec.get("relation") == "complete"
+                    and rec.get("decision") == "quote"):
+                # BOTH RUNS ARE INVENTORY-IDENTICAL AT THIS POINT, and the
+                # assertion below checks it: the cap changes the completion
+                # PRICE, not which extends happen, so the two trajectories
+                # reach their first completion holding the same thing.
                 seen[cap] = D(rec["target_price"])
+                at[cap] = rec["inventory"]["residual"]
                 break
-    assert seen[D("0.96")] == D("0.59")
-    assert seen[D("0.92")] == D("0.55")
+    # the cap is what BINDS: tighten it by 4c and the completion price
+    # moves by 4c, because `observation_cap_px` is cap - our own average.
+    assert set(seen) == {D("0.96"), D("0.92")}, seen
+    assert at[D("0.96")] == at[D("0.92")], at
+    assert seen[D("0.96")] - seen[D("0.92")] == D("0.04"), seen
 
 
 def test_the_default_cap_is_the_btc15m_spring_target(tmp_path):
@@ -466,12 +624,15 @@ def test_the_default_cap_is_the_btc15m_spring_target(tmp_path):
 # ======================================== THE STATE FILE STAYS BOUNDED
 
 def _settle_n(c, n, *, start=0):
+    """Settle n synthetic windows in EVERY scenario, since a window only
+    ages out of the state once all three are done with it."""
     for i in range(start, start + n):
         slug = "w%04d" % i
-        inv = c.inventory_for(slug)
-        inv.record(True, D("0.40"))
-        inv.record(False, D("0.50"))
-        c._store_inventory(slug, inv)
+        for scen in sc.SCENARIOS:
+            inv = c.inventory_for(slug, scen)
+            inv.record(True, D("0.40"))
+            inv.record(False, D("0.50"))
+            c._store_inventory(slug, inv, scen)
         c._slot(slug)["window_end_ts"] = WS + i * 900.0
         c.settle(slug, D(1))
 
@@ -484,26 +645,27 @@ def test_pruning_drops_detail_but_never_a_cent_of_the_net(tmp_path):
     c = ctl(tmp_path)
     _settle_n(c, sc.SETTLED_KEEP)
     before = c.economics()
-    assert before["windows_settled"] == sc.SETTLED_KEEP
-    assert before["windows_folded_into_carry"] == 0
+    assert before["per_scenario"][sc.HEADLINE_SCENARIO]["windows_settled"] == sc.SETTLED_KEEP
+    assert before["per_scenario"][sc.HEADLINE_SCENARIO]["windows_folded_into_carry"] == 0
     _settle_n(c, 50, start=sc.SETTLED_KEEP)
     after = c.economics()
-    assert after["windows_settled"] == sc.SETTLED_KEEP + 50
-    assert after["windows_folded_into_carry"] == 50
+    assert after["per_scenario"][sc.HEADLINE_SCENARIO]["windows_settled"] == sc.SETTLED_KEEP + 50
+    assert after["per_scenario"][sc.HEADLINE_SCENARIO]["windows_folded_into_carry"] == 50
     assert len([k for k in c.state["markets"] if k.startswith("w")]) \
         == sc.SETTLED_KEEP
     # each window: cost 0.90, redemption 1.00 (one matched pair)
-    assert D(after["cost_total"]) == D("0.90") * (sc.SETTLED_KEEP + 50)
-    assert D(after["redemption_total"]) == D(sc.SETTLED_KEEP + 50)
+    assert D(after["per_scenario"][sc.HEADLINE_SCENARIO]["cost_total"]) == D("0.90") * (sc.SETTLED_KEEP + 50)
+    assert D(after["per_scenario"][sc.HEADLINE_SCENARIO]["redemption_total"]) == D(sc.SETTLED_KEEP + 50)
 
 
 def test_the_carry_survives_a_restart(tmp_path):
     c = ctl(tmp_path)
     _settle_n(c, sc.SETTLED_KEEP + 10)
-    net = c.economics()["modelled_net"]
+    net = c.economics()["headline_net"]
     again = ctl(tmp_path)
-    assert again.economics()["modelled_net"] == net
-    assert again.economics()["windows_folded_into_carry"] == 10
+    assert again.economics()["headline_net"] == net
+    assert again.economics()["per_scenario"][
+        sc.HEADLINE_SCENARIO]["windows_folded_into_carry"] == 10
 
 
 def test_the_reported_stranded_list_is_capped_but_the_count_is_exact(tmp_path):
@@ -694,14 +856,11 @@ def test_residual_urgency_keeps_extend_as_a_first_class_action(tmp_path):
                                 model=pv2.load_v2(), policy=pol)
         rels = Counter()
         bk = _book("0.48", "0.50")
+        lad = _ladder(bid="0.48", ask="0.50", bid_qty="0", ask_qty="0")
         for i in range(400):
-            rec = c.step(WS + i * 2.0, slug=SLUG, book=bk, window_end_ts=WEND)
+            rec = _drive(c, WS + i * 4.0, bk, lad)
             if rec.get("decision") == "quote":
                 rels[rec["relation"]] += 1
-            rest = c._slot(SLUG).get("resting")
-            if rest:                      # let it fill so inventory moves
-                c.step(WS + i * 2.0 + 1.0, slug=SLUG, window_end_ts=WEND,
-                       book=_book_against(rest, through=True))
         seen[pol] = rels
     assert seen["RESIDUAL_URGENCY"]["extend"] > 0, seen
     assert (seen["RESIDUAL_URGENCY"]["extend"]
@@ -719,14 +878,11 @@ def test_no_policy_ever_reaches_the_residual_cap_except_the_baseline(tmp_path):
                                 model=pv2.load_v2(), policy=pol)
         n = 0
         bk = _book("0.48", "0.50")
+        lad = _ladder(bid="0.48", ask="0.50", bid_qty="0", ask_qty="0")
         for i in range(400):
-            rec = c.step(WS + i * 2.0, slug=SLUG, book=bk, window_end_ts=WEND)
+            rec = _drive(c, WS + i * 4.0, bk, lad)
             if "residual_cap" in str(rec.get("reason") or ""):
                 n += 1
-            rest = c._slot(SLUG).get("resting")
-            if rest:
-                c.step(WS + i * 2.0 + 1.0, slug=SLUG, window_end_ts=WEND,
-                       book=_book_against(rest, through=True))
         capped[pol] = n
     assert capped["RESIDUAL_URGENCY"] == 0, capped
     assert capped["PAIR_AVAILABLE"] == 0, capped
