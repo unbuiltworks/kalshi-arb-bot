@@ -266,9 +266,17 @@ def test_the_watchdog_SWEEP_has_no_clear_path_even_though_the_script_ships():
     wd = io.open("deploy/l5_halt_watchdog/Dockerfile", encoding="utf-8").read()
     assert "scripts/l5_halt_reset.py" in wd
     sweep = io.open("scripts/l5_halt_watchdog.py", encoding="utf-8").read()
-    assert "l5_halt_reset" not in sweep
-    for verb in ("perform_reset", "_require_clearable_store"):
-        assert verb not in sweep
+    # OPTION A (owner 2026-10-19): the entrypoint now invokes the gated reset
+    # ONCE at startup, so the checkable property is about the LOOP, not the
+    # file. Everything after `while True:` must have no clear path, so no
+    # repeated sweep can clear a latch however long the process runs.
+    assert "while True:" in sweep
+    loop = sweep.split("while True:", 1)[1]
+    for verb in ("l5_halt_reset", "boot_reset", "perform_reset",
+                 "heartbeat_no_halt", "clear"):
+        assert verb not in loop, verb
+    before = sweep.split("while True:", 1)[0]
+    assert before.count("emit(*boot_reset(store))") == 1
 
 
 def test_the_asserter_still_cannot_clear_a_latch_in_that_image():
@@ -678,3 +686,199 @@ def test_the_registry_publishes_the_lock_even_on_an_unreadable_ledger():
     doc = REG.registry(Broken())
     assert doc["readable"] is False
     assert doc["submission_disabled"] is True
+
+
+# --------------------------------------------------------------------------
+# OPTION A: the one-time owner reset at WATCHDOG STARTUP
+#
+# Railway does not mount the volume for the pre-deploy step (probed on
+# production: deployment 8d2a37bc refused NO_LATCH_PRESENT while the latch
+# demonstrably existed), and a Railway volume attaches to exactly one
+# service, so startup in THIS service is the only place the clear can run.
+# --------------------------------------------------------------------------
+from scripts import l5_halt_watchdog as WD    # noqa: E402
+
+
+def _boot_env(monkeypatch, digest, **over):
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, R.IMAGE_MARKER_WATCHDOG)
+    monkeypatch.setenv("L5_ORDER_REGISTRY_URL", "http://registry.local")
+    for k, v in env(**{R.EXPECT_ENV: digest}).items():
+        monkeypatch.setenv(k, v)
+    for k, v in over.items():
+        monkeypatch.setenv(k, v)
+
+
+def _patch_reset_inputs(monkeypatch, *, rows=(), submission_disabled=True,
+                        open_rows=None):
+    """Replace only the WIRE: the real gates run against these inputs."""
+    monkeypatch.setattr(R, "read_only_transport",
+                        lambda: FakeTransport(open_rows=open_rows or []))
+    real = R.perform_reset
+
+    def wrapped(**kw):
+        kw["registry_opener"] = fresh_registry(
+            rows=rows, submission_disabled=submission_disabled)
+        return real(**kw)
+
+    monkeypatch.setattr(R, "perform_reset", wrapped)
+
+
+def test_startup_SUCCESS_clears_the_latch_and_audits_it(tmp_path, monkeypatch):
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    _boot_env(monkeypatch, digest)
+    _patch_reset_inputs(monkeypatch)
+    tag, payload = WD.boot_reset(st)
+    assert tag == "L5_HALT_BOOT_RESET", payload
+    assert payload["ok"] is True and payload["cleared"] is True
+    rec = st.get(HG.HALT_KEY)
+    assert rec is None or json.loads(rec).get("halt") is False
+    audit = st.get(R.AUDIT_KEY)
+    assert audit, "the audit entry is the one-time guarantee"
+    assert json.loads(audit.decode().splitlines()[-1])[
+        "prior_latch_sha256"] == digest
+
+
+def test_startup_REFUSAL_leaves_the_latch_and_never_raises(tmp_path,
+                                                           monkeypatch):
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    _boot_env(monkeypatch, digest)
+    monkeypatch.setenv(R.CONFIRM_ENV, "not the phrase")
+    _patch_reset_inputs(monkeypatch)
+    tag, payload = WD.boot_reset(st)          # must not raise
+    assert tag == "L5_HALT_BOOT_RESET_REFUSED"
+    assert payload["cleared"] is False
+    assert "CONFIRM_PHRASE_MISMATCH" in payload["refused"]
+    assert st.get(HG.HALT_KEY) == raw
+    assert st.get(R.AUDIT_KEY) is None
+
+
+def test_startup_REPLAY_of_a_spent_id_never_clears_a_new_latch(tmp_path,
+                                                               monkeypatch):
+    """A normal restart with the reset variables still in place."""
+    st = volume_store(tmp_path)
+    _, d1 = file_latch(st)
+    _boot_env(monkeypatch, d1)
+    _patch_reset_inputs(monkeypatch)
+    assert WD.boot_reset(st)[0] == "L5_HALT_BOOT_RESET"
+
+    # the watchdog re-latches for a genuinely different hazard
+    raw2, d2 = file_latch(st, reason="A_NEW_UNRELATED_HAZARD")
+    monkeypatch.setenv(R.EXPECT_ENV, d2)      # same id, new digest
+    tag, payload = WD.boot_reset(st)
+    assert tag == "L5_HALT_BOOT_RESET_REFUSED"
+    assert "RESET_ID_ALREADY_CONSUMED" in payload["refused"]
+    assert st.get(HG.HALT_KEY) == raw2, "the new hazard's latch must survive"
+
+
+def test_a_stale_digest_at_startup_refuses(tmp_path, monkeypatch):
+    """Deployment restarts with an old digest: the latch moved, so refuse."""
+    st = volume_store(tmp_path)
+    _, old = file_latch(st)
+    raw2, _ = file_latch(st, reason="SOMETHING_ELSE")
+    _boot_env(monkeypatch, old)
+    _patch_reset_inputs(monkeypatch)
+    tag, payload = WD.boot_reset(st)
+    assert tag == "L5_HALT_BOOT_RESET_REFUSED"
+    assert st.get(HG.HALT_KEY) == raw2
+
+
+def test_an_open_order_or_unlocked_executor_refuses_at_startup(tmp_path,
+                                                               monkeypatch):
+    for label, kw in (
+        ("open order", {"open_rows": [
+            {"id": "D1", "marketSlug": "m", "leavesQuantity": "0.01",
+             "manualOrderIndicator": ""}], "rows": [{"venue_order_id": "D1"}]}),
+        ("submission enabled", {"submission_disabled": False}),
+        ("submission field absent", {"submission_disabled": None}),
+    ):
+        st = volume_store(tmp_path / label.replace(" ", "_"))
+        raw, digest = file_latch(st)
+        _boot_env(monkeypatch, digest)
+        monkeypatch.setenv(R.ID_ENV, "id-%s" % label.replace(" ", "-"))
+        _patch_reset_inputs(monkeypatch, **kw)
+        tag, payload = WD.boot_reset(st)
+        assert tag == "L5_HALT_BOOT_RESET_REFUSED", (label, payload)
+        assert st.get(HG.HALT_KEY) == raw, label
+
+
+def test_a_stale_registry_refuses_at_startup(tmp_path, monkeypatch):
+    """A report that stopped arriving is the WEDGED signal, not an empty
+    book."""
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    _boot_env(monkeypatch, digest)
+    monkeypatch.setattr(R, "read_only_transport", lambda: FakeTransport())
+    real = R.perform_reset
+
+    def wrapped(**kw):
+        kw["registry_opener"] = fresh_registry(
+            age_s=R.MAX_REGISTRY_AGE_S + 30.0)
+        return real(**kw)
+
+    monkeypatch.setattr(R, "perform_reset", wrapped)
+    tag, payload = WD.boot_reset(st)
+    assert tag == "L5_HALT_BOOT_RESET_REFUSED"
+    assert "REGISTRY_STALE" in payload["refused"]
+    assert st.get(HG.HALT_KEY) == raw
+
+
+def test_an_unexpected_error_at_startup_is_swallowed(tmp_path, monkeypatch):
+    """A watchdog that fails to start is a watchdog that stops watching."""
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    _boot_env(monkeypatch, digest)
+
+    def boom():
+        raise RuntimeError("signing blew up")
+
+    monkeypatch.setattr(R, "read_only_transport", boom)
+    tag, payload = WD.boot_reset(st)          # must not raise
+    assert tag == "L5_HALT_BOOT_RESET_REFUSED"
+    assert "RuntimeError" in payload["refused"]
+    assert st.get(HG.HALT_KEY) == raw
+
+
+def test_a_wrong_image_refuses_at_startup(tmp_path, monkeypatch):
+    st = volume_store(tmp_path)
+    raw, digest = file_latch(st)
+    _boot_env(monkeypatch, digest)
+    monkeypatch.setenv(R.IMAGE_MARKER_ENV, "l5_pmus_live")
+    tag, payload = WD.boot_reset(st)
+    assert tag == "L5_HALT_BOOT_RESET_REFUSED"
+    assert "WRONG_IMAGE" in payload["refused"]
+    assert st.get(HG.HALT_KEY) == raw
+
+
+# ---------------------------------------- NORMAL watchdog behaviour: OFF
+@pytest.mark.parametrize("value", [None, "", "no", "NO", "1", "true",
+                                   "yes", "Yes ", "0"])
+def test_a_normal_deployment_or_restart_clears_NOTHING(monkeypatch, value):
+    """Only the literal "YES" arms it. A normal deploy must never clear."""
+    called = []
+    monkeypatch.setattr(WD, "boot_reset",
+                        lambda store: called.append(store) or ("x", {}))
+    if value is None:
+        monkeypatch.delenv(WD.BOOT_RESET_ENV, raising=False)
+    else:
+        monkeypatch.setenv(WD.BOOT_RESET_ENV, value)
+    armed = str(os.getenv(WD.BOOT_RESET_ENV, "")).strip().upper() == "YES"
+    assert armed is (str(value).strip().upper() == "YES" if value else False)
+    assert called == []
+
+
+def test_the_literal_yes_is_what_arms_it(monkeypatch):
+    monkeypatch.setenv(WD.BOOT_RESET_ENV, "YES")
+    assert str(os.getenv(WD.BOOT_RESET_ENV, "")).strip().upper() == "YES"
+
+
+def test_the_asserter_in_this_image_still_cannot_clear(tmp_path):
+    """The guard the invariant always actually rested on, re-checked after
+    the hook was added."""
+    st = volume_store(tmp_path)
+    a = HG.HaltAsserter(st, who="l5-watchdog")
+    a.assert_halt(reason="UNMANAGED_RESTING_ORDER", evidence={"o": 1})
+    with pytest.raises(PermissionError):
+        a.heartbeat_no_halt()
+    assert not hasattr(a, "clear") and not hasattr(a, "clear_halt")

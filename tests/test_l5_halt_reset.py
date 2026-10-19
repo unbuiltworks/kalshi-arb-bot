@@ -349,14 +349,29 @@ def test_a_credentialed_watchdog_still_cannot_clear_its_own_latch():
     assert HG.HaltGate(store).submissions_permitted() is False
 
 
-def test_the_reset_module_is_not_reachable_from_the_sweep_entrypoint():
-    """The script now SHIPS in the watchdog image (owner 2026-10-19), so the
-    property that matters is that the SWEEP never reaches it: the platform
-    invokes it as a separate pre-deploy process, the watchdog process does
-    not. If this ever fails, an automated sweep has gained a clear path."""
+def test_the_sweep_LOOP_can_never_clear_the_halt():
+    """SUPERSEDES "the entrypoint never mentions the reset" (owner
+    2026-10-19, Option A). The entrypoint now invokes the owner-gated reset
+    ONCE at startup, because Railway does not mount the volume for the
+    pre-deploy step (probed: deployment 8d2a37bc refused NO_LATCH_PRESENT
+    while the latch existed) and only a process in this service can write it.
+
+    The property that was ever load-bearing is restated as something
+    CHECKABLE: the sweep LOOP body contains no clear path. Everything after
+    `while True:` must never reference the reset, so no repeated sweep can
+    clear a latch however long the process runs."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sweep = open(os.path.join(root, "scripts/l5_halt_watchdog.py")).read()
-    assert "l5_halt_reset" not in sweep
+    assert "while True:" in sweep
+    loop = sweep.split("while True:", 1)[1]
+    for forbidden in ("l5_halt_reset", "boot_reset", "perform_reset",
+                      "heartbeat_no_halt", "clear"):
+        assert forbidden not in loop, (
+            "the sweep loop must contain no clear path; found %r" % forbidden)
+    # and it is invoked exactly once, outside the loop, behind the env gate
+    before = sweep.split("while True:", 1)[0]
+    assert before.count("emit(*boot_reset(store))") == 1
+    assert "BOOT_RESET_ENV" in before
     wd = open(os.path.join(root, "src/l5_watchdog.py")).read()
     assert "l5_halt_reset" not in wd
     gate = open(os.path.join(root, "src/l5_halt_gate.py")).read()

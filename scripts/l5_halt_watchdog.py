@@ -38,6 +38,72 @@ except Exception:                               # noqa: BLE001
     A = None                                    # type: ignore
 
 
+#: EXACTLY "YES" arms the one-time owner reset at STARTUP. Anything else --
+#: unset, "1", "true", "yes" in the wrong case -- is OFF. A normal deployment
+#: or restart therefore clears nothing, which is the point.
+BOOT_RESET_ENV = "L5_HALT_RESET_AT_BOOT"
+
+
+def boot_reset(store) -> tuple:
+    """The owner-gated HALT reset, ONCE, before the sweep loop begins.
+
+    WHY HERE AND NOWHERE ELSE. The latch is a file on this service's volume
+    and a Railway volume attaches to exactly one service, so only a process
+    in this service can write it. `preDeployCommand` was probed on production
+    on 2026-10-19 (deployment 8d2a37bc) and refused NO_LATCH_PRESENT while
+    the latch demonstrably existed: Railway does NOT mount the volume for the
+    pre-deploy step. This process's volume IS mounted -- it reads and writes
+    the latch every 20s -- so startup is the only remaining place, and it
+    costs the ordinary ~1s container handover and nothing more.
+
+    THE SWEEP LOOP STILL CANNOT CLEAR, which is the invariant that was ever
+    load-bearing. This runs ONCE, before the loop, and the loop never calls
+    it; `HaltAsserter` still has no clear method and `heartbeat_no_halt`
+    still refuses over a latch. The image already held permissive-write
+    capability through that method, so "cannot clear" was always a GUARD
+    rather than an absence of code.
+
+    IT NEVER RAISES. A watchdog that fails to start is a watchdog that stops
+    watching, so every refusal -- and every unexpected error -- is reported
+    and swallowed, and the caller proceeds to sweep. Refusing is the EXPECTED
+    outcome once a reset id is spent.
+
+    EVERY GATE IS THE EXISTING ONE, unchanged: the confirm phrase and a named
+    operator, the sha256 of the latch under review, the retyped reason, a
+    reset id spent by the ATTEMPT (so a replayed id clears nothing), the
+    venue reporting no L5-owned or unattributed-automated working order, the
+    executor's registry readable + fresh + empty AND publishing
+    submission_disabled, and the audit entry fsynced BEFORE the latch write.
+    """
+    try:
+        from scripts import l5_halt_reset as RST
+    except BaseException as exc:                               # noqa: BLE001
+        return ("L5_HALT_BOOT_RESET_REFUSED",
+                {"ok": False, "refused": "RESET_MODULE_UNAVAILABLE:%s"
+                 % type(exc).__name__, "cleared": False})
+    try:
+        RST._require_reset_image()
+        RST._require_clearable_store(store)
+        out = RST.perform_reset(
+            store=store, transport=RST.read_only_transport(),
+            registry_url=os.getenv("L5_ORDER_REGISTRY_URL", "").strip())
+        return ("L5_HALT_BOOT_RESET",
+                {"ok": True, "cleared": True, "entry": out.get("entry"),
+                 "labels": ("the owner-gated latch clear ran ONCE at startup. "
+                            "The sweep loop has no clear path; this process "
+                            "now proceeds to sweep normally.")})
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return ("L5_HALT_BOOT_RESET_REFUSED",
+                {"ok": False, "cleared": False,
+                 "refused": "%s: %s" % (type(exc).__name__, str(exc)[:300]),
+                 "labels": ("NOTHING WAS CLEARED and the latch is untouched. "
+                            "The watchdog starts and sweeps regardless: a "
+                            "refusal must never stop the watching. A spent "
+                            "reset id refusing here is the expected state.")})
+
+
 def emit(tag: str, payload) -> None:
     print("%s %s" % (tag, json.dumps(payload, default=str, sort_keys=True)),
           flush=True)
@@ -72,6 +138,10 @@ def main() -> int:
                        "there is nothing to judge the executor from; serving "
                        "the latch and attesting nothing, which fails the "
                        "executor closed when the record goes stale")})
+    # ONE-TIME OWNER RESET, BEFORE THE LOOP. Default OFF; never raises; the
+    # loop below has no clear path and never calls it.
+    if str(os.getenv(BOOT_RESET_ENV, "")).strip().upper() == "YES":
+        emit(*boot_reset(store))
     while True:
         try:
             emit("L5_WATCHDOG_SWEEP", wd.sweep())
