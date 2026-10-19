@@ -1353,3 +1353,21 @@ deploy the taxonomy version + ONE_TICK_BEHIND variant, shadow-locked 2026-10-19T
 # NO, arm token unset, every risk limit unchanged. No live orders authorized
 # by this, and no exposure limit changed.
 deploy order-ID-linked fill-calibration capture, shadow-locked 2026-10-19T20:53:22Z
+
+# ---------------------------------------------------------------------------
+# c11c55d0 -- the three capture defects the PRODUCTION RECORDS exposed on
+# c6e5aa9a, which the tests did not: the money path's first intents captured
+# book: null / queue: no_ladder (shadow_tick runs last, the hook fires
+# earlier); frame_age_s -75.496 and -0.058 reported as stale: false (age
+# measured against the caller's now, no negative branch); and no timestamp on
+# the book block at all, so book staleness was unmeasurable.
+#
+# RECORDER-ONLY, plus two runner wiring lines. No gate, limit, arming,
+# claim_submission or SUBMIT_SITES line touched; src/l5_live_execution.py
+# unchanged. Regression: 26 failed / 11,649 passed / 14 errors = the SAME 40
+# IDs as the clean baseline, zero NEW, zero GONE, +8 passed = the 8 new tests.
+#
+# ADDS NO CAPABILITY. SHADOW_ONLY stays enabled, mechanism OFF, PMUS_Q1_LIVE
+# NO, arm token unset, every risk limit unchanged. No live orders authorized
+# by this, and no exposure limit changed.
+deploy book-at-the-wire capture and honest frame freshness, shadow-locked 2026-10-19T21:26:51Z
