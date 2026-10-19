@@ -902,3 +902,4 @@ scope the one-shot marker, diagnostic mode OFF 2026-10-19T02:40Z
 # cancellation mechanism stays OFF, PMUS_Q1_LIVE stays NO, and no order is
 # authorized. Code only.
 deploy the placement-time gate, shadow-locked, mechanism OFF 2026-10-19T12:20Z
+live 1315z cancellation verification, owner FINAL GO 2026-10-19T13:15Z
