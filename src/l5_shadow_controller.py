@@ -288,6 +288,7 @@ class ShadowController:
             for k in ("carry", "discontinuity"):
                 if isinstance(doc.get(k), Mapping):
                     self.state[k] = dict(doc[k])
+            self.state["boot"] = self._drop_stale_resting()
             return
         # A STATE DISCONTINUITY, RECORDED RATHER THAN ABSORBED.
         #
@@ -322,6 +323,39 @@ class ShadowController:
                 "labels": ("simulated inventory only. Nothing realized, "
                            "submitted or owned was affected: this object "
                            "has never held a position.")}
+
+    def _drop_stale_resting(self) -> Dict[str, Any]:
+        """A restart drops the ORDER OBJECTS; this drops the record of them.
+
+        `_orders` is deliberately not persisted, because a HypoOrder's
+        whole value is the queue position captured at placement and that
+        cannot be reconstructed. The next tick therefore quotes afresh --
+        `already_resting` is keyed on `_orders`, not on this record, so
+        nothing is frozen.
+
+        But the per-scenario `resting` record DID persist, and a stale one
+        is a reporting lie waiting to happen: the next `window_close` would
+        publish it as `dropped_resting`, attributing to expiry a quote the
+        RESTART dropped. Inventory is untouched -- only the unreconstructable
+        record goes -- and the count is published in the heartbeat so the
+        drop is visible rather than silent. Dropping is the conservative
+        direction: a dropped order can never become a fill.
+        """
+        dropped = []
+        for slug, slot in (self.state.get("markets") or {}).items():
+            for scenario in SCENARIOS:
+                sc = (slot.get("scen") or {}).get(scenario)
+                if isinstance(sc, dict) and sc.get("resting") is not None:
+                    dropped.append("%s|%s" % (slug, scenario))
+                    sc["resting"] = None
+        return {"dropped_resting_records": len(dropped),
+                "dropped": sorted(dropped)[:STRANDED_REPORT_CAP],
+                "inventory_carried": True,
+                "labels": ("a restart cannot reconstruct a queue position, "
+                           "so the resting RECORD is cleared with its order "
+                           "object. Simulated inventory and costs carry "
+                           "across unchanged; nothing was credited and "
+                           "nothing was discarded.")}
 
     def _prune(self) -> None:
         """Keep the state file bounded WITHOUT losing a cent of any
@@ -820,6 +854,7 @@ class ShadowController:
                 "economics": self.economics(),
                 "stranded": self.stranded(cap=STRANDED_REPORT_CAP),
                 "state_discontinuity": self.discontinuity(),
+                "boot": self.state.get("boot"),
                 "resting_now": {sc: bool((self._orders.get(k) or {}).get(sc))
                                 for sc in SCENARIOS
                                 for k in list(self._orders)[:1]} or None,

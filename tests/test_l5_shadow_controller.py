@@ -886,3 +886,82 @@ def test_no_policy_ever_reaches_the_residual_cap_except_the_baseline(tmp_path):
         capped[pol] = n
     assert capped["RESIDUAL_URGENCY"] == 0, capped
     assert capped["PAIR_AVAILABLE"] == 0, capped
+
+
+# --------------------------------------------------------------------------
+# WHAT A DEPLOY DOES TO THE DURABLE STATE.
+#
+# A deploy restarts the process over the same volume. Nothing may be
+# credited, nothing discarded, and nothing attributed to the venue that the
+# RESTART actually did.
+def _deployed_shape(path, slug="cpc-btc-updown-15m-2026-10-19-1700z"):
+    """A v3 state file shaped like the one on the volume: settled-pending
+    inventory in every scenario, and a resting record in one of them."""
+    doc = {"v": sc.STATE_VERSION, "markets": {slug: {
+        "window_end_ts": 1792430100.0, "scen": {}}}}
+    for i, scen in enumerate(sc.SCENARIOS):
+        doc["markets"][slug]["scen"][scen] = {
+            "yes": 6, "no": 3, "yes_cost": "1.83", "no_cost": "1.12",
+            "last_rel": "extend", "settled": None,
+            "resting": ({"side": "NO", "price": "0.41",
+                         "relation": "open", "t": 1792431862.6}
+                        if i == 0 else None)}
+    io.open(path, "w", encoding="utf-8").write(json.dumps(doc))
+    return slug
+
+
+def test_a_restart_carries_inventory_and_records_no_discontinuity(tmp_path):
+    p = str(tmp_path / "s.json")
+    slug = _deployed_shape(p)
+    c = sc.ShadowController(state_path=p)
+    for scen in sc.SCENARIOS:
+        inv = c.inventory_for(slug, scen)
+        assert (inv.yes, inv.no) == (6, 3)
+        assert inv.yes_cost + inv.no_cost == D("2.95")
+    # SAME version, so there is no discontinuity to record
+    assert c.discontinuity() in (None, {}), c.discontinuity()
+    assert c.economics()["per_scenario"][
+        sc.HEADLINE_SCENARIO]["windows_settled"] == 0
+    assert slug in c.stranded()
+
+
+def test_a_restart_drops_the_resting_record_it_cannot_reconstruct(tmp_path):
+    """And says so, rather than leaving a stale record to be published as
+    `dropped_resting` by the next window close -- which would blame expiry
+    for a quote the restart dropped."""
+    p = str(tmp_path / "s.json")
+    slug = _deployed_shape(p)
+    c = sc.ShadowController(state_path=p)
+    boot = c.state["boot"]
+    assert boot["dropped_resting_records"] == 1, boot
+    assert boot["dropped"] == ["%s|%s" % (slug, sc.SCENARIOS[0])]
+    assert boot["inventory_carried"] is True
+    for scen in sc.SCENARIOS:
+        assert c._scen(slug, scen)["resting"] is None
+    closed = c.window_close(slug)
+    for scen in sc.SCENARIOS:
+        assert closed["scenarios"][scen]["dropped_resting"] is None
+        # inventory survived the close untouched
+        assert closed["scenarios"][scen]["cost_total"] == "2.95"
+
+
+def test_the_boot_report_reaches_the_heartbeat(tmp_path):
+    p = str(tmp_path / "s.json")
+    _deployed_shape(p)
+    c = sc.ShadowController(state_path=p)
+    assert c.report()["boot"]["dropped_resting_records"] == 1
+
+
+def test_a_restart_does_not_freeze_a_scenario_that_was_resting(tmp_path):
+    """`already_resting` is keyed on the in-memory order, not the record, so
+    the next tick quotes afresh. Asserted because the opposite -- a slot
+    frozen until the window rolls -- would be invisible in the counts."""
+    p = str(tmp_path / "s.json")
+    slug = _deployed_shape(p)
+    c = sc.ShadowController(state_path=p)
+    assert (c._orders.get(slug) or {}).get(sc.SCENARIOS[0]) is None
+    out = c.step(1792429500.0, slug=slug,
+                 book={"bid": "0.45", "ask": "0.46"},
+                 window_end_ts=1792430100.0, window_source="VENUE",
+                 prints=[], ladder=None)
+    assert out.get("reason") != "already_resting", out
