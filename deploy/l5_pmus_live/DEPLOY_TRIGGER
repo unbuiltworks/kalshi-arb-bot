@@ -1121,3 +1121,60 @@ deploy queue-aware shadow fills, shadow-locked, mechanism OFF 2026-10-19T17:05Z
 # derived independently from the production fill records. Anything else means
 # the settlement path is wrong.
 deploy the settlement fix + corrected intent gate, shadow-locked 2026-10-19T18:42Z
+
+# ----------------------------------------------------------------------------
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT, 2026-10-19. Promotes 19cd3a24:
+# continuous economic reporting for the nine simulations. Authorization was
+# conditional on the existing safety AND ACCOUNTING invariants remaining
+# intact; both were checked by name.
+#
+# EXACTLY ONE FILE IN THE IMAGE CHANGES: src/l5_shadow_controller.py, the
+# shadow decision source. It holds no transport, no credentials and no
+# executor, and defines no order path. The other three changed files
+# (analysis/l5/*) are offline and are NOT copied into the image -- the
+# Dockerfile takes only analysis/l5/l5_action_model_v2.json.
+#
+# NO POLICY CHANGED. The three deployed policies decide exactly as before;
+# every number added is derived from decisions the controller was already
+# making. No strategy added, no architecture touched, no limit altered.
+#
+# REGRESSION: baseline at 23c45806 in the same directory with identical
+# flags and environment: 31 failed, 14 errors, 45 IDs. This tree: 26
+# failed, 14 errors, 40 IDs. NEW: NONE. The 5 GONE are the test_gemini_*
+# group that fails at the baseline too, passes in isolation, and has no
+# dependency path from this diff.
+#
+# SAFETY AND ACCOUNTING INVARIANTS, 559 tests, named rather than implied:
+#   test_l5_one_submission_claim          test_l5_four_bucket_accounting
+#   test_l5_mechanism_strategy_isolation  test_l5_own_terms_accounting
+#   test_l5_account_wide_exposure         test_l5_potential_exposure
+#   test_l5_account_wide_delta_policy     test_l5_outside_claim_adjudication
+#   test_l5_binary_settlement             test_l5_shadow_controller(_wiring)
+#   test_l5_correct_cost_basis            test_l5_intent_gate
+#   test_l5_cost_basis_audit              test_l5_live_runner_graft
+# All pass. The settled line keeps cost_total, redemption_total and
+# modelled_net unchanged and ADDS the pair/residual split beside them; the
+# split is on the AVERAGE-COST basis, which is what complement_target
+# already prices completion against, and the total does not depend on the
+# convention either way.
+#
+# THE TALLY CANNOT COST A DECISION. It is taken in `_out`, the single funnel
+# every decision record already passes through, inside a bare except, so a
+# counter fault can never reach the tick.
+#
+# VALIDATED AGAINST PRODUCTION, NOT FIXTURES: replaying the recorded fills
+# through this code reproduces all six settled windows exactly, including
+# the pair/residual split derived independently by hand.
+#
+# WHAT IT REPORTS: per-window net for EVERY settled window (with
+# windows_folded_into_carry, so the list can never be a flattering sample),
+# zero-trade windows, matched-pair net against directional residual net,
+# capital deployed / efficiency / max drawdown, quotes placed / filled /
+# unfilled at expiry with the fill rate between them, adverse selection,
+# opportunities split into justified refusals versus possible misses with a
+# reason histogram, and fills with known versus unknown queue.
+#
+# ADDS NO CAPABILITY: SHADOW_ONLY enabled, mechanism OFF, PMUS_Q1_LIVE NO,
+# arm token unset, limits unchanged ($5/market, $5 total, 1 market, 1 live
+# order, $5 daily realized loss halt). No live orders are authorized.
+deploy continuous economic reporting, shadow-locked 2026-10-19T19:05Z
