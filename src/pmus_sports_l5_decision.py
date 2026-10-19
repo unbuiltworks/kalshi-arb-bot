@@ -46,6 +46,32 @@ TICK = D("0.01")
 # hard bound below is separate and always participates in the min()
 PAIR_OBSERVATION_CAP = D("0.98")
 SPORTS_TTE_DEFAULT_S = 1e9          # in-game sports: no settlement clock
+
+#: BTC15M ADAPTATION. A sports market has no settlement clock, so the sports
+#: path hands `state_key` a sentinel tte and every decision lands in the
+#: `tte>10m` bucket. A BTC15m window is 900 SECONDS and expires, so that
+#: sentinel is not a harmless default there -- it is the wrong state.
+#: `action_model.TTE_BUCKETS` are tte<30s / tte30-120s / tte2-5m / tte5-10m /
+#: tte>10m, so a 900s window really traverses FOUR of them and the sentinel
+#: reaches none but the last. The authorized placement band (600-450s
+#: remaining) is `tte5-10m`; looked up at the sentinel it reads `tte>10m`,
+#: which is a bucket L5's own BTC15m history never occupied at that point in
+#: a window. Time to expiry is a first-order input for an expiring binary and
+#: it is threaded explicitly below rather than defaulted.
+def tte_at(window_end_ts: Optional[float], t: float) -> float:
+    """Seconds to the window's close, or the sports sentinel when there is
+    no settlement clock. Never negative: past the close the state is
+    `tte<30s`, which is what an expiring book actually is."""
+    if window_end_ts is None:
+        return SPORTS_TTE_DEFAULT_S
+    return max(0.0, float(window_end_ts) - float(t))
+
+
+#: the spring-era completion target from L5_OPERATING_MODEL: materially
+#: cheaper pair completion, NOT the near-$1 tolerance of the later
+#: incentive era. Passed explicitly; the >=1c hard bound always
+#: participates in the min() regardless, so a cap can only ever tighten.
+BTC15M_PAIR_CAP = D("0.96")
 FRESH_BOOK_TTL_S = 120.0            # newest row must be this fresh
 DECISION_MIN_GAP_S = 30.0           # bounded action cadence
 MAX_ACTIONS = 12
@@ -109,12 +135,25 @@ class Inventory:
 
 
 def complement_target(avg_surplus: D,
-                      deficit_bid: Optional[D]) -> tuple[Optional[D], dict]:
+                      deficit_bid: Optional[D], *,
+                      pair_cap: Optional[D] = None
+                      ) -> tuple[Optional[D], dict]:
     """Maker-only completion price on the deficit side: the tightest of
-    the >=1c hard bound, the 0.98 observation cap, and the join at the
-    served deficit-side bid. The hard bound ALWAYS participates."""
+    the >=1c hard bound, the observation cap, and the join at the served
+    deficit-side bid. The hard bound ALWAYS participates.
+
+    `pair_cap` defaults to the sports observation cap so that path is
+    unchanged; BTC15m passes the tighter BTC15M_PAIR_CAP. A cap can only
+    tighten the result -- it enters a min() the hard bound is also in.
+    """
+    # LATE-BOUND ON PURPOSE. A default of `PAIR_OBSERVATION_CAP` in the
+    # signature is bound once at def time, which silently broke
+    # `monkeypatch.setattr(l5d, "PAIR_OBSERVATION_CAP", ...)` -- the module
+    # constant must stay the live source for callers and tests that override
+    # it. None means "use the module constant AS IT IS NOW".
+    cap_v = PAIR_OBSERVATION_CAP if pair_cap is None else pair_cap
     hard = hard_pair_bound() - avg_surplus
-    cap = PAIR_OBSERVATION_CAP - avg_surplus
+    cap = cap_v - avg_surplus
     info = {"hard_bound_px": str(_floor_tick(hard)),
             "observation_cap_px": str(_floor_tick(cap)),
             "max_pair_cost": str(avg_surplus + min(hard, cap))}
@@ -128,8 +167,11 @@ def complement_target(avg_surplus: D,
 
 
 def _proposal(model: Mapping[str, Any], bid: float, inv: Inventory,
-              last_rel: str) -> dict:
-    stt = state_key(bid, SPORTS_TTE_DEFAULT_S, float(inv.residual))
+              last_rel: str, *,
+              tte_s: Optional[float] = None) -> dict:
+    # late-bound for the same reason as the pair cap above
+    tte_v = SPORTS_TTE_DEFAULT_S if tte_s is None else tte_s
+    stt = state_key(bid, tte_v, float(inv.residual))
     d = pv2.v2_dist(model, stt, last_rel or "open", "q<5")
     if d["backed_off"]:
         return {"state": stt, "off_distribution": True}
@@ -193,7 +235,8 @@ def _touch_for(side_yes: bool, book: Mapping[str, Any]) -> Optional[D]:
 
 
 def plan_action(rel: str, inv: "Inventory",
-                book: Mapping[str, Any]) -> dict:
+                book: Mapping[str, Any], *,
+                pair_cap: Optional[D] = None) -> dict:
     """Map a model RELATION + inventory + book into one concrete maker
     action, or a reasoned refusal. Shared by the historical replay and
     the live next-action so the two can never diverge.
@@ -213,7 +256,8 @@ def plan_action(rel: str, inv: "Inventory",
         if surplus_avg is None:
             return {"decision": "no_action",
                     "reason": "complete_without_surplus"}
-        px, econ = complement_target(surplus_avg, _touch_for(side_yes, book))
+        px, econ = complement_target(surplus_avg, _touch_for(side_yes, book),
+                                     pair_cap=pair_cap)
         if px is None:
             return {"decision": "no_action", "relation": rel, **econ}
     else:                                        # open / extend
@@ -231,8 +275,9 @@ def plan_action(rel: str, inv: "Inventory",
         px = _touch_for(side_yes, book)
         if px is None:
             return {"decision": "no_action", "reason": "one_sided_book"}
-        econ = {"max_pair_cost": str(min(hard_pair_bound(),
-                                         PAIR_OBSERVATION_CAP))}
+        econ = {"max_pair_cost": str(min(
+            hard_pair_bound(),
+            PAIR_OBSERVATION_CAP if pair_cap is None else pair_cap))}
     return {"decision": "quote", "relation": rel,
             "side": "YES" if side_yes else "NO",
             "target_price": str(px), "q1_size": 1,
@@ -260,9 +305,18 @@ def _book_at(obs: list, t: float) -> Optional[dict]:
 
 def decide_market(slug: str, obs: list, now: float,
                   model: Mapping[str, Any],
-                  window_s: float = 3600.0) -> dict:
+                  window_s: float = 3600.0, *,
+                  window_end_ts: Optional[float] = None,
+                  pair_cap: Optional[D] = None) -> dict:
     """Sequential no-hindsight L5 replay over one market's collector rows,
-    ending with the CURRENT auditable next action."""
+    ending with the CURRENT auditable next action.
+
+    `window_end_ts` is the market's SETTLEMENT clock. Left None the sports
+    sentinel applies and this path is byte-for-byte what it was; passed (as
+    BTC15m must), every state lookup carries the real seconds-to-expiry at
+    the moment of that decision, so the policy is queried in the TTE bucket
+    the window is actually in. `pair_cap` tightens completion the same way.
+    """
     cut = now - window_s
     obs = sorted((o for o in obs if (st._ts(o) or 0) >= cut),
                  key=lambda o: st._ts(o) or 0)
@@ -281,13 +335,18 @@ def decide_market(slug: str, obs: list, now: float,
         if book is None or book["bid"] is None:
             continue
         t_prev = t
-        prop = _proposal(model, float(book["bid"]), inv, last_rel)
+        # tte AT t, never at `now`: a decision made nine minutes ago was
+        # made with nine minutes more clock, and dating it from `now` would
+        # leak the present into a past state.
+        prop = _proposal(model, float(book["bid"]), inv, last_rel,
+                         tte_s=tte_at(window_end_ts, t))
         if prop.get("off_distribution"):
             actions.append({"t": round(t, 1), "state": prop["state"],
                             "decision": "no_action",
                             "reason": "v2_off_distribution"})
             continue
-        plan = plan_action(prop["recommended_relation"], inv, book)
+        plan = plan_action(prop["recommended_relation"], inv, book,
+                           pair_cap=pair_cap)
         if plan["decision"] != "quote":
             actions.append({"t": round(t, 1), "state": prop["state"],
                             **_public(plan)})
@@ -317,13 +376,15 @@ def decide_market(slug: str, obs: list, now: float,
     book = _book_at(obs, now)
     next_action: dict[str, Any] = {"decision": "no_action"}
     if book is not None and book["bid"] is not None:
-        prop = _proposal(model, float(book["bid"]), inv, last_rel)
+        prop = _proposal(model, float(book["bid"]), inv, last_rel,
+                         tte_s=tte_at(window_end_ts, now))
         if prop.get("off_distribution"):
             next_action = {"decision": "no_action",
                            "reason": "v2_off_distribution",
                            "state": prop["state"]}
         else:
-            plan = plan_action(prop["recommended_relation"], inv, book)
+            plan = plan_action(prop["recommended_relation"], inv, book,
+                               pair_cap=pair_cap)
             rel = plan.get("relation", prop["recommended_relation"])
             p = (prop.get("switch_complete_p") if rel == "complete"
                  else prop.get("persist_extend_p"))
@@ -349,7 +410,8 @@ def decide_market(slug: str, obs: list, now: float,
                                     "reason": "no_fresh_book"}
     if book is not None and book["bid"] is not None:
         probe_inv = Inventory()
-        pprop = _proposal(model, float(book["bid"]), probe_inv, "")
+        pprop = _proposal(model, float(book["bid"]), probe_inv, "",
+                          tte_s=tte_at(window_end_ts, now))
         if pprop.get("off_distribution"):
             probe_action = {"decision": "no_action",
                             "reason": "v2_off_distribution",
@@ -357,7 +419,8 @@ def decide_market(slug: str, obs: list, now: float,
         else:
             probe_action = {
                 **_public(plan_action(pprop["recommended_relation"],
-                                      probe_inv, book)),
+                                      probe_inv, book,
+                                      pair_cap=pair_cap)),
                 "state": pprop["state"],
                 "from_inventory": "flat (first bounded q=1 probe holds "
                                   "no position)",
