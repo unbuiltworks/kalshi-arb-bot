@@ -945,3 +945,42 @@ RESTORE: shadow lock back on, mechanism OFF after the 1315z fill 2026-10-19T13:2
 # observed BTC15m actions, L5_SHADOW_WINDOW_CLOSE on each roll,
 # L5_SHADOW_SETTLED when the venue states a binary settlement price.
 deploy Phase A shadow decision source, shadow-locked, mechanism OFF 2026-10-19T15:33Z
+
+# ===================================================================
+# FIX the production TypeError found by the Phase A deployment itself.
+#
+# Promotes 5ca45150. `AuthBook.snapshot` returns bid/ask as STRINGS (the
+# recorder's `_px` ends in str(value)) and `plan_action` does Decimal
+# arithmetic on them, so the raw snapshot raised TypeError on every tick of
+# 1545z -- the first window whose price band the frozen model covers. 1530z
+# sat at 3-4c where the model has no flat|open state, so every decision
+# returned before plan_action and the records looked correct for eleven
+# minutes. Prices are now coerced at the controller's own edge, not in
+# plan_action, which is shared with the sports path whose callers already
+# pass Decimals.
+#
+# The fixtures were the defect: both test files built Decimal books and the
+# wiring mock returned Decimals, so 82 tests were green against a contract
+# kinder than the real one. They now use strings, and two tests build the
+# snapshot from AuthBook.snapshot and _px themselves so that contract
+# breaking fails the suite instead of production.
+#
+# Also: a one-sided book is refused by name (no_two_sided_book) instead of
+# quoted on whichever side is priceable. This module's decisions are all
+# PAIR economics and a quote whose complement has no price has no pair to
+# evaluate; `snapshot` already returns None unless both sides are present,
+# so this refuses a state that cannot arrive through the runner.
+#
+# CONTAINMENT HELD THROUGHOUT: no raise reached the tick, the money path was
+# untouched, the shadow lock stayed engaged, and the records said
+# controller_error:TypeError on their face rather than reporting decisions
+# that were never made.
+#
+# TESTS: 11,480 passed, 24 failed, 14 errors. The failing-ID set is BYTE
+# IDENTICAL to the previous deployment's and a strict subset of the
+# b838a78e baseline: zero new failures, none in the PMUS executor path.
+# 306 green across the ten files covering this area.
+#
+# NO VARIABLE CHANGES. SHADOW_ONLY stays enabled, mechanism stays OFF,
+# PMUS_Q1_LIVE stays NO, every risk limit unchanged, no order authorized.
+deploy the string-price fix, shadow-locked, mechanism OFF 2026-10-19T16:05Z
