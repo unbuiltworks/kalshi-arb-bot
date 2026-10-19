@@ -1178,3 +1178,61 @@ deploy the settlement fix + corrected intent gate, shadow-locked 2026-10-19T18:4
 # arm token unset, limits unchanged ($5/market, $5 total, 1 market, 1 live
 # order, $5 daily realized loss halt). No live orders are authorized.
 deploy continuous economic reporting, shadow-locked 2026-10-19T19:05Z
+
+# ----------------------------------------------------------------------------
+# CORRECTION TO THE PREVIOUS ENTRY: its last line reads 19:05Z. The actual
+# push was 2026-10-19T18:56:46Z. Recorded here rather than by rewriting
+# pushed history.
+#
+# OWNER-AUTHORIZED SHADOW-ONLY DEPLOYMENT, 2026-10-19. Promotes 21915c87:
+# three measurement defects, every one of them found by READING the first
+# production economic report rather than by reading the code. Each was a
+# number that looked like a measurement and was not one.
+#
+# ONE. A MISSING SPLIT RENDERED AS A CONFIDENT ZERO. Seven of eight settled
+# windows reported pair_net 0.0000, because they were settled before the
+# split existed and `ln.get("pair_net") or 0` turned absence into zero.
+# Read literally it said pair economics contributed nothing -- the exact
+# opposite of the truth, since the pair line is the only positive one in
+# the report. Legacy windows now read NOT_RECORDED, are excluded from the
+# split totals, and split_covers_windows / windows_without_split name the
+# gap.
+#
+# TWO. THE RISK LIMIT WAS COUNTED AS A MISSED OPPORTUNITY.
+# `residual_cap:3>=3` fell through to POSSIBLE_MISS: 103 of ARGMAX's 178
+# refusals, a reported possible-miss rate of 0.5787 where the true rate is
+# 0.0000. Every one was the residual cap or the one-order rule working.
+# The taxonomy now carries plan_action's protective reasons, read from its
+# source rather than guessed, plus prefix matching for residual_cap and
+# pair_cap. An unrecognised reason still lands in the miss bucket.
+#
+# THREE. _SAVE WROTE THE TALLY AND _LOAD DROPPED IT. Every deploy silently
+# reset the execution counters while windows_settled kept persisting, so a
+# fill_rate over three quotes sat beside eight settled windows in the same
+# block. `tally` and `counters_since` are now restored, and the execution
+# block reports counters_since and counters_cover_all_settled_windows.
+#
+# REGRESSION: baseline at 23c45806 in the same directory with identical
+# flags and environment: 31 failed, 14 errors, 45 IDs. This tree: 26
+# failed, 14 errors, 40 IDs. NEW: NONE. The 5 GONE are the test_gemini_*
+# group that fails at the baseline too, passes in isolation, and has no
+# dependency path from this diff.
+#
+# SAFETY AND ACCOUNTING INVARIANTS: 563 tests across the fifteen named
+# suites (one_submission_claim, mechanism_strategy_isolation,
+# account_wide_exposure, account_wide_delta_policy, binary_settlement,
+# correct_cost_basis, cost_basis_audit, four_bucket_accounting,
+# own_terms_accounting, potential_exposure, outside_claim_adjudication,
+# shadow_controller, shadow_controller_wiring, intent_gate,
+# live_runner_graft). All pass.
+#
+# ONE IMAGE FILE CHANGES: src/l5_shadow_controller.py. No policy changed,
+# no limit altered, no capability added. SHADOW_ONLY enabled, mechanism
+# OFF, PMUS_Q1_LIVE NO, arm token unset.
+#
+# POST-DEPLOY CHECKS, FALSIFIABLE: counters_since must survive the restart
+# with quotes_placed carried rather than reset; the windows settled before
+# this code must read pair_net NOT_RECORDED and not 0.0000; and
+# possible_misses must read 0 with residual_cap counted under
+# justified_refusals.
+deploy the measurement-defect fixes, shadow-locked 2026-10-19T19:33Z
