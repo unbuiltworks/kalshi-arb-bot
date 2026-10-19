@@ -903,3 +903,4 @@ scope the one-shot marker, diagnostic mode OFF 2026-10-19T02:40Z
 # authorized. Code only.
 deploy the placement-time gate, shadow-locked, mechanism OFF 2026-10-19T12:20Z
 live 1315z cancellation verification, owner FINAL GO 2026-10-19T13:15Z
+RESTORE: shadow lock back on, mechanism OFF after the 1315z fill 2026-10-19T13:23Z
