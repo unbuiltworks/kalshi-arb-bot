@@ -266,6 +266,18 @@ class ControllerLiveAuthorization:
                 "max_size": str(self.max_size), "note": self.note}
 
 
+#: The modules that are allowed to reach the wire, because each spends a
+#: single-use `claim_submission` in its own body before sending. This is a
+#: MIRROR for reporting, not the authority: the authority is
+#: `tests/test_l5_one_submission_claim.py`, which scans src/ and fails if a
+#: third site appears. Named here so a refusal can say where a send would
+#: have to live.
+CLAIM_GATED_SUBMIT_SITES: Tuple[str, ...] = (
+    "l5_live_execution.py",
+    "l5_cancel_mechanism.py",
+)
+
+
 class IntentGate:
     """The shared chain. Holds NOTHING of its own.
 
@@ -534,43 +546,47 @@ class IntentGate:
         "save",
     )
 
-    def submit_controller_intent(self, intent: Intent) -> Dict[str, Any]:
-        """Route a GENERATED decision toward the venue. UNREACHABLE IN
-        PRODUCTION: `Runner` supplies no authorization, so `evaluate`
-        refuses at EXECUTOR_BOUNDARY before this can be called, and calling
-        it anyway refuses again here.
+    # -------------------------------------------------- the adapter
+    #
+    # THIS MODULE OWNS NO WIRE CALL, AND THAT IS THE CORRECTION.
+    #
+    # An earlier draft of this adapter ended in a transport send of its
+    # own.
+    # `tests/test_l5_one_submission_claim.py` failed it, and the test was
+    # right: the account is protected by the rule that NO path reaches the
+    # wire without spending a single-use `claim_submission` in the SAME
+    # module as the send. That draft was a second, unclaimed door -- the
+    # exact thing the invariant exists to prevent -- and it contradicted
+    # this module's own stated position, that routing a generated decision
+    # to the venue is a money-path change and is not authorized.
+    #
+    # So the wire is gone rather than registered. `SUBMIT_SITES` stays at
+    # the two claim-gated routes it had. What is left here is everything
+    # that is NOT the send: the chain, the registry preconditions, the
+    # duplicate guard, the pre-send record, and the ambiguity semantics --
+    # each a separate, testable step for the claim-gated route that will
+    # one day call them, in a module that takes the claim.
+    #
+    # The practical consequence is stronger than the absent authorization:
+    # production cannot submit a controller intent because THERE IS NO
+    # ROUTE, not because a permission is withheld.
 
-        WHY NOT `ex.handle`. The executor derives side, price and size from
-        L5's row and stamps the record L5_NATIVE. Feeding it a generated
-        decision needs a fabricated row and would file our own order under
-        L5's name in the tape, the ledger and the registry. So this uses the
-        SAME downstream machinery -- the same store, the same deterministic
-        client order id, the same registry oracle, the same transport, the
-        same exact-order cancel route -- while stamping
-        CONTROLLER_GENERATED throughout.
+    def prepare_controller_submission(self, intent: Intent) -> Dict[str, Any]:
+        """Everything that must hold BEFORE a send, and nothing that sends.
 
-        ORDER OF OPERATIONS, each step the fail-closed one:
-
-          1. the full chain again, including the authorization;
-          2. the store API precondition -- a missing method refuses;
-          3. the DUPLICATE guard, on the deterministic coid;
-          4. `record_submit` BEFORE the wire, so a crash between send and
-             ack leaves a durable record reconciliation and the watchdog
-             can both find;
-          5. send;
-          6. ambiguity is POSSIBLY RESTING, never "probably fine": the
-             book is marked uncertain and the caller is told to halt.
+        Returns `prepared: True` with the wire payload, or a refusal. It
+        reaches no venue and writes nothing.
         """
         ev = self.evaluate(intent)
         if not ev["cleared_here"]:
-            return {"submitted": False, "provenance": CONTROLLER_GENERATED,
+            return {"prepared": False, "provenance": CONTROLLER_GENERATED,
                     "refused_by_layer": ev["layer"],
                     "refused_reason": ev["reason"],
                     "blocked_by": ev["blocked_by"],
                     "intent": ev["intent"], "gates": ev["gates"]}
         r, auth = self.runner, self.controller_auth
         if auth is None:                      # unreachable; belt and braces
-            return {"submitted": False, "provenance": CONTROLLER_GENERATED,
+            return {"prepared": False, "provenance": CONTROLLER_GENERATED,
                     "refused_by_layer": "SAFETY_OVERLAY",
                     "refused_reason": "CONTROLLER_INTENT_HAS_NO_AUTHORIZED_"
                                       "ADAPTER",
@@ -587,58 +603,76 @@ class IntentGate:
         missing = [m for m in self.REQUIRED_STORE_API
                    if not callable(getattr(r.store, m, None))]
         if missing:
-            return dict(base, submitted=False,
+            return dict(base, prepared=False,
                         refused_by_layer="SAFETY_OVERLAY",
                         refused_reason="STORE_API_INCOMPLETE",
                         detail={"missing": missing}, halt_required=False)
 
         try:
             if r.store.already_submitted(coid):
-                return dict(base, submitted=False,
+                return dict(base, prepared=False,
                             refused_by_layer="SUBMISSION_CLAIM",
                             refused_reason="DUPLICATE_INTENT",
                             halt_required=False)
         except BaseException as exc:                            # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
-            return dict(base, submitted=False,
+            return dict(base, prepared=False,
                         refused_by_layer="SUBMISSION_CLAIM",
                         refused_reason="DUPLICATE_CHECK_UNREADABLE:%s"
                                        % type(exc).__name__,
                         halt_required=False)
 
-        wire = {"client_order_id": coid, "market": intent.market,
-                "side": intent.side, "price": str(intent.price),
-                "qty": str(intent.size), "provenance": CONTROLLER_GENERATED}
+        return dict(base, prepared=True,
+                    wire={"client_order_id": coid, "market": intent.market,
+                          "side": intent.side, "price": str(intent.price),
+                          "qty": str(intent.size),
+                          "provenance": CONTROLLER_GENERATED})
+
+    def record_controller_submission(self, coid: str,
+                                     wire: Mapping[str, Any]
+                                     ) -> Dict[str, Any]:
+        """The durable record, which must exist BEFORE the wire.
+
+        A crash between send and ack must leave something reconciliation and
+        the watchdog can both find. The claim-gated route calls this, then
+        takes its claim, then sends.
+        """
+        base = {"provenance": CONTROLLER_GENERATED, "client_order_id": coid}
         try:
-            r.store.record_submit(coid, wire, mode=CONTROLLER_GENERATED)
+            self.runner.store.record_submit(coid, dict(wire),
+                                            mode=CONTROLLER_GENERATED)
         except BaseException as exc:                            # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             # NOTHING WAS SENT, so nothing is resting. Refuse without a
             # halt: an unrecorded order that never left is not a risk.
-            return dict(base, submitted=False,
+            return dict(base, recorded=False,
                         refused_by_layer="SAFETY_OVERLAY",
                         refused_reason="PRE_SEND_RECORD_FAILED:%s"
                                        % type(exc).__name__,
                         halt_required=False)
+        return dict(base, recorded=True)
 
-        try:
-            ack = r.transport.submit(wire)
-        except BaseException as exc:                            # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            cls = type(exc).__name__
+    def resolve_controller_submission(self, coid: str,
+                                      outcome: Mapping[str, Any]
+                                      ) -> Dict[str, Any]:
+        """Classify what the venue did with a send THIS MODULE DID NOT MAKE.
+
+        `outcome` is what the claim-gated route got back: `{"ack": {...}}`,
+        or `{"error": exc}` with an optional `refused_before_post` flag that
+        only the transport can set.
+
+        Ambiguity is POSSIBLY RESTING, never "probably fine": the book is
+        marked uncertain and the caller is told to halt.
+        """
+        r = self.runner
+        base = {"provenance": CONTROLLER_GENERATED, "client_order_id": coid}
+        if outcome.get("error") is not None:
+            cls = type(outcome["error"]).__name__
             # DID IT REACH THE VENUE? Only the transport can say, and when
             # it cannot the answer is UNKNOWN, which is a halt.
-            refused_before_post = False
-            try:
-                refused_before_post = bool(
-                    r.transport.refused_before_post(exc)
-                    if hasattr(r.transport, "refused_before_post") else False)
-            except BaseException:                              # noqa: BLE001
-                refused_before_post = False
-            if refused_before_post:
+            if outcome.get("refused_before_post"):
                 return dict(base, submitted=False,
                             refused_by_layer="SAFETY_OVERLAY",
                             refused_reason="REFUSED_BEFORE_ORDER_POST:%s"
@@ -649,8 +683,8 @@ class IntentGate:
                         refused_reason="SUBMIT_OUTCOME_UNKNOWN:%s" % cls,
                         halt_required=True)
 
-        vid = (ack or {}).get("order_id") or ((ack or {}).get("order")
-                                              or {}).get("id")
+        ack = outcome.get("ack") or {}
+        vid = ack.get("order_id") or (ack.get("order") or {}).get("id")
         if not vid:
             # AN ACK WITHOUT AN ID IS AN ORDER WE CANNOT CANCEL. The venue
             # cancels by its own id; ours names nothing.
@@ -689,6 +723,43 @@ class IntentGate:
                     cancel_route=("transport.cancel(venue_order_id) with "
                                   "store.owns_venue_order_id as the oracle "
                                   "-- the same route the deadman uses"))
+
+    #: the reason a prepared controller intent still does not reach the
+    #: venue. Not a permission that could be granted from here: the send
+    #: belongs to a module that spends a single-use submission claim, and
+    #: this one does not have one to spend.
+    NO_CLAIMED_ROUTE = "CONTROLLER_SUBMISSION_HAS_NO_CLAIM_GATED_ROUTE"
+
+    def submit_controller_intent(self, intent: Intent) -> Dict[str, Any]:
+        """Run every precondition, then refuse, because there is no send.
+
+        WHY NOT `ex.handle` EITHER. The executor derives side, price and
+        size from L5's row and stamps the record L5_NATIVE. Feeding it a
+        generated decision needs a fabricated row and would file our own
+        order under L5's name in the tape, the ledger and the registry.
+        That is why a claim-gated route for CONTROLLER_GENERATED has to be
+        built rather than borrowed -- and building it is the money-path
+        change that is not authorized.
+
+        So this is the honest end of the prepared path: everything that can
+        be checked without touching the venue IS checked, and then it stops
+        and says which single thing is missing.
+        """
+        pre = self.prepare_controller_submission(intent)
+        if not pre.get("prepared"):
+            return dict(pre, submitted=False)
+        return dict({k: v for k, v in pre.items() if k != "prepared"},
+                    submitted=False,
+                    refused_by_layer="SAFETY_OVERLAY",
+                    refused_reason=self.NO_CLAIMED_ROUTE,
+                    blocked_by="EXECUTOR_BOUNDARY",
+                    halt_required=False,
+                    detail={"claimed_routes": sorted(CLAIM_GATED_SUBMIT_SITES),
+                            "what_is_missing": (
+                                "a send that spends claim_submission in its "
+                                "own module, for CONTROLLER_GENERATED "
+                                "provenance")})
+
 
     def _mark_uncertain(self, why: str) -> None:
         """A possibly-resting order makes our OWN book uncertain, and an

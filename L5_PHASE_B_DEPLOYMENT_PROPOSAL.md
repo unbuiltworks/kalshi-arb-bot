@@ -5,26 +5,77 @@ Production unchanged throughout: deployment `f3b65e78` / commit `23c45806`.
 
 ---
 
-## 0. Recommendation up front
+## 0. Correction, then the recommendation
 
-**Promote Phase B in shadow-only mode: YES, with one condition.**
+**I reported "zero new regressions" on the Phase B tree, and that was
+wrong.** The claim is in `2ceabfb3`'s commit message. The full suite on the
+corrected tree surfaced four failures absent from the baseline file I was
+diffing against, and two of them are the invariant that matters most:
 
-The condition is that the same push carries the settlement-read fix in
-section 2, because without it the deployed system cannot produce the
-numbers in section 1 by itself — it has been polling a route that discards
-the answer.
+```
+FAILED tests/test_l5_one_submission_claim.py::
+       test_every_reachable_submission_path_goes_through_the_claim
+FAILED tests/test_l5_mechanism_strategy_isolation.py::
+       test_the_mechanism_is_the_only_submit_call_site_reachable_in_this_mode
+```
 
-What makes the Phase B code safe to promote is not that it is well tested;
-it is that it **adds no capability**. The controller-to-venue path is a
-constructor argument that production never supplies, so in the deployed
-process it is *absent*, not disabled. There is no environment variable,
-Railway setting, or latch value that turns it on. Section 4 shows the
-proof.
+`l5_intent_gate.py` had added a **third `transport.submit` call site**, in
+`submit_controller_intent`, which did not spend a single-use
+`claim_submission`. What protects this account is the rule that no path
+reaches the wire without spending that claim in the same module as the
+send. My adapter was a second unclaimed door — the precise thing the
+invariant exists to prevent — and it contradicted my own review, which had
+said that routing a generated decision to the venue is a money-path change
+and is not authorized. **A test caught it; my review did not.**
+
+Verified by running the two tests at the deployed commit `23c45806` in a
+clean worktree: they **pass** there and **fail** on the Phase B tree, so
+this was Phase B's regression and not pre-existing.
+
+(The other two — `test_chain_ca_fallback` and
+`test_gemini_write_path_isolation` — **also fail at `23c45806`**. They are
+pre-existing, unrelated to any of this work, and my baseline file simply
+did not contain them. The baseline has been regenerated from a clean
+worktree at the deployed commit rather than from a stored list.)
+
+**The fix: the wire is removed, not registered.** `SUBMIT_SITES` stays at
+its two claim-gated routes. `l5_intent_gate` now owns no send at all, and
+what is left is everything that is *not* the send, as separately testable
+steps for the claim-gated route that will one day call them:
+
+- `prepare_controller_submission` — chain, authorization, store-API
+  precondition, duplicate guard, wire payload. Writes nothing, sends
+  nothing.
+- `record_controller_submission` — the durable record that must exist
+  *before* a wire.
+- `resolve_controller_submission` — classifies an outcome *someone else's*
+  send produced (`{"ack": …}` or `{"error": …}`), attaches the venue id,
+  proves ownership, marks the book uncertain. Never touches a transport.
+- `submit_controller_intent` — runs every precondition and then refuses:
+  `CONTROLLER_SUBMISSION_HAS_NO_CLAIM_GATED_ROUTE`, naming where a send
+  would have to live.
+
+This is stronger than the absent authorization I was relying on before:
+production cannot submit a controller intent because **there is no route**,
+not because a permission is withheld. Three new tests pin it, including one
+asserting no `transport.submit` appears anywhere in the module.
+
+## 0b. Recommendation
+
+**Promote Phase B in shadow-only mode: YES, on the corrected tree, with one
+condition.** The condition is that the same push carries the
+settlement-read fix in section 2, because without it the deployed system
+cannot produce the numbers in section 1 by itself — it has been polling a
+route that discards the answer.
+
+What makes it safe is not that it is well tested — I have just demonstrated
+the limits of that — but that it **adds no capability and no route**. The
+controller path ends in a refusal with no send behind it, and the two
+claim-gated routes are unchanged.
 
 What is **not** proposed: no live orders, no limit change, no capital
-change, no new service, no new branch, no new executor.
-
----
+change, no new service, no new branch, no new executor, and no third entry
+in `SUBMIT_SITES`.
 
 ## 1. Item 7 — conservative / base / optimistic net economics from settled
 BTC15m windows
@@ -266,15 +317,19 @@ Two tests assert that no module under `src/` ever constructs one and that
 it is never read from the environment, so this is not a flag that a Railway
 variable could flip.
 
-`submit_controller_intent`, when an authorization is supplied, runs in this
-order: full chain → `REQUIRED_STORE_API` precondition against the real
-order store (`already_submitted`, `record_submit`, `attach_venue_id`,
-`mark_uncertain`, `owns_venue_order_id`, `terminate_order`, `save`) →
-duplicate guard on the deterministic `ctl-<policy>-<scenario>-<ref>` client
-order id → `record_submit` **before** the wire → send → ambiguity handling
-→ ownership check after the ack. `REFUSED_BEFORE_ORDER_POST` does not halt;
+The order of operations is unchanged in substance from the draft — full
+chain → `REQUIRED_STORE_API` precondition against the real order store
+(`already_submitted`, `record_submit`, `attach_venue_id`, `mark_uncertain`,
+`owns_venue_order_id`, `terminate_order`, `save`) → duplicate guard on the
+deterministic `ctl-<policy>-<scenario>-<ref>` client order id →
+`record_submit` **before** any wire → (send) → ambiguity handling →
+ownership check after the ack — except that the send is **not here**, per
+section 0. `REFUSED_BEFORE_ORDER_POST` does not halt;
 `SUBMIT_OUTCOME_UNKNOWN`, `ACK_WITHOUT_VENUE_ID`, `ACK_NOT_PERSISTED` and
 `OWNERSHIP_NOT_SERVABLE_AFTER_ACK` each `mark_uncertain` and demand a halt.
+Those four are now exercised through `resolve_controller_submission`, with
+the test performing the send its fake transport, so the semantics stay
+tested while the module stays unable to reach a venue.
 
 An earlier draft of this adapter called `reserve`/`release`/
 `record_submitted`/`owns_client_order_id` — methods that do not exist.
@@ -283,7 +338,7 @@ why code like that is dangerous: it reads as ready. The
 `REQUIRED_STORE_API` precondition is there so the next such mistake refuses
 instead of looking fine.
 
-Fault injection, 82 tests: crash recovery (the pre-send record survives and
+Fault injection, 85 tests: crash recovery (the pre-send record survives and
 the retry is a duplicate), ambiguous submission, stale inventory,
 duplicate intents, HALT transitions mid-submission, account-wide exposure
 aggregation through the runner's own `account_exposure_lines`, a
@@ -327,7 +382,8 @@ Commits on top of `23c45806`:
 | commit | content | path |
 |---|---|---|
 | `abd3dcf3` | `l5_intent_gate.py`; `Runner.handle`'s three refusals delegated | **money path** |
-| `2ceabfb3` | complete-chain declaration, gate-order provenance, the adapter behind an absent authorization | **money path** |
+| `2ceabfb3` | complete-chain declaration, gate-order provenance, the adapter (with the defective wire call — see section 0) | **money path** |
+| (this change) | the wire call removed; adapter split into prepare / record / resolve | **money path** |
 | (this change) | `pmus_settlement` + `shadow_settle` repointed | shadow only |
 
 **The honest warning: these are no longer separable in this tree.** The
@@ -338,10 +394,13 @@ it is a money-path promotion and should be approved as one. Splitting them
 would mean reverting Phase B on this branch and re-landing it, which is
 more churn and more risk than reviewing the diff.
 
-Suite on the tree: see the run attached to this change. The standing
-baseline is 24 failures and 14 errors, an unchanged ID set — the
-`test_spread_scanner` / `test_window_forensics_stream` /
-`test_pmus_status_live_handoff` group, all pre-existing and unrelated.
+Suite on the tree, against a baseline regenerated from a clean worktree at
+`23c45806` rather than from a stored list — that stored list is what let
+section 0's regression through, so it is not used again. The pre-existing
+failing set is the `test_spread_scanner` /
+`test_window_forensics_stream` / `test_pmus_status_live_handoff` group
+plus `test_chain_ca_fallback` and `test_gemini_write_path_isolation`, all
+unrelated to this work. The comparison run is attached to this change.
 
 ### Verification plan for the first 30 minutes after the push
 
@@ -377,13 +436,17 @@ In order:
    in RESIDUAL_URGENCY. A policy that will not double its own basis inside
    the last two minutes is the smallest evidence-supported correction
    available, and the 1730z trace is the evidence for it.
-3. **No controller intent has ever been through the real executor**, not
-   even refused by it: `evaluate` stops at the boundary and the 30 executor
-   gates are declared, not exercised, for controller provenance. A
+3. **There is no claim-gated route for CONTROLLER_GENERATED provenance**,
+   and after section 0 that is the stated blocker rather than a gap to
+   paper over. A controller intent has never reached the real executor,
+   not even to be refused by it: the 30 executor gates are declared, not
+   exercised, for this provenance. Two steps, in order. First, a
    shadow-mode dry run that drives a controller intent into
-   `l5_live_execution.handle` with the shadow lock engaged — so it is
-   refused *by the executor* rather than before it — is the next piece of
-   evidence, and it needs no authorization because the lock refuses it.
+   `l5_live_execution.handle` with the shadow lock engaged, so it is
+   refused *by the executor* rather than before it — that needs no
+   authorization, because the lock refuses it. Only then a send that
+   spends `claim_submission` in its own module, which is a deliberate
+   third entry in `SUBMIT_SITES` and wants approving as one.
 4. **Sample size.** Three windows is not a basis for anything. Thirty to
    fifty settled windows, with the settlement read working, is the
    cheapest evidence left to buy and it costs nothing but time.

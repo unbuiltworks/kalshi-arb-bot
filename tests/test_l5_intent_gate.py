@@ -730,9 +730,37 @@ def test_an_authorization_cannot_cover_an_l5_intent():
 
 # ---------------------------------------- the adapter's own fail-closed path
 
+def _drive(g, intent, transport):
+    """Drive the prepared path the way a CLAIM-GATED route would.
+
+    prepare -> record -> **the caller's send** -> resolve. The send is here,
+    in the test, because `l5_intent_gate` owns none: a send inside it would
+    be a second unclaimed route to the wire, which is what
+    `test_l5_one_submission_claim` exists to stop. These tests therefore
+    assert the semantics of each step while the module stays unable to
+    reach a venue.
+    """
+    pre = g.prepare_controller_submission(intent)
+    if not pre.get("prepared"):
+        return dict(pre, submitted=False)
+    coid, wire = pre["client_order_id"], pre["wire"]
+    rec = g.record_controller_submission(coid, wire)
+    if not rec.get("recorded"):
+        return dict(pre, submitted=False, **rec)
+    try:
+        ack = transport.submit(wire)
+    except BaseException as exc:                               # noqa: BLE001
+        before = False
+        if hasattr(transport, "refused_before_post"):
+            before = bool(transport.refused_before_post(exc))
+        return dict(pre, **g.resolve_controller_submission(
+            coid, {"error": exc, "refused_before_post": before}))
+    return dict(pre, **g.resolve_controller_submission(coid, {"ack": ack}))
+
+
 def test_the_happy_path_records_before_the_wire_and_proves_ownership():
     g, runner, store, transport = _authed()
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     assert out["submitted"] is True and out["venue_order_id"] == "V-1"
     assert out["provenance"] == "CONTROLLER_GENERATED"
     assert "NOT one of L5's actions" in out["labels"]
@@ -748,9 +776,9 @@ def test_the_happy_path_records_before_the_wire_and_proves_ownership():
 
 def test_a_duplicate_intent_is_refused_not_sent_twice():
     g, runner, store, transport = _authed()
-    first = g.submit_controller_intent(ctl_intent())
+    first = _drive(g, ctl_intent(), transport)
     assert first["submitted"] is True
-    again = g.submit_controller_intent(ctl_intent())
+    again = _drive(g, ctl_intent(), transport)
     assert again["submitted"] is False
     assert again["refused_reason"] == "DUPLICATE_INTENT"
     assert len(transport.sent) == 1, transport.sent
@@ -780,7 +808,7 @@ def test_an_incomplete_store_api_refuses_by_name():
 def test_a_failed_pre_send_record_never_sends():
     g, runner, store, transport = _authed(
         store=RecordingStore(fail={"record_submit"}))
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     assert out["submitted"] is False
     assert out["refused_reason"].startswith("PRE_SEND_RECORD_FAILED")
     assert out["halt_required"] is False      # nothing was sent
@@ -801,7 +829,7 @@ def test_an_ambiguous_submission_marks_the_book_and_demands_a_halt():
     the caller is told to halt."""
     g, runner, store, transport = _authed(
         transport=RecordingTransport(exc=TimeoutError("no answer")))
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     assert out["submitted"] is None, out
     assert out["refused_reason"].startswith("SUBMIT_OUTCOME_UNKNOWN")
     assert out["halt_required"] is True
@@ -812,7 +840,7 @@ def test_a_transport_that_knows_it_never_posted_does_not_halt():
     g, runner, store, transport = _authed(
         transport=RecordingTransport(exc=ValueError("rejected locally"),
                                      before_post=True))
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     assert out["submitted"] is False
     assert out["refused_reason"].startswith("REFUSED_BEFORE_ORDER_POST")
     assert out["halt_required"] is False
@@ -823,7 +851,7 @@ def test_an_ack_without_a_venue_id_is_uncancellable_and_halts():
     """The venue cancels by its own id; ours names nothing."""
     g, runner, store, transport = _authed(
         transport=RecordingTransport(ack={"ok": True}))
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     assert out["submitted"] is None
     assert out["refused_reason"] == "ACK_WITHOUT_VENUE_ID"
     assert out["halt_required"] is True
@@ -833,7 +861,7 @@ def test_an_ack_without_a_venue_id_is_uncancellable_and_halts():
 def test_an_unpersisted_ack_halts_with_the_id_reported():
     g, runner, store, transport = _authed(
         store=RecordingStore(fail={"attach_venue_id"}))
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     assert out["submitted"] is None
     assert out["venue_order_id"] == "V-1"
     assert out["refused_reason"] == "ACK_NOT_PERSISTED"
@@ -845,7 +873,7 @@ def test_an_order_the_watchdog_cannot_prove_is_ours_halts():
     """On a SHARED account an unprovable order is uncancellable, so the
     submission is reported but the caller must halt."""
     g, runner, store, transport = _authed(store=RecordingStore(owns=False))
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     assert out["submitted"] is True
     assert out["refused_reason"] == "OWNERSHIP_NOT_SERVABLE_AFTER_ACK"
     assert out["halt_required"] is True
@@ -910,14 +938,14 @@ def test_crash_recovery_leaves_a_durable_record_the_watchdog_can_find():
     resolve rather than an invisible resting order."""
     g, runner, store, transport = _authed(
         transport=RecordingTransport(exc=TimeoutError("crash")))
-    out = g.submit_controller_intent(ctl_intent())
+    out = _drive(g, ctl_intent(), transport)
     coid = out["client_order_id"]
     assert coid in store.submitted, store.submitted
     assert store.submitted[coid]["mode"] == "CONTROLLER_GENERATED"
     assert store.submitted[coid]["intent"]["market"] == MARKET
     # and a fresh gate over the SAME store refuses the retry as a duplicate
     g2 = G.IntentGate(runner, g.controller_auth)
-    again = g2.submit_controller_intent(ctl_intent())
+    again = _drive(g2, ctl_intent(), transport)
     assert again["refused_reason"] == "DUPLICATE_INTENT"
 
 
@@ -937,3 +965,52 @@ def test_account_wide_exposure_aggregation_is_the_runners_own_reader():
                                          max_size=D(1))
     G.IntentGate(runner, auth).submit_controller_intent(ctl_intent())
     assert seen, "the gate did not consult the runner's exposure reader"
+
+
+# ------------------------------------- the module owns no route to the wire
+
+def test_the_adapter_module_owns_no_send():
+    """THE CORRECTION, PINNED. An earlier draft of the adapter ended in a
+    transport send of its own, and `test_l5_one_submission_claim` failed
+    it: the account is protected by the rule that no path reaches the wire
+    without spending a single-use claim in the SAME module as the send.
+
+    That draft was caught by a test rather than by review, so the absence
+    is asserted here too, at the module it was in.
+    """
+    import pathlib
+    import re
+    src = (pathlib.Path(__file__).resolve().parents[1]
+           / "src" / "l5_intent_gate.py").read_text()
+    for n, line in enumerate(src.splitlines(), 1):
+        assert not re.search(r"\btransport\.submit\(", line), (n, line)
+    assert set(G.CLAIM_GATED_SUBMIT_SITES) == {"l5_live_execution.py",
+                                               "l5_cancel_mechanism.py"}
+
+
+def test_everything_green_still_refuses_for_want_of_a_claimed_route():
+    """Not "a permission is off" -- there is no send to permit. With an
+    explicit authorization and every gate clear, the answer names the one
+    thing missing and points at where it would have to live."""
+    g, runner, store, transport = _authed()
+    out = g.submit_controller_intent(ctl_intent())
+    assert out["submitted"] is False
+    assert out["refused_reason"] == G.IntentGate.NO_CLAIMED_ROUTE
+    assert out["blocked_by"] == "EXECUTOR_BOUNDARY"
+    assert out["halt_required"] is False
+    assert out["detail"]["claimed_routes"] == ["l5_cancel_mechanism.py",
+                                               "l5_live_execution.py"]
+    assert "claim_submission" in out["detail"]["what_is_missing"]
+    assert transport.sent == [], transport.sent
+    # and it got far enough to have checked everything checkable
+    assert out["client_order_id"].startswith("ctl-")
+    assert out["provenance"] == "CONTROLLER_GENERATED"
+
+
+def test_preparing_a_submission_writes_nothing_and_sends_nothing():
+    g, runner, store, transport = _authed()
+    pre = g.prepare_controller_submission(ctl_intent())
+    assert pre["prepared"] is True
+    assert pre["wire"]["provenance"] == "CONTROLLER_GENERATED"
+    assert transport.sent == []
+    assert store.submitted == {}, store.submitted
