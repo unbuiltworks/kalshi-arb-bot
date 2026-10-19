@@ -965,3 +965,102 @@ def test_a_restart_does_not_freeze_a_scenario_that_was_resting(tmp_path):
                  window_end_ts=1792430100.0, window_source="VENUE",
                  prints=[], ladder=None)
     assert out.get("reason") != "already_resting", out
+
+
+# --------------------------------------------------------------------------
+# MEASUREMENT CORRECTNESS. Each of these guards a way the economic report
+# could state something false with a straight face. All three were found by
+# reading the FIRST production report rather than by reading the code.
+def test_a_window_settled_before_the_split_says_so_instead_of_zero(tmp_path):
+    """The first production report showed pair=0.0000 for seven of eight
+    windows, which invited the conclusion that pair economics contributed
+    nothing. The truth was that those windows were settled by code that did
+    not record a split. A missing value must not wear the costume of a
+    measurement."""
+    p = str(tmp_path / "s.json")
+    c = sc.ShadowController(state_path=p)
+    legacy = "cpc-btc-updown-15m-2026-10-19-1700z"
+    fresh = "cpc-btc-updown-15m-2026-10-19-1715z"
+    # a legacy line: exactly the keys the old settle() wrote
+    c._slot(legacy)["window_end_ts"] = 1.0
+    for scen in sc.SCENARIOS:
+        c._scen(legacy, scen)["settled"] = {
+            "matched_units": 3, "residual_units": 3, "cost_total": "2.95",
+            "redemption_total": "3.0000", "modelled_net": "0.0500"}
+    # and one settled by the current code
+    c._slot(fresh)["window_end_ts"] = 2.0
+    inv = c.inventory_for(fresh)
+    inv.record(True, D("0.40"))
+    inv.record(False, D("0.50"))
+    c._store_inventory(fresh, inv)
+    c.settle(fresh, D(1))
+
+    e = c.economics()["per_scenario"][sc.HEADLINE_SCENARIO]
+    by = {w["market"]: w for w in e["per_window"]}
+    assert by[legacy]["pair_net"] == "NOT_RECORDED"
+    assert by[legacy]["residual_net"] == "NOT_RECORDED"
+    assert by[fresh]["pair_net"] != "NOT_RECORDED"
+    # the legacy window still counts for net, which IS recorded
+    assert D(by[legacy]["net"]) == D("0.05")
+    assert e["windows_settled"] == 2
+    # ...but the split totals cover only the window that has a split, and
+    # say so
+    assert e["windows_without_split"] == 1
+    assert e["split_covers_windows"] == 1
+    assert D(e["pair_net"]) == D("0.1000")
+
+
+def test_the_residual_cap_is_a_justified_refusal_not_a_missed_opportunity():
+    """`residual_cap:3>=3` is the risk limit working. It was 103 of
+    ARGMAX's 178 refusals in the first production report, and counting it
+    as forgone profit overstated the miss bucket by more than half."""
+    assert "residual_cap".startswith(sc.JUSTIFIED_REFUSAL_PREFIXES)
+    c = sc.ShadowController(state_path="/dev/null")
+    for reason in ("residual_cap:3>=3", "pair_cap:0.97>0.96",
+                   "already_resting", "no_legal_maker_complement",
+                   "no_priceable_side", "one_sided_book",
+                   "complete_without_surplus", "v2_off_distribution",
+                   "would_cross_not_a_maker_quote", "no_two_sided_book"):
+        c._tally_record({"scenario": sc.HEADLINE_SCENARIO,
+                         "decision": "no_action", "reason": reason})
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["possible_misses"] == 0, t["refusal_reasons"]
+    assert t["justified_refusals"] == 10
+    # and something unrecognised still lands in the miss bucket
+    c._tally_record({"scenario": sc.HEADLINE_SCENARIO,
+                     "decision": "no_action", "reason": ""})
+    assert c._tally(sc.HEADLINE_SCENARIO)["possible_misses"] == 1
+
+
+def test_the_counters_survive_a_restart(tmp_path):
+    """_save wrote the tally and _load dropped it, so every deploy reset
+    the execution counters while windows_settled kept persisting -- two
+    numbers over two different periods in one report."""
+    p = str(tmp_path / "s.json")
+    c = sc.ShadowController(state_path=p)
+    for _ in range(4):
+        c._tally_record({"scenario": sc.HEADLINE_SCENARIO,
+                         "decision": "quote"})
+    since = c.state["counters_since"]
+    assert since
+    c._save()
+
+    again = sc.ShadowController(state_path=p)
+    t = again._tally(sc.HEADLINE_SCENARIO)
+    assert t["quotes_placed"] == 4, t
+    assert again.state["counters_since"] == since, "the period was reset"
+
+
+def test_the_execution_block_names_its_own_period(tmp_path):
+    p = str(tmp_path / "s.json")
+    c = sc.ShadowController(state_path=p)
+    c._slot("m")["window_end_ts"] = 1.0
+    inv = c.inventory_for("m")
+    inv.record(True, D("0.40"))
+    c._store_inventory("m", inv)
+    c.settle("m", D(1))
+    ex = c.economics()["per_scenario"][sc.HEADLINE_SCENARIO]["execution"]
+    # one settled window, no window_close observed -> the counters do NOT
+    # cover it, and the report says so rather than implying they do
+    assert ex["counters_cover_all_settled_windows"] is False
+    assert "counters_since" in ex

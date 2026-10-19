@@ -241,10 +241,29 @@ def normalise_book(book: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]
 #:   pair_cap / plan refusals     completion above the fee-safe cap
 #: POSSIBLE_MISS means the model had somewhere to go and the policy declined,
 #: which is the only bucket that can contain forgone profit.
+def _utc_now() -> str:
+    import datetime
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
 JUSTIFIED_REFUSALS = (
-    "no_two_sided_book", "v2_off_distribution",
-    "would_cross_not_a_maker_quote", "already_resting",
+    # this module's own
+    "no_two_sided_book", "would_cross_not_a_maker_quote", "already_resting",
+    # the frozen model admitting it has no state here
+    "v2_off_distribution",
+    # plan_action's protective refusals, read from its source rather than
+    # guessed: each either protects money or admits ignorance
+    "complete_without_surplus", "no_legal_maker_complement",
+    "no_priceable_side", "one_sided_book", "no_fresh_book",
+    "l5_sell_is_noop",
 )
+
+#: reasons whose text carries a value, matched by PREFIX.
+#: `residual_cap:3>=3` is the RISK LIMIT DOING ITS JOB, not a missed
+#: opportunity. It was the single largest bucket in the first production
+#: report -- 103 of ARGMAX's 178 refusals -- and classifying it as a
+#: possible miss overstated forgone profit by more than half.
+JUSTIFIED_REFUSAL_PREFIXES = ("residual_cap", "pair_cap")
 
 
 class ShadowController:
@@ -305,9 +324,17 @@ class ShadowController:
         if doc.get("v") == STATE_VERSION:
             self.state = {"v": STATE_VERSION,
                           "markets": dict(doc.get("markets") or {})}
-            for k in ("carry", "discontinuity"):
+            # `tally` MUST be restored. _save writes it and _load used to
+            # drop it, so every deploy silently reset the execution
+            # counters while `windows_settled` kept persisting -- leaving
+            # fill_rate and adverse_rate describing a few minutes while the
+            # settled windows beside them described hours. Two numbers over
+            # two different periods in one report is worse than no numbers.
+            for k in ("carry", "discontinuity", "tally", "counters_since"):
                 if isinstance(doc.get(k), Mapping):
                     self.state[k] = dict(doc[k])
+                elif k == "counters_since" and doc.get(k):
+                    self.state[k] = doc[k]
             self.state["boot"] = self._drop_stale_resting()
             return
         # A STATE DISCONTINUITY, RECORDED RATHER THAN ABSORBED.
@@ -860,17 +887,29 @@ class ShadowController:
                     lines.append((float(slot.get("window_end_ts") or 0.0),
                                   slug, ln))
             lines.sort()
-            per_window = [
-                {"market": slug,
-                 "net": str(D(str(ln.get("modelled_net") or 0))),
-                 "pair_net": str(D(str(ln.get("pair_net") or 0))
-                                 .quantize(D("0.0001"))),
-                 "residual_net": str(D(str(ln.get("residual_net") or 0))
-                                     .quantize(D("0.0001"))),
-                 "capital_deployed": str(D(str(ln.get("cost_total") or 0))),
-                 "matched_units": int(ln.get("matched_units") or 0),
-                 "residual_units": int(ln.get("residual_units") or 0)}
-                for _, slug, ln in lines]
+            # A WINDOW SETTLED BEFORE THE SPLIT EXISTED HAS NO SPLIT, and
+            # saying 0.0000 for it would be a missing value wearing the
+            # costume of a measurement. The first production report did
+            # exactly that: seven of eight windows read pair=0.0000, which
+            # invited the conclusion that pair economics contributed
+            # nothing, when the truth was that nobody had recorded them.
+            per_window = []
+            no_split = 0
+            for _, slug, ln in lines:
+                has = ln.get("pair_net") is not None
+                no_split += 0 if has else 1
+                per_window.append({
+                    "market": slug,
+                    "net": str(D(str(ln.get("modelled_net") or 0))),
+                    "pair_net": (str(D(str(ln["pair_net"]))
+                                     .quantize(D("0.0001"))) if has
+                                 else "NOT_RECORDED"),
+                    "residual_net": (str(D(str(ln.get("residual_net") or 0))
+                                         .quantize(D("0.0001"))) if has
+                                     else "NOT_RECORDED"),
+                    "capital_deployed": str(D(str(ln.get("cost_total") or 0))),
+                    "matched_units": int(ln.get("matched_units") or 0),
+                    "residual_units": int(ln.get("residual_units") or 0)})
             # DRAWDOWN over the settled sequence. Peak-to-trough of the
             # cumulative modelled net, which is what a run of losing
             # windows would cost before any recovery.
@@ -881,10 +920,11 @@ class ShadowController:
                 run += D(w["net"])
                 peak = max(peak, run)
                 dd = max(dd, peak - run)
+            split = [w for w in per_window if w["pair_net"] != "NOT_RECORDED"]
             pair_net = D(str(c.get("pair_net") or 0)) + sum(
-                (D(w["pair_net"]) for w in per_window), D(0))
+                (D(w["pair_net"]) for w in split), D(0))
             resid_net = D(str(c.get("residual_net") or 0)) + sum(
-                (D(w["residual_net"]) for w in per_window), D(0))
+                (D(w["residual_net"]) for w in split), D(0))
             t = (self.state.get("tally") or {}).get(scenario) or {}
             quotes = int(t.get("quotes_placed") or 0)
             fills = int(t.get("fills") or 0)
@@ -902,6 +942,12 @@ class ShadowController:
                 # P&L line with 27 places reads as precision it has not got
                 "pair_net": str(pair_net.quantize(D("0.0001"))),
                 "residual_net": str(resid_net.quantize(D("0.0001"))),
+                # the split totals cover only the windows that HAVE a
+                # split; this says how many they leave out, so the pair and
+                # residual lines can never be read as covering every
+                # settled window when they do not
+                "split_covers_windows": len(split),
+                "windows_without_split": no_split,
                 "max_drawdown": str(dd),
                 "capital_deployed_total": str(tot["cost"]),
                 "capital_efficiency": (
@@ -912,6 +958,10 @@ class ShadowController:
                     else str((net_total / D(tot["windows_settled"]))
                              .quantize(D("0.0001")))),
                 "execution": {
+                    "counters_since": self.state.get("counters_since"),
+                    "counters_cover_all_settled_windows": (
+                        int(t.get("windows_observed") or 0)
+                        >= tot["windows_settled"]),
                     "quotes_placed": quotes,
                     "filled": fills,
                     "unfilled_at_expiry": int(t.get("unfilled_at_expiry")
@@ -983,6 +1033,11 @@ class ShadowController:
 
     def _tally(self, scenario: str) -> Dict[str, Any]:
         t = self.state.setdefault("tally", {})
+        if not self.state.get("counters_since"):
+            # stamped once, when the counters begin. Reported beside them so
+            # a fill rate over three quotes is never mistaken for the fill
+            # rate of the eight settled windows sitting next to it.
+            self.state["counters_since"] = _utc_now()
         cur = t.setdefault(scenario, self._fresh_tally())
         for k, v in self._fresh_tally().items():       # forward-compatible
             cur.setdefault(k, v)
@@ -1005,7 +1060,8 @@ class ShadowController:
             t["controller_errors"] += 1
         elif d.get("decision") == "quote":
             t["quotes_placed"] += 1
-        elif reason in JUSTIFIED_REFUSALS:
+        elif (reason in JUSTIFIED_REFUSALS
+              or reason.startswith(JUSTIFIED_REFUSAL_PREFIXES)):
             t["justified_refusals"] += 1
             t["refusal_reasons"][reason] = \
                 int(t["refusal_reasons"].get(reason, 0)) + 1
