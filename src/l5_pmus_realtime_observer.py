@@ -145,6 +145,41 @@ def _top_from_levels(md: Mapping[str, Any]) -> Optional[dict]:
             "state": md.get("state"), "_source": "book_levels"}
 
 
+def pmus_settlement(slug: str) -> Optional[dict]:
+    """The venue's own settlement document for one market. READ-ONLY.
+
+    WHY THIS IS NOT `pmus_bbo`. `settlementPx` lives on
+    /v1/markets/{slug}/bbo beside `state`, and an EXPIRED market answers
+    that route with `settlementPx` present and bestBid/bestAsk BOTH NULL.
+    `pmus_bbo` reads that null top of book as an empty answer and falls
+    back to /book -- which does not carry `settlementPx` at all -- so the
+    settlement price is discarded for precisely the markets that have one.
+    Measured on 2026-10-19: 1700z, 1715z and 1730z all returned
+    MARKET_STATE_EXPIRED with settlementPx 0.0000, 1.0000 and 0.0000
+    through this route, and None through `pmus_bbo`.
+
+    So this does NOT reuse the book reader and does NOT fall back: a book
+    endpoint cannot answer a settlement question. `pmus_bbo` keeps its
+    behaviour exactly, because the live execution path reads prices
+    through it.
+
+    Nothing is inferred and nothing is defaulted. The caller gets the
+    venue's `state` and its `settlementPx` verbatim, or None if the read
+    failed -- a failed read is not an unsettled market.
+    """
+    try:
+        md = (_get("%s/v1/markets/%s/bbo" % (PMUS_GATEWAY, slug))
+              or {}).get("marketData")
+    except Exception:                                          # noqa: BLE001
+        return None
+    if not isinstance(md, Mapping):
+        return None
+    return {"marketSlug": md.get("marketSlug"),
+            "state": md.get("state"),
+            "settlementPx": md.get("settlementPx"),
+            "_source": "bbo_settlement"}
+
+
 def pmus_bbo(slug: str) -> Optional[dict]:
     """Top of book, with /book as a fallback when /bbo comes back empty.
 

@@ -2140,13 +2140,23 @@ class Runner:
     def shadow_settle(self, now: float) -> None:
         """Settle a closed shadow window at the VENUE's own price.
 
-        A PUBLIC read, with no credentials and no authenticated quota: the
-        same /v1/markets/{slug}/bbo document the observer already uses
-        carries `settlementPx` beside `state`. Terminal state AND a binary
-        price, or it is not settled -- an expired book's last price
-        reaching a ledger as a payout is a defect this venue has already
-        produced here once, and `settlement_decimal` plus
-        TERMINAL_MARKET_STATES are the existing tested reads for it.
+        A PUBLIC read, with no credentials and no authenticated quota:
+        /v1/markets/{slug}/bbo carries `settlementPx` beside `state`.
+        Terminal state AND a binary price, or it is not settled -- an
+        expired book's last price reaching a ledger as a payout is a defect
+        this venue has already produced here once, and `settlement_decimal`
+        plus TERMINAL_MARKET_STATES are the existing tested reads for it.
+
+        THE READ IS `pmus_settlement`, NOT `pmus_bbo`, AND THAT WAS A BUG
+        FOR 201 POLLS. `pmus_bbo` is a BOOK reader: an expired market
+        answers /bbo with `settlementPx` present and bestBid/bestAsk both
+        null, which it treats as an empty answer, falling back to /book --
+        a route that carries no `settlementPx` at all. So the price was
+        discarded for exactly the markets that had one, every closed window
+        stayed stranded, and `shadow_awaiting_settlement` counted up
+        against a venue that had already published the number. Measured on
+        2026-10-19: 1700z, 1715z and 1730z were EXPIRED with settlementPx
+        0.0000, 1.0000 and 0.0000, and this path read None for all three.
 
         Nothing is inferred. Without the venue's own number the window
         stays unsettled and is reported as stranded inventory.
@@ -2164,7 +2174,7 @@ class Runner:
                 continue
             self._shadow_settle_t[slug] = now
             try:
-                md = OBS.pmus_bbo(slug) or {}
+                md = OBS.pmus_settlement(slug) or {}
                 state = str(md.get("state") or "")
                 px = T.settlement_decimal(md.get("settlementPx"))
             except BaseException as exc:                       # noqa: BLE001

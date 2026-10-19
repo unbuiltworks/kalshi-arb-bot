@@ -383,7 +383,7 @@ def test_settlement_uses_the_venues_own_price_and_nothing_else(
         tmp_path, monkeypatch):
     runner = build(tmp_path, monkeypatch, feed=lambda: [])
     c = _closed_window(runner, monkeypatch, tmp_path)
-    monkeypatch.setattr(R.OBS, "pmus_bbo", lambda slug: {
+    monkeypatch.setattr(R.OBS, "pmus_settlement", lambda slug: {
         "state": "MARKET_STATE_EXPIRED", "settlementPx": "1.0000"})
     out = capture(monkeypatch)
     runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
@@ -416,7 +416,7 @@ def test_an_expired_books_last_price_is_never_a_settlement(tmp_path,
     expired book still carried -- reached the ledger as a payout."""
     runner = build(tmp_path, monkeypatch, feed=lambda: [])
     c = _closed_window(runner, monkeypatch, tmp_path)
-    monkeypatch.setattr(R.OBS, "pmus_bbo", lambda slug: dict(md))
+    monkeypatch.setattr(R.OBS, "pmus_settlement", lambda slug: dict(md))
     out = capture(monkeypatch)
     runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
     assert not [d for k, d in out if k == "L5_SHADOW_SETTLED"
@@ -432,7 +432,7 @@ def test_a_settlement_read_failure_strands_rather_than_settles(tmp_path,
 
     def boom(_slug):
         raise OSError("network")
-    monkeypatch.setattr(R.OBS, "pmus_bbo", boom)
+    monkeypatch.setattr(R.OBS, "pmus_settlement", boom)
     out = capture(monkeypatch)
     runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
     assert not [d for k, d in out if k == "L5_SHADOW_SETTLED"]
@@ -450,7 +450,7 @@ def test_a_still_open_window_is_not_asked_about_at_all(tmp_path, monkeypatch):
     def bbo(_slug):
         asked["n"] += 1
         return {}
-    monkeypatch.setattr(R.OBS, "pmus_bbo", bbo)
+    monkeypatch.setattr(R.OBS, "pmus_settlement", bbo)
     capture(monkeypatch)
     runner.shadow_settle(NOW + 10.0)
     assert asked["n"] == 0, "the shadow asked about a live market"
@@ -666,7 +666,7 @@ def test_one_venue_read_settles_every_policys_copy(tmp_path, monkeypatch):
     def bbo(_slug):
         reads["n"] += 1
         return {"state": "MARKET_STATE_EXPIRED", "settlementPx": "1.0000"}
-    monkeypatch.setattr(R.OBS, "pmus_bbo", bbo)
+    monkeypatch.setattr(R.OBS, "pmus_settlement", bbo)
     out = capture(monkeypatch)
     runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
     settled = [d for k, d in out if k == "L5_SHADOW_SETTLED"]
@@ -847,3 +847,116 @@ def test_the_state_discontinuity_is_reported_not_absorbed(tmp_path):
     for scen in SC.SCENARIOS:
         assert c.inventory_for(PMUS, scen).snapshot()["residual"] == 0, scen
     assert c.report()["state_discontinuity"]["from_version"] == 2
+
+
+# --------------------------------------------------------------------------
+# The read itself, against the document shape the venue actually serves.
+#
+# EVERY TEST ABOVE MONKEYPATCHES THE READ, SO NOT ONE OF THEM COULD CATCH
+# THE DEFECT THAT RAN IN PRODUCTION FOR 201 POLLS: `shadow_settle` called
+# `pmus_bbo`, and the fixtures handed it a dict with `settlementPx` in it --
+# a document the real `pmus_bbo` cannot return for an expired market,
+# because a null top of book sends it to /book, which has no settlementPx
+# at all. The fixture was kinder than the venue. These tests use the venue's
+# own document instead.
+EXPIRED_BBO = {                     # verbatim shape, 2026-10-19 1700z
+    "marketData": {
+        "marketSlug": "cpc-btc-updown-15m-2026-10-19-1700z",
+        "state": "MARKET_STATE_EXPIRED",
+        "settlementPx": {"value": "0.0000", "currency": "USD"},
+        "bestBid": None, "bestAsk": None,
+        "lastTradePx": {"value": "0.0100", "currency": "USD"},
+        "sharesTraded": "618747.5900",
+    }
+}
+EXPIRED_BOOK = {"marketData": {                 # /book after expiry: empty
+    "marketSlug": "cpc-btc-updown-15m-2026-10-19-1700z",
+    "state": "MARKET_STATE_EXPIRED", "bids": [], "offers": []}}
+
+
+def _routes(monkeypatch, bbo, book):
+    seen = []
+
+    def _get(url, timeout=20.0):
+        seen.append(url)
+        if url.endswith("/bbo"):
+            if isinstance(bbo, BaseException):
+                raise bbo
+            return bbo
+        if url.endswith("/book"):
+            if isinstance(book, BaseException):
+                raise book
+            return book
+        raise AssertionError("unexpected route %s" % url)
+    monkeypatch.setattr(R.OBS, "_get", _get)
+    return seen
+
+
+def test_the_settlement_read_returns_the_venues_price_for_a_null_bbo(
+        monkeypatch):
+    seen = _routes(monkeypatch, EXPIRED_BBO, EXPIRED_BOOK)
+    md = R.OBS.pmus_settlement("cpc-btc-updown-15m-2026-10-19-1700z")
+    assert md["state"] == "MARKET_STATE_EXPIRED"
+    assert R.T.settlement_decimal(md["settlementPx"]) == D(0)
+    # and it does not go near the book route, which cannot answer this
+    assert all(u.endswith("/bbo") for u in seen), seen
+
+
+def test_the_book_reader_discards_that_price_which_is_why_they_are_separate(
+        monkeypatch):
+    """The live defect, pinned. If this ever starts carrying settlementPx,
+    the two reads can be merged -- until then, merging them loses it."""
+    _routes(monkeypatch, EXPIRED_BBO, EXPIRED_BOOK)
+    md = R.OBS.pmus_bbo("cpc-btc-updown-15m-2026-10-19-1700z") or {}
+    assert R.T.settlement_decimal(md.get("settlementPx")) is None
+    assert md.get("_source") == "empty_both"
+
+
+def test_shadow_settle_reads_the_settlement_route_not_the_book_route(
+        tmp_path, monkeypatch):
+    """End to end over the REAL observer: a closed window with the venue's
+    own expired document settles, and the book route is never consulted."""
+    runner = build(tmp_path, monkeypatch, feed=lambda: [])
+    c = _closed_window(runner, monkeypatch, tmp_path)
+    md = json.loads(json.dumps(EXPIRED_BBO))
+    md["marketData"]["marketSlug"] = PMUS
+    md["marketData"]["settlementPx"] = {"value": "1.0000", "currency": "USD"}
+    seen = _routes(monkeypatch, md, EXPIRED_BOOK)
+    out = capture(monkeypatch)
+    runner.shadow_settle(NOW + 900.0 + R.SHADOW_SETTLE_GRACE_S + 1.0)
+    rec = [d for k, d in out if k == "L5_SHADOW_SETTLED"
+           and d["policy"] == SC.BASELINE_POLICY]
+    assert rec, [k for k, _ in out]
+    assert rec[0]["yes_value"] == "1.0000"
+    assert not [u for u in seen if u.endswith("/book")], seen
+    assert PMUS not in c.stranded()
+    assert c.economics()["per_scenario"][
+        SC.HEADLINE_SCENARIO]["windows_settled"] == 1
+
+
+def test_a_failed_settlement_read_is_not_an_unsettled_market(monkeypatch):
+    _routes(monkeypatch, OSError("network"), EXPIRED_BOOK)
+    assert R.OBS.pmus_settlement("x") is None
+
+
+def test_the_quoting_book_reader_is_unchanged_by_the_new_read(monkeypatch):
+    """`pmus_bbo` is on the money path. Its behaviour on a live market must
+    be exactly what it was: /bbo when populated, /book when not."""
+    live = {"marketData": {"marketSlug": "m", "state": "MARKET_STATE_OPEN",
+                           "bestBid": {"value": "0.45"},
+                           "bestAsk": {"value": "0.46"}}}
+    seen = _routes(monkeypatch, live, EXPIRED_BOOK)
+    md = R.OBS.pmus_bbo("m")
+    assert md["_source"] == "bbo"
+    assert md["bestBid"]["value"] == "0.45"
+    assert all(u.endswith("/bbo") for u in seen), seen
+
+    book = {"marketData": {"marketSlug": "m", "state": "MARKET_STATE_OPEN",
+                           "bids": [{"px": {"value": "0.45"}, "qty": "10"}],
+                           "offers": [{"px": {"value": "0.46"},
+                                       "qty": "12"}]}}
+    seen2 = _routes(monkeypatch, {"marketData": {"state": "x"}}, book)
+    md2 = R.OBS.pmus_bbo("m")
+    assert md2["_source"] == "book_levels"
+    assert md2["_fallback_from"] == "bbo_empty"
+    assert any(u.endswith("/book") for u in seen2), seen2
