@@ -1003,3 +1003,79 @@ def test_the_net_pair_cost_ceiling_holds_on_the_repriced_complement(tmp_path):
     assert D(comp["pair_cost"]) > D("0.96")
     assert D(comp["first_leg_cost"]) == first
     assert len(w.venue.sent) == 1              # nothing sent
+
+
+# ============================== the REAL 1215z sequence, reproduced exactly
+
+def test_the_1215z_sequence_reproduced_DOWN_then_a_repriced_UP_complement(
+        tmp_path):
+    """THE WINDOW THAT WORKED, from its own production records.
+
+    `cpc-btc-updown-15m-2026-10-20-1215z`, round 3 (rounds 0-2 retired):
+
+        plan at bid 0.91 / ask 0.92 -> UP 0.8900, DOWN 0.0600, pair 0.9500
+        DOWN fills 2.46 at own 0.06            (wire 0.94, D78BWYNG10JH)
+        book moves to bid 0.92 / ask 0.93
+        UP complement DERIVED_FROM_CURRENT_BOOK -> 0.9000, superseding 0.8900
+        first_leg_cost 0.0600, pair_cost 0.9600  (D78C4Q7G10JR)
+        settled: matched 2.46, cost $2.3616, redeemed $2.46, +$0.0984
+
+    The pair landed on 0.96 EXACTLY because `complement_order` bounds it
+    against the realised first-leg cost -- the cap binding, not a
+    coincidence. Two separate per-leg accumulation claims, both legitimate.
+    """
+    w = Window(tmp_path, book=Book("0.91", "0.92"))
+
+    w.venue.fill_next()
+    r1 = w.tick(30.0)
+    plan = r1["TWO_SIDED_PROBE"]
+    assert _px(plan) == {"UP": D("0.89"), "DOWN": D("0.06")}
+    assert D(plan["pair_cost"]) == D("0.95")
+    first = w.venue.sent[0]
+    assert first["side"] == "DOWN"                 # the CHEAPER leg first
+    assert D(first["price"]) == D("0.06")
+    qty = D(first["qty"])
+    assert w.store.position(SLUG, "DOWN") == qty
+
+    w.book.set("0.92", "0.93")                     # the book moves
+    r2 = w.tick(90.0)
+    comp = r2["TWO_SIDED_COMPLEMENT"]
+    assert comp["ok"] is True
+    assert comp["provenance"] == "DERIVED_FROM_CURRENT_BOOK"
+    assert comp["leg"]["side"] == "UP"
+    assert D(comp["leg"]["price"]) == D("0.90")    # 0.92 - 2 ticks
+    assert D(comp["frozen_price_superseded"]) == D("0.89")
+    assert D(comp["first_leg_cost"]) == D("0.06")
+    assert D(comp["pair_cost"]) == D("0.96") == TS.MAX_PAIR_COST
+    assert comp["matching_side"] == "DOWN"
+    assert D(comp["unmatched"]) == qty
+
+    second = w.venue.sent[1]
+    assert second["side"] == "UP" and D(second["price"]) == D("0.90")
+    assert second["mode"] == FT.MAKER
+
+    # and the settlement, on either outcome, from the prices actually filled
+    recs = [{"L5_NATIVE": {"side": s["side"]},
+             "FILL": {"filled": True, "filled_qty": str(qty),
+                      "fill_price": str(s["price"]), "fee_usd": "0",
+                      "maker_rebate_usd": "0"}}
+            for s in (first, second)]
+    for yes in (D("0"), D("1")):
+        out = E.settle(recs, market=SLUG, yes_value=yes)
+        assert D(out["matched"]) == qty
+        assert D(out["residual"]) == D("0")
+        assert D(out["realized_net_usd"]) == D("0.0984")
+    # the production numbers, exactly
+    assert qty == D("2.46")
+    assert qty * D("0.06") + qty * D("0.90") == D("2.3616")
+
+
+def test_the_1215z_pair_is_NOT_blocked_by_the_pair_cost_ceiling(tmp_path):
+    """0.96 is AT the ceiling, not above it. A ceiling that refused this
+    would refuse the only profitable trade we have."""
+    w = Window(tmp_path, book=Book("0.91", "0.92"))
+    w.venue.fill_next()
+    w.tick(30.0)
+    w.book.set("0.92", "0.93")
+    assert w.ex.pair_cost_refusal(SLUG, {"side": "UP"},
+                                  {"price": "0.90", "qty": "2.46"}) is None

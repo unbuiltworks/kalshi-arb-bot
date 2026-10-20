@@ -367,6 +367,91 @@ def windows_spent(path: str, sid: str) -> List[str]:
                   if p.name.startswith(pre))
 
 
+#: how many SUBMISSIONS one authorization may make, across every strategy.
+#:
+#: WHY THIS EXISTS, AND WHY NEITHER EXISTING BOUND COVERED IT. The 1215z
+#: window placed TWO orders under a one-window authorization, and both were
+#: legitimate: the two-sided engine takes a per-(market, round, leg)
+#: accumulation claim, so a round is two claims and `L5_ACC_MAX_ROUNDS`
+#: permits eight rounds -- sixteen submissions in one window, bounded only by
+#: capital. `submission_sid` bounds the OTHER strategy to one, and
+#: `max_live_orders` bounds CONCURRENCY, not the total. So "my authorization
+#: may place N orders" was a property of the written mandate and of no gate.
+#:
+#: Counted from the LOCK FILES for the same reason `windows_spent` is: the
+#: lock is created before the ledger row, so a crash between them spends the
+#: submission rather than releasing it.
+#:
+#: UNSET MEANS NO BOUND, which preserves the behaviour that produced the one
+#: profitable pair we have. It is the owner's number, per authorization.
+MAX_SUBMISSIONS_ENV = "L5_LIVE_AUTH_MAX_SUBMISSIONS"
+
+
+def max_submissions() -> Optional[int]:
+    """The owner's submission budget for this authorization, or None."""
+    raw = (os.getenv(MAX_SUBMISSIONS_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        v = int(raw)
+    except ValueError:
+        return 0        # unreadable is NEVER unlimited: refuse everything
+    return max(0, v)
+
+
+def submissions_spent(path: str, experiment: str) -> List[str]:
+    """Every submission claim this experiment holds, across BOTH strategies.
+
+    `sub1.<exp>` is the single-submission claim and `acc1.<exp>...` are the
+    per-leg accumulation claims. Both are counted, so the budget binds
+    independently of which strategy chose the order.
+    """
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(experiment))[:120]
+    d = pathlib.Path(path).parent
+    if not d.is_dir():
+        return []
+    out = []
+    for p in d.glob("l5_auth_claim_*.lock"):
+        for kind in ("sub1.", "acc1."):
+            pre = "l5_auth_claim_%s%s" % (
+                re.sub(r"[^A-Za-z0-9_.-]", "_", kind), safe)
+            if p.name.startswith(pre):
+                out.append(p.name)
+                break
+    return sorted(out)
+
+
+def submission_budget_refusal(path: str, experiment: str
+                              ) -> Optional[Dict[str, Any]]:
+    """None if this authorization may make another submission, else why not.
+
+    Applied in BOTH claim paths, so it cannot be sidestepped by the choice of
+    strategy. An unreadable budget refuses; an unset one does not bind.
+    """
+    cap = max_submissions()
+    if cap is None:
+        return None
+    try:
+        spent = submissions_spent(path, experiment)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"reason": "SUBMISSION_BUDGET_UNREADABLE",
+                "error": type(exc).__name__,
+                "note": "a budget we cannot count is not a budget we may "
+                        "assume has room"}
+    if len(spent) >= cap:
+        return {"reason": "SUBMISSION_BUDGET_EXHAUSTED",
+                "experiment": str(experiment),
+                "max_submissions": cap, "spent": len(spent),
+                "claims": spent[:16],
+                "env": MAX_SUBMISSIONS_ENV,
+                "note": "counted across BOTH strategies from the durable "
+                        "lock files, so it binds whichever path chose the "
+                        "order"}
+    return None
+
+
 def _lock_path(path: str, sid: str) -> pathlib.Path:
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", sid)[:120]
     return pathlib.Path(path).parent / ("l5_auth_claim_%s.lock" % safe)
@@ -587,6 +672,13 @@ def claim_accumulation_leg(market: str, rnd: int, leg: str,
                        "leg": side, "market": mkt, "round": r,
                        "note": "the placement budget for this leg is spent; "
                                "repricing further would need a new round"})
+    # THE OWNER'S SUBMISSION BUDGET, enforced here as well as in
+    # `claim_submission`, so it binds independently of which strategy chose
+    # the order. The 1215z window's two orders were both legitimate per-leg
+    # claims; nothing counted them against the authorization as a whole.
+    over = submission_budget_refusal(path or ledger_path(), exp)
+    if over:
+        raise Refused(str(over["reason"]), over)
     sid = accumulation_sid(exp, mkt, r, side, a)
     rec = {"kind": "accumulation_leg_claim", "experiment": exp,
            "market": mkt, "round": r, "leg": side, "attempt": a, "sid": sid,
@@ -735,6 +827,9 @@ def claim_submission(market: str, payload: Mapping[str, Any],
     if not mkt:
         raise Refused("SUBMISSION_CLAIM_NO_MARKET",
                       {"note": "the claim is per experiment AND market."})
+    over = submission_budget_refusal(path or ledger_path(), exp)
+    if over:
+        raise Refused(str(over["reason"]), over)
     sid = submission_sid(exp)
     rec = {"kind": "submission_claim", "experiment": exp, "market": mkt,
            "sid": sid,
