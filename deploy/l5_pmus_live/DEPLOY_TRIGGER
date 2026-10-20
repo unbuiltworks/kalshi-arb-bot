@@ -1450,3 +1450,8 @@ deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
 # 2026-10-20T03:25:14Z DEPLOY: emit the two-sided PAIR and the ladder at both leg
 # prices. Log-only and additive. Regression = the same 40 baseline IDs, zero
 # NEW. SHADOW_ONLY stays enabled; authorizes no order.
+
+# 2026-10-20T04:50:06Z DEPLOY the two-sided execution lifecycle, shadow-locked.
+# Round retirement, the complement derived from the current book, the 0.96
+# pair cap, the reconciled side/price transformation, and the end-to-end
+# window test. Gate: the same 40 baseline IDs, zero NEW. Authorizes no order.
