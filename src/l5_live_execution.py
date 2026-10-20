@@ -3935,6 +3935,54 @@ class FaithfulExecutor:
                 out[leg] = True        # unreadable = treat as spent
         return out
 
+    def acc_leg_attempt(self, market: str, rnd: int, leg: str
+                        ) -> Optional[int]:
+        """Which PLACEMENT of this leg may be made next, or None to refuse.
+
+        THE SAFETY RULE, and it is the whole point of the attempt axis: a leg
+        cancelled UNFILLED may be re-placed; a leg that FILLED may never be.
+        So a later attempt is granted only when BOTH hold:
+
+          * this leg holds NO filled quantity in this market, and
+          * no order is live in this market.
+
+        Both come from the authoritative durable state the rest of the engine
+        already uses, rather than from an attempt-to-order map this would
+        otherwise have to invent and keep correct across restarts. A filled
+        leg therefore cannot be re-placed by any path, and a leg whose
+        cancellation was never venue-confirmed cannot either, because an
+        unverified cancel leaves the order live here and marks the store
+        UNCERTAIN -- which the arming and submission gates already refuse on.
+
+        FAIL CLOSED. An unreadable claim is treated as spent by
+        `probe_legs_claimed`, and any exception here returns None.
+        """
+        side = str(leg or "").upper()
+        try:
+            from src import l5_live_authorization as AUTH
+            cap = AUTH.acc_max_attempts()
+            exp = AUTH.experiment_id()
+            for a in range(cap):
+                try:
+                    held = AUTH.claim_held(AUTH.accumulation_sid(
+                        exp, str(market), int(rnd), side, a))
+                except BaseException:                          # noqa: BLE001
+                    return None            # unreadable = refuse, never guess
+                if held:
+                    continue
+                if a == 0:
+                    return 0               # the first placement of this leg
+                # a RE-placement: only over a leg that holds nothing and has
+                # nothing live. Either condition failing means refuse.
+                if self.store.position(str(market), side) != D(0):
+                    return None
+                if self.store.live_order_count():
+                    return None
+                return a
+            return None                    # the placement budget is spent
+        except BaseException:                                  # noqa: BLE001
+            return None
+
     def probe_round(self, market: str) -> Optional[int]:
         """The first round of this market with a leg still unspent, or None.
 

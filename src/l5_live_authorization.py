@@ -513,13 +513,48 @@ def claim_probe_leg(leg: str, payload: Mapping[str, Any],
 #: still derived, `already_submitted(coid)` still suppresses, and
 #: `max_live_orders` still bounds concurrency. What is removed is only the
 #: artificial cap of two orders per authorization.
-def accumulation_sid(experiment: str, market: str, rnd: int, leg: str) -> str:
-    return "acc1.%s.%s.%d.%s" % (experiment, market, int(rnd), leg)
+#: how many PLACEMENTS one leg of one round may take. A leg cancelled
+#: UNFILLED may be re-placed; a leg that FILLED may never be. The attempt
+#: axis is what keeps every individual placement single-use and restart-safe
+#: while still allowing repricing -- without it a reprice had to consume a
+#: whole pair cycle, so a window of active quoting exhausted the rounds.
+ACC_MAX_ATTEMPTS_ENV = "L5_ACC_MAX_ATTEMPTS"
+ACC_MAX_ATTEMPTS_DEFAULT = 4
+ACC_MAX_ATTEMPTS_HARD_CAP = 16
+
+
+def acc_max_attempts() -> int:
+    """Placements permitted per leg per round. Unparseable reads as one."""
+    raw = (os.getenv(ACC_MAX_ATTEMPTS_ENV) or "").strip()
+    if not raw:
+        return ACC_MAX_ATTEMPTS_DEFAULT
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return 1                        # unparseable is the safe reading
+    return max(1, min(n, ACC_MAX_ATTEMPTS_HARD_CAP))
+
+
+def accumulation_sid(experiment: str, market: str, rnd: int, leg: str,
+                     attempt: int = 0) -> str:
+    """The claim id for ONE PLACEMENT of one leg of one round.
+
+    ATTEMPT ZERO KEEPS ITS OLD KEY, deliberately: claims already on the
+    durable volume were written without an attempt axis, and a key change
+    would hand every one of them back as unspent. Attempt zero is therefore
+    byte-identical to the previous id and later attempts extend it.
+    """
+    base = "acc1.%s.%s.%d.%s" % (experiment, market, int(rnd), leg)
+    a = int(attempt)
+    if a < 0:
+        raise Refused("ACC_CLAIM_BAD_ATTEMPT", str(attempt))
+    return base if a == 0 else "%s.a%d" % (base, a)
 
 
 def claim_accumulation_leg(market: str, rnd: int, leg: str,
                            payload: Mapping[str, Any],
-                           path: Optional[str] = None) -> Dict[str, Any]:
+                           path: Optional[str] = None,
+                           attempt: int = 0) -> Dict[str, Any]:
     """Consume ONE accumulation leg's claim, or raise. Never auto-resets.
 
     Durable on the same volume as the ledger, taken BEFORE the wire, and
@@ -542,9 +577,19 @@ def claim_accumulation_leg(market: str, rnd: int, leg: str,
         raise Refused("ACC_CLAIM_BAD_ROUND", str(rnd))
     if r < 0:
         raise Refused("ACC_CLAIM_BAD_ROUND", str(rnd))
-    sid = accumulation_sid(exp, mkt, r, side)
+    try:
+        a = int(attempt)
+    except (TypeError, ValueError):
+        raise Refused("ACC_CLAIM_BAD_ATTEMPT", str(attempt))
+    if a < 0 or a >= acc_max_attempts():
+        raise Refused("ACC_CLAIM_ATTEMPTS_EXHAUSTED",
+                      {"attempt": a, "max": acc_max_attempts(),
+                       "leg": side, "market": mkt, "round": r,
+                       "note": "the placement budget for this leg is spent; "
+                               "repricing further would need a new round"})
+    sid = accumulation_sid(exp, mkt, r, side, a)
     rec = {"kind": "accumulation_leg_claim", "experiment": exp,
-           "market": mkt, "round": r, "leg": side, "sid": sid,
+           "market": mkt, "round": r, "leg": side, "attempt": a, "sid": sid,
            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
            **dict(payload)}
     try:

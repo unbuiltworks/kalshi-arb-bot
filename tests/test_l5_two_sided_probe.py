@@ -546,3 +546,122 @@ def test_entry_runs_from_window_open_by_default():
     assert TSP.place_floor_s() == 0.0
     assert TSP.may_enter(start + 1.0, start, end) is None
     assert TSP.may_enter(start - 1.0, start, end) == "WINDOW_NOT_OPEN"
+
+
+# ----------------------------------- fix 3: bounded replacement attempts
+
+def test_attempt_zero_keeps_its_historical_claim_key(monkeypatch):
+    """Claims already on the durable volume were written without an attempt
+    axis. A key change would hand every one of them back as unspent."""
+    from src import l5_live_authorization as AUTH
+    base = AUTH.accumulation_sid("exp", "mkt", 0, "UP")
+    assert base == "acc1.exp.mkt.0.UP"
+    assert AUTH.accumulation_sid("exp", "mkt", 0, "UP", 0) == base
+    assert AUTH.accumulation_sid("exp", "mkt", 0, "UP", 1) == base + ".a1"
+
+
+def test_attempts_are_distinct_on_every_axis():
+    from src import l5_live_authorization as AUTH
+    seen = set()
+    for m in ("m1", "m2"):
+        for r in (0, 1):
+            for leg in AUTH.PROBE_LEGS:
+                for a in (0, 1, 2):
+                    seen.add(AUTH.accumulation_sid("e", m, r, leg, a))
+    assert len(seen) == 2 * 2 * 2 * 3
+
+
+def test_the_attempt_budget_is_bounded_and_fails_safe(monkeypatch):
+    from src import l5_live_authorization as AUTH
+    assert AUTH.acc_max_attempts() == AUTH.ACC_MAX_ATTEMPTS_DEFAULT
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "3")
+    assert AUTH.acc_max_attempts() == 3
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "9999")
+    assert AUTH.acc_max_attempts() == AUTH.ACC_MAX_ATTEMPTS_HARD_CAP
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "junk")
+    assert AUTH.acc_max_attempts() == 1, "unparseable is the safe reading"
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "0")
+    assert AUTH.acc_max_attempts() == 1
+
+
+def test_a_negative_attempt_is_refused():
+    from src import l5_live_authorization as AUTH
+    with pytest.raises(AUTH.Refused):
+        AUTH.accumulation_sid("e", "m", 0, "UP", -1)
+
+
+def test_a_claim_past_the_attempt_budget_is_refused(tmp_path, monkeypatch):
+    from src import l5_live_authorization as AUTH
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-attempts")
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "2")
+    led = str(tmp_path / "ledger.jsonl")
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=1)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=2)
+    assert "ATTEMPTS_EXHAUSTED" in str(e.value.reason)
+
+
+def test_a_replacement_is_refused_over_a_leg_that_holds_inventory(tmp_path,
+                                                                  monkeypatch):
+    """THE RULE THAT MATTERS: a filled leg is never re-placed."""
+    from decimal import Decimal as _D
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-hold")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    # attempt 0 taken, and the leg FILLED
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    ex.store.state["positions"]["m|UP"] = "1"
+    assert ex.acc_leg_attempt("m", 0, "UP") is None
+
+
+def test_a_replacement_is_granted_over_a_leg_that_holds_nothing(tmp_path,
+                                                                monkeypatch):
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-empty")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv2.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    assert ex.acc_leg_attempt("m", 0, "UP") == 0
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    # cancelled unfilled: nothing held, nothing live -> a reprice is allowed
+    assert ex.acc_leg_attempt("m", 0, "UP") == 1
+
+
+def test_a_replacement_is_refused_while_an_order_is_still_live(tmp_path,
+                                                               monkeypatch):
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-live")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv3.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    ex.store.state["live_orders"] = {"coid-1": {"market": "m"}}
+    assert ex.acc_leg_attempt("m", 0, "UP") is None
+
+
+def test_the_attempt_budget_exhausts_rather_than_wrapping(tmp_path,
+                                                          monkeypatch):
+    from src import l5_live_authorization as AUTH
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "exp-exh")
+    monkeypatch.setenv(AUTH.ACC_MAX_ATTEMPTS_ENV, "2")
+    led = str(tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(AUTH, "ledger_path", lambda: led)
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "inv4.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
+    AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=1)
+    assert ex.acc_leg_attempt("m", 0, "UP") is None
