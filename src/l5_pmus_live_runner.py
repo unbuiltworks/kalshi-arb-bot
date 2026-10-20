@@ -1303,9 +1303,11 @@ class Runner:
                 # of the owner's four and buys no protection. The verdict is
                 # still computed, which is what the activation sequence
                 # verifies before the lock comes off.
+                # ALWAYS READ-ONLY HERE. The window is spent further
+                # down, once `authorize_arming` has RETURNED -- see
+                # `spend_campaign_window`.
                 campaign = CAMP.campaign_decision(
-                    str(t.market_slug), root=self.root,
-                    reserve=not shadow_only())
+                    str(t.market_slug), root=self.root, reserve=False)
             except BaseException as exc:                      # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise
@@ -1357,6 +1359,55 @@ class Runner:
                 # is the window the tick is deciding in.
                 now=dt.datetime.fromtimestamp(self.now_t, dt.timezone.utc),
                 shadow_locked=shadow_only())
+            # ================= THE WINDOW IS SPENT HERE, AND NOWHERE ELSE
+            #
+            # Every refusal is now behind us: the shadow lock is off, an
+            # owner authorization (campaign or legacy handshake) was
+            # established, the halt latch is present and clear, preflight
+            # passed, the book is reconciled, no order is uncertain, the
+            # accounting is resolved, both deadlines hold, the capital scope
+            # is known, the market is inside the approved series, the
+            # mandate's own scope digest matched and the durable claim was
+            # taken. A window spent before any of that was a window that
+            # could never trade -- 1600z went to a verification run under
+            # the shadow lock and 1630z to an arm that MANDATE_SCOPE_CHANGED
+            # then refused.
+            #
+            # AND IT MUST STILL BE WORTH SPENDING. A window whose entry
+            # cutoff has passed cannot take a first leg, so unless we are
+            # already working inventory in it there is nothing for it to do.
+            if campaign.get("present") and campaign.get("ok"):
+                worth = self.campaign_window_is_usable(t.market_slug)
+                if not worth.get("usable"):
+                    self.win["arm_refused_window_not_usable"] += 1
+                    if self.win["arm_refused_window_not_usable"] == 1:
+                        emit("L5_LIVE_DISARMED", {
+                            "market": t.market_slug,
+                            "why": "CAMPAIGN_WINDOW_NOT_USABLE",
+                            "detail": worth,
+                            "boundary": "Runner.try_arm",
+                            "labels": ("the window is not spent: it could "
+                                       "not take a first leg and no "
+                                       "inventory is being worked in it")})
+                    return
+                spend = CAMP.reserve_window(str(t.market_slug),
+                                            root=self.root)
+                try:
+                    self.stats["campaign_window:%s"
+                               % (spend.get("reason") or "RESERVED")] += 1
+                except BaseException as exc:                   # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                if not spend.get("ok"):
+                    self.win["arm_refused_%s"
+                             % str(spend.get("reason")).lower()] += 1
+                    emit("L5_LIVE_DISARMED", {
+                        "market": t.market_slug,
+                        "why": str(spend.get("reason")),
+                        "detail": spend, "boundary": "Runner.try_arm",
+                        "labels": ("the campaign window could not be "
+                                   "reserved, so nothing is armed")})
+                    return
         except AUTH.Refused as exc:
             # THE HISTORICAL COUNTER NAMES SURVIVE. These are operator-facing
             # signals -- the heartbeat publishes them and this branch's own
@@ -2685,6 +2736,54 @@ class Runner:
                     shutil.rmtree(base, ignore_errors=True)
                 except BaseException:                           # noqa: BLE001
                     pass
+
+    def campaign_window_is_usable(self, market: Any) -> Dict[str, Any]:
+        """Could this window still do anything? Spend one only if so.
+
+        TWO WAYS A WINDOW EARNS ITS PLACE IN THE BUDGET: a first leg can
+        still be opened in it, or we are already working inventory in it and
+        completion is still permitted. Past the entry cutoff with nothing
+        held, there is nothing it can do, and reserving it would turn four
+        approved windows into three for no trade -- which is what happened
+        to 1630z, reserved at 16:39 when entry had closed at 16:38:59.
+
+        FAIL CLOSED means NOT USABLE here. If the venue bounds cannot be
+        read, the window cannot be shown to be worth spending, and the safe
+        direction is to keep the budget rather than to spend it on a window
+        we cannot reason about.
+        """
+        try:
+            b = self.venue_window_bounds() or {}
+            start = dt.datetime.fromisoformat(str(b["start"]))
+            end = dt.datetime.fromisoformat(str(b["end"]))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"usable": False, "reason": "WINDOW_BOUNDS_UNREADABLE",
+                    "error": type(exc).__name__}
+        from src import l5_two_sided_probe as TS
+        t0, t1 = start.timestamp(), end.timestamp()
+        now = float(self.now_t)
+        enter = TS.may_enter(now, t0, t1)
+        if enter is None:
+            return {"usable": True, "because": "A_FIRST_LEG_MAY_STILL_OPEN",
+                    "seconds_into_window": round(now - t0, 1)}
+        complete = TS.may_complete(now, t0, t1)
+        held = None
+        try:
+            held = self.store.residual(str(market))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"usable": False, "reason": "INVENTORY_UNREADABLE",
+                    "error": type(exc).__name__, "entry": enter}
+        if held is not None and held != 0 and complete is None:
+            return {"usable": True, "because": "INVENTORY_STILL_TO_COMPLETE",
+                    "residual": str(held), "entry": enter}
+        return {"usable": False, "reason": "PAST_ENTRY_WITH_NO_INVENTORY",
+                "entry": enter, "completion": complete,
+                "residual": None if held is None else str(held),
+                "seconds_into_window": round(now - t0, 1)}
 
     def campaign_telemetry(self) -> Dict[str, Any]:
         """What the bounded campaign currently permits. READ-ONLY.

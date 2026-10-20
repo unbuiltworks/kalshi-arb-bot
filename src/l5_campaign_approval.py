@@ -462,6 +462,56 @@ def authorize_window(gate: "ApprovalGate", market: str, *,
                        "it instead of spending another")}
 
 
+def reserve_window(market: str, *,
+                   root: Optional[str] = None,
+                   now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+    """SPEND the window for `market`, idempotently. Call this LAST.
+
+    THE ORDERING THIS EXISTS TO ENFORCE. `campaign_decision` used to reserve
+    while answering, so the window was spent before the arming boundary had
+    ruled on anything -- and on 2026-10-20 two windows went that way: 1600z
+    to a verification run under the shadow lock, and 1630z to an arm that
+    `MANDATE_SCOPE_CHANGED` then refused. Neither could ever have traded.
+
+    So the verdict is now read-only (`reserve=False`) and the spend is this
+    separate call, made only once `authorize_arming` has RETURNED a claim --
+    which means the shadow lock is off, the owner handshake matched, the halt
+    latch is present and clear, preflight passed, the book is reconciled, no
+    order is uncertain, the accounting is resolved, the deadline holds, the
+    capital scope is known, the market is in the mandate's series AND THE
+    MANDATE'S OWN SCOPE DIGEST MATCHES. Every one of those is a reason a
+    window must not be spent.
+
+    IDEMPOTENT PER SLUG, so a redeploy or a restart inside a window it has
+    already reserved resumes that window instead of spending another:
+    `reserved_now` comes back False and the count does not move.
+    """
+    now = now or _utc()
+    gate = ApprovalGate(EnvApprovalStore(), max_age_s=MAX_CAMPAIGN_S)
+    try:
+        st = gate.state()
+    except ApprovalReadUnavailable as exc:
+        return {"ok": False, "reason": "APPROVAL_UNREADABLE",
+                "detail": {"error": str(exc)[:160]}}
+    if not st.get("approved"):
+        return {"ok": False, "reason": "APPROVAL_NOT_VALID",
+                "detail": {"why": st.get("why")}}
+    scope = dict(st.get("scope") or {})
+    try:
+        return dict(WindowLedger(root).reserve(
+            str(scope.get("nonce_sid")), str(market),
+            max_windows=int(scope.get("max_windows") or 0),
+            now_iso=now.isoformat()), spent=True)
+    except ApprovalReadUnavailable as exc:
+        return {"ok": False, "reason": "WINDOW_LEDGER_UNREADABLE",
+                "detail": {"error": str(exc)[:160]}}
+    except BaseException as exc:                              # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"ok": False, "reason": "WINDOW_RESERVE_FAILED",
+                "detail": {"error": type(exc).__name__}}
+
+
 # ===================================================== delivering the approval
 #
 # ONE VARIABLE PER CAMPAIGN, NOT PER WINDOW. The whole point of this layer is

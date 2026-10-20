@@ -385,6 +385,10 @@ def windows_spent(path: str, sid: str) -> List[str]:
 #: UNSET MEANS NO BOUND, which preserves the behaviour that produced the one
 #: profitable pair we have. It is the owner's number, per authorization.
 MAX_SUBMISSIONS_ENV = "L5_LIVE_AUTH_MAX_SUBMISSIONS"
+#: named in refusals so an operator can see the other way to
+#: authorize. Declared here to avoid importing the campaign
+#: module into the boundary it is consumed by.
+CAMPAIGN_APPROVAL_ENV = "L5_CAMPAIGN_APPROVAL"
 
 
 def max_submissions() -> Optional[int]:
@@ -1480,6 +1484,34 @@ def _limit_of(limits: Any, field: str):
         return None
 
 
+def campaign_claim_sid(scope: Mapping[str, Any]) -> str:
+    """The durable claim identity of ONE approved campaign.
+
+    WHY THE CAMPAIGN NEEDS AN IDENTITY AT ALL. Every durable claim here is
+    keyed on "who approved this" -- the mandate, the per-window claim, the
+    holder check. That key used to be the owner's `PMUS_Q1_SESSION_ID`, so a
+    campaign whose scope differed from the recorded mandate could only be
+    authorized by ROTATING that variable: exactly the per-test ceremony the
+    campaign layer exists to abolish.
+
+    A campaign has its own owner-held credential -- the nonce, in a variable
+    the executor cannot write -- so it can supply the identity itself. A new
+    campaign is a new nonce is a new identity, which takes a fresh mandate
+    under the new scope automatically. "A second mandate needs a new session
+    id" becomes "a second campaign needs a new document", and the owner gets
+    that by issuing one.
+
+    HASHED, NOT THE NONCE. The identity goes into claim payloads on the
+    volume and into the scope digest, so it must not carry the nonce itself.
+    SHA-256 is one-way and the nonce is 32 bytes of os entropy, so the
+    digest identifies the campaign without disclosing it.
+    """
+    nid = str(scope.get("nonce_sid") or "").strip()
+    if not nid:
+        return ""
+    return "camp.%s" % hashlib.sha256(nid.encode()).hexdigest()[:24]
+
+
 def authorize_arming(*, market: str, preflight: Any, store: Any,
                      halted: bool, reconciled: bool,
                      halt_gate_present: bool = False,
@@ -1515,14 +1547,62 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         raise ArmingRefusal("SHADOW_ONLY_LOCK",
                             {"note": "submit() is structurally blocked; "
                                      "arming would change nothing"})
-    # 2. explicit owner authorization
-    if not Q1.armed():
-        raise ArmingRefusal("OWNER_AUTHORIZATION_ABSENT",
-                            {"needs": [Q1.LIVE_ENV, Q1.SID_ENV, Q1.ARM_ENV]})
-    sid = session_id()
-    if not sid:
-        raise ArmingRefusal("OWNER_AUTHORIZATION_ABSENT",
-                            {"needs": [Q1.SID_ENV]})
+    # 2. EXPLICIT OWNER AUTHORIZATION, from EITHER of two owner-held
+    #    objects. Not both, and neither is weaker than the other.
+    #
+    #    THE CAMPAIGN DOCUMENT IS AN AUTHORIZATION, NOT MERELY A BOUND ON
+    #    ONE. Its security property is the same one the Q1 handshake has and
+    #    the same one `HttpHaltStore` states for the halt latch: the owner
+    #    holds an object the executor cannot write. `EnvApprovalStore.put`
+    #    refuses by design, so Claude cannot approve a campaign. Requiring
+    #    the Q1 handshake ON TOP of a valid campaign bought nothing -- both
+    #    are the same kind of evidence from the same owner -- and cost
+    #    exactly what this layer exists to abolish: a Railway edit per
+    #    campaign, and, because the mandate is keyed on the session id, a
+    #    session-id rotation whenever the scope changed.
+    #
+    #    THE LEGACY PATH IS UNTOUCHED. With no campaign document, the Q1
+    #    handshake is required exactly as before, so one-window probes and
+    #    every existing test keep their authorization.
+    #
+    #    FAIL CLOSED ON BOTH: with neither a valid campaign nor the
+    #    handshake, this refuses and names both ways to satisfy it.
+    _camp_present = bool(campaign is not None and campaign.get("present"))
+    _camp_ok = bool(_camp_present and campaign.get("ok"))
+    _camp_scope = dict((campaign or {}).get("scope") or {})
+    # PRESENT AND NOT OK REFUSES BY ITS OWN NAME, FIRST. Falling through to
+    # OWNER_AUTHORIZATION_ABSENT would report an exhausted or expired
+    # campaign as "no authorization configured", which sends an operator
+    # looking for a missing variable instead of at the budget that ran out.
+    if _camp_present and not _camp_ok:
+        raise ArmingRefusal(
+            str(campaign.get("reason") or "CAMPAIGN_NOT_APPROVED"),
+            {"detail": campaign.get("detail"),
+             "note": "a campaign document exists and does not permit this; "
+                     "the legacy single-window handshake is NOT a fallback"})
+    if _camp_ok:
+        sid = campaign_claim_sid(_camp_scope)
+        if not sid:
+            raise ArmingRefusal("CAMPAIGN_IDENTITY_UNKNOWN",
+                                {"note": "an approved campaign with no "
+                                         "identity cannot key a durable "
+                                         "claim, and an unkeyed claim is "
+                                         "not a claim"})
+    elif Q1.armed():
+        sid = session_id()
+        if not sid:
+            raise ArmingRefusal("OWNER_AUTHORIZATION_ABSENT",
+                                {"needs": [Q1.SID_ENV]})
+    else:
+        raise ArmingRefusal(
+            "OWNER_AUTHORIZATION_ABSENT",
+            {"needs_either": {
+                "campaign": [CAMPAIGN_APPROVAL_ENV],
+                "legacy_handshake": [Q1.LIVE_ENV, Q1.SID_ENV, Q1.ARM_ENV]},
+             "campaign_present": _camp_present,
+             "note": "a valid campaign approval authorizes campaign windows "
+                     "on its own; without one the legacy one-window "
+                     "handshake is required"})
     # 2b. THE CAMPAIGN APPROVAL, when one exists.
     #
     #     Passed in as a FACT by the caller, exactly as `reconciled` and
@@ -1541,14 +1621,9 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #                          opposite of what spending a window means.
     #       present, ok     -> proceed, with the window already reserved
     #                          durably by the caller.
-    if campaign is not None and campaign.get("present"):
-        if not campaign.get("ok"):
-            raise ArmingRefusal(
-                str(campaign.get("reason") or "CAMPAIGN_NOT_APPROVED"),
-                {"detail": campaign.get("detail"),
-                 "note": "a campaign document exists and does not permit "
-                         "this; the single-window path is NOT a fallback"})
-        _scope = dict(campaign.get("scope") or {})
+    if _camp_ok:
+        # present-and-not-ok already refused in step 2, by its own name.
+        _scope = _camp_scope
         # the running caps must sit INSIDE what was approved. A cap widened
         # after approval invalidates the approval rather than inheriting it.
         _appr_exp = _dec_or_none(_scope.get("max_total_exposure_usd"))
@@ -1610,6 +1685,24 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     if stale:
         raise ArmingRefusal("UNRESOLVED_ACCOUNTING", {"records": stale[:8]})
     # 8. the owner's absolute deadline, if set
+    # A CAMPAIGN CARRIES ITS OWN ABSOLUTE DEADLINE, clamped by the code to
+    # four hours from issue, so the owner does not have to set a second one
+    # by hand and the two cannot disagree. It is applied IN ADDITION to the
+    # env deadline, never instead: whichever is sooner binds.
+    if _camp_ok:
+        _cexp = _camp_scope.get("expires_utc")
+        try:
+            _cdl = dt.datetime.fromisoformat(str(_cexp).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            raise ArmingRefusal("CAMPAIGN_EXPIRY_UNREADABLE",
+                                {"expires_utc": str(_cexp)[:40]})
+        if _cdl.tzinfo is None:
+            raise ArmingRefusal("CAMPAIGN_EXPIRY_NAIVE",
+                                {"expires_utc": str(_cexp)[:40]})
+        if now > _cdl:
+            raise ArmingRefusal("CAMPAIGN_EXPIRED",
+                                {"expires_utc": _cdl.isoformat(),
+                                 "now": now.isoformat()})
     not_after = os.getenv(NOT_AFTER_ENV, "").strip()
     if not_after:
         try:
@@ -1643,8 +1736,20 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     # a MANDATE names a series, and nothing outside it. The exact-market
     # binding above still wins when both are set, so a single-market mandate
     # stays expressible.
-    pre = series or series_prefix()
-    if mandate_mode() and not want:
+    # A CAMPAIGN NAMES ITS OWN SERIES, from the code's allowlist, so the
+    # owner need not set `L5_LIVE_AUTH_MARKET_SERIES` as well. Both are
+    # applied: the campaign layer has already refused a market outside its
+    # series (CAMPAIGN_SERIES_MISMATCH) before this is reached.
+    pre = series or series_prefix() or (
+        str(_camp_scope.get("series") or "") if _camp_ok else "")
+    if _camp_ok and not want:
+        _cser = str(_camp_scope.get("series") or "")
+        if not _cser or not str(market).startswith(_cser):
+            raise ArmingRefusal("AUTHORIZATION_BOUND_TO_MARKET",
+                                {"authorized_series": _cser,
+                                 "attempted": str(market),
+                                 "note": "the approved campaign's series"})
+    if (mandate_mode() or _camp_ok) and not want:
         if not pre:
             raise ArmingRefusal("MANDATE_SERIES_NOT_DECLARED",
                                 {"env": SERIES_ENV,
@@ -1690,6 +1795,26 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     # one. `max_windows` survives in the signature only for the scope a
     # pre-boundary `Authorization.claim` records.
     mw = max_windows_env()
+    # THE INTERSECTION, NEVER THE WIDER OF THE TWO. A campaign states its own
+    # window budget, already clamped to the code ceiling, so the owner need
+    # not also set `L5_LIVE_AUTH_MAX_WINDOWS` -- and if both are set, the
+    # tighter one binds. Unreadable on the campaign side is a refusal, not a
+    # fallback to the env: a budget we cannot read is not a budget.
+    if _camp_ok:
+        try:
+            _cmw = int(_camp_scope.get("max_windows"))
+        except (TypeError, ValueError):
+            raise ArmingRefusal("CAMPAIGN_WINDOW_BUDGET_UNREADABLE",
+                                {"max_windows":
+                                     str(_camp_scope.get("max_windows"))[:20]})
+        if _cmw < 1:
+            raise ArmingRefusal("CAMPAIGN_WINDOW_BUDGET_BELOW_ONE",
+                                {"max_windows": _cmw})
+        # the env default is 1 when unset, which would silently cap a
+        # four-window campaign at one window; an UNSET env therefore defers
+        # to the campaign, and a SET one can only tighten it.
+        mw = _cmw if not (os.getenv(MAX_WINDOWS_ENV) or "").strip() \
+            else min(mw, _cmw)
     scope = mandate_scope(market=("" if mw > 1 else market), limits=limits,
                           series=pre, max_windows=mw)
     digest = scope_digest(scope)
@@ -1719,7 +1844,9 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #      uncertain orders and the capital envelope. A mandate only lets the
     #      next window ASK.
     if mw > 1:
-        if not os.getenv(NOT_AFTER_ENV, "").strip():
+        # a campaign's own expiry, verified at step 8 above, IS the absolute
+        # deadline this requires; the env one is then optional.
+        if not _camp_ok and not os.getenv(NOT_AFTER_ENV, "").strip():
             raise ArmingRefusal("MANDATE_HAS_NO_DEADLINE",
                                 {"env": NOT_AFTER_ENV,
                                  "note": "a budget above one window with no "
@@ -1756,9 +1883,45 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                                      "note": "the running configuration is "
                                              "not the one this mandate was "
                                              "approved for"})
-            bad = holder_refusal(recorded.get("holder") or {}, holder)
-            if bad:
-                raise ArmingRefusal(bad["reason"], bad["detail"])
+            # THE HOLDER, AND WHY A CAMPAIGN BINDS IT PER WINDOW INSTEAD.
+            #
+            # `holder_refusal` refuses a restart on purpose: "a restart must
+            # never silently resume trading". That is right for a mandate
+            # the owner armed as one trading session -- and fatal for a
+            # four-window campaign, because this service redeploys whenever
+            # a variable changes and the new process has a new deployment
+            # id, boot id and pid. Every remaining window would refuse
+            # MANDATE_HOLDER_CHANGED, so the campaign could never finish
+            # without the owner re-arming by hand: exactly what the campaign
+            # exists to abolish.
+            #
+            # WHAT IT PROTECTS AGAINST, AND WHAT STILL DOES. The hazard is
+            # two overlapping executors trading the SAME window. That is
+            # already prevented per window by `claim_once` on the window
+            # key -- one O_EXCL winner, durably, forever -- and by the
+            # per-nonce ledger, which no restart can hand back. The
+            # mandate-level holder EQUALITY adds nothing against overlap; it
+            # only forbids a later process from using windows nobody has
+            # spent.
+            #
+            # SO THE RELAXATION IS NARROW AND NAMED: under a campaign the
+            # recorded holder is kept for audit and not required to match,
+            # while an executor that cannot identify its own deployment is
+            # still refused -- that is about self-knowledge, not continuity,
+            # and an actor we cannot name has no business taking a claim.
+            # The legacy single-window path keeps the original rule intact.
+            if _camp_ok:
+                _me = dict(holder)
+                if not _me.get("deployment_id") or not _me.get("boot_id"):
+                    raise ArmingRefusal(
+                        "DEPLOYMENT_IDENTITY_UNKNOWN",
+                        {"have": sorted(k for k, v in _me.items() if v),
+                         "note": "an executor that cannot identify its own "
+                                 "deployment cannot be named in a claim"})
+            else:
+                bad = holder_refusal(recorded.get("holder") or {}, holder)
+                if bad:
+                    raise ArmingRefusal(bad["reason"], bad["detail"])
         # THE BUDGET, counted from the locks on the volume rather than from
         # memory, so a restart cannot buy another window.
         wkey = window_key(sid, market)

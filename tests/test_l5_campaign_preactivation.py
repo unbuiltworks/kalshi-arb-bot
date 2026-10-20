@@ -558,10 +558,21 @@ def test_the_dry_run_RAISES_on_an_unreadable_ledger(tmp_path, monkeypatch):
     assert out["reason"] == "WINDOW_LEDGER_UNREADABLE"
 
 
-def test_the_runner_RESERVES_only_when_the_lock_is_OFF():
-    """Source-level, because it is the lock that decides."""
+def test_the_runner_NEVER_RESERVES_WHILE_ASKING():
+    """SUPERSEDES "reserves only when the lock is off".
+
+    Keying the reservation on the lock fixed only the first of the two
+    wasted windows. 1630z was spent with the lock OFF, by an arm that
+    MANDATE_SCOPE_CHANGED then refused -- so the real rule is that asking
+    must never spend, and the window is reserved once `authorize_arming`
+    has RETURNED."""
     src = (ROOT / "src" / "l5_pmus_live_runner.py").read_text()
-    assert "reserve=not shadow_only()" in src
+    assert "reserve=not shadow_only()" not in src
+    assert "root=self.root, reserve=False)" in src
+    assert "CAMP.reserve_window(" in src
+    # and the spend sits AFTER the boundary call
+    assert src.index("AUTH.authorize_arming(") < src.index(
+        "CAMP.reserve_window(")
 
 
 def test_reserving_is_still_the_DEFAULT(tmp_path, monkeypatch):

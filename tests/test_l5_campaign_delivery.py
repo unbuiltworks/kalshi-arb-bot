@@ -244,6 +244,9 @@ class _Runner:
     """Duck-typed stand-in driving the REAL `try_arm` code object."""
 
     try_arm = R.Runner.try_arm
+    # `try_arm` asks whether the window is worth spending before reserving
+    # it, so the stub carries that method too.
+    campaign_window_is_usable = R.Runner.campaign_window_is_usable
 
     def venue_window_bounds(self):
         base = dt.datetime.fromtimestamp(getattr(self, "now_t", 0.0) or 0.0,
@@ -306,10 +309,15 @@ def test_with_NO_approval_the_runner_still_arms_as_it_did_before(
 def test_a_VALID_campaign_arms_and_spends_exactly_one_window(
         monkeypatch, tmp_path):
     monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(live_doc()))
+    monkeypatch.setenv("RAILWAY_DEPLOYMENT_ID", "test-deployment")
     r = _Runner(tmp_path)
     r.try_arm()
-    assert r.transport.armed is True
+    assert r.transport.armed is True, dict(r.win)
     assert r.stats["campaign:OK"] == 1
+    # the window is spent by `reserve_window` AFTER the boundary returns,
+    # not by the verdict that asked -- see the two wasted windows in
+    # tests/test_l5_campaign_is_the_authorization.py
+    assert r.stats["campaign_window:RESERVED"] == 1
     led = CA.WindowLedger(str(tmp_path)).read(CA.nonce_sid(NONCE))
     assert led["windows"] == [W1]
 
@@ -355,6 +363,7 @@ def test_limits_WIDER_than_the_approved_campaign_refuse_the_arm(
 def test_the_published_counter_NEVER_CARRIES_THE_NONCE(monkeypatch, tmp_path):
     """The owner's standing instruction: the nonce is not exposed in logs."""
     monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(live_doc()))
+    monkeypatch.setenv("RAILWAY_DEPLOYMENT_ID", "test-deployment")
     r = _Runner(tmp_path)
     r.try_arm()
     blob = json.dumps(dict(r.stats)) + json.dumps(dict(r.win))
@@ -399,6 +408,7 @@ def test_a_BROKEN_COUNTER_cannot_crash_the_arming_path(monkeypatch, tmp_path):
             raise RuntimeError("counter is broken")
 
     monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(live_doc()))
+    monkeypatch.setenv("RAILWAY_DEPLOYMENT_ID", "test-deployment")
     r = _Runner(tmp_path)
     r.stats = _Exploding()
     r.try_arm()

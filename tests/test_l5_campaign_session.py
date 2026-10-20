@@ -259,6 +259,17 @@ class Limits:
         self.daily_realized_loss_halt_usd = D(loss)
 
 
+def _soon(hours=1):
+    """A campaign expiry on the REAL clock.
+
+    `authorize_arming` reads `dt.datetime.now()` for its own deadline
+    checks, while `NOW` above is this file's fixed clock for the approval
+    GATE's tests. Mixing them made the scope look expired.
+    """
+    return (dt.datetime.now(dt.timezone.utc)
+            + dt.timedelta(hours=hours)).isoformat()
+
+
 def arm(campaign, limits=None, **over):
     kw = dict(market=W1, preflight={"preflight": "PASSED"}, store=None,
               halted=False, reconciled=True, halt_gate_present=True,
@@ -299,7 +310,10 @@ def test_limits_WIDER_than_the_approval_invalidate_it(monkeypatch):
     monkeypatch.setenv("PMUS_Q1_ARM", "s-1")
     ok_campaign = {"present": True, "ok": True,
                    "scope": {"max_total_exposure_usd": "5",
-                             "max_daily_loss_usd": "5"}}
+                             "max_daily_loss_usd": "5",
+                             "nonce_sid": CA.nonce_sid("session-test-nonce"),
+                             "series": SERIES, "max_windows": 4,
+                             "expires_utc": _soon()}}
     with pytest.raises(AUTH.ArmingRefusal) as e:
         arm(ok_campaign, limits=Limits(exp="7"))
     assert e.value.reason == "CAMPAIGN_LIMITS_WIDER_THAN_APPROVED"
@@ -316,7 +330,10 @@ def test_limits_that_cannot_be_READ_are_not_assumed_inside_the_approval(
     with pytest.raises(AUTH.ArmingRefusal) as e:
         arm({"present": True, "ok": True,
              "scope": {"max_total_exposure_usd": "5",
-                       "max_daily_loss_usd": "5"}}, limits=None)
+                       "max_daily_loss_usd": "5",
+                       "nonce_sid": CA.nonce_sid("session-test-nonce"),
+                       "series": SERIES, "max_windows": 4,
+                       "expires_utc": _soon()}}, limits=None)
     assert e.value.reason in ("CAMPAIGN_RUNNING_LIMITS_UNREADABLE",
                               "CAPITAL_SCOPE_UNKNOWN")
 
@@ -328,18 +345,62 @@ def test_the_SHADOW_LOCK_still_outranks_every_campaign(monkeypatch):
     with pytest.raises(AUTH.ArmingRefusal) as e:
         arm({"present": True, "ok": True,
              "scope": {"max_total_exposure_usd": "5",
-                       "max_daily_loss_usd": "5"}}, shadow_locked=True)
+                       "max_daily_loss_usd": "5",
+                       "nonce_sid": CA.nonce_sid("session-test-nonce"),
+                       "series": SERIES, "max_windows": 4,
+                       "expires_utc": _soon()}}, shadow_locked=True)
     assert e.value.reason == "SHADOW_ONLY_LOCK"
 
 
-def test_a_valid_campaign_does_NOT_substitute_for_the_owner_handshake(
+def test_a_valid_campaign_AUTHORIZES_without_the_legacy_handshake(
         monkeypatch):
-    """The campaign bounds a run; it is not permission to trade. Without the
-    owner's arm the answer is still no."""
+    """SUPERSEDES "a campaign does not substitute for the owner handshake".
+
+    That earlier rule was wrong about its own security model, and it cost
+    exactly what this layer exists to abolish. The campaign document's
+    property is the one the Q1 handshake has and the one `HttpHaltStore`
+    states for the halt latch: THE OWNER HOLDS AN OBJECT THE EXECUTOR CANNOT
+    WRITE -- `EnvApprovalStore.put` refuses by design. Requiring both bought
+    no additional evidence, because both come from the same owner by the
+    same means; and because the durable mandate is keyed on
+    PMUS_Q1_SESSION_ID, a campaign whose scope differed from the recorded
+    mandate refused every window until the owner rotated their session id
+    and arm token BY HAND. One approval, many windows, was impossible.
+
+    So a valid campaign authorizes campaign windows on its own. Everything
+    that made it strict is untouched and tested elsewhere in this file: the
+    code ceilings, the intersection, staleness, expiry, the series
+    allowlist, the durable per-nonce window ledger, and the running limits
+    having to sit inside the approval.
+    """
     monkeypatch.delenv("PMUS_Q1_LIVE", raising=False)
     monkeypatch.delenv("PMUS_Q1_ARM", raising=False)
-    with pytest.raises(AUTH.ArmingRefusal) as e:
+    monkeypatch.delenv("PMUS_Q1_SESSION_ID", raising=False)
+    try:
         arm({"present": True, "ok": True,
              "scope": {"max_total_exposure_usd": "5",
-                       "max_daily_loss_usd": "5"}})
+                       "max_daily_loss_usd": "5",
+                       "nonce_sid": CA.nonce_sid("session-test-nonce"),
+                       "series": SERIES, "max_windows": 4,
+                       "expires_utc": _soon()}})
+    except AUTH.ArmingRefusal as exc:
+        # it may refuse for a LATER, unrelated reason -- this helper supplies
+        # no venue window and no real ledger. What must not happen is a
+        # refusal about the AUTHORIZATION itself.
+        assert str(exc.reason) != "OWNER_AUTHORIZATION_ABSENT", (
+            "a valid campaign must authorize on its own")
+        assert not str(exc.reason).startswith("CAMPAIGN"), exc.reason
+        assert not str(exc.reason).startswith("MANDATE"), exc.reason
+
+
+def test_with_NEITHER_a_campaign_NOR_the_handshake_it_still_refuses(
+        monkeypatch):
+    """The relaxation is narrow: one of the two is still required."""
+    monkeypatch.delenv("PMUS_Q1_LIVE", raising=False)
+    monkeypatch.delenv("PMUS_Q1_ARM", raising=False)
+    monkeypatch.delenv("PMUS_Q1_SESSION_ID", raising=False)
+    with pytest.raises(AUTH.ArmingRefusal) as e:
+        arm({"present": False, "ok": False, "reason": "approval_absent"})
     assert e.value.reason == "OWNER_AUTHORIZATION_ABSENT"
+    assert "campaign" in e.value.detail["needs_either"]
+    assert "legacy_handshake" in e.value.detail["needs_either"]

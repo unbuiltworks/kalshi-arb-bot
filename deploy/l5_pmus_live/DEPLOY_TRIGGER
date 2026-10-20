@@ -1548,3 +1548,15 @@ selfcheck completeness repair, shadow-only 2026-10-20T15:45Z
 # BOTH TRADING LOCKS STAY ON. Gate: 26 failed, 11969 passed, 14 errors --
 # the same 40 baseline ids, zero NEW, zero GONE.
 no reservation under the shadow lock, shadow-only 2026-10-20T16:25Z
+
+# 2026-10-20 — SHADOW-ONLY. The campaign approval is now the AUTHORIZATION
+# for campaign trading, not merely a bound on one, so one owner approval
+# covers its windows without a PMUS_Q1 rotation per campaign. The legacy
+# handshake is untouched for one-window probes. The window is reserved only
+# after authorize_arming RETURNS, and only for a window that can still
+# trade. Under a campaign the mandate holder binds per window instead of
+# across the mandate, because a redeploy otherwise refused every remaining
+# window. BOTH TRADING LOCKS STAY ON.
+# Gate: 26 failed, 11989 passed, 14 errors -- the same 40 baseline ids,
+# zero NEW, zero GONE.
+campaign-scoped authorization, shadow-only 2026-10-20T17:20Z
