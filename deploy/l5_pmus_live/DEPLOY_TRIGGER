@@ -1391,3 +1391,24 @@ deploy book-at-the-wire capture and honest frame freshness, shadow-locked 2026-1
 # unset), arm token not reissued, authorization EXPIRED, every risk limit
 # unchanged. No pair-cap change: 0.96 is reached by resting one tick behind.
 deploy two-leg pre-live: queue bracket + widen-only terminal margin, shadow-locked 2026-10-20T00:13:56Z
+
+# ---------------------------------------------------------------------------
+# e7cbdc10 -- L5_TS_PLACE_FLOOR_S, the one real blocker to a mandate campaign.
+#
+# may_place allowed placement from T+0 while the terminal deadline is fixed to
+# the window CLOSE, so a leg's rest was bounded only by when the shadow lock
+# came off. Fine for one hand-timed window; fatal for consecutive windows,
+# where a leg placed at T+0:05 and held to T+10:00 rests 595s against the
+# watchdog's 300s and the watchdog ASSERTS HALT BEFORE it cancels.
+#
+# The floor is RAISE-ONLY (a later floor is a shorter rest) and defaults to
+# 0.0, so deployed behaviour is byte-for-byte unchanged until it is set. With
+# floor 360 + margin 300 every window is bounded at exactly 240s.
+#
+# Regression: 26 failed / 11,658 passed / 14 errors = the SAME 40 IDs as the
+# clean baseline, zero NEW, zero GONE; +3 passed are the 3 floor tests.
+#
+# ADDS NO CAPABILITY AND AUTHORIZES NO ORDER. SHADOW_ONLY stays enabled, the
+# two-leg probe stays INERT, mandate mode is OFF (L5_LIVE_AUTH_MAX_WINDOWS
+# unset), the authorization remains EXPIRED and every risk limit is unchanged.
+deploy raise-only placement floor for mandate campaigns, shadow-locked 2026-10-20T00:34:08Z
