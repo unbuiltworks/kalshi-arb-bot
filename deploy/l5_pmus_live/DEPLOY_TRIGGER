@@ -1472,3 +1472,7 @@ deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
 # 2026-10-20T13:14:13Z DEPLOY the correction: explicit L5_WINDOW_STRATEGY exclusivity
 # (unset enforces nothing), pair ceiling in OWN terms. 1215z was +$0.0984,
 # not a loss. Live execution stays OFF. Same 40 baseline IDs, zero NEW.
+
+# 2026-10-20T13:41:52Z DEPLOY the submission budget + the 1215z regression. Live
+# trading stays OFF (L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO). Same 40 baseline
+# IDs, zero NEW. 1215z resolved: two legitimate per-leg claims, +$0.0984.
