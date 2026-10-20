@@ -1176,3 +1176,155 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
                        "of the first leg. A displayed price is not a fill: "
                        "this leg may rest unfilled or fill partially, and the "
                        "residual is then carried under the existing limits.")}
+
+
+# ============================================ B5: the completion-price ceiling
+#
+# WHAT THIS IS FOR. `completion_decision` already answers "should we cross
+# right now, at the one price the book is showing?". It does not answer the
+# question an authorization needs answered first: "how dear a completion is
+# permissible AT ALL, given what we actually paid, the fee we would actually
+# owe, the inventory we actually hold and the residual risk the owner has
+# actually approved?" That ceiling is a POLICY, and a policy has to be stated
+# as a number before it can be authorized. So this computes it and reports
+# every binding constraint separately. It enables nothing.
+#
+# FOUR CEILINGS, AND THEY ARE DIFFERENT QUESTIONS.
+#
+#   positive_both  the completed book pays on BOTH outcomes. The strongest
+#                  ceiling, and the only one that makes a completion a
+#                  profit rather than a smaller loss.
+#   improves       completing beats HOLDING the one-sided book. This can be
+#                  satisfied where `positive_both` is not: a stranded leg
+#                  bought at 0.79 is already a $3.21 worst case, and a dear
+#                  completion that leaves a $0.40 worst case is better,
+#                  though still a loss.
+#   within_budget  the worst outcome after completing stays inside the
+#                  residual-risk budget the owner approved.
+#   pair_cap       the effective cost per MATCHED share stays under the
+#                  spring target. This is the maker-pair discipline applied
+#                  to a crossing completion; it may be the binding one.
+#
+# The dearest permissible price is the MINIMUM of the ceilings in force, and
+# which ceilings are in force is the owner's decision, not this function's.
+#
+# PRICES ARE OWN-OUTCOME, on the venue tick grid, and the fee is charged at
+# the TAKER coefficient because crossing is what this prices. Costs already
+# paid are taken as given and NOT re-charged a fee: they are sunk, and the
+# fees on them were charged when they filled.
+#
+# NOTHING HERE SUBMITS, CANCELS OR AUTHORIZES ANYTHING.
+
+def max_completion_price(*, held_side: str, held_qty: Any, held_cost_usd: Any,
+                         deficient_qty: Any = 0,
+                         deficient_cost_usd: Any = 0,
+                         complete_qty: Any,
+                         residual_budget_usd: Any,
+                         tick: Any = "0.01",
+                         pair_cap: Any = None,
+                         theta: Any = None) -> Dict[str, Any]:
+    """The dearest price at which completing is permissible, and why.
+
+    `held_*` is the side that FILLED -- exchange-confirmed quantity and the
+    cash actually paid for it, fees included. `deficient_*` is whatever the
+    other side already holds, which is usually nothing. `complete_qty` is how
+    much of the deficit the caller intends to buy, already clipped to the
+    displayed depth by the caller, because only the caller has the book.
+    """
+    def no(reason: str, **extra: Any) -> Dict[str, Any]:
+        return dict({"ok": False, "reason": reason}, **extra)
+
+    if held_side not in (UP, DOWN):
+        return no("HELD_SIDE_UNKNOWN", held_side=str(held_side))
+    h = _d(held_qty)
+    ch = _d(held_cost_usd)
+    d0 = _d(deficient_qty)
+    cd0 = _d(deficient_cost_usd)
+    d = _d(complete_qty)
+    budget = _d(residual_budget_usd)
+    tk = _d(tick)
+    if h is None or h <= 0:
+        return no("NO_CONFIRMED_INVENTORY", held_qty=str(held_qty))
+    if ch is None or ch < 0:
+        return no("HELD_COST_UNKNOWN", held_cost_usd=str(held_cost_usd))
+    if d0 is None or d0 < 0 or cd0 is None or cd0 < 0:
+        return no("DEFICIENT_SIDE_UNREADABLE")
+    if d is None or d <= 0:
+        return no("NOTHING_TO_COMPLETE", complete_qty=str(complete_qty))
+    if budget is None or budget < 0:
+        # a budget we cannot read is NOT an unlimited one
+        return no("RESIDUAL_BUDGET_UNKNOWN",
+                  residual_budget_usd=str(residual_budget_usd))
+    if tk is None or tk <= 0:
+        return no("TICK_UNKNOWN")
+    cap = max_pair_cost() if pair_cap is None else _d(pair_cap)
+    if cap is None or cap <= 0:
+        return no("PAIR_CAP_UNKNOWN")
+    th = TAKER_THETA if theta is None else _d(theta)
+    if th is None:
+        return no("THETA_UNKNOWN")
+
+    sunk = ch + cd0
+    # the worst outcome if we DO NOTHING and carry the one-sided book
+    held_worst = min(h, d0) - sunk
+
+    ceilings: Dict[str, Optional[D]] = {"positive_both": None,
+                                        "improves": None,
+                                        "within_budget": None,
+                                        "pair_cap": None}
+    rows = []
+    q = MAX_PRICE
+    # descending the grid: every constraint is monotone in q (a cheaper
+    # completion is never worse), so the FIRST q that satisfies one is the
+    # dearest price that satisfies it.
+    while q >= MIN_PRICE:
+        f = fee(th, d, q)
+        cost = sunk + q * d + f
+        up_after = (h + D(0)) if held_side == UP else (d0 + d)
+        dn_after = (d0 + d) if held_side == UP else (h + D(0))
+        worst = min(up_after - cost, dn_after - cost)
+        matched = min(up_after, dn_after)
+        eff_pair = (cost / matched) if matched > 0 else None
+        tests = {
+            "positive_both": worst > 0,
+            "improves": worst > held_worst,
+            "within_budget": worst >= -budget,
+            "pair_cap": eff_pair is not None and eff_pair <= cap,
+        }
+        for name, passed in tests.items():
+            if passed and ceilings[name] is None:
+                ceilings[name] = q
+        if all(tests.values()):
+            rows.append(q)
+        q -= tk
+
+    present = {k: v for k, v in ceilings.items() if v is not None}
+    dearest_all = max(rows) if rows else None
+    binding = None
+    if present:
+        binding = min(present, key=lambda k: present[k])
+
+    return {
+        "ok": dearest_all is not None,
+        "reason": None if dearest_all is not None else "NO_PERMISSIBLE_PRICE",
+        "held_side": held_side, "deficient_side": (DOWN if held_side == UP
+                                                   else UP),
+        "held_qty": str(h), "held_cost_usd": str(sunk),
+        "avg_cost_px": str((sunk / h).quantize(D("0.0001"))),
+        "complete_qty": str(d),
+        "residual_budget_usd": str(budget),
+        "pair_cap": str(cap), "theta": str(th),
+        "worst_outcome_if_held_usd": str(held_worst),
+        "ceilings": {k: (None if v is None else str(v))
+                     for k, v in ceilings.items()},
+        "max_permissible_price": (None if dearest_all is None
+                                  else str(dearest_all)),
+        "binding_ceiling": binding,
+        "labels": ("own-outcome prices on the venue grid, TAKER fee, costs "
+                   "already paid treated as SUNK and not re-charged. A null "
+                   "ceiling means NO price on the grid satisfies that "
+                   "constraint. This computes a policy and authorizes "
+                   "nothing: which ceilings are in force is the owner's "
+                   "decision, and `max_permissible_price` is the minimum of "
+                   "ALL FOUR, which is the most conservative reading."),
+    }

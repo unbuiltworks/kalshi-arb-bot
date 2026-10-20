@@ -849,3 +849,157 @@ def test_a_cancel_the_venue_says_is_STILL_OPEN_is_not_treated_as_done(
     assert why.startswith("BOOK_UNCERTAIN:") or why == "MAX_LIVE_ORDERS", why
     assert "still reports it live" in why or why == "MAX_LIVE_ORDERS", why
     assert len(w.venue.sent) == 1
+
+
+# ================================ submitted is NOT hedged; only fills count
+
+def test_a_SUBMITTED_complement_is_not_a_hedge_until_the_exchange_fills_it(
+        tmp_path):
+    """THE INVARIANT. A resting complement is an intention. Until the venue
+    confirms a fill the book is still ONE-SIDED, the residual is undiminished
+    and the worst case is unchanged. Nothing in the engine may count a
+    submission as cover."""
+    w = Window(tmp_path)
+    w.venue.fill_next()                        # leg one fills
+    w.tick(30.0)
+    leg1 = w.venue.sent[0]
+    qty = D(leg1["qty"])
+    other = "DOWN" if leg1["side"] == "UP" else "UP"
+
+    w.tick(90.0)                               # the complement is SUBMITTED
+    assert len(w.venue.sent) == 2
+    assert w.venue.sent[1]["side"] == other
+
+    # ... and nothing about the position has changed
+    assert w.store.position(SLUG, leg1["side"]) == qty
+    assert w.store.position(SLUG, other) == D(0)
+    assert w.store.residual(SLUG) in (qty, -qty)
+    # the resting complement counts as OUTSTANDING, never as matched
+    assert w.store.still_fillable_order_count() == 1
+    assert w.store.outstanding_residual(SLUG) != D(0)
+
+    # settlement from the confirmed fills alone: ONE leg, a directional bet
+    recs = [{"L5_NATIVE": {"side": leg1["side"]},
+             "FILL": {"filled": True, "filled_qty": str(qty),
+                      "fill_price": str(leg1["price"]), "fee_usd": "0",
+                      "maker_rebate_usd": "0"}},
+            {"L5_NATIVE": {"side": other}, "FILL": {"filled": False}}]
+    out = E.settle(recs, market=SLUG, yes_value=D("0"))
+    assert D(out["matched"]) == D("0")         # NOT a completed pair
+    assert D(out["realized_net_usd"]) < 0
+
+
+# ========================================== a post-only order the venue REJECTS
+
+def test_a_post_only_order_the_venue_REJECTS_leaves_no_phantom_position(
+        tmp_path):
+    """A crossing post-only order is rejected rather than filled. The engine
+    must not carry it as live, must not book a position, and must not treat
+    the attempt as a hedge -- while the claim stays spent, because the order
+    did reach the venue."""
+    w = Window(tmp_path)
+
+    def reject(intent):
+        w.venue.sent.append(dict(intent))
+        raise RuntimeError("POST_ONLY_WOULD_CROSS")
+    w.venue.submit = reject
+
+    rec = w.tick(30.0)
+    assert len(w.venue.sent) == 1              # it was attempted
+    assert w.reason(rec) != "SUBMITTED"
+    # no position, and no phantom resting order
+    assert w.store.position(SLUG, "UP") == D(0)
+    assert w.store.position(SLUG, "DOWN") == D(0)
+    # the registry reserved it BEFORE the wire, so it is not silently dropped:
+    # either it is live-and-unresolved or the book is uncertain, never clean
+    assert (w.store.still_fillable_order_count() >= 1
+            or w.store.orders_uncertain())
+
+
+# ================================================= the cancellation race
+
+def test_a_fill_that_lands_WHILE_the_cancel_is_in_flight_is_booked_not_lost(
+        tmp_path):
+    """THE RACE. We decide to cancel at the TTL; between that decision and
+    the venue's answer the order fills. `maybe_acc_deadline` polls BEFORE it
+    cancels for exactly this reason: the fill must be booked into inventory
+    rather than discarded as a cancellation.
+
+    Modelled by a venue that reports the fill on the re-read, which is what a
+    venue racing us actually does.
+    """
+    w = Window(tmp_path)
+    w.tick(30.0)                               # resting, nothing filled yet
+    intent = w.venue.sent[0]
+    qty = D(intent["qty"])
+
+    # the venue filled it in full just as the deadline fired
+    w.venue.acked["v1"] = str(qty)
+
+    w.tick(155.0)                              # TTL: poll, then cancel
+    # the FILL won: inventory carries it
+    assert w.store.position(SLUG, intent["side"]) == qty
+    # and no phantom remains fillable
+    assert w.store.still_fillable_order_count() == 0
+
+
+def test_a_PARTIAL_fill_racing_the_cancel_books_the_part_and_withdraws_rest(
+        tmp_path):
+    w = Window(tmp_path)
+    w.tick(30.0)
+    intent = w.venue.sent[0]
+    w.venue.acked["v1"] = "1.00"               # partial, mid-cancel
+
+    w.tick(155.0)
+    assert w.store.position(SLUG, intent["side"]) == D("1.00")
+    assert w.venue.cancelled == ["v1"]
+    assert w.store.still_fillable_order_count() == 0
+    # and the round now HOLDS inventory, so it may not be retired
+    blocked = w.ex.probe_round_is_safe_to_retire(SLUG, 0)
+    assert blocked is not None and blocked.startswith("LEG_HOLDS_INVENTORY")
+
+
+# ============================== repricing the complement after a PARTIAL fill
+
+def test_the_complement_after_a_PARTIAL_fill_matches_only_what_filled(
+        tmp_path):
+    """Sized to exchange-confirmed quantity, priced at the current book. A
+    1.00 fill of a 3.32 leg is hedged by 1.00, not by 3.32 -- over-hedging
+    would open a directional position on the other side."""
+    w = Window(tmp_path)
+    w.venue.fill_next("1.00")                  # partial
+    w.tick(30.0)
+    leg1 = w.venue.sent[0]
+    assert D(leg1["qty"]) > D("1.00")
+    w.tick(155.0)                              # TTL withdraws the remainder
+    assert w.store.position(SLUG, leg1["side"]) == D("1.00")
+
+    w.book.set("0.50", "0.52")                 # and the market has moved
+    rec = w.tick(170.0)
+    comp = rec.get("TWO_SIDED_COMPLEMENT")
+    assert comp is not None and comp["ok"] is True, w.reason(rec)
+    assert D(comp["unmatched"]) == D("1.00")
+    assert D(comp["leg"]["qty"]) == D("1.00")  # matches the FILL, not the plan
+    # priced off the CURRENT book
+    side = comp["leg"]["side"]
+    assert D(comp["leg"]["price"]) == TS.quote_own_price(
+        side, bid="0.50", ask="0.52", tick="0.01", depth_ticks=2)
+    assert D(comp["first_leg_cost"]) == D(leg1["price"])
+
+
+def test_the_net_pair_cost_ceiling_holds_on_the_repriced_complement(tmp_path):
+    """C3 end to end. Whatever the book does, a complement that would put the
+    effective pair above 0.96 against the REALISED first-leg cost is refused
+    and nothing is sent."""
+    w = Window(tmp_path)
+    w.venue.fill_next()
+    w.tick(30.0)
+    first = D(w.venue.sent[0]["price"])
+
+    w.book.set("0.30", "0.32")                 # complement would cost 0.66
+    rec = w.tick(90.0)
+    comp = rec["TWO_SIDED_COMPLEMENT"]
+    assert comp["ok"] is False
+    assert D(comp["pair_cost"]) > D("0.96")
+    assert D(comp["first_leg_cost"]) == first
+    assert len(w.venue.sent) == 1              # nothing sent
