@@ -30,6 +30,10 @@ def pytest_configure(config):
         "test supplies its own (for tests of the mandate itself)")
     config.addinivalue_line(
         "markers",
+        "real_gemini_socket: start the REAL Gemini websocket thread (the "
+        "suite replaces its body; see _no_real_gemini_socket)")
+    config.addinivalue_line(
+        "markers",
         "multi_submission: the test drives SEVERAL armed submissions, each "
         "standing for a separate authorization, so the one-submission "
         "claim's experiment id rotates per call")
@@ -176,3 +180,37 @@ def _suite_runs_under_a_test_mandate(monkeypatch, request):
         "max_spend_per_market": "1000000", "max_total_spend": "1000000",
         "max_residual": "1000000", "max_daily_realized_loss": "1000000",
         "expiry": "2999-01-01T00:00:00Z"}))
+
+
+# --------------------------------------------------------------- the segfault
+# THE CRASH THIS FIXTURE PINS. Two full-suite runs died with
+# `Fatal Python error: Segmentation fault`, the faulting frame being
+# `ssl.load_default_certs` inside `src/l5_shadow/gemini_ws.py:_ctx`, on one of
+# SIX leaked daemon socket threads, concurrent with `_pytest/capture.py:resume`
+# on the main thread. `GeminiFeed.watch` starts a real websocket thread whose
+# reconnect loop builds a fresh SSL context every two seconds and runs until
+# the process exits; nothing in the suite stops them. Several of those building
+# a default context at once is what faults.
+#
+# The thread body is replaced with a no-op, so `watch` still returns a book and
+# every reader sees the same "socket has delivered nothing" state it sees
+# before the first frame arrives in production -- the path the fallback exists
+# for. No test asserts live Gemini socket content; a test that wants the real
+# socket opts in with @pytest.mark.real_gemini_socket.
+@pytest.fixture(autouse=True)
+def _no_real_gemini_socket(monkeypatch, request):
+    from src.l5_shadow import gemini_ws as _gws
+    if request.node.get_closest_marker("real_gemini_socket"):
+        return
+    seen = []
+
+    def _inert(self, symbol):               # the thread target, doing nothing
+        seen.append(symbol)
+    monkeypatch.setattr(_gws.GeminiFeed, "_run", _inert)
+    yield
+    if seen:
+        import os
+        p = os.environ.get("L5_TEST_WS_TRIPWIRE")
+        if p:
+            with open(p, "a") as fh:
+                fh.write("%s %s\n" % (request.node.nodeid, ",".join(seen)))
