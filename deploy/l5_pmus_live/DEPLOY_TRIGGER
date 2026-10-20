@@ -1441,3 +1441,8 @@ deploy raise-only placement floor for mandate campaigns, shadow-locked 2026-10-2
 # AUTHORIZES NO ORDER. SHADOW_ONLY enabled, two-leg engine INERT (L5_TS_*
 # unset), mandate off, authorization EXPIRED, every risk limit unchanged.
 deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
+
+# 2026-10-20T02:37:50Z DEPLOY f7a2b81f: the two-leg planner gets the authenticated book (additive).
+# Regression on this tree: 26 failed / 11,721 passed / 14 errors = the same 40
+# IDs as the baseline, zero NEW, zero GONE, no crash. Authorizes no order:
+# SHADOW_ONLY stays enabled, authorization expired, limits unchanged.
