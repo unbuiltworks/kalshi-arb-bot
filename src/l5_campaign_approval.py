@@ -32,6 +32,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import os
 from decimal import Decimal as D, InvalidOperation
 from typing import Any, Dict, Optional
 
@@ -220,3 +221,193 @@ class ApprovalGate:
                            "the code ceilings; `clamped` names every field "
                            "the code reduced. The nonce still has to be "
                            "claimed single-use before anything arms.")}
+
+
+# ===================================================== the campaign SESSION
+#
+# `state()` above answers "is there a valid approval, and what does it
+# permit?". This layer answers the operational question: "may THIS market, in
+# THIS window, be armed under it -- and how many windows are left?"
+#
+# WHY CONSUMPTION IS DURABLE AND KEYED ON THE NONCE. A window counter held in
+# memory is reset by every redeploy, and this service redeploys whenever a
+# variable changes. A four-window approval would then authorize four windows
+# per restart, without limit. So consumption is written to the volume under
+# the nonce's own id: the same approval always sees the same count, and a new
+# approval (a new nonce) starts its own.
+#
+# WHY A WINDOW IS RESERVED BEFORE ARMING, NOT CREDITED AFTER. A crash between
+# "we decided to arm" and "we recorded that we did" has to cost a window
+# rather than grant one, which is the same conservative direction
+# `record_submit` takes before the wire. Reserving is IDEMPOTENT per market
+# slug, so a restart inside a window that is already reserved resumes it and
+# does not spend a second.
+
+CONSUMED_DIR = "campaign_windows"
+ROOT_ENV = "L5_LIVE_ROOT"
+
+
+def consumed_root(root: Optional[str] = None) -> str:
+    base = root or os.getenv(ROOT_ENV, "").strip() or "."
+    return os.path.join(base, CONSUMED_DIR)
+
+
+class WindowLedger:
+    """Durable, per-nonce record of which windows an approval has spent."""
+
+    def __init__(self, root: Optional[str] = None) -> None:
+        self.dir = consumed_root(root)
+
+    def _path(self, nonce_sid: str) -> str:
+        safe = "".join(c for c in str(nonce_sid)
+                       if c.isalnum() or c in ".-_")
+        if not safe:
+            raise ValueError("empty nonce id")
+        return os.path.join(self.dir, "%s.json" % safe)
+
+    def read(self, nonce_sid: str) -> Dict[str, Any]:
+        """What this approval has spent. A READ FAILURE RAISES -- it is never
+        reported as an empty ledger, because "I could not tell" and "nothing
+        spent" differ by the whole budget."""
+        p = self._path(nonce_sid)
+        try:
+            with open(p, "r") as fh:
+                doc = json.load(fh)
+        except FileNotFoundError:
+            return {"nonce_sid": str(nonce_sid), "windows": []}
+        except BaseException as exc:                          # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise ApprovalReadUnavailable(
+                "window ledger unreadable: %s" % type(exc).__name__) from exc
+        if not isinstance(doc, dict) or not isinstance(
+                doc.get("windows"), list):
+            raise ApprovalReadUnavailable("window ledger malformed")
+        return doc
+
+    def reserve(self, nonce_sid: str, market: str, *,
+                max_windows: int, now_iso: str) -> Dict[str, Any]:
+        """Reserve `market` against this approval, durably and idempotently.
+
+        Returns the index (1-based) and what remains. Raises on a read
+        failure and refuses once the budget is spent. The write is atomic and
+        fsynced before this returns, so the reservation survives the crash it
+        exists to survive.
+        """
+        doc = self.read(nonce_sid)
+        windows = [str(w) for w in doc.get("windows") or ()]
+        if market in windows:
+            return {"ok": True, "index": windows.index(market) + 1,
+                    "windows_spent": len(windows),
+                    "windows_remaining": max(0, int(max_windows)
+                                             - len(windows)),
+                    "reserved_now": False, "market": market}
+        if len(windows) >= int(max_windows):
+            return {"ok": False, "reason": "CAMPAIGN_WINDOWS_EXHAUSTED",
+                    "windows_spent": len(windows),
+                    "max_windows": int(max_windows), "market": market}
+        windows.append(market)
+        out = dict(doc, nonce_sid=str(nonce_sid), windows=windows,
+                   last_utc=now_iso)
+        out.setdefault("first_utc", now_iso)
+        os.makedirs(self.dir, exist_ok=True)
+        p = self._path(nonce_sid)
+        tmp = p + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(out, fh, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, p)
+        try:
+            dfd = os.open(self.dir, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:
+            pass            # the file itself is already fsynced
+        return {"ok": True, "index": len(windows),
+                "windows_spent": len(windows),
+                "windows_remaining": max(0, int(max_windows) - len(windows)),
+                "reserved_now": True, "market": market}
+
+
+def authorize_window(gate: "ApprovalGate", market: str, *,
+                     ledger: Optional[WindowLedger] = None,
+                     now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+    """May this market be armed under the current approval? Default NO.
+
+    THREE OUTCOMES, AND THE MIDDLE ONE IS THE IMPORTANT ONE:
+
+      `present: False`  no approval document at all. This layer says nothing
+                        and the caller keeps whatever single-window
+                        authorization it already had. A campaign system that
+                        silently REPLACED the existing handshake would be a
+                        widening disguised as a feature.
+      `ok: False`       a document exists and does not permit this. The
+                        caller must REFUSE -- never fall back to the
+                        single-window path, or an expired or exhausted
+                        campaign would quietly become a fresh one-window
+                        authorization.
+      `ok: True`        armed for this window, with the window reserved.
+    """
+    now = now or _utc()
+    try:
+        st = gate.state()
+    except ApprovalReadUnavailable as exc:
+        # UNREADABLE IS PRESENT-AND-REFUSING, never absent. A storage fault
+        # must not read as "no campaign, carry on".
+        return {"present": True, "ok": False,
+                "reason": "APPROVAL_UNREADABLE",
+                "detail": {"error": str(exc)[:160]}}
+    why = str(st.get("why") or "")
+    if not st.get("approved") and why in ("approval_absent", "approval_empty",
+                                          "approval_not_set"):
+        return {"present": False, "ok": False, "reason": why or "absent"}
+    # `state()` CATCHES a read failure and reports it rather than raising, so
+    # the precise reason has to be recovered here too -- otherwise a storage
+    # fault is reported as a merely invalid document, which reads like the
+    # owner's mistake instead of ours.
+    if why == "approval_unreadable":
+        return {"present": True, "ok": False, "reason": "APPROVAL_UNREADABLE",
+                "detail": {"why": why}}
+    if not st.get("approved"):
+        return {"present": True, "ok": False,
+                "reason": "APPROVAL_NOT_VALID", "detail": {"why": why}}
+    scope = dict(st.get("scope") or {})
+    series = str(scope.get("series") or "")
+    if not series or not str(market).startswith(series):
+        return {"present": True, "ok": False,
+                "reason": "CAMPAIGN_SERIES_MISMATCH",
+                "detail": {"series": series, "attempted": str(market)},
+                "scope": scope}
+    exp = _ts(scope.get("expires_utc"))
+    if exp is None or (exp - now).total_seconds() <= 0:
+        return {"present": True, "ok": False, "reason": "CAMPAIGN_EXPIRED",
+                "detail": {"expires_utc": scope.get("expires_utc")},
+                "scope": scope}
+    led = ledger or WindowLedger()
+    try:
+        res = led.reserve(str(scope.get("nonce_sid")), str(market),
+                          max_windows=int(scope.get("max_windows") or 0),
+                          now_iso=now.isoformat())
+    except ApprovalReadUnavailable as exc:
+        return {"present": True, "ok": False,
+                "reason": "WINDOW_LEDGER_UNREADABLE",
+                "detail": {"error": str(exc)[:160]}, "scope": scope}
+    except BaseException as exc:                              # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"present": True, "ok": False,
+                "reason": "WINDOW_RESERVE_FAILED",
+                "detail": {"error": type(exc).__name__}, "scope": scope}
+    if not res.get("ok"):
+        return {"present": True, "ok": False,
+                "reason": str(res.get("reason")), "detail": res,
+                "scope": scope}
+    return {"present": True, "ok": True, "reason": None,
+            "scope": scope, "window": res,
+            "labels": ("the window is RESERVED durably before anything arms, "
+                       "so a crash costs a window rather than granting one, "
+                       "and re-arming the same slug after a restart resumes "
+                       "it instead of spending another")}

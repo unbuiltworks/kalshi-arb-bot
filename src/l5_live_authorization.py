@@ -1025,6 +1025,26 @@ class ArmingRefusal(Refused):
     """Refused at the shared arming boundary."""
 
 
+def _dec_or_none(v: Any):
+    """A Decimal, or None. Unreadable is never zero and never unlimited."""
+    if v is None:
+        return None
+    try:
+        return D(str(v))
+    except BaseException:                                      # noqa: BLE001
+        return None
+
+
+def _limit_of(limits: Any, field: str):
+    """One field off the running SafetyLimits, or None if it cannot be read."""
+    if limits is None:
+        return None
+    try:
+        return _dec_or_none(getattr(limits, field))
+    except BaseException:                                      # noqa: BLE001
+        return None
+
+
 def authorize_arming(*, market: str, preflight: Any, store: Any,
                      halted: bool, reconciled: bool,
                      halt_gate_present: bool = False,
@@ -1034,6 +1054,7 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                      nominal_window_s: Optional[float] = None,
                      series: Optional[str] = None,
                      max_windows: int = 1,
+                     campaign: Optional[Mapping[str, Any]] = None,
                      auth: Optional["Authorization"] = None,
                      path: Optional[str] = None,
                      require_durable: bool = True,
@@ -1067,6 +1088,50 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     if not sid:
         raise ArmingRefusal("OWNER_AUTHORIZATION_ABSENT",
                             {"needs": [Q1.SID_ENV]})
+    # 2b. THE CAMPAIGN APPROVAL, when one exists.
+    #
+    #     Passed in as a FACT by the caller, exactly as `reconciled` and
+    #     `halted` are, so a caller that cannot establish it has to say so
+    #     and be refused rather than omit it.
+    #
+    #     THREE OUTCOMES, and the middle one is the whole point:
+    #       absent          -> this says nothing; the single-window
+    #                          handshake above already authorized us, and a
+    #                          campaign layer that REPLACED it would be a
+    #                          widening disguised as a feature.
+    #       present, not ok -> REFUSE. Never fall back to the single-window
+    #                          path: an expired, exhausted or unreadable
+    #                          campaign would otherwise quietly become a
+    #                          fresh one-window authorization, which is the
+    #                          opposite of what spending a window means.
+    #       present, ok     -> proceed, with the window already reserved
+    #                          durably by the caller.
+    if campaign is not None and campaign.get("present"):
+        if not campaign.get("ok"):
+            raise ArmingRefusal(
+                str(campaign.get("reason") or "CAMPAIGN_NOT_APPROVED"),
+                {"detail": campaign.get("detail"),
+                 "note": "a campaign document exists and does not permit "
+                         "this; the single-window path is NOT a fallback"})
+        _scope = dict(campaign.get("scope") or {})
+        # the running caps must sit INSIDE what was approved. A cap widened
+        # after approval invalidates the approval rather than inheriting it.
+        _appr_exp = _dec_or_none(_scope.get("max_total_exposure_usd"))
+        _appr_loss = _dec_or_none(_scope.get("max_daily_loss_usd"))
+        _run_exp = _limit_of(limits, "max_total_exposure_usd")
+        _run_loss = _limit_of(limits, "daily_realized_loss_halt_usd")
+        if _appr_exp is None or _appr_loss is None:
+            raise ArmingRefusal("CAMPAIGN_SCOPE_UNREADABLE", {"scope": _scope})
+        if _run_exp is None or _run_loss is None:
+            raise ArmingRefusal("CAMPAIGN_RUNNING_LIMITS_UNREADABLE",
+                                {"note": "limits that cannot be read cannot "
+                                         "be shown to be inside the approval"})
+        if _run_exp > _appr_exp or _run_loss > _appr_loss:
+            raise ArmingRefusal("CAMPAIGN_LIMITS_WIDER_THAN_APPROVED",
+                                {"approved_exposure": str(_appr_exp),
+                                 "running_exposure": str(_run_exp),
+                                 "approved_daily_loss": str(_appr_loss),
+                                 "running_daily_loss": str(_run_loss)})
     # 3. the halt latch
     if halted:
         raise ArmingRefusal("HALTED", {"note": "halt latch is set"})
