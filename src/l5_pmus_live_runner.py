@@ -249,6 +249,25 @@ def _dec(v: Any) -> Optional[D]:
         return None
 
 
+#: every check `Runner.budget_selfcheck` must produce when budgets are
+#: configured. A missing one FAILS the report rather than being absent
+#: from it: the first production run reported all_passed true with two
+#: of these silently skipped, and a self-check that passes by not
+#: running is worse than no self-check.
+EXPECTED_SELFCHECKS = (
+    "budgets_configured",
+    "open_exhausts_at_its_ceiling",
+    "complete_survives_exhausted_open",
+    "backstop_binds_a_non_reducing_order",
+    "backstop_exempts_a_reducing_order",
+    "open_refused_without_completion_capacity",
+    "overshoot_is_refused",
+    "a_balance_inside_the_need_is_allowed",
+    "complement_classified_as_COMPLETE",
+    "a_reprice_classified_as_REPLACE",
+)
+
+
 def emit(kind: str, doc: Mapping[str, Any]) -> None:
     print("%s %s" % (kind, json.dumps(doc, default=str,
                                       separators=(",", ":"))), flush=True)
@@ -2434,6 +2453,13 @@ class Runner:
                     self.stats["shadow_error:%s:%s"
                                % (name, type(exc).__name__)] += 1
 
+    #: every check `budget_selfcheck` must produce when budgets are
+    #: configured. A missing one fails the report rather than being absent
+    #: from it -- the first production run passed with two of these skipped.
+    #: Read off the MODULE constant, never off `self`, so a caller cannot
+    #: lose the completeness check by not carrying the attribute.
+    EXPECTED_SELFCHECKS = EXPECTED_SELFCHECKS
+
     def budget_selfcheck(self) -> Dict[str, Any]:
         """Run the REAL budget enforcement in THIS process, on a throwaway
         ledger, and report what it did.
@@ -2569,34 +2595,76 @@ class Runner:
             ck["open_refused_without_completion_capacity"] = reserved
             ck["reserve_refusal"] = why
 
-            # 5. THE BALANCING SAFEGUARD, on the deployed executor object.
-            ex = getattr(self, "executor", None)
-            if ex is not None and hasattr(ex, "balancing_refusal"):
-                class _PS:
+            # 5. THE BALANCING SAFEGUARD, from the DEPLOYED EXECUTOR
+            #    CLASS, bound to a stub book.
+            #
+            # WHY THE CLASS AND NOT THE INSTANCE. `Runner.__init__` sets
+            # `self.executor = None`; the real FaithfulExecutor is built in
+            # `roll()`, on the first market roll. The first production run
+            # of this self-check therefore found `executor is None`,
+            # skipped these two checks, and still reported all_passed TRUE
+            # -- a self-check that passes by not running. Binding the
+            # class's own method to a stub store tests the same code at
+            # startup, before any roll, and does not depend on
+            # construction order.
+            #
+            # `executor_live` records whether an instance exists yet, for
+            # the operator; it is reported and never a condition.
+            # REPORTED, NOT CHECKED. At startup there is legitimately no
+            # instance yet, so this must not sit in `checks`, where every
+            # bool has to be true for the verdict to pass.
+            out["executor_live"] = getattr(self, "executor", None) is not None
+            out["executor_type"] = type(
+                getattr(self, "executor", None)).__name__
+            # this one IS a check: the deployed class must carry the method.
+            ck["executor_has_balancing"] = hasattr(
+                LX.FaithfulExecutor, "balancing_refusal")
+
+            class _Probe:
+                balancing_refusal = LX.FaithfulExecutor.balancing_refusal
+                prospective_residual = LX.FaithfulExecutor.prospective_residual
+                submission_class = LX.FaithfulExecutor.submission_class
+
+                class _Book:
                     def residual(self, m):
                         return D("2.46")
 
                     def outstanding_residual(self, m):
                         return D(0)
 
-                real_store = getattr(ex, "store", None)
-                try:
-                    ex.store = _PS()
-                    over = ex.balancing_refusal(
-                        "selfcheck-market", {"side": "DOWN"},
-                        {"qty": D("5.00"), "price": D("0.90")}, "COMPLETE")
-                    inside = ex.balancing_refusal(
-                        "selfcheck-market", {"side": "DOWN"},
-                        {"qty": D("2.00"), "price": D("0.90")}, "COMPLETE")
-                finally:
-                    if real_store is not None:
-                        ex.store = real_store
-                ck["overshoot_is_refused"] = bool(
-                    over and over.get("reason") == "BALANCING_WOULD_OVERSHOOT")
-                ck["a_balance_inside_the_need_is_allowed"] = (inside is None)
+                def __init__(self):
+                    self.store = self._Book()
+
+            probe = _Probe()
+            over = probe.balancing_refusal(
+                "selfcheck-market", {"side": "DOWN"},
+                {"qty": D("5.00"), "price": D("0.90")}, "COMPLETE")
+            inside = probe.balancing_refusal(
+                "selfcheck-market", {"side": "DOWN"},
+                {"qty": D("2.00"), "price": D("0.90")}, "COMPLETE")
+            ck["overshoot_is_refused"] = bool(
+                over and over.get("reason") == "BALANCING_WOULD_OVERSHOOT")
+            ck["a_balance_inside_the_need_is_allowed"] = (inside is None)
+            # and the CLASSIFIER, which decides which budget pays
+            ck["complement_classified_as_COMPLETE"] = (
+                probe.submission_class("selfcheck-market", {"side": "DOWN"},
+                                       {"qty": D("1.00"),
+                                        "price": D("0.90")}) == "COMPLETE")
+            ck["a_reprice_classified_as_REPLACE"] = (
+                probe.submission_class("selfcheck-market", {"side": "DOWN"},
+                                       {"qty": D("1.00"),
+                                        "price": D("0.90")},
+                                       attempt=1) == "REPLACE")
             out["ran"] = True
-            out["all_passed"] = all(
-                v for k, v in ck.items() if isinstance(v, bool))
+            # EVERY EXPECTED CHECK MUST BE PRESENT. A check that did not run
+            # is a failure, not a pass: the enforcement it was meant to
+            # demonstrate is undemonstrated either way.
+            missing = [k for k in EXPECTED_SELFCHECKS
+                       if k not in ck]
+            out["missing_checks"] = missing
+            out["all_passed"] = (
+                not missing
+                and all(v for k, v in ck.items() if isinstance(v, bool)))
             return out
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):

@@ -382,10 +382,11 @@ class _SelfEx:
 
 class _SelfRunner:
     budget_selfcheck = R.Runner.budget_selfcheck
+    EXPECTED_SELFCHECKS = R.EXPECTED_SELFCHECKS
 
-    def __init__(self, root):
+    def __init__(self, root, executor="default"):
         self.root = str(root)
-        self.executor = _SelfEx()
+        self.executor = _SelfEx() if executor == "default" else executor
 
 
 def test_the_selfcheck_PASSES_against_the_approved_budgets(tmp_path,
@@ -407,6 +408,9 @@ def test_the_selfcheck_PASSES_against_the_approved_budgets(tmp_path,
     assert ck["open_refused_without_completion_capacity"] is True
     assert ck["overshoot_is_refused"] is True
     assert ck["a_balance_inside_the_need_is_allowed"] is True
+    assert ck["complement_classified_as_COMPLETE"] is True
+    assert ck["a_reprice_classified_as_REPLACE"] is True
+    assert out["missing_checks"] == []
     assert out["all_passed"] is True
 
 
@@ -454,3 +458,57 @@ def test_the_selfcheck_REPORTS_a_failure_rather_than_raising(tmp_path,
 def test_the_startup_path_EMITS_the_selfcheck():
     src = (ROOT / "src" / "l5_pmus_live_runner.py").read_text()
     assert 'emit("L5_BUDGET_SELFCHECK", runner.budget_selfcheck())' in src
+
+
+def test_the_safeguard_is_checked_BEFORE_any_executor_instance_exists(
+        tmp_path, monkeypatch):
+    """The defect the first production run exposed. `Runner.__init__` sets
+    `executor = None`; the real FaithfulExecutor is built in `roll()`, so at
+    startup there is no instance. The check used to skip and still report
+    all_passed TRUE. It now runs against the deployed CLASS, so it does not
+    depend on construction order."""
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "skip-exp")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "28")
+    out = _SelfRunner(tmp_path, executor=None).budget_selfcheck()
+    assert out["ran"] is True
+    assert out["executor_live"] is False
+    assert out["checks"]["overshoot_is_refused"] is True
+    assert out["checks"]["a_balance_inside_the_need_is_allowed"] is True
+    assert out["missing_checks"] == []
+    assert out["all_passed"] is True
+
+
+def test_a_MISSING_check_fails_the_report(tmp_path, monkeypatch):
+    """Completeness is part of the verdict: a check that did not run is a
+    failure, not an absence."""
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "missing-exp")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "28")
+    monkeypatch.setattr(R, "EXPECTED_SELFCHECKS",
+                        R.EXPECTED_SELFCHECKS + ("a_check_nobody_runs",))
+    out = _SelfRunner(tmp_path).budget_selfcheck()
+    assert out["missing_checks"] == ["a_check_nobody_runs"]
+    assert out["all_passed"] is False
+
+
+def test_the_selfcheck_reports_whether_a_live_executor_exists_yet(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "which-exp")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "28")
+    out = _SelfRunner(tmp_path).budget_selfcheck()
+    assert out["executor_live"] is True
+    assert out["checks"]["executor_has_balancing"] is True
+    assert out["executor_type"] == "_SelfEx"
+
+
+def test_the_REAL_executor_class_carries_the_balancing_safeguard():
+    """Whatever skipped in production, it was not a missing method: the
+    deployed executor class has it."""
+    assert hasattr(LX.FaithfulExecutor, "balancing_refusal")
+    assert hasattr(LX.FaithfulExecutor, "prospective_residual")
+    assert hasattr(LX.FaithfulExecutor, "submission_class")

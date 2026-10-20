@@ -1524,3 +1524,14 @@ shadow-only campaign wiring + class budgets 2026-10-20T15:20Z
 # Release gate: 26 failed, 11960 passed, 14 errors -- the same 40 baseline
 # ids, zero NEW, zero GONE.
 budget enforcement self-check, shadow-only 2026-10-20T15:25Z
+
+# 2026-10-20 — SHADOW-ONLY. Repairs the self-check that passed by not running.
+# The first production run reported all_passed TRUE with the two balancing
+# checks ABSENT: Runner.__init__ sets executor=None and the real
+# FaithfulExecutor is built in roll(), so at startup there was no instance and
+# the guard skipped. The safeguard is now exercised against the deployed
+# CLASS, so it does not depend on construction order, and a MISSING check
+# fails the verdict instead of being absent from it.
+# BOTH TRADING LOCKS STAY ON. Gate: 26 failed, 11964 passed, 14 errors --
+# the same 40 baseline ids, zero NEW, zero GONE.
+selfcheck completeness repair, shadow-only 2026-10-20T15:45Z
