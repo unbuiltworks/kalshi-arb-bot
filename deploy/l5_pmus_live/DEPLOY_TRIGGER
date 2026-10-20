@@ -1455,3 +1455,7 @@ deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
 # Round retirement, the complement derived from the current book, the 0.96
 # pair cap, the reconciled side/price transformation, and the end-to-end
 # window test. Gate: the same 40 baseline IDs, zero NEW. Authorizes no order.
+
+# 2026-10-20T05:17:10Z DEPLOY the lifecycle observability I left out: emit
+# two_sided_round and two_sided_complement. Log-only and additive; the
+# release gate cannot be met without it. Same 40 baseline IDs, zero NEW.
