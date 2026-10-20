@@ -449,3 +449,43 @@ def test_the_widened_margin_keeps_a_leg_inside_the_watchdog_limit(monkeypatch):
     assert terminal - earliest_place <= 300.0
     assert terminal - place_last >= TSP.MIN_REST_S
     assert place_last < terminal
+
+
+def test_the_placement_floor_raises_but_never_lowers(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    assert TSP.place_floor_s() == TSP.PLACE_FLOOR_S == 0.0
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "360")
+    assert TSP.place_floor_s() == 360.0
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "-120")
+    assert TSP.place_floor_s() == 0.0, "a floor cannot be lowered below zero"
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "not-a-number")
+    assert TSP.place_floor_s() == 0.0, "unreadable is not permission"
+
+
+def test_a_mandate_window_cannot_rest_a_leg_past_the_watchdog(monkeypatch):
+    """THE MANDATE BLOCKER. With the lock open across consecutive windows
+    nothing bounded the earliest placement, so a leg could rest ~595s against
+    the watchdog's 300s. Floor 360 + margin 300 bounds every window at 240s."""
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "300")
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "360")
+    WATCHDOG_MAX_AGE = 300.0
+    for start in (1792000000.0, 1792000900.0, 1792001800.0, 1792002700.0):
+        end = TSP.window_end(start)
+        terminal = TSP.cancel_cutoff_from_start(start)
+        earliest = start + TSP.place_floor_s()
+        latest = TSP.place_cutoff(start, end)
+        assert TSP.may_place(start + 5.0, start, end) == "BEFORE_PLACE_FLOOR"
+        assert TSP.may_place(earliest, start, end) is None
+        assert TSP.may_place(latest, start, end) == "PAST_PLACE_CUTOFF"
+        # the property that matters, in EVERY window, without hand timing
+        assert terminal - earliest == 240.0
+        assert terminal - earliest < WATCHDOG_MAX_AGE
+
+
+def test_a_floor_past_the_cutoff_says_so_rather_than_going_quiet(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.PLACE_FLOOR_ENV, "880")
+    start = 1792000000.0
+    assert TSP.may_place(start + 885.0, start, TSP.window_end(start)) == \
+        "PLACE_FLOOR_LEAVES_NO_BAND"

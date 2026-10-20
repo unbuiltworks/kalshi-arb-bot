@@ -124,6 +124,33 @@ def cancel_margin_s() -> float:
 #: no leg may be PLACED after this
 PLACE_OFFSET_S = 480.0
 MIN_REST_S = 60.0
+#: the EARLIEST offset into a window at which a leg may be placed. Zero keeps
+#: the deployed behaviour byte-for-byte.
+#:
+#: WHY IT EXISTS. `may_place` allowed placement from T+0, and the terminal
+#: deadline is fixed relative to the window CLOSE, so the rest of a leg was
+#: bounded only by whoever chose the moment the shadow lock came off. That
+#: worked for one hand-timed window and does not survive a MANDATE, where the
+#: lock stays open across consecutive windows: a leg placed at T+0:05 and held
+#: to a T+10:00 deadline rests 595s against the watchdog's 300s max order age,
+#: and the watchdog ASSERTS HALT BEFORE it cancels. A floor makes the bound
+#: structural instead of operational.
+#:
+#: RAISE-ONLY, like `cancel_margin_s` widens only: a later floor is a shorter
+#: rest, so only tightening is accepted and an unreadable value is not
+#: permission.
+PLACE_FLOOR_S = 0.0
+PLACE_FLOOR_ENV = "L5_TS_PLACE_FLOOR_S"
+
+
+def place_floor_s() -> float:
+    """The effective placement floor, as an offset from the window start."""
+    raw = (os.getenv(PLACE_FLOOR_ENV) or "").strip()
+    try:
+        v = float(raw) if raw else PLACE_FLOOR_S
+    except ValueError:
+        v = PLACE_FLOOR_S
+    return max(PLACE_FLOOR_S, v)
 MAX_BOOK_AGE_S = 2.0
 
 
@@ -232,7 +259,15 @@ def may_place(now: float, t_start: float, t_end: float) -> Optional[str]:
     """None to allow, else the refusal reason."""
     if now < float(t_start):
         return "WINDOW_NOT_OPEN"
-    if now >= place_cutoff(t_start, t_end):
+    floor = float(t_start) + place_floor_s()
+    cutoff = place_cutoff(t_start, t_end)
+    if floor >= cutoff:
+        # a floor past the cutoff leaves no placement band at all. Say so
+        # rather than silently never placing, which reads like a quiet market.
+        return "PLACE_FLOOR_LEAVES_NO_BAND"
+    if now < floor:
+        return "BEFORE_PLACE_FLOOR"
+    if now >= cutoff:
         return "PAST_PLACE_CUTOFF"
     return None
 
