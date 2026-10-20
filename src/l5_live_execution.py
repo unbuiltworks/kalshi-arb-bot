@@ -1022,8 +1022,20 @@ def _nonzero(value: Any) -> bool:
 class InventoryStore:
     """Persisted inventory. The VENUE is authoritative; this is a cache."""
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str,
+                 now_fn: Optional[Callable[[], dt.datetime]] = None) -> None:
         self.path = path
+        #: THE CLOCK THAT STAMPS A SUBMISSION. `record_submit` writes the
+        #: durable submit time that the per-order deadline later measures
+        #: against the runner's `now`. In production both are the wall clock
+        #: and agree, which is why this defaulted to reading the wall clock
+        #: directly -- and why the TTL could not be exercised end to end at
+        #: all: a harness that stands the clock at T+600 compares it against
+        #: a stamp written at real-time-now, so every order reads overdue the
+        #: instant it is sent. Injecting it changes nothing in production
+        #: (the default IS the previous expression) and makes the deadline
+        #: testable against the same clock the decision used.
+        self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
         self.state: Dict[str, Any] = {"positions": {}, "committed": {},
                                       "realized_today": "0", "day": None,
                                       "submitted": {}, "live_orders": {},
@@ -1092,8 +1104,22 @@ class InventoryStore:
         """
         n = 0
         for o in (self.state.get("live_orders") or {}).values():
-            state = str(o.get("state") or "")
-            if any(h in state.upper() for h in TERMINAL_HINTS):
+            # A PARTIAL IS NOT TERMINAL, exactly as `order_progress` already
+            # says: "ORDER_STATE_PARTIALLY_FILLED" CONTAINS "FILLED", and the
+            # bare substring test that used to stand here therefore retired
+            # every partially filled order from this count -- the one count
+            # `max_live_orders` binds on. A partial fill thus voided the
+            # one-live-order bound and let a second order go out on top of an
+            # order still resting at the venue with `remaining` to work.
+            #
+            # The terminal-state check is KEPT, narrowed by one clause, so a
+            # row that genuinely names a terminal state still counts zero.
+            # That case is defensive rather than reachable -- `terminate_order`
+            # zeroes `remaining` and POPS the row, and a completing fill pops
+            # it too -- but a belt that costs one clause is worth keeping.
+            state = str(o.get("state") or "").upper()
+            if (any(h in state for h in TERMINAL_HINTS)
+                    and "PARTIAL" not in state):
                 continue
             rem = venue_decimal(o.get("remaining"))
             if rem is None or rem > 0:
@@ -2259,7 +2285,7 @@ class InventoryStore:
                       *, session_id: Optional[str] = None,
                       mode: Optional[str] = None) -> None:
         rec = {
-            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "t": self._now().isoformat(),
             "market": intent.get("market"), "side": intent.get("side"),
             "price": str(intent.get("price")), "qty": str(intent.get("qty")),
             # RUN PROVENANCE, stamped at submit. The inventory store is a file
@@ -3978,13 +4004,36 @@ class FaithfulExecutor:
         The claim file is the restart record: its presence means the leg was
         submitted, so a restarted process cannot re-place a leg whatever its
         in-memory state says.
+
+        SPENT MEANS FINISHED, NOT MERELY SENT ONCE. This asked only about
+        attempt ZERO, so the first submission of a leg marked it spent for
+        the rest of the round -- whatever became of it. The consequences were
+        both wrong and opposite in direction:
+
+          * a leg cancelled UNFILLED at its TTL was never re-placed, and the
+            chooser moved on to the OPPOSITE leg, so a round could end
+            holding ONE unhedged leg on whichever side happened to fill --
+            the exact state a both-or-neither pair exists to avoid;
+          * the bounded replacement budget (`L5_ACC_MAX_ATTEMPTS`) was
+            therefore unreachable: `acc_leg_attempt` could only ever be
+            consulted for attempt 0, because a leg with a later attempt
+            available was never selected to be placed again.
+
+        So a claimed leg is spent only when NO further placement of it is
+        permitted, which is precisely what `acc_leg_attempt` decides -- and
+        it refuses whenever the leg holds filled quantity or an order is
+        live, so a FILLED leg can still never be re-placed.
         """
         from src import l5_live_authorization as AUTH
         out = {}
         for leg in AUTH.PROBE_LEGS:
             try:
-                out[leg] = AUTH.claim_held(AUTH.accumulation_sid(
+                held = AUTH.claim_held(AUTH.accumulation_sid(
                     AUTH.experiment_id(), str(market), int(rnd), leg))
+                if held and market:
+                    held = self.acc_leg_attempt(
+                        str(market), int(rnd), leg) is None
+                out[leg] = bool(held)
             except BaseException:                              # noqa: BLE001
                 out[leg] = True        # unreadable = treat as spent
         return out

@@ -101,6 +101,43 @@ class TestStillFillableCount:
         st.save()
         assert st.still_fillable_order_count() == 0
 
+    def test_a_PARTIALLY_FILLED_row_still_counts_because_it_is_STILL_RESTING(
+            self, tmp_path):
+        """THE HOLE THIS CLASS DID NOT COVER, and the reason the test above
+        cannot be a bare substring match. "ORDER_STATE_PARTIALLY_FILLED"
+        CONTAINS "FILLED", so the terminal-hint test retired a partially
+        filled order -- which is still resting at the venue with a remainder
+        to work -- from the very count `max_live_orders` binds on. A partial
+        fill therefore voided the one-live-order bound and let a second order
+        go out on top of the first. Every maker fill of a multi-contract leg
+        is a candidate, so this was reachable by ordinary market behaviour.
+
+        Cash and exposure were never affected: `outstanding_by_market` and
+        `risk_exposure_usd` read the NUMBER. It was the order-count bound --
+        which the owner's authorization and the watchdog's one-resting-order
+        posture both rest on -- that broke.
+        """
+        st = rest(store(tmp_path), "c1", "v1")
+        st.state["live_orders"]["c1"]["state"] = "PARTIALLY_FILLED"
+        st.state["live_orders"]["c1"]["remaining"] = "2.32"
+        st.save()
+        assert st.still_fillable_order_count() == 1
+        # the venue's own spelling must behave identically
+        st.state["live_orders"]["c1"]["state"] = \
+            "ORDER_STATE_PARTIALLY_FILLED"
+        st.save()
+        assert st.still_fillable_order_count() == 1
+
+    def test_a_partially_filled_row_with_NOTHING_left_counts_zero(
+            self, tmp_path):
+        """The number still decides the other way: a partial that has since
+        been worked to completion has nothing left to fill."""
+        st = rest(store(tmp_path), "c1", "v1")
+        st.state["live_orders"]["c1"]["state"] = "PARTIALLY_FILLED"
+        st.state["live_orders"]["c1"]["remaining"] = "0"
+        st.save()
+        assert st.still_fillable_order_count() == 0
+
     def test_an_unreadable_remaining_counts_as_live(self, tmp_path):
         """An unreadable row is not an absent one -- the same worst-case
         convention the risk readers use for an unreadable price."""

@@ -183,16 +183,28 @@ def test_a_one_sided_round_is_completed_before_a_new_pair_is_opened(
 def test_each_market_accumulates_in_its_own_namespace(probe, tmp_path,
                                                       monkeypatch):
     """Successive windows are successive MARKETS. A round spent in one must
-    not read as spent in the next, or the engine goes inert on the roll."""
+    not read as spent in the next, or the engine goes inert on the roll.
+
+    ASSERTED ON THE CLAIM AND THE ATTEMPT, not on `probe_legs_claimed`. That
+    helper now answers "is this leg FINISHED" rather than "was it sent once",
+    and with nothing filled and nothing live a sent leg is legitimately
+    replaceable -- so it reads False for BOTH markets and can no longer tell
+    them apart. The namespacing property itself lives in the claim id, which
+    is what this now reads.
+    """
     H, E = probe
     monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
-    AUTH.claim_accumulation_leg("cpc-btc-updown-15m-2026-10-16-2100z", 0,
-                                "UP", {})
+    A = "cpc-btc-updown-15m-2026-10-16-2100z"
+    B = "cpc-btc-updown-15m-2026-10-16-2115z"
+    AUTH.claim_accumulation_leg(A, 0, "UP", {})
     ex, _t = mk(H, E, tmp_path)
-    assert ex.probe_legs_claimed(
-        "cpc-btc-updown-15m-2026-10-16-2100z", 0)["UP"] is True
-    assert ex.probe_legs_claimed(
-        "cpc-btc-updown-15m-2026-10-16-2115z", 0)["UP"] is False
+    exp = AUTH.experiment_id()
+    assert AUTH.claim_held(AUTH.accumulation_sid(exp, A, 0, "UP")) is True
+    assert AUTH.claim_held(AUTH.accumulation_sid(exp, B, 0, "UP")) is False
+    # and the attempt axis is per market too: A is on its SECOND placement,
+    # B has not been placed at all
+    assert ex.acc_leg_attempt(A, 0, "UP") == 1
+    assert ex.acc_leg_attempt(B, 0, "UP") == 0
 
 
 def test_each_round_is_planned_against_the_CURRENT_book(probe, tmp_path,
@@ -215,18 +227,44 @@ def test_each_round_is_planned_against_the_CURRENT_book(probe, tmp_path,
 
 
 def test_restart_recovery_cannot_replace_a_claimed_leg(probe, tmp_path):
-    """The claim file is the durable record, so a fresh executor on the same
-    volume re-places nothing."""
+    """A fresh executor on the same volume re-places nothing that FILLED.
+
+    WHAT THE DURABLE RECORD ACTUALLY PROVES. The claim file says the leg was
+    sent; the inventory says what became of it. A leg that filled -- as both
+    do here, the harness filling 1 of each -- may never be re-placed at any
+    attempt, and that is what a restart must not be able to undo.
+
+    A leg sent and NOT filled is a different case and is deliberately
+    replaceable within its attempt budget: `record_submit` persists the live
+    order BEFORE the wire, so a claim with no inventory AND no live order on
+    disk is a leg that never reached the venue or already ended there.
+    `test_a_leg_cancelled_with_ZERO_fill_may_be_REPLACED...` in the
+    end-to-end suite covers that path.
+
+    `max_live_orders` is raised here so the assertion under test is about
+    CLAIMS. At the default of two, the two partially filled rows -- which are
+    still resting with a remainder -- correctly fill both slots, and the
+    third process is refused on the order cap before the claim logic is
+    reached. That count is pinned in the end-to-end suite.
+    """
     H, E = probe
     ex, t = mk(H, E, tmp_path)
+    ex.limits = H.limits(max_live_orders=6)
     ex.handle(_row(H), _book(), market="m", window="21:00")
     assert len(t.sent) == 1
     ex2, t2 = mk(H, E, tmp_path)          # new process, same ledger dir
+    ex2.limits = H.limits(max_live_orders=6)
     ex2.handle(_row(H), _book(), market="m", window="21:00")
     assert [s["side"] for s in t2.sent] == ["UP"]     # only the unclaimed leg
-    # a third process re-places NEITHER leg of round 0; the only thing it
-    # may do is open the NEXT round, which is accumulation working.
+    # both legs of round 0 now hold filled quantity, so a third process
+    # re-places NEITHER; the only thing it may do is open the NEXT round,
+    # which is accumulation working.
     ex3, t3 = mk(H, E, tmp_path)
+    ex3.limits = H.limits(max_live_orders=6)
+    assert ex3.store.position("m", "UP") > D(0)
+    assert ex3.store.position("m", "DOWN") > D(0)
+    assert ex3.acc_leg_attempt("m", 0, "UP") is None
+    assert ex3.acc_leg_attempt("m", 0, "DOWN") is None
     ex3.handle(_row(H), _book(), market="m", window="21:00")
     assert [s["side"] for s in t3.sent] == ["DOWN"]
     assert ex3.probe_round("m") == 1
