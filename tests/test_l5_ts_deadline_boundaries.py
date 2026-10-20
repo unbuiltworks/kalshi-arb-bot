@@ -203,10 +203,18 @@ def test_the_queue_measurement_derives_its_end_correctly():
     assert "t_end=float(ws) + WINDOW_S" in body
 
 
-def test_the_executor_passes_start_AND_end_to_may_place():
+def test_the_executor_passes_start_AND_end_to_both_placement_gates():
+    """One `may_place` became two gates -- entry and completion -- because
+    opening late is dangerous while completing late REMOVES risk. Both must
+    still receive a COMPUTED end rather than assuming one."""
     import inspect
     from src import l5_live_execution as E
     body = inspect.getsource(E.FaithfulExecutor.handle)
-    i = body.index("TS.may_place(")
-    call = body[i:i + 200]
-    assert "TS.WINDOW_S" in call          # the end is computed, not assumed
+    gates = ("TS.may_enter(", "TS.may_complete(")
+    for gate in gates:
+        i = body.index(gate)              # raises if the gate is not called
+        call = body[i:i + 200]
+        assert "TS.WINDOW_S" in call, gate   # the end is computed
+        assert "float(ws)" in call, gate     # against the window's own start
+    # and the superseded single gate is gone, so neither path can use it
+    assert "TS.may_place(" not in body
