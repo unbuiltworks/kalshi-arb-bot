@@ -2434,6 +2434,183 @@ class Runner:
                     self.stats["shadow_error:%s:%s"
                                % (name, type(exc).__name__)] += 1
 
+    def budget_selfcheck(self) -> Dict[str, Any]:
+        """Run the REAL budget enforcement in THIS process, on a throwaway
+        ledger, and report what it did.
+
+        WHY THIS EXISTS. While the shadow lock is on, the arming boundary
+        refuses at SHADOW_ONLY_LOCK and `handle` never reaches a claim -- so
+        the class budgets, the backstop exemption and the completion reserve
+        are READ in production (the heartbeat reports them) but never
+        EXERCISED there. Unit tests prove the logic; they do not prove that
+        the deployed image, with the deployed variables, on the deployed
+        volume, enforces it. This closes exactly that gap.
+
+        IT CANNOT TOUCH THE REAL BUDGETS. Everything runs under a
+        throwaway experiment id in its own directory, which is removed
+        afterwards. The real ledger path is never passed in, no real claim
+        or ticket is consumed, no transport exists in this call, and nothing
+        is submitted or cancelled. It is a pure read-and-write-to-scratch
+        check whose only output is this report.
+
+        A FAILURE HERE IS A FAILURE TO REPORT, NOT TO WORK AROUND. If a
+        check comes back false, the enforcement an operator believes is in
+        place is not in place, and that is the finding.
+        """
+        import shutil
+        import tempfile
+        out: Dict[str, Any] = {"ran": False, "checks": {}, "error": None,
+                               "labels": ("the REAL enforcement functions, "
+                                          "run in this process against a "
+                                          "throwaway ledger. No real claim "
+                                          "or ticket is consumed and nothing "
+                                          "reaches a venue.")}
+        base = None
+        try:
+            root = self.root or tempfile.gettempdir()
+            base = tempfile.mkdtemp(prefix="budget_selfcheck_", dir=root)
+            led = os.path.join(base, "scratch_auth.jsonl")
+            exp = "selfcheck-%d" % os.getpid()
+            o_cap = AUTH.max_of_class("OPEN")
+            c_cap = AUTH.max_of_class("COMPLETE")
+            t_cap = AUTH.max_submissions()
+            ck = out["checks"]
+            ck["budgets_configured"] = bool(
+                o_cap is not None and c_cap is not None)
+            if not ck["budgets_configured"]:
+                out["ran"] = True
+                out["note"] = ("no class budgets configured, so there is "
+                               "nothing to enforce and nothing to check")
+                return out
+
+            # 1. OPEN exhausts at its own ceiling, and the ceiling is the
+            #    deployed value rather than a default.
+            n = 0
+            while True:
+                try:
+                    AUTH.claim_class_ticket(led, exp, "OPEN")
+                    n += 1
+                except AUTH.Refused:
+                    break
+                if n > int(o_cap) + 4:
+                    break
+            ck["open_exhausts_at_its_ceiling"] = (n <= int(o_cap))
+            ck["open_tickets_taken"] = n
+
+            # 2. COMPLETE is UNAFFECTED by an exhausted OPEN budget. This is
+            #    the whole reason the budget was split.
+            try:
+                AUTH.claim_class_ticket(led, exp, "COMPLETE")
+                ck["complete_survives_exhausted_open"] = True
+            except AUTH.Refused as exc:
+                ck["complete_survives_exhausted_open"] = False
+                ck["complete_refusal"] = str(exc.reason)
+
+            # 3. THE BACKSTOP EXEMPTION. Spend the flat total with
+            #    non-reducing submissions, then show a reducing one still
+            #    goes. Uses a second experiment id so the counts above do
+            #    not interfere.
+            if t_cap is not None:
+                for i in range(int(t_cap) + 2):
+                    try:
+                        AUTH.claim_accumulation_leg(
+                            "selfcheck-market", i, "UP", {}, path=led,
+                            klass="REPLACE", attempt=1, reducing=False)
+                    except AUTH.Refused:
+                        break
+                blocked = False
+                try:
+                    AUTH.claim_accumulation_leg(
+                        "selfcheck-market", 900, "UP", {}, path=led,
+                        klass="REPLACE", attempt=1, reducing=False)
+                except AUTH.Refused:
+                    blocked = True
+                ck["backstop_binds_a_non_reducing_order"] = blocked
+                exempt = False
+                try:
+                    AUTH.claim_accumulation_leg(
+                        "selfcheck-market", 901, "DOWN", {}, path=led,
+                        klass="COMPLETE", reducing=True)
+                    exempt = True
+                except AUTH.Refused as exc:
+                    ck["exemption_refusal"] = str(exc.reason)
+                ck["backstop_exempts_a_reducing_order"] = exempt
+
+            # 4. THE COMPLETION RESERVE. Spend COMPLETE down below the
+            #    reserve, then show OPEN is refused.
+            #
+            #    ITS OWN DIRECTORY, AND THE REAL EXPERIMENT ID. The claim
+            #    paths read `experiment_id()` themselves -- they cannot be
+            #    told to use another one -- so the tickets have to be
+            #    written under that same id or the reserve would be
+            #    computed for an experiment with nothing spent and the
+            #    check would pass vacuously. Isolation therefore comes from
+            #    the DIRECTORY, which is this scratch tree, never the real
+            #    ledger's.
+            sub3 = os.path.join(base, "reserve")
+            os.makedirs(sub3, exist_ok=True)
+            led3 = os.path.join(sub3, "scratch3.jsonl")
+            exp3 = AUTH.experiment_id() or exp
+            for _ in range(int(c_cap)):
+                try:
+                    AUTH.claim_class_ticket(led3, exp3, "COMPLETE")
+                except AUTH.Refused:
+                    break
+            ck["reserve_setup_complete_spent"] = len(
+                AUTH.class_spent(led3, exp3, "COMPLETE"))
+            reserved = False
+            why = None
+            try:
+                AUTH.claim_accumulation_leg(
+                    "selfcheck-market", 0, "UP", {}, path=led3, klass="OPEN")
+            except AUTH.Refused as exc:
+                why = str(exc.reason)
+                reserved = (why == "NO_COMPLETION_CAPACITY_RESERVED")
+            ck["open_refused_without_completion_capacity"] = reserved
+            ck["reserve_refusal"] = why
+
+            # 5. THE BALANCING SAFEGUARD, on the deployed executor object.
+            ex = getattr(self, "executor", None)
+            if ex is not None and hasattr(ex, "balancing_refusal"):
+                class _PS:
+                    def residual(self, m):
+                        return D("2.46")
+
+                    def outstanding_residual(self, m):
+                        return D(0)
+
+                real_store = getattr(ex, "store", None)
+                try:
+                    ex.store = _PS()
+                    over = ex.balancing_refusal(
+                        "selfcheck-market", {"side": "DOWN"},
+                        {"qty": D("5.00"), "price": D("0.90")}, "COMPLETE")
+                    inside = ex.balancing_refusal(
+                        "selfcheck-market", {"side": "DOWN"},
+                        {"qty": D("2.00"), "price": D("0.90")}, "COMPLETE")
+                finally:
+                    if real_store is not None:
+                        ex.store = real_store
+                ck["overshoot_is_refused"] = bool(
+                    over and over.get("reason") == "BALANCING_WOULD_OVERSHOOT")
+                ck["a_balance_inside_the_need_is_allowed"] = (inside is None)
+            out["ran"] = True
+            out["all_passed"] = all(
+                v for k, v in ck.items() if isinstance(v, bool))
+            return out
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["error"] = "%s: %s" % (type(exc).__name__, str(exc)[:200])
+            out["all_passed"] = False
+            return out
+        finally:
+            if base:
+                try:
+                    shutil.rmtree(base, ignore_errors=True)
+                except BaseException:                           # noqa: BLE001
+                    pass
+
     def campaign_telemetry(self) -> Dict[str, Any]:
         """What the bounded campaign currently permits. READ-ONLY.
 
@@ -4722,6 +4899,26 @@ def main() -> int:
                            "lambda": str(lam), "limits": runner.limits.as_dict(),
                            "worst_case_usd": str(runner.limits.worst_case_loss_usd()),
                            "frozen_rule": "030d8bf"})
+    # THE BUDGET ENFORCEMENT, EXERCISED IN THIS CONTAINER, ONCE AT STARTUP.
+    #
+    # The heartbeat REPORTS the three class budgets, the backstop and the
+    # completion reserve. Reporting is not enforcing: while the shadow lock
+    # is on, the arming boundary refuses at SHADOW_ONLY_LOCK and `handle`
+    # never reaches a claim, so nothing in production had ever executed the
+    # enforcement path. This runs the real functions here, under a
+    # throwaway experiment id in a directory it then deletes, so a failure
+    # is visible BEFORE a live authorization rather than discovered by an
+    # order that should have been refused.
+    #
+    # Emitted as its own line because the heartbeat already exceeds the log
+    # transport's per-line limit and its tail is truncated in production.
+    try:
+        emit("L5_BUDGET_SELFCHECK", runner.budget_selfcheck())
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_BUDGET_SELFCHECK", {"ran": False, "all_passed": False,
+                                     "error": type(_exc).__name__})
     # THE BOUNDED CANCELLATION-MECHANISM MODE, chosen once and announced.
     # It REPLACES the trading tick: see Runner.mechanism_tick for why the
     # strategy and our own two cancellers must be out of the way for the

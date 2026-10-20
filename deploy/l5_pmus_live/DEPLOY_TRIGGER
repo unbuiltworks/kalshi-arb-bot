@@ -1504,3 +1504,23 @@ deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
 # Release gate: 26 failed, 11955 passed, 14 errors -- the same 40 baseline
 # ids, zero NEW, zero GONE.
 shadow-only campaign wiring + class budgets 2026-10-20T15:20Z
+
+# 2026-10-20 — SHADOW-ONLY. Adds the budget ENFORCEMENT self-check, which
+# runs the real class-budget, backstop-exemption, completion-reserve and
+# balancing functions IN THIS CONTAINER at startup, under a throwaway
+# experiment id in a directory it then deletes. No real claim or ticket is
+# consumed and nothing reaches a venue.
+#
+# WHY. The heartbeat REPORTED the budgets from the real volume, which is not
+# the same as enforcing them: with the shadow lock on, the arming boundary
+# refuses at SHADOW_ONLY_LOCK and `handle` never reaches a claim, so the
+# enforcement path had never executed in production. A failure now shows up
+# before a live authorization instead of as an order that should have been
+# refused.
+#
+# BOTH TRADING LOCKS STAY ON: L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO, no campaign
+# approval document.
+#
+# Release gate: 26 failed, 11960 passed, 14 errors -- the same 40 baseline
+# ids, zero NEW, zero GONE.
+budget enforcement self-check, shadow-only 2026-10-20T15:25Z

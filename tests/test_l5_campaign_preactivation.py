@@ -358,3 +358,99 @@ def test_4_the_heartbeat_says_WHY_the_day_is_unknown_not_only_that_it_is(
     assert line["utc_day_realized_usd"] is None
     assert line["unattributed_usd"] == "-3.5"
     assert line["undated_settlements"] == ["m"]
+
+
+# ===== the self-check that runs the REAL enforcement in the container
+
+
+class _SelfStore:
+    def residual(self, m):
+        return D("2.46")
+
+    def outstanding_residual(self, m):
+        return D(0)
+
+
+class _SelfEx:
+    balancing_refusal = LX.FaithfulExecutor.balancing_refusal
+    prospective_residual = LX.FaithfulExecutor.prospective_residual
+    submission_class = LX.FaithfulExecutor.submission_class
+
+    def __init__(self):
+        self.store = _SelfStore()
+
+
+class _SelfRunner:
+    budget_selfcheck = R.Runner.budget_selfcheck
+
+    def __init__(self, root):
+        self.root = str(root)
+        self.executor = _SelfEx()
+
+
+def test_the_selfcheck_PASSES_against_the_approved_budgets(tmp_path,
+                                                           monkeypatch):
+    """The approved configuration, exercised through the real functions."""
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "selfcheck-exp")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["REPLACE"], "16")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "28")
+    out = _SelfRunner(tmp_path).budget_selfcheck()
+    assert out["ran"] is True, out.get("error")
+    ck = out["checks"]
+    assert ck["open_exhausts_at_its_ceiling"] is True
+    assert ck["open_tickets_taken"] == 8
+    assert ck["complete_survives_exhausted_open"] is True
+    assert ck["backstop_binds_a_non_reducing_order"] is True
+    assert ck["backstop_exempts_a_reducing_order"] is True
+    assert ck["open_refused_without_completion_capacity"] is True
+    assert ck["overshoot_is_refused"] is True
+    assert ck["a_balance_inside_the_need_is_allowed"] is True
+    assert out["all_passed"] is True
+
+
+def test_the_selfcheck_NEVER_TOUCHES_THE_REAL_LEDGER(tmp_path, monkeypatch):
+    """It must be impossible for a diagnostic to spend the budget it is
+    checking."""
+    real = tmp_path / "real_auth.jsonl"
+    monkeypatch.setenv(AUTH.LEDGER_ENV, str(real))
+    monkeypatch.setenv(AUTH.EXPERIMENT_ENV, "real-exp")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "28")
+    before = sorted(p.name for p in tmp_path.glob("*"))
+    out = _SelfRunner(tmp_path).budget_selfcheck()
+    assert out["ran"] is True
+    assert AUTH.class_spent(str(real), "real-exp", "OPEN") == []
+    assert AUTH.class_spent(str(real), "real-exp", "COMPLETE") == []
+    assert AUTH.submissions_spent(str(real), "real-exp") == []
+    # and it cleans up after itself
+    assert sorted(p.name for p in tmp_path.glob("*")) == before
+
+
+def test_the_selfcheck_says_so_when_NO_budgets_are_configured(tmp_path,
+                                                              monkeypatch):
+    for env in AUTH.CLASS_BUDGET_ENV.values():
+        monkeypatch.delenv(env, raising=False)
+    out = _SelfRunner(tmp_path).budget_selfcheck()
+    assert out["ran"] is True
+    assert out["checks"]["budgets_configured"] is False
+    assert "nothing to enforce" in out["note"]
+
+
+def test_the_selfcheck_REPORTS_a_failure_rather_than_raising(tmp_path,
+                                                            monkeypatch):
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setattr(AUTH, "claim_class_ticket",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            OSError("volume gone")))
+    out = _SelfRunner(tmp_path).budget_selfcheck()
+    assert out["all_passed"] is False
+    assert "OSError" in str(out["error"])
+
+
+def test_the_startup_path_EMITS_the_selfcheck():
+    src = (ROOT / "src" / "l5_pmus_live_runner.py").read_text()
+    assert 'emit("L5_BUDGET_SELFCHECK", runner.budget_selfcheck())' in src
