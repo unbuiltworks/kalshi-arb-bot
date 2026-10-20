@@ -665,3 +665,89 @@ def test_the_attempt_budget_exhausts_rather_than_wrapping(tmp_path,
     AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=0)
     AUTH.claim_accumulation_leg("m", 0, "UP", {}, path=led, attempt=1)
     assert ex.acc_leg_attempt("m", 0, "UP") is None
+
+
+# ------------------------------- fix 2: the per-order age deadline
+
+def test_the_order_ttl_shortens_only(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    assert TSP.order_ttl_s() == TSP.ORDER_TTL_S
+    monkeypatch.setenv(TSP.ORDER_TTL_ENV, "60")
+    assert TSP.order_ttl_s() == 60.0
+    monkeypatch.setenv(TSP.ORDER_TTL_ENV, "600")
+    assert TSP.order_ttl_s() == TSP.ORDER_TTL_S, "longer is refused"
+    for bad in ("junk", "0", "-5"):
+        monkeypatch.setenv(TSP.ORDER_TTL_ENV, bad)
+        assert TSP.order_ttl_s() == TSP.ORDER_TTL_S, bad
+
+
+def test_an_order_is_due_at_its_own_age_not_the_windows(monkeypatch):
+    """The property that unblocks a full-window strategy: an order's life is
+    its own, so quoting early does not mean resting until the terminal."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    submitted = start + 10.0            # quoted ten seconds into the window
+    assert TSP.order_due(submitted + 1.0, submitted, start, end) is False
+    assert TSP.order_due(submitted + TSP.ORDER_TTL_S, submitted,
+                         start, end) is True
+    # and the terminal still binds an order submitted late
+    late = TSP.cancel_cutoff(end) - 5.0
+    assert TSP.order_due(TSP.cancel_cutoff(end), late, start, end) is True
+
+
+def test_the_per_order_deadline_keeps_every_order_inside_the_watchdog():
+    """With a 120s TTL, an order quoted at ANY point in the window rests far
+    inside the watchdog's 300s -- which is the whole point of fix 2."""
+    from src import l5_two_sided_probe as TSP
+    WATCHDOG_MAX_AGE = 300.0
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    for offset in (0.0, 1.0, 120.0, 300.0, 500.0, 600.0):
+        sub = start + offset
+        age = 0.0
+        while not TSP.order_due(sub + age, sub, start, end) and age < 1000:
+            age += 1.0
+        assert age <= WATCHDOG_MAX_AGE, (offset, age)
+        assert age <= TSP.ORDER_TTL_S
+
+
+def test_deadman_can_be_scoped_to_named_orders(tmp_path):
+    """A per-order deadline must withdraw the overdue leg WITHOUT killing a
+    complement placed seconds ago."""
+    from src import l5_live_execution as LX
+    store = LX.InventoryStore(str(tmp_path / "inv.json"))
+    store.state["live_orders"] = {
+        "old": {"market": "m", "side": "UP", "venue_order_id": None},
+        "new": {"market": "m", "side": "DOWN", "venue_order_id": None},
+    }
+
+    class _T:
+        market_slug = "m"
+        armed = False
+
+        def cancel(self, vid):
+            raise AssertionError("no venue id, so no cancel is attempted")
+
+    rec = LX.deadman(store, _T(), reason="scoped", only=["old"])
+    assert rec["scoped_to"] == ["old"]
+    # only the named order was handled; the other was left entirely alone
+    touched = [r["client_order_id"] for r in rec["no_venue_id"]]
+    assert touched == ["old"]
+
+
+def test_deadman_unscoped_still_sweeps_everything(tmp_path):
+    from src import l5_live_execution as LX
+    store = LX.InventoryStore(str(tmp_path / "inv2.json"))
+    store.state["live_orders"] = {
+        "a": {"market": "m", "side": "UP", "venue_order_id": None},
+        "b": {"market": "m", "side": "DOWN", "venue_order_id": None},
+    }
+
+    class _T:
+        market_slug = "m"
+        armed = False
+
+    rec = LX.deadman(store, _T(), reason="all")
+    assert rec["scoped_to"] is None
+    assert sorted(r["client_order_id"] for r in rec["no_venue_id"]) == ["a", "b"]

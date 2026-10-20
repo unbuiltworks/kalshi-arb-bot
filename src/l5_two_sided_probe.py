@@ -262,6 +262,44 @@ def complete_cutoff_s() -> float:
     return _earlier_only(COMPLETE_CUTOFF_ENV, COMPLETE_CUTOFF_S)
 
 
+#: HOW LONG ONE ORDER MAY REST, from its own submission. This is what makes
+#: the watchdog's 300s a PER-ORDER backstop instead of the strategy's clock:
+#: with a per-order deadline, an order's life stops being the window's life,
+#: so the engine can quote from the window's open and still never hold
+#: anything near the watchdog's limit.
+#:
+#: Measured from SUBMIT rather than from the venue acknowledgement, which is
+#: the conservative direction: submit is always at or before the ack, so the
+#: deadline fires sooner than an ack-based one would.
+#:
+#: SHORTER ONLY. A longer value and an unreadable value are both refused.
+ORDER_TTL_S = 120.0
+ORDER_TTL_ENV = "L5_TS_ORDER_TTL_S"
+
+
+def order_ttl_s() -> float:
+    """The per-order rest bound. Configurable shorter, never longer."""
+    raw = (os.getenv(ORDER_TTL_ENV) or "").strip()
+    try:
+        v = float(raw) if raw else ORDER_TTL_S
+    except ValueError:
+        return ORDER_TTL_S
+    if v <= 0:
+        return ORDER_TTL_S
+    return min(ORDER_TTL_S, v)
+
+
+def order_due(now: float, submitted_t: float, t_start: float,
+              t_end: float) -> bool:
+    """Is this order past its own deadline, or past the terminal?
+
+    `min(submit + ttl, terminal)`, the same shape as the queue
+    measurement's `min(T_ack + 120, T_end - 180)`.
+    """
+    return (float(now) >= float(submitted_t) + order_ttl_s()
+            or float(now) >= cancel_cutoff(t_end))
+
+
 def may_enter(now: float, t_start: float, t_end: float) -> Optional[str]:
     """None to allow a NEW first leg, else the refusal reason.
 

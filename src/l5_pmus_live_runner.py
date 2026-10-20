@@ -2977,6 +2977,90 @@ class Runner:
         emit("L5_TS_DEADLINE", dict(out, slug=slug, now=now, result=res))
         return res
 
+    def maybe_acc_deadline(self, now: float) -> Optional[Dict[str, Any]]:
+        """Cancel each accumulation order at min(submit + TTL, terminal).
+
+        WHY THIS EXISTS. `maybe_qm_deadline` is the only per-order age
+        deadline in this runner and it is scoped to the queue measurement, so
+        an accumulation leg's rest was bounded only by the window and by
+        whoever chose the moment the lock came off. That is what forced
+        `rest = terminal - placement` and collapsed a full-window strategy
+        into a two-minute band. With this, an order's life stops being the
+        strategy's life: the engine may quote from the window's open and
+        still never hold anything near the watchdog's 300s.
+
+        INERT BY DEFAULT. Returns immediately unless the two-sided engine is
+        active for this market, so a shadow-locked service runs none of it.
+
+        SCOPED CANCELS, THROUGH THE SAME ROUTE. Each overdue order is
+        withdrawn by `deadman(..., only=[coid])`, so it inherits
+        cancel-by-venue-id, proof by re-read, fill-booking and the UNCERTAIN
+        marking on `still_open`/`unverified` -- and a complement placed
+        seconds ago is NOT swept with it.
+
+        FAIL CLOSED. An order whose submit time cannot be parsed cannot be
+        timed, and an order that cannot be timed may be resting at the venue
+        past its deadline, so it is marked UNCERTAIN and HALTED rather than
+        left. Restart recovery is automatic: `live_orders` is durable and
+        carries each order's own submit time, so ages survive a restart.
+        """
+        from src import l5_two_sided_probe as TSP
+        t = self.transport
+        if t is None:
+            return None
+        slug = getattr(t, "market_slug", None)
+        if not slug or not TSP.active(slug):
+            return None
+        ws = AB.slug_start(slug)
+        if ws is None:
+            return None
+        live = self.store.live_orders()
+        if not live:
+            return None
+        overdue, unusable = [], []
+        for coid, row in sorted(live.items()):
+            if str(row.get("market") or "") != str(slug):
+                continue
+            raw = row.get("t")
+            try:
+                st = dt.datetime.fromisoformat(str(raw))
+                if st.tzinfo is None:
+                    raise ValueError("naive submit time")
+                sub = st.timestamp()
+            except BaseException:                              # noqa: BLE001
+                unusable.append(coid)
+                continue
+            if TSP.order_due(now, sub, float(ws), float(ws) + TSP.WINDOW_S):
+                overdue.append(coid)
+        if unusable:
+            why = ("accumulation order submit time unparseable: %s"
+                   % ",".join(unusable[:4]))
+            self.store.mark_uncertain(why)
+            emit("L5_ACC_DEADLINE_HALT", {
+                "coids": unusable, "market": slug, "reason": why,
+                "labels": ("an order that cannot be timed may be resting past "
+                           "its deadline. Reconcile against the venue; never "
+                           "assume it was cancelled.")})
+            if t.armed:
+                t.disarm("acc_deadline_record_unusable")
+            return {"halt": True, "reason": "ACC_SUBMIT_TIME_UNPARSEABLE",
+                    "coids": unusable}
+        if not overdue:
+            return None
+        progress = self.poll_orders()      # a fill is booked, not cancelled
+        rec = LX.deadman(self.store, t, reason="acc_order_deadline",
+                         only=overdue)
+        out = dict(rec, market=slug, overdue=overdue,
+                   ttl_s=TSP.order_ttl_s(),
+                   polled=len(progress or []),
+                   labels=("per-order age deadline. `cancelled` means the "
+                           "VENUE reported terminal on re-read; anything "
+                           "else marks the store UNCERTAIN. A leg cancelled "
+                           "with ZERO fill may be re-placed within its "
+                           "attempt budget; a leg that filled may not."))
+        emit("L5_ACC_DEADLINE", out)
+        return out
+
     def maybe_qm_deadline(self, now: float) -> Optional[Dict[str, Any]]:
         """Cancel the measurement order at min(T_ack + 120s, T_end - 180s).
 
@@ -3058,6 +3142,11 @@ class Runner:
         # the queue measurement's own per-order deadline. Inert unless an
         # experiment AND its market are both named -- see maybe_qm_deadline.
         self.maybe_qm_deadline(now)
+        # THE ACCUMULATION ENGINE'S PER-ORDER AGE DEADLINE. Before the
+        # completion decision and before the window sweep, because an
+        # overdue leg must be withdrawn before anything new is priced
+        # against the inventory it would have left.
+        self.maybe_acc_deadline(now)
         # BEFORE the deadline sweep, deliberately. The completion
         # decision needs the order still resting to be worth making;
         # after the cutoff there is nothing left to complete against.

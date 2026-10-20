@@ -49,7 +49,8 @@ import os
 import pathlib
 import re
 from decimal import ROUND_FLOOR, Decimal as D, InvalidOperation
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import (Any, Dict, Iterable, List, Mapping, Optional,
+                    Sequence)
 
 from src import pmus_fees as fees
 from src import l5_faithful_translation as FT
@@ -4727,9 +4728,26 @@ class FaithfulExecutor:
                     # KEYED ON (market, round, leg), so an intent that is
                     # genuinely new gets its own durable slot while a replay
                     # of THIS intent lands on the same slot and is refused.
+                    # WHICH PLACEMENT OF THIS LEG. `acc_leg_attempt` grants a
+                    # later attempt only over a leg holding NOTHING with
+                    # nothing live, so a filled leg can never be re-placed
+                    # and an unverified cancellation cannot buy a retry. None
+                    # means refuse: the budget is spent, the leg holds
+                    # inventory, an order is live, or a claim was unreadable.
+                    att = self.acc_leg_attempt(market, rnd_pending,
+                                               leg_pending)
+                    if att is None:
+                        raise AUTH.Refused(
+                            "ACC_NO_ATTEMPT_AVAILABLE",
+                            {"market": market, "round": rnd_pending,
+                             "leg": leg_pending,
+                             "note": "no placement of this leg is permitted: "
+                                     "the attempt budget is spent, the leg "
+                                     "holds inventory, an order is live, or a "
+                                     "claim could not be read"})
                     claim = AUTH.claim_accumulation_leg(
                         market, rnd_pending, leg_pending,
-                        dict(payload, market=market))
+                        dict(payload, market=market), attempt=att)
                 else:
                     claim = AUTH.claim_submission(market, payload)
             except BaseException as exc:                       # noqa: BLE001
@@ -5006,7 +5024,8 @@ def settle(records: Sequence[Mapping[str, Any]], *, market: str,
 
 
 def deadman(store: InventoryStore, transport: Any, *,
-            reason: str) -> Dict[str, Any]:
+            reason: str, only: Optional[Iterable[str]] = None
+            ) -> Dict[str, Any]:
     """Cancel our RESTING orders by VENUE id, then prove it by reading them.
 
     THREE DEFECTS THIS REPLACES, all in the four lines it used to be, none of
@@ -5053,8 +5072,19 @@ def deadman(store: InventoryStore, transport: Any, *,
                    "re-read, never that a cancel call returned. still_open "
                    "and unverified are failures and mark the book uncertain."),
     }
+    # `only` SCOPES IT TO NAMED ORDERS, for the per-order age deadline. None
+    # keeps the sweep over every resting order, so every existing caller is
+    # unchanged. Scoping matters because a per-order deadline must withdraw
+    # the OVERDUE leg without also killing a complement placed seconds ago --
+    # and it must do so through this function, not a second cancellation
+    # path, so it inherits the cancel-by-venue-id, proof-by-re-read,
+    # book-the-fill and fail-closed behaviour rather than reimplementing it.
+    want = None if only is None else {str(c) for c in only}
+    out["scoped_to"] = None if want is None else sorted(want)
     # a snapshot: apply_order_progress mutates live_orders underneath us
     for coid, row in sorted(store.live_orders().items()):
+        if want is not None and str(coid) not in want:
+            continue
         vid = str(row.get("venue_order_id") or "").strip()
         market = str(row.get("market") or getattr(transport, "market_slug", "")
                      or "")
