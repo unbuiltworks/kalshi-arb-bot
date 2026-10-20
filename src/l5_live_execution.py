@@ -3748,6 +3748,28 @@ class FaithfulExecutor:
         self.fill_calibration: Optional[Any] = None
         self.calib_book: Optional[Any] = None
         self.calib_ladder: Optional[Any] = None
+        #: THE AUTHENTICATED BOOK MIRROR, for the two-leg planner only.
+        #:
+        #: WHY IT EXISTS. The runner calls `handle(row, {}, ...)` -- the empty
+        #: dict IS the `authenticated` argument, and it is deliberate: the
+        #: L5-following path rests at L5's own price through MAKER_TREATMENT
+        #: and needs no book. But `probe_plan` prices BOTH legs from that
+        #: argument, so with `{}` it read stream_age_s as None and
+        #: `build_orders` refused BOOK_STALE unconditionally. The two-leg
+        #: engine could never place an order, which shadow validation found
+        #: within seven minutes of being switched on.
+        #:
+        #: THE MIRROR, NEVER A SNAPSHOT. A stored snapshot would go stale and
+        #: could be reused across a restart or a reconnect; a mirror is
+        #: snapshotted at the moment of the decision, and `AuthBook.snapshot`
+        #: already returns None unless it is connected AND two-sided. So
+        #: disconnected, one-sided and unreadable all arrive as "no book",
+        #: which is the same BOOK_STALE refusal as before.
+        #:
+        #: It changes nothing else: `pmus_translate` still receives whatever
+        #: the caller passed, so L5-following translation, pricing and sizing
+        #: are untouched.
+        self.ts_book: Optional[Any] = None
         #: MAKER_TREATMENT: an action the frozen rule called MAKER and then
         #: refused STRICT_NOT_EVALUABLE is RESTED at L5's own price instead of
         #: dropped. That refusal is about replay evidence -- whether a
@@ -3837,10 +3859,41 @@ class FaithfulExecutor:
                 return None            # incoherent or unreadable: fail closed
         return total
 
+    def ts_authenticated_book(self, market: str,
+                              supplied: Any) -> Mapping[str, Any]:
+        """The book the TWO-LEG planner prices from. Fail-closed.
+
+        A supplied book carrying both sides AND its own age is used as given.
+        Anything else -- the runner's deliberate `{}`, a half-filled dict, a
+        dict with no age -- falls through to a FRESH snapshot of the mirror,
+        taken here and never stored, so no restart or reconnect can reuse an
+        old one.
+
+        Every failure returns an empty mapping, whose `stream_age_s` is None,
+        which `build_orders` refuses as BOOK_STALE. That is the same refusal
+        as before the mirror existed, so nothing becomes permissive.
+        """
+        if isinstance(supplied, Mapping) \
+                and supplied.get("bid") is not None \
+                and supplied.get("ask") is not None \
+                and supplied.get("stream_age_s") is not None:
+            return supplied
+        snap = getattr(getattr(self, "ts_book", None), "snapshot", None)
+        if not callable(snap):
+            return supplied if isinstance(supplied, Mapping) else {}
+        try:
+            fresh = snap(str(market))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {}                      # unreadable is not a fresh book
+        return fresh if isinstance(fresh, Mapping) else {}
+
     def probe_plan(self, market: str,
                    authenticated: Mapping[str, Any],
                    loss_ceiling: Optional[D] = None) -> Dict[str, Any]:
         """Both probe legs, priced once from the authenticated book."""
+        authenticated = self.ts_authenticated_book(market, authenticated)
         return TS.build_orders(
             market=market,
             bid=authenticated.get("bid"), ask=authenticated.get("ask"),

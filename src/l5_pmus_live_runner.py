@@ -870,6 +870,13 @@ class Runner:
         # already exist and neither reference can go stale mid-window.
         self.executor.calib_book = self.book
         self.executor.calib_ladder = self.shadow_ladder
+        # AND THE SAME MIRROR FOR THE TWO-LEG PLANNER. `handle(row, {}, ...)`
+        # passes an empty book on purpose -- the L5-following path rests at
+        # L5's own price and needs none -- but `probe_plan` prices both legs
+        # from that argument, so the two-leg engine refused BOOK_STALE on
+        # every decision. The mirror, not a snapshot: it is read at the
+        # moment of the decision and nothing caches it.
+        self.executor.ts_book = self.book
         # DISARMED-SHADOW VALIDATION PROTECTIONS, attached after construction
         # so the executor's own signature is unchanged.
         #

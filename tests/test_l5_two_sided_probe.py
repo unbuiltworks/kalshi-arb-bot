@@ -751,3 +751,133 @@ def test_deadman_unscoped_still_sweeps_everything(tmp_path):
     rec = LX.deadman(store, _T(), reason="all")
     assert rec["scoped_to"] is None
     assert sorted(r["client_order_id"] for r in rec["no_venue_id"]) == ["a", "b"]
+
+
+# ------------------- the authenticated book reaches the two-leg planner
+
+class _Mirror:
+    """AuthBook's shape: snapshot(slug), None unless connected and 2-sided."""
+
+    def __init__(self, snap=None, raises=False):
+        self._snap, self._raises, self.calls = snap, raises, []
+
+    def snapshot(self, slug):
+        self.calls.append(slug)
+        if self._raises:
+            raise RuntimeError("feed down")
+        return self._snap
+
+
+def _fresh(age="0.05"):
+    return {"bid": "0.49", "ask": "0.51", "bid_shares": "800",
+            "ask_shares": "800", "stream_age_s": age,
+            "source": "authenticated_ws"}
+
+
+def _ex(tmp_path, mirror=None):
+    from src import l5_live_execution as LX
+    from src import l5_pmus_live_runner as R
+    ex = LX.FaithfulExecutor(LX.InventoryStore(str(tmp_path / "i.json")),
+                             LX.SafetyLimits(**R.PROBE_LIMITS))
+    ex.ts_book = mirror
+    return ex
+
+
+def test_a_fresh_authenticated_book_reaches_the_two_leg_planner(tmp_path,
+                                                                monkeypatch):
+    """THE BLOCKER. handle() passes {} on purpose, and probe_plan priced both
+    legs from it, so every decision refused BOOK_STALE against a 9ms book."""
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "fix")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    m = _Mirror(_fresh())
+    ex = _ex(tmp_path, m)
+    got = ex.ts_authenticated_book("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert got["stream_age_s"] == "0.05"
+    assert m.calls == ["cpc-btc-updown-15m-2026-10-20-0200z"]
+
+
+def test_the_mirror_is_snapshotted_per_call_and_never_cached(tmp_path):
+    """A stored snapshot could be reused across a restart or a reconnect."""
+    m = _Mirror(_fresh())
+    ex = _ex(tmp_path, m)
+    for _ in range(3):
+        ex.ts_authenticated_book("m", {})
+    assert len(m.calls) == 3, "each decision takes its own snapshot"
+    assert not hasattr(ex, "_ts_book_cache")
+
+
+@pytest.mark.parametrize("snap,expect", [
+    (None, "BOOK_STALE"),                 # disconnected: snapshot() is None
+    ({}, "BOOK_STALE"),                   # no age
+    ({"bid": "0.49", "ask": "0.51"}, "BOOK_STALE"),       # no age
+    ("not-a-mapping", "BOOK_STALE"),      # not a book at all
+    # a one-sided dict keeps its age, so the AGE gate passes and the
+    # TWO-SIDED gate refuses instead. AuthBook.snapshot cannot actually
+    # produce this -- it returns None unless connected AND two-sided -- but
+    # the planner must refuse it even if something else ever did.
+    ({"bid": "0.49", "stream_age_s": "0.05"}, "BOOK_NOT_TWO_SIDED"),
+])
+def test_an_unusable_book_still_fails_closed(tmp_path, monkeypatch, snap,
+                                             expect):
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "closed")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    ex = _ex(tmp_path, _Mirror(snap))
+    r = ex.probe_plan("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert r["ok"] is False
+    assert r["reason"] == expect, r
+
+
+def test_a_mirror_that_raises_fails_closed(tmp_path):
+    ex = _ex(tmp_path, _Mirror(raises=True))
+    assert ex.ts_authenticated_book("m", {}) == {}
+
+
+def test_no_mirror_at_all_leaves_the_supplied_book_alone(tmp_path):
+    ex = _ex(tmp_path, None)
+    assert ex.ts_authenticated_book("m", {}) == {}
+    supplied = _fresh()
+    assert ex.ts_authenticated_book("m", supplied) is supplied
+
+
+def test_a_stale_mirror_book_is_refused_by_the_planner(tmp_path, monkeypatch):
+    """Freshness is still decided by build_orders, not by this resolver."""
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "stale")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    ex = _ex(tmp_path, _Mirror(_fresh(age="9.0")))
+    r = ex.probe_plan("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert r["ok"] is False and r["reason"] == "BOOK_STALE"
+
+
+def test_a_fresh_mirror_book_lets_the_planner_price_both_legs(tmp_path,
+                                                              monkeypatch):
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "ok")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    ex = _ex(tmp_path, _Mirror(_fresh()))
+    ex.validation_gates = None
+    r = ex.probe_plan("cpc-btc-updown-15m-2026-10-20-0200z", {})
+    assert r["reason"] != "BOOK_STALE", r
+
+
+def test_a_supplied_book_wins_over_the_mirror(tmp_path):
+    """A caller that HAS a complete book is still authoritative."""
+    m = _Mirror(_fresh(age="0.01"))
+    ex = _ex(tmp_path, m)
+    supplied = _fresh(age="0.40")
+    got = ex.ts_authenticated_book("m", supplied)
+    assert got["stream_age_s"] == "0.40"
+    assert m.calls == [], "the mirror is not consulted when not needed"
+
+
+def test_the_l5_following_translation_path_is_untouched():
+    """pmus_translate must still receive whatever the caller passed, so
+    L5-following pricing and sizing cannot change."""
+    import inspect
+    from src import l5_live_execution as E
+    body = inspect.getsource(E.FaithfulExecutor.handle)
+    i = body.index("FT.pmus_translate(")
+    call = body[i:i + 120]
+    assert "authenticated" in call
+    assert "ts_authenticated_book" not in call
+    # the resolver is reached only through probe_plan
+    plan = inspect.getsource(E.FaithfulExecutor.probe_plan)
+    assert "ts_authenticated_book" in plan
