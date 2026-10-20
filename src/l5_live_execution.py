@@ -5321,16 +5321,25 @@ class FaithfulExecutor:
                                      "the attempt budget is spent, the leg "
                                      "holds inventory, an order is live, or a "
                                      "claim could not be read"})
+                    # TWO AXES, DELIBERATELY SEPARATE. `klass` is which
+                    # budget pays -- a re-price is charged to REPLACE
+                    # whatever its direction, which is the split the owner
+                    # approved. `reducing` is the order's EFFECT, and it is
+                    # what exempts a risk-reducing order from the flat
+                    # backstop. Collapsing them would mean a re-priced
+                    # complement could be refused by a total that OPEN had
+                    # already spent, stranding the inventory it created.
                     _klass = self.submission_class(market, dec, tr,
                                                    attempt=att)
                     claim = AUTH.claim_accumulation_leg(
                         market, rnd_pending, leg_pending,
                         dict(payload, market=market), attempt=att,
-                        klass=_klass)
+                        klass=_klass, reducing=(_bal_klass == "COMPLETE"))
                 else:
                     _klass = self.submission_class(market, dec, tr)
-                    claim = AUTH.claim_submission(market, payload,
-                                                  klass=_klass)
+                    claim = AUTH.claim_submission(
+                        market, payload, klass=_klass,
+                        reducing=(_bal_klass == "COMPLETE"))
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise

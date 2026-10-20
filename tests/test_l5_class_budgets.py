@@ -177,14 +177,19 @@ def test_the_OVERALL_safety_bound_still_binds_across_all_classes(
     finite backstop below their sum, so no two classes can both run out."""
     monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "5")
     monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "5")
-    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "2")
+    # 4, not 2: with a total of 2 the COMPLETION RESERVE refuses the very
+    # first OPEN, which is correct but is a different property (it has its
+    # own tests below). 4 leaves room for two non-reducing orders plus the
+    # two-submission reserve.
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "4")
     AUTH.claim_accumulation_leg("mkt-a", 0, UP, {}, path=led, klass="OPEN")
-    AUTH.claim_accumulation_leg("mkt-a", 0, DOWN, {}, path=led,
-                               klass="COMPLETE")
+    AUTH.claim_accumulation_leg("mkt-a", 1, UP, {}, path=led, klass="OPEN")
     with pytest.raises(AUTH.Refused) as e:
-        AUTH.claim_accumulation_leg("mkt-a", 1, UP, {}, path=led,
+        AUTH.claim_accumulation_leg("mkt-a", 2, UP, {}, path=led,
                                     klass="OPEN")
-    assert e.value.args[0] == "SUBMISSION_BUDGET_EXHAUSTED"
+    # the reserve speaks first here, and it is the stricter of the two
+    assert e.value.args[0] in ("SUBMISSION_BUDGET_EXHAUSTED",
+                               "NO_COMPLETION_CAPACITY_RESERVED")
 
 
 # ======================================= classifying, and the safeguard
@@ -303,3 +308,152 @@ def test_an_order_charged_to_COMPLETE_that_does_not_reduce_is_refused(led):
     ex = _Ex()
     bad = ex.balancing_refusal("m", {"side": UP}, _tr(), "COMPLETE")
     assert bad and bad["reason"] == "BALANCING_DOES_NOT_REDUCE"
+
+
+# ============ THE BACKSTOP MUST NOT STRAND WHAT THE OTHER CLASSES CREATED
+#
+# The hole in the first design. With OPEN 8, REPLACE 16 and a flat backstop
+# of 28, OPEN and REPLACE together (24) can leave only 4 of the backstop for
+# COMPLETE -- while 8 opened legs can need up to 16 completion submissions.
+# The account would then hold unmatched inventory with no submission left to
+# close it, which is the one outcome every limit here exists to prevent.
+#
+# Two repairs, and both are needed: the backstop does not bind a
+# risk-reducing order at all, and an OPEN is refused before the exposure
+# exists if the completion capacity to close it is not reserved.
+
+
+def test_the_flat_backstop_DOES_NOT_BIND_a_risk_reducing_order(
+        led, monkeypatch):
+    """The core repair. A global count that can refuse an order which
+    provably reduces |unmatched| protects nothing and can only strand
+    risk."""
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "4")
+    AUTH.claim_accumulation_leg("m", 0, UP, {}, path=led, klass="OPEN")
+    AUTH.claim_accumulation_leg("m", 1, UP, {}, path=led, klass="OPEN")
+    # the flat total is now spent for anything that ADDS exposure
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 2, UP, {}, path=led, klass="OPEN")
+    assert e.value.args[0] in ("SUBMISSION_BUDGET_EXHAUSTED",
+                               "NO_COMPLETION_CAPACITY_RESERVED")
+    # ...and the complement STILL GOES, because refusing it could only
+    # strand the inventory the two OPEN legs just created
+    rec = AUTH.claim_accumulation_leg("m", 0, DOWN, {}, path=led,
+                                      klass="COMPLETE", reducing=True)
+    assert rec["reducing"] is True
+    assert rec["class_ticket"]
+
+
+def test_a_REPRICED_complement_is_also_exempt_from_the_backstop(
+        led, monkeypatch):
+    """A re-price is CHARGED to REPLACE -- the split the owner approved --
+    but its EFFECT is still risk-reducing. With one live-order slot the
+    complement is always placed against a book that has moved, so repricing
+    it is how a complement gets placed at all: a backstop that refused it
+    would strand inventory just as surely."""
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["REPLACE"], "16")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "0")
+    rec = AUTH.claim_accumulation_leg("m", 0, DOWN, {}, path=led, attempt=1,
+                                      klass="REPLACE", reducing=True)
+    assert rec["klass"] == "REPLACE"
+    assert rec["reducing"] is True
+
+
+def test_a_REPRICED_OPEN_leg_is_NOT_exempt(led, monkeypatch):
+    """The exemption is on the EFFECT, not on the class. Repricing a leg
+    that still adds exposure is exactly what the backstop is for."""
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["REPLACE"], "16")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "0")
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 0, UP, {}, path=led, attempt=1,
+                                    klass="REPLACE", reducing=False)
+    assert e.value.args[0] == "SUBMISSION_BUDGET_EXHAUSTED"
+
+
+def test_an_OPEN_is_REFUSED_when_the_COMPLETE_budget_could_not_close_it(
+        led, monkeypatch):
+    """Do not open what you cannot close. Reserving after the fact is
+    impossible: once the budget is spent the inventory already exists."""
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "3")
+    # spend the completion budget down to one, below the two-submission
+    # reserve one obligation can need
+    for r in range(2):
+        AUTH.claim_accumulation_leg("m", r, DOWN, {}, path=led,
+                                    klass="COMPLETE", reducing=True)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 5, UP, {}, path=led, klass="OPEN")
+    assert e.value.args[0] == "NO_COMPLETION_CAPACITY_RESERVED"
+    assert e.value.detail["complete_remaining"] == 1
+    assert e.value.detail["reserve_required"] == 2
+
+
+def test_the_reserve_is_checked_against_the_FLAT_TOTAL_too(led, monkeypatch):
+    """A reserve only one of the two bounds respects is not a reserve."""
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "4")
+    # two OPEN legs spend two of the four
+    AUTH.claim_accumulation_leg("m", 0, UP, {}, path=led, klass="OPEN")
+    AUTH.claim_accumulation_leg("m", 1, UP, {}, path=led, klass="OPEN")
+    # a third would leave 1 < the 2 an obligation can need
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 2, UP, {}, path=led, klass="OPEN")
+    assert e.value.args[0] == "NO_COMPLETION_CAPACITY_RESERVED"
+    assert e.value.detail["total_spent"] == 2
+
+
+def test_the_APPROVED_FIGURES_cannot_strand_inventory(led, monkeypatch):
+    """The approved campaign, end to end: OPEN 8, COMPLETE 12, REPLACE 16,
+    backstop 28. Spend OPEN and REPLACE to their ceilings and the
+    completion budget must still be fully available."""
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["REPLACE"], "16")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "28")
+    opens = 0
+    for r in range(8):
+        try:
+            AUTH.claim_accumulation_leg("m", r, UP, {}, path=led,
+                                        klass="OPEN")
+            opens += 1
+        except AUTH.Refused:
+            break
+    reps = 0
+    for r in range(16):
+        try:
+            AUTH.claim_accumulation_leg("m2", r, UP, {}, path=led,
+                                        attempt=1, klass="REPLACE",
+                                        reducing=False)
+            reps += 1
+        except AUTH.Refused:
+            break
+    # OPEN and REPLACE are now spent against the flat backstop...
+    with pytest.raises(AUTH.Refused):
+        AUTH.claim_accumulation_leg("m3", 0, UP, {}, path=led, klass="OPEN")
+    # ...and EVERY ONE of the twelve completion submissions is still
+    # available, which is the property that cannot be allowed to fail.
+    for r in range(12):
+        AUTH.claim_accumulation_leg("m4", r, DOWN, {}, path=led,
+                                    klass="COMPLETE", reducing=True)
+    rep = AUTH.class_budget_report(led, EXP)
+    assert rep["COMPLETE"]["spent"] == 12
+    assert opens + reps <= 28
+    assert opens >= 1 and reps >= 1
+
+
+def test_an_UNREADABLE_reserve_refuses_the_OPEN(led, monkeypatch):
+    """A reserve we cannot count is not a reserve we may assume exists."""
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["OPEN"], "8")
+    monkeypatch.setenv(AUTH.CLASS_BUDGET_ENV["COMPLETE"], "12")
+    import src.l5_live_authorization as A
+
+    def boom(*a, **kw):
+        raise OSError("volume gone")
+
+    monkeypatch.setattr(A, "class_spent", boom)
+    with pytest.raises(AUTH.Refused) as e:
+        AUTH.claim_accumulation_leg("m", 0, UP, {}, path=led, klass="OPEN")
+    assert e.value.args[0] == "COMPLETION_CAPACITY_UNREADABLE"

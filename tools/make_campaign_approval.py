@@ -73,8 +73,12 @@ def build(now: dt.datetime | None = None) -> dict:
         "max_complete_submissions": 12,
         "max_replace_submissions": 16,
         # the finite backstop, deliberately BELOW the sum of the three, so
-        # no two classes can both run to their ceiling
+        # no two classes can both run to their ceiling. It does NOT bind a
+        # risk-reducing order: a global count that can refuse an order
+        # which provably reduces |unmatched| can only STRAND risk.
         "max_submissions_total": 28,
+        "completion_reserve_submissions": 2,
+        "backstop_exempts_risk_reducing": True,
         "cancellations": "UNBUDGETED: a bound that could refuse a cancel is "
                          "a bound that traps an order on the venue",
     }

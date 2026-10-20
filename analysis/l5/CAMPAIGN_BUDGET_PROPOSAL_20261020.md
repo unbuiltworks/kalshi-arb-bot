@@ -121,3 +121,67 @@ heartbeat as `campaign.class_budgets` with spent/remaining per class.
 These figures, then: deploy with live trading off → verify health,
 reconciliation and the durable counters → generate the approval document →
 activate.
+
+---
+
+# APPROVED 2026-10-20, plus the stranding repair
+
+The figures above were approved as written: OPEN 3/window 8/campaign,
+COMPLETE 4/window 12/campaign, REPLACE 5/window 16/campaign, backstop 28,
+4 windows, 4 hours, $5/$5, $0.96, one outstanding order.
+
+## The hole the owner identified
+
+With OPEN 8 and REPLACE 16 against a flat backstop of 28, OPEN and REPLACE
+together (24) can leave only **4** of the backstop for COMPLETE — while 8
+opened legs can need up to 16 completion submissions. The account would then
+hold unmatched inventory with no submission left to close it. That is the one
+outcome every limit here exists to prevent, and the exposure ceiling cannot
+fix it: the exposure already exists by then.
+
+## Both repairs, because either alone is insufficient
+
+**1. The flat backstop does not bind a risk-reducing order at all.**
+`total_backstop_binds(reducing)` returns False for any submission whose
+effect is risk-reducing. Such an order has already passed
+`BALANCING_DOES_NOT_REDUCE` and `BALANCING_WOULD_OVERSHOOT`, so it provably
+reduces |prospective unmatched| and cannot overshoot — a global count that can
+refuse it protects nothing and can only strand risk. The backstop still binds
+every submission that is *not* risk-reducing, which is the only class that can
+add exposure.
+
+The charge and the exemption are **two separate axes**, deliberately:
+
+- `klass` — which budget pays. A re-price is charged to REPLACE whatever its
+  direction, which is the split that was approved.
+- `reducing` — the order's effect, derived at the boundary from the same
+  safeguard that refuses. This is what exempts it from the total.
+
+Collapsing them would mean a **re-priced complement** could be refused by a
+total that OPEN had already spent. With one live-order slot the complement is
+always placed against a book that has moved, so repricing it is how a
+complement gets placed at all — that path must never be budget-starved.
+A re-priced *OPEN* leg is not exempt: the exemption is on the effect, not the
+class.
+
+**2. Do not open what you cannot close.**
+`completion_capacity_refusal` refuses a new OPEN **before the exposure
+exists** unless the capacity to close it is still reserved, against *both*
+bounds that could run out — the COMPLETE class budget and the flat total. A
+reserve only one of the two respects is not a reserve. Reserve =
+`COMPLETION_SUBMISSIONS_PER_OBLIGATION = 2`: the complement itself plus one
+re-derivation after a partial fill or a book that moved under it. Unreadable
+→ `COMPLETION_CAPACITY_UNREADABLE` and refuse: a reserve we cannot count is
+not a reserve we may assume exists. Applied to OPEN only — a REPLACE refused
+here leaves the original intent intact and costs nothing.
+
+New refusals: `NO_COMPLETION_CAPACITY_RESERVED`,
+`COMPLETION_CAPACITY_UNREADABLE`.
+
+Published on every heartbeat as `campaign.completion_reserve.may_open` with
+the reason when it is false, so the verdict does not have to be re-derived
+from the numbers.
+
+`test_the_APPROVED_FIGURES_cannot_strand_inventory` drives the approved
+numbers end to end: OPEN and REPLACE are spent to their ceilings against the
+backstop, and all twelve completion submissions remain available.

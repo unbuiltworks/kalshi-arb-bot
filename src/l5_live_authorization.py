@@ -552,6 +552,92 @@ def any_class_budget_configured() -> bool:
     return any(max_of_class(k) is not None for k in SUBMISSION_CLASSES)
 
 
+#: how many COMPLETE submissions one outstanding obligation can need: the
+#: complement itself, plus ONE re-derivation after a partial fill or a book
+#: that moved under it. Derived, not guessed: with one live-order slot the
+#: complement is always placed later than the leg it matches, against a book
+#: that has moved, which is why `complement_order` re-prices from the
+#: current book at all.
+COMPLETION_SUBMISSIONS_PER_OBLIGATION = 2
+
+
+def total_backstop_binds(reducing: bool) -> bool:
+    """Does the flat total apply to a submission with this EFFECT?
+
+    NO FOR A RISK-REDUCING ORDER, and this is the whole repair. A global
+    count that can refuse an order which provably reduces |unmatched| --
+    it has already passed `BALANCING_DOES_NOT_REDUCE` and
+    `BALANCING_WOULD_OVERSHOOT`, so it cannot add exposure and cannot
+    overshoot -- protects nothing and can only STRAND risk. OPEN and
+    REPLACE spending the total down to zero would otherwise leave the
+    account holding unmatched inventory with no submission left to close
+    it, which is the one outcome every limit here exists to prevent.
+
+    The total still binds every submission that is NOT risk-reducing, so it
+    remains a finite backstop on the only class of order that can add
+    exposure or be placed discretionarily.
+    """
+    return not bool(reducing)
+
+
+def completion_capacity_refusal(path: str, experiment: str
+                                ) -> Optional[Dict[str, Any]]:
+    """None if a NEW exposure-increasing order may be placed, else why not.
+
+    DO NOT OPEN WHAT YOU CANNOT CLOSE. Reserving capacity after the fact is
+    impossible: once OPEN and REPLACE have spent the budget, the inventory
+    they created is already on the books. So the check is made BEFORE the
+    exposure exists, and it is made against BOTH bounds that could run out:
+
+      * the COMPLETE class budget, which must still hold enough for one
+        obligation;
+      * the flat total, which must still leave room for this order AND for
+        that obligation -- even though the total does not itself bind a
+        risk-reducing order, because a reserve that only one of the two
+        bounds respects is not a reserve.
+
+    Applied to OPEN only. REPLACE is discretionary: a re-price refused here
+    leaves the original intent intact and costs nothing.
+    """
+    cap_c = max_of_class("COMPLETE")
+    reserve = COMPLETION_SUBMISSIONS_PER_OBLIGATION
+    if cap_c is not None:
+        try:
+            spent_c = len(class_spent(path, experiment, "COMPLETE"))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"reason": "COMPLETION_CAPACITY_UNREADABLE",
+                    "error": type(exc).__name__,
+                    "note": "a reserve we cannot count is not a reserve we "
+                            "may assume exists"}
+        if cap_c - spent_c < reserve:
+            return {"reason": "NO_COMPLETION_CAPACITY_RESERVED",
+                    "complete_max": cap_c, "complete_spent": spent_c,
+                    "complete_remaining": cap_c - spent_c,
+                    "reserve_required": reserve,
+                    "note": "refusing to open exposure the completion "
+                            "budget could no longer close"}
+    cap_t = max_submissions()
+    if cap_t is not None:
+        try:
+            spent_t = len(submissions_spent(path, experiment))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"reason": "COMPLETION_CAPACITY_UNREADABLE",
+                    "error": type(exc).__name__,
+                    "note": "a reserve we cannot count is not a reserve we "
+                            "may assume exists"}
+        if spent_t + 1 + reserve > cap_t:
+            return {"reason": "NO_COMPLETION_CAPACITY_RESERVED",
+                    "total_max": cap_t, "total_spent": spent_t,
+                    "reserve_required": reserve,
+                    "note": "the flat backstop would not leave room for this "
+                            "order AND the obligation it creates"}
+    return None
+
+
 def class_sid(experiment: str, klass: str, n: int) -> str:
     """The claim id for TICKET `n` of one class of one authorization."""
     return "cls1.%s.%s.%d" % (experiment, str(klass).upper(), int(n))
@@ -650,7 +736,9 @@ def claim_class_ticket(path: str, experiment: str, klass: str
 
 
 def class_claim_or_refuse(path: str, experiment: str,
-                          klass: Any) -> Optional[Dict[str, Any]]:
+                          klass: Any,
+                          reducing: bool = False
+                          ) -> Optional[Dict[str, Any]]:
     """The one place a submission's class budget is spent.
 
     UNSTATED IS A REFUSAL ONCE BUDGETS EXIST. A caller that does not say
@@ -669,6 +757,11 @@ def class_claim_or_refuse(path: str, experiment: str,
                                    "belongs to cannot be charged for and is "
                                    "refused"})
         return None
+    # DO NOT OPEN WHAT YOU CANNOT CLOSE, checked before the ticket is spent.
+    if k == "OPEN":
+        short = completion_capacity_refusal(path, experiment)
+        if short:
+            raise Refused(str(short["reason"]), short)
     return claim_class_ticket(path, experiment, k)
 
 
@@ -860,7 +953,8 @@ def claim_accumulation_leg(market: str, rnd: int, leg: str,
                            payload: Mapping[str, Any],
                            path: Optional[str] = None,
                            attempt: int = 0,
-                           klass: Any = None) -> Dict[str, Any]:
+                           klass: Any = None,
+                           reducing: bool = False) -> Dict[str, Any]:
     """Consume ONE accumulation leg's claim, or raise. Never auto-resets.
 
     Durable on the same volume as the ledger, taken BEFORE the wire, and
@@ -897,19 +991,25 @@ def claim_accumulation_leg(market: str, rnd: int, leg: str,
     # `claim_submission`, so it binds independently of which strategy chose
     # the order. The 1215z window's two orders were both legitimate per-leg
     # claims; nothing counted them against the authorization as a whole.
-    over = submission_budget_refusal(path or ledger_path(), exp)
-    if over:
-        raise Refused(str(over["reason"]), over)
+    # THE FLAT BACKSTOP -- and it does NOT bind a risk-reducing order. See
+    # `total_backstop_binds`: a global count that can refuse an order which
+    # provably reduces |unmatched| protects nothing and can only strand the
+    # inventory the other classes created.
+    if total_backstop_binds(reducing):
+        over = submission_budget_refusal(path or ledger_path(), exp)
+        if over:
+            raise Refused(str(over["reason"]), over)
     # THE CLASS BUDGET, spent BEFORE the leg claim. Order matters: if the
     # class is exhausted, nothing should consume the leg's own slot, because
     # the leg slot is what a later retry under a replenished class budget
     # would need. The reverse order would spend the leg on an order the
     # class budget then refused.
-    ticket = class_claim_or_refuse(path or ledger_path(), exp, klass)
+    ticket = class_claim_or_refuse(path or ledger_path(), exp, klass,
+                                   reducing=reducing)
     sid = accumulation_sid(exp, mkt, r, side, a)
     rec = {"kind": "accumulation_leg_claim", "experiment": exp,
            "market": mkt, "round": r, "leg": side, "attempt": a, "sid": sid,
-           "klass": normalize_class(klass),
+           "klass": normalize_class(klass), "reducing": bool(reducing),
            "class_ticket": (None if ticket is None else ticket.get("sid")),
            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
            **dict(payload)}
@@ -1016,7 +1116,8 @@ def submission_claim_state(experiment: Optional[str] = None, *,
 
 def claim_submission(market: str, payload: Mapping[str, Any],
                      path: Optional[str] = None,
-                     klass: Any = None) -> Dict[str, Any]:
+                     klass: Any = None,
+                     reducing: bool = False) -> Dict[str, Any]:
     """Consume THE one submission claim, or raise. Never auto-resets.
 
     WHY THIS EXISTS, AND WHY max_live_orders DID NOT COVER IT.
@@ -1057,15 +1158,20 @@ def claim_submission(market: str, payload: Mapping[str, Any],
     if not mkt:
         raise Refused("SUBMISSION_CLAIM_NO_MARKET",
                       {"note": "the claim is per experiment AND market."})
-    over = submission_budget_refusal(path or ledger_path(), exp)
-    if over:
-        raise Refused(str(over["reason"]), over)
+    # the same exemption, on the other strategy's path: a risk-reducing
+    # order is never refused by the flat total, whichever engine chose it.
+    if total_backstop_binds(reducing):
+        over = submission_budget_refusal(path or ledger_path(), exp)
+        if over:
+            raise Refused(str(over["reason"]), over)
     # the same class budget, on the other strategy's path, so a class bound
     # cannot be sidestepped by which engine chose the order.
-    ticket = class_claim_or_refuse(path or ledger_path(), exp, klass)
+    ticket = class_claim_or_refuse(path or ledger_path(), exp, klass,
+                                   reducing=reducing)
     sid = submission_sid(exp)
     rec = {"kind": "submission_claim", "experiment": exp, "market": mkt,
            "sid": sid, "klass": normalize_class(klass),
+           "reducing": bool(reducing),
            "class_ticket": (None if ticket is None else ticket.get("sid")),
            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
            **dict(payload)}

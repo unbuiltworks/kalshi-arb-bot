@@ -2452,7 +2452,8 @@ class Runner:
             "reason": None, "windows_spent": None,
             "windows_remaining": None, "max_windows": None,
             "submissions_spent": None, "max_submissions": None,
-            "class_budgets": None,
+            "class_budgets": None, "completion_reserve": None,
+            "exact_market_binding": None, "blocks_advancement": None,
             "labels": ("the campaign BOUNDS a run; it does not authorize "
                        "one. The owner handshake and the shadow lock still "
                        "decide that. The nonce is identified by digest "
@@ -2472,6 +2473,22 @@ class Runner:
             # exposure or the one that UNWINDS it.
             out["class_budgets"] = AUTH.class_budget_report(
                 AUTH.ledger_path(), AUTH.experiment_id())
+            # THE COMPLETION RESERVE, reported as a verdict and not just as
+            # numbers. "Could a new exposure-increasing order still be
+            # closed?" is the question that matters, and an operator should
+            # not have to do the arithmetic to answer it.
+            _short = AUTH.completion_capacity_refusal(
+                AUTH.ledger_path(), AUTH.experiment_id())
+            out["completion_reserve"] = {
+                "submissions_per_obligation":
+                    AUTH.COMPLETION_SUBMISSIONS_PER_OBLIGATION,
+                "may_open": _short is None,
+                "why_not": None if _short is None else _short.get("reason"),
+                "detail": _short,
+                "labels": ("a risk-reducing order is NEVER refused by the "
+                           "flat backstop; a new exposure-increasing order "
+                           "is refused unless the capacity to close it is "
+                           "still reserved")}
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -2507,6 +2524,30 @@ class Runner:
                         slug in spent_w or out["windows_remaining"] > 0)
             else:
                 out["reason"] = st.get("why")
+            # A STALE EXACT-MARKET BINDING STOPS ADVANCEMENT DEAD.
+            # `L5_LIVE_PROBE_MARKET` pins authorization to ONE slug and wins
+            # over the series mandate by design, so a value left over from a
+            # single-window test would let window one arm and refuse windows
+            # two to four with AUTHORIZATION_BOUND_TO_MARKET. That is a
+            # tightening, not a hole -- which is exactly why it must be
+            # VISIBLE rather than discovered from a refusal counter at
+            # 1615z.
+            _pin = (os.getenv(AUTH.MARKET_ENV) or "").strip()
+            out["exact_market_binding"] = _pin or None
+            if scope and _pin:
+                _slug = (self.transport.market_slug
+                         if self.transport else None)
+                out["blocks_advancement"] = True
+                out["advancement_note"] = (
+                    "%s pins authorization to one market; the other windows "
+                    "of this campaign will refuse "
+                    "AUTHORIZATION_BOUND_TO_MARKET%s"
+                    % (AUTH.MARKET_ENV,
+                       "" if not _slug or _slug == _pin
+                       else " -- and THIS window (%s) is not the pinned one"
+                            % _slug))
+            elif scope:
+                out["blocks_advancement"] = False
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -2539,6 +2580,19 @@ class Runner:
             "would_halt": None if day is None else bool(day <= -halt),
             "room_usd": None if day is None else str(day + halt),
             "all_time_realized_usd": str(self.store.realized_today()),
+            # WHY IT MIGHT BE UNKNOWN, not just that it is. `realized_
+            # current_utc_day` returns None whenever an UNATTRIBUTED
+            # residual is nonzero -- a figure that belongs to no day cannot
+            # be excluded from today -- or when any settlement row is
+            # undated. Both refuse at the gate, and an operator seeing only
+            # `None` cannot tell which, nor what to reconcile.
+            "unattributed_usd": str(
+                self.store.state.get("realized_unattributed") or 0),
+            "undated_settlements": [
+                m for m, row in (self.store.state.get("retired_markets")
+                                 or {}).items()
+                if isinstance(row, Mapping) and not str(row.get("t") or "")
+            ][:8],
             "labels": ("the DAILY ceiling reads utc_day_realized_usd; the "
                        "separate cumulative ceilings read "
                        "all_time_realized_usd. None is UNKNOWN and refuses "
