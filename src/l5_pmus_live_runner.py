@@ -1466,6 +1466,16 @@ class Runner:
             "stream_age_s": row["pmus"]["stream_age_s"],
             "translation": rec.get("PMUS_TRANSLATION"),
             "safety": (rec.get("SAFETY_OVERLAY") or {}).get("reason"),
+            # THE PAIR, NOT JUST THE LEG. The two-sided plan -- both legs'
+            # prices, the common quantity and the combined pair cost -- is
+            # staged into `rec` and written to the tape, but the emitted line
+            # carried only the single leg that was being placed, so neither
+            # the proposed complement nor the pair economics were observable
+            # from the logs at all. Log-only and additive: the plan is what
+            # the engine already decided, reported rather than recomputed.
+            "two_sided": rec.get("TWO_SIDED_PROBE"),
+            "two_sided_queue": self.ts_queue_view(
+                slug, rec.get("TWO_SIDED_PROBE")),
             "order": {k: order.get(k) for k in
                       ("client_order_id", "submitted", "reason", "venue_order_id",
                        "state", "error")} if order else None,
@@ -1475,6 +1485,56 @@ class Runner:
         # OBSERVED the action, which is what the queue model must date.
         self.model_place(order.get("intent"), row, recv, rec=rec,
                          refused_reason=rec.get("refused_reason"))
+
+    def ts_queue_view(self, slug: str,
+                      plan: Any) -> Optional[Dict[str, Any]]:
+        """The ladder at BOTH proposed leg prices, for the fill scenarios.
+
+        WHY. The three fill scenarios are not computable from a BBO:
+        CONSERVATIVE needs the same-rung queue plus our own size cleared,
+        BASE needs the queue, and OPTIMISTIC needs a print THROUGH our price.
+        The emitted record carried only the touch, so no scenario could be
+        evaluated from the logs for either leg -- including the complement,
+        which is never submitted and therefore appears nowhere else.
+
+        Read-only, log-only, and it never raises: an unreadable ladder
+        reports why rather than a number, because an unknown queue is an
+        unknown fill and not a zero.
+        """
+        legs = (plan or {}).get("legs") if isinstance(plan, Mapping) else None
+        if not legs:
+            return None
+        lad = self.shadow_ladder
+        out: Dict[str, Any] = {
+            "labels": ("same_rung_fifo is a QUEUE that volume must clear; "
+                       "cross_price_depth is a PRICE DISTANCE and no fill "
+                       "may be claimed from it. A null is UNKNOWN, never 0.")}
+        for leg in legs:
+            try:
+                side = str(leg.get("side"))
+                own = D(str(leg.get("price")))
+                qty = D(str(leg.get("qty")))
+                wire = own if side == FM.UP else (D(1) - own)
+                resting = FM.BID if side == FM.UP else FM.ASK
+                row: Dict[str, Any] = {"own_px": str(own), "wire_px": str(wire),
+                                       "qty": str(qty),
+                                       "resting_side": resting}
+                if lad is None:
+                    row["why"] = "no_ladder"
+                else:
+                    q = lad.ahead_of_us(slug, resting, wire)
+                    dep = lad.depth_at(slug, resting, wire)
+                    row["queue_ahead"] = None if q is None else str(q)
+                    row["level_depth"] = None if dep is None else str(dep)
+                    row["bracket"] = lad.cross_price_bracket(
+                        slug, resting, wire, qty)
+                out[side] = row
+            except BaseException as exc:                      # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["ts_queue_view_error:%s"
+                           % type(exc).__name__] += 1
+        return out
 
     def observable_despite_refusal(self, rec: Mapping[str, Any],
                                    refused_reason: Optional[str]

@@ -566,3 +566,100 @@ def test_accumulation_sids_are_distinct_on_every_axis():
     # and a DIFFERENT namespace from the superseded two-slot claim
     assert not any(s.startswith("ts1.") for s in sids)
     assert all(s.startswith("acc1.") for s in sids)
+
+
+# ------------------------------------- the PAIR is observable from the logs
+
+def test_the_emitted_decision_line_carries_the_whole_pair_plan(probe,
+                                                               tmp_path):
+    """WHAT THIS PINS. The staged plan -- both legs' prices, the common
+    quantity and the combined pair cost -- went to the durable tape but was
+    dropped from `L5_LIVE_DECISION`, whose `intent` holds only the ONE leg
+    being placed. So from the logs alone the proposed complement and the pair
+    economics were invisible: the 0245z window showed thirty orders and not
+    one pair price. Both halves are asserted here so they cannot drift: the
+    executor really does stage the pair under this key, and the emitter
+    really does read that key.
+    """
+    import inspect
+
+    from src import l5_pmus_live_runner as R
+
+    H, E = probe
+    ex, _t = mk(H, E, tmp_path)
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+
+    # (1) the executor stages the PAIR, not the leg
+    plan = rec["TWO_SIDED_PROBE"]
+    assert {l["side"] for l in plan["legs"]} == {"UP", "DOWN"}
+    assert plan["pair_cost"] == "0.95"
+    assert plan["leg_to_place"] == "DOWN"
+    # the complement's price is present even though only one leg is placed
+    assert {l["side"]: l["price"] for l in plan["legs"]} == {
+        "DOWN": "0.37", "UP": "0.58"}
+
+    # (2) the emitter reads that exact key into the line it emits
+    body = inspect.getsource(R.Runner.handle)
+    i = body.index('emit("L5_LIVE_DECISION"')
+    payload = body[i:body.index("self.model_place", i)]
+    assert '"two_sided": rec.get("TWO_SIDED_PROBE")' in payload
+
+
+def test_the_emitted_line_carries_the_ladder_at_BOTH_leg_prices(probe,
+                                                                tmp_path):
+    """The three fill scenarios need the QUEUE, which a BBO cannot give.
+
+    CONSERVATIVE wants the same-rung queue plus our own size cleared, BASE
+    the queue, OPTIMISTIC a print THROUGH our price. None of that is
+    computable from the touch, and the complement leg -- never submitted --
+    appears in no other record at all. So the view is asserted for BOTH
+    sides, with the UP/DOWN wire-price and resting-side mapping that the fill
+    model actually uses, and an unreadable ladder must say WHY rather than
+    report a zero.
+    """
+    from decimal import Decimal as D
+
+    from src import l5_maker_fill_model as FM
+    from src import l5_pmus_live_runner as R
+
+    H, E = probe
+    ex, _t = mk(H, E, tmp_path)
+    plan = ex.handle(_row(H), _book(), market="m",
+                     window="21:00")["TWO_SIDED_PROBE"]
+
+    lad = FM.Ladder()
+    lad.ingest({"marketSlug": "m",
+                "bids": [{"px": {"value": "0.40"}, "qty": "250"},
+                         {"px": {"value": "0.37"}, "qty": "80"}],
+                "offers": [{"px": {"value": "0.42"}, "qty": "500"}],
+                "transactTime": "0"}, 0.0)
+
+    class Stub:
+        shadow_ladder = lad
+        stats: dict = {}
+
+    got = R.Runner.ts_queue_view(Stub(), "m", plan)
+
+    # UP rests as a BID at its own price; DOWN rests as an ASK at 1 - price
+    assert got["UP"]["resting_side"] == FM.BID
+    assert got["UP"]["wire_px"] == "0.58"
+    assert got["DOWN"]["resting_side"] == FM.ASK
+    assert got["DOWN"]["own_px"] == "0.37"
+    assert got["DOWN"]["wire_px"] == "0.63"
+
+    # the DOWN leg's wire price is beyond the deepest ASK rung served, so the
+    # queue is UNKNOWN -- a null, never a zero
+    assert got["DOWN"]["queue_ahead"] is None
+
+    # no ladder at all says why, and still reports both legs
+    class Blind:
+        shadow_ladder = None
+        stats: dict = {}
+    blind = R.Runner.ts_queue_view(Blind(), "m", plan)
+    assert blind["UP"]["why"] == "no_ladder"
+    assert blind["DOWN"]["why"] == "no_ladder"
+    assert "queue_ahead" not in blind["UP"]
+
+    # and nothing to plan means nothing to report
+    assert R.Runner.ts_queue_view(Stub(), "m", None) is None
+    assert R.Runner.ts_queue_view(Stub(), "m", {"legs": []}) is None
