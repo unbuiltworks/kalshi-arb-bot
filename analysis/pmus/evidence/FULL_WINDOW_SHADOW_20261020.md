@@ -86,3 +86,84 @@ BOTH legs, including the complement that is never submitted.
 MODELLED and PROPOSED. Nothing here was submitted, filled, settled or
 realized. The +$0.181 is a pair economics calculation on displayed prices,
 not a fill, and the rebate is reported separately and assumed nowhere.
+
+---
+
+# 0330z, fully observed (deployment `a0391641`, commit `abb2c3b0`)
+
+32 evaluated decisions, **zero refusals**, 259 `arm_refused_shadow_only_lock`.
+The record now carries the whole pair and the ladder at both leg prices.
+
+## The proposed pair, from the record itself
+
+```
+UP    0.4000 x 3.32   touch_at_placement 0.4200   alone_cost $1.3880
+DOWN  0.5400 x 3.32   touch_at_placement 0.5600   alone_cost $1.8528
+pair_cost 0.9400   edge_per_contract 0.0600   depth_ticks 2
+gross_cash_usd $3.1008    cash_gate_obligation_usd $4.6480  (gate $4.65)
+accumulation_round 0 of 8   leg_to_place UP   legs_claimed {UP:false, DOWN:false}
+replaced_l5_intent  UP 0.9 x 1.35 MAKER
+```
+
+| | per contract | pair of 3.32 |
+|---|---|---|
+| post-only both legs, **no rebate assumed** | +0.066105 | **+$0.2192** |
+| if BOTH legs paid taker | +0.026056 | +$0.0792 |
+| maker rebate upside, never assumed | +0.006105 | +$0.02 |
+
+`both_positive_if_taker: true`. Worst single-leg loss **-$1.8528**.
+
+## Modelled fills: CONSERVATIVE / BASE / OPTIMISTIC
+
+From `two_sided_queue`, read at 03:35:26Z when the book was **0.9100 / 0.9200**
+while the plan was frozen against a 0.42 / 0.56 touch:
+
+| leg | wire | rests | same_rung_fifo | cross_price_depth | price must reach us |
+|---|---|---|---|---|---|
+| UP | 0.4000 | BID | 0 | 22,025.95 | **yes** |
+| DOWN | 0.4600 | ASK | 0 | 0 | no |
+
+* **CONSERVATIVE** -- no fill. `conservative_required_volume` is only 3.32,
+  but `requires_price_to_reach_us: true`: the bid must fall 51 cents to 0.40
+  first, and price distance is cleared by withdrawal, which trade volume
+  cannot measure. No fill may be claimed.
+* **BASE** -- no fill, same reason. The queue is empty; the price is not there.
+* **OPTIMISTIC** -- no fill. This needs a print strictly THROUGH 0.40 and BTC
+  went the other way, to 0.91.
+
+**All three scenarios: zero fills, zero residual, $0.00 net settlement.**
+
+## What this window actually teaches
+
+The engine proposed a correctly-priced, positive-expectancy pair and the
+market then left it behind. Two consequences, neither visible before today:
+
+1. **The frozen plan does not reprice.** Freezing was the right fix for a
+   real defect (re-planning each tick produced legs of DIFFERENT sizes --
+   1.89 against 0.98 -- which is not a matched pair). But a plan frozen at a
+   0.42 touch is still being proposed at a 0.91 touch, 32 times. In live it
+   would have rested the UP leg at 0.40, watched BTC run to 0.91, and
+   cancelled it unfilled at the terminal deadline: no position, no loss, a
+   spent window. The missing rule is not "reprice the resting leg" (that is
+   chasing) -- it is **abandon a round whose plan the market has left, and
+   open a new round at the new touch**, which the round machinery already
+   supports (8 rounds authorized, round 0 used).
+2. **The complement's price is only valid near where it was frozen.** The
+   DOWN leg's wire price of 0.46 is now 45 cents BELOW the bid. Submitted
+   post-only it would be rejected for crossing, so it never rests. A
+   complement must be re-derived from the book at the moment leg one fills,
+   not carried from the moment the pair was planned.
+
+That is the useful output of a full window of shadow: the pair economics are
+sound and the *sequencing* has a gap, found for the price of a log line
+instead of an authorization and an owner handshake.
+
+## Three complete windows
+
+| window | decisions | refusals | plan | outcome |
+|---|---|---|---|---|
+| 0245z | 30 | 0 | eligible | blocked at the lock |
+| 0300z | 22 | 0 | UP 0.4400 / DOWN 0.5100, pair 0.9500, +$0.181 | blocked at the lock |
+| 0330z | 32 | 0 | UP 0.4000 / DOWN 0.5400, pair 0.9400, +$0.2192 | blocked at the lock; 0 fills in all 3 scenarios |
+
+84 eligible pair proposals, zero refusals, zero submissions, $0 at risk.
