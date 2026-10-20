@@ -1463,3 +1463,8 @@ deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
 # 2026-10-20T06:02:34Z DEPLOY B5 completion ceiling + the requested E2E coverage.
 # Gate: the same 40 baseline IDs, zero NEW, 11,817 passed. Authorizes no
 # order and enables no crossing; L5_TS_COMPLETION_CROSS stays unset.
+
+# 2026-10-20T12:48:37Z DEPLOY the pair-cost ceiling at the common submission boundary,
+# strategy exclusivity per authorized window, and the durable campaign
+# authorization (INERT: no approval document exists). Live execution OFF:
+# L5_SHADOW_ONLY=1 and PMUS_Q1_LIVE=NO. Same 40 baseline IDs, zero NEW.
