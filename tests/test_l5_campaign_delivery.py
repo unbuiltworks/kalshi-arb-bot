@@ -419,6 +419,9 @@ class _TelStore:
     def __init__(self, day=None, all_time=D("-8.2688")) -> None:
         self._day = day
         self._all = all_time
+        # the day line also reports WHY the day might be unknown, which it
+        # reads off the durable state the real InventoryStore carries
+        self.state = {"realized_unattributed": "0", "retired_markets": {}}
 
     def realized_current_utc_day(self, now=None):
         if isinstance(self._day, BaseException):
