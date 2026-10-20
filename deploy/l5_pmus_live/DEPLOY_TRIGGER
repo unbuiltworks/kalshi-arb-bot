@@ -1412,3 +1412,32 @@ deploy two-leg pre-live: queue bracket + widen-only terminal margin, shadow-lock
 # two-leg probe stays INERT, mandate mode is OFF (L5_LIVE_AUTH_MAX_WINDOWS
 # unset), the authorization remains EXPIRED and every risk limit is unchanged.
 deploy raise-only placement floor for mandate campaigns, shadow-locked 2026-10-20T00:34:08Z
+
+# ---------------------------------------------------------------------------
+# c302bd79 -- the four full-window fixes. SHADOW ONLY.
+#
+# 1. DECOUPLED. The call site picks its gate from the legs claimed ON DISK for
+#    the current round, so a restart mid-round completes rather than
+#    re-entering. With the default floor of zero, entry runs from the window's
+#    own open: the T+6-to-T+8 band is gone.
+# 2. PER-ORDER AGE DEADLINE. ORDER_TTL_S 120s, shortens only, measured from
+#    SUBMIT (at or before the ack, so it fires sooner). maybe_acc_deadline
+#    cancels via deadman(only=[coid]) -- one cancellation route, so it keeps
+#    cancel-by-venue-id, proof by re-read, fill-booking and the UNCERTAIN
+#    marking, without sweeping a complement placed seconds ago. An order whose
+#    submit time will not parse is marked UNCERTAIN and disarms.
+# 3. BOUNDED REPLACEMENT. accumulation_sid gains an attempt axis; attempt zero
+#    keeps its historical key so claims already on the volume are not handed
+#    back as unspent. A later attempt needs BOTH zero filled quantity on the
+#    leg AND no live order, so a filled leg can never be re-placed and an
+#    unverified cancel cannot buy a retry. Budget 4, hard cap 16.
+# 4. TWO ECONOMIC CUTOFFS. may_enter (600s) and may_complete (720s), both
+#    earlier-only, both bounded by the terminal. Completing stays available
+#    after entering stops, because completing REMOVES risk.
+#
+# Regression: 26 failed / 11,708 passed / 14 errors = the SAME 40 IDs as the
+# clean baseline, zero NEW, zero GONE; +50 passed are the new tests.
+#
+# AUTHORIZES NO ORDER. SHADOW_ONLY enabled, two-leg engine INERT (L5_TS_*
+# unset), mandate off, authorization EXPIRED, every risk limit unchanged.
+deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
