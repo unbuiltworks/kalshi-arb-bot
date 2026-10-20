@@ -374,33 +374,25 @@ def test_a_reconnect_takes_a_FRESH_snapshot_and_never_the_old_one(tmp_path):
 
 # ================================================ eligible and ineligible
 
-def test_the_module_has_NO_pair_cost_CAP_and_only_depth_ticks_protects_us(
-        tmp_path, monkeypatch):
-    """A GAP, PINNED. `L5_OPERATING_MODEL` puts the spring target at <= 0.96
-    and the controller enforces one (`max_pair_cost: 0.96` in its records).
-    The two-sided probe has NO such cap: its only price test is
-    `MIN_GROSS_EDGE = 0.01`, so a pair at 0.99 passes, and `fee_floor` judges
-    that pair profitable only because it is judged for POST-ONLY execution --
-    `net_if_taker` is NEGATIVE there and `both_positive_if_taker` is False,
-    and NEITHER is gated on.
+def test_the_pair_cost_CAP_no_longer_depends_on_one_environment_variable(
+        monkeypatch):
+    """C3, CLOSED. This test previously pinned the gap: `MIN_GROSS_EDGE` is
+    0.01, so a 0.99 pair passed, and `fee_floor` called it profitable only
+    because it judges POST-ONLY execution -- `net_if_taker` is negative there
+    and `both_positive_if_taker` is False, and neither was gated on. The only
+    thing standing between us and such a pair was `L5_TS_DEPTH_TICKS=2`.
 
-    What stands between us and such a pair is one environment variable:
-    `L5_TS_DEPTH_TICKS=2` makes the pair at most `1 - spread - 0.04`. At 1
-    tick a 1-cent book gives 0.97 and at 0 it gives 0.99, both sendable.
-
-    This test asserts the CURRENT behaviour, so that adding the cap is a
-    deliberate change with a failing test to flip, not a silent one.
+    `L5_OPERATING_MODEL` puts the spring target at <= 0.96 and keeps near-$1
+    pair tolerance LOCKED, so that is now a gate.
     """
-    monkeypatch.setenv("L5_TS_DEPTH_TICKS", "0")
-    o = TS.build_orders(market=SLUG, bid="0.50", ask="0.51",
-                        bid_depth="900", ask_depth="900", tick="0.01",
-                        min_qty="0.01", depth_ticks=0, cash_envelope="4.65",
-                        max_worst_case_loss="5", book_age_s="0.05")
-    assert o["ok"] is True                      # <- the gap
-    assert D(o["pair_cost"]) == D("0.99")
-    assert o["both_positive_if_taker"] is False
-    assert D(o["fee_floor"]["net_if_taker"]) < 0
-    # and at the deployed setting the same book is safely under the target
+    for dticks in (0, 1):
+        o = TS.build_orders(market=SLUG, bid="0.50", ask="0.51",
+                            bid_depth="900", ask_depth="900", tick="0.01",
+                            min_qty="0.01", depth_ticks=dticks,
+                            cash_envelope="4.65", max_worst_case_loss="5",
+                            book_age_s="0.05")
+        assert o["ok"] is False
+        assert o["reason"] == "PAIR_COST_ABOVE_CAP"
     o2 = TS.build_orders(market=SLUG, bid="0.50", ask="0.51",
                          bid_depth="900", ask_depth="900", tick="0.01",
                          min_qty="0.01", depth_ticks=2, cash_envelope="4.65",
@@ -669,23 +661,20 @@ def test_one_complete_window_entry_to_realized_net(tmp_path):
 
 # ========================================== the gap a full window exposed
 
-def test_the_COMPLEMENT_price_is_carried_from_PLANNING_time(tmp_path):
-    """A GAP, PINNED, from the 0330z production window.
+def test_the_COMPLEMENT_is_derived_from_the_CURRENT_book_after_a_fill(
+        tmp_path):
+    """THE 0330z GAP, CLOSED. This test previously pinned the defect.
 
-    The plan is frozen per round -- rightly, because re-planning each tick
-    produced legs of DIFFERENT sizes, which is not a matched pair. But with
-    `max_live_orders=1` the complement CANNOT be placed until the first leg
-    leaves the book, so it is ALWAYS placed later, against a book that has
-    moved -- and its price comes from the frozen plan, not from the book at
-    that moment.
+    The plan stays frozen per round -- re-planning each tick produced legs of
+    DIFFERENT sizes, which is not a matched pair. But with `max_live_orders=1`
+    the complement can never rest beside the first leg, so it is ALWAYS placed
+    later against a book that has moved. Carrying the planning-time price is
+    what left the 0330z complement 45 cents through the touch, where post-only
+    is rejected for crossing and the filled leg is left unhedged.
 
-    Here the first leg fills and the market then runs 20 cents. The
-    complement still goes out at its planning-time price, which is now far
-    through the touch: post-only, a real venue rejects it for crossing, so it
-    never rests and the first leg is left unhedged.
-
-    Asserts the CURRENT behaviour so that re-deriving the complement is a
-    deliberate change with a failing test to flip.
+    Here the first leg fills and the market then runs 20 cents. The complement
+    now goes out at a price derived from THAT book, sized to the quantity
+    actually filled, and judged against the cost actually paid.
     """
     w = Window(tmp_path)
     w.venue.fill_next()
@@ -695,11 +684,168 @@ def test_the_COMPLEMENT_price_is_carried_from_PLANNING_time(tmp_path):
                for l in w.records[0]["TWO_SIDED_PROBE"]["legs"]}
 
     w.book.set("0.62", "0.64")                # the market has moved 20c
-    w.tick(90.0)
+    rec = w.tick(90.0)
     leg2 = w.venue.sent[1]
     assert leg2["side"] != leg1["side"]
-    # <- the gap: the planning-time price, not one derived from THIS book
-    assert D(leg2["price"]) == planned[leg2["side"]]
-    fresh = D(1) - D("0.64") - D("0.02") if leg2["side"] == "DOWN" else (
-        D("0.62") - D("0.02"))
-    assert D(leg2["price"]) != fresh
+
+    # priced off the CURRENT touch: DOWN own = (1 - 0.64) - 0.02
+    fresh = (D("0.62") - D("0.02") if leg2["side"] == "UP"
+             else D(1) - D("0.64") - D("0.02"))
+    assert D(leg2["price"]) == fresh
+    assert D(leg2["price"]) != planned[leg2["side"]]
+
+    # sized to what actually filled, and judged on what we actually paid
+    comp = rec["TWO_SIDED_COMPLEMENT"]
+    assert comp["ok"] is True
+    assert comp["provenance"] == "DERIVED_FROM_CURRENT_BOOK"
+    assert D(leg2["qty"]) == D(leg1["qty"])
+    assert D(comp["first_leg_cost"]) == D(leg1["price"])
+    assert D(comp["pair_cost"]) == D(leg1["price"]) + fresh
+    assert D(comp["frozen_price_superseded"]) == planned[leg2["side"]]
+    # and it still rests post-only, on the correct side of the book
+    assert leg2["mode"] == FT.MAKER
+    assert TS.leg_crosses(leg2["side"], leg2["price"],
+                          bid="0.62", ask="0.64") is False
+
+
+def test_a_complement_that_no_longer_PAYS_is_refused_and_nothing_is_sent(
+        tmp_path):
+    """The other half of the same decision. The first leg filled at 0.40 and
+    the book has run the WRONG way, so the only complement available would
+    put the pair at or above a dollar. It is refused rather than repriced
+    into a certain loss, and the residual is carried under the existing
+    limits -- an economic decision, not a deadline."""
+    w = Window(tmp_path)
+    w.venue.fill_next()
+    w.tick(30.0)
+    assert len(w.venue.sent) == 1
+    w.book.set("0.30", "0.32")                # DOWN's fair price is now 0.66
+    rec = w.tick(90.0)
+    assert w.reason(rec) in ("COMPLEMENT_BELOW_FEE_FLOOR",
+                             "COMPLEMENT_NOT_POSITIVE_ON_BOTH_OUTCOMES",
+                             "COMPLEMENT_PAIR_ABOVE_CAP")
+    assert len(w.venue.sent) == 1             # nothing sent
+    assert D(rec["TWO_SIDED_COMPLEMENT"]["pair_cost"]) >= D("0.96")
+
+
+def test_a_round_the_market_has_LEFT_is_retired_and_re_planned(tmp_path):
+    """B4. An unfilled plan the book has walked away from is abandoned, and
+    the next round is planned at the CURRENT touch -- instead of the same
+    unreachable pair being proposed for the rest of the window, which is
+    what 0330z did 32 times."""
+    w = Window(tmp_path)
+    w.tick(30.0)                              # round 0 planned and leg sent
+    first = D(w.venue.sent[0]["price"])
+    assert w.ex.probe_round(SLUG) == 0
+
+    w.tick(155.0)                             # TTL cancel: nothing live, none filled
+    assert w.venue.cancelled == ["v1"]
+
+    w.book.set("0.80", "0.82")                # and the market has gone
+    rec = w.tick(170.0)
+    assert rec["TWO_SIDED_ROUND"]["retired"] is True
+    assert rec["TWO_SIDED_ROUND"]["plan_unexecutable"]
+    assert rec["TWO_SIDED_ROUND"]["retirement_blocked_by"] is None
+    assert w.ex.probe_round_retired(SLUG, 0) is True
+    # re-planned at the new touch, not the old one -- and still the CHEAPER
+    # leg first, which at a 0.80/0.82 book is DOWN at (1 - 0.82) - 0.02
+    assert w.reason(rec) == "SUBMITTED", w.reason(rec)
+    sent = w.venue.sent[-1]
+    assert D(sent["price"]) != first
+    fresh = {s: TS.quote_own_price(s, bid="0.80", ask="0.82", tick="0.01",
+                                   depth_ticks=2) for s in ("UP", "DOWN")}
+    assert sent["side"] == min(fresh, key=lambda s: fresh[s])
+    assert D(sent["price"]) == fresh[sent["side"]] == D("0.16")
+
+
+def test_a_round_is_NEVER_retired_while_an_order_is_live(tmp_path):
+    w = Window(tmp_path)
+    w.tick(30.0)                              # leg resting, nothing filled
+    w.book.set("0.80", "0.82")
+    rec = w.tick(60.0)
+    assert rec["TWO_SIDED_ROUND"]["retired"] is False
+    assert rec["TWO_SIDED_ROUND"]["retirement_blocked_by"] in (
+        "ORDER_STILL_LIVE", "ORDER_STILL_FILLABLE")
+    assert w.ex.probe_round_retired(SLUG, 0) is False
+
+
+def test_a_round_is_NEVER_retired_while_a_leg_HOLDS_inventory(tmp_path):
+    """Including a PARTIAL. Walking past a round that holds stock would
+    strand it: the complement is tracked per round, so the round is the only
+    thing that would have hedged it."""
+    w = Window(tmp_path)
+    w.venue.fill_next("1.00")                 # partial fill, order ends
+    w.tick(30.0)
+    w.tick(155.0)                             # TTL cancels the remainder
+    w.book.set("0.80", "0.82")
+    rec = w.tick(170.0)
+    blocked = rec.get("TWO_SIDED_ROUND", {}).get("retirement_blocked_by")
+    assert blocked is not None and blocked.startswith("LEG_HOLDS_INVENTORY")
+    assert w.ex.probe_round_retired(SLUG, 0) is False
+
+
+# ============================================= cancellation UNCERTAINTY
+
+def test_an_UNVERIFIABLE_cancellation_stops_the_engine_rather_than_guessing(
+        tmp_path):
+    """THE CASE THAT MATTERS MOST. The cancel ack came back, but the re-read
+    that would PROVE the order terminal failed -- so the venue may still hold
+    it. An unverified cancellation is not a cancellation: the store goes
+    UNCERTAIN, no further order may be placed, and no round may be retired.
+
+    A cancel ack is a receipt, not proof. `deadman` stopped trusting its own
+    ack for exactly this reason.
+    """
+    w = Window(tmp_path)
+    w.tick(30.0)
+    assert len(w.venue.sent) == 1
+
+    # the venue accepts the cancel and then goes dark on the re-read
+    def blind(order_id):
+        raise OSError("venue unreachable")
+    w.venue.order = blind
+
+    w.tick(155.0)                                   # the TTL fires
+    assert w.venue.cancelled == ["v1"]              # cancelled by exact id
+    assert w.store.orders_uncertain()               # but NOT proved terminal
+
+    # nothing further is placed while the book is uncertain
+    rec = w.tick(170.0)
+    why = w.reason(rec)
+    # the refusal NAMES the order and why it could not be verified, which is
+    # stronger than a bare ORDER_STATE_UNCERTAIN
+    assert why.startswith("BOOK_UNCERTAIN:"), why
+    assert "v1" in why and "OSError" in why, why
+    assert len(w.venue.sent) == 1
+
+    # and the round cannot be retired on an unknown, however far the book moves
+    w.book.set("0.80", "0.82")
+    assert w.ex.probe_round_is_safe_to_retire(SLUG, 0) is not None
+    assert w.ex.probe_round_retired(SLUG, 0) is False
+
+
+def test_a_cancel_the_venue_says_is_STILL_OPEN_is_not_treated_as_done(
+        tmp_path):
+    """The venue answers the re-read and says the order is still working.
+    That is a refusal to confirm, not a confirmation."""
+    w = Window(tmp_path)
+    w.tick(30.0)
+    intent = w.venue.sent[0]
+
+    def still_open(order_id):
+        return {"id": order_id, "state": "ORDER_STATE_NEW",
+                "quantity": str(intent["qty"]),
+                "cumQuantity": "0", "leavesQuantity": str(intent["qty"]),
+                "avgPx": {"value": "0", "currency": "USD"},
+                "commissionNotionalTotalCollected": {"value": "0",
+                                                     "currency": "USD"}}
+    w.venue.order = still_open
+
+    w.tick(155.0)
+    assert w.venue.cancelled == ["v1"]
+    # the slot is NOT released: the order may still take money
+    assert w.store.still_fillable_order_count() >= 1
+    why = w.reason(w.tick(170.0))
+    assert why.startswith("BOOK_UNCERTAIN:") or why == "MAX_LIVE_ORDERS", why
+    assert "still reports it live" in why or why == "MAX_LIVE_ORDERS", why
+    assert len(w.venue.sent) == 1

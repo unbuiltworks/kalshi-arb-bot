@@ -4086,6 +4086,60 @@ class FaithfulExecutor:
         except BaseException:                                  # noqa: BLE001
             return None
 
+    def probe_round_retired(self, market: str, rnd: int) -> bool:
+        """Has this round been abandoned because the book left its plan?"""
+        key = "%s|%d" % (str(market), int(rnd))
+        return bool((self.store.state.get("probe_rounds_retired") or {}
+                     ).get(key))
+
+    def probe_retire_round(self, market: str, rnd: int, why: str) -> None:
+        """Abandon a round durably. ADDITIVE, and it deletes nothing.
+
+        The claims of a retired round STAY on disk -- they are the record
+        that those legs were sent, and resetting a claim is never automatic.
+        Retirement is a separate durable fact that makes `probe_round` walk
+        PAST this round, so the engine re-plans at the current touch in the
+        next one instead of re-proposing a pair the market has left.
+        """
+        reg = self.store.state.setdefault("probe_rounds_retired", {})
+        key = "%s|%d" % (str(market), int(rnd))
+        if key not in reg:
+            reg[key] = {"t": self._now().isoformat(), "why": str(why)[:160]}
+            self.store.save()
+
+    def probe_round_is_safe_to_retire(self, market: str,
+                                      rnd: int) -> Optional[str]:
+        """None if this round may be abandoned, else what forbids it.
+
+        THE TWO THINGS THAT FORBID IT, both read from authoritative durable
+        state rather than from memory:
+
+          * ANY order live in this market. An order we may still own cannot
+            be orphaned by moving on from the round that owns it -- it has to
+            be cancelled by its own deadline first, by exact id, and proved
+            terminal by a re-read.
+          * ANY filled quantity on either leg, including a PARTIAL. Retiring
+            a round that holds inventory would strand it: the complement is
+            tracked per round, so walking past the round walks past the only
+            thing that would have hedged it.
+
+        An unreadable position or order count forbids it too, because an
+        unknown is not a zero.
+        """
+        try:
+            if self.store.live_order_count():
+                return "ORDER_STILL_LIVE"
+            if self.store.still_fillable_order_count():
+                return "ORDER_STILL_FILLABLE"
+            for leg in ("UP", "DOWN"):
+                if self.store.position(market, leg) != D(0):
+                    return "LEG_HOLDS_INVENTORY:%s" % leg
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return "STATE_UNREADABLE:%s" % type(exc).__name__
+        return None
+
     def probe_round(self, market: str) -> Optional[int]:
         """The first round of this market with a leg still unspent, or None.
 
@@ -4096,6 +4150,8 @@ class FaithfulExecutor:
         this market is spent, and the caller refuses.
         """
         for r in range(self.acc_max_rounds()):
+            if self.probe_round_retired(market, r):
+                continue           # abandoned: its plan is not coming back
             claimed = self.probe_legs_claimed(market, r)
             if not all(claimed.values()):
                 return r
@@ -4420,10 +4476,74 @@ class FaithfulExecutor:
             # WHICH ACCUMULATION ROUND IS THIS. Walked from disk, so a
             # restart resumes the round it was working rather than opening a
             # fresh pair on top of inventory it has forgotten.
+            # THE BOOK, RESOLVED ONCE FOR THIS BRANCH AND NOWHERE ELSE.
+            #
+            # `handle` is called with `{}` as `authenticated` on purpose: the
+            # L5-following path rests at L5's own price through
+            # MAKER_TREATMENT and needs no book, and giving `pmus_translate` a
+            # real one would change the pricing and sizing of a path that has
+            # traded real money. `probe_plan` resolves the mirror itself, but
+            # it does so in a LOCAL -- so the retirement test and the
+            # complement, which are decided out here, were reading the empty
+            # dict and refusing BOOK_STALE unconditionally. Exactly the shape
+            # of the blocker that cost us the 0200z window.
+            #
+            # So this is a separate local, used ONLY by the two-sided
+            # lifecycle below. `authenticated` is deliberately NOT reassigned.
+            ts_book = self.ts_authenticated_book(market, authenticated)
+            _tick = getattr(self.transport, "tick_size", None)
+            _dticks = int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+
             rnd = self.probe_round(market)
             if rnd is None:
                 return prov.refuse("TWO_SIDED_PROBE",
                                    "ACCUMULATION_EXHAUSTED")
+
+            # RETIRE A ROUND THE MARKET HAS LEFT BEHIND, and only then.
+            #
+            # THE 0330z WINDOW. A plan frozen against a 0.42/0.56 touch was
+            # re-proposed 32 times after the book had gone to 0.91/0.92, by
+            # which point its DOWN leg's wire price was 45 cents BELOW the
+            # bid -- post-only, the venue rejects that for crossing, so it
+            # could never rest -- and its UP leg was 51 cents under the
+            # touch, which no fill scenario can reach. Freezing the plan per
+            # round is right (re-planning each tick gave legs of 1.89 and
+            # 0.98, which is not a matched pair); never ABANDONING it was
+            # not.
+            #
+            # SAFETY FIRST, AND IT IS NOT NEGOTIABLE. Nothing is retired
+            # while an order is live or either leg holds filled quantity --
+            # not even a partial. Walking past a round that owns a live
+            # order would orphan it, and walking past one that holds
+            # inventory would strand it, because the complement is tracked
+            # per round. `probe_round_is_safe_to_retire` reads both from
+            # durable state and treats an unreadable answer as a refusal.
+            # The claims themselves are never deleted: retirement is an
+            # additive durable fact.
+            _stale_plan = self.probe_stored_plan(market, rnd)
+            if _stale_plan is not None:
+                _why = TS.plan_executable(
+                    _stale_plan, bid=ts_book.get("bid"),
+                    ask=ts_book.get("ask"), tick=_tick,
+                    depth_ticks=_dticks)
+                if _why:
+                    _blocked = self.probe_round_is_safe_to_retire(market, rnd)
+                    prov.stage("TWO_SIDED_ROUND", {
+                        "round": rnd, "plan_unexecutable": _why,
+                        "retired": not _blocked,
+                        "retirement_blocked_by": _blocked,
+                        "labels": ("a frozen plan the book has left cannot "
+                                   "fill and cannot be completed. It is "
+                                   "abandoned only with nothing live and "
+                                   "nothing filled; otherwise the deadline "
+                                   "owns the order and the residual is "
+                                   "carried under the existing limits.")})
+                    if not _blocked:
+                        self.probe_retire_round(market, rnd, _why)
+                        rnd = self.probe_round(market)
+                        if rnd is None:
+                            return prov.refuse("TWO_SIDED_PROBE",
+                                               "ACCUMULATION_EXHAUSTED")
 
             # THE ENTRY/COMPLETION GATE. Opening a first leg late is the
             # dangerous action: if the window cannot still produce a
@@ -4483,6 +4603,74 @@ class FaithfulExecutor:
                 # unreachable unless the claim state changed underneath us.
                 return prov.refuse("TWO_SIDED_PROBE", "ACCUMULATION_EXHAUSTED")
             leg = legs[nxt]
+
+            # THE COMPLEMENT IS PRICED NOW, NOT AT PLANNING TIME.
+            #
+            # With one live-order slot the complement can never rest beside
+            # the first leg -- it is refused MAX_LIVE_ORDERS until that leg
+            # leaves the book -- so it is ALWAYS placed later, against a
+            # book that has moved. Carrying the frozen price is what left
+            # the 0330z complement 45 cents through the touch.
+            #
+            # Only when the OTHER side actually holds filled quantity, so
+            # this is a genuine completion and not a first leg: the quantity
+            # is the unmatched remainder (never more than was filled), and
+            # the economics are judged on the cost we REALLY paid plus this
+            # quote. A complement that no longer clears the fee floor is
+            # REFUSED, not repriced into a loss -- the residual is then
+            # carried under the existing controls, which is an economic
+            # decision and not a deadline.
+            _other = "DOWN" if nxt == "UP" else "UP"
+            try:
+                _held = self.store.position(market, _other)
+                _mine = self.store.position(market, nxt)
+            except BaseException:                              # noqa: BLE001
+                _held = _mine = None
+            _need = (None if (_held is None or _mine is None)
+                     else _held - _mine)
+            # UNMATCHED REMAINDER, not merely "the other side holds
+            # something". After a completed round BOTH sides hold stock and
+            # the book is matched, so `_held > 0` was true while there was
+            # nothing to complete -- the next round's FIRST leg was then
+            # routed down the complement path and refused NOTHING_TO_MATCH,
+            # which stopped accumulation dead at one pair. A completion
+            # exists only while one side is ahead of the other.
+            if _need is not None and _need > D(0):
+                _basis = self.store.leg_cost(market).get(_other)
+                _avg = (_basis / _held) if (_basis is not None
+                                            and _held > D(0)) else None
+                comp = TS.complement_order(
+                    side=nxt, qty=_need, cost_px=_avg,
+                    bid=ts_book.get("bid"), ask=ts_book.get("ask"),
+                    tick=_tick,
+                    min_qty=getattr(self.transport, "quantity_increment",
+                                    None),
+                    depth_ticks=_dticks,
+                    book_age_s=ts_book.get("stream_age_s"),
+                    gap_suspected=bool(ts_book.get("gap_suspected")))
+                prov.stage("TWO_SIDED_COMPLEMENT", dict(
+                    comp, round=rnd, matching_side=_other,
+                    filled_qty=str(_held), already_matched=str(_mine),
+                    unmatched=str(_need),
+                    frozen_price_superseded=str(leg.get("price"))))
+                if not comp.get("ok"):
+                    return prov.refuse("TWO_SIDED_PROBE",
+                                       str(comp.get("reason"))[:120])
+                leg = dict(comp["leg"])
+                # NO PAIR RE-GATE HERE, DELIBERATELY. `probe_precheck` prices
+                # both legs as if BOTH were still outstanding, which is right
+                # when neither has been placed -- it stops leg one spending
+                # leg two's headroom. Applied to a completion it DOUBLE-COUNTS
+                # the filled leg, which is already carried as inventory by
+                # `inventory_for_gates`: re-gating this complement that way
+                # produced a phantom $5.976 commitment against a $4.65 cap and
+                # refused a pair that in fact fits. The complement is ONE
+                # order and the gates it must pass are the single-order ones
+                # below -- the validation gates and `limits.check`, both of
+                # which see the filled leg as inventory and this order as the
+                # only thing outstanding. Its ECONOMICS were already judged
+                # by `complement_order` against the cost we really paid.
+
             # rewrite BOTH the decision and the translation: downstream code
             # reads dec["side"] for the order intent and the residual
             # direction, and tr for price and quantity.

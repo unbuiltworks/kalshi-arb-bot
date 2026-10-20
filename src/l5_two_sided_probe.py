@@ -46,9 +46,44 @@ MAKER_THETA = D("-0.0125")
 #: both legs post-only. A crossing order is a different experiment.
 MODE = FT.MAKER
 
+#: the two sides, named rather than spelled out at each comparison. Same
+#: strings the rest of this module and `AUTH.PROBE_LEGS` already use.
+UP, DOWN = "UP", "DOWN"
+
 #: the SMALLEST gross edge ever acceptable. A pair at or above $1.00 is
 #: never placed whatever the fee schedule says.
 MIN_GROSS_EDGE = D("0.01")
+
+#: the DEAREST pair this module will ever quote.
+#:
+#: WHY A CAP AND NOT JUST AN EDGE FLOOR. `MIN_GROSS_EDGE` admits a pair at
+#: 0.99, and `fee_floor` then calls it profitable -- because it judges
+#: POST-ONLY execution, where the maker credit carries it. On that pair
+#: `net_if_taker` is NEGATIVE and `both_positive_if_taker` is False, so its
+#: profitability depends entirely on a rebate, and L5_OPERATING_MODEL is
+#: explicit that an uncredited rebate is never permission to place a trade.
+#:
+#: What stood between us and such a pair was one environment variable:
+#: `L5_TS_DEPTH_TICKS=2` happens to make the pair at most `1 - spread - 0.04`.
+#: At 1 tick a one-cent book gives 0.97 and at 0 it gives 0.99, both sendable.
+#: 0.96 is the spring target in L5_OPERATING_MODEL, so the discipline is now
+#: a gate rather than a side effect of a setting.
+MAX_PAIR_COST = D("0.96")
+MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
+
+
+def max_pair_cost() -> D:
+    """The pair ceiling. Configurable CHEAPER only; unreadable is not wider."""
+    raw = (os.getenv(MAX_PAIR_COST_ENV) or "").strip()
+    if not raw:
+        return MAX_PAIR_COST
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, ArithmeticError):
+        return MAX_PAIR_COST
+    if v <= 0:
+        return MAX_PAIR_COST
+    return min(MAX_PAIR_COST, v)
 #: retained for callers that still read it; the binding test is now
 #: `fee_floor()`, computed from the ACTUAL proposed quote prices.
 MIN_EDGE = MIN_GROSS_EDGE
@@ -523,6 +558,10 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             return no("PRICE_NOT_ON_TICK", price=str(px))
 
     pair = up_px + dn_px
+    cap_px = max_pair_cost()
+    if pair > cap_px:
+        return no("PAIR_COST_ABOVE_CAP", pair_cost=str(pair),
+                  max_pair_cost=str(cap_px))
     floor = fee_floor(up_px, dn_px)
     edge = floor["edge"]
     if not floor["ok"]:
@@ -857,3 +896,283 @@ def completion_decision(*, up_qty: Any, dn_qty: Any,
                        "is not a fill: the size may fill partially or not at "
                        "all, and a refusal to fill leaves the residual the "
                        "existing controls already bound.")}
+
+
+# ===================================================== the execution lifecycle
+#
+# WHAT THE 0330z WINDOW SHOWED. The plan is frozen per round -- rightly:
+# re-planning on every tick produced legs of DIFFERENT sizes (1.89 against
+# 0.98 in test), which is not a matched pair at all. But a frozen plan was
+# never RETIRED either, so when the book left it behind the engine proposed
+# the same unreachable pair 32 times in one window, and the complement's price
+# came from planning time however far the market had moved.
+#
+# These two functions are the whole remedy and they are PURE: one says whether
+# a frozen plan is still executable against the book in front of us, the other
+# prices a complement against that book and the cost we ACTUALLY paid. Neither
+# reads a file, a clock or an environment variable beyond the tick knobs, and
+# neither can submit, cancel or claim anything.
+
+#: how far the book may move away from a frozen leg before its round is
+#: retired, in ticks. Measured per leg, against where that leg would be
+#: priced right now.
+#:
+#: WHY A DRIFT TEST AND NOT ONLY A CROSSING TEST. A crossing leg is rejected
+#: by the venue outright, so it is unambiguously dead. A leg that has merely
+#: been left behind is still a legal resting order -- it simply cannot fill,
+#: because the price has to travel back to it, and `cross_price_depth` is
+#: cleared by WITHDRAWAL, which trade volume cannot measure. Holding it is not
+#: unsafe; it just spends the window. Six ticks is wider than the 2-tick
+#: placement offset and well inside the 51-cent move that exposed this.
+STALE_DRIFT_TICKS = 6
+STALE_DRIFT_ENV = "L5_TS_STALE_DRIFT_TICKS"
+
+
+def stale_drift_ticks() -> int:
+    """The drift tolerance. Configurable TIGHTER only -- a wider tolerance
+    keeps unreachable legs alive longer, which is the unsafe direction for
+    the measurement even though it risks no money."""
+    raw = (os.getenv(STALE_DRIFT_ENV) or "").strip()
+    try:
+        v = int(raw) if raw else STALE_DRIFT_TICKS
+    except ValueError:
+        return STALE_DRIFT_TICKS
+    if v < 0:
+        return STALE_DRIFT_TICKS
+    return min(STALE_DRIFT_TICKS, v)
+
+
+def wire_price(side: str, own_px: Any) -> Optional[D]:
+    """The price the VENUE sees for a leg quoted at `own_px` in own terms.
+
+    THE TRANSFORMATION, IN ONE PLACE. A DOWN buy at own cost `q` IS a sell of
+    YES at `1 - q`, and it rests as an ASK; an UP buy at `p` rests as a BID at
+    `p`. So the 0330z plan's DOWN leg at 0.5400 and its queue row's wire price
+    of 0.4600 are the same order, and `0.54 + 0.46 == 1` is the check that
+    says so. Behind-the-touch for DOWN therefore means a LOWER own price and a
+    HIGHER wire price: at ask 0.44 and 2 ticks, own 0.54 and wire 0.46, which
+    is two ticks ABOVE the ask -- correctly away from the touch, exactly as
+    `up_px = bid - 2 ticks` is.
+    """
+    p = _d(own_px)
+    if p is None:
+        return None
+    return p if side == UP else (D(1) - p)
+
+
+def resting_side(side: str) -> str:
+    """BID for UP, ASK for DOWN -- see `wire_price`."""
+    return "BID" if side == UP else "ASK"
+
+
+def leg_crosses(side: str, own_px: Any, *, bid: Any, ask: Any) -> bool:
+    """Would this leg cross the book, so post-only rejects it?
+
+    A BID at or above the ask crosses; an ASK at or below the bid crosses.
+    Unknowable prices are NOT called crossing -- the caller fails closed on a
+    missing book long before this.
+    """
+    w = wire_price(side, own_px)
+    b = _d(bid)
+    a = _d(ask)
+    if w is None:
+        return False
+    if side == UP:
+        return a is not None and w >= a
+    return b is not None and w <= b
+
+
+def touch_own_price(side: str, *, bid: Any, ask: Any) -> Optional[D]:
+    """Where this side's TOUCH sits in own terms.
+
+    UP's touch is the YES bid. DOWN's is `1 - ask`, because buying DOWN means
+    selling YES and the best resting sell is the ask.
+    """
+    b = _d(bid)
+    a = _d(ask)
+    if side == UP:
+        return b
+    return None if a is None else (D(1) - a)
+
+
+def quote_own_price(side: str, *, bid: Any, ask: Any, tick: Any,
+                    depth_ticks: int) -> Optional[D]:
+    """Where this side would be quoted RIGHT NOW: `depth_ticks` behind its
+    touch, in own terms. The same arithmetic `build_orders` uses, so a
+    complement derived here and a leg planned there agree by construction."""
+    t = touch_own_price(side, bid=bid, ask=ask)
+    tk = _d(tick)
+    if t is None or tk is None or tk <= 0:
+        return None
+    return t - (D(int(depth_ticks)) * tk)
+
+
+def plan_executable(plan: Mapping[str, Any], *, bid: Any, ask: Any,
+                    tick: Any, depth_ticks: int,
+                    drift_ticks: Optional[int] = None) -> Optional[str]:
+    """None if this frozen plan is still executable, else WHY it is not.
+
+    Says nothing about whether retiring the round is SAFE -- that is the
+    caller's business, and it must confirm no order is live and no leg holds a
+    fill before acting on this. This function only reads prices.
+    """
+    tk = _d(tick)
+    if tk is None or tk <= 0:
+        return "TICK_UNKNOWN"
+    b = _d(bid)
+    a = _d(ask)
+    if b is None or a is None or b <= 0 or a <= 0:
+        return None            # no book to judge against: judge nothing
+    if a <= b:
+        return None            # crossed or locked: not the plan's fault
+    legs = list(plan.get("legs") or ())
+    if len(legs) != 2:
+        return "PLAN_NOT_TWO_LEGS"
+    allow = stale_drift_ticks() if drift_ticks is None else min(
+        stale_drift_ticks(), int(drift_ticks))
+    priced = []
+    for leg in legs:
+        side = str(leg.get("side"))
+        own = _d(leg.get("price"))
+        if own is None:
+            return "LEG_PRICE_UNREADABLE"
+        priced.append((side, own))
+    # CROSSING FIRST, BOTH LEGS, BEFORE ANY DRIFT. A crossing leg is rejected
+    # by the venue outright; a leg left behind is merely unable to fill. When
+    # both are true -- which a large move usually makes true, since on a
+    # two-cent book one side crosses long before the other drifts six ticks
+    # -- the harder fact is the one worth reporting.
+    for side, own in priced:
+        if leg_crosses(side, own, bid=b, ask=a):
+            return "LEG_WOULD_CROSS:%s" % side
+    # THE DRIFT CASE IS THE SPREAD WIDENING. With a narrow book and a 2-tick
+    # offset a leg cannot drift six ticks without the other crossing, so this
+    # fires when the spread opens up and the complement's fair price walks
+    # away while nothing crosses -- which is exactly when completing stops
+    # paying.
+    for side, own in priced:
+        now_px = quote_own_price(side, bid=b, ask=a, tick=tk,
+                                 depth_ticks=depth_ticks)
+        if now_px is None:
+            return None
+        drift = (now_px - own) / tk
+        if drift < 0:
+            drift = -drift
+        if drift > D(allow):
+            return "PRICE_LEFT_BEHIND:%s:%s_ticks" % (
+                side, drift.to_integral_value(rounding=ROUND_CEILING))
+    return None
+
+
+def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
+                     tick: Any, min_qty: Any, depth_ticks: int,
+                     book_age_s: Any = None,
+                     gap_suspected: bool = False) -> Dict[str, Any]:
+    """Price the SECOND leg against the book in front of us and the cost we
+    ACTUALLY paid for the first.
+
+    WHY THE FROZEN PRICE CANNOT BE USED. With one live-order slot the
+    complement can never rest beside the first leg -- it is refused
+    MAX_LIVE_ORDERS until that leg leaves the book -- so it is ALWAYS placed
+    later, against a book that has moved. In 0330z the frozen complement's
+    wire price ended 45 cents BELOW the bid: post-only, the venue rejects it
+    for crossing, so it never rests and the filled leg is left unhedged.
+
+    WHAT IS PRESERVED. The QUANTITY, because matching the filled quantity is
+    what makes the pair a pair -- never more than was filled, and quantised
+    DOWN to the venue grid. And the economics, judged on the REALISED cost of
+    leg one plus this quote: `cost_px` is what we paid, not what we hoped to
+    pay, so the floor this clears is the real one. A complement that no longer
+    clears it is REFUSED rather than repriced into a loss -- the residual is
+    then carried under the existing controls, which is a decision about
+    economics and not about the deadline.
+    """
+    def no(reason: str, **extra: Any) -> Dict[str, Any]:
+        return dict({"ok": False, "reason": reason}, **extra)
+
+    if side not in (UP, DOWN):
+        return no("COMPLEMENT_SIDE_UNKNOWN", side=str(side))
+    if gap_suspected:
+        return no("GAP_SUSPECTED")
+    age = _d(book_age_s)
+    if age is None or age > D(str(MAX_BOOK_AGE_S)):
+        return no("BOOK_STALE")
+    b = _d(bid)
+    a = _d(ask)
+    if b is None or a is None or b <= 0 or a <= 0:
+        return no("BOOK_NOT_TWO_SIDED")
+    if a <= b:
+        return no("BOOK_CROSSED_OR_LOCKED")
+    tk = _d(tick)
+    if tk is None or tk <= 0:
+        return no("TICK_UNKNOWN")
+    mq = _d(min_qty)
+    if mq is None or mq <= 0:
+        return no("MIN_QTY_UNKNOWN")
+    need = _d(qty)
+    if need is None or need <= 0:
+        return no("NOTHING_TO_MATCH", qty=str(qty))
+    paid = _d(cost_px)
+    if paid is None or paid <= 0:
+        return no("FIRST_LEG_COST_UNKNOWN", cost_px=str(cost_px))
+
+    px = quote_own_price(side, bid=b, ask=a, tick=tk, depth_ticks=depth_ticks)
+    if px is None:
+        return no("PRICE_UNDERIVABLE")
+    if px < MIN_PRICE or px > MAX_PRICE:
+        return no("PRICE_OUT_OF_BAND", price=str(px))
+    if (px / tk) != (px / tk).to_integral_value():
+        return no("PRICE_NOT_ON_TICK", price=str(px))
+    if leg_crosses(side, px, bid=b, ask=a):
+        # cannot happen from `quote_own_price` at depth_ticks >= 0, and is
+        # asserted rather than assumed because post-only would reject it
+        return no("COMPLEMENT_WOULD_CROSS", price=str(px))
+
+    # match no more than was filled, on the venue's grid, rounded DOWN
+    q = (need / mq).to_integral_value(rounding="ROUND_FLOOR") * mq
+    if q < mq:
+        return no("NOTHING_TO_MATCH_ON_GRID", need=str(need), min_qty=str(mq))
+
+    up_px, dn_px = ((paid, px) if side == DOWN else (px, paid))
+    floor = fee_floor(up_px, dn_px)
+    pair = up_px + dn_px
+    cap_px = max_pair_cost()
+    if pair > cap_px:
+        # the REALISED first leg plus this quote is what must clear the cap,
+        # so a leg that filled dearer than planned tightens the complement
+        return no("COMPLEMENT_PAIR_ABOVE_CAP", pair_cost=str(pair),
+                  max_pair_cost=str(cap_px), first_leg_cost=str(paid),
+                  complement_price=str(px))
+    if not floor["ok"]:
+        return no("COMPLEMENT_BELOW_FEE_FLOOR", pair_cost=str(pair),
+                  edge=str(floor["edge"]),
+                  net_if_maker=str(floor["net_if_maker"]),
+                  net_if_taker=str(floor["net_if_taker"]),
+                  first_leg_cost=str(paid), complement_price=str(px))
+    econ = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
+                          dn_price=dn_px, theta=MAKER_THETA)
+    if not econ["both_positive"]:
+        return no("COMPLEMENT_NOT_POSITIVE_ON_BOTH_OUTCOMES",
+                  up_pnl=str(econ["up_pnl"]), dn_pnl=str(econ["dn_pnl"]),
+                  pair_cost=str(pair))
+    econ_taker = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
+                                dn_price=dn_px, theta=TAKER_THETA)
+    return {"ok": True, "provenance": "DERIVED_FROM_CURRENT_BOOK",
+            "leg": {"side": side, "action": "BUY", "price": str(px),
+                    "qty": str(q), "mode": MODE, "post_only": True,
+                    "depth_ticks": int(depth_ticks),
+                    "touch_at_placement": str(
+                        touch_own_price(side, bid=b, ask=a)),
+                    "wire_price": str(wire_price(side, px)),
+                    "resting_side": resting_side(side)},
+            "first_leg_cost": str(paid), "pair_cost": str(pair),
+            "edge_per_contract": str(floor["edge"]),
+            "fee_floor": floor,
+            "up_pnl": str(econ["up_pnl"]), "dn_pnl": str(econ["dn_pnl"]),
+            "up_pnl_if_taker": str(econ_taker["up_pnl"]),
+            "dn_pnl_if_taker": str(econ_taker["dn_pnl"]),
+            "both_positive_if_taker": bool(econ_taker["both_positive"]),
+            "labels": ("priced against the CURRENT book and the REALISED cost "
+                       "of the first leg. A displayed price is not a fill: "
+                       "this leg may rest unfilled or fill partially, and the "
+                       "residual is then carried under the existing limits.")}

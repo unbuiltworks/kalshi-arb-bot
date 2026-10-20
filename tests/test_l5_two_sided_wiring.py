@@ -111,16 +111,24 @@ def test_accumulation_keeps_working_pairs_past_the_first(probe, tmp_path,
     for _ in range(8):
         seen.append(ex.handle(_row(H), _book(), market="m",
                               window="21:00").get("refused_reason"))
-    # MORE THAN ONE PAIR, which is the whole point.
-    assert [s["side"] for s in t.sent] == ["DOWN", "UP", "DOWN", "UP"]
-    # every client order id distinct: these are independent intents, not a
-    # replay slipping past duplicate suppression
-    assert len({s["client_order_id"] for s in t.sent}) == 4
-    # AND IT STOPS ON A RISK GATE, not on the claim namespace. With nothing
-    # filling, round two's pair exhausts the $8 cash envelope and the gate
-    # refuses -- which is the bound that should decide how much inventory is
-    # accumulated.
-    assert seen[-1].startswith("PAIR_UP:CASH_COMMITMENT"), seen
+    # MORE THAN ONE PAIR, which is the whole point, and always CHEAPER leg
+    # first within each pair.
+    sides = [s["side"] for s in t.sent]
+    assert len(sides) >= 4 and len(sides) % 2 == 0, sides
+    assert sides == ["DOWN", "UP"] * (len(sides) // 2), sides
+    # HOW MANY PAIRS IS NOT PINNED, deliberately. The complement is now sized
+    # to the quantity that actually FILLED rather than to the planned leg
+    # size, and this harness fills 1 of each, so each pair costs the envelope
+    # less than a full-size pair would and more rounds fit. The invariants
+    # are what matter: pairs in order, distinct intents, and a RISK GATE --
+    # not the claim namespace -- deciding where accumulation stops.
+    assert len({s["client_order_id"] for s in t.sent}) == len(sides)
+    # AND IT STOPS ON A RISK GATE. With nothing filling in full, the cash
+    # envelope is what refuses -- the bound that should decide how much
+    # inventory is accumulated.
+    assert seen[-1] is not None, seen
+    assert ("CASH_COMMITMENT" in seen[-1]
+            or seen[-1] == "ACCUMULATION_EXHAUSTED"), seen
 
 
 def test_the_round_bound_is_hard_and_then_refuses(probe, tmp_path,
@@ -277,17 +285,30 @@ def test_restart_recovery_cannot_replace_a_claimed_leg(probe, tmp_path):
 def test_the_pair_is_sized_so_BOTH_legs_fit_the_cash_cap(probe, tmp_path):
     """ITEM 5. Leg one must never spend the headroom leg two needs, so the
     pair is sized DOWN until both fit -- it does not place a big first leg
-    and then discover there is nothing left for the second."""
+    and then discover there is nothing left for the second.
+
+    ASSERTED ON THE PLAN, which is what `probe_precheck` gates. The SENT
+    quantities no longer have to match each other: the second leg is a
+    COMPLEMENT, sized to the quantity that actually filled, so a partial
+    first fill correctly produces a smaller second leg. The property this
+    test exists for is that the PAIR was sized so both legs fit before
+    either was placed.
+    """
     H, E = probe
     ex, t = mk(H, E, tmp_path, g=gates(cash="3"))
-    ex.handle(_row(H), _book(), market="m", window="21:00")
+    r1 = ex.handle(_row(H), _book(), market="m", window="21:00")
     ex.handle(_row(H), _book(), market="m", window="21:00")
     assert len(t.sent) == 2
-    by = {x["side"]: x for x in t.sent}
-    q = D(by["UP"]["qty"])
-    assert D(by["DOWN"]["qty"]) == q
+    plan = r1["TWO_SIDED_PROBE"]
+    legs = {l["side"]: l for l in plan["legs"]}
+    q = D(legs["UP"]["qty"])
+    assert D(legs["DOWN"]["qty"]) == q          # the PAIR is matched
     # the gate's own basis: short at a dollar a share plus the long at price
-    assert q * (D(1) + D(by["UP"]["price"])) <= D("3")
+    assert q * (D(1) + D(legs["UP"]["price"])) <= D("3")
+    assert D(plan["cash_gate_obligation_usd"]) <= D("3")
+    # and the first leg actually sent is that planned leg, unchanged
+    first = t.sent[0]
+    assert D(first["qty"]) == q
 
 
 def test_an_envelope_below_the_venue_grid_places_NOTHING(probe, tmp_path):

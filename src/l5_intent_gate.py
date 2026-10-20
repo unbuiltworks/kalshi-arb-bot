@@ -98,6 +98,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     "TWO_SIDED_PROBE:PLAN_REASON",
     "TWO_SIDED_PROBE:LEG_INVALID",
     "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED_2",
+    # the execution lifecycle: a round the book has left behind is retired
+    # and the engine re-plans in the NEXT round, which can exhaust the round
+    # budget; and a completion whose fresh price no longer clears the fee
+    # floor or the pair cap is refused rather than repriced into a loss.
+    "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED_AFTER_RETIREMENT",
+    "TWO_SIDED_PROBE:COMPLEMENT_REASON",
     "QUEUE_MEASUREMENT:BUILD_REASON",
     "SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER",
     "SAFETY_OVERLAY:QUANTITY_INCREMENT_UNKNOWN",

@@ -531,7 +531,14 @@ def test_the_verdict_cannot_be_read_as_would_submit():
     for ev in (g.evaluate(l5_intent()), g.evaluate(ctl_intent())):
         assert "admissible" not in ev
         assert ev["complete_chain"] is False
-        assert len(ev["not_evaluated_here"]) == 30
+        # tied to the inventory rather than re-stating its length, so the
+        # single tripwire for "handle grew a refusal site" stays
+        # test_the_executor_refusal_inventory_is_still_complete and this
+        # test keeps asserting what it is about: that the verdict declares
+        # the chain incomplete and names what it skipped.
+        assert (len(ev["not_evaluated_here"])
+                == len(G.EXECUTOR_GATES_NOT_EVALUATED_HERE))
+        assert len(ev["not_evaluated_here"]) > 0
         assert "NOT a verdict" in ev["labels"] or ev["blocked_by"]
 
 

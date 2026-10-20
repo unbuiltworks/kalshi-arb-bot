@@ -53,17 +53,34 @@ def test_another_market_is_untouched(armed):
 
 # -------------------------------------------- the structural refusal
 
-def test_resting_AT_the_touch_is_now_ACCEPTED_as_a_post_only_pair(armed):
-    """pair 0.99 is negative as a taker pair and positive as a maker one.
-    Both legs are post-only by construction, so the maker coefficient is the
-    one that applies -- and the taker figure is still reported."""
-    r = TS.build_orders(**book(depth_ticks=0))
-    assert r["ok"] is True, r
-    assert r["pair_cost"] == "0.99"
-    ff = r["fee_floor"]
+def test_resting_AT_the_touch_is_REFUSED_on_the_pair_cost_CAP(armed):
+    """SUPERSEDES `resting AT the touch is now ACCEPTED as a post-only pair`.
+
+    The fee verdict that test asserted is unchanged and still asserted below:
+    a 0.99 pair IS positive under maker execution and negative under taker,
+    and `fee_floor` says so. What changed is that `build_orders` no longer
+    QUOTES such a pair.
+
+    WHY, AND IT IS NOT A STYLE CHOICE. `L5_OPERATING_MODEL` puts spring
+    discipline at a materially cheaper pair, roughly <= 0.96, and states that
+    near-$1 pair tolerance belongs to later incentive-era L5 behaviour and
+    "stays locked unless equivalent economics are source-confirmed for our
+    account". It also forbids treating a rebate as permission: on this pair
+    the entire margin is one cent of gross edge plus a maker credit, and
+    `both_positive_if_taker` is False -- so if either leg ends up crossing,
+    the pair loses. Accepting it also made the whole discipline depend on one
+    environment variable, `L5_TS_DEPTH_TICKS`, rather than on a gate.
+    """
+    ff = TS.fee_floor(D("0.50"), D("0.49"))          # the same 0.99 pair
     assert D(ff["net_if_maker"]) > 0
     assert D(ff["net_if_taker"]) < 0        # the honest worst case, reported
     assert ff["requires_post_only"] is True
+
+    r = TS.build_orders(**book(depth_ticks=0))
+    assert r["ok"] is False
+    assert r["reason"] == "PAIR_COST_ABOVE_CAP"
+    assert r["pair_cost"] == "0.99"
+    assert D(r["max_pair_cost"]) == TS.MAX_PAIR_COST == D("0.96")
 
 
 def test_a_pair_at_or_above_a_dollar_is_still_refused(armed):
@@ -91,8 +108,9 @@ def test_the_floor_verdict_is_explicitly_post_only_only(armed):
     f = TS.fee_floor(D("0.60"), D("0.39"))
     assert f["requires_post_only"] is True
     assert "POST-ONLY" in f["labels"]
-    # and the orders the module emits really are post-only
-    r = TS.build_orders(**book(depth_ticks=0))
+    # and the orders the module emits really are post-only. At the DEPLOYED
+    # offset, because a pair quoted at the touch is now refused on the cap.
+    r = TS.build_orders(**book(depth_ticks=2))
     for leg in r["legs"]:
         assert leg["post_only"] is True
         assert leg["mode"] == TS.MODE == FT.MAKER
