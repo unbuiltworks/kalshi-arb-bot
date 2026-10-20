@@ -1358,8 +1358,21 @@ EXECUTION_MODE = "MAKER_ONLY"
 
 def mandate_scope(*, market: str, limits: Any = None,
                   series: Optional[str] = None,
-                  max_windows: int = 1) -> Dict[str, Any]:
-    """The exact envelope being approved, as plain strings."""
+                  max_windows: int = 1,
+                  session: Optional[str] = None) -> Dict[str, Any]:
+    """The exact envelope being approved, as plain strings.
+
+    `session` NAMES WHO APPROVED IT, and under a campaign that is the
+    CAMPAIGN, not `PMUS_Q1_SESSION_ID`. The scope digest is re-proved every
+    window, so recording the legacy session id here kept the old failure
+    alive even once the claim KEY was campaign-derived: rotating that
+    variable mid-campaign changed the digest and refused every remaining
+    window with MANDATE_SCOPE_CHANGED. The identity that keys the claim and
+    the identity recorded in its scope have to be the same one.
+
+    None falls back to `session_id()`, so the legacy single-window path is
+    byte-identical to before.
+    """
     d: Dict[str, Any] = {}
     try:
         d = dict(limits.as_dict()) if hasattr(limits, "as_dict") else dict(
@@ -1367,7 +1380,7 @@ def mandate_scope(*, market: str, limits: Any = None,
     except BaseException:                                      # noqa: BLE001
         d = {}
     scope = {
-        "session_id": session_id(),
+        "session_id": (session if session is not None else session_id()),
         "market": market or "",
         "series": series or "",
         "max_windows": str(int(max_windows)),
@@ -1816,7 +1829,11 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         mw = _cmw if not (os.getenv(MAX_WINDOWS_ENV) or "").strip() \
             else min(mw, _cmw)
     scope = mandate_scope(market=("" if mw > 1 else market), limits=limits,
-                          series=pre, max_windows=mw)
+                          series=pre, max_windows=mw,
+                          # the identity that KEYS the claim, so a legacy
+                          # session rotation cannot change the digest a
+                          # campaign's later windows must re-prove
+                          session=sid)
     digest = scope_digest(scope)
     holder = holder_identity()
     claim = {"event": "CLAIMED", "session_id": sid, "market": market,

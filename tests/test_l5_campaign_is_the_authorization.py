@@ -381,3 +381,113 @@ def test_consumption_SURVIVES_a_restart(env):
     r2.try_arm()
     assert CA.WindowLedger(str(env)).read(
         CA.nonce_sid(NONCE))["windows"] == [W1, W2]
+
+
+# ===== the legacy PMUS_Q1 variables cannot interfere with a campaign
+#
+# They are still present in production and they must now be INERT for
+# campaign windows: neither able to block one, nor able to change the
+# identity a campaign's durable claims are keyed on. The second is what
+# caused the original failure -- the mandate was keyed on
+# PMUS_Q1_SESSION_ID, so the owner had to rotate it by hand.
+
+
+def test_a_MISMATCHED_legacy_handshake_cannot_BLOCK_a_campaign(env,
+                                                               monkeypatch):
+    """Q1.armed() is False when the arm token does not equal the session id.
+    Under a campaign that must not matter at all."""
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
+    monkeypatch.setenv(Q1.ARM_ENV, "session-bbb")       # deliberately wrong
+    assert Q1.armed() is False
+    r = _Runner(env, market=W1)
+    r.try_arm()
+    assert r.transport.armed is True, dict(r.win)
+
+
+def test_PMUS_Q1_LIVE_NO_cannot_block_a_campaign(env, monkeypatch):
+    monkeypatch.setenv(Q1.LIVE_ENV, "NO")
+    monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
+    monkeypatch.setenv(Q1.ARM_ENV, "session-aaa")
+    assert Q1.armed() is False
+    r = _Runner(env, market=W1)
+    r.try_arm()
+    assert r.transport.armed is True, dict(r.win)
+
+
+def test_an_ARMED_legacy_handshake_does_not_change_the_claim_IDENTITY(
+        env, monkeypatch):
+    """The identity must come from the CAMPAIGN even when the legacy
+    handshake is fully armed. Otherwise rotating PMUS_Q1_SESSION_ID
+    mid-campaign would orphan the mandate and refuse the remaining windows
+    -- the exact failure this architecture removed."""
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
+    monkeypatch.setenv(Q1.ARM_ENV, "session-aaa")
+    assert Q1.armed() is True
+    r = _Runner(env, market=W1)
+    r.try_arm()
+    assert r.transport.armed is True
+    # window one armed under the campaign's identity; now ROTATE the legacy
+    # session id, which used to invalidate the recorded mandate
+    monkeypatch.setenv(Q1.SID_ENV, "session-zzz")
+    monkeypatch.setenv(Q1.ARM_ENV, "session-zzz")
+    r2 = _Runner(env, market=W2)
+    r2.try_arm()
+    assert r2.transport.armed is True, (
+        "a legacy session rotation must not disturb a campaign's mandate: "
+        "%s" % dict(r2.win))
+    assert CA.WindowLedger(str(env)).read(
+        CA.nonce_sid(NONCE))["windows"] == [W1, W2]
+
+
+def test_the_claim_identity_is_the_CAMPAIGNS_not_the_sessions(env,
+                                                              monkeypatch):
+    """Directly: the sid the boundary uses is derived from the nonce."""
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
+    monkeypatch.setenv(Q1.ARM_ENV, "session-aaa")
+    seen = {}
+    real = AUTH.claim_once
+
+    def spy(path, sid, payload):
+        seen.setdefault("sids", []).append(sid)
+        return real(path, sid, payload)
+
+    monkeypatch.setattr(AUTH, "claim_once", spy)
+    _Runner(env, market=W1).try_arm()
+    expect = AUTH.campaign_claim_sid({"nonce_sid": CA.nonce_sid(NONCE)})
+    assert any(s.startswith(expect) for s in seen["sids"]), seen
+    assert not any("session-aaa" in s for s in seen["sids"])
+
+
+def test_an_EXPIRED_document_does_not_fall_back_to_the_legacy_path(
+        env, monkeypatch):
+    """THE BELT THAT PROTECTS THE NEXT DEPLOYMENT. The document in
+    production is exhausted and expiring. Present-and-not-ok must refuse by
+    its own name and must NOT hand the armed legacy handshake a fresh
+    one-window grant."""
+    now = dt.datetime.now(dt.timezone.utc)
+    monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(doc(
+        issued_utc=(now - dt.timedelta(hours=5)).isoformat(),
+        expires_utc=(now - dt.timedelta(minutes=1)).isoformat())))
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
+    monkeypatch.setenv(Q1.ARM_ENV, "session-aaa")
+    r = _Runner(env, market=W1)
+    r.try_arm()
+    assert r.transport.armed is False
+    assert not (env / CA.CONSUMED_DIR).exists()
+
+
+def test_an_EXHAUSTED_document_does_not_fall_back_either(env, monkeypatch):
+    """The production state exactly: four of four windows spent."""
+    monkeypatch.setenv(Q1.LIVE_ENV, "YES")
+    monkeypatch.setenv(Q1.SID_ENV, "session-aaa")
+    monkeypatch.setenv(Q1.ARM_ENV, "session-aaa")
+    for w in (W1, W2, W3, W4):
+        _Runner(env, market=w).try_arm()
+    r = _Runner(env, market=W5)
+    r.try_arm()
+    assert r.transport.armed is False
+    assert r.win["arm_refused_campaign_windows_exhausted"] == 1
