@@ -1476,3 +1476,31 @@ deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
 # 2026-10-20T13:41:52Z DEPLOY the submission budget + the 1215z regression. Live
 # trading stays OFF (L5_SHADOW_ONLY=1, PMUS_Q1_LIVE=NO). Same 40 baseline
 # IDs, zero NEW. 1215z resolved: two legitimate per-leg claims, +$0.0984.
+
+# 2026-10-20 — SHADOW-ONLY deployment of the bounded-campaign wiring and the
+# three durable class budgets. BOTH TRADING LOCKS STAY ON: L5_SHADOW_ONLY=1
+# and PMUS_Q1_LIVE=NO. No campaign approval document is set, so the campaign
+# layer reads "absent" and the pre-existing single-window handshake is
+# untouched. This deployment adds REFUSALS and TELEMETRY and no capability.
+#
+# What it carries:
+#   * the campaign gate finally has a caller -- authorize_arming(campaign=...)
+#     existed and nothing passed it, so an approval document bounded nothing
+#   * src/l5_campaign_approval.py added to the image (the closure test caught
+#     that the runner would fail to import without it)
+#   * three durable class budgets (OPEN / COMPLETE / REPLACE) replacing one
+#     flat total, with the flat backstop no longer binding a risk-reducing
+#     order and a completion reserve that refuses an OPEN the completion
+#     budget could not close
+#   * BALANCING_DOES_NOT_REDUCE and BALANCING_WOULD_OVERSHOOT at the common
+#     submission boundary, ahead of every claim and ticket
+#   * day_realized on the heartbeat: the figure the DAILY halt actually
+#     reads, plus why it may be unknown (unattributed_usd,
+#     undated_settlements), because the heartbeat previously carried only
+#     the all-time total, which is a different ceiling
+#   * campaign telemetry: per-class spent/remaining, the completion-reserve
+#     verdict, and whether a stale exact-market pin blocks advancement
+#
+# Release gate: 26 failed, 11955 passed, 14 errors -- the same 40 baseline
+# ids, zero NEW, zero GONE.
+shadow-only campaign wiring + class budgets 2026-10-20T15:20Z
