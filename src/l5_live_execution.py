@@ -5106,20 +5106,47 @@ class FaithfulExecutor:
             # The limit was never the problem and raising it would only have
             # funded the loss.
             #
-            # So when a market is authorized for the two-sided experiment,
-            # ONLY the two-sided engine may submit in it. An order that is
-            # not carrying a two-sided leg is refused by name.
-            if TS.active(market) and not getattr(
+            # WHICH STRATEGY OWNS THE WINDOW IS NAMED, NOT INFERRED.
+            #
+            # The first version of this gate said "if the market is bound for
+            # the two-sided experiment, two-sided wins". That would have
+            # BLOCKED the 1215z fills -- and those fills were the first
+            # economically valid completed pair this programme has produced:
+            # UP 2.46 at own 0.90 and DOWN 2.46 at own 0.06, a pair cost of
+            # exactly 0.96, redeemed 2.46 for +$0.0984 settled. They came
+            # from the L5-following path. Letting an unset preference decide
+            # which strategy dies is how you lose the one that works.
+            #
+            # So exclusivity is explicit: `L5_WINDOW_STRATEGY` names the
+            # owner of the window. Unset enforces nothing and preserves
+            # today's behaviour; TWO_SIDED admits only two-sided orders;
+            # L5_FOLLOWING admits only L5-following ones.
+            _owner_strategy = str(
+                os.getenv("L5_WINDOW_STRATEGY", "")).strip().upper()
+            if _owner_strategy == "TWO_SIDED" and not getattr(
                     self, "_probe_leg_pending", None):
                 prov.stage("ORDER", {
                     "client_order_id": coid, "submitted": False,
                     "reason": "STRATEGY_EXCLUSIVE_TWO_SIDED",
                     "detail": {"market": market},
-                    "labels": ("this market is authorized for the two-sided "
-                               "experiment, so the L5-following path may not "
-                               "submit in it. Two strategies sharing one "
-                               "envelope is how 1215z emptied it.")})
+                    "strategy": _owner_strategy,
+                    "labels": ("L5_WINDOW_STRATEGY names TWO_SIDED as the "
+                               "owner of this window, so the L5-following "
+                               "path may not submit in it. Two strategies "
+                               "sharing one cash envelope is how the "
+                               "two-sided engine was starved in 1215z.")})
                 return prov.refuse("STRATEGY_EXCLUSIVE_TWO_SIDED", market)
+            if _owner_strategy == "L5_FOLLOWING" and getattr(
+                    self, "_probe_leg_pending", None):
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "STRATEGY_EXCLUSIVE_L5_FOLLOWING",
+                    "detail": {"market": market},
+                    "strategy": _owner_strategy,
+                    "labels": ("L5_WINDOW_STRATEGY names L5_FOLLOWING as the "
+                               "owner of this window, so the two-sided "
+                               "engine may not submit in it.")})
+                return prov.refuse("STRATEGY_EXCLUSIVE_L5_FOLLOWING", market)
 
             try:
                 # ACCUMULATION NEEDS MANY SUBMISSIONS, so it claims a

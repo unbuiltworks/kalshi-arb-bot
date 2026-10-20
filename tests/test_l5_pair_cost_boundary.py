@@ -1,15 +1,24 @@
-"""The 1215z loss, pinned: a pair above the ceiling can never be bought.
+"""The pair-cost ceiling at the common submission boundary.
 
-WHAT HAPPENED. Two real orders filled 38 seconds apart in
-cpc-btc-updown-15m-2026-10-20-1215z -- UP 2.46 @ 0.9400 (D78BWYNG10JH) and
-DOWN 2.46 @ 0.9000 (D78C4Q7G10JR). A matched pair costing 1.84 pays exactly
-1.00 at settlement, so that book is a CERTAIN -$2.0664 before fees.
+WHAT 1215z ACTUALLY DID, because I first reported it backwards. Two
+exchange-confirmed fills in cpc-btc-updown-15m-2026-10-20-1215z settled as:
 
-Nothing refused it, because the pair-cost ceiling lived only inside
-`build_orders` and those orders did not come from it: the L5-following path
-copies L5's own side and price and had no pair discipline at all. These tests
-drive the REAL executor and assert the ceiling now binds at the one boundary
-every order passes, on venue-CONFIRMED fills.
+    up_qty 2.46  up_cost $2.2140  -> own price 0.90
+    dn_qty 2.46  dn_cost $0.1476  -> own price 0.06
+    PAIR COST 0.96 exactly, redeemed $2.46, settlement_pnl +$0.0984
+
+That is a PROFIT and the first economically valid completed pair this
+programme has produced -- and it came from the L5-following path.
+
+THE READING ERROR, KEPT HERE BECAUSE IT IS THE WHOLE POINT OF THE CEILING'S
+BASIS. The order records show avg_px 0.9400 and 0.9000, and those are WIRE
+prices. A DOWN buy at wire 0.94 costs 0.06 in own terms, so summing wire
+prices across sides (0.94 + 0.90 = 1.84) double-counts the YES side and
+invents a loss that did not happen. The ceiling therefore has to be computed
+in OWN-outcome terms off `leg_cost`, which is what these tests assert.
+
+The ceiling still matters: a pair above 0.96 buys something that pays 1.00,
+and the L5-following path had no pair discipline of any kind.
 """
 from decimal import Decimal as D
 
@@ -37,22 +46,31 @@ def ex(monkeypatch, tmp_path):
     return x, t, H, E
 
 
-def test_the_EXACT_1215z_second_leg_is_now_refused(ex):
-    """UP 2.46 at 0.94 is already confirmed; DOWN 2.46 at 0.90 would make the
-    pair 1.84. That is the order that must not go out."""
+def test_the_REAL_1215z_pair_is_ALLOWED_at_exactly_the_ceiling(ex):
+    """0.90 own + 0.06 own = 0.96, the spring target exactly. This is the
+    trade that worked and the ceiling must not refuse it."""
+    x, t, H, E = ex
+    x.store.apply_fill(SLUG, "UP", D("2.46"), D("0.90"), basis="OWN")
+    assert x.pair_cost_refusal(SLUG, {"side": "DOWN"},
+                               {"price": "0.06", "qty": "2.46"}) is None
+    # the settled economics, for the record
+    cost = D("2.46") * D("0.90") + D("2.46") * D("0.06")
+    assert cost == D("2.3616")
+    assert D("2.46") - cost == D("0.0984")
+
+
+def test_a_pair_genuinely_above_the_ceiling_in_OWN_terms_is_refused(ex):
+    """The hypothetical the ceiling exists for -- NOT what 1215z did. A
+    0.94 own UP plus a 0.90 own DOWN really would be a 1.84 pair and a
+    certain -$2.0664 on 2.46 contracts."""
     x, t, H, E = ex
     x.store.apply_fill(SLUG, "UP", D("2.46"), D("0.94"), basis="OWN")
-    assert x.store.position(SLUG, "UP") == D("2.46")
-
     bad = x.pair_cost_refusal(SLUG, {"side": "DOWN"},
                               {"price": "0.90", "qty": "2.46"})
     assert bad is not None
     assert bad["why"] == "PAIR_COST_ABOVE_CEILING"
     assert D(bad["effective_pair_cost"]) == D("1.84")
     assert D(bad["ceiling"]) == TS.MAX_PAIR_COST == D("0.96")
-    assert D(bad["confirmed_cost_usd"]) == D("4.5264")
-    assert D(bad["matched_after"]) == D("2.46")
-    # the loss it prevents, stated in the record
     assert (D(bad["matched_after"]) - D(bad["confirmed_cost_usd"])
             == D("-2.0664"))
 
@@ -159,11 +177,16 @@ def test_the_exclusivity_gate_and_the_pair_ceiling_both_precede_the_CLAIM(
     assert "_probe_leg_pending" in call
 
 
-def test_the_arithmetic_of_the_6_99_refusal_is_explained_not_a_bug():
-    """$4.5264 of confirmed fills, plus a 2.46 short leg charged a dollar a
-    share by the cash gate, is $6.9864 -- the 6.99 in
-    CASH_COMMITMENT:6.99>4.65. The gate was right; the envelope had been
-    spent by the other strategy. Raising it would have funded the loss."""
-    confirmed = D("2.46") * D("0.94") + D("2.46") * D("0.90")
-    assert confirmed == D("4.5264")
-    assert (confirmed + D("2.46")).quantize(D("0.01")) == D("6.99")
+def test_the_ceiling_is_computed_in_OWN_terms_not_WIRE_terms(ex):
+    """THE READING ERROR, PINNED. Wire prices cannot be summed across sides.
+    A DOWN leg whose avg_px reads 0.94 on the wire costs 0.06, and the pair
+    with a 0.90 own UP is 0.96 -- not the 1.84 that summing wires suggests."""
+    x, t, H, E = ex
+    assert TS.wire_price("DOWN", "0.06") == D("0.94")
+    assert D("0.06") + TS.wire_price("DOWN", "0.06") == D(1)
+    x.store.apply_fill(SLUG, "UP", D("2.46"), D("0.90"), basis="OWN")
+    # own 0.06 -> allowed; the wire number 0.94 would not be
+    assert x.pair_cost_refusal(SLUG, {"side": "DOWN"},
+                               {"price": "0.06", "qty": "2.46"}) is None
+    assert x.pair_cost_refusal(SLUG, {"side": "DOWN"},
+                               {"price": "0.94", "qty": "2.46"}) is not None
