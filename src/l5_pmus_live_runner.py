@@ -1476,6 +1476,15 @@ class Runner:
             "two_sided": rec.get("TWO_SIDED_PROBE"),
             "two_sided_queue": self.ts_queue_view(
                 slug, rec.get("TWO_SIDED_PROBE")),
+            # THE LIFECYCLE'S OWN DECISIONS. Both are staged into `rec` and
+            # reach the durable tape, and both were missing here -- so the
+            # two things the lifecycle release exists to do, retiring a round
+            # the book has left and deriving a complement from the current
+            # book, were invisible in the logs and the release could not be
+            # validated from them at all. Same omission as `two_sided`
+            # itself, one release later.
+            "two_sided_round": rec.get("TWO_SIDED_ROUND"),
+            "two_sided_complement": rec.get("TWO_SIDED_COMPLEMENT"),
             "order": {k: order.get(k) for k in
                       ("client_order_id", "submitted", "reason", "venue_order_id",
                        "state", "error")} if order else None,

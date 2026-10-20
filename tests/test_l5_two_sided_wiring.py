@@ -722,3 +722,32 @@ def test_the_emitted_line_carries_the_ladder_at_BOTH_leg_prices(probe,
     # and nothing to plan means nothing to report
     assert R.Runner.ts_queue_view(Stub(), "m", None) is None
     assert R.Runner.ts_queue_view(Stub(), "m", {"legs": []}) is None
+
+
+def test_the_emitted_line_carries_EVERY_two_sided_stage(probe, tmp_path):
+    """WHAT THIS PINS. `two_sided` reached the log a release before
+    `two_sided_round` and `two_sided_complement` did, so the retirement and
+    complement decisions -- the whole point of the lifecycle release -- were
+    staged into the record and written to the tape but dropped from the line,
+    and the release could not be validated from the logs at all.
+
+    Asserted against the stage names the EXECUTOR actually produces, so a new
+    stage cannot be added without either appearing in the emitted payload or
+    failing here.
+    """
+    import inspect
+    import re
+
+    from src import l5_live_execution as E
+    from src import l5_pmus_live_runner as R
+
+    body = inspect.getsource(E.FaithfulExecutor.handle)
+    staged = set(re.findall(r'prov\.stage\("(TWO_SIDED[A-Z_]*)"', body))
+    assert staged >= {"TWO_SIDED_PROBE", "TWO_SIDED_ROUND",
+                      "TWO_SIDED_COMPLEMENT"}, staged
+
+    emit = inspect.getsource(R.Runner.handle)
+    i = emit.index('emit("L5_LIVE_DECISION"')
+    payload = emit[i:emit.index("self.model_place", i)]
+    for stage in staged:
+        assert 'rec.get("%s")' % stage in payload, stage
