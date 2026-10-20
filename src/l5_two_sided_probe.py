@@ -100,6 +100,27 @@ MAX_PRICE = D("0.95")
 WINDOW_S = 900
 #: the hard terminal deadline: nothing rests past this
 CANCEL_MARGIN_S = 180.0
+#: the margin may be WIDENED (cancel EARLIER), never narrowed, exactly as
+#: `l5_live_authorization.close_margin_s` works.
+#:
+#: WHY IT NEEDS A KNOB AT ALL. The independent watchdog treats an order older
+#: than `L5_WATCHDOG_REPORT_MAX_AGE_S` (300s in production) as overdue, and it
+#: ASSERTS HALT BEFORE it cancels. With the default margin a leg placed at
+#: T+2:00 and held to the T+12:00 deadline rests 600s, so the watchdog would
+#: latch UNMANAGED_RESTING_ORDER, stop the executor and kill the complement
+#: mid-window. That is safe but it destroys the measurement. Widening the
+#: margin cancels EARLIER and is therefore a tightening in both senses.
+CANCEL_MARGIN_ENV = "L5_TS_CANCEL_MARGIN_S"
+
+
+def cancel_margin_s() -> float:
+    """The effective terminal margin. Wider only; unreadable is not wider."""
+    raw = (os.getenv(CANCEL_MARGIN_ENV) or "").strip()
+    try:
+        v = float(raw) if raw else CANCEL_MARGIN_S
+    except ValueError:
+        v = CANCEL_MARGIN_S
+    return max(CANCEL_MARGIN_S, v)
 #: no leg may be PLACED after this
 PLACE_OFFSET_S = 480.0
 MIN_REST_S = 60.0
@@ -179,7 +200,7 @@ def active(market: Optional[str] = None) -> bool:
 
 def cancel_cutoff(t_end: float) -> float:
     """The hard terminal deadline. Nothing may rest past it."""
-    return float(t_end) - CANCEL_MARGIN_S
+    return float(t_end) - cancel_margin_s()
 
 
 def window_end(t_start: float) -> float:

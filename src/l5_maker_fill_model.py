@@ -225,6 +225,53 @@ class Ladder:
                 better += qty
         return better + here
 
+    def cross_price_bracket(self, slug: str, resting_side: str,
+                            wire_px: D, qty: D) -> Dict[str, Any]:
+        """Split `ahead_of_us` into its two DIFFERENT components.
+
+        WHY THIS EXISTS. On 2026-10-19 a real maker bid at 0.89 filled while
+        the book was 0.93/0.94. `ahead_of_us` reported 12959.03 and
+        `depth_at` reported 604.00, so CONSERVATIVE wanted 12959.34 shares of
+        direction-correct volume and BASE wanted 12959.03. The order rested
+        about ninety seconds in a window that consumed 2228 prints. Both
+        rejected a fill the venue confirmed.
+
+        The error is not the arithmetic, it is the conflation. `ahead_of_us`
+        sums better-priced rungs INTO a queue, but those orders are not ahead
+        of us in any queue -- they sit at other prices. When the market falls
+        to our rung they are WITHDRAWN or REPRICED, not consumed. Within our
+        own rung "a cancellation ahead of us is not progress" is right;
+        across rungs cancellation is precisely the mechanism by which price
+        reaches us, and trade volume does not measure it.
+
+        So this reports a BRACKET rather than a number, and names what each
+        bound does and does not assume. It changes no fill decision: the
+        deployed scenarios are untouched, and an OPTIMISTIC fill stays
+        unconfirmed rather than being promoted.
+        """
+        out: Dict[str, Any] = {
+            "same_rung_fifo": None, "cross_price_depth": None,
+            "legacy_ahead_of_us": None,
+            "conservative_required_volume": None,
+            "legacy_required_volume": None,
+            "requires_price_to_reach_us": None,
+            "labels": ("same_rung_fifo is a QUEUE and volume must clear it. "
+                       "cross_price_depth is a PRICE DISTANCE and is cleared "
+                       "by withdrawal, which trade volume cannot measure, so "
+                       "no fill may be claimed from it either way.")}
+        here = self.depth_at(slug, resting_side, wire_px)
+        legacy = self.ahead_of_us(slug, resting_side, wire_px)
+        if here is None or legacy is None:
+            return dict(out, why="no_published_depth_at_our_price")
+        better = legacy - here
+        return dict(out,
+                    same_rung_fifo=str(here),
+                    cross_price_depth=str(better),
+                    legacy_ahead_of_us=str(legacy),
+                    conservative_required_volume=str(here + qty),
+                    legacy_required_volume=str(legacy + qty),
+                    requires_price_to_reach_us=bool(better > 0))
+
     def status(self) -> Dict[str, Any]:
         return {"slugs": len(self.books), "frames": self.frames,
                 "rungs_rejected": self.rejected,

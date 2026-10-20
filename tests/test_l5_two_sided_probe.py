@@ -334,3 +334,118 @@ def test_matching_is_case_sensitive(monkeypatch):
     monkeypatch.setenv(TS.EXPERIMENT_ENV, "e")
     monkeypatch.setenv(TS.MARKET_ENV, "cpc-btc-updown-15m-*")
     assert TS.active("CPC-BTC-UPDOWN-15M-2026-10-16-2100z") is False
+
+
+# --------------------------------------------------- the 2026-10-19 bracket
+
+def test_the_cross_price_bracket_separates_queue_from_price_distance():
+    """THE OCT 19 FILL. A bid at 0.89 under a 0.93 book filled for real.
+    `ahead_of_us` said 12959.03; the same-rung queue was 604.00. The bracket
+    must report both and must not turn either into a fill."""
+    from decimal import Decimal as D
+    from src import l5_maker_fill_model as FM
+    lad = FM.Ladder()
+    lad.ingest({"market_events": [{
+        "marketSlug": "S",
+        "bids": [{"px": "0.93", "qty": "100"}, {"px": "0.92", "qty": "4000"},
+                 {"px": "0.91", "qty": "4000"}, {"px": "0.90", "qty": "4255.03"},
+                 {"px": "0.89", "qty": "604"}],
+        "asks": [{"px": "0.94", "qty": "7768.28"}]}]}, 1000.0)
+    br = lad.cross_price_bracket("S", FM.BID, D("0.89"), D("0.31"))
+    assert br["same_rung_fifo"] == "604"
+    assert D(br["cross_price_depth"]) == D("12355.03")
+    assert D(br["legacy_ahead_of_us"]) == D("12959.03")
+    # the material correction: 604.31 of same-rung volume, not 12959.34
+    assert D(br["conservative_required_volume"]) == D("604.31")
+    assert D(br["legacy_required_volume"]) == D("12959.34")
+    assert br["requires_price_to_reach_us"] is True
+    assert "withdrawal" in br["labels"]
+
+
+def test_the_bracket_changes_no_fill_decision():
+    """It is a diagnostic. An unknown or deep queue still does not fill."""
+    from decimal import Decimal as D
+    from src import l5_maker_fill_model as FM
+    lad = FM.Ladder()
+    lad.ingest({"market_events": [{"marketSlug": "S",
+                                   "bids": [{"px": "0.50", "qty": "10"}],
+                                   "asks": [{"px": "0.51", "qty": "10"}]}]},
+               1000.0)
+    before = lad.ahead_of_us("S", FM.BID, D("0.50"))
+    lad.cross_price_bracket("S", FM.BID, D("0.50"), D("1"))
+    assert lad.ahead_of_us("S", FM.BID, D("0.50")) == before
+    # and at a price the venue never published, the bracket refuses to guess
+    br = lad.cross_price_bracket("S", FM.BID, D("0.01"), D("1"))
+    assert br["same_rung_fifo"] is None
+    assert br["why"] == "no_published_depth_at_our_price"
+
+
+def test_an_expired_authorization_leaves_the_two_leg_path_inert(monkeypatch):
+    """The two-leg path must not place when the owner's deadline has lapsed.
+    Oct 19 proved the live refusal; this pins it as a test."""
+    import datetime as dt
+    from src import l5_live_authorization as AUTH
+    monkeypatch.setenv(AUTH.NOT_AFTER_ENV, "2026-10-19T13:29:00Z")
+    st = AUTH.not_after_status(now=dt.datetime(2026, 10, 20, 1, 0,
+                                               tzinfo=dt.timezone.utc))
+    assert st["set"] is True
+    assert st["state"] == "EXPIRED"
+    assert st["expires_in_s"] < 0
+    # the configured value is never emitted
+    assert "2026-10-19T13:29:00Z" not in repr(st)
+
+
+def test_both_legs_plus_fees_stay_inside_the_five_dollar_obligation(monkeypatch):
+    """The cash gate charges a resting DOWN leg a dollar a share, so the
+    binding number is the obligation, not the gross cash."""
+    from decimal import Decimal as D
+    monkeypatch.setenv("L5_TS_EXPERIMENT_ID", "bound-check")
+    monkeypatch.setenv("L5_TS_MARKET", "cpc-btc-updown-15m-*")
+    from src import l5_two_sided_probe as TSP
+    r = TSP.build_orders(market="cpc-btc-updown-15m-2026-10-20-0100z",
+                         bid="0.49", ask="0.51",
+                         bid_depth="800", ask_depth="800",
+                         tick="0.01", min_qty="0.01", depth_ticks=1,
+                         cash_envelope="5", max_worst_case_loss="5",
+                         book_age_s="0.1")
+    assert r["ok"] is True
+    assert D(r["cash_gate_obligation_usd"]) <= D("5")
+    assert D(r["gross_cash_usd"]) <= D("5")
+    assert abs(D(r["worst_single_leg_loss_usd"])) <= D("5")
+    # profitable on BOTH outcomes charging the TAKER fee and crediting NO rebate
+    assert r["both_positive_if_taker"] is True
+    assert D(r["up_pnl_if_taker"]) > 0 and D(r["dn_pnl_if_taker"]) > 0
+    # the venue grid is respected
+    assert D(r["qty_per_leg"]) % D("0.01") == 0
+
+
+def test_the_cancel_margin_widens_but_never_narrows(monkeypatch):
+    """The watchdog calls an order older than 300s overdue and HALTS before
+    cancelling, so the terminal margin must be able to cancel EARLIER."""
+    from src import l5_two_sided_probe as TSP
+    end = 1792000900.0
+    assert TSP.cancel_margin_s() == TSP.CANCEL_MARGIN_S
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "300")
+    assert TSP.cancel_margin_s() == 300.0
+    assert TSP.cancel_cutoff(end) == end - 300.0
+    # narrowing is refused: a smaller value cannot push the deadline later
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "10")
+    assert TSP.cancel_margin_s() == TSP.CANCEL_MARGIN_S
+    # and an unreadable value is not permission
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "not-a-number")
+    assert TSP.cancel_margin_s() == TSP.CANCEL_MARGIN_S
+
+
+def test_the_widened_margin_keeps_a_leg_inside_the_watchdog_limit(monkeypatch):
+    """With the margin at 300 and the lock lifted at T+6:00, a leg placed by
+    the T+8:00 cutoff rests at most 240s -- 60s inside the watchdog's 300s."""
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.CANCEL_MARGIN_ENV, "300")
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    terminal = TSP.cancel_cutoff_from_start(start)
+    place_last = TSP.place_cutoff(start, end)
+    earliest_place = start + 360.0            # lock lifted at T+6:00
+    assert terminal - earliest_place <= 300.0
+    assert terminal - place_last >= TSP.MIN_REST_S
+    assert place_last < terminal
