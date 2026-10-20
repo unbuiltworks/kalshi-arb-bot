@@ -1371,3 +1371,23 @@ deploy order-ID-linked fill-calibration capture, shadow-locked 2026-10-19T20:53:
 # NO, arm token unset, every risk limit unchanged. No live orders authorized
 # by this, and no exposure limit changed.
 deploy book-at-the-wire capture and honest frame freshness, shadow-locked 2026-10-19T21:26:51Z
+
+# ---------------------------------------------------------------------------
+# a4d7c234 -- pre-live work for the bounded TWO-LEG BTC15m test.
+#
+# 1. Ladder.cross_price_bracket: splits the conflated queue number that made
+#    CONSERVATIVE/BASE reject the venue-confirmed 2026-10-19 fill. Pure
+#    diagnostic. Changes NO fill decision; the Oct 19 fill stays
+#    OPTIMISTIC-only and UNCONFIRMED.
+# 2. L5_TS_CANCEL_MARGIN_S: the two-leg terminal margin, WIDEN-ONLY (cancel
+#    earlier, never later). Needed because the probe could otherwise rest a
+#    leg 600s against the watchdog's 300s max order age.
+#
+# Regression: 26 failed / 11,655 passed / 14 errors = the SAME 40 IDs as the
+# clean baseline, zero NEW; +6 passed are the 6 added tests.
+#
+# ADDS NO CAPABILITY AND AUTHORIZES NO ORDER. SHADOW_ONLY stays enabled,
+# mechanism OFF, two-leg probe INERT (L5_TS_EXPERIMENT_ID / L5_TS_MARKET
+# unset), arm token not reissued, authorization EXPIRED, every risk limit
+# unchanged. No pair-cap change: 0.96 is reached by resting one tick behind.
+deploy two-leg pre-live: queue bracket + widen-only terminal margin, shadow-locked 2026-10-20T00:13:56Z
