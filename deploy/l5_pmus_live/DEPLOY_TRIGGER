@@ -1446,3 +1446,7 @@ deploy the four full-window fixes, shadow-locked 2026-10-20T01:36:16Z
 # Regression on this tree: 26 failed / 11,721 passed / 14 errors = the same 40
 # IDs as the baseline, zero NEW, zero GONE, no crash. Authorizes no order:
 # SHADOW_ONLY stays enabled, authorization expired, limits unchanged.
+
+# 2026-10-20T03:25:14Z DEPLOY: emit the two-sided PAIR and the ladder at both leg
+# prices. Log-only and additive. Regression = the same 40 baseline IDs, zero
+# NEW. SHADOW_ONLY stays enabled; authorizes no order.
