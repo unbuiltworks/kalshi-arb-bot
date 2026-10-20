@@ -452,6 +452,226 @@ def submission_budget_refusal(path: str, experiment: str
     return None
 
 
+# ======================================= THE THREE DURABLE CLASS BUDGETS
+#
+# WHY ONE TOTAL WAS THE WRONG SHAPE. A single "8 submissions per
+# authorization" bound treats every order as the same kind of act. It is
+# not. L5 works inventory SEQUENTIALLY -- open, extend, wait, complete,
+# keep working -- so a flat total is spent by the orders that TAKE ON risk
+# and then has nothing left for the orders that REDUCE it. The budget that
+# runs out first would be the one that completes a pair, which is precisely
+# backwards: an exhausted completion budget strands unmatched exposure that
+# the exposure ceiling is then powerless to unwind.
+#
+# So the budget is split by what the order DOES:
+#
+#   OPEN      an order that increases |prospective unmatched| -- a first
+#             leg or a same-side EXTEND. This is the one that must be
+#             scarce, because it is the only class that can add risk.
+#   COMPLETE  an order that strictly REDUCES |prospective unmatched|. Held
+#             deliberately looser than OPEN, and separately gated on
+#             actually reducing (see `balancing_refusal` in the executor):
+#             a generous budget is safe only because an order in this class
+#             cannot add inventory.
+#   REPLACE   a re-placement of a leg that has already been placed once
+#             (attempt > 0) -- a re-price after the book moved. Bounded by
+#             the serialization mechanics: one outstanding order at a time
+#             and a 120s per-order TTL.
+#
+# CANCELLATION IS NOT BUDGETED, EVER. A bound that could refuse a cancel
+# would be a bound that traps an order on the venue. Only the REPLACEMENT
+# SUBMISSION that follows a cancel is counted; the cancel itself stays
+# available unconditionally, exactly as the submission gate's own labels
+# promise ("Cancellation is NOT gated by any of these").
+#
+# DURABLE AND MONOTONIC. Each class's consumption is a sequence of
+# single-use ticket locks on the same volume as the ledger, taken with
+# O_CREAT|O_EXCL and fsynced before the wire. A redeploy, a crash, a
+# cancelled order, a rejected order and an ambiguous acknowledgement all
+# leave the ticket spent -- the same rule every other claim here follows.
+#
+# WHY TICKETS AND NOT A NEW CLAIM KEY. The existing `acc1.` ids were
+# written without a class axis, and changing their shape would hand every
+# claim already on the volume back as unspent. A ticket is additive: the
+# original claim keeps its exact key and the class counter sits beside it.
+
+#: the classes, in the order they are reported.
+SUBMISSION_CLASSES = ("OPEN", "COMPLETE", "REPLACE")
+
+CLASS_BUDGET_ENV = {
+    "OPEN": "L5_LIVE_AUTH_MAX_OPEN",
+    "COMPLETE": "L5_LIVE_AUTH_MAX_COMPLETE",
+    "REPLACE": "L5_LIVE_AUTH_MAX_REPLACE",
+}
+
+#: a ticket index can never reach this. Purely a loop bound, so a corrupt
+#: directory cannot spin here.
+_CLASS_TICKET_CEILING = 4096
+
+
+def normalize_class(klass: Any) -> Optional[str]:
+    """One of `SUBMISSION_CLASSES`, or None for 'not stated'.
+
+    An UNRECOGNISED class is not None: it raises. 'I was told something I do
+    not understand' and 'I was told nothing' must not collapse, because the
+    second is allowed when no class budget is configured and the first is
+    always a programming error.
+    """
+    if klass is None:
+        return None
+    k = str(klass).strip().upper()
+    if not k:
+        return None
+    if k not in SUBMISSION_CLASSES:
+        raise Refused("SUBMISSION_CLASS_UNKNOWN",
+                      {"klass": k[:40],
+                       "known": list(SUBMISSION_CLASSES)})
+    return k
+
+
+def max_of_class(klass: str) -> Optional[int]:
+    """This class's durable budget, or None for 'not configured'.
+
+    Same three-way reading as `max_submissions`: unset does not bind,
+    unreadable is ZERO rather than unlimited.
+    """
+    env = CLASS_BUDGET_ENV.get(str(klass).strip().upper())
+    if not env:
+        return None
+    raw = (os.getenv(env) or "").strip()
+    if not raw:
+        return None
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 0            # unreadable is NEVER unlimited
+
+
+def any_class_budget_configured() -> bool:
+    """True when the owner has configured at least one class budget."""
+    return any(max_of_class(k) is not None for k in SUBMISSION_CLASSES)
+
+
+def class_sid(experiment: str, klass: str, n: int) -> str:
+    """The claim id for TICKET `n` of one class of one authorization."""
+    return "cls1.%s.%s.%d" % (experiment, str(klass).upper(), int(n))
+
+
+def class_spent(path: str, experiment: str, klass: str) -> List[str]:
+    """Every ticket this class holds. Durable; counted from the filesystem."""
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(experiment))[:120]
+    d = pathlib.Path(path).parent
+    if not d.is_dir():
+        return []
+    pre = "l5_auth_claim_cls1.%s.%s." % (safe, str(klass).upper())
+    return sorted(p.name for p in d.glob("l5_auth_claim_cls1.*.lock")
+                  if p.name.startswith(pre))
+
+
+def class_budget_report(path: str, experiment: str) -> Dict[str, Any]:
+    """Read-only. What each class has spent and what it may still spend."""
+    out: Dict[str, Any] = {}
+    for k in SUBMISSION_CLASSES:
+        cap = max_of_class(k)
+        try:
+            spent = len(class_spent(path, experiment, k))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out[k] = {"max": cap, "spent": None,
+                      "remaining": None,
+                      "reason": "UNREADABLE:%s" % type(exc).__name__}
+            continue
+        out[k] = {"max": cap, "spent": spent,
+                  "remaining": None if cap is None else max(0, cap - spent)}
+    return out
+
+
+def claim_class_ticket(path: str, experiment: str, klass: str
+                       ) -> Optional[Dict[str, Any]]:
+    """Consume one ticket in `klass`, or raise. None when unconfigured.
+
+    Takes the LOWEST free ticket index, atomically. Two processes cannot
+    take the same index -- `claim_once` is O_EXCL -- and a loser simply
+    moves to the next, so a race costs an index rather than letting a
+    second order through on one ticket.
+    """
+    k = str(klass).upper()
+    cap = max_of_class(k)
+    if cap is None:
+        return None
+    if cap <= 0:
+        raise Refused("%s_BUDGET_EXHAUSTED" % k,
+                      {"klass": k, "max": cap, "spent": 0,
+                       "env": CLASS_BUDGET_ENV[k],
+                       "note": "a budget of zero, or one we could not read, "
+                               "permits nothing"})
+    try:
+        spent = len(class_spent(path, experiment, k))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise Refused("%s_BUDGET_UNREADABLE" % k,
+                      {"klass": k, "error": type(exc).__name__,
+                       "note": "a budget we cannot count is not a budget we "
+                               "may assume has room"})
+    if spent >= cap:
+        raise Refused("%s_BUDGET_EXHAUSTED" % k,
+                      {"klass": k, "max": cap, "spent": spent,
+                       "env": CLASS_BUDGET_ENV[k],
+                       "note": "this class of order is spent for this "
+                               "authorization; the other classes are "
+                               "unaffected"})
+    for n in range(spent, _CLASS_TICKET_CEILING):
+        if n >= cap:
+            break
+        sid = class_sid(experiment, k, n)
+        rec = {"kind": "class_ticket", "experiment": str(experiment),
+               "klass": k, "index": n, "sid": sid,
+               "t": dt.datetime.now(dt.timezone.utc).isoformat()}
+        try:
+            claim_once(path, sid, rec)
+        except Refused:
+            continue            # someone else holds this index; try the next
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise Refused("%s_BUDGET_UNAVAILABLE" % k,
+                          {"klass": k, "sid": sid,
+                           "error": type(exc).__name__,
+                           "note": "the ticket could not be persisted, so it "
+                                   "is not held. Refusing rather than "
+                                   "submitting on an unproven budget."})
+        return rec
+    raise Refused("%s_BUDGET_EXHAUSTED" % k,
+                  {"klass": k, "max": cap, "spent": spent,
+                   "env": CLASS_BUDGET_ENV[k],
+                   "note": "every index inside the budget is already held"})
+
+
+def class_claim_or_refuse(path: str, experiment: str,
+                          klass: Any) -> Optional[Dict[str, Any]]:
+    """The one place a submission's class budget is spent.
+
+    UNSTATED IS A REFUSAL ONCE BUDGETS EXIST. A caller that does not say
+    what kind of order this is cannot be charged for it, and an uncharged
+    order is an unbudgeted one. While no class budget is configured at all,
+    silence is accepted and nothing is spent -- that is the pre-existing
+    behaviour, unchanged.
+    """
+    k = normalize_class(klass)
+    if k is None:
+        if any_class_budget_configured():
+            raise Refused("SUBMISSION_CLASS_NOT_STATED",
+                          {"known": list(SUBMISSION_CLASSES),
+                           "note": "class budgets are configured, so an "
+                                   "order that does not say which class it "
+                                   "belongs to cannot be charged for and is "
+                                   "refused"})
+        return None
+    return claim_class_ticket(path, experiment, k)
+
+
 def _lock_path(path: str, sid: str) -> pathlib.Path:
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", sid)[:120]
     return pathlib.Path(path).parent / ("l5_auth_claim_%s.lock" % safe)
@@ -639,7 +859,8 @@ def accumulation_sid(experiment: str, market: str, rnd: int, leg: str,
 def claim_accumulation_leg(market: str, rnd: int, leg: str,
                            payload: Mapping[str, Any],
                            path: Optional[str] = None,
-                           attempt: int = 0) -> Dict[str, Any]:
+                           attempt: int = 0,
+                           klass: Any = None) -> Dict[str, Any]:
     """Consume ONE accumulation leg's claim, or raise. Never auto-resets.
 
     Durable on the same volume as the ledger, taken BEFORE the wire, and
@@ -679,9 +900,17 @@ def claim_accumulation_leg(market: str, rnd: int, leg: str,
     over = submission_budget_refusal(path or ledger_path(), exp)
     if over:
         raise Refused(str(over["reason"]), over)
+    # THE CLASS BUDGET, spent BEFORE the leg claim. Order matters: if the
+    # class is exhausted, nothing should consume the leg's own slot, because
+    # the leg slot is what a later retry under a replenished class budget
+    # would need. The reverse order would spend the leg on an order the
+    # class budget then refused.
+    ticket = class_claim_or_refuse(path or ledger_path(), exp, klass)
     sid = accumulation_sid(exp, mkt, r, side, a)
     rec = {"kind": "accumulation_leg_claim", "experiment": exp,
            "market": mkt, "round": r, "leg": side, "attempt": a, "sid": sid,
+           "klass": normalize_class(klass),
+           "class_ticket": (None if ticket is None else ticket.get("sid")),
            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
            **dict(payload)}
     try:
@@ -786,7 +1015,8 @@ def submission_claim_state(experiment: Optional[str] = None, *,
 
 
 def claim_submission(market: str, payload: Mapping[str, Any],
-                     path: Optional[str] = None) -> Dict[str, Any]:
+                     path: Optional[str] = None,
+                     klass: Any = None) -> Dict[str, Any]:
     """Consume THE one submission claim, or raise. Never auto-resets.
 
     WHY THIS EXISTS, AND WHY max_live_orders DID NOT COVER IT.
@@ -830,9 +1060,13 @@ def claim_submission(market: str, payload: Mapping[str, Any],
     over = submission_budget_refusal(path or ledger_path(), exp)
     if over:
         raise Refused(str(over["reason"]), over)
+    # the same class budget, on the other strategy's path, so a class bound
+    # cannot be sidestepped by which engine chose the order.
+    ticket = class_claim_or_refuse(path or ledger_path(), exp, klass)
     sid = submission_sid(exp)
     rec = {"kind": "submission_claim", "experiment": exp, "market": mkt,
-           "sid": sid,
+           "sid": sid, "klass": normalize_class(klass),
+           "class_ticket": (None if ticket is None else ticket.get("sid")),
            "t": dt.datetime.now(dt.timezone.utc).isoformat(),
            **dict(payload)}
     try:

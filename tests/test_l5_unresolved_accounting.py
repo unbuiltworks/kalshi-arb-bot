@@ -232,6 +232,13 @@ class _Runner:
         self.transport = _T()
         self.now_t = 1000.0
         self.win = collections.Counter()
+        # the campaign layer reads `root` (where the durable window ledger
+        # lives) and publishes a counter. No approval document is set in
+        # this file, so the verdict is "absent" and the single-window
+        # handshake under test here is untouched.
+        import tempfile as _tf
+        self.root = _tf.mkdtemp(prefix="unresolved-root-")
+        self.stats = collections.Counter()
         self.reconciled = True
         self.store = store
         # `try_arm` now goes through the one shared arming boundary, which

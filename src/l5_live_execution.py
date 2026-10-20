@@ -4157,6 +4157,114 @@ class FaithfulExecutor:
                 return r
         return None
 
+    # ============================= WHAT KIND OF ORDER IS THIS, AND MAY IT GO
+    #
+    # A flat "N submissions per authorization" bound cannot tell an order
+    # that TAKES ON risk from one that UNWINDS it, so it is spent by the
+    # first kind and then refuses the second -- stranding exactly the
+    # unmatched exposure it was meant to contain. These two methods are what
+    # let the budget be split by what the order does.
+    #
+    # BOTH READ THE PROSPECTIVE BOOK, never the realized one. "Prospective"
+    # is realized inventory PLUS every outstanding order in this market as
+    # if it filled, which is the same basis the residual cap uses and for
+    # the same reason: on 1130z four legs each calling itself the opening
+    # one filled inside seven seconds. What we HAVE is not the bound; what
+    # we have ALREADY COMMITTED TO is.
+
+    def prospective_residual(self, market: str, dec: Mapping[str, Any],
+                             tr: Mapping[str, Any]) -> Dict[str, Any]:
+        """Signed unmatched inventory before and after, if everything fills."""
+        before = D(str(self.store.residual(market)))
+        outstanding = D(str(self.store.outstanding_residual(market)))
+        prosp_before = before + outstanding
+        qty = D(str(tr.get("qty") or 0))
+        signed = qty if str(dec.get("side")).upper() == UP else -qty
+        prosp_after = prosp_before + signed
+        return {"realized": before, "outstanding": outstanding,
+                "before": prosp_before, "after": prosp_after,
+                "signed_qty": signed,
+                "abs_before": abs(prosp_before), "abs_after": abs(prosp_after),
+                "basis": "PROSPECTIVE_NET: realized + every live order in "
+                         "this market as if it filled"}
+
+    def submission_class(self, market: str, dec: Mapping[str, Any],
+                         tr: Mapping[str, Any], *,
+                         attempt: Optional[int] = None) -> str:
+        """One of AUTH.SUBMISSION_CLASSES, from the order's EFFECT.
+
+        REPLACE first, and whatever the direction. A re-price of a leg
+        already placed once is a replacement -- that is the act the owner
+        asked to bound separately, and letting it be charged to OPEN or
+        COMPLETE instead would make repricing consume the budget for new
+        decisions.
+
+        Then COMPLETE for anything that strictly reduces |prospective
+        unmatched|, and OPEN for everything else. A flat order -- one that
+        changes nothing -- is OPEN, deliberately: it is not reducing, and
+        the scarce budget is the right place for an order whose effect we
+        cannot call risk-reducing.
+        """
+        if attempt is not None:
+            try:
+                if int(attempt) > 0:
+                    return "REPLACE"
+            except (TypeError, ValueError):
+                return "REPLACE"      # unreadable attempt: the bounded class
+        pr = self.prospective_residual(market, dec, tr)
+        if pr["abs_after"] < pr["abs_before"]:
+            return "COMPLETE"
+        return "OPEN"
+
+    def balancing_refusal(self, market: str, dec: Mapping[str, Any],
+                          tr: Mapping[str, Any], klass: str
+                          ) -> Optional[Dict[str, Any]]:
+        """None if a risk-reducing order may go, else why not.
+
+        A looser COMPLETE budget is only safe if an order in that class
+        genuinely cannot add inventory. Two conditions, both on the
+        prospective book:
+
+          REDUCES    |after| must be strictly less than |before|. An order
+                     charged to the risk-reducing budget that does not
+                     reduce risk is the whole failure mode this prevents.
+          NO OVERSHOOT  it may not cross zero. A complement larger than the
+                     remaining unmatched need would retire the imbalance and
+                     open an equal one on the other side -- "balancing" that
+                     leaves the account exactly as exposed, with another
+                     pair of fees paid for it.
+
+        Cash and outstanding-order commitments are NOT re-checked here. They
+        are enforced account-wide at the cash gate and at
+        `max_live_orders`, both of which this order still passes; a second
+        copy of that arithmetic here is what produced the phantom
+        `CASH_COMMITMENT:5.9760>4.65` by counting a filled leg twice.
+        """
+        if str(klass).upper() != "COMPLETE":
+            return None
+        pr = self.prospective_residual(market, dec, tr)
+        # OVERSHOOT FIRST, so the refusal names the real fault and carries
+        # the size that WOULD have been allowed. A large enough overshoot
+        # also fails the reduction test, and reporting it as "does not
+        # reduce" would hide both the cause and the remedy.
+        crosses = ((pr["before"] > 0 and pr["after"] < 0)
+                   or (pr["before"] < 0 and pr["after"] > 0))
+        if crosses:
+            need = pr["before"] if pr["before"] > 0 else -pr["before"]
+            return {"reason": "BALANCING_WOULD_OVERSHOOT",
+                    "prospective_before": str(pr["before"]),
+                    "prospective_after": str(pr["after"]),
+                    "max_qty": str(need),
+                    "note": "larger than the remaining unmatched need: it "
+                            "would open an equal imbalance on the other side"}
+        if pr["abs_after"] >= pr["abs_before"]:
+            return {"reason": "BALANCING_DOES_NOT_REDUCE",
+                    "prospective_before": str(pr["before"]),
+                    "prospective_after": str(pr["after"]),
+                    "note": "charged to the risk-reducing budget but does "
+                            "not reduce |unmatched| on the prospective book"}
+        return None
+
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """None if this order keeps the market's pair cost under the ceiling.
@@ -5148,6 +5256,41 @@ class FaithfulExecutor:
                                "engine may not submit in it.")})
                 return prov.refuse("STRATEGY_EXCLUSIVE_L5_FOLLOWING", market)
 
+            # THE RISK-REDUCING SAFEGUARD, before any claim is spent. The
+            # COMPLETE budget is deliberately looser than OPEN; that is only
+            # safe because an order charged to it has to actually reduce
+            # |prospective unmatched| and may not cross zero. Evaluated here,
+            # at the common boundary, so it binds whichever engine chose the
+            # order. A refusal costs nothing: no claim, no ticket, no wire.
+            # THE EFFECT CLASS, with no attempt axis: this asks only "does
+            # this order reduce unmatched exposure?". The attempt index is
+            # not known until the accumulation branch below, which upgrades
+            # the charge to REPLACE; the SAFEGUARD must not depend on that,
+            # because a re-price that overshoots is exactly as unwanted as a
+            # first placement that does.
+            _bal_klass = self.submission_class(market, dec, tr)
+            _bal = self.balancing_refusal(market, dec, tr, _bal_klass)
+            if _bal:
+                prov.stage("ORDER", {
+                    "submitted": False,
+                    "reason": str(_bal.get("reason")),
+                    "detail": _bal,
+                    "klass": _bal_klass,
+                    "labels": ("an order charged to the risk-reducing budget "
+                               "must reduce unmatched exposure on the "
+                               "PROSPECTIVE book and must not overshoot into "
+                               "an equal imbalance on the other side")})
+                # TWO NAMED SITES, not one dynamic refusal. The refusal
+                # inventory in `l5_intent_gate` is asserted against the
+                # number of `prov.refuse` sites in this method, so a site
+                # that emits two different reasons would make that guard
+                # under-count and the declared review surface stale.
+                if str(_bal.get("reason")) == "BALANCING_WOULD_OVERSHOOT":
+                    return prov.refuse("BALANCING_WOULD_OVERSHOOT",
+                                       str(_bal.get("note"))[:160])
+                return prov.refuse("BALANCING_DOES_NOT_REDUCE",
+                                   str(_bal.get("note"))[:160])
+
             try:
                 # ACCUMULATION NEEDS MANY SUBMISSIONS, so it claims a
                 # NAMED (market, round, leg) slot rather than loosening the
@@ -5178,11 +5321,16 @@ class FaithfulExecutor:
                                      "the attempt budget is spent, the leg "
                                      "holds inventory, an order is live, or a "
                                      "claim could not be read"})
+                    _klass = self.submission_class(market, dec, tr,
+                                                   attempt=att)
                     claim = AUTH.claim_accumulation_leg(
                         market, rnd_pending, leg_pending,
-                        dict(payload, market=market), attempt=att)
+                        dict(payload, market=market), attempt=att,
+                        klass=_klass)
                 else:
-                    claim = AUTH.claim_submission(market, payload)
+                    _klass = self.submission_class(market, dec, tr)
+                    claim = AUTH.claim_submission(market, payload,
+                                                  klass=_klass)
             except BaseException as exc:                       # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise

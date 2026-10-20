@@ -54,6 +54,9 @@ COPY src/l5_live_execution.py src/l5_live_execution.py
 # bit the preflight and live-probe images. test_the_image_copies_every_module
 # _the_entrypoint_can_reach caught this before it ever ran.
 COPY src/l5_live_authorization.py src/l5_live_authorization.py
+# the bounded-campaign approval layer the runner now reads on every arm
+# attempt. Missing from the image, the runner fails to import.
+COPY src/l5_campaign_approval.py src/l5_campaign_approval.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py

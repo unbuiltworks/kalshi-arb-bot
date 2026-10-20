@@ -115,7 +115,12 @@ class _Runner:
         return {"source": "VENUE", "start": s.isoformat(),
                 "end": (s + _d.timedelta(seconds=900)).isoformat()}
 
-    def __init__(self, *, uncertain=None) -> None:
+    def __init__(self, *, uncertain=None, root=None) -> None:
+        # the campaign layer reads `root` (where the durable window ledger
+        # lives). These tests set no approval document, so the verdict is
+        # "absent" and the single-window handshake under test is untouched.
+        self.root = root or tempfile.mkdtemp(prefix="arm-retry-root-")
+        self.stats = collections.Counter()
         self.transport = _Transport()
         self.store = _Store(uncertain)
         self.executor = _Executor()

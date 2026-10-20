@@ -53,6 +53,7 @@ from src import l5_live_authorization as AUTH
 from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
 from src import l5_two_sided_shadow as TS
+from src import l5_campaign_approval as CAMP
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
@@ -1265,7 +1266,40 @@ class Runner:
         # on -- which is the DEFAULT -- the boundary refuses by name, so the
         # logs say why this service is not live instead of going quiet.
         try:
+            # THE CAMPAIGN VERDICT, established here and passed in as a
+            # FACT, exactly as `reconciled` and `halted` are. A runner that
+            # cannot establish it has to say so and be refused rather than
+            # omit it -- which is why this is computed before the call and
+            # never defaulted inside it.
+            #
+            # The bounded campaign is what stops the owner editing Railway
+            # for every fifteen-minute window: one approval document covers
+            # the run, the durable per-nonce ledger counts the windows, and
+            # an absent document leaves the existing single-window handshake
+            # exactly as it was.
+            try:
+                campaign = CAMP.campaign_decision(
+                    str(t.market_slug), root=self.root)
+            except BaseException as exc:                      # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # UNREADABLE IS PRESENT-AND-REFUSING. A fault in this layer
+                # must never read as "no campaign, carry on".
+                campaign = {"present": True, "ok": False,
+                            "reason": "CAMPAIGN_LAYER_FAILED",
+                            "detail": {"error": type(exc).__name__}}
+            # TELEMETRY NEVER DECIDES ARMING. The verdict above is already
+            # fixed; publishing it must not be able to raise out of the
+            # arming path and turn an ordinary refusal into a crashed tick.
+            if campaign.get("present"):
+                try:
+                    self.stats["campaign:%s" % (campaign.get("reason")
+                                                or "OK")] += 1
+                except BaseException as exc:                  # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
             claim = AUTH.authorize_arming(
+                campaign=campaign,
                 market=t.market_slug,
                 # getattr: a caller without a recorded preflight has not
                 # passed one, and the boundary must refuse that rather than
@@ -2400,6 +2434,116 @@ class Runner:
                     self.stats["shadow_error:%s:%s"
                                % (name, type(exc).__name__)] += 1
 
+    def campaign_telemetry(self) -> Dict[str, Any]:
+        """What the bounded campaign currently permits. READ-ONLY.
+
+        THE NONCE IS NEVER PUBLISHED. The document identifies itself here by
+        sha256 alone -- the same rule `HaltGate` telemetry follows for the
+        latch -- so an operator can confirm WHICH approval is in force
+        without the log carrying something that bounds a live run.
+
+        Reporting is fail-closed in the same direction as the gate: a figure
+        this cannot establish is reported as None with its reason, never as a
+        comfortable number.
+        """
+        out: Dict[str, Any] = {
+            "approval_present": None, "approval_state": None,
+            "document_sha256": None, "permits_this_window": None,
+            "reason": None, "windows_spent": None,
+            "windows_remaining": None, "max_windows": None,
+            "submissions_spent": None, "max_submissions": None,
+            "class_budgets": None,
+            "labels": ("the campaign BOUNDS a run; it does not authorize "
+                       "one. The owner handshake and the shadow lock still "
+                       "decide that. The nonce is identified by digest "
+                       "only and never emitted.")}
+        # THE SUBMISSION BUDGET, counted from the durable claim locks rather
+        # than from a counter in memory, so a redeploy cannot hand any back.
+        try:
+            cap = AUTH.max_submissions()
+            spent = AUTH.submissions_spent(AUTH.ledger_path(),
+                                           AUTH.experiment_id())
+            out["max_submissions"] = cap
+            out["submissions_spent"] = len(spent)
+            # AND THE THREE CLASS BUDGETS, which are the operative limits.
+            # `max_submissions` is the finite backstop below their sum; an
+            # operator reading only the total cannot tell whether the
+            # budget that is about to run out is the one that OPENS
+            # exposure or the one that UNWINDS it.
+            out["class_budgets"] = AUTH.class_budget_report(
+                AUTH.ledger_path(), AUTH.experiment_id())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["submissions_spent"] = "UNREADABLE:%s" % type(exc).__name__
+        # THE APPROVAL ITSELF, read WITHOUT reserving a window. `state()` is
+        # the document's own verdict; `authorize_window` is what spends, and
+        # telemetry must never spend.
+        try:
+            g = CAMP.ApprovalGate(CAMP.EnvApprovalStore())
+            st = g.state()
+            out["approval_state"] = g.last_state
+            out["document_sha256"] = g.last_sha256
+            out["approval_present"] = (g.last_state != "approval_absent")
+            scope = dict(st.get("scope") or {})
+            if scope:
+                out["max_windows"] = scope.get("max_windows")
+                out["series"] = scope.get("series")
+                out["expires_utc"] = scope.get("expires_utc")
+                out["clamped"] = scope.get("clamped")
+                led = CAMP.WindowLedger(self.root).read(
+                    str(scope.get("nonce_sid")))
+                spent_w = list(led.get("windows") or ())
+                out["windows_spent"] = len(spent_w)
+                out["windows"] = spent_w
+                out["windows_remaining"] = max(
+                    0, int(scope.get("max_windows") or 0) - len(spent_w))
+                slug = (self.transport.market_slug
+                        if self.transport else None)
+                if slug:
+                    # an already-reserved window still permits: re-arming
+                    # inside it resumes rather than spending a second.
+                    out["permits_this_window"] = bool(
+                        slug in spent_w or out["windows_remaining"] > 0)
+            else:
+                out["reason"] = st.get("why")
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["reason"] = "CAMPAIGN_TELEMETRY_FAILED:%s" % type(exc).__name__
+        return out
+
+    def day_realized_line(self) -> Dict[str, Any]:
+        """The figure the DAILY loss halt actually reads, published.
+
+        `realized_today()` -- the all-time total the cumulative gates read --
+        was the only realized number on the heartbeat, and it is NOT what
+        the daily halt evaluates. An operator checking whether the daily
+        ceiling has room was reading the wrong line. None here means the day
+        could not be computed, which is exactly what REFUSES at the gate.
+        """
+        try:
+            day = self.store.realized_current_utc_day()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"utc_day_realized_usd": None,
+                    "reason": "DAY_READ_FAILED:%s" % type(exc).__name__,
+                    "halt_usd": str(self.limits.daily_realized_loss_halt_usd),
+                    "room_usd": None}
+        halt = self.limits.daily_realized_loss_halt_usd
+        return {
+            "utc_day": now_utc().strftime("%Y-%m-%d"),
+            "utc_day_realized_usd": None if day is None else str(day),
+            "halt_usd": str(halt),
+            "would_halt": None if day is None else bool(day <= -halt),
+            "room_usd": None if day is None else str(day + halt),
+            "all_time_realized_usd": str(self.store.realized_today()),
+            "labels": ("the DAILY ceiling reads utc_day_realized_usd; the "
+                       "separate cumulative ceilings read "
+                       "all_time_realized_usd. None is UNKNOWN and refuses "
+                       "at the gate -- it is never read as zero.")}
+
     def heartbeat(self) -> None:
         t = self.transport
         emit("L5_LIVE_HB", {
@@ -2418,6 +2562,11 @@ class Runner:
             "halt": self.submission_gate().get("blocked"),
             "halt_local_env": self.halted(),
             "submission_gate": self.submission_gate(),
+            # THE BOUNDED CAMPAIGN and THE DAILY CEILING, on every
+            # heartbeat. Both were decidable only by reading code; a budget
+            # an operator cannot see is one nobody notices binding.
+            "campaign": self.campaign_telemetry(),
+            "day_realized": self.day_realized_line(),
             "auth_book": self.book.status(),
             "fill_calibration": (None if self.fill_calibration is None
                                  else self.fill_calibration.report()),

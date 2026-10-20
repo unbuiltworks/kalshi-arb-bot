@@ -110,6 +110,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     "PAIR_COST_CEILING",
     "STRATEGY_EXCLUSIVE_TWO_SIDED",
     "STRATEGY_EXCLUSIVE_L5_FOLLOWING",
+    # the risk-reducing safeguard that lets the COMPLETE budget be looser
+    # than the OPEN budget: an order charged to it must actually reduce
+    # |prospective unmatched| and may not overshoot into an equal imbalance
+    # on the other side.
+    "BALANCING_DOES_NOT_REDUCE",
+    "BALANCING_WOULD_OVERSHOOT",
     "QUEUE_MEASUREMENT:BUILD_REASON",
     "SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER",
     "SAFETY_OVERLAY:QUANTITY_INCREMENT_UNKNOWN",

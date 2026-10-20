@@ -411,3 +411,91 @@ def authorize_window(gate: "ApprovalGate", market: str, *,
                        "so a crash costs a window rather than granting one, "
                        "and re-arming the same slug after a restart resumes "
                        "it instead of spending another")}
+
+
+# ===================================================== delivering the approval
+#
+# ONE VARIABLE PER CAMPAIGN, NOT PER WINDOW. The whole point of this layer is
+# that the owner stops editing Railway for every fifteen-minute window. The
+# approval document is therefore read from a single environment variable, set
+# once, covering the bounded run -- and the durable per-nonce window ledger,
+# not the variable, is what counts consumption, so a redeploy cannot hand back
+# a window.
+#
+# WHY NOT THE VOLUME. `FileStore` would be the natural home and the halt latch
+# uses it, but the owner cannot write to the mounted volume without a deploy,
+# which is the ceremony this exists to remove.
+#
+# THE DOCUMENT IS NOT A CREDENTIAL. It bounds a run; it does not authorize
+# one. The owner's `PMUS_Q1_*` handshake is still required, the shadow lock
+# still outranks it, and `telemetry()` publishes only the sha256 digest -- the
+# contents, nonce included, are never emitted.
+
+APPROVAL_ENV = "L5_CAMPAIGN_APPROVAL"
+
+
+class EnvApprovalStore:
+    """An `ObjectStore` serving the approval document from the environment.
+
+    `get` honours the contract that matters: None ONLY when the variable is
+    positively absent or empty, and a raise when the answer cannot be
+    established. Those two must not collapse, because `authorize_window`
+    treats absent as "no campaign, keep the single-window path" and
+    unreadable as "present and refusing".
+    """
+
+    def __init__(self, env: str = APPROVAL_ENV) -> None:
+        self.env = str(env)
+
+    def get(self, key: str) -> Optional[bytes]:
+        if key != APPROVAL_KEY:
+            return None
+        raw = os.getenv(self.env)
+        if raw is None or not str(raw).strip():
+            return None
+        try:
+            return str(raw).encode("utf-8")
+        except BaseException as exc:                          # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise ApprovalReadUnavailable(
+                "approval variable unreadable: %s" % type(exc).__name__
+            ) from exc
+
+    def put(self, key: str, body: bytes) -> Any:
+        # DELIBERATELY NOT IMPLEMENTED. The executor must never be able to
+        # write its own authorization; only the owner sets this variable.
+        raise ApprovalReadUnavailable(
+            "the executor may not write its own approval")
+
+
+def campaign_decision(market: str, *,
+                      root: Optional[str] = None,
+                      now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+    """The per-window campaign verdict for `market`, ready to pass to
+    `l5_live_authorization.authorize_arming(campaign=...)`.
+
+    One call, so the runner has one thing to do and cannot half-wire it.
+    Absent approval returns `present: False`, which that boundary treats as
+    silence.
+    """
+    # THE STALENESS WINDOW, for an OWNER-SET VARIABLE, IS THE CAMPAIGN
+    # CEILING -- not the one-hour default.
+    #
+    # `DEFAULT_MAX_AGE_S` exists so a forgotten PULL endpoint cannot keep
+    # authorizing: nobody has to touch an HTTP server for it to keep serving
+    # yesterday's approval, so age is the only thing that stops it. A Railway
+    # variable is not that: it is set deliberately, once, and withdrawn by
+    # clearing it. Judging it stale an hour after issue would cut the
+    # approved FOUR-HOUR campaign to one hour and put the owner back to
+    # re-issuing by hand -- the exact ceremony this layer removes.
+    #
+    # NOTHING IS WIDENED. `state()` still clamps the effective expiry to
+    # `issued + MAX_CAMPAIGN_S`, so four hours from issue remains the hard
+    # bound; this only stops a SECOND, shorter clock truncating it.
+    gate = ApprovalGate(EnvApprovalStore(), max_age_s=MAX_CAMPAIGN_S)
+    out = authorize_window(gate, market, ledger=WindowLedger(root), now=now)
+    # the digest identifies the document in the logs; the contents never are
+    out["document_sha256"] = gate.last_sha256
+    out["approval_state"] = gate.last_state
+    return out
