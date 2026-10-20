@@ -281,9 +281,30 @@ def test_the_behaviour_our_old_heuristics_disliked_is_not_suppressed(tmp_path):
             ("DOWN", "0.60", "0.90", "0.45")]):
         ex.handle(row(key="k%d" % i, side=side, l5px=px, ask=ask, bid=bid),
                   {}, market="m", window="16:15")
-    assert len(t.sent) == 3
+    # NARROWED, DELIBERATELY, AND IT IS A CHANGE OF PRINCIPLE.
+    #
+    # The two SAME-SIDE repeats still go out: no behavioural
+    # heuristic suppresses L5's accumulation, which is what this
+    # test exists to protect and what the engine still mirrors.
+    #
+    # The third order does NOT, and that is new. It is the opposite
+    # leg at 0.90 against 2 UP already confirmed at 1.31, which
+    # would lock a matched pair costing 2.21 a share to buy
+    # something that pays 1.00 -- a certain loss. On 2026-10-20
+    # that exact shape cost $2.0664 in the 1215z window (UP 2.46 @
+    # 0.94 then DOWN 2.46 @ 0.90, pair 1.84), and the instruction
+    # after it was to enforce the pair-cost ceiling on ACTUAL fills.
+    #
+    # So faithful mirroring now stops short of a leg that completes
+    # a losing pair. That is a real divergence from pure replication
+    # and is recorded here rather than hidden: the ceiling fires
+    # ONLY on an order creating matched quantity above it, never on
+    # a same-side repeat.
+    assert len(t.sent) == 2
+    assert [s["side"] for s in t.sent] == ["UP", "UP"]
     assert st.position("m", "UP") > 0
-    assert st.position("m", "DOWN") > 0
+    # and NO DOWN inventory, because the losing completing leg never went out
+    assert st.position("m", "DOWN") == 0
 
 
 # -------------------------------------------------------------- reconciliation

@@ -4157,6 +4157,61 @@ class FaithfulExecutor:
                 return r
         return None
 
+    def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
+                          tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+        """None if this order keeps the market's pair cost under the ceiling.
+
+        THE BASIS IS CONFIRMED FILLS. `leg_cost` is written from
+        venue-confirmed fills, so a resting or submitted order contributes
+        nothing here -- a submission is an intention, not a hedge.
+
+        The constraint only exists once a pair would EXIST: if this order
+        does not increase `min(up, dn)`, there is no pair cost to bound and
+        this returns None. That keeps a legitimate first leg unconstrained
+        while making the leg that completes a pair justify it.
+
+        Unreadable state REFUSES. A pair cost we cannot compute is not a
+        pair cost we may assume is fine.
+        """
+        try:
+            side = str(dec.get("side") or "")
+            if side not in (UP, DOWN):
+                return {"why": "SIDE_UNREADABLE", "side": side}
+            px = D(str(tr.get("price")))
+            qty = D(str(tr.get("qty")))
+            if px <= 0 or qty <= 0:
+                return {"why": "PRICE_OR_QTY_UNREADABLE",
+                        "price": str(px), "qty": str(qty)}
+            lc = self.store.leg_cost(market)
+            held = {s: self.store.position(market, s) for s in (UP, DOWN)}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"why": "STATE_UNREADABLE:%s" % type(exc).__name__}
+        other = DOWN if side == UP else UP
+        after = dict(held)
+        after[side] = held[side] + qty
+        matched_before = min(held[UP], held[DOWN])
+        matched_after = min(after[UP], after[DOWN])
+        if matched_after <= matched_before:
+            return None          # creates no new matched quantity
+        cost_after = (lc.get(UP) or D(0)) + (lc.get(DOWN) or D(0)) + px * qty
+        eff = cost_after / matched_after
+        cap = TS.max_pair_cost()
+        if eff <= cap:
+            return None
+        return {"why": "PAIR_COST_ABOVE_CEILING",
+                "effective_pair_cost": str(eff.quantize(D("0.0001"))),
+                "ceiling": str(cap),
+                "confirmed_cost_usd": str(cost_after),
+                "matched_after": str(matched_after),
+                "held_confirmed": {k: str(v) for k, v in held.items()},
+                "this_order": {"side": side, "price": str(px),
+                               "qty": str(qty)},
+                "settlement_pays_usd": str(matched_after),
+                "note": ("a matched pair pays exactly $1.00 a share, so a "
+                         "pair cost above the ceiling buys a certain loss")}
+
     def probe_precheck(self, market: str, plan: Mapping[str, Any]
                        ) -> Optional[str]:
         """Gate the WHOLE PAIR before either leg is claimed.
@@ -5005,6 +5060,67 @@ class FaithfulExecutor:
                 "client_order_id": coid, "action_key": key,
                 "side": str(dec["side"]), "price": str(tr["price"]),
                 "qty": str(tr["qty"]), "mode": str(tr.get("mode") or "")}
+            # ============== THE 1215z LOSS, AND THE GATE THAT WAS MISSING
+            #
+            # WHAT HAPPENED. Two real orders filled 38 seconds apart in
+            # cpc-btc-updown-15m-2026-10-20-1215z: UP 2.46 at 0.9400
+            # (D78BWYNG10JH) and DOWN 2.46 at 0.9000 (D78C4Q7G10JR). A
+            # matched pair costing 1.84 pays exactly 1.00 at settlement, so
+            # that book is a CERTAIN loss of -$2.0664 before fees. Nothing
+            # refused it, because the pair-cost ceiling lived only inside
+            # `build_orders` -- the two-sided planner -- and these orders did
+            # not come from it. The L5-following path copies L5's own side
+            # and price and had no pair discipline at all.
+            #
+            # SO THE CEILING MOVES HERE, to the one boundary every order
+            # passes, and it is judged on CONFIRMED FILLS rather than on a
+            # plan: cost already paid for this market, plus this order, over
+            # the matched quantity it would create. The first leg of a pair
+            # is unconstrained (there is nothing to match yet, so no pair
+            # cost exists); it is the leg that CREATES a matched pair that
+            # has to justify one.
+            #
+            # A submitted order is never a hedge. Only `leg_cost`, which is
+            # written from venue-confirmed fills, counts here.
+            _pair_bad = self.pair_cost_refusal(market, dec, tr)
+            if _pair_bad:
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "PAIR_COST_CEILING", "detail": _pair_bad,
+                    "labels": ("judged on venue-confirmed fills plus this "
+                               "order. A pair above the ceiling pays less "
+                               "at settlement than it costs to buy.")})
+                return prov.refuse("PAIR_COST_CEILING",
+                                   str(_pair_bad.get("why"))[:120])
+
+            # ONE STRATEGY PER AUTHORIZED WINDOW, never both.
+            #
+            # The two-sided engine and the L5-following path share this
+            # executor, this envelope and this market. In 1215z they ran
+            # together: the L5-following path spent $4.5264 of the $4.65
+            # cash envelope on the two fills above, and the two-sided engine
+            # then refused `CASH_COMMITMENT:6.99>4.65` -- which was the cash
+            # gate working exactly as designed, on an envelope another
+            # strategy had already emptied. $4.5264 + a 2.46 short leg at a
+            # dollar a share is $6.9864, which is the 6.99 in that refusal.
+            # The limit was never the problem and raising it would only have
+            # funded the loss.
+            #
+            # So when a market is authorized for the two-sided experiment,
+            # ONLY the two-sided engine may submit in it. An order that is
+            # not carrying a two-sided leg is refused by name.
+            if TS.active(market) and not getattr(
+                    self, "_probe_leg_pending", None):
+                prov.stage("ORDER", {
+                    "client_order_id": coid, "submitted": False,
+                    "reason": "STRATEGY_EXCLUSIVE_TWO_SIDED",
+                    "detail": {"market": market},
+                    "labels": ("this market is authorized for the two-sided "
+                               "experiment, so the L5-following path may not "
+                               "submit in it. Two strategies sharing one "
+                               "envelope is how 1215z emptied it.")})
+                return prov.refuse("STRATEGY_EXCLUSIVE_TWO_SIDED", market)
+
             try:
                 # ACCUMULATION NEEDS MANY SUBMISSIONS, so it claims a
                 # NAMED (market, round, leg) slot rather than loosening the

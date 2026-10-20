@@ -104,6 +104,11 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # floor or the pair cap is refused rather than repriced into a loss.
     "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED_AFTER_RETIREMENT",
     "TWO_SIDED_PROBE:COMPLEMENT_REASON",
+    # the two gates the 1215z loss added at the COMMON submission boundary:
+    # a pair cost judged on venue-confirmed fills, and one strategy per
+    # authorized window so two of them cannot share one cash envelope.
+    "PAIR_COST_CEILING",
+    "STRATEGY_EXCLUSIVE_TWO_SIDED",
     "QUEUE_MEASUREMENT:BUILD_REASON",
     "SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER",
     "SAFETY_OVERLAY:QUANTITY_INCREMENT_UNKNOWN",
