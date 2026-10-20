@@ -512,3 +512,65 @@ def test_the_REAL_executor_class_carries_the_balancing_safeguard():
     assert hasattr(LX.FaithfulExecutor, "balancing_refusal")
     assert hasattr(LX.FaithfulExecutor, "prospective_residual")
     assert hasattr(LX.FaithfulExecutor, "submission_class")
+
+
+# ===== a window that cannot trade must not spend the owner's budget
+#
+# Found by applying Patch A on 2026-10-20: the campaign was installed with
+# the shadow lock deliberately ON so it could be verified first, and the
+# verification itself reserved the 1600z window. Four approved windows became
+# three, and the one it spent was unusable -- past its entry cutoff by the
+# time the lock would have come off.
+
+
+def test_a_SHADOW_LOCKED_window_is_not_reserved(tmp_path, monkeypatch):
+    monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(live_doc()))
+    out = CA.campaign_decision(W1, root=str(tmp_path), reserve=False)
+    assert out["ok"] is True
+    assert out["window"]["dry_run"] is True
+    assert out["window"]["reserved_now"] is False
+    assert out["window"]["windows_remaining"] == 4
+    assert not (tmp_path / CA.CONSUMED_DIR).exists(), (
+        "a dry run must write nothing at all"
+    )
+
+
+def test_the_dry_run_still_REFUSES_an_exhausted_campaign(tmp_path,
+                                                         monkeypatch):
+    """Read-only must not mean permissive."""
+    monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(live_doc(max_windows=1)))
+    assert CA.campaign_decision(W1, root=str(tmp_path))["ok"] is True
+    out = CA.campaign_decision(W2, root=str(tmp_path), reserve=False)
+    assert out["ok"] is False
+    assert out["reason"] == "CAMPAIGN_WINDOWS_EXHAUSTED"
+    assert out["present"] is True
+
+
+def test_the_dry_run_RAISES_on_an_unreadable_ledger(tmp_path, monkeypatch):
+    """"I could not tell" and "nothing spent" differ by the whole budget on
+    this path too."""
+    monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(live_doc()))
+    d = tmp_path / CA.CONSUMED_DIR
+    d.mkdir()
+    (d / ("%s.json" % CA.nonce_sid(NONCE))).write_text("{not json")
+    out = CA.campaign_decision(W1, root=str(tmp_path), reserve=False)
+    assert out["ok"] is False
+    assert out["reason"] == "WINDOW_LEDGER_UNREADABLE"
+
+
+def test_the_runner_RESERVES_only_when_the_lock_is_OFF():
+    """Source-level, because it is the lock that decides."""
+    src = (ROOT / "src" / "l5_pmus_live_runner.py").read_text()
+    assert "reserve=not shadow_only()" in src
+
+
+def test_reserving_is_still_the_DEFAULT(tmp_path, monkeypatch):
+    """A caller that says nothing must still spend the window, so a crash
+    between deciding to arm and recording it costs a window rather than
+    granting one."""
+    monkeypatch.setenv(CA.APPROVAL_ENV, json.dumps(live_doc()))
+    out = CA.campaign_decision(W1, root=str(tmp_path))
+    assert out["window"]["reserved_now"] is True
+    assert out["window"].get("dry_run") is None
+    assert CA.WindowLedger(str(tmp_path)).read(
+        CA.nonce_sid(NONCE))["windows"] == [W1]

@@ -285,6 +285,35 @@ class WindowLedger:
             raise ApprovalReadUnavailable("window ledger malformed")
         return doc
 
+    def would_reserve(self, nonce_sid: str, market: str, *,
+                      max_windows: int) -> Dict[str, Any]:
+        """Would `market` be granted? READ-ONLY; writes nothing.
+
+        Same verdict shape as `reserve`, so a caller cannot tell them apart
+        by accident -- except for `dry_run`, which says plainly that no
+        window was spent. A read failure still RAISES: "I could not tell"
+        and "nothing spent" differ by the whole budget here too.
+        """
+        doc = self.read(nonce_sid)
+        windows = [str(w) for w in doc.get("windows") or ()]
+        if market in windows:
+            return {"ok": True, "index": windows.index(market) + 1,
+                    "windows_spent": len(windows),
+                    "windows_remaining": max(0, int(max_windows)
+                                             - len(windows)),
+                    "reserved_now": False, "dry_run": True,
+                    "market": market}
+        if len(windows) >= int(max_windows):
+            return {"ok": False, "reason": "CAMPAIGN_WINDOWS_EXHAUSTED",
+                    "windows_spent": len(windows),
+                    "max_windows": int(max_windows), "dry_run": True,
+                    "market": market}
+        return {"ok": True, "index": len(windows) + 1,
+                "windows_spent": len(windows),
+                "windows_remaining": max(0, int(max_windows)
+                                         - len(windows)),
+                "reserved_now": False, "dry_run": True, "market": market}
+
     def reserve(self, nonce_sid: str, market: str, *,
                 max_windows: int, now_iso: str) -> Dict[str, Any]:
         """Reserve `market` against this approval, durably and idempotently.
@@ -334,7 +363,8 @@ class WindowLedger:
 
 def authorize_window(gate: "ApprovalGate", market: str, *,
                      ledger: Optional[WindowLedger] = None,
-                     now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+                     now: Optional[dt.datetime] = None,
+                     reserve: bool = True) -> Dict[str, Any]:
     """May this market be armed under the current approval? Default NO.
 
     THREE OUTCOMES, AND THE MIDDLE ONE IS THE IMPORTANT ONE:
@@ -388,9 +418,28 @@ def authorize_window(gate: "ApprovalGate", market: str, *,
                 "scope": scope}
     led = ledger or WindowLedger()
     try:
-        res = led.reserve(str(scope.get("nonce_sid")), str(market),
-                          max_windows=int(scope.get("max_windows") or 0),
-                          now_iso=now.isoformat())
+        # RESERVE, OR MERELY ASK.
+        #
+        # A WINDOW RESERVED WHILE SUBMISSION IS STRUCTURALLY BLOCKED IS A
+        # WINDOW SPENT ON NOTHING. The reservation exists so that a crash
+        # between "we decided to arm" and "we recorded it" costs a window
+        # rather than granting one -- and that risk does not exist when the
+        # shadow lock means no order can reach the venue at all. The
+        # activation sequence deliberately installs the campaign with the
+        # lock ON so it can be verified first, and on 2026-10-20 that
+        # verification consumed the 1600z window: four approved windows
+        # became three, with the one it spent unusable.
+        #
+        # So the caller says which it wants. `reserve=False` answers "would
+        # this window be granted?" and writes nothing.
+        if reserve:
+            res = led.reserve(str(scope.get("nonce_sid")), str(market),
+                              max_windows=int(scope.get("max_windows") or 0),
+                              now_iso=now.isoformat())
+        else:
+            res = led.would_reserve(
+                str(scope.get("nonce_sid")), str(market),
+                max_windows=int(scope.get("max_windows") or 0))
     except ApprovalReadUnavailable as exc:
         return {"present": True, "ok": False,
                 "reason": "WINDOW_LEDGER_UNREADABLE",
@@ -471,7 +520,8 @@ class EnvApprovalStore:
 
 def campaign_decision(market: str, *,
                       root: Optional[str] = None,
-                      now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+                      now: Optional[dt.datetime] = None,
+                      reserve: bool = True) -> Dict[str, Any]:
     """The per-window campaign verdict for `market`, ready to pass to
     `l5_live_authorization.authorize_arming(campaign=...)`.
 
@@ -494,7 +544,8 @@ def campaign_decision(market: str, *,
     # `issued + MAX_CAMPAIGN_S`, so four hours from issue remains the hard
     # bound; this only stops a SECOND, shorter clock truncating it.
     gate = ApprovalGate(EnvApprovalStore(), max_age_s=MAX_CAMPAIGN_S)
-    out = authorize_window(gate, market, ledger=WindowLedger(root), now=now)
+    out = authorize_window(gate, market, ledger=WindowLedger(root), now=now,
+                           reserve=reserve)
     # the digest identifies the document in the logs; the contents never are
     out["document_sha256"] = gate.last_sha256
     out["approval_state"] = gate.last_state

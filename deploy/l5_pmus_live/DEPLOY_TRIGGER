@@ -1535,3 +1535,16 @@ budget enforcement self-check, shadow-only 2026-10-20T15:25Z
 # BOTH TRADING LOCKS STAY ON. Gate: 26 failed, 11964 passed, 14 errors --
 # the same 40 baseline ids, zero NEW, zero GONE.
 selfcheck completeness repair, shadow-only 2026-10-20T15:45Z
+
+# 2026-10-20 — SHADOW-ONLY. A window that cannot trade must not spend the
+# owner's budget. Applying Patch A installed the campaign with the shadow
+# lock deliberately ON so it could be verified first, and the verification
+# RESERVED the 1600z window: four approved windows became three, and the one
+# it spent was already past its entry cutoff. The reservation exists so a
+# crash between deciding to arm and recording it costs a window rather than
+# granting one, and that risk does not exist while submit() is structurally
+# blocked. The runner now reserves only when the lock is OFF and takes a
+# read-only verdict otherwise.
+# BOTH TRADING LOCKS STAY ON. Gate: 26 failed, 11969 passed, 14 errors --
+# the same 40 baseline ids, zero NEW, zero GONE.
+no reservation under the shadow lock, shadow-only 2026-10-20T16:25Z

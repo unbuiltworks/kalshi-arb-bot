@@ -1297,8 +1297,15 @@ class Runner:
             # an absent document leaves the existing single-window handshake
             # exactly as it was.
             try:
+                # DO NOT SPEND A WINDOW THAT CANNOT TRADE. While the shadow
+                # lock is on, submit() is structurally blocked and arming
+                # would change nothing -- so reserving the window costs one
+                # of the owner's four and buys no protection. The verdict is
+                # still computed, which is what the activation sequence
+                # verifies before the lock comes off.
                 campaign = CAMP.campaign_decision(
-                    str(t.market_slug), root=self.root)
+                    str(t.market_slug), root=self.root,
+                    reserve=not shadow_only())
             except BaseException as exc:                      # noqa: BLE001
                 if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                     raise

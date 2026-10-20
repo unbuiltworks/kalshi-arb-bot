@@ -79,6 +79,22 @@ def main(argv: list) -> int:
 
     patch_a = dict(BUDGETS)
     patch_a[CA.APPROVAL_ENV] = body
+    # A FRESH EXPERIMENT ID, SO THE CAMPAIGN'S SUBMISSION BUDGETS START AT
+    # ZERO. The three class budgets and the flat backstop are counted from
+    # durable lock files keyed on this id, so a new id gives the campaign its
+    # own budget and leaves the previous campaign's claims on the volume,
+    # named after the id that spent them.
+    #
+    # WHAT IT DOES NOT RESET, and this is the point: the InventoryStore is
+    # keyed on `<L5_LIVE_ROOT>/inventory.json`, not on the experiment, so
+    # positions, realized P&L, retired_markets, account-wide exposure and the
+    # cumulative loss gates are untouched. The halt latch belongs to the
+    # watchdog. The daily halt reads the store's own UTC-day settlement rows.
+    # Not one safety counter is keyed on this id.
+    #
+    # READABLE, NOT SECRET: it names the claim files an auditor has to find.
+    patch_a[AUTH.EXPERIMENT_ENV] = "l5-campaign-%s" % dt.datetime.now(
+        dt.timezone.utc).strftime("%Y%m%dT%H%Mz")
     patch_a["L5_WINDOW_STRATEGY"] = "TWO_SIDED"
     patch_a[AUTH.SERIES_ENV] = CA.ALLOWED_SERIES[0]
     patch_a[AUTH.MAX_WINDOWS_ENV] = str(scope["max_windows"])
@@ -124,6 +140,9 @@ def main(argv: list) -> int:
             "campaign.exact_market_binding == null",
             "campaign.class_budgets == OPEN 8 / COMPLETE 12 / REPLACE 16",
             "campaign.completion_reserve.may_open == true",
+            "campaign.class_budgets all spent == 0 under the new "
+            "experiment id",
+            "campaign.submissions_spent == 0",
             "day_realized.would_halt == false and room_usd > 0",
             "submission_gate.halt_latch == CLEAR and kind == PRESENT",
             "unresolved_accounting.count == 0",
