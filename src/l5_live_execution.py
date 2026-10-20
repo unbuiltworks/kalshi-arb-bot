@@ -4250,10 +4250,10 @@ class FaithfulExecutor:
                 ws = None
             if ws is None:
                 return prov.refuse("TWO_SIDED_PROBE", "WINDOW_START_UNKNOWN")
-            late = TS.may_place(float(self._now().timestamp()),
-                                float(ws), float(ws) + TS.WINDOW_S)
-            if late:
-                return prov.refuse("TWO_SIDED_PROBE", late)
+            # THE GATE IS CHOSEN BY WHAT THIS ACTION IS, and it is applied
+            # BELOW, once the round is known -- see THE ENTRY/COMPLETION
+            # GATE. A single cutoff for both stopped the engine REDUCING
+            # risk at the same instant it stopped taking it.
 
             # SIZE DOWN UNTIL THE GATES ACCEPT THE PAIR. The module sizes
             # from the cash and loss inputs it is given, but the gates own
@@ -4273,6 +4273,23 @@ class FaithfulExecutor:
             if rnd is None:
                 return prov.refuse("TWO_SIDED_PROBE",
                                    "ACCUMULATION_EXHAUSTED")
+
+            # THE ENTRY/COMPLETION GATE. Opening a first leg late is the
+            # dangerous action: if the window cannot still produce a
+            # complement that clears the fee floor, that leg is a directional
+            # bet this engine never intended. Completing is the SAFE action --
+            # it removes exposure -- so it stays available later. Which one
+            # this is comes from the claims on disk, not from memory, so a
+            # restart mid-round still completes rather than re-entering.
+            _claimed = self.probe_legs_claimed(market, rnd)
+            _entering = not any(_claimed.values())
+            _tnow = float(self._now().timestamp())
+            late = (TS.may_enter(_tnow, float(ws), float(ws) + TS.WINDOW_S)
+                    if _entering
+                    else TS.may_complete(_tnow, float(ws),
+                                         float(ws) + TS.WINDOW_S))
+            if late:
+                return prov.refuse("TWO_SIDED_PROBE", late)
             plan = self.probe_stored_plan(market, rnd)
             bad = None
             if plan is None:

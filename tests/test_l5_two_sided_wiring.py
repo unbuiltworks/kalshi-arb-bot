@@ -489,7 +489,10 @@ def test_Q4_the_placement_cutoff_is_CALLED_not_merely_defined(probe,
     ex, t = mk(H, E, tmp_path)
     r = ex.handle(_row(H), _book(), market="m", window="21:00")
     assert t.sent == []
-    assert r["refused_reason"] == "PAST_PLACE_CUTOFF"
+    # ENTRY-specific now: with no leg of this round claimed, this action is an
+    # entry, and entering is what the late cutoff forbids. Completing an
+    # existing leg stays permitted later -- see may_enter vs may_complete.
+    assert r["refused_reason"] == "PAST_ENTRY_CUTOFF"
 
 
 def test_Q4_an_unknown_window_refuses_rather_than_guessing(probe, tmp_path,

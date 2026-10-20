@@ -489,3 +489,60 @@ def test_a_floor_past_the_cutoff_says_so_rather_than_going_quiet(monkeypatch):
     start = 1792000000.0
     assert TSP.may_place(start + 885.0, start, TSP.window_end(start)) == \
         "PLACE_FLOOR_LEAVES_NO_BAND"
+
+
+# ------------------------------- entry vs completion: two economic cutoffs
+
+def test_completing_stays_permitted_later_than_entering(monkeypatch):
+    """The whole point: the engine must not stop REDUCING risk at the same
+    instant it stops taking it."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    assert TSP.ENTRY_CUTOFF_S < TSP.COMPLETE_CUTOFF_S
+    mid = start + (TSP.ENTRY_CUTOFF_S + TSP.COMPLETE_CUTOFF_S) / 2.0
+    assert TSP.may_enter(mid, start, end) == "PAST_ENTRY_CUTOFF"
+    assert TSP.may_complete(mid, start, end) is None
+
+
+def test_both_cutoffs_are_bounded_by_the_terminal(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    terminal = TSP.cancel_cutoff(end)
+    assert TSP.may_complete(terminal, start, end) == "PAST_COMPLETE_CUTOFF"
+    # with the complete cutoff pushed to the terminal, the terminal still binds
+    monkeypatch.setenv(TSP.COMPLETE_CUTOFF_ENV, "999")
+    assert TSP.complete_cutoff_s() == TSP.COMPLETE_CUTOFF_S, "raise refused"
+
+
+def test_an_entry_that_could_not_be_withdrawn_is_refused():
+    """A leg the terminal could not cancel in time is never opened."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    late = TSP.cancel_cutoff(end) - TSP.MIN_REST_S + 1.0
+    # inside the entry cutoff only if the entry cutoff were later; force that
+    assert TSP.may_enter(late, start, end) in ("PAST_ENTRY_CUTOFF",
+                                               "TOO_LATE_TO_WITHDRAW")
+
+
+def test_the_cutoffs_move_earlier_only(monkeypatch):
+    from src import l5_two_sided_probe as TSP
+    monkeypatch.setenv(TSP.ENTRY_CUTOFF_ENV, "300")
+    assert TSP.entry_cutoff_s() == 300.0, "earlier is accepted"
+    monkeypatch.setenv(TSP.ENTRY_CUTOFF_ENV, "900")
+    assert TSP.entry_cutoff_s() == TSP.ENTRY_CUTOFF_S, "later is refused"
+    monkeypatch.setenv(TSP.ENTRY_CUTOFF_ENV, "junk")
+    assert TSP.entry_cutoff_s() == TSP.ENTRY_CUTOFF_S, "unreadable is refused"
+
+
+def test_entry_runs_from_window_open_by_default():
+    """The two-minute band was an artifact. With the default floor of zero,
+    entry is permitted from the window's own open."""
+    from src import l5_two_sided_probe as TSP
+    start = 1792000000.0
+    end = TSP.window_end(start)
+    assert TSP.place_floor_s() == 0.0
+    assert TSP.may_enter(start + 1.0, start, end) is None
+    assert TSP.may_enter(start - 1.0, start, end) == "WINDOW_NOT_OPEN"

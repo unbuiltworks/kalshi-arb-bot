@@ -225,6 +225,77 @@ def active(market: Optional[str] = None) -> bool:
 
 # --------------------------------------------------------------- timing
 
+#: THE TWO ECONOMIC CUTOFFS, replacing one arbitrary placement band.
+#:
+#: WHY TWO. A single `place_cutoff` conflated two decisions with opposite
+#: risk. ENTERING a first leg late is the dangerous one: if the window cannot
+#: still produce a complement at a price that clears the fee floor, that leg
+#: is a directional bet the engine never intended. COMPLETING is the safe one
+#: -- it REMOVES exposure -- so it must stay available later than opening.
+#: Collapsing them meant the engine stopped reducing risk at the same instant
+#: it stopped taking it.
+#:
+#: Both are offsets from the window START and are RAISE-ONLY in the safe
+#: direction: `open` may only move EARLIER (stop entering sooner) and
+#: `complete` may only move EARLIER too, so neither knob can extend trading.
+ENTRY_CUTOFF_S = 600.0
+COMPLETE_CUTOFF_S = 720.0
+ENTRY_CUTOFF_ENV = "L5_TS_ENTRY_CUTOFF_S"
+COMPLETE_CUTOFF_ENV = "L5_TS_COMPLETE_CUTOFF_S"
+
+
+def _earlier_only(env: str, default: float) -> float:
+    """Configured value, accepted only when it is EARLIER than the default."""
+    raw = (os.getenv(env) or "").strip()
+    try:
+        v = float(raw) if raw else default
+    except ValueError:
+        return default                      # unreadable is not permission
+    return min(default, v)
+
+
+def entry_cutoff_s() -> float:
+    return _earlier_only(ENTRY_CUTOFF_ENV, ENTRY_CUTOFF_S)
+
+
+def complete_cutoff_s() -> float:
+    return _earlier_only(COMPLETE_CUTOFF_ENV, COMPLETE_CUTOFF_S)
+
+
+def may_enter(now: float, t_start: float, t_end: float) -> Optional[str]:
+    """None to allow a NEW first leg, else the refusal reason.
+
+    Bounded by the open cutoff AND by the terminal deadline, so a leg can
+    never be opened that the terminal could not withdraw.
+    """
+    if now < float(t_start):
+        return "WINDOW_NOT_OPEN"
+    floor = float(t_start) + place_floor_s()
+    if now < floor:
+        return "BEFORE_PLACE_FLOOR"
+    if now >= float(t_start) + entry_cutoff_s():
+        return "PAST_ENTRY_CUTOFF"
+    if now >= cancel_cutoff(t_end) - MIN_REST_S:
+        return "TOO_LATE_TO_WITHDRAW"
+    return None
+
+
+def may_complete(now: float, t_start: float, t_end: float) -> Optional[str]:
+    """None to allow a COMPLEMENT against existing inventory.
+
+    Deliberately later than `may_enter`: completing removes risk, so the
+    engine keeps doing it after it has stopped opening. Still bounded by the
+    terminal, which nothing may rest past.
+    """
+    if now < float(t_start):
+        return "WINDOW_NOT_OPEN"
+    if now >= float(t_start) + complete_cutoff_s():
+        return "PAST_COMPLETE_CUTOFF"
+    if now >= cancel_cutoff(t_end):
+        return "PAST_TERMINAL"
+    return None
+
+
 def cancel_cutoff(t_end: float) -> float:
     """The hard terminal deadline. Nothing may rest past it."""
     return float(t_end) - cancel_margin_s()
