@@ -223,13 +223,14 @@ is asserted to contain no budget-exhaustion refusal).
 | cancellation | **236 passed** |
 | defensive (both directions) | **84 passed** |
 | image / Dockerfile-aware | **1467 passed** |
-| runtime config verifier | **18 passed** |
+| runtime config verifier | **29 passed** |
 | intent gate / refusal inventory | **85 passed** |
 
 Full regression: two baselines were measured (`f6b67aa2`, the deployed SHA,
 and `f8d4a45c`, the branch head before this work); both produce an identical
 set of **40** pre-existing failures. HEAD, after the fix described below,
-returns **26 failed, 12118 passed, 27 skipped, 1 xfailed, 14 errors** --
+returns **26 failed, 12129 passed, 27 skipped, 1 xfailed, 14 errors** at
+`a4526387` --
 the same 40 IDs, **zero new, zero gone** (`comm` both directions).
 
 **The first run of this batch produced one NEW failure, and it was a real
