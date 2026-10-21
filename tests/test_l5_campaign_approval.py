@@ -61,7 +61,7 @@ def test_a_well_formed_in_scope_document_is_approved():
 # ------------------------------------------------- it can never widen a limit
 
 @pytest.mark.parametrize("field,asked,expected", [
-    ("max_windows", 40, 4),
+    ("max_windows", 40, 8),
     ("max_total_exposure_usd", "500", "5"),
     ("max_daily_loss_usd", "250", "5"),
 ])
@@ -180,5 +180,9 @@ def test_telemetry_names_the_ceilings_and_never_the_document():
 def test_the_ceilings_are_the_authorized_envelope():
     assert CA.MAX_TOTAL_EXPOSURE_USD == D("5")
     assert CA.MAX_DAILY_LOSS_USD == D("5")
-    assert CA.MAX_WINDOWS == 4
+    # raised 4 -> 8 for the eight-window campaign. The ENVELOPE assertion
+    # is the point of this test and the other three ceilings are unchanged:
+    # eight windows buys more opportunities to deploy the same $5, never
+    # more dollars at risk at once.
+    assert CA.MAX_WINDOWS == 8
     assert CA.ALLOWED_SERIES == ("cpc-btc-updown-15m-",)

@@ -58,6 +58,7 @@ COPY src/l5_live_authorization.py src/l5_live_authorization.py
 # attempt. Missing from the image, the runner fails to import.
 COPY src/l5_campaign_approval.py src/l5_campaign_approval.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
+COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py
 COPY src/l5_maker_fill_model.py src/l5_maker_fill_model.py
 COPY src/l5_two_sided_shadow.py src/l5_two_sided_shadow.py

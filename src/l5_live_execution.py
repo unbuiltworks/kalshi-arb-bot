@@ -55,6 +55,7 @@ from typing import (Any, Dict, Iterable, List, Mapping, Optional,
 from src import pmus_fees as fees
 from src import l5_faithful_translation as FT
 from src import l5_queue_measurement as QM
+from src import l5_defensive_completion as DEF
 from src import l5_two_sided_probe as TS
 
 #: the pipeline, in order. A record names the furthest stage it reached.
@@ -4811,11 +4812,42 @@ class FaithfulExecutor:
                     depth_ticks=_dticks,
                     book_age_s=ts_book.get("stream_age_s"),
                     gap_suspected=bool(ts_book.get("gap_suspected")))
+                # THE DEFENSIVE VERDICT, OBSERVED AND NEVER ACTED ON HERE.
+                # It is computed only to be logged: no branch below reads
+                # it, nothing is submitted or cancelled from it, and with
+                # the flag off (the default everywhere) it is a constant
+                # DEFENSIVE_DISABLED. It rides this record so that turning
+                # the flag on yields production evidence of what the policy
+                # WOULD have done, window by window, before a single
+                # defensive order is ever wired to the venue.
+                _defensive = None
+                try:
+                    _defensive = DEF.decide(
+                        now_t=_tnow,
+                        window_start=ws,
+                        complete_cutoff_s=TS.complete_cutoff_s(),
+                        unmatched_qty=_need,
+                        first_leg_cost=comp.get("first_leg_cost"),
+                        exit_price=comp.get("complement_price"),
+                        displayed_depth=(ts_book.get("ask_shares")
+                                         if _other == "DOWN"
+                                         else ts_book.get("bid_shares")),
+                        taker_fee_per_contract=(comp.get("fee_floor") or {})
+                        .get("taker_fee_per_contract"),
+                        window_settled=False)
+                except BaseException as exc:               # noqa: BLE001
+                    # observation must never be able to break the money
+                    # path: a failure here is recorded, not raised.
+                    _defensive = {"act": False,
+                                  "reason": "DEFENSIVE_EVAL_FAILED",
+                                  "error": "%s: %s" % (type(exc).__name__,
+                                                       str(exc)[:120])}
                 prov.stage("TWO_SIDED_COMPLEMENT", dict(
                     comp, round=rnd, matching_side=_other,
                     filled_qty=str(_held), already_matched=str(_mine),
                     unmatched=str(_need),
-                    frozen_price_superseded=str(leg.get("price"))))
+                    frozen_price_superseded=str(leg.get("price")),
+                    defensive=_defensive))
                 if not comp.get("ok"):
                     return prov.refuse("TWO_SIDED_PROBE",
                                        str(comp.get("reason"))[:120])

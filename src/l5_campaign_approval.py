@@ -43,7 +43,15 @@ APPROVAL_KEY = "campaign_approval.json"
 #: THE CEILINGS. Code constants. The document may ask for less and never more.
 MAX_TOTAL_EXPOSURE_USD = D("5")
 MAX_DAILY_LOSS_USD = D("5")
-MAX_WINDOWS = 4
+#: EIGHT, raised from four for the two-hour eight-window campaign.
+#: WHAT THIS DOES NOT CHANGE, and the distinction is the whole safety
+#: argument: exposure is bounded by MAX_TOTAL_EXPOSURE_USD at every
+#: instant, not by how many windows may be worked, so eight windows buys
+#: more OPPORTUNITIES to deploy the same $5 and never more dollars at
+#: risk at once. The duration ceiling, the daily-loss halt, the series
+#: allow-list, the class budgets, the completion reserve, the watchdog and
+#: the HALT latch are all untouched.
+MAX_WINDOWS = 8
 #: the longest campaign a single approval may cover, regardless of its own
 #: stated expiry. A document asking for a week gets four hours.
 MAX_CAMPAIGN_S = 4 * 3600.0

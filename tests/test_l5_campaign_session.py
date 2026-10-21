@@ -107,7 +107,7 @@ def test_the_code_ceilings_clamp_a_greedier_document(tmp_path):
     out = CA.authorize_window(g, W1, ledger=led(tmp_path), now=NOW)
     assert out["ok"] is True
     s = out["scope"]
-    assert s["max_windows"] == CA.MAX_WINDOWS == 4
+    assert s["max_windows"] == CA.MAX_WINDOWS == 8
     assert D(s["max_total_exposure_usd"]) == CA.MAX_TOTAL_EXPOSURE_USD == D("5")
     assert D(s["max_daily_loss_usd"]) == CA.MAX_DAILY_LOSS_USD == D("5")
     assert s["clamped"]["max_windows"] is True
