@@ -211,3 +211,73 @@ def test_a_partial_fill_is_sized_to_what_remains_unmatched():
     assert D(part["qty"]) == D("1.50")
     assert D(part["hold_downside_usd"]) < D(full["hold_downside_usd"])
     assert D(part["exit_downside_usd"]) < D(full["exit_downside_usd"])
+
+
+# ------------------------------------- confirmed cancellation (deadman)
+
+COID = "l5f-complement-abc"
+
+
+def _dead(**buckets):
+    base = {"reason": "DEFENSIVE", "cancelled": [], "errors": [],
+            "unverified": [], "no_venue_id": [], "still_open": [],
+            "filled": []}
+    base.update(buckets)
+    return base
+
+
+def test_a_venue_rereaad_terminal_state_confirms():
+    r = DC.cancel_confirmed(_dead(cancelled=[{"client_order_id": COID}]),
+                            COID)
+    assert r["confirmed"] is True
+    assert r["reason"] == "CANCEL_CONFIRMED_BY_VENUE_REREAD"
+
+
+def test_still_open_is_the_dangerous_case_and_never_confirms():
+    """The cancel returned but the order is still working. A defensive
+    order beside it is how BOTH fill and the position doubles."""
+    r = DC.cancel_confirmed(_dead(still_open=[{"client_order_id": COID}]),
+                            COID)
+    assert r["confirmed"] is False
+    assert r["reason"] == "CANCEL_NOT_CONFIRMED_STILL_OPEN"
+
+
+def test_unverified_and_no_venue_id_are_treated_as_still_resting():
+    for bucket in ("unverified", "no_venue_id"):
+        r = DC.cancel_confirmed(_dead(**{bucket: [{"client_order_id": COID}]}),
+                                COID)
+        assert r["confirmed"] is False, bucket
+        assert bucket.upper() in r["reason"]
+
+
+def test_silence_about_our_order_is_not_confirmation():
+    """Another order cancelled says nothing about ours."""
+    r = DC.cancel_confirmed(
+        _dead(cancelled=[{"client_order_id": "someone-else"}]), COID)
+    assert r["confirmed"] is False
+    assert r["reason"] == "CANCEL_NOT_REPORTED_FOR_THIS_ORDER"
+
+
+def test_reported_errors_refuse():
+    r = DC.cancel_confirmed(
+        _dead(cancelled=[{"client_order_id": COID}],
+              errors=[{"client_order_id": COID}]), COID)
+    assert r["confirmed"] is False
+    assert r["reason"] == "CANCEL_REPORTED_ERRORS"
+
+
+def test_a_fill_booked_during_the_cancel_is_carried_out():
+    """deadman books it with its cost basis; the defensive order must then
+    be sized to what is LEFT, not to the pre-cancel unmatched."""
+    r = DC.cancel_confirmed(
+        _dead(cancelled=[{"client_order_id": COID}],
+              filled=[{"client_order_id": COID, "qty": "1.25"}]), COID)
+    assert r["confirmed"] is True
+    assert r["filled_during_cancel"] == "1.25"
+
+
+def test_an_unreadable_result_refuses():
+    assert DC.cancel_confirmed(None, COID)["reason"] \
+        == "CANCEL_RESULT_UNREADABLE"
+    assert DC.cancel_confirmed(_dead(still_open="garbage"), COID)["confirmed"] \
+        is False

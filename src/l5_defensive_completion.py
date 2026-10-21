@@ -252,3 +252,67 @@ def decide(*,
     out["reason"] = "DEFENSIVE_EXIT_BOUNDED_AND_FUNDED"
     out["saves_vs_holding_usd"] = str(hold_downside - exit_downside)
     return out
+
+
+# ------------------------------------------------- confirmed cancellation
+
+def cancel_confirmed(result: Mapping[str, Any], coid: str) -> Dict[str, Any]:
+    """Did the venue PROVE our resting complement is gone?
+
+    Reads a `deadman()` result. The bar is the venue's own re-read, not a
+    cancel ack -- `deadman` already classifies by `GET /v1/order/{id}` and
+    documents that "cancelled means the VENUE reported a terminal state on
+    re-read, never that a cancel call returned".
+
+    EVERY AMBIGUOUS BUCKET REFUSES. `still_open` is the dangerous one: the
+    cancel returned but the order is still working, so placing a defensive
+    order beside it is how BOTH fill and the position doubles instead of
+    closing. `unverified` and `no_venue_id` are unknowns, and an unknown
+    resting order is treated exactly like a live one.
+
+    A FILL BOOKED DURING THE CANCEL SHRINKS THE RESIDUAL. `deadman` books
+    it with its cost basis; the defensive order must then be sized to what
+    is left, not to what was unmatched before the cancel.
+    """
+    out: Dict[str, Any] = {
+        "confirmed": False, "reason": None, "coid": coid,
+        "filled_during_cancel": "0",
+        "labels": ("a cancel ack is not proof. Only the venue's own re-read "
+                   "retires an order, and any ambiguity is treated as still "
+                   "resting."),
+    }
+    if not isinstance(result, Mapping):
+        out["reason"] = "CANCEL_RESULT_UNREADABLE"
+        return out
+
+    def _ids(bucket: str) -> set:
+        rows = result.get(bucket) or []
+        if not isinstance(rows, (list, tuple)):
+            return {"__unreadable__"}
+        got = set()
+        for r in rows:
+            if isinstance(r, Mapping):
+                got.add(str(r.get("client_order_id")))
+            else:
+                got.add("__unreadable__")
+        return got
+
+    for bad in ("still_open", "unverified", "no_venue_id"):
+        if coid in _ids(bad) or "__unreadable__" in _ids(bad):
+            out["reason"] = "CANCEL_NOT_CONFIRMED_" + bad.upper()
+            return out
+    if result.get("errors"):
+        out["reason"] = "CANCEL_REPORTED_ERRORS"
+        return out
+
+    for r in (result.get("filled") or []):
+        if isinstance(r, Mapping) and str(r.get("client_order_id")) == coid:
+            out["filled_during_cancel"] = str(r.get("qty") or "0")
+
+    if coid not in _ids("cancelled"):
+        out["reason"] = "CANCEL_NOT_REPORTED_FOR_THIS_ORDER"
+        return out
+
+    out["confirmed"] = True
+    out["reason"] = "CANCEL_CONFIRMED_BY_VENUE_REREAD"
+    return out
