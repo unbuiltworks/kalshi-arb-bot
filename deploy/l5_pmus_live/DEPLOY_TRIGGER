@@ -1572,3 +1572,50 @@ deploy: 2026-10-21T01:20Z observation-only, defensive flag OFF
 # byte-identical, defensive live submission is unwritten, the flag is OFF,
 # and the campaign stays closed. No financial limit changes.
 deploy: 2026-10-21T01:52Z shadow measurement, no new capability
+
+# 2026-10-21 — OWNER-AUTHORIZED DEPLOYMENT-ONLY promotion of ab098648 for
+# the eight-window live TWO_SIDED campaign. Authorization is to DEPLOY AND
+# VERIFY ONLY: not to arm, not to enable defensive execution, not to change
+# a risk limit, not to submit an order.
+#
+# WHY THIS FILE IS BEING TOUCHED AT ALL, which is the mechanism and not a
+# workaround. `watchPatterns` on this service is exactly
+# ["deploy/l5_pmus_live/DEPLOY_TRIGGER"], so every push since 962e7a5d was
+# correctly SKIPPED -- none of them changed this file. That is why the
+# running SHA did not move while the branch did. No GitHub Action deploys
+# this service: deploy.yml fires on `main`, l5-research-deploy.yml on
+# feature/l5-canonical, pmus-recorder-deploy.yml on
+# feature/l5-transfer-backtest and a different service. This file is the
+# only mechanism, and no new one is being created.
+#
+# THE DEPLOYED SHA WILL NOT READ ab098648, AND THAT IS INHERENT. Appending
+# here makes a new commit, so Railway builds that commit. The IMAGE is
+# unaffected: this file is not COPYed into it (verified -- no COPY under
+# deploy/ in this Dockerfile), so the built image is byte-identical to one
+# built from ab098648. The tree differs by these comment lines alone.
+#
+# WHAT SHIPS: defensive completion wired to the live path but DISABLED
+# (L5_DEFENSIVE_COMPLETION is absent from this service; absence is OFF);
+# the [T+540, T+600) guard derived from the binding cutoff with a 15s
+# execution floor; both unmatched directions; the venue-position
+# cross-check; the budget-exhaustion entry block; and
+# src/l5_runtime_config_verify.py, which does NOT exist in the running
+# 962e7a5d image and so can only be run after this deployment.
+#
+# WHAT DOES NOT SHIP: any new capability that can trade. L5_SHADOW_ONLY
+# stays set, the campaign approval is stale, and the arm token is the
+# owner's. Risk limits are untouched by this deployment: $5 aggregate
+# exposure, $5 daily realized-loss halt, one outstanding order, the
+# watchdog's independent HALT authority and its inability to submit.
+#
+# GATE: 26 failed, 12129 passed, 27 skipped, 1 xfailed, 14 errors -- the
+# same 40 pre-existing ids as BOTH measured baselines (f6b67aa2, the
+# previously deployed SHA, and f8d4a45c, the branch head before this work),
+# zero NEW and zero GONE in each direction. Image/Dockerfile-aware suites
+# 1467 passed. Watchdog 145, HALT 166, reconciliation 129, cancellation
+# 236, defensive both-directions 84, runtime verifier 29.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 22, failed: [].
+deploy: 2026-10-21T13:09Z ab098648 — deployment-only, defensive flag OFF, NOT_ARMED
