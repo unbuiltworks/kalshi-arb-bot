@@ -1619,3 +1619,51 @@ deploy: 2026-10-21T01:52Z shadow measurement, no new capability
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, checked: 22, failed: [].
 deploy: 2026-10-21T13:09Z ab098648 — deployment-only, defensive flag OFF, NOT_ARMED
+
+# 2026-10-21T15:28Z — RE-TRIGGER. Same authorization as the 13:09Z entry:
+# DEPLOYMENT-ONLY. Not arming, not enabling defensive execution, not
+# changing a risk limit, not submitting an order. No new service, no source
+# reconnection, no strategy change.
+#
+# WHY A SECOND TRIGGER ENTRY EXISTS, AND IT IS MY ERROR AND NOT THE
+# PLATFORM'S. The 13:09Z entry made 61e4b9b1, which DID change this file and
+# should have deployed; that push produced no deployment record at all,
+# because it landed inside the Railway outage window and was lost. I then
+# pushed the GO/NO-GO audit commit e5fe6132 on top of it. Railway evaluates
+# watchPatterns PER PUSH, and that push carried only
+# analysis/l5/GO_NOGO_EIGHT_WINDOW_20261021.md -- so it was correctly
+# SKIPPED at 14:46Z.
+#
+# THE SKIPPED RECORD IS THEREFORE GOOD NEWS, TWICE OVER: the webhook is
+# working (it fired and returned a correct verdict), and the watch pattern is
+# doing its job (a docs-only push cannot deploy the money-capable service).
+# My earlier "the push webhook is not firing" diagnosis was wrong -- it was
+# drawn from the one push made during the outage. Recorded here because the
+# next person to see a SKIPPED record should read it as the filter working,
+# not as a fault.
+#
+# THE LESSON, for whoever appends here next: the trigger change must be in
+# the push that is MEANT to deploy, and nothing may be pushed after it until
+# the build is seen. Nothing will be pushed after this commit.
+#
+# WHAT SHIPS is unchanged from the 13:09Z entry -- the application code is
+# identical to ab098648 and to 61e4b9b1 across every path in this
+# Dockerfile's COPY set (verified: 0 files differ). The delta since 61e4b9b1
+# is one analysis document, which is not in the image.
+#
+# STILL NOT SHIPPING ANY CAPABILITY THAT CAN TRADE: L5_SHADOW_ONLY stays
+# set, the campaign approval is stale, L5_DEFENSIVE_COMPLETION is absent
+# (absence is OFF), and the arm token is the owner's. $5 aggregate exposure,
+# $5 daily realized-loss halt, 0.96 maker pair ceiling, one outstanding
+# order, and the watchdog's independent HALT authority are all untouched.
+#
+# KNOWN PRE-ACTIVATION BLOCKER, not addressed by this deployment: every
+# claim namespace is keyed on L5_EXPERIMENT_ID rather than the campaign
+# nonce, so L5_EXPERIMENT_ID and L5_TS_EXPERIMENT_ID must be rotated before
+# the eight-window campaign, or it starts with the four-window campaign's
+# five tickets already spent. See analysis/l5/GO_NOGO_EIGHT_WINDOW_20261021.md.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 22, failed: [].
+deploy: 2026-10-21T15:28Z re-trigger after a lost webhook — deployment-only, flag OFF, NOT_ARMED
