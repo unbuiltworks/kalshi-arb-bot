@@ -144,7 +144,9 @@ is asserted to contain no budget-exhaustion refusal).
 
 Full regression: two baselines were measured (`f6b67aa2`, the deployed SHA,
 and `f8d4a45c`, the branch head before this work); both produce an identical
-set of **40** pre-existing failures.
+set of **40** pre-existing failures. HEAD, after the fix described below,
+returns **26 failed, 12118 passed, 27 skipped, 1 xfailed, 14 errors** --
+the same 40 IDs, **zero new, zero gone** (`comm` both directions).
 
 **The first run of this batch produced one NEW failure, and it was a real
 catch.** `test_the_executor_refusal_inventory_is_still_complete` counts the
