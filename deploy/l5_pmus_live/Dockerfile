@@ -57,6 +57,14 @@ COPY src/l5_live_authorization.py src/l5_live_authorization.py
 # the bounded-campaign approval layer the runner now reads on every arm
 # attempt. Missing from the image, the runner fails to import.
 COPY src/l5_campaign_approval.py src/l5_campaign_approval.py
+# The effective-runtime-configuration verifier. Shipped because the
+# only configuration that matters is the one the RUNNING process has,
+# so it has to be runnable in here:
+#   python3 -m src.l5_runtime_config_verify
+# It reads config and prints a verdict. It imports no transport, has
+# no order path, and cannot arm, submit or cancel -- asserted by
+# test_nothing_in_the_verifier_can_submit_arm_or_reach_a_venue.
+COPY src/l5_runtime_config_verify.py src/l5_runtime_config_verify.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py

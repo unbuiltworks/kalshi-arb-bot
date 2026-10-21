@@ -284,6 +284,31 @@ ALLOWED_DATA = {
 }
 
 
+#: Modules shipped DELIBERATELY although the entrypoint does not import
+#: them. Same discipline as ALLOWED_DATA above: an addition here is a
+#: visible, reviewed act, and the assertion stays green so it can keep
+#: catching the module it exists to catch.
+#:
+#: Each entry needs a reason that justifies shipping an UNIMPORTED module
+#: into the money-capable image.
+ALLOWED_EXTRA_MODULES = {
+    # config.py is imported lazily inside a function; P39 shipped it too.
+    "src/polymarket_l5/config.py",
+    # The effective-runtime-configuration verifier, run by hand in the
+    # container as `python3 -m src.l5_runtime_config_verify`. It ships
+    # because the only configuration that matters is the one the RUNNING
+    # process has: checking the variables we INTENDED to set, from
+    # outside, cannot see a value an accessor floors, clamps or ignores,
+    # and cannot see the approved limits that are code constants with no
+    # variable at all. It reads configuration and prints a verdict --
+    # test_nothing_in_the_verifier_can_submit_arm_or_reach_a_venue asserts
+    # it has no transport, no order path and no claim or arm call, and
+    # test_the_verifier_s_own_imports_are_all_in_the_image asserts it can
+    # actually run in here.
+    "src/l5_runtime_config_verify.py",
+}
+
+
 def _copied():
     with open(DOCKERFILE, encoding="utf-8") as fh:
         return {ln.split()[1] for ln in fh if ln.startswith("COPY ")}
@@ -293,9 +318,31 @@ def test_the_image_carries_no_module_outside_that_closure():
     """Reviewability: the list is the closure, not a pile."""
     # config.py is imported lazily inside a function; P39 shipped it too.
     allowed = {os.path.relpath(p, ROOT) for _, p in _closure(ENTRY)} \
-        | {"src/polymarket_l5/config.py"}
+        | ALLOWED_EXTRA_MODULES
     modules = {c for c in _copied() if c.endswith(".py")}
     assert modules - allowed == set(), sorted(modules - allowed)
+
+
+def test_every_deliberate_extra_module_is_actually_shipped():
+    """The allowlist is not a wishlist. An entry that is NOT in the image
+    means either the COPY was dropped or the entry is stale, and both should
+    be noticed here rather than discovered by a container that cannot run
+    the verifier the preflight depends on."""
+    missing = ALLOWED_EXTRA_MODULES - _copied()
+    assert missing == set(), sorted(missing)
+
+
+def test_the_verifier_s_own_imports_are_all_in_the_image():
+    """Shipping the verifier is pointless if it cannot import inside the
+    image. Its module-level imports are stdlib; these are the ones it pulls
+    in inside `verify()`, which the ast closure above cannot see."""
+    shipped = _copied()
+    for mod in ("src/l5_campaign_approval.py",
+                "src/l5_defensive_completion.py",
+                "src/l5_live_authorization.py",
+                "src/l5_pmus_live_runner.py",
+                "src/l5_two_sided_probe.py"):
+        assert mod in shipped, mod
 
 
 def test_the_image_carries_no_unaccounted_data_file():

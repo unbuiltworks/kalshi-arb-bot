@@ -681,3 +681,103 @@ def test_a_defensive_unwind_is_never_charged_to_OPEN_in_either_direction(ex):
                                    {"price": "0.80", "qty": "3.39"},
                                    attempt=att)
             assert k in ("COMPLETE", "REPLACE"), (held, buy, att, k)
+
+
+# ========== A SPENT DEFENSIVE BUDGET BLOCKS NEW ENTRIES, NOT COMPLETIONS
+#
+# The owner's rule: "If the $2 defensive budget is exhausted, block new
+# first-leg entries. Continue managing existing inventory within the
+# remaining hard risk limits."
+#
+# The reason it is not simply "stop": the budget is what pays to get OUT of
+# an unmatched leg. Once spent, a new first leg carries exactly the risk the
+# budget existed to bound, with the bound gone. But refusing COMPLETIONS
+# would strand the inventory the rule is protecting.
+
+def test_the_store_reports_the_budget_as_spent_once_it_is(ex):
+    x, t, E = ex
+    assert x.store.defensive_spent() == D(0)
+    x.store.defensive_charge(DC.DEFENSIVE_LOSS_BUDGET_USD,
+                             {"market": SLUG, "note": "exhausted"})
+    assert x.store.defensive_spent() >= DC.DEFENSIVE_LOSS_BUDGET_USD
+
+
+def test_an_unreadable_budget_reads_as_SPENT_and_so_blocks_entry(ex):
+    """The direction that refuses. A budget we cannot read is exhausted."""
+    x, t, E = ex
+    x.store.state["defensive_spent_usd"] = {"not": "a number"}
+    assert x.store.defensive_spent() == DC.DEFENSIVE_LOSS_BUDGET_USD
+
+
+def test_the_budget_survives_a_restart_so_entry_stays_blocked(ex):
+    x, t, E = ex
+    x.store.defensive_charge(D("2.00"), {"market": SLUG})
+    again = E.InventoryStore(x.store.path)
+    assert again.defensive_spent() == D("2.00")
+    assert again.defensive_spent() >= DC.DEFENSIVE_LOSS_BUDGET_USD
+
+
+def test_the_entry_block_is_wired_at_the_ENTRY_branch_only(ex):
+    """Read off the executor's own source, because the branch that matters
+    is `_entering` and a block placed anywhere else would refuse
+    completions too. Asserted structurally rather than by driving the whole
+    window, which needs a venue, a claim and an armed transport."""
+    import inspect
+    import re
+    from src import l5_live_execution as EX
+    body = inspect.getsource(EX.FaithfulExecutor.handle)
+    i = body.index("DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY")
+    before = body[:i]
+    # the nearest enclosing condition is the entry branch
+    guards = re.findall(r"\n            if (_entering|not _entering)", before)
+    assert guards and guards[-1] == "_entering", guards[-3:]
+    # it compares the store's spend against the module constant, not a
+    # literal that could drift away from the budget
+    window = body[max(0, i - 900):i]
+    assert "self.store.defensive_spent()" in window
+    assert "DEF.DEFENSIVE_LOSS_BUDGET_USD" in window
+    # and an unreadable read falls back to the FULL budget, i.e. blocks
+    assert "_dspent = DEF.DEFENSIVE_LOSS_BUDGET_USD" in window
+
+
+def test_the_entry_block_does_not_touch_the_completion_path(ex):
+    """The completion branch (`may_complete`, the complement staging site
+    and `defensive_execute`) must contain no budget-exhaustion refusal: the
+    inventory already held keeps being managed under the unchanged hard
+    limits."""
+    import inspect
+    from src import l5_live_execution as EX
+    comp = inspect.getsource(EX.FaithfulExecutor.defensive_execute)
+    assert "DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY" not in comp
+    body = inspect.getsource(EX.FaithfulExecutor.handle)
+    # exactly one occurrence, in the staged record and its refusal
+    assert body.count("DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY") == 2
+
+
+def test_an_exhausted_budget_still_lets_the_existing_leg_be_completed(ex):
+    """The behavioural half of the rule: with the budget spent, a maker
+    completion of inventory already held is unaffected -- it is priced by
+    `complement_order` and gated by the 0.96 ceiling, neither of which reads
+    the defensive budget."""
+    x, t, E = ex
+    x.store.defensive_charge(D("2.00"), {"market": SLUG})
+    x.store.apply_fill(SLUG, "UP", D("3.39"), D("0.37"), basis="OWN")
+    # a profitable completion at 0.55 (pair 0.92) is still admitted
+    assert x.pair_cost_refusal(SLUG, {"side": "DOWN"},
+                               {"price": "0.55", "qty": "3.39"}) is None
+
+
+def test_an_exhausted_budget_refuses_the_defensive_order_itself(ex):
+    """And the other half: no NEW defensive order either, since there is
+    nothing left to fund it with. The leg holds to settlement."""
+    x, t, E = ex
+    x.store.defensive_charge(D("2.00"), {"market": SLUG})
+    x.store.apply_fill(SLUG, "UP", D("3.39"), D("0.37"), basis="OWN")
+    sync(x)
+    out = x.defensive_execute(
+        market=SLUG, buy_side="DOWN", held_side="UP", resting=[],
+        decide_kwargs=kwargs(defensive_spent_usd=x.store.defensive_spent()),
+        prov=None)
+    assert out["ok"] is False
+    assert out["verdict"]["reason"] == "DEFENSIVE_LOSS_BUDGET"
+    assert D(out["verdict"]["budget_remaining_usd"]) <= D(0)

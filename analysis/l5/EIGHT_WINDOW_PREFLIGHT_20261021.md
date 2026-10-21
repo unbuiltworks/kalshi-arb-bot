@@ -1,135 +1,191 @@
-# Eight-window live TWO_SIDED preflight — exact configuration
+# FINAL PRODUCTION PREFLIGHT — eight-window live TWO_SIDED campaign
 
-Date 2026-10-21. **NOT ACTIVATED.** Nothing in this document has been
-applied. `L5_DEFENSIVE_COMPLETION` is absent from the production service, the
-campaign approval is stale, and `PMUS_Q1_LIVE`/`PMUS_Q1_ARM` are as the owner
-left them.
+Date 2026-10-21. Branch `claude/l5-defensive-8window-prod`.
 
-Service `l5-pmus-live` (`87f1834e-530e-4fc4-a310-91c8d3add196`), project
-`50fb7357-e2bc-4d04-a49e-71eb5d73b0d1`, environment `production`
-(`f3642d27-26dc-4e21-9170-bc76290c076f`). Watchdog
-`fb038b8c-c7c1-4599-b06a-54f72bad544f` stays as it is — it cannot submit
-orders and holds independent HALT authority.
+**STATUS: NOT ARMED, NOT ACTIVATED, NOT DEPLOYED.** No live order can reach
+the venue from this build until the owner performs section F.
 
-## A. Variables to CHANGE
+---
 
-Only two, and one of them is new.
+## 0. One blocker that is not mine to clear
 
-| variable | from | to | why |
-|---|---|---|---|
-| `L5_LIVE_AUTH_MAX_WINDOWS` | `4` | `8` | the window count the authorization permits |
-| `L5_DEFENSIVE_COMPLETION` | *absent* | `1` | arms the defensive path. **Absent is OFF.** Only `1`/`yes`/`true`/`on` arm it; a typo cannot half-enable it |
+**The Railway MCP server needs re-authorization.** It disconnected mid-session
+and now reports that authentication is required. Until it is reconnected (via
+claude.ai connector settings — I cannot start that flow and must not be given
+tokens), I **cannot**:
 
-`MAX_WINDOWS` in `src/l5_campaign_approval.py` is already `8` at the pushed
-SHA, so the code ceiling no longer clamps the request to four.
+* set the environment variables in section B;
+* trigger the deployment;
+* read back the running SHA, image health or the live variable values.
 
-**If you want the eight windows WITHOUT the defensive path,** leave
-`L5_DEFENSIVE_COMPLETION` absent. Everything else below is unchanged and the
-campaign behaves exactly as the four-window one did. The defensive path is a
-separate decision from the window count and I have kept them separable on
-purpose.
+Everything that does not require Railway is done and verified below. The
+deployment itself is section F step 4, which is an owner action regardless.
 
-## B. Variables that must be CONFIRMED UNCHANGED
+---
 
-This connection returns variable names only — values are redacted — so I
-cannot read these back and am not guessing at them. Each must hold the value
-shown:
+## A. Approved figures, 2026-10-21
 
-| variable | required value | what it holds |
+| control | approved | where it lives |
 |---|---|---|
-| `L5_MAX_CASH_DEPLOYED_USD` | `5` | $5 aggregate exposure |
-| `L5_MAX_L5_DAILY_LOSS_USD` | `5` | $5 daily realized-loss halt |
-| `L5_MAX_LIVE_ORDERS` | `1` | one outstanding order |
-| `L5_WINDOW_STRATEGY` | `TWO_SIDED` | strategy lock |
-| `L5_LIVE_AUTH_MARKET_SERIES` | `cpc-btc-updown-15m-` | series allow-list |
-| `L5_TS_CANCEL_MARGIN_S` | `300` | **sets the guard.** See the warning below |
-| `L5_LIVE_AUTH_MAX_OPEN` | `8` | per-campaign OPEN budget |
-| `L5_LIVE_AUTH_MAX_COMPLETE` | `12` | per-campaign COMPLETE budget |
-| `L5_LIVE_AUTH_MAX_REPLACE` | `16` | per-campaign REPLACE budget |
-| `L5_LIVE_AUTH_MAX_SUBMISSIONS` | `28` | total submission backstop |
-| `L5_SHADOW_ONLY` | `0` | must be 0 for live; **this is the live switch** |
-| `L5_MAX_UNMATCHED_CONTRACTS` | as currently set | residual bound |
-| `PMUS_Q1_LIVE` / `PMUS_Q1_ARM` | owner's | I do not read, generate or set these |
+| OPEN budget | **16** | `L5_LIVE_AUTH_MAX_OPEN` |
+| COMPLETE budget | **24** | `L5_LIVE_AUTH_MAX_COMPLETE` |
+| REPLACE budget | **32** | `L5_LIVE_AUTH_MAX_REPLACE` |
+| aggregate submission backstop | **56** | `L5_LIVE_AUTH_MAX_SUBMISSIONS` |
+| defensive-loss budget | **$2 / campaign** | code constant, no variable |
+| aggregate exposure | **$5** | `PROBE_LIMITS`, code constant |
+| daily realized-loss halt | **$5** | `daily_realized_loss_halt()`, floored at $5 |
+| maker pair ceiling | **$0.96** | `TS.max_pair_cost()` |
+| defensive pair ceiling | **$1.20** | code constant, no variable |
+| cancel margin | **300 s** | `L5_TS_CANCEL_MARGIN_S` |
+| defensive interval | **T+540 – T+585** | derived from the margin |
+| windows | **8** | `L5_LIVE_AUTH_MAX_WINDOWS` + code ceiling |
 
-> **`L5_TS_CANCEL_MARGIN_S` is load-bearing for the guard.** The defensive
-> window is the last 60 seconds before the *binding* terminal, which is
-> `900 − L5_TS_CANCEL_MARGIN_S`. At `300` that is `[T+540, T+600)`, less the
-> 15-second execution floor, so the effective action window is
-> `[T+540, T+585)`. The code reads both clocks and takes the minimum, so the
-> guard **moves with this variable** rather than breaking — but if you change
-> it, the guard is no longer the interval you approved. Changing it from 300
-> needs a fresh read of the arithmetic.
+The backstop now exceeds the per-window need: 56 across eight windows is 7.0
+submissions per window, matching the four-window campaign's headroom. The
+constraint I flagged previously is resolved.
 
-## B2. A consequence you should decide on, not one I should quietly fix
+## B. Variables to CHANGE (six)
 
-The class budgets in section B were approved for a **four**-window campaign.
-Spread over eight they are materially tighter per window, and I am not
-raising them:
-
-| budget | total | per window over 8 | per window as approved for 4 |
-|---|---|---|---|
-| OPEN | 8 | 1.0 | 2.0 |
-| COMPLETE | 12 | 1.5 | 3.0 |
-| REPLACE | 16 | 2.0 | 4.0 |
-| **total backstop** | **28** | **3.5** | **7.0** |
-
-The 28 backstop binds before the class budgets do (8+12+16 = 36), so the
-campaign's real limit is **3.5 submissions per window averaged over eight
-windows**. A window needs at least one OPEN and one COMPLETE. Where a defensive order
-is charged depends on whether a complement was already placed on that leg:
-`acc_leg_attempt` grants attempt 0 for a leg's first placement and attempt
->= 1 after a venue-confirmed cancellation, and `submission_class` charges any
-attempt > 0 to REPLACE. So a defensive unwind that **replaces a cancelled
-complement** is REPLACE, and one on a leg **never placed** is COMPLETE (it
-reduces |residual|). Neither is ever OPEN.
-
-**What happens if it runs out:** the submission claim refuses and later
-windows submit nothing. That is a safe failure — no order, no exposure — but
-it means an eight-window campaign may in practice trade six or seven
-windows. If you want eight windows that all trade, the backstop needs
-raising, and that is your call and not something I will do on my own. The
-alternative is to accept that the campaign stops when the budget is spent.
-
-## C. Code constants — no variable, deliberately
-
-These are not configurable at runtime, so they cannot be widened by an
-environment change:
-
-| constant | value | file |
+| variable | from | to |
 |---|---|---|
-| defensive loss budget | **$2.00** per campaign | `l5_defensive_completion.DEFENSIVE_LOSS_BUDGET_USD` |
-| defensive pair ceiling | **1.20** (≤ $0.20 realized loss/share) | `...DEFENSIVE_PAIR_CEILING` |
-| maker completion ceiling | **0.96** | `...MAKER_COMPLETE_CEILING` / `TS.max_pair_cost()` |
-| guard length | 60 s | `...DEFENSIVE_ARM_S` |
-| execution floor | 15 s | `...DEFENSIVE_MIN_EXECUTION_S` |
-| campaign duration ceiling | 4 h | `l5_campaign_approval.MAX_CAMPAIGN_S` |
-| exposure / daily-loss ceilings | $5 / $5 | `l5_campaign_approval` |
+| `L5_LIVE_AUTH_MAX_WINDOWS` | `4` | `8` |
+| `L5_LIVE_AUTH_MAX_OPEN` | `8` | `16` |
+| `L5_LIVE_AUTH_MAX_COMPLETE` | `12` | `24` |
+| `L5_LIVE_AUTH_MAX_REPLACE` | `16` | `32` |
+| `L5_LIVE_AUTH_MAX_SUBMISSIONS` | `28` | `56` |
+| `L5_TS_CANCEL_MARGIN_S` | confirm | `300` |
 
-### How many defensive exits the $2 budget actually buys
+`L5_DEFENSIVE_COMPLETION` stays **absent** for this deployment. Absence is
+OFF, and the build must deploy with defensive execution disabled.
 
-Charged at the **worst case, at submission, not at fill** — an order that
-might fill is a real offer to lose that money, and a budget counting only
-fills would let unlimited unfilled attempts through. For a 2315z-sized
-position (3.39 at own 0.37, exiting at own 0.80):
+## C. Verifying the EFFECTIVE configuration, not the variable names
+
+This is the part the owner asked for specifically, and it is now a program
+rather than a checklist: **`src/l5_runtime_config_verify.py`**, shipped in
+the live image and run inside the container:
 
 ```
-qty * (pair_cost - 1)  = 3.39 * 0.17    = $0.5763
-+ one crossing leg fee = 3.39 * 0.01112 = $0.0377
-                                        = $0.6140 charged
+python3 -m src.l5_runtime_config_verify
 ```
 
-So **$2.00 buys about three defensive exits per campaign**, after which
-`DEFENSIVE_LOSS_BUDGET` refuses and later unmatched legs hold to settlement.
-Smaller positions cost proportionally less and buy more exits. A refused
-defensive order still spends its charge and its window — the charge happens
-before the wire on purpose, so a process dying between the two has already
-paid — and one attempt per window is allowed, so a defensive order refused
-downstream does not get retried on the next tick.
+It checks **22 rows**, each read through the accessor the money path itself
+uses, and each row records which accessor produced it. Exit 0 on PASS, 1 on
+any failure. An unreadable row FAILS; it never defaults.
 
-## D. The approval document — yours to issue, not mine
+Why the distinction matters, concretely:
 
-Written to `campaign_approval.json` in the campaign store. I do not generate,
-read, print or transmit the nonce or the arm token. The document must carry:
+* **A name can be present and the limit still be different.**
+  `daily_realized_loss_halt()` reads `L5_DAILY_REALIZED_LOSS_HALT_USD`,
+  floors it at $5, caps it at $50, and falls back to $5 on anything
+  unreadable. Setting that variable to `1` yields an effective **$5** — so
+  the variable's text is not the limit, the accessor's return is. Tested.
+* **Five approved limits have no variable at all** — the $2 defensive
+  budget, the $1.20 defensive ceiling, the 60 s guard, the 15 s execution
+  floor, the four-hour campaign ceiling, and the $5/$5 approval ceilings. An
+  environment-only check cannot see them, and an environment change cannot
+  move them. They are checked as constants.
+* **The margin condition is checked as a derivation, not a number.** The
+  owner's approval names `L5_TS_CANCEL_MARGIN_S = 300` *because* the guard
+  comes from it. So four rows are checked: the margin, the binding terminal
+  it implies (600), the guard open (540) and the last actionable second
+  (585). At a margin of 180 all four fail and the report shows the terminal
+  has moved to 720. At 240 they show 660/600/645. Tested at all three.
+
+Verified end to end: run against the approved environment it returns
+`PASS: true, checked: 22, failed: []`. Run inside a **materialized image
+closure** — only the 47 files the Dockerfile COPYs, nothing else on the path
+— it returns the same. So it will run in the container.
+
+The three activation switches (`shadow_only`, `experiment_id`,
+`acc_max_attempts`) are **reported and not graded**: grading them would make
+the verifier fail at exactly the moment activation succeeds, which would
+teach the owner to ignore it.
+
+## D. The budget-exhaustion rule, as implemented
+
+> "If the $2 defensive budget is exhausted, block new first-leg entries.
+> Continue managing existing inventory within the remaining hard risk
+> limits."
+
+Implemented at the entry branch only. Once `store.defensive_spent() >=
+$2.00`, a new first leg is refused with
+`DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY`, because the budget is what pays to
+get *out* of a stranded leg — once spent, a new first leg carries exactly the
+risk the budget existed to bound, with the bound gone.
+
+What continues: **completion of inventory already held.** The gate sits
+inside `if _entering:`, and `_entering` is false once a leg of the round is
+claimed — which is the branch that matches an existing position. Refusing it
+would strand the very inventory the rule protects. Completion stays governed
+by the unchanged hard limits: $5 exposure, $5 daily halt, the residual bound,
+one outstanding order, the watchdog, the HALT latch.
+
+Campaign-wide, not per-market: one budget, one campaign, and a leg stranded
+in another market has already spent it. The spend is **persisted**, so a
+restart cannot reset it, and an unreadable budget reads as **spent** — so it
+blocks rather than permits.
+
+Both halves are tested, including structurally (the refusal's nearest
+enclosing condition is asserted to be `_entering`, and `defensive_execute`
+is asserted to contain no budget-exhaustion refusal).
+
+## E. Test evidence
+
+| group | result |
+|---|---|
+| watchdog | **145 passed** |
+| HALT | **166 passed** |
+| reconciliation | **129 passed** |
+| cancellation | **236 passed** |
+| defensive (both directions) | **84 passed** |
+| image / Dockerfile-aware | **1467 passed** |
+| runtime config verifier | **18 passed** |
+
+Full regression: see the covering message. Two baselines were measured
+(`f6b67aa2`, the deployed SHA, and `f8d4a45c`, the branch head before this
+work); both produce an identical set of 40 pre-existing failures, and HEAD
+matches it — zero new, zero gone.
+
+The image test `test_the_image_carries_no_module_outside_that_closure`
+correctly rejected the verifier at first, because it is not imported by the
+entrypoint. It is now on an explicit `ALLOWED_EXTRA_MODULES` allowlist with
+its justification, mirroring the `ALLOWED_DATA` discipline already in that
+file — so shipping an unimported module into the money-capable image is a
+visible, reviewed act. Two further tests were added: that every allowlisted
+module is actually in the image (the allowlist is not a wishlist), and that
+the verifier's own lazy imports are all shipped.
+
+## F. The exact activation action
+
+Nothing here has been done. In order:
+
+1. **Reconnect Railway** (section 0), or perform steps 2–5 in the dashboard.
+2. Set the six variables in section B. Leave `L5_DEFENSIVE_COMPLETION`
+   absent.
+3. Append a line to `deploy/l5_pmus_live/DEPLOY_TRIGGER` and push. **The
+   service watches only that path** — a code push alone does not deploy, and
+   a deploy attempt without it reports SKIPPED.
+4. Confirm the deployment reports SUCCESS and its `commitHash` equals the
+   SHA in the covering message.
+5. In the container, run `python3 -m src.l5_runtime_config_verify` and
+   require `PASS: true, checked: 22, failed: []`. **This is the gate.** If
+   any row fails, do not proceed — the report names the row, the accessor
+   and both values.
+6. Confirm the campaign still reads `NOT_ARMED` and
+   `defensive_execution_enabled: false`.
+
+**THEN, and only on explicit owner authorization, activation is:**
+
+* issue the approval document (section G) with `max_windows: 8`;
+* set `L5_SHADOW_ONLY=0`;
+* arm with the owner's own token.
+
+I will not generate, read, print or transmit the nonce or the arm token, and
+I will not perform any of those three steps without explicit authorization.
+
+## G. The approval document — owner-issued
+
+Written to `campaign_approval.json` in the campaign store:
 
 ```
 approved                 true
@@ -146,72 +202,28 @@ An approval is the **intersection** of what it asks and what the code
 permits; it can never widen a ceiling. A document older than one hour is
 stale even if its campaign has not expired.
 
-## E. Preflight sequence, in order
+## H. What the $2 budget buys
 
-1. set the two variables in section A;
-2. confirm every value in section B (I cannot read them);
-3. issue the approval document in section D;
-4. touch `deploy/l5_pmus_live/DEPLOY_TRIGGER` — **the service watches only
-   that path**, so a code push alone does not deploy and a deploy without it
-   will report SKIPPED;
-5. verify the deployment reports SUCCESS on the SHA in section F;
-6. verify the campaign reads `approved` and the defensive flag reads enabled
-   in the service's own telemetry;
-7. **then** the campaign may be armed, on your explicit authorization.
+Charged at the **worst case, at submission, not at fill** — an order that
+might fill is a real offer to lose that money. For a 2315z-sized position
+(3.39 at own 0.37, exiting at own 0.80), verified against `decide()`:
 
-## F. Regression and image attribution
+```
+qty * (pair_cost - 1)  = 3.39 * 0.17    = $0.5763
++ one crossing leg fee = 3.39 * 0.01112 = $0.0377
+                                        = $0.6140 charged
+          saved against holding          = $0.6403
+```
 
-**Three full-suite runs, so every failure is attributed rather than
-characterised.** Two baselines were measured, not assumed:
+**About three defensive exits per campaign**, refusing on the fourth — after
+which section D blocks new entries and existing inventory is managed to
+settlement.
 
-| tree | result |
-|---|---|
-| `f6b67aa2` — the deployed SHA this branch started from | 26 failed, 14 errors = **40** |
-| `f8d4a45c` — branch head before this work | 26 failed, 14 errors = **40**, byte-identical ID set |
-| **HEAD** — this work | **26 failed, 12090 passed, 27 skipped, 1 xfailed, 14 errors** |
-
-`comm` over the sorted failure IDs: **zero new, zero gone.** The two
-baselines are identical to each other, so the 40 are pre-existing and none
-of them is attributable to this work.
-
-The 40, classified against the code rather than by name — none is reachable
-from the executor's import closure or present in the live image:
-
-| count | module | why it fails |
-|---|---|---|
-| 14 | `test_pmus_status_live_handoff` | monkeypatches `_LIVE_STATUS`, which exists nowhere in `src/` |
-| 9 | `test_spread_scanner` | legacy Kalshi arb; not in the image |
-| 5 | `test_orderbook` | legacy; not reachable from the executor |
-| 4 | `test_pmus_auth` | passes 13/13 in isolation — full-run interference, not a signing defect; production authenticates |
-| 8 | lineage / CA / chain / forensics | provenance tooling; `r1_source_lineage` drift is in three `pmus_*` executor files untouched here |
-
-**Image checks: 1447 pass** across every Dockerfile-aware module, including
-`test_the_image_copies_every_module_the_service_actually_imports`,
-`test_l5_live_probe_image_closure`, and the no-order-path assertions on the
-observer and preview images. Both live Dockerfiles carry
-`l5_defensive_completion.py`; the shadow module's new `TAKER_THETA` import
-resolves inside the `l5_pmus_live` closure, which already copies
-`l5_two_sided_probe.py`.
-
-**A correction to an earlier figure in this session.** I reported 37 failures
-at one point and treated it as 11 new ones. That run was started against a
-tree I was still editing; it was not a measurement of any commit. The
-authoritative run above is on the committed HEAD.
-
-## G. Deploy-ready SHA
-
-Branch `claude/l5-defensive-8window-prod`. The SHA is in the covering
-message. `deploy/l5_pmus_live/DEPLOY_TRIGGER` has NOT been touched since the
-live deployment, so none of this work could trigger a deploy — the service
-is still running `962e7a5d` (deployment `38fa35fd`, SUCCESS
-2026-10-21T02:06:28Z). Deploying is step 4 of section E and is yours.
-
-## H. What is NOT in this configuration
+## I. What is NOT in this configuration
 
 * no new services, volumes or infrastructure;
-* no change to the watchdog;
-* no change to the HALT latch or any existing latch;
-* no shadow observation campaign;
+* no change to the watchdog, the HALT latch, or any existing latch;
+* no shadow campaign;
 * no global taker permission — the maker-only overlay stands for every order
   and is relaxed only for one order a live defensive mandate names exactly;
 * no automatic relaunch after a completed or crashed money-moving session.

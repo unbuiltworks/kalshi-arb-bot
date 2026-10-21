@@ -5075,6 +5075,49 @@ class FaithfulExecutor:
                                          float(ws) + TS.WINDOW_S))
             if late:
                 return prov.refuse("TWO_SIDED_PROBE", late)
+
+            # A SPENT DEFENSIVE BUDGET CLOSES THE DOOR, NOT THE BUILDING.
+            #
+            # The $2 budget is what pays to get OUT of an unmatched leg. Once
+            # it is spent, the next stranded leg has no funded exit and would
+            # hold to settlement for its full cost -- so opening a new first
+            # leg after that point is taking on exactly the risk the budget
+            # existed to bound, with the bound gone. New ENTRIES therefore
+            # stop.
+            #
+            # COMPLETIONS DO NOT. `_entering` is false once a leg of this
+            # round is claimed, and that is the branch that matches an
+            # existing position: refusing it would strand the very inventory
+            # this rule is protecting. Managing what we already hold
+            # continues under the unchanged hard limits -- the $5 exposure
+            # cap, the $5 daily realized-loss halt, the residual bound, one
+            # outstanding order, the watchdog and the HALT latch.
+            #
+            # CAMPAIGN-WIDE, not per-market: one budget, one campaign, and a
+            # leg stranded in another market has already spent it. Unreadable
+            # reads as spent (`defensive_spent` returns the whole budget on a
+            # read that raises), so an unreadable budget stops new entries
+            # rather than permitting them.
+            if _entering:
+                try:
+                    _dspent = self.store.defensive_spent()
+                except BaseException:                          # noqa: BLE001
+                    _dspent = DEF.DEFENSIVE_LOSS_BUDGET_USD
+                if _dspent >= DEF.DEFENSIVE_LOSS_BUDGET_USD:
+                    prov.stage("TWO_SIDED_PROBE", {
+                        "refused": "DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY",
+                        "defensive_spent_usd": str(_dspent),
+                        "defensive_budget_usd": str(
+                            DEF.DEFENSIVE_LOSS_BUDGET_USD),
+                        "labels": ("no funded exit remains for a new "
+                                   "stranded leg, so no new first leg is "
+                                   "opened. Completion of inventory already "
+                                   "held continues under the unchanged hard "
+                                   "limits.")})
+                    return prov.refuse(
+                        "TWO_SIDED_PROBE",
+                        "DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY")
+
             plan = self.probe_stored_plan(market, rnd)
             bad = None
             if plan is None:
