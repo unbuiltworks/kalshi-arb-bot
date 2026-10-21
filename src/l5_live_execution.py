@@ -4334,6 +4334,19 @@ class FaithfulExecutor:
         def no(reason: str, **extra: Any) -> Dict[str, Any]:
             return dict({"ok": False, "reason": reason}, **extra)
 
+        # THE SIDES, VALIDATED FIRST, BEFORE ANY STATE IS READ OR ANY ORDER
+        # IS CANCELLED. Two sides that are not opposed do not describe a
+        # reduction of anything, and a side this venue does not have cannot
+        # be priced -- `position()` would answer 0 for it and the quantity
+        # arithmetic below would compute a plausible-looking order for a
+        # market leg that does not exist. Checked here rather than later so
+        # the refusal names the real fault instead of surfacing as
+        # NOTHING_UNMATCHED, which is what a same-side pair produces.
+        if buy_side not in (UP, DOWN) or held_side not in (UP, DOWN) \
+                or buy_side == held_side:
+            return no("DEFENSIVE_SIDES_NOT_OPPOSED",
+                      buy_side=str(buy_side), held_side=str(held_side))
+
         if "__unreadable__" in (resting or []):
             return no("DEFENSIVE_LIVE_ORDERS_UNREADABLE")
 
@@ -4409,6 +4422,94 @@ class FaithfulExecutor:
             return no("DEFENSIVE_BELOW_MIN_INCREMENT",
                       unmatched=str(need), increment=str(inc))
 
+        # EXPOSURE REDUCTION IS A PROPERTY OF THE DERIVATION, AND THE TWO
+        # CHECKS BELOW ARE ASSERTIONS OF IT RATHER THAN THE PROTECTION.
+        #
+        # Being precise about this, because a guard that reads like a
+        # safeguard and cannot fire is worse than no guard: it implies a
+        # protection that is not there. With the sides validated as opposed
+        # at the top of this method, `need = position(held) -
+        # position(buy)` being positive ALREADY means the held side is the
+        # long one. residual is defined as position(UP) - position(DOWN), so
+        # need > 0 with held UP forces residual > 0 and buy DOWN, and held
+        # DOWN forces residual < 0 and buy UP. The direction cannot come out
+        # wrong, and `qty = floor(need/inc)*inc <= need = |residual|` cannot
+        # overshoot flat.
+        #
+        # They are kept because they pin that invariant to the store's own
+        # venue-confirmed positions rather than to this function's local
+        # arithmetic. If `need` is ever sourced differently -- from a plan, a
+        # cached snapshot, a venue read -- these fire instead of a
+        # directional position being doubled while the record calls it a
+        # defensive exit. Tested by construction in both directions, not by
+        # pretending an unreachable branch is reachable.
+        try:
+            resid = self.store.residual(market)
+        except BaseException:                                  # noqa: BLE001
+            return no("DEFENSIVE_RESIDUAL_UNREADABLE")
+
+        # AND THE EXPOSURE IS THE VENUE'S, NOT OURS. Everything above reads
+        # the local ledger. The ledger is written from venue-confirmed fills
+        # and the cancel's own re-read refreshed it moments ago, but "our
+        # books say we are long 3.39" is not the same claim as "the venue
+        # says we are long 3.39" -- and only the second one is the exposure
+        # a defensive order has to reduce.
+        #
+        # `position_row` is the parser that refuses rather than guesses: a
+        # row carries a SIGNED net plus unsigned bought/sold halves, the
+        # halves decide the sign (long-positive by construction), and a
+        # stated net that disagrees with them refuses the row. Summed over
+        # this market the signed net IS the residual in our terms, including
+        # for a matched pair -- we buy UP and wire "buy DOWN" as a SELL, so
+        # a matched book nets to zero at the venue exactly as it does here.
+        #
+        # FAIL CLOSED ON EVERY UNCERTAINTY: an endpoint that raises, a shape
+        # the parser will not accept, a market with no row while we believe
+        # we hold one, or any disagreement at all. The consequence of
+        # refusing is that the leg holds to settlement, which is the
+        # behaviour this window had before the feature existed -- never a
+        # defensive order placed against a position we cannot confirm.
+        try:
+            rows = [position_row(r)
+                    for r in (self.transport.positions() or [])]
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("DEFENSIVE_VENUE_POSITIONS_UNREADABLE",
+                      error="%s: %s" % (type(exc).__name__, str(exc)[:160]))
+        mine_rows = [r for r in rows
+                     if canonical_market(r["market"], doing="defensive "
+                                         "venue reconciliation") == market]
+        if not mine_rows:
+            return no("DEFENSIVE_VENUE_POSITION_ABSENT",
+                      residual_local=str(resid),
+                      note=("we believe we hold an unmatched leg and the "
+                            "venue reports no position in this market"))
+        venue_net = sum((D(r["signed_net"]) for r in mine_rows), D(0))
+        if venue_net != resid:
+            return no("DEFENSIVE_VENUE_POSITION_DISAGREES",
+                      residual_local=str(resid),
+                      residual_venue=str(venue_net),
+                      rows=[dict(r) for r in mine_rows],
+                      note=("the ledger and the venue do not agree on this "
+                            "market's exposure, so neither may be used to "
+                            "size an order that spends money"))
+
+        reduces = ((buy_side == DOWN and resid > 0)
+                   or (buy_side == UP and resid < 0))
+        if not reduces:
+            return no("DEFENSIVE_WOULD_INCREASE_EXPOSURE",
+                      buy_side=buy_side, held_side=held_side,
+                      residual=str(resid), unmatched=str(need),
+                      note=("residual is UP - DOWN: an unmatched UP is "
+                            "reduced only by buying DOWN, and an unmatched "
+                            "DOWN only by buying UP"))
+        if qty > abs(resid):
+            return no("DEFENSIVE_WOULD_REVERSE_EXPOSURE",
+                      qty=str(qty), residual=str(resid),
+                      note=("a defensive order may bring the position to "
+                            "flat, never through it"))
+
         # PHASE TWO. The only verdict in this system that can submit a
         # defensive order, and it runs against the post-cancel quantity with
         # the cancellation declared and CONFIRMED.
@@ -4455,6 +4556,16 @@ class FaithfulExecutor:
         }
         return {"ok": True, "verdict": verdict,
                 "confirmations": confirmations,
+                "exposure": {"residual_before": str(resid),
+                             "residual_venue_confirmed": str(venue_net),
+                             "residual_after": str(
+                                 resid - qty if buy_side == DOWN
+                                 else resid + qty),
+                             "held_side": held_side, "buy_side": buy_side,
+                             "basis": ("venue-confirmed fills only. This is "
+                                       "the exposure the order REDUCES; it "
+                                       "is not hedged until the venue "
+                                       "confirms a fill.")},
                 "mandate": dict(self._defensive_mandate),
                 "leg": {"side": buy_side, "action": "BUY", "price": str(px),
                         "qty": str(qty), "mode": FT.TAKER,
@@ -5097,9 +5208,15 @@ class FaithfulExecutor:
                     maker_complement_price=(comp.get("leg") or {}).get(
                         "price") or comp.get("complement_price"),
                     buy_side=nxt,
-                    displayed_depth=(ts_book.get("ask_shares")
-                                     if _other == DOWN
-                                     else ts_book.get("bid_shares")),
+                    # SYMMETRIC, AND FROM ONE VARIABLE. Buying DOWN sells
+                    # the YES token INTO the bid and consumes bid depth;
+                    # buying UP lifts the ask and consumes ask depth. Both
+                    # the price above and the depth here are derived from
+                    # `nxt`, so they cannot come to disagree about which
+                    # side of the book is being taken.
+                    displayed_depth=(ts_book.get("bid_shares")
+                                     if nxt == DOWN
+                                     else ts_book.get("ask_shares")),
                     taker_fee_per_contract=_dfee,
                     defensive_spent_usd=self.store.defensive_spent(),
                     window_settled=False)
