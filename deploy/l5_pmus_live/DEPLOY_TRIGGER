@@ -1566,3 +1566,9 @@ campaign-scoped authorization, shadow-only 2026-10-20T17:20Z
 # reads it. MAX_WINDOWS is 8 in code but unused until a campaign document
 # asks for it; the campaign is closed and NOT_ARMED. No new capability.
 deploy: 2026-10-21T01:20Z observation-only, defensive flag OFF
+
+# 2026-10-21 — LIVE_SEQUENTIAL shadow arm + SIMULATED defensive evaluation
+# in the [T+660, T+720) guard. Read-only: the live submission path is
+# byte-identical, defensive live submission is unwritten, the flag is OFF,
+# and the campaign stays closed. No financial limit changes.
+deploy: 2026-10-21T01:52Z shadow measurement, no new capability

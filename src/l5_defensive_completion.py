@@ -114,6 +114,7 @@ def decide(*,
            pair_ceiling: D = DEFENSIVE_PAIR_CEILING,
            loss_budget_usd: D = DEFENSIVE_LOSS_BUDGET_USD,
            arm_s: float = DEFENSIVE_ARM_S,
+           simulate: bool = False,
            ) -> Dict[str, Any]:
     """Should we pay to unwind this unmatched leg, and at what bounded cost?
 
@@ -133,7 +134,14 @@ def decide(*,
                    "hedged -- only a venue-confirmed fill does that."),
     }
 
-    if not enabled():
+    # SIMULATION BYPASSES THE LIVE FLAG AND SAYS SO. The shadow must be
+    # able to measure this policy while live submission stays disabled --
+    # that is the entire point of measuring it first. `simulated: True`
+    # rides every such verdict so no reader can mistake a modelled exit
+    # for one that happened.
+    if simulate:
+        out["simulated"] = True
+    elif not enabled():
         out["reason"] = "DEFENSIVE_DISABLED"
         return out
 

@@ -428,7 +428,17 @@ def one_sided(e, bsh="10", ash="10"):
 def test_both_policies_are_measured_on_the_same_window():
     rep = ev().report(None)
     pol = {c["policy"] for c in rep["cells"]}
-    assert pol == {TS.COMPLEMENT_ONLY, TS.SKEWED}
+    # three arms now: the two at-touch policies and the live-basis arm that
+    # measures what the money path runs (two ticks behind touch, one order,
+    # frozen complement). All three see the same window and the same prints.
+    assert pol == {TS.COMPLEMENT_ONLY, TS.SKEWED, TS.LIVE_SEQUENTIAL}
+    lv = [c for c in rep["cells"] if c["policy"] == TS.LIVE_SEQUENTIAL]
+    assert {c["threshold"] for c in lv} == {"0.96"}      # the live ceiling
+    assert {c["depth_ticks"] for c in lv} == {2}         # the live basis
+    # and the at-touch arms keep their basis, so the two are comparable only
+    # when a reader checks depth_ticks -- which is why the cell reports it.
+    assert {c["depth_ticks"] for c in rep["cells"]
+            if c["policy"] != TS.LIVE_SEQUENTIAL} == {0}
     sk = [c for c in rep["cells"] if c["policy"] == TS.SKEWED]
     assert {c["threshold"] for c in sk} == {"0.99"}      # the reachable gate
     assert {c["envelope"] for c in sk} == {"1", "100", "200", "300", "500"}
@@ -484,7 +494,10 @@ def test_capital_queue_fees_and_settlement_are_identical_across_policies():
     # policy -- is built by the same Leg, which is where queue-ahead is frozen
     assert src.count("self.exposure()") >= 1
     assert "fee" not in src.lower()
-    assert src.count("Leg(self.slug") == 4   # pair x2, complement, adding
+    # pair x2, complement, adding, and the live arm's single first leg.
+    # The point of the count is that NO quote is built any other way: every
+    # one goes through Leg, which is where queue-ahead is frozen.
+    assert src.count("Leg(self.slug") == 5
     assert "ahead" in code_only(inspect.getsource(TS.Leg.__init__))
     # settlement is scored by one shared function for both policies
     assert "policy" not in code_only(inspect.getsource(TS.score_report))

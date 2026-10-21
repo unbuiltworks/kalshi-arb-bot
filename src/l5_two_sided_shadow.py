@@ -50,9 +50,18 @@ import os
 from decimal import Decimal as D, ROUND_FLOOR, ROUND_CEILING
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from src import l5_defensive_completion as DEF
 from src import l5_maker_fill_model as FM
 
 TICK = D("0.01")
+
+#: the venue taker fee per contract, as the live fee_floor record reported
+#: it on the 2300z plan. Used ONLY to price a simulated defensive exit.
+SIM_TAKER_FEE = D("0.026986850000")
+
+#: the venue's completion cutoff, in seconds from window open. The guard
+#: window is the final DEFENSIVE_ARM_S of it.
+SIM_COMPLETE_CUTOFF_S = 720.0
 
 #: the two quoting policies compared in shadow. COMPLEMENT_ONLY is what the
 #: engine does today: while inventory is non-zero the adding leg is refused
@@ -65,6 +74,24 @@ TICK = D("0.01")
 #: that L5 uses this formula.
 COMPLEMENT_ONLY = "COMPLEMENT_ONLY"
 SKEWED = "SKEWED"
+#: THE POLICY THE MONEY PATH ACTUALLY RUNS, which neither of the two above
+#: models. The live two-sided engine differs on three axes at once, and all
+#: three had to be modelled together or the cell measures nothing we run:
+#:
+#:   1. IT RESTS BEHIND THE TOUCH. `depth_ticks` (live: 2) is subtracted from
+#:      each leg's own price, so the pair costs 2*depth_ticks ticks LESS than
+#:      the touch implies. At the 0.96 ceiling this is the whole discrepancy:
+#:      2300z showed touch UP 0.26 / DOWN 0.73 -- a touch pair of 0.99, which
+#:      the at-touch cell refused -- while the engine placed 0.24/0.71 for a
+#:      pair of 0.95 and completed it. The at-touch cell reported 0 eligible
+#:      ticks in both windows the live engine actually earned money in.
+#:   2. ONE OUTSTANDING ORDER. It never quotes both legs at once; it places
+#:      one, waits for a terminal state, then places the complement.
+#:   3. THE COMPLEMENT LIMIT IS FROZEN at plan time and is NOT re-priced or
+#:      withdrawn when the touch moves away. In 2300z that is precisely what
+#:      earned the edge: the complement sat at 0.71 for 3m42s while the book
+#:      quoted 0.74-0.79, refused to chase, and filled when the book returned.
+LIVE_SEQUENTIAL = "LIVE_SEQUENTIAL"
 
 #: SKEWED's policy version. v1 retained every resting leg UNCONDITIONALLY --
 #: no distance test, no re-check of the pair economics after placement -- which
@@ -137,9 +164,16 @@ class Config:
     """One (threshold, envelope) cell. Conservative band drives the ledger."""
 
     def __init__(self, slug: str, thresh: D, envelope: D,
-                 policy: str = COMPLEMENT_ONLY):
+                 policy: str = COMPLEMENT_ONLY, depth_ticks: int = 0):
         self.slug, self.thresh, self.envelope = slug, thresh, envelope
         self.policy = policy
+        #: ticks BEHIND the touch each leg rests. 0 reproduces the at-touch
+        #: pricing every existing cell was built with, byte for byte.
+        self.depth_ticks = int(depth_ticks)
+        self.depth = D(self.depth_ticks) * TICK
+        #: the complement limit frozen when the first leg was placed. Only
+        #: LIVE_SEQUENTIAL reads it; None means "not holding a plan".
+        self.frozen_cpx: Optional[D] = None
         self.retained_legs = 0
         self.replaced_legs = 0
         self.revalidation_cancels: Dict[str, int] = {}
@@ -156,6 +190,9 @@ class Config:
         self.partial_legs = 0
         self.peak_exposure = D(0)
         self.first_fill_offset: Optional[float] = None
+        #: SIMULATED defensive verdicts, one per tick inside the guard
+        #: window while a modelled residual exists. Never a real exit.
+        self.defensive: List[Dict[str, Any]] = []
 
     # ----------------------------------------------------------- reads
     def spent(self) -> D:
@@ -234,6 +271,8 @@ class Config:
         self._step(bid, ask, bid_sh, ask_sh, prints, now, window_start)
         # AFTER quoting as well as before: a window that posts once and never
         # re-quotes would otherwise report a peak exposure of zero.
+        if self.policy == LIVE_SEQUENTIAL and window_start is not None:
+            self._defensive_eval(bid, ask, bid_sh, ask_sh, now, window_start)
         exp = self.exposure()
         if exp > self.peak_exposure:
             self.peak_exposure = exp
@@ -264,6 +303,13 @@ class Config:
             ref = bid if side == FM.UP else ask
             if leg.book_px == ref:
                 continue
+            if self.policy == LIVE_SEQUENTIAL:
+                # FROZEN. The live engine does not re-price or withdraw a
+                # resting leg because the touch moved; it waits. Keeping it
+                # costs nothing here -- a leg still only fills when prints
+                # cross its own price.
+                self.retained_legs += 1
+                continue
             if self.policy == SKEWED:
                 why = self.stale_reason(leg, side, bid, ask)
                 if why is None:
@@ -284,7 +330,10 @@ class Config:
         if exp > self.peak_exposure:
             self.peak_exposure = exp
         room = self.envelope - exp
-        up_px, dn_px = bid, D(1) - ask
+        # BEHIND THE TOUCH. A maker buy of UP rests below the bid and a maker
+        # buy of DOWN rests above the ask, so both own prices fall by `depth`.
+        # depth 0 leaves the historical at-touch basis untouched.
+        up_px, dn_px = bid - self.depth, (D(1) - ask) - self.depth
         if up_px <= 0 or dn_px <= 0:
             return
         resid = self.residual()
@@ -301,6 +350,26 @@ class Config:
                     clip = min(clip, d)
             if clip < TICK:
                 return
+            if self.policy == LIVE_SEQUENTIAL:
+                # ONE OUTSTANDING ORDER, and the CHEAPER leg goes first: if it
+                # fills alone the residual it strands is the smaller of the
+                # two. The 2300z plan put UP at 0.24 ahead of DOWN at 0.71 and
+                # bounded its alone-loss at 0.95 rather than 2.7225.
+                first = FM.UP if up_px <= dn_px else FM.DOWN
+                px = up_px if first == FM.UP else dn_px
+                ref = bid if first == FM.UP else ask
+                disp = bid_sh if first == FM.UP else ask_sh
+                c = clip if disp is None else min(clip, disp)
+                if c < TICK:
+                    return
+                # the complement limit is fixed HERE, at plan time, and is
+                # what the cell will wait for however far the touch wanders.
+                self.frozen_cpx = dn_px if first == FM.UP else up_px
+                self.flat_quotes += 1
+                self.quoted_shares += c
+                self.rest[first] = Leg(self.slug, first, px, ref, c, now,
+                                       bid, ask, disp)
+                return
             self.flat_quotes += 1
             self.quoted_shares += clip * 2
             self.rest[FM.UP] = Leg(self.slug, FM.UP, up_px, bid, clip, now,
@@ -312,6 +381,16 @@ class Config:
         held = FM.UP if resid > 0 else FM.DOWN
         b = self.basis(held)
         cpx = dn_px if need == FM.DOWN else up_px
+        if self.policy == LIVE_SEQUENTIAL:
+            # the FROZEN limit, not a fresh read of the book. Re-deriving it
+            # each tick is chasing, which is what the 0.96 ceiling refused
+            # seven times in 2300z while the frozen 0.71 waited and filled.
+            if self.frozen_cpx is not None:
+                cpx = self.frozen_cpx
+            # one outstanding order TOTAL: a partially filled first leg still
+            # occupies the slot, so the complement waits for it to terminate.
+            if self.rest:
+                return
         # u is how full the inventory is against one flat pair clip. It is the
         # taper's only input and is clamped to [0, 1].
         flat_clip = (self.envelope / (up_px + dn_px)).quantize(
@@ -359,6 +438,58 @@ class Config:
                               clip, now, bid, ask, disp)
 
     # ----------------------------------------------------------- report
+    def _defensive_eval(self, bid: D, ask: D, bid_sh: Optional[D],
+                        ask_sh: Optional[D], now: float,
+                        window_start: float) -> None:
+        """Price a SIMULATED defensive exit for the modelled residual.
+
+        Both bands are evaluated because they can hold different
+        inventories: the conservative band is the ledger, the optimistic
+        one is the upper bound, and a rule that only works on the
+        optimistic book is not a rule.
+        """
+        off = now - window_start
+        if not DEF.arm_window_open(now, window_start,
+                                   SIM_COMPLETE_CUTOFF_S):
+            return
+        for band, qty_map, cost_map in (("conservative", self.qty,
+                                         self.cost),
+                                        ("optimistic", self.qty_opt,
+                                         self.cost_opt)):
+            resid = qty_map[FM.UP] - qty_map[FM.DOWN]
+            if resid == 0:
+                continue
+            held = FM.UP if resid > 0 else FM.DOWN
+            q = abs(resid)
+            held_qty = qty_map[held]
+            basis = (cost_map[held] / held_qty) if held_qty > 0 else None
+            if basis is None or basis <= 0:
+                continue
+            # EXECUTABLE, not a maker hope: a long UP is sold INTO the bid,
+            # a long DOWN is closed by buying UP at the ask. The displayed
+            # size on that side is the only liquidity evidence there is.
+            if held == FM.UP:
+                exit_px, depth = (D(1) - bid), bid_sh
+            else:
+                exit_px, depth = ask, ask_sh
+            v = DEF.decide(
+                now_t=now, window_start=window_start,
+                complete_cutoff_s=SIM_COMPLETE_CUTOFF_S,
+                unmatched_qty=q, first_leg_cost=basis,
+                exit_price=exit_px, displayed_depth=depth,
+                taker_fee_per_contract=SIM_TAKER_FEE,
+                simulate=True)
+            self.defensive.append({
+                "band": band, "t_offset_s": round(off, 1),
+                "held": held, "unmatched": str(q),
+                "basis": str(basis), "bid": str(bid), "ask": str(ask),
+                "exit_price_own": str(exit_px),
+                "displayed_depth": (None if depth is None else str(depth)),
+                "frozen_complement": (None if self.frozen_cpx is None
+                                      else str(self.frozen_cpx)),
+                "verdict": v,
+            })
+
     def report(self, settle_up: Optional[bool]) -> Dict[str, Any]:
         up, dn = self.qty[FM.UP], self.qty[FM.DOWN]
         m = self.matched()
@@ -377,9 +508,23 @@ class Config:
         out = {
             "threshold": str(self.thresh), "envelope": str(self.envelope),
             "policy": self.policy,
+            #: WHICH PRICE BASIS this cell measured. 0 is at-touch, the
+            #: historical basis; 2 is the live engine's. Two cells at the same
+            #: threshold and different depths are not comparable and this is
+            #: how a reader tells them apart.
+            "depth_ticks": self.depth_ticks,
+            "frozen_complement": (None if self.policy != LIVE_SEQUENTIAL
+                                  else (None if self.frozen_cpx is None
+                                        else str(self.frozen_cpx))),
             "legs_retained_through_a_touch_move": self.retained_legs,
             "legs_replaced_on_a_touch_move": self.replaced_legs,
             "policy_version": (SKEW_VERSION if self.policy == SKEWED else None),
+            #: SIMULATED defensive verdicts inside the guard window. Empty
+            #: for every at-touch arm. Never a real exit, never a fill.
+            "defensive_evals": len(self.defensive),
+            "defensive_would_act": sum(
+                1 for d in self.defensive if d["verdict"].get("act")),
+            "defensive_detail": self.defensive[:40],
             "revalidation_cancels": dict(self.revalidation_cancels),
             "eligible_ticks": self.eligible,
             "flat_quotes": self.flat_quotes,
@@ -425,6 +570,14 @@ class TwoSidedShadow:
         # two policies are measured on the same windows and the same prints.
         self.configs += [Config(slug, D("0.99"), e, SKEWED)
                          for e in tuple(envelopes) + (LIVE_ENVELOPE,)]
+        # THE ARM THAT MEASURES WHAT WE ACTUALLY RUN: the live ceiling, the
+        # live envelope, priced two ticks behind the touch, one order at a
+        # time, complement frozen. Added rather than substituted so every
+        # historical at-touch cell keeps reporting exactly what it always did
+        # and the two bases can be read side by side.
+        self.configs += [Config(slug, D("0.96"), e, LIVE_SEQUENTIAL,
+                                depth_ticks=2)
+                         for e in (LIVE_ENVELOPE, D("100"))]
         self.ticks = 0
         self.two_sided_ticks = 0
         self.prints_consumed = 0
