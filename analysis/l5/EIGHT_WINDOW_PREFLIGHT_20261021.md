@@ -105,6 +105,27 @@ environment change:
 | campaign duration ceiling | 4 h | `l5_campaign_approval.MAX_CAMPAIGN_S` |
 | exposure / daily-loss ceilings | $5 / $5 | `l5_campaign_approval` |
 
+### How many defensive exits the $2 budget actually buys
+
+Charged at the **worst case, at submission, not at fill** — an order that
+might fill is a real offer to lose that money, and a budget counting only
+fills would let unlimited unfilled attempts through. For a 2315z-sized
+position (3.39 at own 0.37, exiting at own 0.80):
+
+```
+qty * (pair_cost - 1)  = 3.39 * 0.17    = $0.5763
++ one crossing leg fee = 3.39 * 0.01112 = $0.0377
+                                        = $0.6140 charged
+```
+
+So **$2.00 buys about three defensive exits per campaign**, after which
+`DEFENSIVE_LOSS_BUDGET` refuses and later unmatched legs hold to settlement.
+Smaller positions cost proportionally less and buy more exits. A refused
+defensive order still spends its charge and its window — the charge happens
+before the wire on purpose, so a process dying between the two has already
+paid — and one attempt per window is allowed, so a defensive order refused
+downstream does not get retried on the next tick.
+
 ## D. The approval document — yours to issue, not mine
 
 Written to `campaign_approval.json` in the campaign store. I do not generate,
