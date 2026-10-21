@@ -56,6 +56,14 @@ COPY src/pmus_auth.py         src/pmus_auth.py
 COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 COPY src/l5_halt_server.py    src/l5_halt_server.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
+# THE OWNER'S EMERGENCY HALT. Reads a signed marker from a URL and
+# can reach exactly one call: HaltAsserter.assert_halt. It holds no
+# venue credential and no order path (asserted by
+# test_the_module_holds_no_venue_credential_and_no_order_path), and
+# integrity comes from an HMAC rather than from the transport, so
+# this image gains no new secret beyond the HMAC key and stays
+# credential-free with respect to the venue.
+COPY src/l5_emergency_halt_marker.py src/l5_emergency_halt_marker.py
 # the ownership contract's constants (REGISTRY_KEY). The watchdog imports it
 # to name the key it reads; it serves nothing and holds no venue route.
 COPY src/l5_order_registry_server.py src/l5_order_registry_server.py
