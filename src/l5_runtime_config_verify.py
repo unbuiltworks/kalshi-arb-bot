@@ -89,6 +89,123 @@ def _s(v: Any) -> Any:
     return v
 
 
+#: THE ONLY VARIABLE NAMES A SNAPSHOT MAY CARRY INTO THIS PROCESS.
+#:
+#: An allowlist and not a denylist, because the snapshot's purpose is to
+#: check LIMITS before they are changed, and nothing else about a production
+#: environment needs to be loaded here to do that. Anything outside this set
+#: is ignored by name and its value is never read, never printed and never
+#: placed in `os.environ`.
+SNAPSHOT_ALLOWED = (
+    "L5_LIVE_AUTH_MAX_OPEN",
+    "L5_LIVE_AUTH_MAX_COMPLETE",
+    "L5_LIVE_AUTH_MAX_REPLACE",
+    "L5_LIVE_AUTH_MAX_SUBMISSIONS",
+    "L5_LIVE_AUTH_MAX_WINDOWS",
+    "L5_TS_CANCEL_MARGIN_S",
+    "L5_WINDOW_STRATEGY",
+    "L5_MAX_LIVE_ORDERS",
+    "L5_DAILY_REALIZED_LOSS_HALT_USD",
+    "L5_DEFENSIVE_COMPLETION",
+    "L5_SHADOW_ONLY",
+)
+
+#: Name fragments that mean "this is a secret, and it must not be in a file
+#: anyone is pasting around". A snapshot carrying one is REFUSED rather than
+#: filtered: a careless paste should fail loudly, so the file gets deleted
+#: and the paste gets redone, instead of being quietly half-accepted while a
+#: credential sits on disk and in this process's memory.
+SNAPSHOT_FORBIDDEN_FRAGMENTS = (
+    "KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD", "CREDENTIAL",
+    "NONCE", "ARM", "PRIVATE", "SIGNING", "AUTH_LEDGER",
+)
+
+
+class SnapshotRefused(ValueError):
+    """A snapshot that must not be loaded. Never partially accepted."""
+
+
+def _screen_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """Split a variable snapshot into {applied, ignored} or refuse it.
+
+    Values are returned ONLY for allowlisted names. Ignored names are
+    reported as names alone -- a name is not a secret and the owner needs to
+    see what was skipped, but a value outside the allowlist has no business
+    being echoed by a tool whose output gets pasted into a chat.
+    """
+    if not isinstance(snapshot, dict):
+        raise SnapshotRefused("snapshot is not a JSON object")
+    bad = sorted(k for k in snapshot
+                 if any(f in str(k).upper()
+                        for f in SNAPSHOT_FORBIDDEN_FRAGMENTS))
+    if bad:
+        raise SnapshotRefused(
+            "snapshot carries secret-looking variables and was NOT loaded. "
+            "Remove them and re-export, then delete the file: %s"
+            % ", ".join(bad))
+    applied = {k: str(v) for k, v in snapshot.items()
+               if k in SNAPSHOT_ALLOWED}
+    ignored = sorted(k for k in snapshot if k not in SNAPSHOT_ALLOWED)
+    return {"applied": applied, "ignored_names_only": ignored}
+
+
+def verify_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """What the accessors WOULD return for this variable snapshot.
+
+    WHY THIS EXISTS AND WHEN TO USE IT. The in-container run is the real
+    check, but it needs the verifier to be IN the running image -- and a
+    build that predates this module has no verifier to run. So before
+    changing anything, the owner can take Railway's rendered variable
+    values, strip the secrets, and ask this what the money path's accessors
+    would make of them.
+
+    IT IS A PREDICTION AND IT SAYS SO. `basis: SNAPSHOT_PREDICTION`. It
+    cannot see a variable the snapshot omitted, a value Railway renders
+    differently at runtime, or anything the deployed image's own code does
+    differently from this tree. Only the in-container run settles it, and
+    `in_container_check_required` stays true on every snapshot result.
+
+    The snapshot is applied to `os.environ` for the duration of the call and
+    restored afterwards, including variables that were previously ABSENT --
+    which are restored to absent, not to empty string.
+    """
+    screened = _screen_snapshot(snapshot)
+    applied = screened["applied"]
+    # every allowlisted name is set, including to-absent for the ones the
+    # snapshot does not carry, so a MISSING variable is predicted as missing
+    # rather than inheriting this shell's value
+    saved: Dict[str, Optional[str]] = {}
+    for name in SNAPSHOT_ALLOWED:
+        saved[name] = os.environ.get(name)
+    try:
+        for name in SNAPSHOT_ALLOWED:
+            if name in applied:
+                os.environ[name] = applied[name]
+            else:
+                os.environ.pop(name, None)
+        out = verify()
+    finally:
+        for name, was in saved.items():
+            if was is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = was
+    out["basis"] = "SNAPSHOT_PREDICTION"
+    out["in_container_check_required"] = True
+    out["snapshot_applied"] = applied
+    out["snapshot_ignored_names_only"] = screened["ignored_names_only"]
+    out["snapshot_absent_from_allowlist"] = sorted(
+        n for n in SNAPSHOT_ALLOWED if n not in applied)
+    out["labels"] = (
+        "A PREDICTION, not a verification. It says what this tree's "
+        "accessors would return for these variable values. It cannot see a "
+        "variable the snapshot omitted, a value the platform renders "
+        "differently at runtime, or code in the deployed image that differs "
+        "from this tree. Only running this module INSIDE the container "
+        "settles the effective configuration.")
+    return out
+
+
 def verify() -> Dict[str, Any]:
     """Every approved figure, read effectively. `PASS` only if all hold."""
     from src import l5_campaign_approval as CA
@@ -224,8 +341,31 @@ def verify() -> Dict[str, Any]:
     }
 
 
-def main() -> int:
-    out = verify()
+def main(argv: Optional[List[str]] = None) -> int:
+    """No args: verify THIS process's effective configuration -- the real
+    check, meant to be run inside the deployed container.
+
+    `--from-snapshot PATH` (or `-` for stdin): predict instead, from a JSON
+    object of variable names to values. Strip every secret before exporting
+    one; a snapshot carrying a secret-looking name is REFUSED outright.
+    """
+    import sys
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "--from-snapshot":
+        path = argv[1] if len(argv) > 1 else "-"
+        raw = sys.stdin.read() if path == "-" else open(path).read()
+        try:
+            out = verify_snapshot(json.loads(raw))
+        except SnapshotRefused as exc:
+            print(json.dumps({"PASS": False, "refused": str(exc),
+                              "basis": "SNAPSHOT_REFUSED"}, indent=1))
+            return 2
+    elif argv:
+        print("usage: python3 -m src.l5_runtime_config_verify "
+              "[--from-snapshot PATH|-]")
+        return 2
+    else:
+        out = verify()
     print(json.dumps(out, indent=1, sort_keys=False))
     return 0 if out["PASS"] else 1
 

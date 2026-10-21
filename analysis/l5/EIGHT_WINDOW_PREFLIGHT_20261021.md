@@ -7,12 +7,49 @@ the venue from this build until the owner performs section F.
 
 ---
 
-## 0. One blocker that is not mine to clear
+## 0. Two things to know before you touch a variable
 
-**The Railway MCP server needs re-authorization.** It disconnected mid-session
-and now reports that authentication is required. Until it is reconnected (via
-claude.ai connector settings — I cannot start that flow and must not be given
-tokens), I **cannot**:
+### 0a. The in-container check CANNOT run on the build that is live now
+
+`src/l5_runtime_config_verify.py` does not exist at `962e7a5d`. I verified
+this against the commit itself, not from memory: the module is absent and
+that Dockerfile has no COPY for it. **This corrects my own earlier
+sequence**, which implied the in-container verification could gate the
+deploy. It cannot — it only becomes available once `64fc9415` is deployed.
+
+So the order is: **predict, deploy, then verify.**
+
+* **Predict, before changing anything** — `--from-snapshot`, below. It tells
+  you what the accessors would make of the values production holds now.
+* **Deploy** `64fc9415`.
+* **Verify in the container** — `python3 -m src.l5_runtime_config_verify`,
+  which is the only thing that settles the effective configuration.
+
+### 0b. Setting a variable may itself trigger a redeploy — check this first
+
+On Railway a variable change normally queues a redeploy, and `watchPatterns`
+gates **push**-triggered builds, not that one. If the service builds from the
+branch tip, setting the variables could deploy `64fc9415` as a side effect,
+bypassing the `DEPLOY_TRIGGER` gate entirely.
+
+Here that is not harmful — `64fc9415` is the build you want, and
+`L5_DEFENSIVE_COMPLETION` stays absent so defensive execution is off either
+way. But it collapses "apply limits" and "deploy" into one step with less
+control than the sequence implies, and it would mean the running SHA changes
+at the moment you set a variable rather than when you expect.
+
+**I could not verify this** — the Railway tools are unavailable to me (see
+0c). State it as a risk to confirm on your side, not as a fact. Check the
+service's source setting and whether a variable change is configured to
+redeploy before you change the first one.
+
+### 0c. The Railway connector is down on my side
+
+The Railway MCP server disconnected mid-session and now requires
+re-authorization (via claude.ai connector settings — I cannot start that flow
+and must not be given tokens). You have confirmed Railway is reachable from
+another session, so the sequence can be driven from there. From **here** I
+**cannot**:
 
 * set the environment variables in section B;
 * trigger the deployment;
@@ -57,6 +94,53 @@ constraint I flagged previously is resolved.
 
 `L5_DEFENSIVE_COMPLETION` stays **absent** for this deployment. Absence is
 OFF, and the build must deploy with defensive execution disabled.
+
+## B2. Predicting the effective values BEFORE changing them
+
+The one check you said was outstanding. Railway's rendered values are the
+**inputs**; what binds is what the accessors return. So:
+
+```bash
+# 1. export the variables from Railway, then DELETE every secret from the
+#    file. Keep only the L5_* limit variables.
+# 2. ask what the accessors would make of them:
+python3 -m src.l5_runtime_config_verify --from-snapshot vars.json
+#    (or pipe JSON on stdin with `-`)
+# 3. delete vars.json.
+```
+
+It reports `basis: SNAPSHOT_PREDICTION` and keeps
+`in_container_check_required: true` on **every** result, including a passing
+one — it cannot see a variable the snapshot omitted, a value the platform
+renders differently at runtime, or code in the deployed image that differs
+from this tree.
+
+**Credential safety is enforced, not advised.** A snapshot carrying a
+secret-looking name (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `NONCE`, `ARM`,
+`PRIVATE`, `SIGNING`, `AUTH_LEDGER`) is **refused outright and nothing is
+loaded** — not filtered and half-accepted — and the message names the remedy.
+Only an allowlist of eleven config variables is ever read into the process;
+everything else is reported **by name only**, never by value, because this
+tool's output gets pasted into chats. Both behaviours are tested, including
+that a refusal leaves `os.environ` untouched.
+
+A variable the snapshot omits is predicted as **absent**, not as whatever the
+machine running the tool happens to have — otherwise the prediction silently
+inherits that machine.
+
+Run against the four-window values production is believed to hold today, it
+names exactly the five rows that must change:
+
+```
+basis: SNAPSHOT_PREDICTION | PASS: False | in-container still required: True
+failed: submission_budget_open, submission_budget_complete,
+        submission_budget_replace, submission_backstop,
+        max_windows_authorization
+```
+
+...and confirms the margin and all three derived guard rows already hold at
+300. That is the shape of answer to want before changing anything: not
+"something is wrong" but *which five*.
 
 ## C. Verifying the EFFECTIVE configuration, not the variable names
 
@@ -173,7 +257,8 @@ the verifier's own lazy imports are all shipped.
 
 Nothing here has been done. In order:
 
-1. **Reconnect Railway** (section 0), or perform steps 2–5 in the dashboard.
+1. **Predict first** (section B2) against the values production holds now,
+   and confirm the redeploy-on-variable-change behaviour in 0b.
 2. Set the six variables in section B. Leave `L5_DEFENSIVE_COMPLETION`
    absent.
 3. Append a line to `deploy/l5_pmus_live/DEPLOY_TRIGGER` and push. **The

@@ -229,3 +229,153 @@ def test_the_approved_set_is_code_so_drift_shows_as_a_failing_row():
     assert V.APPROVED["max_windows"] == 8
     assert V.APPROVED["max_live_orders"] == 1
     assert V.APPROVED["defensive_execution_enabled"] is False
+
+
+# ============ THE PRE-DEPLOY SNAPSHOT MODE, AND WHY IT IS ONLY A PREDICTION
+#
+# The in-container run is the real check, but it needs this module to BE in
+# the running image -- and the build live in production (962e7a5d) predates
+# it, so there is nothing to run there. The snapshot mode fills exactly that
+# gap: before changing a variable, ask what the accessors would make of the
+# values the platform currently holds.
+
+APPROVED_SNAPSHOT = {
+    "L5_LIVE_AUTH_MAX_OPEN": "16",
+    "L5_LIVE_AUTH_MAX_COMPLETE": "24",
+    "L5_LIVE_AUTH_MAX_REPLACE": "32",
+    "L5_LIVE_AUTH_MAX_SUBMISSIONS": "56",
+    "L5_LIVE_AUTH_MAX_WINDOWS": "8",
+    "L5_TS_CANCEL_MARGIN_S": "300",
+    "L5_WINDOW_STRATEGY": "TWO_SIDED",
+    "L5_MAX_LIVE_ORDERS": "1",
+    "L5_SHADOW_ONLY": "1",
+}
+
+#: what production is believed to hold TODAY: the four-window campaign's
+#: values, which is the drift the owner must not change blind.
+CURRENT_SNAPSHOT = dict(APPROVED_SNAPSHOT,
+                        **{"L5_LIVE_AUTH_MAX_OPEN": "8",
+                           "L5_LIVE_AUTH_MAX_COMPLETE": "12",
+                           "L5_LIVE_AUTH_MAX_REPLACE": "16",
+                           "L5_LIVE_AUTH_MAX_SUBMISSIONS": "28",
+                           "L5_LIVE_AUTH_MAX_WINDOWS": "4"})
+
+
+def test_the_approved_snapshot_predicts_a_pass():
+    out = V.verify_snapshot(APPROVED_SNAPSHOT)
+    assert out["PASS"] is True, out["failed"]
+    assert out["basis"] == "SNAPSHOT_PREDICTION"
+
+
+def test_todays_production_values_predict_exactly_the_rows_that_must_change():
+    """The useful answer: not "something is wrong" but WHICH five."""
+    out = V.verify_snapshot(CURRENT_SNAPSHOT)
+    assert out["PASS"] is False
+    assert set(out["failed"]) == {
+        "submission_budget_open", "submission_budget_complete",
+        "submission_budget_replace", "submission_backstop",
+        "max_windows_authorization"}
+    # and the margin and the whole derived guard already hold at 300
+    for name in ("cancel_margin_s", "defensive_terminal_s",
+                 "defensive_guard_opens_s", "defensive_last_actionable_s"):
+        assert row(out, name)["ok"] is True, name
+
+
+def test_a_prediction_never_claims_to_be_a_verification():
+    """It cannot see a variable the snapshot omitted, a value the platform
+    renders differently at runtime, or code in the deployed image that
+    differs from this tree."""
+    out = V.verify_snapshot(APPROVED_SNAPSHOT)
+    assert out["basis"] == "SNAPSHOT_PREDICTION"
+    assert out["in_container_check_required"] is True
+    assert "PREDICTION, not a verification" in out["labels"]
+    # even a passing prediction keeps the requirement
+    assert V.verify_snapshot(CURRENT_SNAPSHOT)["in_container_check_required"]
+
+
+def test_a_snapshot_carrying_a_secret_is_REFUSED_not_filtered(tmp_path):
+    """A careless paste must fail loudly, so the file gets deleted and the
+    paste gets redone -- not be quietly half-accepted while a credential
+    sits on disk and in this process's memory."""
+    for bad in ("PMUS_API_SECRET_KEY", "PMUS_API_KEY_ID", "L5_ARM_TOKEN",
+                "SOME_PASSWORD", "L5_LIVE_AUTH_LEDGER"):
+        with pytest.raises(V.SnapshotRefused) as e:
+            V.verify_snapshot({"L5_LIVE_AUTH_MAX_OPEN": "16", bad: "x"})
+        assert bad in str(e.value)
+        # and it names the remedy rather than just complaining
+        assert "Remove them" in str(e.value)
+
+
+def test_a_refused_snapshot_loads_nothing_into_the_environment(monkeypatch):
+    monkeypatch.delenv("L5_LIVE_AUTH_MAX_OPEN", raising=False)
+    with pytest.raises(V.SnapshotRefused):
+        V.verify_snapshot({"L5_LIVE_AUTH_MAX_OPEN": "16",
+                           "PMUS_API_SECRET_KEY": "xxx"})
+    import os
+    assert os.environ.get("L5_LIVE_AUTH_MAX_OPEN") is None
+    assert os.environ.get("PMUS_API_SECRET_KEY") is None
+
+
+def test_a_non_allowlisted_variable_is_ignored_by_NAME_and_never_valued():
+    """Names are not secrets and the owner needs to see what was skipped.
+    A VALUE outside the allowlist has no business being echoed by a tool
+    whose output gets pasted into a chat."""
+    out = V.verify_snapshot(dict(APPROVED_SNAPSHOT,
+                                 RAILWAY_PROJECT_NAME="whatever",
+                                 PYTHONUNBUFFERED="1"))
+    assert out["snapshot_ignored_names_only"] == ["PYTHONUNBUFFERED",
+                                                  "RAILWAY_PROJECT_NAME"]
+    blob = str(out)
+    assert "whatever" not in blob
+    assert set(out["snapshot_applied"]) <= set(V.SNAPSHOT_ALLOWED)
+
+
+def test_a_variable_the_snapshot_omits_is_predicted_as_ABSENT(monkeypatch):
+    """Not as this shell's value. A snapshot that forgets a variable must
+    predict what production would do WITHOUT it -- otherwise the prediction
+    silently inherits the machine it ran on."""
+    monkeypatch.setenv("L5_DEFENSIVE_COMPLETION", "1")
+    out = V.verify_snapshot(APPROVED_SNAPSHOT)
+    # the flag is absent from the snapshot, so it is predicted OFF even
+    # though this process has it ON
+    assert row(out, "defensive_execution_enabled")["effective"] is False
+    assert "L5_DEFENSIVE_COMPLETION" in out["snapshot_absent_from_allowlist"]
+
+
+def test_the_environment_is_restored_afterwards_including_to_absent(
+        monkeypatch):
+    import os
+    monkeypatch.setenv("L5_LIVE_AUTH_MAX_OPEN", "99")
+    monkeypatch.delenv("L5_TS_CANCEL_MARGIN_S", raising=False)
+    V.verify_snapshot(APPROVED_SNAPSHOT)
+    assert os.environ["L5_LIVE_AUTH_MAX_OPEN"] == "99"
+    assert "L5_TS_CANCEL_MARGIN_S" not in os.environ
+
+
+def test_a_snapshot_that_is_not_an_object_is_refused():
+    for bad in ([], "x", 3, None):
+        with pytest.raises(V.SnapshotRefused):
+            V.verify_snapshot(bad)
+
+
+def test_the_cli_exits_nonzero_on_a_failing_prediction(capsys, tmp_path):
+    import json as _json
+    f = tmp_path / "snap.json"
+    f.write_text(_json.dumps(CURRENT_SNAPSHOT))
+    assert V.main(["--from-snapshot", str(f)]) == 1
+    out = _json.loads(capsys.readouterr().out)
+    assert out["basis"] == "SNAPSHOT_PREDICTION"
+    assert out["PASS"] is False
+
+    f.write_text(_json.dumps(APPROVED_SNAPSHOT))
+    assert V.main(["--from-snapshot", str(f)]) == 0
+
+
+def test_the_cli_exits_2_and_prints_the_remedy_on_a_secret(capsys, tmp_path):
+    import json as _json
+    f = tmp_path / "snap.json"
+    f.write_text(_json.dumps({"PMUS_API_SECRET_KEY": "xxx"}))
+    assert V.main(["--from-snapshot", str(f)]) == 2
+    out = _json.loads(capsys.readouterr().out)
+    assert out["basis"] == "SNAPSHOT_REFUSED"
+    assert "xxx" not in capsys.readouterr().out
