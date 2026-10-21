@@ -65,6 +65,24 @@ TICK = D("0.01")
 #: that L5 uses this formula.
 COMPLEMENT_ONLY = "COMPLEMENT_ONLY"
 SKEWED = "SKEWED"
+#: THE POLICY THE MONEY PATH ACTUALLY RUNS, which neither of the two above
+#: models. The live two-sided engine differs on three axes at once, and all
+#: three had to be modelled together or the cell measures nothing we run:
+#:
+#:   1. IT RESTS BEHIND THE TOUCH. `depth_ticks` (live: 2) is subtracted from
+#:      each leg's own price, so the pair costs 2*depth_ticks ticks LESS than
+#:      the touch implies. At the 0.96 ceiling this is the whole discrepancy:
+#:      2300z showed touch UP 0.26 / DOWN 0.73 -- a touch pair of 0.99, which
+#:      the at-touch cell refused -- while the engine placed 0.24/0.71 for a
+#:      pair of 0.95 and completed it. The at-touch cell reported 0 eligible
+#:      ticks in both windows the live engine actually earned money in.
+#:   2. ONE OUTSTANDING ORDER. It never quotes both legs at once; it places
+#:      one, waits for a terminal state, then places the complement.
+#:   3. THE COMPLEMENT LIMIT IS FROZEN at plan time and is NOT re-priced or
+#:      withdrawn when the touch moves away. In 2300z that is precisely what
+#:      earned the edge: the complement sat at 0.71 for 3m42s while the book
+#:      quoted 0.74-0.79, refused to chase, and filled when the book returned.
+LIVE_SEQUENTIAL = "LIVE_SEQUENTIAL"
 
 #: SKEWED's policy version. v1 retained every resting leg UNCONDITIONALLY --
 #: no distance test, no re-check of the pair economics after placement -- which
@@ -137,9 +155,16 @@ class Config:
     """One (threshold, envelope) cell. Conservative band drives the ledger."""
 
     def __init__(self, slug: str, thresh: D, envelope: D,
-                 policy: str = COMPLEMENT_ONLY):
+                 policy: str = COMPLEMENT_ONLY, depth_ticks: int = 0):
         self.slug, self.thresh, self.envelope = slug, thresh, envelope
         self.policy = policy
+        #: ticks BEHIND the touch each leg rests. 0 reproduces the at-touch
+        #: pricing every existing cell was built with, byte for byte.
+        self.depth_ticks = int(depth_ticks)
+        self.depth = D(self.depth_ticks) * TICK
+        #: the complement limit frozen when the first leg was placed. Only
+        #: LIVE_SEQUENTIAL reads it; None means "not holding a plan".
+        self.frozen_cpx: Optional[D] = None
         self.retained_legs = 0
         self.replaced_legs = 0
         self.revalidation_cancels: Dict[str, int] = {}
@@ -264,6 +289,13 @@ class Config:
             ref = bid if side == FM.UP else ask
             if leg.book_px == ref:
                 continue
+            if self.policy == LIVE_SEQUENTIAL:
+                # FROZEN. The live engine does not re-price or withdraw a
+                # resting leg because the touch moved; it waits. Keeping it
+                # costs nothing here -- a leg still only fills when prints
+                # cross its own price.
+                self.retained_legs += 1
+                continue
             if self.policy == SKEWED:
                 why = self.stale_reason(leg, side, bid, ask)
                 if why is None:
@@ -284,7 +316,10 @@ class Config:
         if exp > self.peak_exposure:
             self.peak_exposure = exp
         room = self.envelope - exp
-        up_px, dn_px = bid, D(1) - ask
+        # BEHIND THE TOUCH. A maker buy of UP rests below the bid and a maker
+        # buy of DOWN rests above the ask, so both own prices fall by `depth`.
+        # depth 0 leaves the historical at-touch basis untouched.
+        up_px, dn_px = bid - self.depth, (D(1) - ask) - self.depth
         if up_px <= 0 or dn_px <= 0:
             return
         resid = self.residual()
@@ -301,6 +336,26 @@ class Config:
                     clip = min(clip, d)
             if clip < TICK:
                 return
+            if self.policy == LIVE_SEQUENTIAL:
+                # ONE OUTSTANDING ORDER, and the CHEAPER leg goes first: if it
+                # fills alone the residual it strands is the smaller of the
+                # two. The 2300z plan put UP at 0.24 ahead of DOWN at 0.71 and
+                # bounded its alone-loss at 0.95 rather than 2.7225.
+                first = FM.UP if up_px <= dn_px else FM.DOWN
+                px = up_px if first == FM.UP else dn_px
+                ref = bid if first == FM.UP else ask
+                disp = bid_sh if first == FM.UP else ask_sh
+                c = clip if disp is None else min(clip, disp)
+                if c < TICK:
+                    return
+                # the complement limit is fixed HERE, at plan time, and is
+                # what the cell will wait for however far the touch wanders.
+                self.frozen_cpx = dn_px if first == FM.UP else up_px
+                self.flat_quotes += 1
+                self.quoted_shares += c
+                self.rest[first] = Leg(self.slug, first, px, ref, c, now,
+                                       bid, ask, disp)
+                return
             self.flat_quotes += 1
             self.quoted_shares += clip * 2
             self.rest[FM.UP] = Leg(self.slug, FM.UP, up_px, bid, clip, now,
@@ -312,6 +367,16 @@ class Config:
         held = FM.UP if resid > 0 else FM.DOWN
         b = self.basis(held)
         cpx = dn_px if need == FM.DOWN else up_px
+        if self.policy == LIVE_SEQUENTIAL:
+            # the FROZEN limit, not a fresh read of the book. Re-deriving it
+            # each tick is chasing, which is what the 0.96 ceiling refused
+            # seven times in 2300z while the frozen 0.71 waited and filled.
+            if self.frozen_cpx is not None:
+                cpx = self.frozen_cpx
+            # one outstanding order TOTAL: a partially filled first leg still
+            # occupies the slot, so the complement waits for it to terminate.
+            if self.rest:
+                return
         # u is how full the inventory is against one flat pair clip. It is the
         # taper's only input and is clamped to [0, 1].
         flat_clip = (self.envelope / (up_px + dn_px)).quantize(
@@ -377,6 +442,14 @@ class Config:
         out = {
             "threshold": str(self.thresh), "envelope": str(self.envelope),
             "policy": self.policy,
+            #: WHICH PRICE BASIS this cell measured. 0 is at-touch, the
+            #: historical basis; 2 is the live engine's. Two cells at the same
+            #: threshold and different depths are not comparable and this is
+            #: how a reader tells them apart.
+            "depth_ticks": self.depth_ticks,
+            "frozen_complement": (None if self.policy != LIVE_SEQUENTIAL
+                                  else (None if self.frozen_cpx is None
+                                        else str(self.frozen_cpx))),
             "legs_retained_through_a_touch_move": self.retained_legs,
             "legs_replaced_on_a_touch_move": self.replaced_legs,
             "policy_version": (SKEW_VERSION if self.policy == SKEWED else None),
@@ -425,6 +498,14 @@ class TwoSidedShadow:
         # two policies are measured on the same windows and the same prints.
         self.configs += [Config(slug, D("0.99"), e, SKEWED)
                          for e in tuple(envelopes) + (LIVE_ENVELOPE,)]
+        # THE ARM THAT MEASURES WHAT WE ACTUALLY RUN: the live ceiling, the
+        # live envelope, priced two ticks behind the touch, one order at a
+        # time, complement frozen. Added rather than substituted so every
+        # historical at-touch cell keeps reporting exactly what it always did
+        # and the two bases can be read side by side.
+        self.configs += [Config(slug, D("0.96"), e, LIVE_SEQUENTIAL,
+                                depth_ticks=2)
+                         for e in (LIVE_ENVELOPE, D("100"))]
         self.ticks = 0
         self.two_sided_ticks = 0
         self.prints_consumed = 0
