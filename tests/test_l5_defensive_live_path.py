@@ -643,3 +643,41 @@ def test_the_venue_reconciliation_is_reported_on_the_authorized_action(ex):
     assert D(out["exposure"]["residual_venue_confirmed"]) == D("3.39")
     assert out["exposure"]["residual_venue_confirmed"] \
         == out["exposure"]["residual_before"]
+
+
+# ============ WHICH BUDGET A DEFENSIVE ORDER SPENDS
+#
+# Stated in the eight-window preflight the owner acts on, so it is pinned
+# here rather than asserted in prose. It is never OPEN: OPEN is the scarce
+# budget for new decisions and a defensive unwind is not one.
+
+def test_a_defensive_unwind_replacing_a_cancelled_complement_is_REPLACE(ex):
+    x, t, E = ex
+    x.store.apply_fill(SLUG, "UP", D("3.39"), D("0.37"), basis="OWN")
+    dec, tr = {"side": "DOWN"}, {"price": "0.80", "qty": "3.39"}
+    # attempt >= 1 is a re-placement of that leg, whatever its direction
+    assert x.submission_class(SLUG, dec, tr, attempt=1) == "REPLACE"
+    assert x.submission_class(SLUG, dec, tr, attempt=3) == "REPLACE"
+
+
+def test_a_defensive_unwind_on_a_leg_never_placed_is_COMPLETE(ex):
+    x, t, E = ex
+    x.store.apply_fill(SLUG, "UP", D("3.39"), D("0.37"), basis="OWN")
+    dec, tr = {"side": "DOWN"}, {"price": "0.80", "qty": "3.39"}
+    # it strictly reduces |residual|, which is what COMPLETE means here
+    assert x.submission_class(SLUG, dec, tr, attempt=0) == "COMPLETE"
+    assert x.submission_class(SLUG, dec, tr) == "COMPLETE"
+
+
+def test_a_defensive_unwind_is_never_charged_to_OPEN_in_either_direction(ex):
+    x, t, E = ex
+    for held, buy in (("UP", "DOWN"), ("DOWN", "UP")):
+        y = E.FaithfulExecutor(
+            E.InventoryStore(str(x.store.path) + "k" + held),
+            x.limits, transport=t, now_fn=x._now, maker_only=True)
+        y.store.apply_fill(SLUG, held, D("3.39"), D("0.37"), basis="OWN")
+        for att in (None, 0, 1):
+            k = y.submission_class(SLUG, {"side": buy},
+                                   {"price": "0.80", "qty": "3.39"},
+                                   attempt=att)
+            assert k in ("COMPLETE", "REPLACE"), (held, buy, att, k)
