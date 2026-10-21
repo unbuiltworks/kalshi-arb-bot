@@ -159,12 +159,54 @@ stale even if its campaign has not expired.
    in the service's own telemetry;
 7. **then** the campaign may be armed, on your explicit authorization.
 
-## F. Deploy-ready SHA
+## F. Regression and image attribution
 
-See the covering message. The branch is
-`claude/l5-defensive-8window-prod`.
+**Three full-suite runs, so every failure is attributed rather than
+characterised.** Two baselines were measured, not assumed:
 
-## G. What is NOT in this configuration
+| tree | result |
+|---|---|
+| `f6b67aa2` — the deployed SHA this branch started from | 26 failed, 14 errors = **40** |
+| `f8d4a45c` — branch head before this work | 26 failed, 14 errors = **40**, byte-identical ID set |
+| **HEAD** — this work | **26 failed, 12090 passed, 27 skipped, 1 xfailed, 14 errors** |
+
+`comm` over the sorted failure IDs: **zero new, zero gone.** The two
+baselines are identical to each other, so the 40 are pre-existing and none
+of them is attributable to this work.
+
+The 40, classified against the code rather than by name — none is reachable
+from the executor's import closure or present in the live image:
+
+| count | module | why it fails |
+|---|---|---|
+| 14 | `test_pmus_status_live_handoff` | monkeypatches `_LIVE_STATUS`, which exists nowhere in `src/` |
+| 9 | `test_spread_scanner` | legacy Kalshi arb; not in the image |
+| 5 | `test_orderbook` | legacy; not reachable from the executor |
+| 4 | `test_pmus_auth` | passes 13/13 in isolation — full-run interference, not a signing defect; production authenticates |
+| 8 | lineage / CA / chain / forensics | provenance tooling; `r1_source_lineage` drift is in three `pmus_*` executor files untouched here |
+
+**Image checks: 1447 pass** across every Dockerfile-aware module, including
+`test_the_image_copies_every_module_the_service_actually_imports`,
+`test_l5_live_probe_image_closure`, and the no-order-path assertions on the
+observer and preview images. Both live Dockerfiles carry
+`l5_defensive_completion.py`; the shadow module's new `TAKER_THETA` import
+resolves inside the `l5_pmus_live` closure, which already copies
+`l5_two_sided_probe.py`.
+
+**A correction to an earlier figure in this session.** I reported 37 failures
+at one point and treated it as 11 new ones. That run was started against a
+tree I was still editing; it was not a measurement of any commit. The
+authoritative run above is on the committed HEAD.
+
+## G. Deploy-ready SHA
+
+Branch `claude/l5-defensive-8window-prod`. The SHA is in the covering
+message. `deploy/l5_pmus_live/DEPLOY_TRIGGER` has NOT been touched since the
+live deployment, so none of this work could trigger a deploy — the service
+is still running `962e7a5d` (deployment `38fa35fd`, SUCCESS
+2026-10-21T02:06:28Z). Deploying is step 4 of section E and is yours.
+
+## H. What is NOT in this configuration
 
 * no new services, volumes or infrastructure;
 * no change to the watchdog;
