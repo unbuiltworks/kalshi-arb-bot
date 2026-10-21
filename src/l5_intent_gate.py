@@ -104,6 +104,13 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # floor or the pair cap is refused rather than repriced into a loss.
     "TWO_SIDED_PROBE:ACCUMULATION_EXHAUSTED_AFTER_RETIREMENT",
     "TWO_SIDED_PROBE:COMPLEMENT_REASON",
+    # the defensive budget, applied to ENTRIES ONLY. The $2 campaign budget
+    # is what pays to get OUT of an unmatched leg, so once it is spent a new
+    # FIRST LEG carries exactly the risk the budget existed to bound, with
+    # the bound gone. Completions are deliberately NOT refused here: the
+    # branch is `_entering`, and refusing a completion would strand the very
+    # inventory the rule protects. An unreadable budget reads as spent.
+    "TWO_SIDED_PROBE:DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY",
     # the two gates the 1215z loss added at the COMMON submission boundary:
     # a pair cost judged on venue-confirmed fills, and one strategy per
     # authorized window so two of them cannot share one cash envelope.

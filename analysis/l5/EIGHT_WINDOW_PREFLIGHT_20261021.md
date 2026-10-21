@@ -140,11 +140,23 @@ is asserted to contain no budget-exhaustion refusal).
 | defensive (both directions) | **84 passed** |
 | image / Dockerfile-aware | **1467 passed** |
 | runtime config verifier | **18 passed** |
+| intent gate / refusal inventory | **85 passed** |
 
-Full regression: see the covering message. Two baselines were measured
-(`f6b67aa2`, the deployed SHA, and `f8d4a45c`, the branch head before this
-work); both produce an identical set of 40 pre-existing failures, and HEAD
-matches it — zero new, zero gone.
+Full regression: two baselines were measured (`f6b67aa2`, the deployed SHA,
+and `f8d4a45c`, the branch head before this work); both produce an identical
+set of **40** pre-existing failures.
+
+**The first run of this batch produced one NEW failure, and it was a real
+catch.** `test_the_executor_refusal_inventory_is_still_complete` counts the
+`prov.refuse(` sites in `FaithfulExecutor.handle` and requires
+`l5_intent_gate.EXECUTOR_GATES_NOT_EVALUATED_HERE` to list every one. It
+exists so the gap between what that module reviews and what the executor
+actually applies cannot widen silently behind a stale claim. The
+budget-exhaustion refusal took the count from 37 to 38. Resolved by adding
+it to the inventory with its reason, **not** by relaxing the count. A
+further test now pins it **by name** too, because a count alone cannot tell
+that the right refusal was recorded: adding one and deleting another keeps
+the count.
 
 The image test `test_the_image_carries_no_module_outside_that_closure`
 correctly rejected the verifier at first, because it is not imported by the

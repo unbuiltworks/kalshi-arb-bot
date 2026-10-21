@@ -781,3 +781,13 @@ def test_an_exhausted_budget_refuses_the_defensive_order_itself(ex):
     assert out["ok"] is False
     assert out["verdict"]["reason"] == "DEFENSIVE_LOSS_BUDGET"
     assert D(out["verdict"]["budget_remaining_usd"]) <= D(0)
+
+
+def test_the_new_entry_refusal_is_inventoried_BY_NAME(ex):
+    """`test_the_executor_refusal_inventory_is_still_complete` counts
+    refusal sites, which caught this one being added. A count alone cannot
+    say the right refusal was recorded -- adding one refusal and deleting
+    another keeps the count -- so the name is pinned here too."""
+    from src import l5_intent_gate as G
+    assert ("TWO_SIDED_PROBE:DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY"
+            in G.EXECUTOR_GATES_NOT_EVALUATED_HERE)
