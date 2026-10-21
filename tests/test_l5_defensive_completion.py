@@ -28,10 +28,14 @@ TAKER = D("0.026986850000")      # fee_floor from the live 2300z plan record
 WIN_START = 0.0
 CUTOFF = 599.0                   # completion cutoff at cancel margin 300
 
+# far enough inside the guard to leave DEFENSIVE_MIN_EXECUTION_S for the
+# cancel -> venue re-read -> submit sequence. See the execution-time tests.
+BASE_T = CUTOFF - 30
+
 
 def call(**kw):
     base = dict(
-        now_t=CUTOFF - 10, window_start=WIN_START, complete_cutoff_s=CUTOFF,
+        now_t=BASE_T, window_start=WIN_START, complete_cutoff_s=CUTOFF,
         unmatched_qty=D("3.39"), first_leg_cost=D("0.37"),
         exit_price=D("0.80"),            # own complement = 1 - bid(0.20)
         displayed_depth=D("1831.25"),
@@ -281,3 +285,157 @@ def test_an_unreadable_result_refuses():
         == "CANCEL_RESULT_UNREADABLE"
     assert DC.cancel_confirmed(_dead(still_open="garbage"), COID)["confirmed"] \
         is False
+
+
+# ================================ VERIFICATION 1: which clock actually binds
+
+PRODUCTION_COMPLETE_CUTOFF = 720.0   # TS.complete_cutoff_s()
+PRODUCTION_CANCEL_CUTOFF = 600.0     # cancel_cutoff(t_end) at margin 300
+
+
+def test_the_earlier_of_the_two_window_clocks_binds():
+    """`may_complete` refuses on whichever comes first, so this must too."""
+    assert DC.binding_terminal_s(PRODUCTION_COMPLETE_CUTOFF,
+                                 PRODUCTION_CANCEL_CUTOFF) == 600.0
+    assert DC.binding_terminal_s(PRODUCTION_COMPLETE_CUTOFF) == 720.0
+    assert DC.binding_terminal_s("banana", 600.0) is None
+    assert DC.binding_terminal_s(None, None) is None
+
+
+def test_the_originally_specified_guard_interval_is_outside_the_arm_window():
+    """[T+660, T+720) was the interval asked for. Every second of it is
+    PAST_TERMINAL at the deployed margin, so the guard must be shut there."""
+    for t in (660.0, 700.0, 719.0):
+        assert not DC.arm_window_open(
+            t, WIN_START, PRODUCTION_COMPLETE_CUTOFF,
+            cancel_cutoff_s=PRODUCTION_CANCEL_CUTOFF), t
+
+
+def test_the_proposed_guard_interval_is_the_last_minute_before_the_terminal():
+    """[T+540, T+600) -- derived from the clock, not chosen."""
+    for t in (540.0, 570.0, 599.0):
+        assert DC.arm_window_open(
+            t, WIN_START, PRODUCTION_COMPLETE_CUTOFF,
+            cancel_cutoff_s=PRODUCTION_CANCEL_CUTOFF), t
+    for t in (539.0, 600.0):
+        assert not DC.arm_window_open(
+            t, WIN_START, PRODUCTION_COMPLETE_CUTOFF,
+            cancel_cutoff_s=PRODUCTION_CANCEL_CUTOFF), t
+
+
+def test_the_looser_clock_alone_cannot_arm_the_policy_in_dead_time():
+    """The defect this guards: handed 720 only, the guard would arm at T+660
+    and submit into PAST_TERMINAL. With both clocks it refuses."""
+    r = call(now_t=700.0, complete_cutoff_s=PRODUCTION_COMPLETE_CUTOFF,
+             cancel_cutoff_s=PRODUCTION_CANCEL_CUTOFF)
+    assert r["act"] is False
+    assert r["reason"] == "OUTSIDE_DEFENSIVE_ARM_WINDOW"
+    assert r["binding_terminal_s"] == 600.0
+
+
+def test_a_defensive_sequence_is_not_started_without_time_to_finish_it():
+    """Cancel, venue re-read, submit. Starting that with seconds left would
+    retire the profitable complement and put nothing in its place."""
+    r = call(now_t=CUTOFF - 5)
+    assert r["act"] is False
+    assert r["reason"] == "INSUFFICIENT_EXECUTION_TIME"
+    assert r["remaining_s"] == 5.0
+    assert r["min_execution_s"] == DC.DEFENSIVE_MIN_EXECUTION_S
+    # and the boundary is the floor itself, not a round number near it
+    assert call(now_t=CUTOFF - DC.DEFENSIVE_MIN_EXECUTION_S)["act"] is True
+
+
+# ============== VERIFICATION 2: one wire order, and the real alternatives
+
+def test_the_unwind_is_one_wire_order_named_in_the_venue_s_own_enums():
+    r = call(buy_side="DOWN")
+    assert r["wire"]["intent"] == "ORDER_INTENT_BUY_SHORT"
+    assert r["wire"]["side"] == "ORDER_SIDE_SELL"
+    assert r["wire"]["outcomeSide"] == "OUTCOME_SIDE_NO"
+    assert r["wire"]["own_limit_price"] == "0.80"
+    assert call(buy_side="UP")["wire"]["intent"] == "ORDER_INTENT_BUY_LONG"
+    # an unreadable side stamps no wire rather than guessing one
+    assert "wire" not in call(buy_side="sideways")
+
+
+def test_the_proceeds_view_and_the_pair_cost_view_are_the_same_number():
+    """Our ledger says "pair cost 1.17"; the venue credits 0.20 a share and
+    flattens. Both must be reported and they must agree."""
+    r = call(first_leg_cost=D("0.37"), exit_price=D("0.80"))
+    assert r["pair_cost"] == "1.17"
+    assert r["sale_proceeds_per_contract"] == "0.20"
+    assert D(r["loss_per_contract"]) == D("0.17")
+    assert D(r["first_leg_cost"]) - D(r["sale_proceeds_per_contract"]) \
+        == D(r["loss_per_contract"])
+    # the 1.20 ceiling, stated as what it actually caps
+    assert D(r["ceiling_as_loss_per_contract"]) == D("0.20")
+
+
+def test_priority_one_is_the_profitable_completion_while_it_is_reachable():
+    """A maker complement at 0.55 against a 0.37 leg is a 0.92 pair -- a
+    PROFIT -- and at or inside the executable 0.80 it can fill now. Paying
+    a taker fee to unwind instead would be strictly worse."""
+    r = call(maker_complement_price=D("0.55"), exit_price=D("0.50"))
+    assert r["act"] is False
+    assert r["reason"] == "MAKER_COMPLETION_STILL_REACHABLE"
+    assert r["maker_pair_cost"] == "0.92"
+    assert r["maker_reachable_now"] is True
+
+
+def test_an_unreachable_maker_completion_does_not_block_the_unwind():
+    """The 2315z shape: our 0.55 limit sits far inside a book whose
+    executable price is 0.80. It cannot fill without the market coming to
+    us, and there are seconds left for it to."""
+    r = call(maker_complement_price=D("0.55"), exit_price=D("0.80"))
+    assert r["maker_reachable_now"] is False
+    assert r["act"] is True
+
+
+def test_a_maker_completion_above_the_096_ceiling_never_blocks_the_unwind():
+    r = call(maker_complement_price=D("0.70"), exit_price=D("0.60"))
+    assert D(r["maker_pair_cost"]) > DC.MAKER_COMPLETE_CEILING
+    assert r["act"] is True
+
+
+def test_the_alternatives_are_priced_side_by_side_in_dollars():
+    r = call(maker_complement_price=D("0.55"), exit_price=D("0.80"))
+    by = {a["action"]: a for a in r["alternatives"]}
+    assert set(by) == {"HOLD_TO_SETTLEMENT", "MAKER_COMPLETE_AT_CEILING",
+                       "DEFENSIVE_UNWIND"}
+    # holding risks the whole leg; the unwind is certain and smaller
+    assert D(by["HOLD_TO_SETTLEMENT"]["worst_usd"]) \
+        < D(by["DEFENSIVE_UNWIND"]["worst_usd"]) < 0
+    assert by["DEFENSIVE_UNWIND"]["certain"] is True
+    assert by["HOLD_TO_SETTLEMENT"]["certain"] is False
+    # and the maker completion, were it reachable, beats both
+    assert D(by["MAKER_COMPLETE_AT_CEILING"]["worst_usd"]) > 0
+    assert by["MAKER_COMPLETE_AT_CEILING"]["executable_now"] is False
+
+
+def test_the_unwind_row_prices_the_fee_it_pays():
+    r = call(exit_price=D("0.80"))
+    unwind = [a for a in r["alternatives"]
+              if a["action"] == "DEFENSIVE_UNWIND"][0]
+    # 3.39 * (1 - 1.17) - 3.39 * fee
+    assert D(unwind["worst_usd"]) == pytest.approx(D("-0.6678"), abs=1e-3)
+    assert D(unwind["fees_usd"]) == D("3.39") * TAKER
+    assert unwind["worst_usd"] == unwind["best_usd"]
+
+
+def test_a_cancel_error_the_venue_reread_settled_does_not_refuse():
+    """`deadman` records a raised cancel even when the re-read came back
+    terminal, which is the common case: cancelling an order the venue has
+    already retired raises. Refusing on that would make the policy unusable
+    in the one situation it exists for."""
+    r = DC.cancel_confirmed(
+        _dead(cancelled=[{"client_order_id": COID}],
+              errors=[{"client_order_id": COID,
+                       "resolved_by_reread": True}]), COID)
+    assert r["confirmed"] is True
+
+
+def test_another_order_s_error_says_nothing_about_ours():
+    r = DC.cancel_confirmed(
+        _dead(cancelled=[{"client_order_id": COID}],
+              errors=[{"client_order_id": "someone-else"}]), COID)
+    assert r["confirmed"] is True

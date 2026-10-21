@@ -52,6 +52,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from src import l5_defensive_completion as DEF
 from src import l5_maker_fill_model as FM
+from src.l5_two_sided_probe import TAKER_THETA
 
 TICK = D("0.01")
 
@@ -59,9 +60,22 @@ TICK = D("0.01")
 #: it on the 2300z plan. Used ONLY to price a simulated defensive exit.
 SIM_TAKER_FEE = D("0.026986850000")
 
-#: the venue's completion cutoff, in seconds from window open. The guard
-#: window is the final DEFENSIVE_ARM_S of it.
+#: the venue's completion cutoff, in seconds from window open.
 SIM_COMPLETE_CUTOFF_S = 720.0
+
+#: THE CLOCK THAT ACTUALLY BINDS, and the correction to a shadow that was
+#: measuring a window the money path can never act in. `may_complete`
+#: refuses on the EARLIER of `complete_cutoff_s()` (720) and
+#: `cancel_cutoff(t_end)`, which at the deployed `L5_TS_CANCEL_MARGIN_S=300`
+#: is 600 -- verified by running `may_complete` at the production margin,
+#: and corroborated by 2315z logging PAST_TERMINAL 195 times. A guard armed
+#: on 720 sat entirely inside dead time, so every simulated verdict it
+#: produced described an action the engine could not have taken.
+SIM_CANCEL_CUTOFF_S = 600.0
+
+#: the single crossing leg's taker fee is priced per leg in `_defensive_eval`
+#: (theta * p * (1-p)); `SIM_TAKER_FEE` above is the BOTH-LEGS pair figure
+#: and overstates an unwind, whose first leg already filled as a maker.
 
 #: the two quoting policies compared in shadow. COMPLEMENT_ONLY is what the
 #: engine does today: while inventory is non-zero the adding leg is refused
@@ -450,7 +464,8 @@ class Config:
         """
         off = now - window_start
         if not DEF.arm_window_open(now, window_start,
-                                   SIM_COMPLETE_CUTOFF_S):
+                                   SIM_COMPLETE_CUTOFF_S,
+                                   cancel_cutoff_s=SIM_CANCEL_CUTOFF_S):
             return
         for band, qty_map, cost_map in (("conservative", self.qty,
                                          self.cost),
@@ -475,9 +490,13 @@ class Config:
             v = DEF.decide(
                 now_t=now, window_start=window_start,
                 complete_cutoff_s=SIM_COMPLETE_CUTOFF_S,
+                cancel_cutoff_s=SIM_CANCEL_CUTOFF_S,
                 unmatched_qty=q, first_leg_cost=basis,
                 exit_price=exit_px, displayed_depth=depth,
-                taker_fee_per_contract=SIM_TAKER_FEE,
+                buy_side=(FM.DOWN if held == FM.UP else FM.UP),
+                maker_complement_price=self.frozen_cpx,
+                taker_fee_per_contract=(TAKER_THETA * exit_px
+                                        * (D(1) - exit_px)),
                 simulate=True)
             self.defensive.append({
                 "band": band, "t_offset_s": round(off, 1),

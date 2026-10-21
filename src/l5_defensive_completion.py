@@ -1,5 +1,37 @@
 """Bounded defensive completion for an unmatched first leg.
 
+TWO VERIFICATIONS THE OWNER REQUIRED BEFORE ANY OF THIS MAY BE ENABLED, AND
+WHAT THEY FOUND. Both are reproducible from this repository.
+
+1. THE SPECIFIED GUARD INTERVAL [T+660, T+720) IS UNREACHABLE. A BTC15m
+   window has TWO completion clocks and the EARLIER binds:
+   `complete_cutoff_s() == 720` and `cancel_cutoff(t_end) == t_end -
+   cancel_margin_s()`, which at the deployed `L5_TS_CANCEL_MARGIN_S=300` is
+   T+600. `may_complete` therefore returns PAST_TERMINAL at T+600 and
+   beyond; production corroborates it (2315z logged PAST_TERMINAL 195
+   times). So this module takes BOTH clocks and guards the last
+   `DEFENSIVE_ARM_S` seconds before the BINDING one -- [T+540, T+600) at the
+   deployed margin -- and cannot be handed the looser clock alone.
+
+2. "BUY THE OPPOSITE SIDE" AND "SELL THE FIRST LEG" ARE THE SAME WIRE ORDER
+   ON THIS VENUE, so the choice between them is not an economic choice and
+   is not made by implementation convenience. Polymarket US is a
+   single-instrument venue -- its own documentation titles the page "buying
+   Yes vs selling No" -- and every order it has been observed to accept is
+   `ORDER_INTENT_BUY_LONG` or `ORDER_INTENT_BUY_SHORT`; no reduce-only,
+   sell-to-close or liquidate intent appears anywhere in its observed
+   surface. The venue cashflow proves the identity rather than inferring it:
+   Probe 05's eight `ORDER_INTENT_BUY_SHORT` orders CREDITED $1.2432, which
+   is exactly their WIRE notional (sum of cumQuantity * avgPx over
+   `analysis/pmus/evidence/probe05_orders.json`). A BUY_SHORT is executed as
+   a SELL of the YES token and takes cash IN. Unwinding a long UP leg and
+   buying DOWN against it are one order, one price, one fee.
+
+   So the comparison this module makes is between the alternatives that DO
+   differ here, and `alternatives()` reports all of them with their
+   economics: keep working the profitable maker completion, unwind at the
+   executable touch, or hold to settlement.
+
 WHAT THIS IS FOR, AND WHAT IT IS NOT. 2315z filled a first leg at own 0.37
 for $1.2543 and never obtained its complement; the residual settled
 worthless and cost more than both winning pairs of that campaign combined.
@@ -52,9 +84,34 @@ DEFENSIVE_PAIR_CEILING = D("1.20")
 #: campaign-wide realized defensive loss budget, inside the $5 daily halt.
 DEFENSIVE_LOSS_BUDGET_USD = D("2.00")
 
-#: how long before the completion cutoff defensive action may be considered.
-#: 60s of a 900s window. Short on purpose: see the module docstring.
+#: how long before the BINDING completion terminal defensive action may be
+#: considered. 60s of a 900s window. Short on purpose: see the docstring.
 DEFENSIVE_ARM_S = 60.0
+
+#: the minimum time that must remain before the terminal for the defensive
+#: SEQUENCE to run: cancel the resting complement, re-read it at the venue to
+#: CONFIRM it is gone, then submit one order. Starting a cancel we cannot
+#: finish is the one way this policy could leave a position worse than it
+#: found it -- complement retired, nothing in its place. This is what makes
+#: the answer to "does the final-minute guard provide enough execution time"
+#: a check rather than an opinion: the effective action window at the
+#: deployed margin is [T+540, T+585).
+DEFENSIVE_MIN_EXECUTION_S = 15.0
+
+#: the profitable maker ceiling, which this module never relaxes. Priority
+#: one is still completion at or under it; defensive action is considered
+#: only once that completion is no longer reachable at the live book.
+MAKER_COMPLETE_CEILING = D("0.96")
+
+#: The one wire order this venue has for unwinding, per verification 2. The
+#: `side` is about the YES token; `outcomeSide` names the outcome you end up
+#: long. Buying the complement of a held leg IS selling that leg.
+DEFENSIVE_WIRE = {
+    "UP": {"intent": "ORDER_INTENT_BUY_LONG", "side": "ORDER_SIDE_BUY",
+           "outcomeSide": "OUTCOME_SIDE_YES"},
+    "DOWN": {"intent": "ORDER_INTENT_BUY_SHORT", "side": "ORDER_SIDE_SELL",
+             "outcomeSide": "OUTCOME_SIDE_NO"},
+}
 
 
 #: THE FEATURE FLAG. Absent, empty, misspelled or unreadable is OFF. Only
@@ -82,18 +139,46 @@ def _d(v: Any) -> Optional[D]:
         return None
 
 
+def binding_terminal_s(complete_cutoff_s: Any,
+                       cancel_cutoff_s: Any = None) -> Optional[float]:
+    """The EARLIER of the window's two completion clocks, in window seconds.
+
+    VERIFICATION 1 LIVES HERE. `may_complete` refuses on whichever of
+    `complete_cutoff_s()` (720) and `cancel_cutoff(t_end)` (600 at the
+    deployed margin of 300) comes first, so a guard built on the first alone
+    would arm in an interval where every order is already PAST_TERMINAL.
+    Taking the minimum means a caller cannot arm this policy outside the
+    interval the engine can actually act in, whatever the margin is set to.
+
+    Unreadable refuses by returning None, which shuts the window.
+    """
+    vals = []
+    for v in (complete_cutoff_s, cancel_cutoff_s):
+        if v is None:
+            continue
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            return None
+    return min(vals) if vals else None
+
+
 def arm_window_open(now_t: float, window_start: float,
                     complete_cutoff_s: float,
-                    arm_s: float = DEFENSIVE_ARM_S) -> bool:
+                    arm_s: float = DEFENSIVE_ARM_S,
+                    cancel_cutoff_s: Any = None) -> bool:
     """Is `now` inside the last `arm_s` seconds of completion eligibility?
 
-    Closed at the cutoff: past it the venue will not accept a completing
-    order anyway, and claiming otherwise would invent a fill.
+    Measured against the BINDING terminal, not the looser of the two clocks.
+    Closed at the terminal: past it `may_complete` refuses PAST_TERMINAL, so
+    claiming otherwise would invent a fill.
     """
     try:
         off = float(now_t) - float(window_start)
-        cut = float(complete_cutoff_s)
     except (TypeError, ValueError):
+        return False
+    cut = binding_terminal_s(complete_cutoff_s, cancel_cutoff_s)
+    if cut is None:
         return False
     return (cut - float(arm_s)) <= off < cut
 
@@ -107,6 +192,9 @@ def decide(*,
            exit_price: Any,
            displayed_depth: Any,
            taker_fee_per_contract: Any,
+           cancel_cutoff_s: Any = None,
+           maker_complement_price: Any = None,
+           buy_side: Optional[str] = None,
            defensive_spent_usd: Any = D(0),
            defensive_pending: bool = False,
            window_settled: bool = False,
@@ -114,6 +202,7 @@ def decide(*,
            pair_ceiling: D = DEFENSIVE_PAIR_CEILING,
            loss_budget_usd: D = DEFENSIVE_LOSS_BUDGET_USD,
            arm_s: float = DEFENSIVE_ARM_S,
+           min_execution_s: float = DEFENSIVE_MIN_EXECUTION_S,
            simulate: bool = False,
            ) -> Dict[str, Any]:
     """Should we pay to unwind this unmatched leg, and at what bounded cost?
@@ -175,9 +264,44 @@ def decide(*,
         out["reason"] = "DEFENSIVE_INPUT_IMPLAUSIBLE"
         return out
 
-    if not arm_window_open(now_t, window_start, complete_cutoff_s, arm_s):
+    terminal = binding_terminal_s(complete_cutoff_s, cancel_cutoff_s)
+    out["binding_terminal_s"] = terminal
+    if not arm_window_open(now_t, window_start, complete_cutoff_s, arm_s,
+                           cancel_cutoff_s=cancel_cutoff_s):
         out["reason"] = "OUTSIDE_DEFENSIVE_ARM_WINDOW"
         return out
+
+    # ENOUGH TIME TO FINISH WHAT WE START. The sequence is cancel ->
+    # venue re-read -> submit, and a cancel we cannot follow with a
+    # submission retires the profitable complement and puts nothing in its
+    # place. Refusing here leaves the complement working to the deadline,
+    # which is the state we would otherwise have been in anyway.
+    try:
+        remaining = float(terminal) - (float(now_t) - float(window_start))
+    except (TypeError, ValueError):
+        out["reason"] = "DEFENSIVE_INPUT_UNREADABLE"
+        return out
+    out["remaining_s"] = round(remaining, 3)
+    if remaining < float(min_execution_s):
+        out["reason"] = "INSUFFICIENT_EXECUTION_TIME"
+        out["min_execution_s"] = float(min_execution_s)
+        return out
+
+    # PRIORITY ONE IS STILL THE PROFITABLE COMPLETION, and it is checked
+    # against the LIVE book rather than against hope. A maker complement at
+    # or inside the executable price needs no favour from the market: it can
+    # fill now, at a pair cost under the 0.96 ceiling, for a PROFIT. Paying
+    # the taker fee to unwind instead would be strictly worse, so defensive
+    # action is refused while that is true. (`exit_price` is the executable
+    # own price; a maker limit at least that aggressive is reachable.)
+    mk = _d(maker_complement_price)
+    if mk is not None and mk > 0:
+        out["maker_complement_price"] = str(mk)
+        out["maker_pair_cost"] = str(leg + mk)
+        out["maker_reachable_now"] = bool(mk >= px)
+        if (leg + mk) <= MAKER_COMPLETE_CEILING and mk >= px:
+            out["reason"] = "MAKER_COMPLETION_STILL_REACHABLE"
+            return out
 
     # A PROFITABLE COMPLEMENT STILL RESTING OWNS THE POSITION. It may fill,
     # and in 2300z it did. It is displaced only by a cancellation the venue
@@ -198,13 +322,34 @@ def decide(*,
     hold_downside = qty * leg                 # our side loses: lose it all
     exit_downside = qty * (pair_cost - D(1)) + fees_usd
 
+    # THE SAME NUMBERS IN THE VENUE'S OWN TERMS, because "pair cost" is our
+    # ledger's vocabulary and this venue does not buy a second token: it
+    # SELLS the one we hold, at the wire price, and credits the proceeds
+    # (verification 2). The two views are arithmetically identical --
+    # proceeds = 1 - exit_price and loss/contract = pair_cost - 1 -- and
+    # both are reported so neither reader has to convert.
+    proceeds = D(1) - px
+    loss_per_contract = pair_cost - D(1)
     out.update({
         "qty": str(qty), "first_leg_cost": str(leg),
         "exit_price": str(px), "pair_cost": str(pair_cost),
         "fees_usd": str(fees_usd),
         "hold_downside_usd": str(hold_downside),
         "exit_downside_usd": str(exit_downside),
+        "sale_proceeds_per_contract": str(proceeds),
+        "loss_per_contract": str(loss_per_contract),
+        "ceiling_as_loss_per_contract": str(pair_ceiling - D(1)),
+        "venue_action": ("ONE wire order. On a single-instrument venue "
+                         "buying the complement of a held leg IS selling "
+                         "that leg: there is no reduce-only or "
+                         "sell-to-close intent to choose instead."),
     })
+    if buy_side in DEFENSIVE_WIRE:
+        out["wire"] = dict(DEFENSIVE_WIRE[buy_side], buy_side=buy_side,
+                           own_limit_price=str(px))
+    out["alternatives"] = alternatives(
+        qty=qty, first_leg_cost=leg, exit_price=px, fee=fee,
+        maker_complement_price=mk)
 
     # A CHECK THAT WAS HERE AND IS GONE, because it could never fire and
     # reading it would have implied a protection that does not exist.
@@ -254,6 +399,71 @@ def decide(*,
     return out
 
 
+# --------------------------------------------------- the real alternatives
+
+def alternatives(*, qty: D, first_leg_cost: D, exit_price: D, fee: D,
+                 maker_complement_price: Optional[D] = None,
+                 ) -> list:
+    """Every course actually open to us at this instant, with its economics.
+
+    WHY THIS IS THE COMPARISON AND NOT "BUY VERSUS SELL". Verification 2
+    established that on this venue those two are the same wire order at the
+    same price for the same fee, so choosing between them is not an economic
+    decision and no amount of code would make it one. What genuinely differs
+    is whether we keep working the profitable completion, unwind at the
+    executable price, or hold the leg to settlement -- so those are what is
+    priced here, in dollars, side by side.
+
+    `worst_usd` is what the course can cost under the settlement that hurts;
+    `best_usd` under the other. A certain course has one number for both.
+    Nothing here is a fill and nothing here is a promise of one.
+    """
+    rows = [{
+        "action": "HOLD_TO_SETTLEMENT",
+        "wire": None,
+        "executable_now": True,
+        "certain": False,
+        # our side settles 0: the whole leg is gone. Settles 1: it pays $1.
+        "worst_usd": str(-(qty * first_leg_cost)),
+        "best_usd": str(qty * (D(1) - first_leg_cost)),
+        "note": ("the course 2315z actually took. It is not a decision that "
+                 "was made; it is what happens when nothing else does."),
+    }]
+    if maker_complement_price is not None and maker_complement_price > 0:
+        mpair = first_leg_cost + maker_complement_price
+        rows.append({
+            "action": "MAKER_COMPLETE_AT_CEILING",
+            "wire": "same single order, posted rather than crossing",
+            "executable_now": bool(maker_complement_price >= exit_price),
+            "certain": False,
+            "limit_own_price": str(maker_complement_price),
+            "pair_cost": str(mpair),
+            "within_maker_ceiling": bool(mpair <= MAKER_COMPLETE_CEILING),
+            # a maker pair pays $1 and costs `mpair`, with no taker fee
+            "worst_usd": str(qty * (D(1) - mpair)),
+            "best_usd": str(qty * (D(1) - mpair)),
+            "note": ("priority one. Worth more than any unwind whenever it "
+                     "is reachable, which is why `decide` refuses defensive "
+                     "action while it is."),
+        })
+    unwind = qty * (D(1) - (first_leg_cost + exit_price)) - qty * fee
+    rows.append({
+        "action": "DEFENSIVE_UNWIND",
+        "wire": "ORDER_INTENT_BUY_LONG/BUY_SHORT at the executable price",
+        "executable_now": True,
+        "certain": True,
+        "limit_own_price": str(exit_price),
+        "proceeds_per_contract": str(D(1) - exit_price),
+        "fees_usd": str(qty * fee),
+        "worst_usd": str(unwind),
+        "best_usd": str(unwind),
+        "note": ("converts an uncertain loss into a certain one and pays "
+                 "the taker fee for the conversion. Chosen for tail "
+                 "control, never because it is better in expectation."),
+    })
+    return rows
+
+
 # ------------------------------------------------- confirmed cancellation
 
 def cancel_confirmed(result: Mapping[str, Any], coid: str) -> Dict[str, Any]:
@@ -301,9 +511,23 @@ def cancel_confirmed(result: Mapping[str, Any], coid: str) -> Dict[str, Any]:
         if coid in _ids(bad) or "__unreadable__" in _ids(bad):
             out["reason"] = "CANCEL_NOT_CONFIRMED_" + bad.upper()
             return out
-    if result.get("errors"):
-        out["reason"] = "CANCEL_REPORTED_ERRORS"
-        return out
+    # AN ERROR THE RE-READ SETTLED IS NOT AN UNKNOWN. `deadman` records a
+    # cancel that raised even when the subsequent `GET /v1/order/{id}` came
+    # back terminal, and stamps `resolved_by_reread` -- which is the COMMON
+    # case, because cancelling an order the venue has already retired
+    # raises. Refusing on that would have made this policy unusable in
+    # exactly the situation it exists for. An error for OUR order that the
+    # re-read did not settle still refuses, and so does an unreadable row;
+    # another order's error says nothing about ours (and `only=[coid]`
+    # means there should not be one).
+    for r in (result.get("errors") or []):
+        if not isinstance(r, Mapping):
+            out["reason"] = "CANCEL_REPORTED_ERRORS"
+            return out
+        if str(r.get("client_order_id")) == coid \
+                and not bool(r.get("resolved_by_reread")):
+            out["reason"] = "CANCEL_REPORTED_ERRORS"
+            return out
 
     for r in (result.get("filled") or []):
         if isinstance(r, Mapping) and str(r.get("client_order_id")) == coid:

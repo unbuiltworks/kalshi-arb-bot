@@ -149,8 +149,14 @@ def test_the_shadow_reaches_the_guard_window_that_the_live_hook_cannot():
 
     The live observation hook reads `store.position()`, so it needs a REAL
     fill and can never fire while the campaign is closed. The shadow holds
-    MODELLED inventory, so it can reach [T+660, T+720) with no capital and
-    no venue. This asserts exactly that difference.
+    MODELLED inventory, so it can reach the guard with no capital and no
+    venue. This asserts exactly that difference.
+
+    THE GUARD IS [T+540, T+600), NOT [T+660, T+720). `may_complete` refuses
+    PAST_TERMINAL from T+600 at the deployed cancel margin of 300, so the
+    interval this test originally used was entirely dead time -- every
+    verdict it recorded described an action the engine could not have taken.
+    `test_the_guard_cannot_be_armed_in_dead_time` below holds that line.
     """
     c = _cell(2)
     # a modelled first leg, held: 3.39 UP at 0.37 -- the 2315z position
@@ -163,8 +169,8 @@ def test_the_shadow_reaches_the_guard_window_that_the_live_hook_cannot():
     c.step(D("0.20"), D("0.21"), D("500"), D("500"), (), 100.0, 0.0)
     assert c.defensive == [], "nothing may be recorded outside the guard"
 
-    # inside the guard [660, 720)
-    c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 700.0, 0.0)
+    # inside the guard [540, 600)
+    c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 570.0, 0.0)
     assert c.defensive, "the shadow MUST reach the guard window"
 
     rec = c.defensive[0]
@@ -183,7 +189,7 @@ def test_both_bands_are_recorded_separately():
     c = _cell(2)
     c.qty[FM.UP] = D("1.00"); c.cost[FM.UP] = D("0.37")
     c.qty_opt[FM.UP] = D("3.39"); c.cost_opt[FM.UP] = D("3.39") * D("0.37")
-    c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 700.0, 0.0)
+    c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 570.0, 0.0)
     bands = {r["band"]: r for r in c.defensive}
     assert set(bands) == {"conservative", "optimistic"}
     assert bands["conservative"]["unmatched"] == "1.00"
@@ -193,7 +199,7 @@ def test_both_bands_are_recorded_separately():
 def test_a_simulated_verdict_is_never_labelled_real():
     c = _cell(2)
     c.qty[FM.UP] = D("3.39"); c.cost[FM.UP] = D("3.39") * D("0.37")
-    c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 700.0, 0.0)
+    c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 570.0, 0.0)
     for r in c.defensive:
         assert r["verdict"].get("simulated") is True
     rep = c.report(None)
@@ -207,3 +213,30 @@ def test_at_touch_arms_record_no_defensive_verdicts():
     c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 700.0, 0.0)
     assert c.defensive == []
     assert c.report(None)["defensive_evals"] == 0
+
+
+def test_the_guard_cannot_be_armed_in_dead_time():
+    """The correction, asserted directly on the shadow arm. T+700 is past
+    the binding terminal, so NOTHING may be recorded there however much
+    modelled inventory is held -- it is not a quiet window, it is a window
+    in which no order can be placed at all."""
+    c = _cell(2)
+    c.qty[FM.UP] = D("3.39"); c.cost[FM.UP] = D("3.39") * D("0.37")
+    for t in (660.0, 700.0, 719.0):
+        c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), t, 0.0)
+    assert c.defensive == []
+    assert c.report(None)["defensive_evals"] == 0
+
+
+def test_the_simulated_fee_is_one_crossing_leg_not_the_pair():
+    """`SIM_TAKER_FEE` is the BOTH-LEGS figure from the 2300z plan. An
+    unwind crosses once -- the first leg already filled as a maker -- so
+    charging the pair figure would roughly double the fee and make the
+    comparison lie about the cost of getting out."""
+    c = _cell(2)
+    c.qty[FM.UP] = D("3.39"); c.cost[FM.UP] = D("3.39") * D("0.37")
+    c.step(D("0.20"), D("0.21"), D("1831.25"), D("500"), (), 570.0, 0.0)
+    rec = c.defensive[0]
+    one_leg = D("3.39") * TS.TAKER_THETA * D("0.80") * D("0.20")
+    assert D(rec["verdict"]["fees_usd"]) == one_leg
+    assert one_leg < D("3.39") * TS.SIM_TAKER_FEE

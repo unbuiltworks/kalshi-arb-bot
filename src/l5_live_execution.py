@@ -1167,6 +1167,41 @@ class InventoryStore:
         self.state["orders_uncertain"] = str(why)
         self.save()
 
+    # ------------------------------------------- the defensive loss budget
+
+    def defensive_spent(self) -> D:
+        """Worst-case defensive loss COMMITTED so far, across the campaign.
+
+        CHARGED AT SUBMISSION, NOT AT FILL, and at the worst case rather than
+        the outcome. A defensive order that fills costs what it costs; one
+        that does not fill costs nothing -- but a budget that only counts
+        fills would let an unbounded number of unfilled attempts through,
+        and each attempt is a real offer to lose that money. Counting the
+        commitment is the conservative direction and it is the one a bound
+        has to take. Persisted, so a restart cannot reset the budget.
+        """
+        try:
+            return D(str(self.state.get("defensive_spent_usd") or 0))
+        except BaseException:                                  # noqa: BLE001
+            # unreadable means spent: a budget we cannot read is exhausted
+            return DEF.DEFENSIVE_LOSS_BUDGET_USD
+
+    def defensive_charge(self, usd: Any, detail: Mapping[str, Any]) -> D:
+        """Charge the budget before the wire, and record why. Returns the new
+        total. fsynced through `save()` so a process that dies between this
+        and the submission has already paid."""
+        amt = D(str(usd))
+        if amt < 0:
+            amt = D(0)
+        total = self.defensive_spent() + amt
+        self.state["defensive_spent_usd"] = str(total)
+        log = self.state.setdefault("defensive_log", [])
+        if isinstance(log, list):
+            log.append(dict(detail, charged_usd=str(amt),
+                            total_usd=str(total)))
+        self.save()
+        return total
+
     def owns_venue_order_id(self, venue_order_id: Any) -> bool:
         """Did THIS ledger put that venue order id on the book?
 
@@ -3807,6 +3842,15 @@ class FaithfulExecutor:
         #: MAKER_ONLY: no taker fallback at all. Probe 07 is a test of the
         #: maker mechanism, and a crossing order would contaminate it.
         self.maker_only = maker_only
+        # THE DEFENSIVE MANDATE. None except in the moments between a
+        # confirmed cancellation of the resting complement and the single
+        # order that replaces it. It is the ONLY thing that relaxes
+        # `maker_only` or the 0.96 pair ceiling, it names the exact order it
+        # covers (market, side, price, quantity), it expires on the window
+        # clock, and it is consumed by the first matching order. Nothing
+        # sets it unless `l5_defensive_completion.enabled()` is true, which
+        # is false on every deployment by default.
+        self._defensive_mandate: Optional[Dict[str, Any]] = None
         #: PROBE 08 TREATMENT. While the market's REALIZED residual is
         #: non-zero, an order that would deepen the imbalance is refused.
         #: It refuses and nothing else: it never invents a trade, never
@@ -4266,6 +4310,192 @@ class FaithfulExecutor:
                             "not reduce |unmatched| on the prospective book"}
         return None
 
+    def defensive_execute(self, *, market: str, buy_side: str,
+                          held_side: str, resting, decide_kwargs,
+                          prov) -> Dict[str, Any]:
+        """Retire the resting complement, PROVE it is gone, then authorize
+        exactly one crossing order -- or refuse and change nothing.
+
+        THE ORDER OF OPERATIONS IS THE SAFETY PROPERTY. Cancel, prove by the
+        venue's own re-read, re-read OUR OWN inventory, decide again against
+        what is actually there, charge the budget, and only then issue a
+        mandate naming that one order. Every failure returns `ok: False` and
+        leaves the position exactly as it was: the complement either still
+        rests (cancel refused) or is gone and nothing replaces it (which is
+        the state the window was heading for anyway).
+
+        OVERHEDGING IS REFUSED, NOT RESIZED IN FLIGHT. If the complement
+        filled while we were cancelling it, the residual it was there to
+        match has already shrunk -- possibly to nothing -- so this tick
+        stops. The next tick re-reads the position and decides again from
+        venue-confirmed state rather than from a quantity computed before
+        the fill existed.
+        """
+        def no(reason: str, **extra: Any) -> Dict[str, Any]:
+            return dict({"ok": False, "reason": reason}, **extra)
+
+        if "__unreadable__" in (resting or []):
+            return no("DEFENSIVE_LIVE_ORDERS_UNREADABLE")
+
+        # ONE DEFENSIVE ATTEMPT PER WINDOW, AND ONE CHARGE FOR IT. A mandate
+        # outlives the order it was issued for -- it expires on the clock,
+        # not on consumption -- so without this a defensive order refused
+        # further downstream (cash, the submission claim, the validation
+        # gates) could be rebuilt identically on the next tick and ride the
+        # mandate that was already paid for. Refusing here means the budget
+        # is charged exactly once per window and the refusal reason stays in
+        # the record where it can be read. Fail closed: a window whose
+        # defensive attempt did not reach the venue stays as it was.
+        _live = self._defensive_mandate
+        if isinstance(_live, Mapping):
+            try:
+                _unexpired = (float(self._now().timestamp())
+                              < float(_live["expires_at"]))
+            except BaseException:                              # noqa: BLE001
+                _unexpired = True          # unreadable expiry blocks
+            if _unexpired and str(_live.get("market")) == str(market):
+                return no("DEFENSIVE_ALREADY_MANDATED",
+                          mandate=dict(_live))
+
+        confirmations: List[Dict[str, Any]] = []
+        filled_during = D(0)
+        if resting:
+            try:
+                res = deadman(self.store, self.transport,
+                              reason="DEFENSIVE_COMPLETION", only=resting)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                return no("DEFENSIVE_CANCEL_FAILED",
+                          error="%s: %s" % (type(exc).__name__,
+                                            str(exc)[:120]))
+            if prov is not None:
+                try:
+                    prov.note("DEFENSIVE_CANCEL", dict(
+                        res, labels=("recorded BEFORE the verdict that could "
+                                     "submit, so a cancellation stands in "
+                                     "the record even if everything after "
+                                     "it refuses or raises.")))
+                except BaseException:                          # noqa: BLE001
+                    pass
+            for coid in resting:
+                c = DEF.cancel_confirmed(res, coid)
+                confirmations.append(c)
+                if not c.get("confirmed"):
+                    return no("DEFENSIVE_CANCEL_NOT_CONFIRMED",
+                              confirmations=confirmations)
+                filled_during += D(str(c.get("filled_during_cancel") or 0))
+            if filled_during > 0:
+                return no("DEFENSIVE_FILLED_DURING_CANCEL",
+                          filled_during_cancel=str(filled_during),
+                          confirmations=confirmations)
+
+        # THE INVENTORY AFTER THE CANCEL is the only inventory that may be
+        # defended, read from the store rather than carried in from before.
+        try:
+            held = self.store.position(market, held_side)
+            mine = self.store.position(market, buy_side)
+            inc = getattr(self.transport, "quantity_increment", None)
+            inc = None if inc is None else D(str(inc))
+        except BaseException:                                  # noqa: BLE001
+            return no("DEFENSIVE_POSITION_UNREADABLE")
+        need = held - mine
+        if need <= 0:
+            return no("DEFENSIVE_NOTHING_UNMATCHED", unmatched=str(need))
+        if inc is None or inc <= 0:
+            return no("DEFENSIVE_QUANTITY_INCREMENT_UNKNOWN")
+        qty = (need / inc).to_integral_value(rounding="ROUND_FLOOR") * inc
+        if qty <= 0:
+            return no("DEFENSIVE_BELOW_MIN_INCREMENT",
+                      unmatched=str(need), increment=str(inc))
+
+        # PHASE TWO. The only verdict in this system that can submit a
+        # defensive order, and it runs against the post-cancel quantity with
+        # the cancellation declared and CONFIRMED.
+        rc = (None if not resting
+              else {"venue_order_id": resting[0], "cancel_confirmed": True})
+        verdict = DEF.decide(**dict(decide_kwargs, unmatched_qty=qty,
+                                    resting_complement=rc))
+        verdict = dict(verdict, phase="AUTHORIZE")
+        if not verdict.get("act"):
+            return no("DEFENSIVE_REFUSED_AFTER_CANCEL", verdict=verdict,
+                      confirmations=confirmations)
+
+        px = D(str(verdict["exit_price"]))
+        # CHARGE THE BUDGET BEFORE THE MANDATE AND BEFORE THE WIRE, at the
+        # worst case. See `InventoryStore.defensive_charge`.
+        try:
+            total = self.store.defensive_charge(
+                verdict["exit_downside_usd"],
+                {"market": market, "buy_side": buy_side, "qty": str(qty),
+                 "price": str(px), "reason": verdict.get("reason")})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return no("DEFENSIVE_BUDGET_NOT_CHARGEABLE",
+                      error=type(exc).__name__)
+
+        expires = None
+        try:
+            expires = (float(decide_kwargs["window_start"])
+                       + float(verdict["binding_terminal_s"]))
+        except BaseException:                                  # noqa: BLE001
+            expires = None
+        if expires is None:
+            return no("DEFENSIVE_MANDATE_HAS_NO_EXPIRY")
+        self._defensive_mandate = {
+            "market": market, "side": buy_side, "price": str(px),
+            "qty": str(qty), "expires_at": expires,
+            "reason": verdict.get("reason"),
+            "budget_total_usd": str(total),
+            "labels": ("permits ONE crossing order and the defensive pair "
+                       "ceiling for that order alone. It is not a change to "
+                       "the maker-only overlay or to the 0.96 ceiling, "
+                       "which stand for everything else."),
+        }
+        return {"ok": True, "verdict": verdict,
+                "confirmations": confirmations,
+                "mandate": dict(self._defensive_mandate),
+                "leg": {"side": buy_side, "action": "BUY", "price": str(px),
+                        "qty": str(qty), "mode": FT.TAKER,
+                        "post_only": False,
+                        "defensive": True,
+                        "wire": verdict.get("wire"),
+                        "labels": ("a crossing order against displayed "
+                                   "depth. Displayed size is not a fill and "
+                                   "this position is NOT hedged until the "
+                                   "venue confirms one.")}}
+
+    def defensive_mandate_covers(self, market: str, dec: Mapping[str, Any],
+                                 tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+        """The live defensive mandate, but only if it names THIS order.
+
+        TIGHT ON PURPOSE. A mandate that matched loosely would be a standing
+        taker permission and a standing 1.20 ceiling for any order that
+        happened to follow it. It must agree on the market, the side, the
+        price and the quantity, it must still be inside the window interval
+        it was issued for, and the flag must still be on. Anything
+        unreadable means NOT covered, so the normal maker-only and 0.96
+        rules apply -- which is the direction that refuses.
+        """
+        m = self._defensive_mandate
+        if not isinstance(m, Mapping) or not DEF.enabled():
+            return None
+        try:
+            if str(m.get("market")) != str(market):
+                return None
+            if str(m.get("side")) != str(dec.get("side")):
+                return None
+            if D(str(m.get("price"))) != D(str(tr.get("price"))):
+                return None
+            if D(str(m.get("qty"))) != D(str(tr.get("qty"))):
+                return None
+            if float(self._now().timestamp()) >= float(m["expires_at"]):
+                return None
+        except BaseException:                                  # noqa: BLE001
+            return None
+        return dict(m)
+
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """None if this order keeps the market's pair cost under the ceiling.
@@ -4306,12 +4536,21 @@ class FaithfulExecutor:
             return None          # creates no new matched quantity
         cost_after = (lc.get(UP) or D(0)) + (lc.get(DOWN) or D(0)) + px * qty
         eff = cost_after / matched_after
-        cap = TS.max_pair_cost()
+        # THE DEFENSIVE CEILING IS SEPARATE AND LOOSER, AND ONLY HERE.
+        # Normal completion stays capped at 0.96: a pair above $1.00 buys a
+        # certain loss and is never an edge. Unwinding a leg that would
+        # otherwise settle worthless is the one case where paying above
+        # $1.00 can still be the smaller loss, so it gets its own ceiling
+        # (1.20 == at most $0.20 a share of realized loss) and only for the
+        # exact order a live mandate names.
+        _mand = self.defensive_mandate_covers(market, dec, tr)
+        cap = (DEF.DEFENSIVE_PAIR_CEILING if _mand else TS.max_pair_cost())
         if eff <= cap:
             return None
         return {"why": "PAIR_COST_ABOVE_CEILING",
                 "effective_pair_cost": str(eff.quantize(D("0.0001"))),
                 "ceiling": str(cap),
+                "ceiling_is_defensive": bool(_mand),
                 "confirmed_cost_usd": str(cost_after),
                 "matched_after": str(matched_after),
                 "held_confirmed": {k: str(v) for k, v in held.items()},
@@ -4812,46 +5051,116 @@ class FaithfulExecutor:
                     depth_ticks=_dticks,
                     book_age_s=ts_book.get("stream_age_s"),
                     gap_suspected=bool(ts_book.get("gap_suspected")))
-                # THE DEFENSIVE VERDICT, OBSERVED AND NEVER ACTED ON HERE.
-                # It is computed only to be logged: no branch below reads
-                # it, nothing is submitted or cancelled from it, and with
-                # the flag off (the default everywhere) it is a constant
-                # DEFENSIVE_DISABLED. It rides this record so that turning
-                # the flag on yields production evidence of what the policy
-                # WOULD have done, window by window, before a single
-                # defensive order is ever wired to the venue.
+                # ============ DEFENSIVE COMPLETION, IN TWO PHASES
+                #
+                # PRIORITY ONE IS STILL THE PROFITABLE COMPLETION above, and
+                # `DEF.decide` refuses while that completion is reachable at
+                # the live book. Only when it is not, and only in the last
+                # minute before the BINDING window terminal, is unwinding
+                # considered at all.
+                #
+                # THE EXECUTABLE PRICE, NOT THE MAKER PRICE. `comp`'s price
+                # is a post-only quote `_dticks` behind the touch -- what we
+                # HOPE to fill at. An unwind has to cross, so its price is
+                # the touch on the side we would consume: buying DOWN sells
+                # the YES token into the bid, buying UP lifts the ask.
+                _exit_px = None
+                try:
+                    _b = D(str(ts_book.get("bid")))
+                    _a = D(str(ts_book.get("ask")))
+                    if _b > 0 and _a > _b:
+                        _exit_px = (D(1) - _b) if nxt == DOWN else _a
+                except BaseException:                          # noqa: BLE001
+                    _exit_px = None
+                # ONE crossing leg's fee, on its own price. `comp`'s
+                # `fee_floor` charges BOTH legs as takers, and the first leg
+                # has already filled as a maker -- using the pair figure
+                # would roughly double the fee and misprice the comparison.
+                _dfee = (None if _exit_px is None
+                         else TS.TAKER_THETA * _exit_px * (D(1) - _exit_px))
+                _cc = None
+                try:
+                    _cc = (TS.cancel_cutoff(float(ws) + TS.WINDOW_S)
+                           - float(ws))
+                except BaseException:                          # noqa: BLE001
+                    _cc = None
+                _dkw = dict(
+                    now_t=_tnow, window_start=float(ws),
+                    # BOTH clocks. `complete_cutoff_s()` alone is 720, and
+                    # `may_complete` refuses PAST_TERMINAL from 600 at the
+                    # deployed cancel margin -- a guard built on 720 would
+                    # arm entirely inside dead time.
+                    complete_cutoff_s=TS.complete_cutoff_s(),
+                    cancel_cutoff_s=_cc,
+                    unmatched_qty=_need, first_leg_cost=_avg,
+                    exit_price=_exit_px,
+                    maker_complement_price=(comp.get("leg") or {}).get(
+                        "price") or comp.get("complement_price"),
+                    buy_side=nxt,
+                    displayed_depth=(ts_book.get("ask_shares")
+                                     if _other == DOWN
+                                     else ts_book.get("bid_shares")),
+                    taker_fee_per_contract=_dfee,
+                    defensive_spent_usd=self.store.defensive_spent(),
+                    window_settled=False)
+                _resting = []
+                try:
+                    _resting = sorted(
+                        str(c) for c, r in
+                        (self.store.live_orders() or {}).items()
+                        if str((r or {}).get("market") or "") == str(market))
+                except BaseException:                          # noqa: BLE001
+                    _resting = ["__unreadable__"]
                 _defensive = None
                 try:
-                    _defensive = DEF.decide(
-                        now_t=_tnow,
-                        window_start=ws,
-                        complete_cutoff_s=TS.complete_cutoff_s(),
-                        unmatched_qty=_need,
-                        first_leg_cost=comp.get("first_leg_cost"),
-                        exit_price=comp.get("complement_price"),
-                        displayed_depth=(ts_book.get("ask_shares")
-                                         if _other == "DOWN"
-                                         else ts_book.get("bid_shares")),
-                        taker_fee_per_contract=(comp.get("fee_floor") or {})
-                        .get("taker_fee_per_contract"),
-                        window_settled=False)
+                    # PHASE ONE asks only whether this is the moment and
+                    # whether the economics sit inside every bound. It is
+                    # deliberately asked with NO resting order declared,
+                    # because its answer is what decides whether to cancel
+                    # at all -- and it authorizes nothing. Phase two, inside
+                    # `defensive_execute`, is the only verdict that can
+                    # submit, and it runs after the venue has confirmed the
+                    # book is clear.
+                    _defensive = DEF.decide(**_dkw)
                 except BaseException as exc:               # noqa: BLE001
-                    # observation must never be able to break the money
-                    # path: a failure here is recorded, not raised.
+                    # a failure here is recorded, never raised into the
+                    # money path, and refuses by omission.
                     _defensive = {"act": False,
                                   "reason": "DEFENSIVE_EVAL_FAILED",
                                   "error": "%s: %s" % (type(exc).__name__,
                                                        str(exc)[:120])}
+                _defensive = dict(_defensive, phase="PRECHECK",
+                                  resting_orders=_resting,
+                                  flag_enabled=bool(DEF.enabled()))
+                _dact = None
+                if _defensive.get("act"):
+                    try:
+                        _dact = self.defensive_execute(
+                            market=market, buy_side=nxt, held_side=_other,
+                            resting=_resting, decide_kwargs=_dkw, prov=prov)
+                    except BaseException as exc:           # noqa: BLE001
+                        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        _dact = {"ok": False,
+                                 "reason": "DEFENSIVE_EXECUTE_FAILED",
+                                 "error": "%s: %s" % (type(exc).__name__,
+                                                      str(exc)[:120])}
                 prov.stage("TWO_SIDED_COMPLEMENT", dict(
                     comp, round=rnd, matching_side=_other,
                     filled_qty=str(_held), already_matched=str(_mine),
                     unmatched=str(_need),
                     frozen_price_superseded=str(leg.get("price")),
-                    defensive=_defensive))
-                if not comp.get("ok"):
+                    defensive=_defensive,
+                    defensive_action=_dact))
+                if _dact is not None and _dact.get("ok"):
+                    # THE DEFENSIVE ORDER REPLACES THE COMPLEMENT, and it is
+                    # reached only with the complement venue-confirmed gone.
+                    leg = dict(_dact["leg"])
+                elif not comp.get("ok"):
                     return prov.refuse("TWO_SIDED_PROBE",
                                        str(comp.get("reason"))[:120])
-                leg = dict(comp["leg"])
+                else:
+                    leg = dict(comp["leg"])
                 # NO PAIR RE-GATE HERE, DELIBERATELY. `probe_precheck` prices
                 # both legs as if BOTH were still outstanding, which is right
                 # when neither has been placed -- it stops leg one spending
@@ -4876,7 +5185,14 @@ class FaithfulExecutor:
             # would silently become a lambda-sized order. Found by the
             # money-field integrity check. Both are set here.
             executable = D(leg["qty"])
-            tr = dict(tr, ok=True, mode=FT.MAKER,
+            # THE LEG'S OWN MODE. Every leg this path builds is MAKER except
+            # the defensive unwind, which must cross or it is not an unwind;
+            # a missing mode falls back to MAKER, so nothing else changes.
+            # `l5_order_body.from_intent` derives participateDontInitiate
+            # from this field, and the maker-only overlay reads it too --
+            # which is why the overlay needs the mandate to let it past.
+            tr = dict(tr, ok=True,
+                      mode=(str(leg.get("mode") or FT.MAKER).upper()),
                       price=D(leg["price"]), qty=executable)
             prov.stage("TWO_SIDED_PROBE", dict(
                 plan, leg_to_place=nxt, legs_claimed=claimed,
@@ -4934,7 +5250,21 @@ class FaithfulExecutor:
                        dict(mi, replaced_l5_intent=dict(superseded_l5)))
 
         if self.maker_only and str(tr.get("mode") or "").upper() != FT.MAKER:
-            return prov.refuse("SAFETY_OVERLAY", "MAKER_ONLY_NO_TAKER")
+            # DEFENSIVE-ONLY TAKER, NEVER GLOBALLY. The overlay stands for
+            # every order in the system; the single exception is an order a
+            # live defensive mandate names exactly, which exists only
+            # between a venue-confirmed cancellation of the resting
+            # complement and the one order that replaces it. An unwind that
+            # could not cross would not be an unwind -- resting a limit is
+            # what we are abandoning -- so the exemption is the policy, not
+            # a convenience.
+            _mand = self.defensive_mandate_covers(market, dec, tr)
+            if not _mand:
+                return prov.refuse("SAFETY_OVERLAY", "MAKER_ONLY_NO_TAKER")
+            prov.note("DEFENSIVE_TAKER_PERMITTED", dict(
+                _mand, labels=("taker permitted for THIS order only. The "
+                               "maker-only overlay is unchanged for every "
+                               "other order and for every later tick.")))
 
         # An armed transport has passed preflight, and preflight does not pass
         # without quantity_constraint_known -- so an unknown grid here means
