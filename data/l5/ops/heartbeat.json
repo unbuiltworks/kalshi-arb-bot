@@ -1,8 +1,9 @@
 {
- "utc": "2026-10-22T06:42:25Z",
+ "utc": "2026-10-22T08:41:43Z",
  "status": "ok",
  "read_only": true,
- "stage": "shadow",
- "fills_processed": 1177,
- "windows": 72
+ "stage": "regression",
+ "canonical_sha_matches_meta": true,
+ "action_model_reproducible": true,
+ "tests_pass": true
 }
