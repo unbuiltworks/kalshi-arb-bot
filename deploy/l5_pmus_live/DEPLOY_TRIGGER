@@ -1757,3 +1757,37 @@ deploy: 2026-10-22T20:20Z deploy PR #191 merge 6d3eb8b2 -- ownership + double-co
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, checked: 21, failed: [].
 deploy: 2026-10-22T20:57Z budget-aware planner sizing + record correction; SHADOW_ONLY_LOCK stays ON, no order authorized
+#
+# RETRY of 7fcff843. Deployment 13ff032c FAILED at 21:03:42Z on
+# `fetching snapshot`: ~76 MB in 271 s (~280 KB/s) against a hard ~305 s
+# deadline, before the builder reads this Dockerfile, with zero build steps
+# executed and failureStage/failureError both null at the time of reading.
+#
+# JUSTIFIED RECOVERY, not a blind retry. Same-hour evidence on this service:
+# 6a3b2984 SUCCEEDED in 82 s and d7696e01 SUCCEEDED, both from this branch,
+# while bf533e5c, 3ee39fd0 and now 13ff032c died in the same fetch stage.
+# pmus-readonly-recovery showed the identical pattern earlier -- FAILED
+# 16:03:33, then the SAME commit 3080f3b1 SUCCEEDED on retry at 16:12:24.
+# The fetch stage is intermittently degraded; the input is unchanged and has
+# already built successfully twice today.
+#
+# NOT ATTEMPTED, and why: `redeploy` reuses the PRIOR build (167331a1) and
+# would ship none of this. `.railwayignore` is CLI-only per Railway's docs
+# and has no effect on a GitHub-sourced snapshot. Untracking data/ (979 MB of
+# the ~1.23 GB snapshot, COPYd by no Dockerfile) would cut the fetch, but 48
+# files under tests/, src/ and scripts/ read it, so it breaks the suite and
+# destroys research evidence -- declined.
+#
+# THE DEPLOY IS LOAD-BEARING. The live build lacks budget-aware planner
+# sizing, so build_orders emits 3.36 contracts whose 4.6368 obligation gate
+# 3b must refuse at 13.5356 > 11.10. Without 7fcff843 the authorized window
+# cannot place an order at all.
+#
+# UNCHANGED BY THIS RETRY: SHADOW_ONLY_LOCK on, approval document stale,
+# $4.65 cash, $11.10 budget, $20 exposure, $20 cumulative, $5 daily halt,
+# 5 unmatched, one market, one live order, watchdog HALT authority.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-22T21:07Z retry 7fcff843 after snapshot-fetch timeout; no code change
