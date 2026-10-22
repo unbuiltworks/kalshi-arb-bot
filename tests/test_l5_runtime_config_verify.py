@@ -41,10 +41,18 @@ def row(out, name):
     return next(r for r in out["rows"] if r["name"] == name)
 
 
+def obs(out, name):
+    """A REPORTED, ungraded switch. Separate helper from `row` on purpose:
+    `row` would raise StopIteration for one of these, and the distinction
+    between graded and reported is the thing these tests are about."""
+    return next(r for r in out["observed_not_graded"] if r["name"] == name)
+
+
 def test_the_approved_configuration_passes_every_row(approved):
     out = V.verify()
     assert out["PASS"] is True, out["failed"]
-    assert out["checked"] == 22
+    # 21, not 22: defensive_execution_enabled moved to observed_not_graded.
+    assert out["checked"] == 21
     assert out["failed"] == []
 
 
@@ -167,14 +175,43 @@ def test_the_daily_halt_is_read_through_its_accessor_not_its_variable(
 
 # -------------------------------------- the deploy state, and activation
 
-def test_the_build_must_deploy_with_defensive_execution_disabled(approved):
+def test_defensive_execution_is_reported_and_rolls_back_without_failing(
+        approved):
+    """BOTH postures must be deployable, and the value must stay visible.
+
+    THE DEFECT THIS REPLACES. This test used to assert the verifier FAILS
+    when L5_DEFENSIVE_COMPLETION=1, because the row was graded against
+    APPROVED["defensive_execution_enabled"] = False. That made the
+    pre-deploy gate refuse the owner-authorized live window at exactly the
+    moment it was switched on -- and inverting the APPROVED value instead
+    would have made it refuse a deliberate safety ROLLBACK to defensive-off,
+    which is worse: it obstructs standing the window down in a hurry.
+
+    An activation switch cannot be graded in either direction without
+    breaking at one of the two moments that matter, so it is now REPORTED.
+    Visibility is preserved -- the effective value still appears in the
+    verdict -- while neither posture can fail the verifier.
+    """
     out = V.verify()
-    assert row(out, "defensive_execution_enabled")["effective"] is False
-    assert row(out, "defensive_execution_enabled")["ok"] is True
+    assert obs(out, "defensive_execution_enabled")["effective"] is False
+    assert out["PASS"] is True, out["failed"]
+
+    # ON: the authorized live posture. Reported, graded nowhere, still PASS.
     approved.setenv("L5_DEFENSIVE_COMPLETION", "1")
     out = V.verify()
-    assert out["PASS"] is False
-    assert "defensive_execution_enabled" in out["failed"]
+    assert obs(out, "defensive_execution_enabled")["effective"] is True
+    assert out["PASS"] is True, out["failed"]
+    assert "defensive_execution_enabled" not in out["failed"]
+
+    # OFF again: the rollback. Must also PASS, which is the whole point.
+    approved.delenv("L5_DEFENSIVE_COMPLETION", raising=False)
+    out = V.verify()
+    assert obs(out, "defensive_execution_enabled")["effective"] is False
+    assert out["PASS"] is True, out["failed"]
+
+    # and it is NOT silently gradeable again: absent from the graded rows.
+    assert "defensive_execution_enabled" not in {
+        r["name"] for r in out["rows"]}
 
 
 def test_the_activation_switches_are_reported_and_never_graded(approved):
@@ -339,7 +376,7 @@ def test_a_variable_the_snapshot_omits_is_predicted_as_ABSENT(monkeypatch):
     out = V.verify_snapshot(APPROVED_SNAPSHOT)
     # the flag is absent from the snapshot, so it is predicted OFF even
     # though this process has it ON
-    assert row(out, "defensive_execution_enabled")["effective"] is False
+    assert obs(out, "defensive_execution_enabled")["effective"] is False
     assert "L5_DEFENSIVE_COMPLETION" in out["snapshot_absent_from_allowlist"]
 
 
