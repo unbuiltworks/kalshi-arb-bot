@@ -1707,3 +1707,53 @@ deploy: 2026-10-21T15:28Z re-trigger after a lost webhook — deployment-only, f
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, checked: 21, failed: [].
 deploy: 2026-10-22T20:20Z deploy PR #191 merge 6d3eb8b2 -- ownership + double-count + verifier rollback; flag OFF, approval stale, NOT_ARMED
+#
+# ---------------------------------------------------------------------------
+# CORRECTION TO THE RECORD, and it corrects THIS FILE's own entry above.
+#
+# The preceding entry, and commit 9105c386, attributed the production refusal
+#     CAMPAIGN_WORST_CASE_BUDGET:13.54880000>11.10
+# to "~$4.17 of residue belonging to markets the venue reports EXPIRED".
+# THAT ATTRIBUTION IS WRONG and is withdrawn.
+#
+# What the figure actually was, from the planner's own emitted plan in
+# cpc-btc-updown-15m-2026-10-22-2045z:
+#     cash_gate_obligation_usd  4.636800
+#     cash_basis  "a resting DOWN leg is a BUY_SHORT and the cash gate
+#                  charges it a dollar a share"
+# Obligation per contract is UP price 0.38 + DOWN at $1.00 = 1.38; at the
+# planner's 3.36 contracts that is 4.6368, and 8.8988 + 4.6368 = 13.5356 --
+# inside the exact 13.5348-13.5488 range observed, the variation being the
+# planner re-sizing against the $4.65 cap tick by tick.
+#
+# `cash_committed` was ZERO throughout, which the authenticated venue read
+# independently confirms: positions {}, openOrders 0, assetNotional 0,
+# unsettledFunds 0. NO retired-market residue was ever being charged.
+#
+# The retired_markets asymmetry fixed in 9105c386 is REAL -- markets_with_
+# exposure subtracts retired_markets and cash_legs_for_gates did not, and
+# the 10 tests in tests/test_l5_retired_market_cash_release.py pin genuine
+# behaviour. It was simply not this refusal, and it freed no headroom.
+# The $4.17 figure appears nowhere in any venue or ledger reading; I inferred
+# it by subtraction before checking what the planner was charging.
+#
+# THE ACTUAL CAUSE was that build_orders sized against the cash envelope and
+# loss ceiling only and never consulted campaign-budget headroom, so it
+# emitted plans gate 3b was then obliged to reject. Fixed by passing
+# budget_headroom into the planner on the gate's own obligation basis.
+#
+# WHY THIS WINDOW IS STILL NOT TRADED, on measured parameters rather than
+# on caution. At the budget-feasible size of 1.59 contracts, using this
+# repo's own BASELINE in src/l5_complete_requote_gate.py:
+#     pair_profit_per_matched_pair_usd   0.057230
+#     residual_loss_per_unit_usd        -0.331449
+#     observed_leg_completion_rate       0.834196
+#     breakeven_leg_completion_rate      0.845161  (derived: 0.852758)
+# EV per unit = 0.834196*0.057230 + 0.165804*(-0.331449) = -0.007215, so
+# 1.59 contracts is -0.0115 USD EXPECTED. It fits every gate and is still
+# a negative-expectancy trade. Not shipped as a trade.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-22T20:57Z budget-aware planner sizing + record correction; SHADOW_ONLY_LOCK stays ON, no order authorized

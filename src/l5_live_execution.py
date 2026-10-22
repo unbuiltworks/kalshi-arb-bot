@@ -3976,12 +3976,58 @@ class FaithfulExecutor:
             cash_envelope=self.probe_cash_envelope(),
             max_worst_case_loss=(self.probe_loss_ceiling()
                                  if loss_ceiling is None else loss_ceiling),
+            budget_headroom=self.probe_budget_headroom(),
             book_age_s=authenticated.get("stream_age_s"),
             gap_suspected=bool(authenticated.get("gap_suspected")))
 
     def probe_cash_envelope(self) -> Optional[D]:
         vg = self.validation_gates
         return None if vg is None else vg.max_cash_deployed_usd
+
+    def probe_budget_headroom(self) -> Optional[D]:
+        """What the CAMPAIGN budget can still fund, on gate 3b's own basis.
+
+        WHY THE PLANNER NEEDS THIS. `build_orders` used to size against the
+        cash envelope and the loss ceiling only, so it emitted a 3.36-contract
+        plan whose $4.6368 obligation fit the $4.65 cash gate and was then
+        refused by gate 3b at 13.5356 > 11.10 -- the $8.8988 of account-wide
+        realized loss already standing against the $11.10 campaign budget.
+        A plan the planner's own gates must reject is a wasted window
+        reservation, and `WindowLedger.reserve` is deliberately not
+        refundable.
+
+        IT REUSES THE GATE'S HELPERS RATHER THAN RE-DERIVING THE FIGURE.
+        `cash_committed` and `pending_obligation` are the audited ones gate 3b
+        calls, and the realized term is the same `max(0, -realized)`. A second
+        opinion computed here could drift from the one actually enforced, and
+        then the planner would be sizing to a budget nobody holds.
+
+        None when no campaign budget is configured, which `build_orders`
+        treats as unconstrained -- the pre-campaign behaviour, unchanged.
+        A figure that cannot be established is NOT reported as room: it
+        returns zero, which `build_orders` refuses as exhausted, because
+        "I could not tell" and "the budget is empty" must fail the same way.
+        """
+        vg = self.validation_gates
+        if vg is None or getattr(vg, "campaign_budget", None) is None:
+            return None
+        try:
+            # An UNREADABLE realized figure is not a zero loss. `realized_
+            # today` returns None when it cannot be established, and reading
+            # that as "nothing lost" would hand the planner the whole budget
+            # at precisely the moment the accounting is broken.
+            realized = finite_decimal(self.store.realized_today())
+            budget = finite_decimal(vg.campaign_budget.budget_usd)
+            if realized is None or budget is None:
+                return D(0)
+            used = (max(D(0), -realized)
+                    + vg.cash_committed(self.cash_legs_for_gates())
+                    + vg.pending_obligation(self.outstanding_for_gates()))
+            return max(D(0), budget - used)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return D(0)                    # unreadable is never headroom
 
     def probe_loss_ceiling(self) -> Optional[D]:
         vg = self.validation_gates

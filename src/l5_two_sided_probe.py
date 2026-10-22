@@ -509,6 +509,7 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                  depth_ticks: int,
                  cash_envelope: Any,
                  max_worst_case_loss: Any,
+                 budget_headroom: Any = None,
                  book_age_s: Any = None,
                  gap_suspected: bool = False) -> Dict[str, Any]:
     """Exactly two post-only intents, or a terminal refusal.
@@ -546,6 +547,26 @@ def build_orders(*, market: str, bid: Any, ask: Any,
         return no("CASH_ENVELOPE_UNKNOWN")
     if cap is None or cap <= 0:
         return no("LOSS_CEILING_UNKNOWN")
+    # THE CAMPAIGN BUDGET IS A THIRD BINDING CONSTRAINT, and it has to be
+    # applied HERE for the same reason the cash basis already is -- see the
+    # `oblig_per_contract` comment below, which records this module learning
+    # the identical lesson one gate earlier. Sizing against the cash gate
+    # alone built a 3.36-contract plan whose $4.6368 obligation fit the
+    # $4.65 cash envelope and then had to be refused by the $11.10 campaign
+    # budget at 13.5356 > 11.10, because $8.8988 of account-wide realized
+    # loss already stood against it. The planner must not emit a plan its
+    # own gates must reject; a refusal that the planner could have avoided
+    # spends a window reservation for nothing.
+    #
+    # None means NOT SUPPLIED and is passed through unconstrained, so a
+    # caller that does not run a campaign is unaffected. A supplied value of
+    # zero or less is EXHAUSTED and refuses outright rather than sizing to
+    # nothing -- "no budget" and "a tiny budget" are different answers.
+    head = _d(budget_headroom)
+    if budget_headroom is not None and (head is None or head <= 0):
+        return no("CAMPAIGN_BUDGET_EXHAUSTED",
+                  budget_headroom_usd=(None if head is None
+                                       else str(head)))
 
     dsteps = D(int(depth_ticks)) * tk
     up_px = b - dsteps                     # rest BEHIND the UP bid
@@ -585,6 +606,13 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     oblig_per_contract = D(1) + up_px
     by_cash = env / oblig_per_contract
     qty = min(by_loss, by_cash)
+    # and the campaign budget, on that SAME obligation basis, because
+    # `ValidationGates` gate 3b charges the order exactly as the cash gate
+    # above does -- a resting BUY_SHORT at a dollar a share.
+    by_budget = None
+    if head is not None:
+        by_budget = head / oblig_per_contract
+        qty = min(qty, by_budget)
     # quantise DOWN to the venue grid, never up
     qty = (qty / mq).to_integral_value(rounding="ROUND_FLOOR") * mq
     # THEN SHRINK UNTIL THE FEE FITS TOO. Sizing on price alone overshoots,
@@ -595,12 +623,26 @@ def build_orders(*, market: str, bid: Any, ask: Any,
         if qty < mq:
             break
         if (qty * dear + worst_fee(qty, dear) <= cap
-                and qty * oblig_per_contract <= env):
+                and qty * oblig_per_contract <= env
+                and (head is None or qty * oblig_per_contract <= head)):
             break
         qty -= mq
     if qty < mq:
         return no("NO_LEGAL_QUANTITY", by_loss=str(by_loss),
-                  by_cash=str(by_cash))
+                  by_cash=str(by_cash),
+                  by_budget=(None if by_budget is None else str(by_budget)),
+                  budget_headroom_usd=(None if head is None else str(head)),
+                  min_qty=str(mq),
+                  obligation_per_contract=str(oblig_per_contract),
+                  binding=("CAMPAIGN_BUDGET"
+                           if by_budget is not None
+                           and by_budget <= min(by_loss, by_cash)
+                           else "CASH_ENVELOPE"
+                           if by_cash <= by_loss else "LOSS_CEILING"),
+                  labels=("the venue minimum is one grid step; a budget "
+                          "that cannot fund even that is reported as the "
+                          "binding constraint rather than as a book "
+                          "problem"))
     if qty * dear + worst_fee(qty, dear) > cap:
         return no("LOSS_CEILING_UNREACHABLE", qty=str(qty))
     bd = _d(bid_depth); ad = _d(ask_depth)
@@ -647,6 +689,15 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                            "gate charges it a dollar a share; sizing uses "
                            "that basis so the plan the gate sees is the "
                            "plan this built"),
+            "budget_headroom_usd": (None if head is None else str(head)),
+            "sized_by": ("CAMPAIGN_BUDGET" if by_budget is not None
+                         and by_budget <= min(by_loss, by_cash)
+                         else "CASH_ENVELOPE" if by_cash <= by_loss
+                         else "LOSS_CEILING"),
+            "budget_basis": ("the campaign budget is charged on the same "
+                             "dollar-a-share obligation as the cash gate, "
+                             "so the smaller of the two binds and the plan "
+                             "this emits is one BOTH gates accept"),
             "up_pnl": str(econ["up_pnl"]), "dn_pnl": str(econ["dn_pnl"]),
             "up_pnl_if_taker": str(econ_taker["up_pnl"]),
             "dn_pnl_if_taker": str(econ_taker["dn_pnl"]),
