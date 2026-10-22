@@ -1667,3 +1667,43 @@ deploy: 2026-10-21T13:09Z ab098648 — deployment-only, defensive flag OFF, NOT_
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, checked: 22, failed: [].
 deploy: 2026-10-21T15:28Z re-trigger after a lost webhook — deployment-only, flag OFF, NOT_ARMED
+#
+# ---------------------------------------------------------------------------
+# DEPLOYING THE MERGE OF PR #191 (6d3eb8b2). Railway SKIPPED the merge's own
+# deployment (bee85d05, 20:17:14Z) because this service's watchPatterns are
+# ["deploy/l5_pmus_live/DEPLOY_TRIGGER"] -- the guard that stops an unrelated
+# merge redeploying a money-path service. `redeploy` cannot be used instead:
+# it reuses the PRIOR deployment's build, which is dd613e7b and does not
+# contain these fixes. Touching this file is the designed path and leaves the
+# intent on the record, which is the point of the file.
+#
+# WHAT ENTERS THE IMAGE, all three verified present in the merge's file
+# content rather than inferred from commit ancestry:
+#   * durable campaign-budget OWNERSHIP -- l5_live_authorization now calls
+#     open_or_resume, so the lock is claimed at arming instead of being inert;
+#   * the RETIRED-MARKET DOUBLE COUNT correction -- cash_legs_for_gates marks
+#     a leg settled when its market is in retired_markets, so ~$4.17 of
+#     residue belonging to markets the venue reports EXPIRED (positions {},
+#     assetNotional 0, unsettledFunds 0) stops being charged a second time on
+#     top of the realized loss it is already inside;
+#   * verifier ROLLBACK SAFETY -- defensive_execution_enabled moved from the
+#     graded rows to the reported ones, so defensive-ON and defensive-OFF are
+#     both deployable and a safety rollback can no longer fail the verifier.
+#
+# THE POST-DEPLOY GATE LINE ABOVE IS NOW WRONG AND IS CORRECTED BELOW.
+# Moving defensive_execution_enabled out of the graded set takes `checked`
+# from 22 to 21. A precondition nobody can satisfy is a precondition that
+# gets ignored, so it is fixed here rather than left to trip the next reader.
+#
+# STILL SHIPS NOTHING THAT CAN TRADE BY ITSELF. L5_DEFENSIVE_COMPLETION is
+# absent (absence is OFF), the campaign approval in production is the stale
+# $5 document so authorize_arming still refuses CAMPAIGN_LIMITS_WIDER_THAN_
+# APPROVED, and the owner's arm token governs as before. $4.65 max deployed
+# cash, $11.10 campaign budget, 5 max unmatched contracts, one market, one
+# outstanding order and the watchdog's independent HALT authority are all
+# untouched by this deployment.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-22T20:20Z deploy PR #191 merge 6d3eb8b2 -- ownership + double-count + verifier rollback; flag OFF, approval stale, NOT_ARMED
