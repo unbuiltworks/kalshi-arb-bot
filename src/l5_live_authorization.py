@@ -1787,6 +1787,28 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                      "note": "the campaign's worst-case budget is spent or "
                              "owned by another campaign; a new nonce does "
                              "not mint a new budget"})
+            # CLAIM THE BUDGET, and this is not bookkeeping.
+            #
+            # Without this call the ledger is never OPENED, and the whole
+            # anti-reset property is inert: `read()` returns the closed
+            # placeholder, so `open_id` is None, so the LOCKED branch can
+            # never fire and the durable peak -- guarded by
+            # `open_id and not closed` -- is never written. The per-order
+            # AMOUNT ceiling still binds, because that check runs before the
+            # ownership logic, which is exactly why the gap was invisible in
+            # telemetry: the number looked enforced while the lock was not.
+            #
+            # Claiming at ARMING is the right moment: it is once per window,
+            # it is after refuse_arming has already rejected a foreign
+            # campaign, and it is before any order can exist.
+            _claim = _budget.open_or_resume(
+                campaign_id=_cid,
+                now_iso=dt.datetime.now(dt.timezone.utc).isoformat())
+            if not _claim.get("ok"):
+                raise ArmingRefusal(
+                    "CAMPAIGN_BUDGET_REFUSED",
+                    {"why": _claim.get("reason"), "campaign_id": _cid,
+                     "note": "the budget is owned by another campaign"})
     # 9b. WHICH MARKET, before anything about its window. An unauthorized
     #     market is refused whatever its clock says, and the refusal names
     #     the outermost reason.

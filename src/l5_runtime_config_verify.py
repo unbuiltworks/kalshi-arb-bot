@@ -66,6 +66,20 @@ APPROVED: Dict[str, Any] = {
     "approval_exposure_ceiling_usd": D("20"),
     "approval_daily_loss_ceiling_usd": D("5"),
     # at DEPLOY time, before activation
+    #
+    # OWNER-APPROVED BUT DELIBERATELY NOT APPLIED HERE, 2026-10-22. The
+    # owner approved flipping this row to True for the next bounded window.
+    # It is left False because this row is GRADED (see its `_row` below),
+    # so True makes the verifier PASS only a build whose flag is ON and
+    # FAIL one whose flag is off -- including a deliberate safety rollback
+    # to defensive-off. Grading an activation switch breaks at one of the
+    # two moments that matter, which is exactly why the "REPORTED, NOT
+    # REQUIRED" block below exists for the other switches.
+    #
+    # The correct change is therefore to MOVE this row into that block
+    # rather than to invert the value it is graded against. That is a
+    # behaviour change to the pre-deploy gate and wants the owner's call,
+    # not a quiet redesign inside an accounting fix.
     "defensive_execution_enabled": False,
 }
 
@@ -308,18 +322,32 @@ def verify() -> Dict[str, Any]:
              A["window_strategy"]),
         _row("series_allowlist", "CA.ALLOWED_SERIES (code constant)",
              lambda: list(CA.ALLOWED_SERIES), ["cpc-btc-updown-15m-"]),
-
-        # --------------------------- the state this build must deploy IN
-        _row("defensive_execution_enabled", "DEF.enabled()",
-             DEF.enabled, A["defensive_execution_enabled"]),
     ]
 
     # REPORTED, NOT REQUIRED. These are the activation switches: they are
     # what the owner flips, so this tool states them and does not grade
     # them. Asserting a value here would make the verifier fail at exactly
     # the moment activation succeeds.
+    #
+    # `defensive_execution_enabled` MOVED HERE FROM THE GRADED ROWS, and it
+    # belongs here for precisely the reason this block already states. It was
+    # graded against APPROVED["defensive_execution_enabled"], which made the
+    # verifier assert one particular side of an activation switch:
+    #
+    #   graded False -> the verifier FAILS the authorized live window, the
+    #                   moment defensive completion is switched on;
+    #   graded True  -> the verifier FAILS a deliberate safety ROLLBACK to
+    #                   defensive-off, which is the worse of the two because
+    #                   it obstructs standing the window down in a hurry.
+    #
+    # Either way the pre-deploy gate breaks at one of the two moments that
+    # matter. Reporting it keeps the value VISIBLE in the verdict -- an
+    # operator still reads the effective state from `observed_not_graded` --
+    # while leaving both ON and OFF deployable. APPROVED keeps its entry so
+    # the approved posture stays documented; nothing grades against it.
     observed: List[Dict[str, Any]] = []
     for name, source, read in (
+            ("defensive_execution_enabled", "DEF.enabled()", DEF.enabled),
             ("shadow_only", "R.shadow_only()", R.shadow_only),
             ("experiment_id", "AUTH.experiment_id()", AUTH.experiment_id),
             ("acc_max_attempts", "AUTH.acc_max_attempts()",

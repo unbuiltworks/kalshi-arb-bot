@@ -4740,15 +4740,49 @@ class FaithfulExecutor:
     def cash_legs_for_gates(self) -> List[Dict[str, Any]]:
         """Filled notional as unreleased cash, one leg per market.
 
-        `settled` is False for every leg, which is the conservative reading
-        and the one NO_RECYCLING already encodes: cash is released by a
-        confirmed settlement, and this executor's ledger does not mark one
-        here. Reading it as settled would hand the gate headroom it has no
-        evidence for.
+        `settled` is False UNLESS the market is in `retired_markets`, and
+        that exception corrects a real double count rather than softening
+        the conservative reading.
+
+        WHAT WAS WRONG. This used to hardcode `settled: False` for every
+        entry, on the stated grounds that "cash is released by a confirmed
+        settlement, and this executor's ledger does not mark one here". The
+        ledger DOES mark one. `retire_settled_market` is the only writer of
+        `retired_markets`; it runs only on a venue-terminal state WITH a
+        final settlement price, and it books the settlement P&L into
+        `realized_attributed` and pops `committed` in the same step. A market
+        in `retired_markets` is a CONFIRMED settlement by construction --
+        exactly the evidence this docstring asked for and did not look up.
+
+        HOW THE RESIDUE SURVIVES, which is why popping once is not enough.
+        `committed` is re-incremented by any fill booked for a market after
+        it was retired. `markets_with_exposure` subtracts `retired_markets`
+        ("never swept, never re-settled"), so the settlement sweep cannot see
+        that residue and nothing will ever release it -- while this method
+        iterated `committed()` UNFILTERED, so the gates charged it forever.
+        Two readings of one dict disagreed, and that asymmetry is the defect.
+
+        WHY IT IS A DOUBLE COUNT AND NOT CONSERVATISM. Retirement already
+        added the market's realized P&L to the figure the campaign budget
+        charges as `max(0, -cumulative_realized)`. Charging the residue as
+        unsettled cost on top bills ONE economic event twice: once at what
+        the venue actually paid, and again at its full worst case. Measured
+        in production on 2026-10-22 that residue was ~$4.17 against an
+        $11.10 campaign budget, while the authenticated venue read returned
+        `positions: {}`, `openOrders: 0`, `assetNotional: 0` and
+        `unsettledFunds: 0` -- no open risk existed behind any of it.
+
+        THIS RELEASES REAL HEADROOM on both the cash gate and the campaign
+        budget, so it is deliberately narrow: `retired_markets` only, never a
+        quote, never a `matched` flag, never an unsettled leg. A market that
+        has CLOSED but not SETTLED keeps holding its cash in full, which is
+        the case `retire_settled_market` already refuses to retire.
         """
+        retired = self.store.state.get("retired_markets") or {}
         legs: List[Dict[str, Any]] = []
         for mkt, usd in sorted(self.store.committed().items()):
-            legs.append({"market": mkt, "cash_out": usd, "settled": False,
+            legs.append({"market": mkt, "cash_out": usd,
+                         "settled": mkt in retired,
                          "closing": False})
         return legs
 
