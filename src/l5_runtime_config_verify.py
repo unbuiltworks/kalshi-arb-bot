@@ -66,6 +66,20 @@ APPROVED: Dict[str, Any] = {
     "approval_exposure_ceiling_usd": D("20"),
     "approval_daily_loss_ceiling_usd": D("5"),
     # at DEPLOY time, before activation
+    #
+    # OWNER-APPROVED BUT DELIBERATELY NOT APPLIED HERE, 2026-10-22. The
+    # owner approved flipping this row to True for the next bounded window.
+    # It is left False because this row is GRADED (see its `_row` below),
+    # so True makes the verifier PASS only a build whose flag is ON and
+    # FAIL one whose flag is off -- including a deliberate safety rollback
+    # to defensive-off. Grading an activation switch breaks at one of the
+    # two moments that matter, which is exactly why the "REPORTED, NOT
+    # REQUIRED" block below exists for the other switches.
+    #
+    # The correct change is therefore to MOVE this row into that block
+    # rather than to invert the value it is graded against. That is a
+    # behaviour change to the pre-deploy gate and wants the owner's call,
+    # not a quiet redesign inside an accounting fix.
     "defensive_execution_enabled": False,
 }
 
