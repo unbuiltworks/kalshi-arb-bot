@@ -190,3 +190,57 @@ def test_the_arming_factory_is_off_unless_configured(tmp_path, monkeypatch):
     monkeypatch.setenv(AUTH.CAMPAIGN_BUDGET_ENV, "11.10")
     led = AUTH.campaign_budget_ledger(root=str(tmp_path))
     assert led is not None and led.budget_usd == D("11.10")
+
+
+# ------------------------------- durable ownership (the inert-lock defect)
+
+def test_without_a_claim_the_amount_binds_but_the_lock_does_not(tmp_path):
+    """THE DEFECT THIS PINS. An unopened ledger still enforces the AMOUNT,
+    which is why the gap was invisible in telemetry -- the number looked
+    enforced while the ownership lock was not."""
+    led = CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd="11.10")
+    # never opened
+    assert led.is_active() is False
+    assert led.refuse_amount(campaign_id="c1", used_usd=D("12")) is not None
+    # ...but a foreign campaign is NOT refused, and no peak is recorded
+    assert led.refuse_amount(campaign_id="OTHER", used_usd=D("1")) is None
+    assert D(led.telemetry()["peak_usd"]) == D(0)
+
+
+def test_claiming_makes_the_lock_and_the_peak_real(tmp_path):
+    led = CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd="11.10")
+    assert led.open_or_resume("camp1.alpha", now_iso="t0")["ok"] is True
+    assert led.is_active() is True
+    assert led.refuse_amount(campaign_id="camp1.alpha",
+                             used_usd=D("9")) is None
+    # the peak is now durable
+    assert D(led.telemetry(campaign_id="camp1.alpha")["peak_usd"]) == D("9")
+    assert led.telemetry(campaign_id="camp1.alpha")["owns_budget"] is True
+    # and a rotated nonce is refused on the ORDER path
+    assert led.refuse_amount(campaign_id="camp1.ROTATED",
+                             used_usd=D("1")).startswith(
+                                 "CAMPAIGN_BUDGET_LOCKED")
+
+
+def test_the_claimed_peak_survives_a_new_process(tmp_path):
+    CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd="11.10"
+                            ).open_or_resume("camp1.alpha", now_iso="t0")
+    a = CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd="11.10")
+    a.refuse_amount(campaign_id="camp1.alpha", used_usd=D("10.50"))
+    b = CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd="11.10")
+    assert D(b.telemetry()["peak_usd"]) == D("10.50")
+    assert b.refuse_arming(campaign_id="camp1.alpha") is None
+    b.refuse_amount(campaign_id="camp1.alpha", used_usd=D("11.10"))
+    c = CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd="11.10")
+    out = c.refuse_arming(campaign_id="camp1.alpha")
+    assert out is not None and out.startswith("CAMPAIGN_WORST_CASE_EXHAUSTED")
+
+
+def test_authorize_arming_claims_the_budget_after_checking_it():
+    """Structural: the claim must follow refuse_arming, never precede it."""
+    from src import l5_live_authorization as AUTH
+    src = AUTH.__file__.replace(".pyc", ".py")
+    body = open(src).read()
+    i_check = body.index("refuse_arming(campaign_id=_cid)")
+    i_claim = body.index("open_or_resume(")
+    assert i_check < i_claim, "the claim must come after the lock check"
