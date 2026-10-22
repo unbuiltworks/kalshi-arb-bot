@@ -68,9 +68,9 @@ def test_the_runner_carries_exactly_the_authorized_bounds():
     """
     from src import l5_pmus_live_runner as R
     assert {k: str(v) for k, v in R.PROBE_LIMITS.items()} == {
-        "max_usd_per_market": "5",
+        "max_usd_per_market": "20",
         "max_abs_residual": "10",
-        "max_total_exposure_usd": "5",
+        "max_total_exposure_usd": "20",
         "max_concurrent_markets": "1",
         "max_live_orders": str(R.max_live_orders()),
         "daily_realized_loss_halt_usd": "5",
@@ -91,7 +91,7 @@ def test_the_bounds_are_accepted_by_the_canonical_limits_object():
     lim = LX.SafetyLimits(**R.PROBE_LIMITS)
     assert lim.max_live_orders == R.max_live_orders()
     assert lim.max_live_orders >= 1       # zero would refuse the first order
-    assert str(lim.max_total_exposure_usd) == "5"
+    assert str(lim.max_total_exposure_usd) == "20"
     assert str(lim.max_abs_residual) == "10"
     assert str(lim.daily_realized_loss_halt_usd) == "5"
 

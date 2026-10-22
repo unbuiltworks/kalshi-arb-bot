@@ -42,7 +42,11 @@ APPROVED: Dict[str, Any] = {
     "submission_budget_replace": 32,
     "submission_backstop": 56,
     "defensive_loss_budget_usd": D("2"),
-    "aggregate_exposure_usd": D("5"),
+    # RAISED 5 -> 20 in lockstep with CA.MAX_TOTAL_EXPOSURE_USD and
+    # R.PROBE_LIMITS. The two must agree or _looser() refuses arming, so a
+    # verifier row that still expected 5 would pass only a configuration
+    # that could never arm.
+    "aggregate_exposure_usd": D("20"),
     "daily_realized_loss_halt_usd": D("5"),
     "maker_pair_ceiling": D("0.96"),
     "defensive_pair_ceiling": D("1.20"),
@@ -54,7 +58,12 @@ APPROVED: Dict[str, Any] = {
     "max_live_orders": 1,
     "window_strategy": "TWO_SIDED",
     "campaign_duration_ceiling_s": 14400.0,
-    "approval_exposure_ceiling_usd": D("5"),
+    # RAISED 5 -> 20 by owner decision for the eight-window sequential
+    # pairing campaign. The DAILY ceiling is deliberately NOT raised, so one
+    # market can overshoot the daily halt fourfold; the campaign worst-case
+    # budget (l5_campaign_budget, $11.10) is what bounds that, and $11.10 is
+    # itself the UNSPENT part of the untouched $20 account-wide ceiling.
+    "approval_exposure_ceiling_usd": D("20"),
     "approval_daily_loss_ceiling_usd": D("5"),
     # at DEPLOY time, before activation
     "defensive_execution_enabled": False,
