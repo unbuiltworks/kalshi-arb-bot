@@ -265,6 +265,32 @@ SCOPED_LIMIT_FIELDS = ("max_usd_per_market", "max_total_exposure_usd",
                        "daily_realized_loss_halt_usd")
 
 
+#: the campaign worst-case budget, in dollars. UNSET MEANS OFF: no budget is
+#: constructed, no behaviour changes, and nothing new can refuse. A gate that
+#: switched itself on by default would be a limit nobody approved.
+CAMPAIGN_BUDGET_ENV = "L5_CAMPAIGN_BUDGET_USD"
+
+
+def campaign_budget_ledger(root: Optional[str] = None) -> Any:
+    """The configured campaign budget, or None when it is not configured.
+
+    Never raises: a construction failure returns None and leaves the
+    pre-existing gates to decide, exactly as they did before this module
+    existed. The budget's own read failures are refusals, but that is the
+    LEDGER's contract and is evaluated where it is consulted.
+    """
+    raw = (os.getenv(CAMPAIGN_BUDGET_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        from src import l5_campaign_budget as CBD
+        return CBD.CampaignBudgetLedger(root=root, budget_usd=raw)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+
 def not_after_status(now: Optional[dt.datetime] = None) -> Dict[str, Any]:
     """Is the owner's absolute deadline still open? WITHOUT emitting it.
 
@@ -1737,6 +1763,30 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                              "note": "an authorization with no capital scope "
                                      "is unbounded, which is not an "
                                      "authorization"})
+    # 9a. THE CAMPAIGN WORST-CASE BUDGET, at arming.
+    #
+    #     WHY HERE AND NOT ONLY PER ORDER. The per-order gate refuses the
+    #     order that would breach the budget, but arming happens once per
+    #     window and `WindowLedger.reserve` is deliberately NOT refundable:
+    #     arming an exhausted campaign would spend a window that can only
+    #     ever be refused. This also enforces the campaign LOCK at the
+    #     earliest point, so a campaign that does not own the budget never
+    #     reaches the order path at all.
+    #
+    #     ABSENT IS OFF. No budget configured leaves every existing
+    #     authorization path byte-for-byte unchanged.
+    if _camp_ok:
+        _budget = campaign_budget_ledger()
+        if _budget is not None:
+            _cid = str(_camp_scope.get("nonce_sid") or "").strip()
+            _why = _budget.refuse_arming(campaign_id=_cid)
+            if _why:
+                raise ArmingRefusal(
+                    "CAMPAIGN_BUDGET_REFUSED",
+                    {"why": _why, "campaign_id": _cid,
+                     "note": "the campaign's worst-case budget is spent or "
+                             "owned by another campaign; a new nonce does "
+                             "not mint a new budget"})
     # 9b. WHICH MARKET, before anything about its window. An unauthorized
     #     market is refused whatever its clock says, and the refusal names
     #     the outermost reason.

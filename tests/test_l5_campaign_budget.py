@@ -10,7 +10,7 @@ import pytest
 from src import l5_campaign_budget as CB
 
 
-def ledger(tmp_path, budget="20"):
+def ledger(tmp_path, budget="20"):  # tests pin their own budget explicitly
     return CB.CampaignBudgetLedger(root=str(tmp_path), budget_usd=budget)
 
 

@@ -97,6 +97,8 @@ class ValidationGates:
                  max_cumulative_loss_usd: D = D("20"),
                  cash_policy: str = NO_RECYCLING,
                  max_windows: int = 20,
+                 campaign_budget: Any = None,
+                 campaign_id: Optional[str] = None,
                  max_worst_case_deficit_usd: Optional[D] = None,
                  fee_theta_worst: D = D("0.0695"),
                  fee_extra_per_order_usd: D = D("0.01"),
@@ -115,6 +117,12 @@ class ValidationGates:
         self.max_cash_deployed_usd = _d(max_cash_deployed_usd)
         self.max_unmatched_contracts = _d(max_unmatched_contracts)
         self.max_cumulative_loss_usd = _d(max_cumulative_loss_usd)
+        #: THE CAMPAIGN WORST-CASE BUDGET. None leaves every existing
+        #: behaviour byte-for-byte unchanged, which is why it defaults to
+        #: None rather than to a number: a gate that switches itself on is a
+        #: gate nobody approved. Configured, it can only ADD a refusal.
+        self.campaign_budget = campaign_budget
+        self.campaign_id = str(campaign_id or "").strip() or None
         # Separate verified L5 net loss cap. None leaves old behaviour
         # unchanged; explicit config requires an independently audited net.
         self.max_strategy_loss_usd = (
@@ -182,6 +190,10 @@ class ValidationGates:
         return {"max_cash_deployed_usd": str(self.max_cash_deployed_usd),
                 "max_unmatched_contracts": str(self.max_unmatched_contracts),
                 "max_cumulative_loss_usd": str(self.max_cumulative_loss_usd),
+                "campaign_budget": (None if self.campaign_budget is None
+                                    else self.campaign_budget.telemetry(
+                                        campaign_id=self.campaign_id or "")),
+                "campaign_id": self.campaign_id,
                 "max_strategy_loss_usd": (None if self.max_strategy_loss_usd
                                           is None else str(self.max_strategy_loss_usd)),
                 "max_l5_daily_loss_usd": (None if self.max_l5_daily_loss_usd
@@ -591,6 +603,33 @@ class ValidationGates:
         if committed > self.max_cash_deployed_usd:
             return ("CASH_COMMITMENT:%s>%s"
                     % (committed, self.max_cash_deployed_usd))
+        # 3b. THE CAMPAIGN WORST-CASE BUDGET, spanning windows rather than
+        #     instants. Deliberately placed HERE, sharing `cash_committed`
+        #     and `pending_obligation` with the cash gate above, so the
+        #     campaign cannot be evaded by the three routes that would
+        #     otherwise be open: a CONCURRENT order is counted because
+        #     `outstanding` is counted at its full worst case; a PENDING
+        #     commitment is counted because `cash_committed` counts an
+        #     unsettled leg in full and skips only SETTLED ones; and RESIDUAL
+        #     exposure is counted for exactly the same reason -- an unmatched
+        #     leg is simply a leg that has not settled. Realized losses are
+        #     added on top and never net against open risk.
+        if self.campaign_budget is not None and self.campaign_id:
+            campaign_used = (max(D(0), -_d(cumulative_realized))
+                             + self.cash_committed(filled_legs)
+                             + self.pending_obligation(outstanding))
+            try:
+                why = self.campaign_budget.refuse_amount(
+                    campaign_id=self.campaign_id,
+                    used_usd=campaign_used,
+                    new_order_cost_usd=this_order)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # A budget that cannot answer is a refusal, never a pass.
+                return "CAMPAIGN_BUDGET_ERROR:%s" % type(exc).__name__
+            if why:
+                return why
         # 4. WORST-CASE SETTLEMENT DEFICIT. Default disabled; when an owner
         #    configures it, no order may leave the book able to lose more
         #    than the bound on EITHER outcome. This is the only gate that
