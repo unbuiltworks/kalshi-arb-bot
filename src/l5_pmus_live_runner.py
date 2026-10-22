@@ -4792,6 +4792,23 @@ GATES_ENV = "L5_VALIDATION_GATES"
 DEFICIT_ENV = "L5_MAX_WORST_CASE_DEFICIT_USD"
 
 
+def _campaign_nonce_sid():
+    """The approval's own campaign id, or None. Never raises.
+
+    Read from the document rather than from any variable an operator could
+    set independently: the budget must be owned by the APPROVAL, so that
+    issuing a new approval is exactly what the budget ledger notices and
+    refuses, rather than something it can be told to ignore.
+    """
+    try:
+        st = CAMP.ApprovalGate(CAMP.EnvApprovalStore()).state()
+        return str((st.get("scope") or {}).get("nonce_sid") or "") or None
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+
 def validation_gates():
     """The run-scoped additive gates, or None when explicitly disabled.
 
@@ -4852,6 +4869,15 @@ def validation_gates():
                                       "").strip()
                 else D(os.getenv(
                     "L5_MAX_ACCOUNT_WIDE_DELTA_LOSS_USD").strip())),
+            # THE CAMPAIGN WORST-CASE BUDGET. Both halves come from the same
+            # place so they cannot disagree: the ledger is built from
+            # L5_CAMPAIGN_BUDGET_USD (unset = off, no behaviour change) and
+            # the campaign id is the APPROVAL's own nonce_sid, never an
+            # operator-supplied string. If the approval is absent or invalid
+            # the id is None and the gate stays inert -- an unauthorized run
+            # is already refused by the campaign layer itself.
+            campaign_budget=AUTH.campaign_budget_ledger(),
+            campaign_id=_campaign_nonce_sid(),
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
         # a gate we cannot build is announced, never silently skipped

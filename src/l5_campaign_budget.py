@@ -63,8 +63,16 @@ BUDGET_DIR = "campaign_budget"
 BUDGET_FILE = "active.json"
 ROOT_ENV = "L5_LIVE_ROOT"
 
-#: the owner-approved campaign worst-case ceiling.
-DEFAULT_BUDGET_USD = D("20")
+#: THE OWNER-APPROVED CAMPAIGN WORST-CASE CEILING.
+#:
+#: RE-SCOPED 20 -> 11.10 and the reason is arithmetic, not caution. The
+#: ACCOUNT-WIDE cumulative gate is $20 and `all_time_realized_usd` is
+#: -8.8988, so only $11.1012 of that ceiling is unspent. The owner's
+#: instruction is to preserve the account-wide limit and never bypass it, so
+#: a $20 campaign budget could never bind: the account-wide gate would refuse
+#: first, every time, and the campaign number would be decoration. The
+#: smaller of the two relevant limits is the real one.
+DEFAULT_BUDGET_USD = D("11.10")
 
 
 class CampaignBudgetUnavailable(RuntimeError):
@@ -260,6 +268,43 @@ class CampaignBudgetLedger:
 
         used = worst_case_usd(realized_usd=realized_usd, legs=legs,
                               outstanding=outstanding)
+        return self.refuse_amount(campaign_id=cid, used_usd=used,
+                                  new_order_cost_usd=new_order_cost_usd,
+                                  record_peak=record_peak, _doc=doc)
+
+    def refuse_amount(self, *,
+                      campaign_id: str,
+                      used_usd: Any,
+                      new_order_cost_usd: Any = 0,
+                      record_peak: bool = True,
+                      _doc: Optional[Mapping[str, Any]] = None
+                      ) -> Optional[str]:
+        """The same gate, from a worst case the CALLER already computed.
+
+        WHY THIS ENTRY POINT EXISTS. `ValidationGates` already owns audited
+        helpers for exactly these figures -- `cash_committed` skips settled
+        legs and honours the cash policy, and `pending_obligation` charges a
+        resting BUY_SHORT its full $1-a-share worst case rather than
+        qty*price. Recomputing any of that here would be a second opinion
+        that could drift from the one the executor actually enforces. So the
+        gate takes the number rather than the book, and the book stays the
+        responsibility of the layer that already reconciles it.
+        """
+        cid = str(campaign_id or "").strip()
+        if not cid:
+            return "CAMPAIGN_BUDGET_ID_MISSING"
+        if _doc is None:
+            try:
+                _doc = self.read()
+            except CampaignBudgetUnavailable:
+                return "CAMPAIGN_BUDGET_UNREADABLE"
+            open_id0 = _doc.get("campaign_id")
+            if open_id0 and not bool(_doc.get("closed")) \
+                    and str(open_id0) != cid:
+                return "CAMPAIGN_BUDGET_LOCKED:%s" % open_id0
+        doc = _doc
+        open_id = doc.get("campaign_id")
+        used = max(D(0), _d(used_usd))
         projected = used + max(D(0), _d(new_order_cost_usd))
 
         # WHAT IS GATED IS THE CURRENT WORST CASE, NOT THE HIGH-WATER MARK,
@@ -286,6 +331,38 @@ class CampaignBudgetLedger:
                 self._write(out)
             except BaseException:                              # noqa: BLE001
                 return "CAMPAIGN_BUDGET_UNWRITABLE"
+        return None
+
+    def refuse_arming(self, *, campaign_id: str) -> Optional[str]:
+        """The ARMING-time half of the gate. None to allow, else the reason.
+
+        WHY ARMING NEEDS ITS OWN CHECK, and why it is not the per-order one.
+        The per-order gate sees the book and refuses the order that would
+        breach the budget. But arming happens once per window, before any
+        order exists, and an exhausted campaign should not arm a transport at
+        all -- a window that can only ever be refused is a window that spent
+        a window reservation for nothing, and `WindowLedger.reserve` is
+        deliberately not refundable.
+
+        It is also where the LOCK is enforced earliest: a campaign that does
+        not own the budget never reaches the order path.
+        """
+        cid = str(campaign_id or "").strip()
+        if not cid:
+            return "CAMPAIGN_BUDGET_ID_MISSING"
+        try:
+            doc = self.read()
+        except CampaignBudgetUnavailable:
+            return "CAMPAIGN_BUDGET_UNREADABLE"
+        open_id = doc.get("campaign_id")
+        if open_id and not bool(doc.get("closed")) and str(open_id) != cid:
+            return "CAMPAIGN_BUDGET_LOCKED:%s" % open_id
+        # Nothing is reserved at arming, so the question is only whether any
+        # room remains at all. The peak is the campaign's high-water mark.
+        peak = _d(doc.get("peak_usd"))
+        if peak >= self.budget_usd:
+            return ("CAMPAIGN_WORST_CASE_EXHAUSTED:%s>=%s"
+                    % (peak, self.budget_usd))
         return None
 
     def telemetry(self, *, campaign_id: str = "") -> Dict[str, Any]:
