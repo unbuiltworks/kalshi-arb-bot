@@ -62,7 +62,7 @@ def test_a_well_formed_in_scope_document_is_approved():
 
 @pytest.mark.parametrize("field,asked,expected", [
     ("max_windows", 40, 8),
-    ("max_total_exposure_usd", "500", "5"),
+    ("max_total_exposure_usd", "500", "20"),
     ("max_daily_loss_usd", "250", "5"),
 ])
 def test_a_document_asking_for_more_is_clamped_not_honoured(field, asked,
@@ -172,13 +172,17 @@ def test_telemetry_names_the_ceilings_and_never_the_document():
     g.state()
     t = g.telemetry()
     assert t["ceilings"]["max_windows"] == CA.MAX_WINDOWS
-    assert t["ceilings"]["max_total_exposure_usd"] == "5"
+    assert t["ceilings"]["max_total_exposure_usd"] == "20"
     assert t["sha256"] and len(t["sha256"]) == 64
     assert "distinctive" not in json.dumps(t)
 
 
 def test_the_ceilings_are_the_authorized_envelope():
-    assert CA.MAX_TOTAL_EXPOSURE_USD == D("5")
+    # RAISED 5 -> 20 by owner decision for the eight-window
+    # sequential-pairing campaign. The DAILY halt is deliberately
+    # NOT raised, so one market can now overshoot it fourfold;
+    # l5_campaign_budget bounds the campaign independently.
+    assert CA.MAX_TOTAL_EXPOSURE_USD == D("20")
     assert CA.MAX_DAILY_LOSS_USD == D("5")
     # raised 4 -> 8 for the eight-window campaign. The ENVELOPE assertion
     # is the point of this test and the other three ceilings are unchanged:

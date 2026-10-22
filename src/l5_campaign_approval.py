@@ -41,7 +41,16 @@ from typing import Any, Dict, Optional
 APPROVAL_KEY = "campaign_approval.json"
 
 #: THE CEILINGS. Code constants. The document may ask for less and never more.
-MAX_TOTAL_EXPOSURE_USD = D("5")
+#: RAISED 5 -> 20 for the eight-window sequential-pairing campaign. This is
+#: the INSTANTANEOUS ceiling: one market, one live order, up to $20 at risk
+#: at any moment. It is NOT a campaign budget -- eight windows at $20 would
+#: be $160 of sequential commitment, which `l5_campaign_budget` now bounds
+#: at $20 of worst-case loss independently of this number.
+MAX_TOTAL_EXPOSURE_USD = D("20")
+#: UNCHANGED at $5. Note the asymmetry this creates and does not resolve: a
+#: single market can lose $20, so one settlement can overshoot the daily halt
+#: fourfold. The halt stops new commitment; it cannot unwind what is already
+#: at risk. The campaign budget is what bounds the overshoot.
 MAX_DAILY_LOSS_USD = D("5")
 #: EIGHT, raised from four for the two-hour eight-window campaign.
 #: WHAT THIS DOES NOT CHANGE, and the distinction is the whole safety

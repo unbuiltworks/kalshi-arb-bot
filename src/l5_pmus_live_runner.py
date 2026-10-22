@@ -100,8 +100,14 @@ def daily_realized_loss_halt() -> D:
         return D("5")
 
 
-PROBE_LIMITS = dict(max_usd_per_market=D("5"), max_abs_residual=D("10"),
-                    max_total_exposure_usd=D("5"), max_concurrent_markets=1,
+#: RAISED 5 -> 20, in lockstep with l5_campaign_approval.MAX_TOTAL_EXPOSURE_USD.
+#: THEY MUST MOVE TOGETHER. `authorize_arming` records the approved envelope
+#: into the claim and `_looser()` refuses if the RUNNING limits exceed the
+#: APPROVED ones, so raising this file alone would not half-enable a larger
+#: envelope -- it would refuse arming outright. max_abs_residual stays at 10
+#: contracts by owner decision, and max_concurrent_markets stays at 1.
+PROBE_LIMITS = dict(max_usd_per_market=D("20"), max_abs_residual=D("10"),
+                    max_total_exposure_usd=D("20"), max_concurrent_markets=1,
                     max_live_orders=max_live_orders(),
                     daily_realized_loss_halt_usd=daily_realized_loss_halt())
 
