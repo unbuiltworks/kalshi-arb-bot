@@ -140,7 +140,7 @@ def test_the_code_constant_limits_are_checked_not_just_the_variables(
     for name, value in (("defensive_loss_budget_usd", "2.00"),
                         ("defensive_pair_ceiling", "1.20"),
                         ("campaign_duration_ceiling_s", 14400.0),
-                        ("approval_exposure_ceiling_usd", "5"),
+                        ("approval_exposure_ceiling_usd", "20"),
                         ("approval_daily_loss_ceiling_usd", "5"),
                         ("max_windows_code_ceiling", 8)):
         r = row(out, name)
@@ -219,7 +219,8 @@ def test_the_approved_set_is_code_so_drift_shows_as_a_failing_row():
     assert V.APPROVED["submission_budget_complete"] == 24
     assert V.APPROVED["submission_budget_replace"] == 32
     assert V.APPROVED["defensive_loss_budget_usd"] == D("2")
-    assert V.APPROVED["aggregate_exposure_usd"] == D("5")
+    # RAISED 5 -> 20 by owner decision; the daily halt stays $5.
+    assert V.APPROVED["aggregate_exposure_usd"] == D("20")
     assert V.APPROVED["daily_realized_loss_halt_usd"] == D("5")
     assert V.APPROVED["maker_pair_ceiling"] == D("0.96")
     assert V.APPROVED["defensive_pair_ceiling"] == D("1.20")

@@ -483,7 +483,7 @@ def test_2100z_cash_deployed_is_reported_beside_an_unchanged_gate(store):
     assert D(cash["leg_cost_total"]) == D("7.48710")
     assert store.risk_exposure_usd(M2100) == D("1.81710")
     # the gate itself is untouched
-    assert LX.SafetyLimits(**R.PROBE_LIMITS).max_usd_per_market == D("5")
+    assert LX.SafetyLimits(**R.PROBE_LIMITS).max_usd_per_market == D("20")
 
 
 # =====================================================================
