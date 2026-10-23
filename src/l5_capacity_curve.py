@@ -55,6 +55,27 @@ import os
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 # ---- observed inputs. Every one of these is measured, none is assumed. ----
+#
+# INSTRUMENT-COHORT WARNING. THESE CONSTANTS ARE NOT BTC15m.
+#
+# They come from `src/l5_breakeven.py` over `analysis/l5/l5_r5f_cohort.json`,
+# which is 13 esports (`aec`), 2 `atc` and 1 MLB (`tsc`) market and contains
+# ZERO BTC15m markets. One of its rows carries `matched_pair_cost 1.110705`,
+# a pair cost the 0.96 BTC15m ceiling makes impossible.
+#
+# They were used to compute a BTC15m breakeven of 84.52% and to declare the
+# BTC15m strategy negative. That conclusion was an instrument-cohort error and
+# is withdrawn. For BTC15m use `analysis/l5/btc15m/native_baseline.py`, which
+# reconciles to the cashflow identity redemption - acquisition.
+#
+# AND THE COMPLETION-RATE BREAKEVEN THIS MODULE DRAWS FAILS VALIDATION on the
+# one book where it can be checked: it reports L5 clearing breakeven by +0.1219
+# in TRAIN and +0.0655 out of sample while his realized return goes +52.03 bp
+# -> +1.08 bp. A 48x swing in cash against a 2x change in "margin". It does not
+# predict cash and must not be used as a decision metric.
+INSTRUMENT_CLASS = "SPORTS_ESPORTS_R5F"      # NOT BTC15m. See above.
+NATIVE_BASELINE_FOR_BTC15M = "analysis/l5/btc15m/native_baseline.py"
+
 PAIR_PROFIT_PER_MATCHED_PAIR = 0.057230      # l5_breakeven, 15 markets
 RESIDUAL_LOSS_PER_RESIDUAL_UNIT = -0.331449  # l5_breakeven
 CONFIRMED_REBATE_PER_LEG = 0.002953          # l5_breakeven, approximate map
