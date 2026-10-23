@@ -258,7 +258,7 @@ class TestNothingElseMoved:
 
     def test_the_stale_recovery_thresholds_are_unchanged(self):
         assert TS.STALE_RECOVER_DRIFT_TICKS == 4
-        assert TS.recover_max_per_market() == 3
+        assert TS.recover_max_per_market() == 1
         assert TS.recover_min_rest_s() == 15.0
 
     def test_the_residual_ceiling_is_unchanged(self):

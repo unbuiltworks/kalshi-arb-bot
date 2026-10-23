@@ -256,7 +256,7 @@ class TestTheThresholdsAreConfigurableOnlyTheSafeWay:
         assert TS.recover_min_rest_s() == want
 
     @pytest.mark.parametrize("raw, want", [
-        ("1", 1), ("0", 0), ("99", 3), ("x", 3), ("", 3), ("-1", 0),
+        ("1", 1), ("0", 0), ("99", 1), ("x", 1), ("", 1), ("-1", 0),
     ])
     def test_the_churn_cap_is_configurable_smaller_only(self, monkeypatch,
                                                         raw, want):
@@ -393,6 +393,14 @@ def test_the_per_market_count_is_honoured_across_calls():
     r.acc_recoveries[SLUG] = TS.recover_max_per_market()
     assert r.acc_stale_by_distance(NOW, SLUG, r.store.live_orders()) == []
     assert r.stats["acc_recover:RECOVERY_BUDGET_SPENT"] == 1
+
+
+def test_the_churn_cap_is_one_per_market_not_three():
+    """Lowered on review: 8 windows x (1 opening + 3 recoveries) is exactly
+    the 32-submission OPEN budget, which would leave a later window unable
+    to open at all. At 1 the worst case is 16 of 32."""
+    assert TS.STALE_RECOVER_MAX_PER_MARKET == 1
+    assert 8 * (1 + TS.STALE_RECOVER_MAX_PER_MARKET) * 2 <= 32
 
 
 def test_two_stale_legs_do_not_both_spend_the_last_slot():

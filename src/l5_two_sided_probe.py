@@ -1277,10 +1277,20 @@ STALE_RECOVER_DRIFT_ENV = "L5_TS_RECOVER_DRIFT_TICKS"
 STALE_RECOVER_MIN_REST_S = 15.0
 STALE_RECOVER_MIN_REST_ENV = "L5_TS_RECOVER_MIN_REST_S"
 
-#: and the churn bound: how many drift recoveries one market may spend. Each
-#: one costs an OPEN submission and surrenders queue priority, so this is a
-#: hard ceiling and not a target.
-STALE_RECOVER_MAX_PER_MARKET = 3
+#: and the churn bound: how many drift recoveries one market may spend.
+#:
+#: ONE, lowered from 3 on review of 2cc57bed against the real OPEN budget.
+#: The 8-window campaign of 2026-10-23 spent 8 OPEN submissions against a
+#: ceiling of 32, so a cap of 3 would have permitted 8 * (1 + 3) = 32 --
+#: exactly the whole budget, leaving nothing for a legitimate opening in a
+#: later window. The code declines a recovery when OPEN has nothing left, so
+#: that fails safe rather than overspending, but "fails safe by refusing to
+#: trade" is a window lost. At 1 the worst case is 8 * 2 = 16 of 32.
+#:
+#: One is also what the evidence asks for: 2200z needed exactly one
+#: recovery, and each one costs an OPEN submission and surrenders queue
+#: priority. This is a hard ceiling, not a target.
+STALE_RECOVER_MAX_PER_MARKET = 1
 STALE_RECOVER_MAX_ENV = "L5_TS_RECOVER_MAX_PER_MARKET"
 
 #: the book backing a recovery must be THIS fresh. `snapshot()` already
