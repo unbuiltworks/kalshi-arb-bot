@@ -106,8 +106,53 @@ def daily_realized_loss_halt() -> D:
 #: APPROVED ones, so raising this file alone would not half-enable a larger
 #: envelope -- it would refuse arming outright. max_abs_residual stays at 10
 #: contracts by owner decision, and max_concurrent_markets stays at 1.
+#: THE ACCOUNT-WIDE INSTANTANEOUS CEILING, NOW SETTABLE. It was a bare
+#: D("20") and there was no way to configure it, so an owner who approved a
+#: $2 instantaneous envelope could not get one: the approval document could
+#: say 2, step 14 would then refuse CAMPAIGN_LIMITS_WIDER_THAN_APPROVED
+#: because the RUNNING limit was 20, and putting 20 in the document to make
+#: arming succeed left the real ceiling at 20. That is a risk-control
+#: defect, not a configuration error, and the $1.65 cash envelope does NOT
+#: substitute for it -- that bounds ONE order's obligation, while this
+#: bounds worst-case loss across every market holding a position or a
+#: resting order, manual trades included.
+#:
+#: DEFAULT IS UNCHANGED AT 20, so an unset variable changes nothing. Only
+#: LOWERING is useful: step 14 refuses when running > approved, so a value
+#: above the approval's figure cannot arm, and a value at or below it can.
+#:
+#: WHERE IT BINDS, and it is the same number in all three places:
+#:   * step 14, as the running limit compared against the approval;
+#:   * `account_exposure_lines`, as capacity_usd = cap - total;
+#:   * the SIZING path, where capacity narrows cash_headroom, so a proposed
+#:     order is reserved against what inventory and resting orders already
+#:     consume rather than sized as if the book were empty.
+MAX_TOTAL_EXPOSURE_ENV = "L5_MAX_TOTAL_EXPOSURE_USD"
+DEFAULT_MAX_TOTAL_EXPOSURE_USD = D("20")
+
+
+def max_total_exposure_usd() -> D:
+    """The account-wide instantaneous ceiling. UNREADABLE IS THE DEFAULT, not
+    infinity: a typo must not silently remove the ceiling. A non-positive
+    value is also refused, because a zero ceiling would disarm by arithmetic
+    rather than by an owner decision, which is a confusing way to stop."""
+    raw = (os.getenv(MAX_TOTAL_EXPOSURE_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_MAX_TOTAL_EXPOSURE_USD
+    try:
+        v = D(raw)
+    except (ValueError, TypeError, ArithmeticError):
+        # decimal.InvalidOperation subclasses ArithmeticError, so it is
+        # caught here without importing it into this module.
+        return DEFAULT_MAX_TOTAL_EXPOSURE_USD
+    if not v.is_finite() or v <= 0:
+        return DEFAULT_MAX_TOTAL_EXPOSURE_USD
+    return v
+
+
 PROBE_LIMITS = dict(max_usd_per_market=D("20"), max_abs_residual=D("10"),
-                    max_total_exposure_usd=D("20"), max_concurrent_markets=1,
+                    max_total_exposure_usd=max_total_exposure_usd(),
+                    max_concurrent_markets=1,
                     max_live_orders=max_live_orders(),
                     daily_realized_loss_halt_usd=daily_realized_loss_halt())
 
