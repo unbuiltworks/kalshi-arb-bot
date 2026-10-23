@@ -232,11 +232,15 @@ def verify_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
 def _mandate_verdict_reason() -> str:
     """The mandate verdict as a bare reason string, for REPORTING.
 
-    Never records the monotonic seq (`record_seq` stays False), so reading
-    the status cannot consume the owner's mandate. Revocation state is not
-    yet served by the watchdog, so this passes an explicit empty set and the
-    reported verdict is therefore NOT a statement about revocation -- which
-    is exactly why phase 1 does not enforce.
+    `verify` performs no I/O and writes nothing, so reading the status can
+    never consume or advance the owner's mandate.
+
+    REPORTING SUPPLIES PLACEHOLDERS, and that is why this is not enforcement.
+    The watchdog floor and revocation documents are read by the enforcing
+    caller from `HttpSeqFloorStore`/`HttpRevocationStore`; here a floor of 0
+    and an empty revocation set are passed so the SIGNATURE and SCOPE can be
+    reported without the watchdog endpoints existing yet. The reported
+    verdict is therefore NOT a statement about replay or revocation.
     """
     from src import l5_mandate_signature as MS
     try:
@@ -244,7 +248,7 @@ def _mandate_verdict_reason() -> str:
                       environment=os.getenv("RAILWAY_ENVIRONMENT_NAME", ""),
                       service_role=os.getenv("PMUS_SERVICE_ROLE", ""),
                       series=os.getenv("L5_LIVE_AUTH_MARKET_SERIES", ""),
-                      revoked=[], record_seq=False)
+                      revoked=[], seq_floor=0)
         return str(v.get("reason") or "OK")
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):

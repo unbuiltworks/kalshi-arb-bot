@@ -186,64 +186,189 @@ def _verify_ed25519(pub_hex: str, sig_hex: str, msg: bytes) -> bool:
         return False
 
 
-class SeqStore:
-    """Per-key_id monotonic high-water mark: replay and rollback protection.
+#: the watchdog-served documents. ONE STORE, ONE KEY, exactly as
+#: HttpHaltStore insists: a store asked for a key it does not serve must
+#: raise rather than answer None, or "not served here" and "absent" arrive as
+#: the same false-permissive read.
+FLOOR_KEY = "mandate_floor.json"
+REVOCATION_KEY = "mandate_revocations.json"
 
-    A mandate whose `seq` is not STRICTLY GREATER than the highest seq ever
-    accepted for its key_id is refused. That stops both replaying a captured
-    document and rolling back to a genuinely-signed older one whose limits
-    were looser.
+#: how stale a watchdog document may be. Matches l5_halt_gate's bound: a
+#: document nobody is refreshing must stop authorizing.
+DEFAULT_MAX_AGE_S = 900.0
 
-    AN UNREADABLE MARK RAISES. Reporting it as zero would make a corrupt file
-    indistinguishable from a fresh install and accept any seq at all.
 
-    KNOWN PHASE-1 LIMITATION, stated rather than papered over: this file sits
-    on the EXECUTOR's volume, so the executor could in principle delete it
-    and replay an old mandate. Before enforcement, the mark must move to the
-    watchdog-owned store that already holds the halt latch, where the
-    executor's only verb is GET. Until then rollback protection is ADVISORY.
+class WatchdogSeqWriter:
+    """THE WATCHDOG'S side of the replay floor. Not used by the executor.
+
+    REQUIREMENT 3: the high-water mark moved off the executor's volume. It
+    previously lived next to the executor, which meant the guarded process
+    could delete its own replay protection and re-accept an old mandate. It
+    now lives on the WATCHDOG's volume -- the same asymmetry l5_halt_gate
+    establishes for the latch and for the same reason: "the executor must
+    never be able to change it", so its only verb is GET.
+
+    SEMANTICS CHANGED WITH THE MOVE, deliberately. When the executor owned
+    the mark it recorded acceptance and required `seq > mark`. The watchdog
+    records the highest seq it has OBSERVED, so the current mandate's own seq
+    is already in the mark and the executor requires `seq >= floor`. Getting
+    this backwards would reject the live mandate every time the watchdog saw
+    it first.
     """
 
     def __init__(self, root: Optional[str] = None) -> None:
         base = root or os.getenv(SEQ_ROOT_ENV, "").strip() or "."
         self.dir = os.path.join(base, SEQ_DIR)
 
-    def _path(self, key_id: str) -> str:
-        safe = "".join(c for c in str(key_id) if c.isalnum() or c in ".-_")
-        if not safe:
-            raise ValueError("empty key id")
-        return os.path.join(self.dir, "%s.json" % safe)
+    def _path(self) -> str:
+        return os.path.join(self.dir, FLOOR_KEY)
 
-    def highest(self, key_id: str) -> int:
+    def read(self) -> Dict[str, Any]:
         try:
-            with open(self._path(key_id), "r") as fh:
+            with open(self._path(), "r") as fh:
                 doc = json.load(fh)
         except FileNotFoundError:
-            return 0
+            return {"asof_utc": None, "floors": {}}
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             raise MandateUnavailable(
-                "seq store unreadable: %s" % type(exc).__name__) from exc
-        v = doc.get("highest_seq") if isinstance(doc, dict) else None
-        if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-            raise MandateUnavailable("seq store malformed")
-        return v
+                "floor store unreadable: %s" % type(exc).__name__) from exc
+        if not isinstance(doc, dict) or not isinstance(doc.get("floors"),
+                                                       dict):
+            raise MandateUnavailable("floor store malformed")
+        return doc
 
-    def record(self, key_id: str, seq: int) -> None:
-        """Raise the mark. NEVER LOWERS IT, so a replayed document cannot
-        reopen the window it just closed."""
-        cur = self.highest(key_id)
-        if int(seq) <= cur:
-            return
+    def observe(self, key_id: str, seq: int, *,
+                now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+        """Raise the floor to `seq`. NEVER LOWERS IT."""
+        doc = self.read()
+        floors = dict(doc.get("floors") or {})
+        cur = floors.get(str(key_id))
+        cur = cur if isinstance(cur, int) and not isinstance(cur, bool) else 0
+        floors[str(key_id)] = max(cur, int(seq))
+        out = {"asof_utc": (now or _utc()).isoformat(), "floors": floors}
         os.makedirs(self.dir, exist_ok=True)
-        tmp = self._path(key_id) + ".tmp"
+        tmp = self._path() + ".tmp"
         with open(tmp, "w") as fh:
-            json.dump({"key_id": str(key_id), "highest_seq": int(seq)}, fh,
-                      sort_keys=True)
+            json.dump(out, fh, sort_keys=True)
             fh.flush()
             os.fsync(fh.fileno())
-        os.replace(tmp, self._path(key_id))
+        os.replace(tmp, self._path())
+        return out
+
+
+class _HttpDoc:
+    """Shared GET-only client. Every failure is UNAVAILABLE, never absent.
+
+    A 404 is NOT treated as an empty document here, unlike the halt latch
+    where absence genuinely means "no halt". A missing floor or revocation
+    document means the watchdog is not publishing one, and an executor that
+    cannot find out whether its mandate was superseded or revoked is not
+    authorized. So absence refuses too.
+    """
+
+    DEFAULT_TIMEOUT_S = 3.0
+
+    def __init__(self, url: str, key: str, *,
+                 timeout_s: float = DEFAULT_TIMEOUT_S,
+                 max_age_s: float = DEFAULT_MAX_AGE_S, opener=None) -> None:
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("store needs a url")
+        self.url = url.strip().rstrip("/")
+        self.key = str(key)
+        self.timeout_s = float(timeout_s)
+        self.max_age_s = float(max_age_s)
+        self._opener = opener
+
+    def fetch(self, key: str, *, now: Optional[dt.datetime] = None
+              ) -> Dict[str, Any]:
+        if str(key) != self.key:
+            raise MandateUnavailable(
+                "this store serves only %r: %r is unreadable here, not "
+                "absent" % (self.key, str(key)[:60]))
+        import urllib.request
+        url = "%s/%s" % (self.url, self.key.lstrip("/"))
+        try:
+            if self._opener is not None:
+                body = self._opener(url, self.timeout_s)
+            else:
+                with urllib.request.urlopen(url,
+                                            timeout=self.timeout_s) as r:
+                    if getattr(r, "status", 200) != 200:
+                        raise MandateUnavailable(
+                            "GET %s status %s" % (self.key,
+                                                  getattr(r, "status", "?")))
+                    body = r.read()
+        except MandateUnavailable:
+            raise
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise MandateUnavailable(
+                "GET %s failed: %s" % (self.key, type(exc).__name__)) from exc
+        if body is None:
+            raise MandateUnavailable("%s absent; absence refuses" % self.key)
+        try:
+            doc = json.loads(body)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise MandateUnavailable("%s unparseable" % self.key) from exc
+        if not isinstance(doc, dict):
+            raise MandateUnavailable("%s not an object" % self.key)
+        asof = _ts(doc.get("asof_utc"))
+        if asof is None:
+            raise MandateUnavailable("%s has no usable asof_utc" % self.key)
+        age = ((now or _utc()) - asof).total_seconds()
+        if age < 0:
+            raise MandateUnavailable("%s is dated in the future" % self.key)
+        if age > self.max_age_s:
+            raise MandateUnavailable(
+                "%s is stale by %.0fs" % (self.key, age - self.max_age_s))
+        return doc
+
+
+class HttpSeqFloorStore(_HttpDoc):
+    """The replay floor, read over private networking. GET only."""
+
+    def __init__(self, url: str, **kw: Any) -> None:
+        super().__init__(url, FLOOR_KEY, **kw)
+
+    def floor(self, key_id: str, *, now: Optional[dt.datetime] = None) -> int:
+        doc = self.fetch(FLOOR_KEY, now=now)
+        floors = doc.get("floors")
+        if not isinstance(floors, dict):
+            raise MandateUnavailable("floor document has no floors object")
+        v = floors.get(str(key_id))
+        if v is None:
+            # A key absent from a PRESENT, FRESH document is a positive
+            # statement by the watchdog that it has seen nothing for that
+            # key. Zero is then a real floor, not a guess.
+            return 0
+        if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+            raise MandateUnavailable("floor for %r is not a count"
+                                     % str(key_id)[:40])
+        return v
+
+
+class HttpRevocationStore(_HttpDoc):
+    """The revocation list, read over private networking. GET only."""
+
+    def __init__(self, url: str, **kw: Any) -> None:
+        super().__init__(url, REVOCATION_KEY, **kw)
+
+    def revoked(self, *, now: Optional[dt.datetime] = None) -> frozenset:
+        doc = self.fetch(REVOCATION_KEY, now=now)
+        rev = doc.get("revoked")
+        if not isinstance(rev, list):
+            raise MandateUnavailable("revocation document has no list")
+        out = []
+        for x in rev:
+            if not isinstance(x, str):
+                raise MandateUnavailable("revocation entry is not a string")
+            out.append(x)
+        return frozenset(out)
 
 
 def _no(reason: str, **extra: Any) -> Dict[str, Any]:
@@ -359,9 +484,8 @@ def _check_validity(p: Mapping[str, Any], now: dt.datetime
 
 def verify(raw: Any, *, environment: str, service_role: str, series: str,
            now: Optional[dt.datetime] = None,
-           seq_store: Optional[SeqStore] = None,
-           revoked: Any = None,
-           record_seq: bool = False) -> Dict[str, Any]:
+           seq_floor: Optional[int] = None,
+           revoked: Any = None) -> Dict[str, Any]:
     """The one verdict. Default NO.
 
     `revoked` is the revocation set the watchdog serves. **None means NOT
@@ -369,8 +493,10 @@ def verify(raw: Any, *, environment: str, service_role: str, series: str,
     mandate was revoked is not authorized, the same rule `HaltGate` applies
     to the latch. Pass an explicit empty collection to mean "nothing revoked".
 
-    `record_seq` is False by default so that REPORTING cannot consume the
-    monotonic mark. Only an enforcing caller records.
+    `seq_floor` is the watchdog-published replay floor. **None means NOT
+    ESTABLISHED and refuses**, for the same reason `revoked=None` does. This
+    function performs no I/O and writes nothing, so reporting can never
+    consume or advance the owner's mandate.
     """
     now = now or _utc()
     if not MANDATE_PUBKEYS:
@@ -431,28 +557,28 @@ def verify(raw: Any, *, environment: str, service_role: str, series: str,
     if mid in rev or ("%s#%d" % (mid, seq)) in rev:
         return _no("MANDATE_REVOKED", detail={"mandate_id": mid[:60]})
 
-    store = seq_store or SeqStore()
+    # THE REPLAY FLOOR, SUPPLIED BY THE CALLER FROM THE WATCHDOG'S STORE.
+    #
+    # `None` IS NOT ESTABLISHED AND REFUSES. An executor that cannot find out
+    # whether its mandate has been superseded is not authorized -- the same
+    # rule HaltGate applies to the latch and that this module applies to
+    # revocation.
+    #
+    # `>=`, NOT `>`. The watchdog records the highest seq it has OBSERVED,
+    # so the live mandate's own seq is already in the floor. Requiring
+    # strictly greater would reject the current mandate whenever the
+    # watchdog saw it first, which is always.
+    if seq_floor is None:
+        return _no("MANDATE_SEQ_FLOOR_UNKNOWN",
+                   detail={"note": "replay floor could not be established "
+                                   "from the watchdog store; refusing"})
     try:
-        high = store.highest(key_id)
-    except MandateUnavailable as exc:
-        return _no("MANDATE_SEQ_STORE_UNAVAILABLE",
-                   detail={"error": str(exc)[:120]})
-    except BaseException as exc:                               # noqa: BLE001
-        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-            raise
-        return _no("MANDATE_SEQ_STORE_UNAVAILABLE",
-                   detail={"error": type(exc).__name__})
-    if seq <= high:
+        floor = int(seq_floor)
+    except (TypeError, ValueError):
+        return _no("MANDATE_SEQ_FLOOR_UNREADABLE")
+    if seq < floor:
         return _no("MANDATE_REPLAYED_OR_ROLLED_BACK",
-                   detail={"seq": seq, "highest_accepted": high})
-    if record_seq:
-        try:
-            store.record(key_id, seq)
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            return _no("MANDATE_SEQ_RECORD_FAILED",
-                       detail={"error": type(exc).__name__})
+                   detail={"seq": seq, "floor": floor})
 
     return {"ok": True, "reason": None, "key_id": key_id,
             "mandate_id": mid, "seq": seq, "kind": payload["kind"],
