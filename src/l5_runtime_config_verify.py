@@ -229,10 +229,34 @@ def verify_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _mandate_verdict_reason() -> str:
+    """The mandate verdict as a bare reason string, for REPORTING.
+
+    Never records the monotonic seq (`record_seq` stays False), so reading
+    the status cannot consume the owner's mandate. Revocation state is not
+    yet served by the watchdog, so this passes an explicit empty set and the
+    reported verdict is therefore NOT a statement about revocation -- which
+    is exactly why phase 1 does not enforce.
+    """
+    from src import l5_mandate_signature as MS
+    try:
+        v = MS.verify(os.getenv(MS.MANDATE_ENV),
+                      environment=os.getenv("RAILWAY_ENVIRONMENT_NAME", ""),
+                      service_role=os.getenv("PMUS_SERVICE_ROLE", ""),
+                      series=os.getenv("L5_LIVE_AUTH_MARKET_SERIES", ""),
+                      revoked=[], record_seq=False)
+        return str(v.get("reason") or "OK")
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return "VERIFY_RAISED:%s" % type(exc).__name__
+
+
 def verify() -> Dict[str, Any]:
     """Every approved figure, read effectively. `PASS` only if all hold."""
     from src import l5_campaign_approval as CA
     from src import l5_defensive_completion as DEF
+    from src import l5_mandate_signature as MS
     from src import l5_live_authorization as AUTH
     from src import l5_pmus_live_runner as R
     from src import l5_two_sided_probe as TS
@@ -351,7 +375,18 @@ def verify() -> Dict[str, Any]:
             ("shadow_only", "R.shadow_only()", R.shadow_only),
             ("experiment_id", "AUTH.experiment_id()", AUTH.experiment_id),
             ("acc_max_attempts", "AUTH.acc_max_attempts()",
-             AUTH.acc_max_attempts)):
+             AUTH.acc_max_attempts),
+            # PHASE 1 IS REPORTING ONLY, so the mandate's verdict is
+            # OBSERVED and NOT GRADED. Grading it would fail every
+            # deployment until a mandate is installed, and the whole point
+            # of phase 1 is to run verification beside the live path without
+            # anything depending on it. `trusted_keys` being empty is the
+            # shipped state and is reported, not failed.
+            ("mandate_trusted_key_ids", "MS.MANDATE_PUBKEYS",
+             lambda: ",".join(sorted(MS.MANDATE_PUBKEYS)) or "(none)"),
+            ("mandate_verdict", "MS.verify(reporting only)",
+             _mandate_verdict_reason),
+            ("mandate_enforcing", "phase 1 constant", lambda: False)):
         try:
             observed.append({"name": name, "source": source,
                              "effective": _s(read())})
@@ -403,6 +438,47 @@ def verify() -> Dict[str, Any]:
         "maker_only_forbids_defensive_crossing",
         "AUTH.EXECUTION_MODE vs DEF.enabled()",
         _mode_and_defensive_agree, True))
+
+    # ------------------------------------------------------------ PHASE 1
+    # THE MANDATE SIGNING KEY MUST NEVER BE REACHABLE FROM THE RUNTIME.
+    #
+    # Requirement 1 of the standing-mandate design: the owner's private key
+    # is generated offline and never exists in this repository, in Railway,
+    # or in any environment the executor can read. That is an invariant, not
+    # a phase, so unlike the mandate's own status it IS graded -- and it
+    # stays true for ever, so grading it never has to be revisited.
+    #
+    # It looks for private-key SHAPE rather than a fixed name, because the
+    # mistake this catches is someone pasting a seed into a variable nobody
+    # thought to forbid. A 64-hex-character value under a signing-ish name
+    # is refused; the 64-hex PUBLIC key is fine because it lives in code,
+    # not the environment.
+    _KEYISH = ("MANDATE_PRIVATE", "MANDATE_SECRET", "MANDATE_SEED",
+               "MANDATE_SIGNING_KEY", "SIGNING_SEED", "OWNER_PRIVATE")
+
+    def _no_signing_key_in_runtime() -> bool:
+        try:
+            for name, val in os.environ.items():
+                up = name.upper()
+                if any(k in up for k in _KEYISH):
+                    return False
+                v = (val or "").strip()
+                if "MANDATE" in up and len(v) == 64:
+                    try:
+                        bytes.fromhex(v)
+                    except ValueError:
+                        continue
+                    return False          # 32 raw bytes under a MANDATE name
+                if "BEGIN PRIVATE KEY" in v or "BEGIN OPENSSH PRIVATE" in v:
+                    return False
+        except BaseException:                                  # noqa: BLE001
+            return False                  # cannot tell -> fail closed
+        return True
+
+    rows.append(_row(
+        "mandate_signing_key_absent_from_runtime",
+        "os.environ private-key shape scan",
+        _no_signing_key_in_runtime, True))
 
     failed = [r for r in rows if not r["ok"]]
     return {

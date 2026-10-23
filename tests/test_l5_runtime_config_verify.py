@@ -51,8 +51,10 @@ def obs(out, name):
 def test_the_approved_configuration_passes_every_row(approved):
     out = V.verify()
     assert out["PASS"] is True, out["failed"]
-    # 21, not 22: defensive_execution_enabled moved to observed_not_graded.
-    assert out["checked"] == 22
+    # 21 -> 22 when defensive_execution_enabled moved to
+    # observed_not_graded; 22 -> 23 with the phase-1 invariant that the
+    # mandate signing key is never reachable from the runtime.
+    assert out["checked"] == 23
     assert out["failed"] == []
 
 
@@ -478,3 +480,44 @@ def test_the_approved_execution_mode_is_inside_the_owner_digest():
     from src import l5_live_authorization as AUTH
     assert "execution_mode" in AUTH.SCOPE_FIELDS
     assert AUTH.EXECUTION_MODE == "MAKER_ONLY"
+
+
+# ------------------------------------------------- phase 1: signed mandates
+
+def test_the_signing_key_invariant_is_graded(approved):
+    """Requirement 1 is an invariant, not a phase, so it IS graded."""
+    r = row(V.verify(), "mandate_signing_key_absent_from_runtime")
+    assert r["ok"] is True
+
+
+def test_a_signing_seed_in_the_environment_fails_the_row(approved,
+                                                         monkeypatch):
+    monkeypatch.setenv("L5_MANDATE_SIGNING_KEY", "ab" * 32)
+    assert row(V.verify(), "mandate_signing_key_absent_from_runtime")["ok"] \
+        is False
+
+
+def test_a_pem_private_key_anywhere_fails_the_row(approved, monkeypatch):
+    monkeypatch.setenv("SOME_UNRELATED_VAR",
+                       "-----BEGIN PRIVATE KEY-----\nabc\n")
+    assert row(V.verify(), "mandate_signing_key_absent_from_runtime")["ok"] \
+        is False
+
+
+def test_the_public_key_in_code_does_not_trip_the_scan(approved):
+    """The 64-hex PUBLIC key lives in code, not the environment."""
+    assert row(V.verify(),
+               "mandate_signing_key_absent_from_runtime")["ok"] is True
+
+
+def test_the_mandate_verdict_is_reported_and_not_graded(approved):
+    """Phase 1. Grading it would fail every deploy until a mandate exists."""
+    out = V.verify()
+    assert obs(out, "mandate_verdict")["effective"]
+    assert obs(out, "mandate_enforcing")["effective"] in ("False", False)
+    assert "mandate_verdict" not in out["failed"]
+
+
+def test_the_shipped_state_has_no_trusted_keys(approved):
+    assert obs(V.verify(), "mandate_trusted_key_ids")["effective"] \
+        == "(none)"
