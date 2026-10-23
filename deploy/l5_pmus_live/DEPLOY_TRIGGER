@@ -1869,3 +1869,38 @@ deploy: 2026-10-23T00:50Z ee8509cd entry-runway guard; SHADOW_ONLY_LOCK ON, camp
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, checked: 21, failed: [].
 deploy: 2026-10-23T02:23Z campaign budget release lifecycle; four-window campaign already authorized to 05:55:27Z
+
+# ---------------------------------------------------------------------------
+# 81b931f1 -- wire the dwell gate's ANCHOR and fix the retirement deadline.
+#
+# WHAT RUNS DIFFERENTLY IN LIVE DECISION-MAKING: nothing. `L5_DEFENSIVE_DWELL`
+# is ABSENT from this environment, so `l5_live_execution` passes
+# `stranded_since_t=None` and `decide` uses the arm window exactly as before.
+# The only behavioural change outside that flag is `maybe_ts_deadline`, which
+# now retires a resting leg at terminal - DEFENSIVE_MIN_EXECUTION_S (T+705
+# instead of T+720 at the default margin). That is a TIGHTENING: legs rest 15s
+# less, so the defensive sequence always has runway to cancel, confirm and
+# submit. It is the 0300z fix.
+#
+# WHAT THIS DEPLOY IS FOR: the READ-ONLY shadow. `l5_two_sided_shadow` now
+# carries a per-band stranding clock and passes it to `decide`, so the dwell
+# verdicts become observable in production (`timing_gate: DWELL`,
+# `stranded_for_s`) alongside the arm-window verdicts on the same ticks.
+# Timing-only refusals are counted in `defensive_timing_skips`, not stored, so
+# the payload does not grow by ~200 rows a window.
+#
+# THE POLICY IS NOT ENABLED, AND SHOULD NOT BE ON THIS EVIDENCE. Out of sample
+# DWELL - ARM is +0.01572/unit with a 95% CI of [-0.030, +0.062] over 167
+# eligible 15-minute windows; detecting that effect at 80% power needs ~2,900.
+# It forfeits 0.1422/unit of opportunity to net 0.0157, and 88.4% of its exits
+# land in windows where the profitable completion became reachable later. On
+# 5-minute windows it is significantly HARMFUL. See
+# analysis/l5/DWELL_GATE_IMPLEMENTATION.md.
+#
+# Shadow lock: L5_SHADOW_ONLY stays set. No capital change, no limit moved, no
+# new service, no live submission authorized.
+#
+# POST-DEPLOY, REQUIRED:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, failed: [].
+deploy: 2026-10-23T13:20Z dwell anchor + coordinated retirement deadline; shadow-only, dwell flag OFF
