@@ -239,6 +239,72 @@ class CampaignBudgetLedger:
         self._write(out)
         return {"ok": True, "already_closed": False, "campaign_id": cid}
 
+    def release_stale(self, claimant_id: str, *,
+                      legs: Sequence[Mapping[str, Any]] = (),
+                      outstanding: Sequence[Mapping[str, Any]] = (),
+                      now_iso: str = "") -> Dict[str, Any]:
+        """Close a FINISHED campaign's budget so a new one may claim it.
+
+        WHY THIS HAD TO EXIST. `close` is the right gate but nothing ever
+        called it, so a campaign's budget stayed OPEN for ever once its
+        windows were spent, and every later campaign was refused
+        CAMPAIGN_BUDGET_LOCKED. Observed in production on 2026-10-23: the
+        0153 campaign could not arm because the 2122 campaign from the
+        previous day still owned the ledger, with the venue reporting
+        positions {}, openOrders 0 and unsettledFunds 0. The anti-reset
+        property was doing its job; the lifecycle around it was missing.
+
+        IT RELEASES ONLY A CAMPAIGN THAT IS PROVABLY FINISHED, on exactly
+        the evidence `close` demands -- nothing outstanding, nothing
+        unsettled -- and the evidence is supplied by the CALLER from the
+        venue-reconciled ledger, never assumed here.
+
+        A CAMPAIGN MAY NOT RELEASE ITSELF. If the open campaign IS the
+        claimant, this refuses: closing your own live budget would reset
+        `peak_usd` mid-run, which is precisely the reset the lock exists to
+        prevent. Use `close` at the end of a campaign for that.
+
+        NO LOSS IS ERASED AND NO HEADROOM IS MINTED. The ledger stores only
+        {campaign_id, closed, opened_utc, peak_usd}. Realized losses live in
+        the executor's own store and reach the gate through
+        `worst_case_usd(realized_usd=...)` on EVERY evaluation, so a release
+        cannot touch them: after it, headroom is still
+        budget - (realized losses + unsettled cost + outstanding notional).
+        What a release clears is the OWNERSHIP claim and the high-water
+        mark, neither of which is a spending allowance.
+        """
+        cid = str(claimant_id or "").strip()
+        if not cid:
+            return {"ok": False, "reason": "CAMPAIGN_BUDGET_ID_MISSING"}
+        doc = self.read()
+        open_id = doc.get("campaign_id")
+        if not open_id or bool(doc.get("closed")):
+            return {"ok": True, "released": False, "reason": "ALREADY_CLOSED"}
+        if str(open_id) == cid:
+            return {"ok": False, "released": False,
+                    "reason": "CANNOT_RELEASE_OWN_OPEN_CAMPAIGN",
+                    "campaign_id": str(open_id)}
+        if any(True for _ in (outstanding or ())):
+            return {"ok": False, "released": False,
+                    "reason": "CAMPAIGN_OUTSTANDING_ORDERS",
+                    "campaign_id": str(open_id)}
+        unsettled = [l for l in (legs or ())
+                     if isinstance(l, Mapping) and not bool(l.get("settled"))]
+        if unsettled:
+            return {"ok": False, "released": False,
+                    "reason": "CAMPAIGN_UNSETTLED_EXPOSURE:%d" % len(unsettled),
+                    "campaign_id": str(open_id)}
+        out = dict(doc)
+        out.update({"closed": True, "closed_utc": str(now_iso),
+                    "released_for": cid})
+        self._write(out)
+        return {"ok": True, "released": True,
+                "closed_campaign_id": str(open_id), "claimant_id": cid,
+                "peak_usd_at_close": str(doc.get("peak_usd") or "0"),
+                "labels": ("ownership and high-water mark cleared; realized "
+                           "losses are held in the executor's store and are "
+                           "recomputed into every gate evaluation")}
+
     # -------------------------------------------------------------- the gate
 
     def refuse(self, *,

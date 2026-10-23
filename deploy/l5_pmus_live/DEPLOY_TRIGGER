@@ -1835,3 +1835,37 @@ deploy: 2026-10-22T21:07Z retry 7fcff843 after snapshot-fetch timeout; no code c
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, checked: 21, failed: [].
 deploy: 2026-10-23T00:50Z ee8509cd entry-runway guard; SHADOW_ONLY_LOCK ON, campaign exhausted, no order authorized
+#
+# ---------------------------------------------------------------------------
+# CAMPAIGN BUDGET RELEASE LIFECYCLE. Owner-authorized 2026-10-23.
+#
+# At 02:08:08Z the 0153 campaign could not arm:
+#   CAMPAIGN_BUDGET_REFUSED CAMPAIGN_BUDGET_LOCKED:camp1.l5live-20261022-2122
+# `close` was the right gate and NOTHING EVER CALLED IT, so a budget stayed
+# OPEN for ever once its windows were spent and every later campaign was
+# locked out. The anti-reset property was working; the lifecycle was missing.
+#
+# `release_stale` closes a FINISHED campaign on the same evidence `close`
+# demands -- nothing outstanding, nothing unsettled -- supplied by the store,
+# never assumed. It REFUSES a campaign releasing itself (that would reset
+# peak_usd mid-run), and an unreadable store yields a sentinel outstanding
+# entry so it fails CLOSED.
+#
+# NO LOSS ERASED, NO HEADROOM MINTED. The ledger holds only
+# {campaign_id, closed, opened_utc, peak_usd}; realized losses live in the
+# executor's store and re-enter every gate evaluation via
+# worst_case_usd(realized_usd=...). After release the headroom is still
+# 11.10 - 8.8988 = 2.2012. Tests pin that a loss cannot be erased, that no
+# realized/loss field is ever written to the ledger, and that the boundary
+# passes at exactly 2.2012 and refuses one cent more.
+#
+# Reconciliation gating this release: positions {}, availablePositions [],
+# open_orders [], assetNotional 0, unsettledFunds 0, watchdog open_orders 0.
+#
+# Limits unchanged: $20 exposure, $5 daily, 1 market, 1 live order, $4.65
+# cash, $11.10 budget, 0.96 pair ceiling, maker-only, post-only.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-23T02:23Z campaign budget release lifecycle; four-window campaign already authorized to 05:55:27Z

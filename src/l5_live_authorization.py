@@ -1779,6 +1779,41 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         _budget = campaign_budget_ledger()
         if _budget is not None:
             _cid = str(_camp_scope.get("nonce_sid") or "").strip()
+            # RELEASE A FINISHED CAMPAIGN'S BUDGET BEFORE CLAIMING.
+            #
+            # `close` was the right gate and nothing called it, so a budget
+            # stayed OPEN for ever once its windows were spent and every
+            # later campaign was refused CAMPAIGN_BUDGET_LOCKED. Seen in
+            # production at 2026-10-23T02:08:08Z, with the venue reporting
+            # positions {}, openOrders 0 and unsettledFunds 0.
+            #
+            # EVIDENCE, NOT ASSERTION. `release_stale` refuses unless the
+            # store shows nothing outstanding and nothing unsettled, refuses
+            # a campaign releasing ITSELF (which would reset peak_usd
+            # mid-run), and erases no loss: realized figures live in the
+            # store and re-enter the gate on every evaluation. An unreadable
+            # store yields a SENTINEL outstanding entry, so the release
+            # fails closed rather than freeing a budget we cannot vouch for.
+            try:
+                _live = store.live_orders() if store is not None else {}
+                _out = [o for o in (_live or {}).values()
+                        if _dec_or_none(o.get("remaining")) is None
+                        or (_dec_or_none(o.get("remaining")) or D(0)) > 0]
+                _ret = (getattr(store, "state", {}) or {}).get(
+                    "retired_markets") or {}
+                _legs = [{"market": m, "settled": m in _ret}
+                         for m in ((store.committed() or {})
+                                   if store is not None else {})]
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                _out = [{"UNREADABLE": type(_exc).__name__}]
+                _legs = [{"market": "UNREADABLE", "settled": False}]
+            _rel = _budget.release_stale(_cid, legs=_legs, outstanding=_out,
+                                         now_iso=str(now or ""))
+            # the release is reported through the refusal/telemetry channel
+            # the caller already reads; this module does not own a logger.
+            _budget_release = dict(_rel)
             _why = _budget.refuse_arming(campaign_id=_cid)
             if _why:
                 raise ArmingRefusal(
