@@ -148,3 +148,25 @@ realized** separately, with no shadow or modelled figure presented as realized.
 Stop conditions: expiry, four windows spent, the $5 daily halt, any
 reconciliation uncertainty, watchdog latch, or any safety failure. Shadow lock
 restored and verified afterwards.
+
+## 7. Post-change verification (deployment `cae0c1dd`, SUCCESS 15:16:11Z)
+
+| check | observed |
+|---|---|
+| shadow lock | **ON** — `shadow_lock:true`, `blocked:true`, `armed:false` |
+| `L5_LIVE_DISARMED` | `why:"SHADOW_ONLY_LOCK"`, *"submit() is structurally blocked; arming would change nothing"* |
+| preflight | **PASSED** |
+| independent watchdog | `halt:false`, `halt_latch:"CLEAR"` |
+| authorization | `approval_state:"approval_stale"` — nothing can arm |
+| realized losses | **−$9.30360000** — unchanged, nothing reset |
+| daily room | $4.595200 of $5 |
+| residual cap | `residual_cap:3>=3` — still 3 |
+| defensive crosser | `decide()` returns `DEFENSIVE_DISABLED` with the flag off; `defensive_execute` unreachable |
+
+**One subtlety worth recording:** in `decide()` the guard is
+`if simulate: ... elif not enabled():`, so `simulate=True` **bypasses** the
+flag. That is the read-only shadow path, which is why
+`L5_TWO_SIDED_SHADOW` still reports `defensive_evals:241` and
+`defensive_would_act:24` after the flag went off. The shadow submits nothing;
+the money path (`simulate` absent) returns `DEFENSIVE_DISABLED`. The
+telemetry is not evidence that the crosser is still live.
