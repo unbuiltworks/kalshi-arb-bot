@@ -138,6 +138,108 @@ def min_first_leg_own_price() -> D:
     return v
 
 
+# ================== TWO MAKER ORDERS, ONE BOUNDED PAIR
+#
+# WHY. With one live-order slot the complement can never rest beside the
+# first leg: it is refused MAX_LIVE_ORDERS -- 331 times across the 8-window
+# campaign of 2026-10-23 -- and can only be placed once the first leg leaves
+# the book, which is exactly the interval in which the book walks away and
+# the pair breaches the 0.96 cap. Three of eight windows never completed and
+# cost -$0.6684 against +$0.8020 from the five that did.
+#
+# OFF BY DEFAULT, and that is deliberate: the owner approved the mechanism
+# and withheld activation until the lifecycle and risk accounting are
+# verified. With the flag unset this module behaves exactly as it did.
+#
+# WHAT IT IS NOT. It is not `max_live_orders = 2`. That would permit two
+# independent FIRST legs -- two openings sharing one cash envelope, which is
+# the 1215z failure mode the STRATEGY_EXCLUSIVE gates exist to stop. The
+# second slot is granted only to an order that is demonstrably the OTHER
+# side of the SAME round in the SAME market as the one order already live.
+TWO_ORDER_PAIR_ENV = "L5_TS_TWO_ORDER_PAIR"
+
+
+def two_order_pair_enabled() -> bool:
+    """Is the second maker slot active? Default NO.
+
+    Only the exact strings "1", "YES" and "TRUE" (case-insensitively) enable
+    it. Anything else -- unset, empty, "0", "no", a typo -- leaves the single
+    slot in place, because a second resting order is money at the venue and
+    must not be switchable on by accident.
+    """
+    raw = (os.getenv(TWO_ORDER_PAIR_ENV) or "").strip().upper()
+    return raw in ("1", "YES", "TRUE")
+
+
+def second_leg_slot_refusal(*, market: Any, side: str,
+                            live_orders: Optional[Mapping[str, Any]] = None,
+                            legs_claimed: Optional[Mapping[str, Any]] = None
+                            ) -> Optional[str]:
+    """None if this order may take the SECOND maker slot, else why not.
+
+    Returning None does not place anything and grants no other allowance:
+    the caller still runs every cash, exposure, residual, per-market and
+    loss gate, each of which already prices an outstanding order as though
+    it fills in full. This decides one thing only -- whether the
+    MAX_LIVE_ORDERS ceiling may be one higher for THIS order.
+
+    EVERY CONDITION MUST HOLD, and each is a named refusal:
+
+      * the flag is on;
+      * exactly ONE order is live. Zero means this is the first leg and the
+        ordinary slot covers it; two or more means the pair is already
+        resting and a third order is never part of one bounded pair;
+      * that live order is in THIS market. A second market is excluded by
+        max_concurrent_markets as well, and this refuses it independently;
+      * it is on the OPPOSITE side. A same-side order is an EXTEND, which
+        is a separate decision with its own economics and is not authorized
+        to use this slot;
+      * it belongs to the SAME round. `live_orders` rows carry no round --
+        `record_submit` stores t, market, side, price, qty, session_id, mode,
+        remaining and state and nothing else -- so the round is established
+        from `legs_claimed`, which the caller reads per round with
+        `probe_legs_claimed(market, rnd)`. The resting side must be CLAIMED
+        in this round, which is what makes it this plan's first leg rather
+        than an older order;
+      * and THIS side must not be claimed in this round, which is what stops
+        a replacement of an already-claimed leg from taking the slot.
+
+    FAIL CLOSED: an absent claim map, an unreadable live-order map or a row
+    whose side or market cannot be read all refuse.
+    """
+    if not two_order_pair_enabled():
+        return "TWO_ORDER_PAIR_DISABLED"
+    if live_orders is None:
+        return "LIVE_ORDERS_UNREADABLE"
+    try:
+        rows = list(live_orders.values())
+    except BaseException:                                      # noqa: BLE001
+        return "LIVE_ORDERS_UNREADABLE"
+    if len(rows) == 0:
+        return "NO_FIRST_LEG_RESTING"
+    if len(rows) > 1:
+        return "PAIR_ALREADY_RESTING"
+    row = rows[0]
+    try:
+        r_market = str(row.get("market") or "")
+        r_side = str(row.get("side") or "").strip().upper()
+    except BaseException:                                      # noqa: BLE001
+        return "LIVE_ORDER_ROW_UNREADABLE"
+    if not r_market or r_market != str(market):
+        return "RESTING_ORDER_IS_ANOTHER_MARKET"
+    if r_side not in (UP, DOWN):
+        return "RESTING_ORDER_SIDE_UNREADABLE"
+    if r_side == str(side).strip().upper():
+        return "RESTING_ORDER_IS_THE_SAME_SIDE"
+    if not legs_claimed:
+        return "CLAIM_STATE_UNREADABLE"
+    if not bool(legs_claimed.get(r_side)):
+        return "RESTING_ORDER_IS_ANOTHER_ROUND"
+    if bool(legs_claimed.get(str(side).strip().upper())):
+        return "THIS_SIDE_ALREADY_CLAIMED"
+    return None
+
+
 def first_leg_entry_refusal(*, side: str, own_px: Any,
                             legs_claimed: Optional[Mapping[str, Any]] = None,
                             held_up: Any = 0,

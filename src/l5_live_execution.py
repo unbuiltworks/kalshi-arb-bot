@@ -485,7 +485,8 @@ class SafetyLimits:
                live_order_count: int,
                outstanding_residual: D = D(0),
                orders_uncertain: Optional[str] = None,
-               risk_by_market: Optional[Mapping[str, D]] = None
+               risk_by_market: Optional[Mapping[str, D]] = None,
+               pair_second_leg_ok: bool = False
                ) -> Optional[str]:
         """Refuse on POTENTIAL exposure: filled + still-fillable + this one.
 
@@ -503,7 +504,24 @@ class SafetyLimits:
         # ceiling the owner had deliberately lowered.
         if self.max_total_exposure_usd is None:
             return "MAX_TOTAL_EXPOSURE_CEILING_UNREADABLE"
-        if live_order_count >= self.max_live_orders:
+        # THE SECOND MAKER SLOT, FOR ONE BOUNDED PAIR ONLY.
+        #
+        # `pair_second_leg_ok` is EVIDENCE the caller had to establish, not a
+        # preference: `l5_two_sided_probe.second_leg_slot_refusal` grants it
+        # only when the flag is on, exactly one order is live, it is in this
+        # market, on the opposite side, claimed in this round, and this side
+        # is not. Default False, so with no caller change and no flag this
+        # line is the ceiling it always was.
+        #
+        # IT RAISES THE CEILING BY EXACTLY ONE AND NOTHING ELSE. Every other
+        # bound below -- per-market worst case, account-wide exposure, the
+        # cash envelope, the residual ceiling, the daily and cumulative
+        # halts -- already prices an outstanding order as though it fills in
+        # full, so two resting legs are charged as two filled legs without
+        # any change here. That is what makes this safe to grant: it buys a
+        # slot, never headroom.
+        ceiling = self.max_live_orders + (1 if pair_second_leg_ok else 0)
+        if live_order_count >= ceiling:
             return "MAX_LIVE_ORDERS"
         if realized_today <= -self.daily_realized_loss_halt_usd:
             return "DAILY_REALIZED_LOSS_HALT"
@@ -5784,6 +5802,36 @@ class FaithfulExecutor:
             prov.stage("SAFETY_OVERLAY",
                        {"refused": "DAY_REALIZED_UNAVAILABLE"})
             return prov.refuse("SAFETY_OVERLAY", "DAY_REALIZED_UNAVAILABLE")
+        # THE SECOND MAKER SLOT, established as EVIDENCE before the gate
+        # runs. `_probe_leg_pending` and `_probe_round_pending` were set by
+        # the two-sided path above when it chose this leg, so the claim state
+        # is read for the SAME round that produced this order. Anything
+        # missing -- another strategy's order, no pending round, an
+        # unreadable store -- leaves the ceiling where it was.
+        _pair_slot = False
+        _pair_slot_why = "NOT_A_TWO_SIDED_LEG"
+        try:
+            _rnd = getattr(self, "_probe_round_pending", None)
+            if _rnd is not None and TS.two_order_pair_enabled():
+                _pair_slot_why = TS.second_leg_slot_refusal(
+                    market=market, side=str(dec["side"]),
+                    live_orders=self.store.live_orders(),
+                    legs_claimed=self.probe_legs_claimed(market, _rnd))
+                _pair_slot = _pair_slot_why is None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            _pair_slot, _pair_slot_why = False, (
+                "PAIR_SLOT_LAYER_FAILED:%s" % type(exc).__name__)
+        prov.stage("PAIR_SECOND_SLOT", {
+            "granted": bool(_pair_slot),
+            "why_not": None if _pair_slot else str(_pair_slot_why),
+            "enabled": TS.two_order_pair_enabled(),
+            "labels": ("the slot raises MAX_LIVE_ORDERS by exactly one for "
+                       "this order. Every cash, exposure, residual, "
+                       "per-market and loss bound still prices a resting "
+                       "order as though it fills in full, so it buys a slot "
+                       "and never headroom.")})
         why = self.limits.refuse(
             price=tr["price"], qty=tr["qty"], market=market,
             committed_by_market=self.store.committed(),
@@ -5791,6 +5839,7 @@ class FaithfulExecutor:
             realized_today=day_realized,
             open_markets=open_markets,
             outstanding_by_market=outstanding,
+            pair_second_leg_ok=_pair_slot,
             # THE COUNT THAT BINDS THE ONE-ORDER LIMIT, and it fails closed.
             # `live_order_count` counts rows; this counts orders that could
             # still take money, including a cancel we could not verify and
