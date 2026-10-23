@@ -1904,3 +1904,4 @@ deploy: 2026-10-23T02:23Z campaign budget release lifecycle; four-window campaig
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, failed: [].
 deploy: 2026-10-23T13:20Z dwell anchor + coordinated retirement deadline; shadow-only, dwell flag OFF
+deploy: 2026-10-23T21:06Z residual ceiling intersected with the approved absolute 3; consolidated authorization preflight. No limit, strategy or authorization change.
