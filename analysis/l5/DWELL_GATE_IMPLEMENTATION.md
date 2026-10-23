@@ -192,7 +192,76 @@ question about whether to open at all, not about how to recover.
 | `analysis/l5/residual_exit/dwell_validation.py` | the validation above |
 | 3 existing test files | boundary moved 720→705; two source-text guards restated as arithmetic invariants |
 
-## 10. Limitations
+## 10. Shadow operation, verified
+
+Deploy `d1cead39` (commit `d31a9fc5`) built and reached SUCCESS. The deploy
+guard is `watchPatterns: ["deploy/l5_pmus_live/DEPLOY_TRIGGER"]`, so the two
+preceding commits were SKIPPED by design and the trigger file had to be touched
+-- code changes never auto-deploy on this service.
+
+```
+13:21:00Z  L5_LIVE_SHADOW_LOCK {"locked":true,"env":"L5_SHADOW_ONLY",
+                                "blocked":["submit"],"cancel_still_permitted":true}
+13:24:44Z  heartbeat: shadow_lock true, armed false,
+           submission_gate.blocked true, halt true, approval_state approval_stale
+```
+
+**The dwell gate is firing in the read-only shadow.** First cell, window
+`cpc-btc-updown-15m-2026-10-23-1315z` at 13:24:03Z:
+
+```
+timing_gate "DWELL"      stranded_for_s 31.677, 34.819, 37.961, 41.089, 44.345
+defensive_evals 5        defensive_would_act 5
+```
+
+Before this change every cell reported `defensive_evals: 0`, because
+`_defensive_eval` returned early on `arm_window_open` and the shadow could not
+see the decision it exists to measure. One window now yields five evaluations,
+all five of which would act. That is the collection mechanism for the ~2,900
+eligible windows §7(a) says the out-of-sample estimate needs.
+
+`L5_DEFENSIVE_DWELL` is absent from the environment, so none of this changes a
+live decision.
+
+## 11. Test status, and a correction to `81b931f1`'s message
+
+**The figure in commit `81b931f1` -- "2,133 passed" -- is not a characterisation
+of this suite and should not be read as one.** It came from a `-k`-filtered
+subset run with `-p no:randomly`. Run as the project normally runs it, the full
+suite reports **58 failed, 12,292 passed, 27 skipped, 23 errors**.
+
+Two errors in my own checking, recorded so neither is repeated:
+
+* A HEAD-vs-baseline comparison that returned "0 failures on both sides" was
+  **vacuous**. Without `--ignore` for the three `httpx`-missing gemini modules,
+  pytest aborts at collection and runs NO tests; both sides were empty, so the
+  diff meant nothing.
+* `-rf` lists failures but not errors, so even a valid run would have
+  undercounted by the 23.
+
+What is established:
+
+* This suite has substantial **pre-existing inter-test pollution**. The 58
+  appear under `pytest-randomly`'s reordering and concentrate in modules with
+  module-level state and env monkeypatching (`test_gemini_terms_gate` 17,
+  `test_pmus_status_live_handoff` 14, `test_gemini_request_transport` 9,
+  `test_spread_scanner` 9).
+* Of the four cached failures in files this change touches, **three are stale
+  node IDs** that no longer exist after the boundary tests were
+  re-parametrized (`[587-False]`, `[719.0]`, `[720.0]`), and the fourth,
+  `test_l5_runtime_config_verify.py::test_the_build_must_deploy_with_defensive_
+  execution_disabled`, **passes in isolation** (29/29) and is therefore
+  order-dependent.
+* The suites covering every module this change touches pass: 42 in
+  `test_l5_dwell_gate_wiring.py`, 59 in `test_l5_stranded_leg_recovery.py`,
+  89 across the three updated boundary/wiring files.
+
+A correctly scoped comparison -- both commits, deterministic ordering, the three
+collection errors ignored, `-ra` so errors are listed -- is the only thing that
+settles how much of the 58 is attributable here, and no attribution is claimed
+until it has run.
+
+## 12. Limitations
 
 * OOS is 167 eligible 15-minute windows over three weeks of a regime in which
   L5's own per-fill edge had already fallen 45×.
