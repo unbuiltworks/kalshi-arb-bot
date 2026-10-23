@@ -543,6 +543,48 @@ def authorization_preflight(market: str = "", *,
     except BaseException as exc:                               # noqa: BLE001
         row("halt_gate", "UNKNOWN", error=type(exc).__name__)
 
+    # 8b. THE EFFECTIVE RESIDUAL CEILING, reported so an operator can read
+    # it without waiting for an order to reach the gate. The owner approved
+    # "residual cap 3"; the implemented rule is min(k * clip, absolute), and
+    # until 2026-10-23 only the relative half existed -- which at the live
+    # 2015z clip of 1.3 gave 2.6 and happened to sit inside the approval.
+    # This reports both halves and which one would bind at the LARGEST clip
+    # the durable store has recorded, so the answer is about production's
+    # own state rather than about a constant. It reads nothing but code
+    # constants and the ledger, and decides nothing.
+    try:
+        from src import l5_live_execution as _LX
+        from src import l5_pmus_live_runner as _R3
+        absolute = _LX.ABS_RESIDUAL_CAP_CONTRACTS
+        k = _R3.residual_cap_k()
+        clip = _R3.largest_recorded_clip(root=root)
+        rel = (k * clip) if clip is not None else None
+        eff = min(rel, absolute) if rel is not None else None
+        row("residual_ceiling", "PASS",
+            k=str(k),
+            absolute_cap_contracts=str(absolute),
+            largest_recorded_clip=(str(clip) if clip is not None
+                                   else "UNREADABLE"),
+            relative_cap_at_that_clip=(str(rel) if rel is not None
+                                       else "NOT_EVALUATED"),
+            effective_cap_contracts=(str(eff) if eff is not None
+                                     else "NOT_EVALUATED"),
+            which_binds=("ABSOLUTE" if rel is not None and absolute < rel
+                         else "RELATIVE" if rel is not None
+                         else "NOT_EVALUATED"),
+            outer_bound_contracts=str(
+                (_R3.PROBE_LIMITS or {}).get("max_abs_residual")),
+            note=("the applied ceiling is min(k * clip, absolute); the outer "
+                  "bound is the separate SafetyLimits max_abs_residual and "
+                  "is not the approved figure"))
+    except BaseException as exc:                               # noqa: BLE001
+        # NOT_EVALUATED, never UNKNOWN. This row REPORTS a ceiling the gate
+        # enforces for itself; it is not one of the arming blockers, so a
+        # fault reading it must not turn the whole preflight red and send an
+        # operator hunting for an authorization problem that does not exist.
+        row("residual_ceiling", "NOT_EVALUATED", error=type(exc).__name__,
+            note="telemetry only; the gate computes the applied cap itself")
+
     # 9. what cannot be answered here, named rather than assumed PASS
     for n, why in (
             ("window_bounds", "needs live venue window metadata"),

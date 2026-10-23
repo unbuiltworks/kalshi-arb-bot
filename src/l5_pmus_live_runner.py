@@ -359,6 +359,32 @@ def residual_cap_k() -> Optional[D]:
     return k if k > 0 else None
 
 
+def largest_recorded_clip(root: Optional[str] = None) -> Optional[D]:
+    """The biggest single filled quantity the durable store has ever written.
+
+    READ-ONLY, and for TELEMETRY only: the applied residual ceiling is always
+    computed per market inside the gate. This answers the operator's
+    question -- "at the clip this account has actually produced, which half
+    of min(k * clip, absolute) decides?" -- which the per-market value cannot,
+    because the market that will trade next has no clip yet.
+
+    None when the store cannot be read, and None is reported as such rather
+    than as zero: a zero clip would make the relative rule look tighter than
+    anything the account has done.
+    """
+    try:
+        base = root or os.getenv("L5_LIVE_ROOT", "/state/l5-live")
+        path = os.path.join(base, "inventory.json")
+        with open(path, "r", encoding="utf-8") as fh:
+            state = json.load(fh)
+        vals = [D(str(v)) for v in (state.get("max_clip") or {}).values()]
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    return max(vals) if vals else D(0)
+
+
 def now_utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
@@ -823,6 +849,14 @@ class Runner:
         # is the state every orphan path runs in. Without it the transport
         # refuses to cancel at all: absent is not permission.
         self.transport.cancel_owner_oracle = self.store.owns_venue_order_id
+        # THE SOCKET, AS PREFLIGHT'S FALLBACK EVIDENCE OF A READABLE BOOK.
+        # The venue does not serve a 15m market's REST book for its first
+        # minutes; the authenticated socket serves it from under a second.
+        # Installed here, on the transport this window will use, so the
+        # fallback is for THIS market and no other. It is read-only and the
+        # transport consults it only after a 404 has exhausted the REST
+        # retries -- see PmusTransport._ws_book_substitute.
+        self.transport.ws_book = self.book
         # STRUCTURAL DISARM, applied before the executor is given the
         # transport, so there is no window in which it holds a
         # submit-capable object.
@@ -1405,6 +1439,44 @@ class Runner:
                 except BaseException as exc:                  # noqa: BLE001
                     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                         raise
+            # ============ USABILITY IS DECIDED BEFORE THE CLAIM IS TAKEN
+            #
+            # `authorize_arming` writes the irreversible single-use claim
+            # lock. Asking "is this window worth anything?" AFTERWARDS means
+            # an unusable window burns the lock on its way to refusing
+            # itself, and every later tick in that window is then refused
+            # AUTHORIZATION_ALREADY_USED against a lock nothing can release.
+            #
+            # 2045z on 2026-10-23 is the whole case. The claim was written at
+            # 20:49:16; usability refused seven seconds later with 284s of
+            # entry runway against the 300s floor; the remaining 180 ticks of
+            # that window were refused AUTHORIZATION_ALREADY_USED. The
+            # campaign counter stayed honest -- `reserve_window` was never
+            # reached, so none of the owner's windows was consumed -- but the
+            # MARKET was unreachable for the rest of its life.
+            #
+            # This check is read-only: venue window bounds plus a store read,
+            # writing nothing and reserving nothing, so moving it earlier can
+            # only ever add a refusal. The post-claim re-check below is KEPT:
+            # runway shrinks monotonically, so the two can disagree only in
+            # the sub-second between them, and a window that became unusable
+            # in that gap must still not trade.
+            if campaign.get("present") and campaign.get("ok"):
+                pre = self.campaign_window_is_usable(t.market_slug)
+                if not pre.get("usable"):
+                    self.win["arm_refused_window_not_usable"] += 1
+                    if self.win["arm_refused_window_not_usable"] == 1:
+                        emit("L5_LIVE_DISARMED", {
+                            "market": t.market_slug,
+                            "why": "CAMPAIGN_WINDOW_NOT_USABLE",
+                            "detail": pre,
+                            "boundary": "Runner.try_arm/pre_claim",
+                            "claim_taken": False,
+                            "labels": ("refused BEFORE the single-use claim "
+                                       "was taken: no campaign window is "
+                                       "spent and the authorization is "
+                                       "still available to a later window")})
+                    return
             claim = AUTH.authorize_arming(
                 campaign=campaign,
                 market=t.market_slug,
@@ -1455,6 +1527,12 @@ class Runner:
             # AND IT MUST STILL BE WORTH SPENDING. A window whose entry
             # cutoff has passed cannot take a first leg, so unless we are
             # already working inventory in it there is nothing for it to do.
+            #
+            # THE SAME CHECK RAN BEFORE THE CLAIM. This one closes the
+            # sub-second gap in which runway can cross the floor between the
+            # two calls; it is reached only when the pre-claim check passed,
+            # so a refusal here means the window expired mid-arm rather than
+            # that it was never usable.
             if campaign.get("present") and campaign.get("ok"):
                 worth = self.campaign_window_is_usable(t.market_slug)
                 if not worth.get("usable"):
@@ -1464,10 +1542,12 @@ class Runner:
                             "market": t.market_slug,
                             "why": "CAMPAIGN_WINDOW_NOT_USABLE",
                             "detail": worth,
-                            "boundary": "Runner.try_arm",
-                            "labels": ("the window is not spent: it could "
-                                       "not take a first leg and no "
-                                       "inventory is being worked in it")})
+                            "boundary": "Runner.try_arm/post_claim",
+                            "claim_taken": True,
+                            "labels": ("the window crossed the entry floor "
+                                       "between the pre-claim check and the "
+                                       "claim. No campaign window is spent; "
+                                       "the claim for this market is")})
                     return
                 spend = CAMP.reserve_window(str(t.market_slug),
                                             root=self.root)

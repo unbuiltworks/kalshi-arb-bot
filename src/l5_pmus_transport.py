@@ -557,6 +557,27 @@ EVENT_PREFIXES = ("cpc-",)
 BOOK_READ_ATTEMPTS = 3
 BOOK_READ_BACKOFF_S = 1.0
 
+#: and when the REST route 404s for the whole retry budget, the AUTHENTICATED
+#: WEBSOCKET book for the same market is accepted as equivalent evidence that
+#: the book is reachable -- because it is the same venue, the same market and
+#: the same credentials, delivering a two-sided top of book on a connected
+#: socket. 2100z on 2026-10-23 is the case: `book_readable` 404ed until the
+#: campaign expired while the socket had served 7,800 book updates for that
+#: slug from +0.8s. ONLY a 404 qualifies: a 401, a 403, a 5xx or a transport
+#: error is a genuine read failure and still fails the preflight.
+BOOK_READ_404_CODES = (404,)
+#: the socket snapshot must be FRESH. `snapshot()` already returns None
+#: unless the socket is connected and the book is two-sided; this bounds how
+#: stale the last frame of any kind may be. A push stream is quiet when
+#: nothing changes, so this is generous relative to a 15m window and still
+#: far short of the minutes a dead socket would show.
+WS_BOOK_FALLBACK_MAX_AGE_S = 30.0
+#: and the only market states the socket may report for the substitution to
+#: stand. An ALLOWLIST: the venue also emits MARKET_STATE_UNOPENED and
+#: MARKET_STATE_CLOSED, and `"OPEN" in "MARKET_STATE_UNOPENED"` is True, so a
+#: substring test accepts exactly the state that must be refused.
+WS_BOOK_OPEN_STATES = ("MARKET_STATE_OPEN", "OPEN")
+
 
 def event_slug_for(market_slug: str) -> str:
     for p in EVENT_PREFIXES:
@@ -703,6 +724,14 @@ class PmusTransport:
         self.last_cancel_error: Optional[Dict[str, Any]] = None
         self._now = now_fn or (lambda: dt.datetime.now(dt.timezone.utc))
         self.armed = False
+        #: OPTIONAL read-only supplier of the authenticated WEBSOCKET top of
+        #: book for a slug, used by preflight ONLY when the REST book route
+        #: 404s for its whole retry budget. Set by the runner, which owns the
+        #: socket. None means no fallback exists and a 404 fails as before.
+        #: It can only ever turn a FAILED preflight into a passing one on
+        #: evidence from the same venue, market and credentials; it is never
+        #: consulted when the REST read succeeds.
+        self.ws_book: Optional[Any] = None
         self.preflight_report: Optional[Dict[str, Any]] = None
         self.identity_probe: Dict[str, Any] = {}
         #: the venue's own execution grid, filled in by preflight(). None
@@ -1221,7 +1250,23 @@ class PmusTransport:
                     if attempt < BOOK_READ_ATTEMPTS:
                         _time.sleep(BOOK_READ_BACKOFF_S * attempt)
             if last_exc is not None:
-                return self._fail(checks, gate, "book_readable", last_exc)
+                sub = self._ws_book_substitute(last_exc)
+                if sub is None:
+                    return self._fail(checks, gate, "book_readable", last_exc)
+                bk = {"bid": sub["bid"], "ask": sub["ask"]}
+                book_attempts.append("ws_fallback:accepted")
+                detail = dict(sub)
+                detail["rest_error"] = "%s: %s" % (
+                    type(last_exc).__name__, redact(last_exc))
+                detail["note"] = (
+                    "the REST book route 404ed for its whole retry budget; "
+                    "the authenticated socket is serving a fresh two-sided "
+                    "book for this same market, which is what this gate "
+                    "asks. Executability is still decided at the decision "
+                    "point by l5_preview_gate.require_fresh_book.")
+                checks.append({
+                    "check": "book_readable_via_authenticated_ws",
+                    "passed": True, "blocking": False, "detail": detail})
             checks.append({"check": "book_read_attempts", "passed": True,
                            "blocking": False, "detail": book_attempts})
         # A periodic preflight runs hundreds of seconds into a window and
@@ -1279,6 +1324,88 @@ class PmusTransport:
         if not ok:
             raise PreflightFailed(json.dumps(report))
         return report
+
+    def _ws_book_substitute(self, exc: BaseException
+                            ) -> Optional[Dict[str, Any]]:
+        """The authenticated socket book, IF it can stand in for a 404.
+
+        Returns None -- meaning "no substitute, fail the preflight" -- unless
+        every one of these holds, because each is part of what makes the
+        socket book equivalent evidence rather than a way around the gate:
+
+          * the REST failure was a 404, so the ROUTE did not answer for a
+            market the venue has otherwise confirmed open. Any other status,
+            and any non-HTTP error, is a genuine read failure.
+          * a supplier was injected, and it yields a snapshot. `snapshot()`
+            returns None unless the socket is CONNECTED and the book is
+            TWO-SIDED, so a quiet or half-served book cannot qualify.
+          * the last frame on that socket is recent, so a connected-but-dead
+            stream cannot qualify either.
+          * the market state the socket reports, when it reports one, is
+            OPEN. An unopened or closed market is never tradable, which is
+            the one thing this must not be able to assert.
+
+        It never raises: a supplier that throws is simply no substitute.
+        """
+        if int(getattr(exc, "code", 0) or 0) not in BOOK_READ_404_CODES:
+            return None
+        src = self.ws_book
+        if src is None:
+            return None
+        try:
+            snap = src(self.market_slug) if callable(src) else src.snapshot(
+                self.market_slug)
+        except BaseException as inner:                         # noqa: BLE001
+            if isinstance(inner, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        if not snap:
+            return None
+        bid, ask = snap.get("bid"), snap.get("ask")
+        if bid is None or ask is None:
+            return None
+        # AND THE SOCKET MUST HAVE BEEN READY BEFORE THE WINDOW OPENED.
+        # A socket that subscribed LATE has only the frames sent since it
+        # arrived; its two-sided book is then a partial view, and "the
+        # socket has this market's book" is a weaker claim than the REST
+        # route answering. The subscription is deterministic -- the slug is
+        # a function of the window grid and the observer subscribes ahead of
+        # open -- so requiring it costs nothing when preparation worked and
+        # refuses the substitution when it did not. Unavailable is NOT
+        # permission: an observer that cannot report it is no substitute.
+        pre = None
+        if not callable(src):
+            try:
+                pre = (src.window_report(self.market_slug) or {}).get(
+                    "subscribed_before_open")
+            except BaseException as inner:                     # noqa: BLE001
+                if isinstance(inner, (KeyboardInterrupt, SystemExit)):
+                    raise
+                pre = None
+        else:
+            pre = snap.get("subscribed_before_open")
+        if pre is not True:
+            return None
+        age = snap.get("stream_age_s")
+        if age is None or float(age) > WS_BOOK_FALLBACK_MAX_AGE_S:
+            return None
+        # AN ALLOWLIST, NOT A SUBSTRING. "OPEN" in "MARKET_STATE_UNOPENED" is
+        # True, so substring matching would have accepted the one state this
+        # is here to refuse -- a market that has not opened yet. The venue's
+        # own value for an open 15m market is MARKET_STATE_OPEN; anything
+        # else, including a value we do not recognise, is no substitute.
+        st = snap.get("market_state")
+        if st is not None and str(st).upper() not in WS_BOOK_OPEN_STATES:
+            return None
+        return {"bid": bid, "ask": ask,
+                "bid_shares": snap.get("bid_shares"),
+                "ask_shares": snap.get("ask_shares"),
+                "subscribed_before_open": True,
+                "stream_age_s": age,
+                "max_stream_age_s": WS_BOOK_FALLBACK_MAX_AGE_S,
+                "book_updates": snap.get("book_updates"),
+                "market_state": st,
+                "source": snap.get("source") or "authenticated_ws"}
 
     def _fail(self, checks, gate, name, exc) -> Dict[str, Any]:
         gate(name, False, "%s: %s" % (type(exc).__name__, redact(exc)))
