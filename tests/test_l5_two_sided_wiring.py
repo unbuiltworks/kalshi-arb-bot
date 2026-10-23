@@ -597,7 +597,10 @@ def test_Q5_leg_two_is_bounded_by_the_deadline_not_by_another_L5_trade(probe,
         __import__("src.l5_pmus_live_runner", fromlist=["x"]).Runner
         .maybe_ts_deadline)
     assert "live_orders" in body
-    assert "now <= TSP.cancel_cutoff" in body
+    # the deadline is now coordinated with the defensive runway, so the
+    # comparison is against complement_retire_from_start, not the raw
+    # terminal. Same clock, 15s earlier. See the 0300z fix.
+    assert "now <= TSP.complement_retire_from_start" in body
 
 
 def test_accumulation_claim_refusals(tmp_path, monkeypatch):

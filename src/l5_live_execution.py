@@ -1040,7 +1040,12 @@ class InventoryStore:
         self.state: Dict[str, Any] = {"positions": {}, "committed": {},
                                       "realized_today": "0", "day": None,
                                       "submitted": {}, "live_orders": {},
-                                      "orders_uncertain": None}
+                                      "orders_uncertain": None,
+                                      # market -> epoch seconds of the FIRST
+                                      # fill that took this market off flat.
+                                      # Persisted, so a restart inside a
+                                      # window does not reset the dwell.
+                                      "stranded_since": {}}
         self._load()
 
     def _load(self) -> None:
@@ -1258,6 +1263,91 @@ class InventoryStore:
 
     def residual(self, market: str) -> D:
         return self.position(market, "UP") - self.position(market, "DOWN")
+
+    # ---------------------------------------------------------------- dwell
+    #
+    # THE FIRST UNMATCHED-FILL TIMESTAMP, per market, persisted.
+    #
+    # `l5_defensive_completion.decide` takes `stranded_since_t` and uses it to
+    # run its timing gate as a DWELL measured from the moment the leg became
+    # unmatched, instead of as a 45-second slot before the terminal. The slot
+    # is narrower than the executor's own evaluation jitter -- 0300z stepped
+    # T+524 -> T+587 and straddled it -- so the gate has to be anchored to the
+    # position, and the anchor has to survive a restart.
+    #
+    # FAIL CLOSED EVERYWHERE. A market with inventory but NO stamp returns
+    # None, which `decide` reads as "use the arm window": the pre-existing
+    # behaviour, byte for byte. Nothing here invents a stranding time it
+    # cannot source from a fill.
+
+    def _note_stranding(self, market: str, before: D, after: D) -> None:
+        """Maintain the stamp across one authoritative fill."""
+        try:
+            ss = self.state.setdefault("stranded_since", {})
+            if after == 0:
+                # flat: there is nothing stranded, so there is no clock
+                ss.pop(str(market), None)
+                return
+            if before == 0:
+                # this fill is the one that took the market off flat
+                ss[str(market)] = float(self._now().timestamp())
+            # already unmatched: keep the ORIGINAL stamp. The dwell measures
+            # from when the imbalance opened, not from the latest fill, so an
+            # EXTEND must not restart it.
+        except BaseException:                                  # noqa: BLE001
+            # a stamp we could not write is a stamp we do not have, and the
+            # reader falls back to the arm window.
+            pass
+
+    def stranded_since(self, market: str) -> Optional[float]:
+        """Epoch seconds of the first unmatched fill, or None.
+
+        None whenever the answer is not authoritative: no stamp, an
+        unreadable stamp, or a market the ledger says is flat. A flat market
+        with a leftover stamp is a reconciliation failure, and returning None
+        makes the caller behave exactly as it did before this field existed.
+        """
+        try:
+            if self.residual(market) == 0:
+                return None
+            v = (self.state.get("stranded_since") or {}).get(str(market))
+            if v is None:
+                return None
+            f = float(v)
+            return f if f > 0 else None
+        except BaseException:                                  # noqa: BLE001
+            return None
+
+    def reconcile_stranded(self) -> Dict[str, Any]:
+        """Drop stamps for markets the ledger says are flat, and REPORT the
+        markets that hold inventory with no stamp rather than inventing one.
+
+        Called on the reconcile path so a restart, an adoption from the venue
+        or a store written before this field cannot leave the dwell keyed to
+        a position that no longer exists.
+        """
+        out: Dict[str, Any] = {"cleared": [], "stranded_without_stamp": [],
+                               "kept": []}
+        try:
+            ss = self.state.setdefault("stranded_since", {})
+            markets = set(ss)
+            for key in list(self.state.get("positions") or {}):
+                markets.add(str(key).split("|", 1)[0])
+            for m in sorted(markets):
+                try:
+                    res = self.residual(m)
+                except BaseException:                          # noqa: BLE001
+                    continue
+                if res == 0:
+                    if ss.pop(m, None) is not None:
+                        out["cleared"].append(m)
+                elif m not in ss:
+                    out["stranded_without_stamp"].append(m)
+                else:
+                    out["kept"].append(m)
+        except BaseException as exc:                           # noqa: BLE001
+            out["error"] = "%s" % type(exc).__name__
+        return out
 
     def realized_today(self) -> D:
         """The loss halt's authority: attributed settled P&L PLUS the
@@ -2403,8 +2493,16 @@ class InventoryStore:
             raw = self.state.setdefault("venue_side_raw", {})
             raw.setdefault(k, sorted(set(raw.get(k, []))
                                      | {str(side)}))
+        # WHEN DID THIS MARKET BECOME UNMATCHED? Read the residual either
+        # side of the only write that can change it, so the stamp is a
+        # consequence of an authoritative fill and never of a clock read
+        # somewhere else. `apply_fill` is the single writer of `positions`
+        # on the fill path, which is why this belongs here and nowhere else.
+        _res_before = self.residual(own_market)
         self.state["positions"][k] = str(
             D(str(self.state["positions"].get(k, 0))) + qty)
+        self._note_stranding(own_market, _res_before,
+                             self.residual(own_market))
         # both of these are CASH OUT in the leg's own terms now. They used to
         # take the wire number, which credits a short instead of charging it.
         self.state["committed"][own_market] = str(
@@ -3714,8 +3812,15 @@ class InventoryStore:
                 "unbooked terminal orders %s; quarantined orders %s"
                 % (sorted(set(disputed)), sorted(incoherent), pending,
                    quarantine))
+        # THE DWELL ANCHOR IS RECONCILED HERE TOO, after the venue has
+        # overwritten our positions. A stamp for a market the venue says is
+        # flat is dropped; a market that holds inventory with NO stamp is
+        # REPORTED, never given an invented one -- it reads as None and the
+        # defensive gate falls back to the arm window for that market.
+        _dwell = self.reconcile_stranded()
         self.save()
         return {"reconciled": True, "drift": drift,
+                "stranded_since": _dwell,
                 # stated separately and never collapsed into one another
                 "gross_before": {m: {k: str(v) for k, v in d.items()}
                                  for m, d in gross.items()},
@@ -5342,6 +5447,17 @@ class FaithfulExecutor:
                                      else ts_book.get("ask_shares")),
                     taker_fee_per_contract=_dfee,
                     defensive_spent_usd=self.store.defensive_spent(),
+                    # THE DWELL ANCHOR. `stranded_since` returns None unless
+                    # the ledger holds inventory in this market AND an
+                    # authoritative fill stamped the moment it went off flat,
+                    # and the flag gates it besides -- so with the flag off,
+                    # or on a store that predates the field, or on a market
+                    # whose stamp we cannot source, this is None and `decide`
+                    # falls back to the arm window with the deployed timing
+                    # unchanged. Both phases share `_dkw`, so the precheck
+                    # and the authorizing verdict cannot disagree about it.
+                    stranded_since_t=(self.store.stranded_since(market)
+                                      if DEF.dwell_enabled() else None),
                     window_settled=False)
                 _resting = []
                 try:

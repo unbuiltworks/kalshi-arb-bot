@@ -141,12 +141,32 @@ DEFENSIVE_WIRE = {
 DEFENSIVE_ENABLED_ENV = "L5_DEFENSIVE_COMPLETION"
 _TRUE = ("1", "yes", "true", "on")
 
+#: A SECOND, SEPARATE FLAG FOR THE TIMING GATE ITSELF.
+#:
+#: The dwell is a change to WHEN a money-moving decision may be taken, and it
+#: is not the same decision as lifting the shadow lock. Keeping it on its own
+#: flag means the executor can be wired, tested and shadow-measured with the
+#: live timing byte-for-byte unchanged, and the policy can then be turned on
+#: by one explicit authorization rather than arriving as a side effect of
+#: unlocking submission. OFF -> callers pass `stranded_since_t=None` ->
+#: `decide` uses the arm window, exactly as before this existed.
+DEFENSIVE_DWELL_ENV = "L5_DEFENSIVE_DWELL"
+
 
 def enabled() -> bool:
     import os
     try:
         return (os.getenv(DEFENSIVE_ENABLED_ENV) or "").strip().lower() \
             in _TRUE
+    except BaseException:                                  # noqa: BLE001
+        return False
+
+
+def dwell_enabled() -> bool:
+    """Is the DWELL timing gate armed? Unreadable is OFF, as above."""
+    import os
+    try:
+        return (os.getenv(DEFENSIVE_DWELL_ENV) or "").strip().lower() in _TRUE
     except BaseException:                                  # noqa: BLE001
         return False
 

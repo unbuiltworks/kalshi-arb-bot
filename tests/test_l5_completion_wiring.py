@@ -358,4 +358,16 @@ def test_the_deadline_sweep_is_not_weakened_by_the_completion_path():
     src = inspect.getsource(R.Runner.maybe_ts_deadline)
     assert "ts_terminal_deadline" in src
     assert "TS_TERMINAL_DEADLINE" in src
-    assert "completion" not in src.lower()
+    # THE GUARD, RESTATED AS ARITHMETIC. It used to grep the source for the
+    # word "completion", which the defensive module's own name now trips --
+    # `l5_defensive_completion` is imported here on purpose, to pull the
+    # deadline EARLIER by the defensive runway. A word is not the property
+    # that matters; the property is that the sweep is never weakened, so
+    # assert the deadline directly and let the import be.
+    from src import l5_two_sided_probe as _TSP
+    from src import l5_defensive_completion as _DEFC
+    _ws = 1792094400.0
+    _terminal = _TSP.cancel_cutoff_from_start(_ws)
+    assert _TSP.complement_retire_from_start(
+        _ws, _DEFC.DEFENSIVE_MIN_EXECUTION_S) <= _terminal
+    assert "maybe_ts_completion" not in src

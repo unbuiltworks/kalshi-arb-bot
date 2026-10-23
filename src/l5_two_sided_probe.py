@@ -470,6 +470,39 @@ def cancel_cutoff(t_end: float) -> float:
     return float(t_end) - cancel_margin_s()
 
 
+def complement_retire_from_start(t_start: float,
+                                 defensive_runway_s: float = 0.0) -> float:
+    """The terminal deadline, pulled EARLIER by the defensive runway.
+
+    THE 0300z COORDINATION DEFECT LIVES HERE. `maybe_ts_deadline` retired a
+    resting leg AT `cancel_cutoff_from_start` -- the binding terminal, T+600 at
+    the deployed margin. `l5_defensive_completion` needs
+    `DEFENSIVE_MIN_EXECUTION_S` (15s) BEFORE that terminal to run its sequence
+    at all: cancel the complement, re-read the venue to confirm it is gone,
+    then submit one order. So a complement still resting at T+600 was retired
+    at the exact moment the defensive exit's own window had already shut, and
+    the position went to settlement with no exit attempted. That is 0300z.
+
+    Subtracting the runway makes the ordering structural:
+
+        complement retired   <=  terminal - runway   <   terminal
+
+    RETIRING EARLIER IS A TIGHTENING. It shortens how long a leg may rest, in
+    the same direction `cancel_margin_s` may only widen and `place_floor_s`
+    may only rise, so a runway that cannot be read is simply zero and the
+    deadline falls back to the deployed one rather than becoming later.
+
+    The runway is a PARAMETER, not an import: this module owns the window
+    arithmetic and `l5_defensive_completion` owns the constant, and neither
+    should have to import the other to agree.
+    """
+    try:
+        r = float(defensive_runway_s)
+    except (TypeError, ValueError):
+        r = 0.0
+    return cancel_cutoff_from_start(t_start) - max(0.0, r)
+
+
 def window_end(t_start: float) -> float:
     """Window END from its START. BTC15m slugs name the start."""
     return float(t_start) + WINDOW_S

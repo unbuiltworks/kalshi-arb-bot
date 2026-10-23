@@ -3613,6 +3613,7 @@ class Runner:
         which is the bounded outcome the risk envelope already prices.
         """
         from src import l5_two_sided_probe as TSP
+        from src import l5_defensive_completion as DEFC
         t = self.transport
         if t is None:
             return None
@@ -3624,7 +3625,8 @@ class Runner:
             # UNKNOWN WINDOW TIMING IS ALREADY OVERDUE. A deadline we cannot
             # compute is not a deadline, so the legs come in.
             out = {"reason": "TS_WINDOW_UNKNOWN", "cancelled": True}
-        elif now <= TSP.cancel_cutoff_from_start(float(ws)):
+        elif now <= TSP.complement_retire_from_start(
+                float(ws), DEFC.DEFENSIVE_MIN_EXECUTION_S):
             return None
         else:
             # FROM THE START, NOT THE END. AB.slug_start names the window
@@ -3632,10 +3634,17 @@ class Runner:
             # start - 180, a deadline already expired before the window
             # opened, which cancelled the legs on the first tick. Found by
             # independent review; the helper now owns the arithmetic.
+            # THE CUTOFF IS NOW THE TERMINAL LESS THE DEFENSIVE RUNWAY, so a
+            # complement can never be retired at the instant the defensive
+            # exit's own window has already closed. This is the 0300z fix; see
+            # `TSP.complement_retire_from_start`.
             out = {"reason": "TS_TERMINAL_DEADLINE",
                    "window_start": float(ws),
                    "window_end": TSP.window_end(float(ws)),
-                   "cutoff": TSP.cancel_cutoff_from_start(float(ws))}
+                   "terminal": TSP.cancel_cutoff_from_start(float(ws)),
+                   "defensive_runway_s": DEFC.DEFENSIVE_MIN_EXECUTION_S,
+                   "cutoff": TSP.complement_retire_from_start(
+                       float(ws), DEFC.DEFENSIVE_MIN_EXECUTION_S)}
         if not (self.store.live_orders() or {}):
             return None
         res = LX.deadman(self.store, t, reason="ts_terminal_deadline")

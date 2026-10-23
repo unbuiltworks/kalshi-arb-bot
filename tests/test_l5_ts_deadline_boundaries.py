@@ -89,11 +89,32 @@ def armed_probe(monkeypatch):
 
 def test_the_cutoff_is_start_plus_720_not_start_minus_180():
     assert TSP.cancel_cutoff_from_start(WS) == WS + 720.0
+
+
+def test_the_retirement_deadline_leaves_the_defensive_runway_intact():
+    """The coordination invariant, asserted on the arithmetic rather than on
+    source text: a leg is retired at or before the terminal LESS the runway
+    the defensive sequence needs to cancel, confirm and submit."""
+    from src import l5_defensive_completion as DEFC
+    terminal = TSP.cancel_cutoff_from_start(WS)
+    retire = TSP.complement_retire_from_start(
+        WS, DEFC.DEFENSIVE_MIN_EXECUTION_S)
+    assert retire == terminal - DEFC.DEFENSIVE_MIN_EXECUTION_S
+    assert retire == WS + 705.0
+    assert retire < terminal
+    # and an unreadable runway is ZERO, never a LATER deadline
+    for bad in (None, "x", float("nan")):
+        got = TSP.complement_retire_from_start(WS, bad)
+        assert got <= terminal
     assert TSP.cancel_cutoff_from_start(WS) == CUT
     assert TSP.cancel_cutoff_from_start(WS) > WS       # the whole bug
 
 
-@pytest.mark.parametrize("offset", [0.0, 300.0, 719.0, 720.0])
+# THE CUTOFF MOVED 15s EARLIER, deliberately. A resting complement must
+# be retired with the defensive sequence's runway still intact, so the
+# deadline is now terminal - DEFENSIVE_MIN_EXECUTION_S = start + 705.
+# See TSP.complement_retire_from_start; this is the 0300z fix.
+@pytest.mark.parametrize("offset", [0.0, 300.0, 704.0, 705.0])
 def test_an_order_may_REST_at_or_before_the_cutoff(armed_probe, offset):
     st = Stub({"c1": leg("V1", "UP")})
     assert R.Runner.maybe_ts_deadline(st, WS + offset) is None
@@ -101,7 +122,7 @@ def test_an_order_may_REST_at_or_before_the_cutoff(armed_probe, offset):
     assert armed_probe == []
 
 
-@pytest.mark.parametrize("offset", [721.0, 800.0, 900.0, 1200.0])
+@pytest.mark.parametrize("offset", [706.0, 721.0, 800.0, 900.0, 1200.0])
 def test_after_the_cutoff_it_cancels_by_exact_venue_id_with_a_reread(
         armed_probe, offset):
     st = Stub({"c1": leg("V1", "UP")})
