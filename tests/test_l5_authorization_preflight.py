@@ -132,3 +132,61 @@ class TestWindowBudget:
         r = row(A.authorization_preflight(MKT, now=NOW), "window_budget_env")
         assert r["max_windows_env"] == 1
         assert "silently caps" in r["note"]
+
+
+class TestNoMarketYetDoesNotFakeASeriesMismatch:
+    """Emitted in production 2026-10-23T19:37: a valid approval -- state
+    "approved", exposure 2.00, 4 windows, daily loss 5 -- was reported FAIL
+    with CAMPAIGN_SERIES_MISMATCH purely because the transport had no slug
+    yet and `"".startswith("cpc-btc-updown-15m-")` is False."""
+
+    def _doc(self):
+        import datetime as dt, json
+        now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+        return json.dumps({
+            "approved": True, "nonce": "camp-20261023-4w-c2",
+            "series": "cpc-btc-updown-15m-",
+            "issued_utc": (now - dt.timedelta(minutes=2)).isoformat(),
+            "expires_utc": (now + dt.timedelta(minutes=73)).isoformat(),
+            "max_windows": 4, "max_total_exposure_usd": "2.00",
+            "max_daily_loss_usd": "5"})
+
+    def test_a_valid_approval_passes_with_no_market(self, monkeypatch):
+        monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", self._doc())
+        r = row(A.authorization_preflight("", now=None), "campaign_approval")
+        assert r["verdict"] == "PASS", r
+        assert r["reason"] != "CAMPAIGN_SERIES_MISMATCH"
+
+    def test_coverage_is_reported_not_evaluated_rather_than_failed(
+            self, monkeypatch):
+        monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", self._doc())
+        r = row(A.authorization_preflight(""), "campaign_approval")
+        assert "NOT_EVALUATED" in str(r["covers_market"])
+
+    def test_the_approved_scope_is_still_reported(self, monkeypatch):
+        """The operator must still see what was approved."""
+        monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", self._doc())
+        r = row(A.authorization_preflight(""), "campaign_approval")
+        assert r["max_windows"] == 4
+        assert r["approved_exposure"] == "2.00"
+        assert r["approved_daily_loss"] == "5"
+        assert r["document_sha256"]
+
+    def test_a_real_series_mismatch_still_fails_when_a_market_is_known(
+            self, monkeypatch):
+        monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", self._doc())
+        r = row(A.authorization_preflight("cpc-eth-updown-15m-2026-10-23-2000z"),
+                "campaign_approval")
+        assert r["verdict"] == "FAIL"
+        assert r["reason"] == "CAMPAIGN_SERIES_MISMATCH"
+
+    def test_a_matching_market_passes_and_asserts_coverage(self, monkeypatch):
+        monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", self._doc())
+        r = row(A.authorization_preflight("cpc-btc-updown-15m-2026-10-23-2000z"),
+                "campaign_approval")
+        assert r["verdict"] == "PASS" and r["covers_market"] is True
+
+    def test_an_absent_document_still_fails_with_no_market(self, monkeypatch):
+        monkeypatch.delenv("L5_CAMPAIGN_APPROVAL", raising=False)
+        r = row(A.authorization_preflight(""), "campaign_approval")
+        assert r["verdict"] == "FAIL"

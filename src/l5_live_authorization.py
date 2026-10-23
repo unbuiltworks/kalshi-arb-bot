@@ -481,22 +481,49 @@ def authorization_preflight(market: str = "", *,
         note=("unset defers to the campaign; a SET value can only tighten "
               "it, so a stale 1 silently caps a four-window campaign"))
 
-    # 7. the campaign approval, WITHOUT reserving a window
+    # 7. the campaign approval, WITHOUT reserving a window.
+    #
+    # WITH NO MARKET YET, DO NOT ASSERT MARKET COVERAGE. At startup the
+    # transport has no slug, and `campaign_decision("")` reaches
+    # authorize_window's series test -- `"".startswith("cpc-btc-...")` is
+    # False -- so a perfectly valid approval was reported as
+    # CAMPAIGN_SERIES_MISMATCH. That false FAIL was emitted in production on
+    # 2026-10-23T19:37 against an approval whose state was "approved" with
+    # the right exposure, windows and daily loss, and it is exactly the kind
+    # of misleading diagnostic this preflight exists to eliminate.
+    #
+    # So: with a market, evaluate the full decision. Without one, evaluate
+    # the DOCUMENT through the canonical gate -- which needs no market --
+    # and report coverage as NOT_EVALUATED rather than as a failure.
     try:
         from src import l5_campaign_approval as CA
-        d = CA.campaign_decision(market or "", root=root, now=t,
-                                 reserve=False)
-        if not d.get("present"):
-            row("campaign_approval", "FAIL", present=False,
-                reason=d.get("reason"))
+        if market:
+            d = CA.campaign_decision(market, root=root, now=t,
+                                     reserve=False)
+            if not d.get("present"):
+                row("campaign_approval", "FAIL", present=False,
+                    reason=d.get("reason"))
+            else:
+                sc = dict(d.get("scope") or {})
+                row("campaign_approval", "PASS" if d.get("ok") else "FAIL",
+                    state=d.get("approval_state"), reason=d.get("reason"),
+                    max_windows=sc.get("max_windows"),
+                    approved_exposure=sc.get("max_total_exposure_usd"),
+                    approved_daily_loss=sc.get("max_daily_loss_usd"),
+                    document_sha256=d.get("document_sha256"),
+                    covers_market=True, reserved_nothing=True)
         else:
-            sc = dict(d.get("scope") or {})
-            row("campaign_approval", "PASS" if d.get("ok") else "FAIL",
-                state=d.get("approval_state"), reason=d.get("reason"),
+            g = CA.approval_gate()
+            st2 = g.state()
+            sc = dict(st2.get("scope") or {})
+            row("campaign_approval",
+                "PASS" if st2.get("approved") is True else "FAIL",
+                state=g.last_state, reason=st2.get("why"),
                 max_windows=sc.get("max_windows"),
                 approved_exposure=sc.get("max_total_exposure_usd"),
                 approved_daily_loss=sc.get("max_daily_loss_usd"),
-                document_sha256=d.get("document_sha256"),
+                document_sha256=g.last_sha256,
+                covers_market="NOT_EVALUATED: no market slug yet",
                 reserved_nothing=True)
     except BaseException as exc:                               # noqa: BLE001
         row("campaign_approval", "UNKNOWN", error=type(exc).__name__)
