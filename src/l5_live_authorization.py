@@ -433,16 +433,35 @@ def authorization_preflight(market: str = "", *,
     except ValueError:
         row("claim_ttl_s", "FAIL", env=TTL_ENV, note="unparseable")
 
-    # 4. series declaration and whether it covers this market
+    # 4. series declaration and whether it covers this market.
+    #
+    # THE ENV IS NOT THE ONLY SOURCE, and a preflight that assumed it was
+    # would report a false FAIL. Step 31 resolves
+    # `series or series_prefix() or campaign_scope["series"]`, so a VALID
+    # CAMPAIGN DECLARING ITS OWN SERIES satisfies the check with the env
+    # unset. Reported with which source supplied it, because "declared by
+    # the campaign" and "declared by the environment" fail in different
+    # ways later.
     pref = series_prefix()
+    _src = "env" if pref else None
+    if not pref and _camp_valid:
+        try:
+            from src import l5_campaign_approval as _CA2
+            _d2 = _CA2.campaign_decision(market or "", root=root, now=t,
+                                         reserve=False)
+            pref = str((_d2.get("scope") or {}).get("series") or "")
+            _src = "campaign" if pref else None
+        except BaseException:                                  # noqa: BLE001
+            pref, _src = "", None
     if not pref:
-        row("market_series", "FAIL", env=SERIES_ENV, set=False,
-            blocks="MANDATE_SERIES_NOT_DECLARED (step 31)")
+        row("market_series", "FAIL", env=SERIES_ENV, declared_by=None,
+            blocks="MANDATE_SERIES_NOT_DECLARED (step 31)",
+            note="neither the environment nor a valid campaign declares it")
     elif market and not str(market).startswith(pref):
-        row("market_series", "FAIL", env=SERIES_ENV, set=True,
+        row("market_series", "FAIL", env=SERIES_ENV, declared_by=_src,
             covers_market=False, blocks="AUTHORIZATION_BOUND_TO_MARKET")
     else:
-        row("market_series", "PASS", env=SERIES_ENV, set=True,
+        row("market_series", "PASS", env=SERIES_ENV, declared_by=_src,
             covers_market=bool(market) or None)
 
     # 5. role and session binding

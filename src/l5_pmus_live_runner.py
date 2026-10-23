@@ -5156,6 +5156,30 @@ def main() -> int:
     #
     # Emitted as its own line because the heartbeat already exceeds the log
     # transport's per-line limit and its tail is truncated in production.
+    # EVERY CONFIG-LEVEL ARMING BLOCKER, ONCE AT STARTUP, BEFORE A WINDOW.
+    #
+    # authorize_arming raises on the FIRST refusal, so preparing a campaign
+    # meant discovering them one market window and one redeploy at a time --
+    # on 2026-10-23 that cost three updates and four unused approved
+    # windows. This reports all of them together, from the same accessors
+    # that enforce, reserving nothing and emitting no configured value.
+    #
+    # Its own line because the heartbeat already exceeds the log transport's
+    # per-line limit and its tail is truncated in production.
+    try:
+        emit("L5_AUTHORIZATION_PREFLIGHT",
+             AUTH.authorization_preflight(
+                 str(getattr(getattr(runner, "transport", None),
+                             "market_slug", "") or ""), root=root))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_LIVE_ALARM", {
+            "kind": "authorization_preflight_unavailable",
+            "error": "%s: %s" % (type(exc).__name__, str(exc)[:120]),
+            "labels": ("diagnostic only -- authorize_arming still decides "
+                       "and still refuses independently")})
+
     try:
         emit("L5_BUDGET_SELFCHECK", runner.budget_selfcheck())
     except BaseException as _exc:                              # noqa: BLE001
