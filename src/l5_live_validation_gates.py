@@ -614,7 +614,16 @@ class ValidationGates:
         #     exposure is counted for exactly the same reason -- an unmatched
         #     leg is simply a leg that has not settled. Realized losses are
         #     added on top and never net against open risk.
-        if self.campaign_budget is not None and self.campaign_id:
+        if self.campaign_budget is not None:
+            # A MISSING CAMPAIGN ID IS NOT PERMISSION TO SKIP THE BUDGET.
+            # This read `and self.campaign_id`, so an approval that had gone
+            # stale, expired, absent or unreadable produced a None id and
+            # this entire gate was bypassed -- the owner's $29.30
+            # worst-case ceiling stopped applying precisely when the
+            # authorization behind it became doubtful. A budget was
+            # configured; an identity we cannot establish is a refusal.
+            if not self.campaign_id:
+                return "CAMPAIGN_IDENTITY_UNAVAILABLE"
             campaign_used = (max(D(0), -_d(cumulative_realized))
                              + self.cash_committed(filled_legs)
                              + self.pending_obligation(outstanding))

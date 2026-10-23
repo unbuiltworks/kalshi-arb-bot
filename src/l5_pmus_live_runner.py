@@ -2956,7 +2956,9 @@ class Runner:
         # the document's own verdict; `authorize_window` is what spends, and
         # telemetry must never spend.
         try:
-            g = CAMP.ApprovalGate(CAMP.EnvApprovalStore())
+            # THE CANONICAL GATE, so the status reported here is the
+            # verdict try_arm actually enforces rather than a stricter one.
+            g = CAMP.approval_gate()
             st = g.state()
             out["approval_state"] = g.last_state
             out["document_sha256"] = g.last_sha256
@@ -4912,7 +4914,11 @@ def _campaign_nonce_sid():
     refuses, rather than something it can be told to ignore.
     """
     try:
-        st = CAMP.ApprovalGate(CAMP.EnvApprovalStore()).state()
+        # THE CANONICAL GATE. This used to build its own with the
+        # 1-hour default, so the budget's campaign id vanished an hour
+        # after issue and gate 3b skipped itself while arming stayed
+        # authorized for four hours.
+        st = CAMP.approval_gate().state()
         return str((st.get("scope") or {}).get("nonce_sid") or "") or None
     except BaseException as exc:                               # noqa: BLE001
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):

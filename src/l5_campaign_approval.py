@@ -504,7 +504,7 @@ def reserve_window(market: str, *,
     `reserved_now` comes back False and the count does not move.
     """
     now = now or _utc()
-    gate = ApprovalGate(EnvApprovalStore(), max_age_s=MAX_CAMPAIGN_S)
+    gate = approval_gate()
     try:
         st = gate.state()
     except ApprovalReadUnavailable as exc:
@@ -585,6 +585,30 @@ class EnvApprovalStore:
             "the executor may not write its own approval")
 
 
+def approval_gate() -> "ApprovalGate":
+    """THE approval gate. Every caller must use this one.
+
+    WHY IT EXISTS. Three call sites built their own gate and two of them
+    omitted `max_age_s`, taking the 1-hour DEFAULT_MAX_AGE_S while the
+    arming path used the 4-hour MAX_CAMPAIGN_S. The consequences were not
+    cosmetic:
+
+      * the heartbeat reported `approval_stale` an hour after issue while
+        `try_arm` still accepted the same document for four -- so the status
+        an operator reads was not the verdict the money path enforced;
+      * `_campaign_nonce_sid` returned None on the same 1-hour clock, and a
+        None campaign id made the $29.30 worst-case budget gate SKIP
+        ITSELF. A control silently stopped binding one hour after issue
+        while trading remained authorized for four.
+
+    A single factory makes that divergence unrepresentable. The staleness
+    window is MAX_CAMPAIGN_S, the same bound `state()` already clamps the
+    effective expiry to, so the document's own `expires_utc` still decides
+    within it.
+    """
+    return ApprovalGate(EnvApprovalStore(), max_age_s=MAX_CAMPAIGN_S)
+
+
 def campaign_decision(market: str, *,
                       root: Optional[str] = None,
                       now: Optional[dt.datetime] = None,
@@ -610,7 +634,7 @@ def campaign_decision(market: str, *,
     # NOTHING IS WIDENED. `state()` still clamps the effective expiry to
     # `issued + MAX_CAMPAIGN_S`, so four hours from issue remains the hard
     # bound; this only stops a SECOND, shorter clock truncating it.
-    gate = ApprovalGate(EnvApprovalStore(), max_age_s=MAX_CAMPAIGN_S)
+    gate = approval_gate()
     out = authorize_window(gate, market, ledger=WindowLedger(root), now=now,
                            reserve=reserve)
     # the digest identifies the document in the logs; the contents never are
