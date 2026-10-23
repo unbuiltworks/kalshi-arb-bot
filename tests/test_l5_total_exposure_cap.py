@@ -24,6 +24,23 @@ from src.l5_live_execution import SafetyLimits
 CAP = D("2")
 
 
+@pytest.fixture(autouse=True)
+def _restore_runner_module_state():
+    """RELOAD LEAVES THE MODULE WHERE THE LAST TEST PUT IT.
+
+    These tests reload l5_pmus_live_runner to re-evaluate PROBE_LIMITS, which
+    is module-level. monkeypatch restores the ENVIRONMENT but not the already
+    re-evaluated module, so without this the final parametrised case left
+    PROBE_LIMITS["max_total_exposure_usd"] as None for every suite that ran
+    afterwards -- which is exactly what happened: five unrelated tests in
+    other files failed until this fixture existed.
+    """
+    yield
+    import src.l5_pmus_live_runner as R
+    os.environ.pop("L5_MAX_TOTAL_EXPOSURE_USD", None)
+    reload(R)
+
+
 def lim(**kw):
     base = dict(max_usd_per_market=D("20"), max_abs_residual=D("10"),
                 max_total_exposure_usd=CAP, max_concurrent_markets=1,
@@ -52,15 +69,9 @@ class TestTheCeilingIsSettable:
 
     @pytest.mark.parametrize("raw,expect", [
         (None, "20"), ("2", "2"), ("2.00", "2.00"), ("1.65", "1.65"),
-        ("20", "20"),
-        # UNREADABLE IS THE DEFAULT, NEVER INFINITY: a typo must not
-        # silently remove the ceiling.
-        ("garbage", "20"), ("", "20"), ("NaN", "20"), ("Infinity", "20"),
-        # a zero or negative ceiling would disarm by arithmetic rather than
-        # by an owner decision, which is a confusing way to stop.
-        ("0", "20"), ("-5", "20"),
+        ("20", "20"), (" 2 ", "2"),
     ])
-    def test_boundary_values(self, raw, expect, monkeypatch):
+    def test_readable_values(self, raw, expect, monkeypatch):
         if raw is None:
             monkeypatch.delenv("L5_MAX_TOTAL_EXPOSURE_USD", raising=False)
         else:
@@ -70,13 +81,93 @@ class TestTheCeilingIsSettable:
         assert str(R.max_total_exposure_usd()) == expect
         assert str(R.PROBE_LIMITS["max_total_exposure_usd"]) == expect
 
-    def test_the_default_is_unchanged_so_unset_changes_nothing(self,
-                                                               monkeypatch):
+    def test_unset_uses_the_unchanged_default(self, monkeypatch):
         monkeypatch.delenv("L5_MAX_TOTAL_EXPOSURE_USD", raising=False)
         import src.l5_pmus_live_runner as R
         reload(R)
         assert R.DEFAULT_MAX_TOTAL_EXPOSURE_USD == D("20")
         assert R.max_total_exposure_usd() == D("20")
+
+
+class TestAConfiguredButUnreadableCeilingRefuses:
+    """THE REGRESSION THIS CLASS EXISTS FOR. An owner who deliberately
+    configured a $2 ceiling and mistyped it must get a LIVE REFUSAL, never a
+    silent fall back to $20 -- a typo must not quadruple the approved
+    envelope. UNSET and UNREADABLE are different states."""
+
+    @pytest.mark.parametrize("bad", [
+        "garbage", "2.0.0", "two", "$2", "2,00", "1e", "--2",
+        "NaN", "nan", "Infinity", "-Infinity", "inf",
+        "0", "0.00", "-5", "-0.01",
+    ])
+    def test_a_set_but_unusable_value_yields_none_not_the_default(
+            self, bad, monkeypatch):
+        monkeypatch.setenv("L5_MAX_TOTAL_EXPOSURE_USD", bad)
+        import src.l5_pmus_live_runner as R
+        reload(R)
+        got = R.max_total_exposure_usd()
+        assert got is None, "%r silently became %r" % (bad, got)
+        assert R.PROBE_LIMITS["max_total_exposure_usd"] is None
+
+    def test_it_never_silently_becomes_twenty(self, monkeypatch):
+        monkeypatch.setenv("L5_MAX_TOTAL_EXPOSURE_USD", "garbage")
+        import src.l5_pmus_live_runner as R
+        reload(R)
+        assert R.max_total_exposure_usd() != D("20")
+
+    def test_the_safety_gate_refuses_by_name(self):
+        """Refusal 1 of 3: no arithmetic is attempted on the ceiling."""
+        assert refuse(lim(max_total_exposure_usd=None),
+                      risk={"M1": D("0.01")}) \
+            == "MAX_TOTAL_EXPOSURE_CEILING_UNREADABLE"
+
+    def test_it_refuses_even_with_zero_exposure_and_a_tiny_order(self):
+        assert refuse(lim(max_total_exposure_usd=None), risk={},
+                      price=D("0.01"), qty=D("0.01")) \
+            == "MAX_TOTAL_EXPOSURE_CEILING_UNREADABLE"
+
+    def test_it_refuses_on_the_notional_fallback_path_too(self):
+        assert refuse(lim(max_total_exposure_usd=None), risk=None) \
+            == "MAX_TOTAL_EXPOSURE_CEILING_UNREADABLE"
+
+    def test_the_ceiling_check_precedes_the_live_order_check(self):
+        """Ordering matters only for the reason string, but the reason is
+        what the operator acts on, so it is pinned."""
+        assert refuse(lim(max_total_exposure_usd=None),
+                      risk={"M1": D("0.01")}, live_orders=5) \
+            == "MAX_TOTAL_EXPOSURE_CEILING_UNREADABLE"
+
+    def test_uncertain_orders_still_outrank_it(self):
+        assert refuse(lim(max_total_exposure_usd=None),
+                      risk={"M1": D("0.01")}, uncertain="X") \
+            == "ORDER_STATE_UNCERTAIN"
+
+    def test_the_exposure_report_refuses_rather_than_inventing_headroom(self):
+        """Refusal 2 of 3. Reporting capacity against an unreadable ceiling
+        would manufacture headroom that does not exist."""
+        import inspect
+        from src import l5_pmus_live_runner as R
+        src = inspect.getsource(R)
+        assert "ACCOUNT_EXPOSURE_CEILING_UNREADABLE" in src
+        assert 'if cap is None:' in src
+
+    def test_arming_refuses_because_running_limits_are_unreadable(self):
+        """Refusal 3 of 3, at authorize_arming step 14: limits that cannot be
+        read cannot be shown to be inside the approval."""
+        import inspect
+        from src import l5_live_authorization as A
+        src = inspect.getsource(A)
+        assert "CAMPAIGN_RUNNING_LIMITS_UNREADABLE" in src
+        assert "_run_exp is None" in src
+
+    def test_worst_case_report_does_not_crash_on_an_unreadable_ceiling(self):
+        """A diagnostic must not take the process down; `refuse` is what
+        blocks, and it already has."""
+        assert lim(max_total_exposure_usd=None).worst_case_loss_usd() == D("5")
+
+    def test_as_dict_shows_the_unreadable_state(self):
+        assert lim(max_total_exposure_usd=None
+                   ).as_dict()["max_total_exposure_usd"] == "None"
 
 
 # ------------------------------------------- the cap is EFFECTIVE, not stated

@@ -131,11 +131,28 @@ MAX_TOTAL_EXPOSURE_ENV = "L5_MAX_TOTAL_EXPOSURE_USD"
 DEFAULT_MAX_TOTAL_EXPOSURE_USD = D("20")
 
 
-def max_total_exposure_usd() -> D:
-    """The account-wide instantaneous ceiling. UNREADABLE IS THE DEFAULT, not
-    infinity: a typo must not silently remove the ceiling. A non-positive
-    value is also refused, because a zero ceiling would disarm by arithmetic
-    rather than by an owner decision, which is a confusing way to stop."""
+def max_total_exposure_usd() -> Optional[D]:
+    """The account-wide instantaneous ceiling, or None meaning REFUSE.
+
+    UNSET AND UNREADABLE ARE NOT THE SAME THING, and collapsing them is how
+    an owner who typed a ceiling gets a looser one than they asked for:
+
+      * UNSET -> the default. Nothing was configured, so nothing changes.
+      * SET BUT UNREADABLE, non-finite, zero or negative -> **None**, which
+        every consumer treats as a named refusal. An owner who deliberately
+        configured a $2 ceiling and fat-fingered it must get a live refusal,
+        NOT a silent $20. Returning the default here would mean a typo
+        QUADRUPLED the approved envelope, which is exactly the shape of the
+        defect this whole change exists to remove.
+
+    None is not a quiet failure. It surfaces as
+    CAMPAIGN_RUNNING_LIMITS_UNREADABLE at authorize_arming step 14 (limits
+    that cannot be read cannot be shown to be inside the approval), as
+    ACCOUNT_EXPOSURE_CEILING_UNKNOWN in the completion path, and as
+    MAX_TOTAL_EXPOSURE_CEILING_UNREADABLE in SafetyLimits.refuse -- three
+    independent refusals, so no single missed call site can let an order
+    through.
+    """
     raw = (os.getenv(MAX_TOTAL_EXPOSURE_ENV) or "").strip()
     if not raw:
         return DEFAULT_MAX_TOTAL_EXPOSURE_USD
@@ -144,9 +161,9 @@ def max_total_exposure_usd() -> D:
     except (ValueError, TypeError, ArithmeticError):
         # decimal.InvalidOperation subclasses ArithmeticError, so it is
         # caught here without importing it into this module.
-        return DEFAULT_MAX_TOTAL_EXPOSURE_USD
+        return None
     if not v.is_finite() or v <= 0:
-        return DEFAULT_MAX_TOTAL_EXPOSURE_USD
+        return None
     return v
 
 
@@ -621,6 +638,17 @@ class Runner:
                                "refuses in this state")}
         total = D(str(out["total_usd"]))
         cap = self.limits.max_total_exposure_usd
+        if cap is None:
+            # A CONFIGURED-BUT-UNREADABLE CEILING IS NOT AN ABSENT ONE.
+            # Reporting capacity against a ceiling nobody can read would
+            # invent headroom; the gates refuse independently.
+            return {"ok": False,
+                    "reason": "ACCOUNT_EXPOSURE_CEILING_UNREADABLE",
+                    "capacity_usd": None,
+                    "account_total_worst_case_usd": str(total),
+                    "labels": ("L5_MAX_TOTAL_EXPOSURE_USD is set to a value "
+                               "that cannot be used. Submissions refuse; the "
+                               "ceiling is NOT defaulted.")}
         per_market = {k: str(v) for k, v in out["risk_by_market"].items()}
         worst = max(out["risk_by_market"].items(),
                     key=lambda kv: kv[1], default=(None, D(0)))

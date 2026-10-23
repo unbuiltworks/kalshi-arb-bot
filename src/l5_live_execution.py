@@ -451,6 +451,12 @@ class SafetyLimits:
         and the halt, because the halt stops new commitment but cannot unwind
         what is already at risk.
         """
+        if self.max_total_exposure_usd is None:
+            # A CONFIGURED-BUT-UNREADABLE CEILING. The worst case is not
+            # knowable, so the halt is reported as the only bound that IS
+            # readable. `refuse` blocks every submission in this state, so
+            # this figure is a diagnostic rather than a permission.
+            return self.daily_realized_loss_halt_usd
         return max(self.max_total_exposure_usd,
                    self.daily_realized_loss_halt_usd)
 
@@ -472,6 +478,14 @@ class SafetyLimits:
         """
         if orders_uncertain:
             return "ORDER_STATE_UNCERTAIN"
+        # A CEILING THAT CANNOT BE READ IS NOT AN ABSENT CEILING, and this
+        # check comes before any arithmetic that would use it. The owner
+        # configured L5_MAX_TOTAL_EXPOSURE_USD and it did not parse, so the
+        # approved envelope is unknown -- refusing is the only answer that
+        # cannot exceed it. Defaulting here would let a typo restore a
+        # ceiling the owner had deliberately lowered.
+        if self.max_total_exposure_usd is None:
+            return "MAX_TOTAL_EXPOSURE_CEILING_UNREADABLE"
         if live_order_count >= self.max_live_orders:
             return "MAX_LIVE_ORDERS"
         if realized_today <= -self.daily_realized_loss_halt_usd:
