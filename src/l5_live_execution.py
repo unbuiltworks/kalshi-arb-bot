@@ -409,6 +409,23 @@ def client_order_id(action_key: str, attempt: int = 0) -> str:
     return "l5f-" + hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
+#: THE APPROVED ABSOLUTE RESIDUAL CEILING, in contracts.
+#:
+#: WHY THIS EXISTS. The owner approved "residual cap 3". The implemented
+#: control is RESIDUAL_CAP_k2: `cap = k * max(largest filled clip, this
+#: order's qty)` on the prospective book, with k=2. Those are NOT equivalent.
+#: They coincide at a clip of 1.5 and the RELATIVE bound exceeds 3 above it,
+#: without limit -- on 2026-10-23 the 2015z clip was 1.3, giving 2.6, but a
+#: larger envelope would raise the clip and with it the cap, silently past
+#: the figure that was approved.
+#:
+#: So the relative bound is now intersected with this absolute one. It can
+#: only ever TIGHTEN: `min(k * clip, 3)`. max_abs_residual (10) remains the
+#: outer SafetyLimits bound and is unchanged; this is the approved figure,
+#: enforced where the k-rule is applied.
+ABS_RESIDUAL_CAP_CONTRACTS = D("3")
+
+
 class SafetyLimits:
     """Hard account protection. Outside L5_NATIVE, and never silent."""
 
@@ -5814,9 +5831,19 @@ class FaithfulExecutor:
             clip = self.store.max_clip(market)
             if tr["qty"] > clip:
                 clip = tr["qty"]
-            cap = self.residual_cap_k * clip
+            # THE INTERSECTION, NEVER THE WIDER OF THE TWO. The relative
+            # bound scales with the clip and would pass the approved
+            # absolute ceiling above a clip of 1.5; the owner approved 3
+            # contracts, so 3 is the ceiling whatever k * clip computes to.
+            cap = min(self.residual_cap_k * clip, ABS_RESIDUAL_CAP_CONTRACTS)
             prov.note("RESIDUAL_CAP", {
                 "k": str(self.residual_cap_k),
+                "relative_cap_contracts": str(self.residual_cap_k * clip),
+                "absolute_cap_contracts": str(ABS_RESIDUAL_CAP_CONTRACTS),
+                "which_binds": ("ABSOLUTE"
+                                if ABS_RESIDUAL_CAP_CONTRACTS
+                                < self.residual_cap_k * clip
+                                else "RELATIVE"),
                 "basis": "PROSPECTIVE_NET",
                 "max_clip_filled": str(self.store.max_clip(market)),
                 "clip_used": str(clip),

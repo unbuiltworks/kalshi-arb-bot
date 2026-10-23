@@ -306,3 +306,69 @@ class TestTheCashEnvelopeIsNotTheCap:
         assert lim().worst_case_loss_usd() == D("5")       # halt binds at $2
         assert lim(max_total_exposure_usd=D("20")
                    ).worst_case_loss_usd() == D("20")
+
+
+# ------------------------- the approved absolute residual ceiling (3)
+
+class TestAbsoluteResidualCeiling:
+    """The owner approved "residual cap 3". The implemented control was
+    RESIDUAL_CAP_k2 -- cap = k * max(largest filled clip, this order's qty)
+    with k=2 -- which coincides with 3 only at a clip of 1.5 and EXCEEDS it
+    without limit above that. On 2026-10-23 the 2015z clip was 1.3 (cap 2.6),
+    but a larger envelope raises the clip and with it the cap, silently past
+    the approved figure."""
+
+    K = D("2")
+
+    def _eff(self, clip):
+        from src.l5_live_execution import ABS_RESIDUAL_CAP_CONTRACTS as A
+        return min(self.K * D(clip), A)
+
+    def test_the_approved_figure_is_three(self):
+        from src.l5_live_execution import ABS_RESIDUAL_CAP_CONTRACTS as A
+        assert A == D("3")
+
+    @pytest.mark.parametrize("clip,expect,binds", [
+        ("1.0", "2.0", "RELATIVE"),
+        ("1.3", "2.6", "RELATIVE"),       # the live 2015z clip
+        ("1.5", "3.0", "RELATIVE"),       # the crossover
+        ("1.51", "3", "ABSOLUTE"),
+        ("1.6", "3", "ABSOLUTE"),
+        ("2.5", "3", "ABSOLUTE"),
+        ("10", "3", "ABSOLUTE"),
+        ("37.73", "3", "ABSOLUTE"),       # a real clip from max_clip_filled
+    ])
+    def test_the_effective_cap_never_exceeds_three(self, clip, expect, binds):
+        got = self._eff(clip)
+        assert str(got) == expect
+        assert got <= D("3")
+        rel = self.K * D(clip)
+        assert ("ABSOLUTE" if D("3") < rel else "RELATIVE") == binds
+
+    def test_it_only_ever_tightens(self):
+        """min() can never produce a looser bound than the relative rule."""
+        for clip in ("0.01", "1", "1.5", "2", "100"):
+            assert self._eff(clip) <= self.K * D(clip)
+
+    def test_the_outer_safety_bound_is_untouched(self):
+        """max_abs_residual stays at 10; this is a separate, tighter rule
+        applied where the k-rule is applied."""
+        assert lim().max_abs_residual == D("10")
+
+    def test_the_code_applies_the_intersection(self):
+        import inspect
+        from src import l5_live_execution as X
+        src = inspect.getsource(X)
+        assert ("cap = min(self.residual_cap_k * clip, "
+                "ABS_RESIDUAL_CAP_CONTRACTS)") in src
+        assert "cap = self.residual_cap_k * clip\n" not in src
+
+    def test_telemetry_names_which_bound_binds(self):
+        """An operator must be able to see whether the relative or the
+        absolute rule decided."""
+        import inspect
+        from src import l5_live_execution as X
+        src = inspect.getsource(X)
+        for field in ("relative_cap_contracts", "absolute_cap_contracts",
+                      "which_binds"):
+            assert field in src, field

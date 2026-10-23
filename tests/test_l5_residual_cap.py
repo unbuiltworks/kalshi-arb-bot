@@ -181,9 +181,16 @@ def boundary_store(tmp_path, k, *, over: D):
     cap = k*clip is known before the candidate is priced.
     """
     q = qty_of(tmp_path)
-    clip = D("4")                       # comfortably above the order size
-    assert clip > q
+    # CLIP CHOSEN SO THE RELATIVE RULE IS THE BINDING ONE. These tests
+    # exercise the k*clip boundary, and since ABS_RESIDUAL_CAP_CONTRACTS (3)
+    # now intersects it, a clip of 4 would make the ABSOLUTE rule decide
+    # every case and the boundary under test would never be reached.
+    # k=2 * 1.4 = 2.8, inside the absolute ceiling.
+    clip = D("1.4")
+    assert clip > q, (clip, q)
     cap = k * clip
+    assert cap < EX.ABS_RESIDUAL_CAP_CONTRACTS, (
+        "the relative rule must bind for these boundary tests")
     ex, store = executor(tmp_path / ("bd%s" % over), k=k)
     store.apply_fill(MARKET, "UP", clip, D("0.20"), basis=EX.OWN)
     extra = cap + over - q - clip
@@ -489,3 +496,49 @@ def test_6c_the_dollar_gate_already_counted_outstanding_orders(tmp_path):
     hedged = store.risk_exposure_usd(MARKET, extra_side="UP",
                                      extra_qty=D("0.45"), extra_price=D("0.60"))
     assert hedged < bare, "outstanding orders are not priced into the risk gate"
+
+
+# ------------------------- the approved absolute ceiling intersects k*clip
+
+def test_a_large_clip_is_capped_by_the_approved_absolute_three(tmp_path):
+    """RESIDUAL_CAP_k2 scales with the clip, so at clip 4 it would permit 8
+    contracts -- well past the 3 the owner approved. The absolute ceiling
+    now decides instead."""
+    q = qty_of(tmp_path)
+    ex, store = executor(tmp_path / "abs", k=D("2"))
+    store.apply_fill(MARKET, "UP", D("4"), D("0.20"), basis=EX.OWN)
+    assert store.max_clip(MARKET) == D("4")
+    rec = drive(ex, side="UP", key="abs")
+    n = note(rec)
+    assert D(n["cap_contracts"]) == EX.ABS_RESIDUAL_CAP_CONTRACTS
+    assert D(n["relative_cap_contracts"]) == D("8.0")
+    assert n["which_binds"] == "ABSOLUTE"
+    # 4 contracts held already exceeds 3, and this order increases it
+    assert n["binds"] is True
+
+
+def test_the_relative_rule_still_decides_below_the_absolute(tmp_path):
+    q = qty_of(tmp_path)
+    ex, store = executor(tmp_path / "rel", k=D("2"))
+    store.apply_fill(MARKET, "UP", D("1.0"), D("0.20"), basis=EX.OWN)
+    rec = drive(ex, side="UP", key="rel")
+    n = note(rec)
+    assert n["which_binds"] == "RELATIVE"
+    assert D(n["cap_contracts"]) == D("2.0")
+
+
+def test_the_effective_cap_never_exceeds_three_at_any_clip(tmp_path):
+    """Whatever the clip, the cap the gate actually applies is <= 3. A row
+    that refuses before the cap note is reached emits no note, and that is
+    not a violation -- it simply did not get that far."""
+    seen = 0
+    for clip in (D("1"), D("1.5"), D("2"), D("4"), D("20")):
+        ex, store = executor(tmp_path / ("c%s" % clip), k=D("2"))
+        store.apply_fill(MARKET, "UP", clip, D("0.20"), basis=EX.OWN)
+        rec = drive(ex, side="UP", key="c%s" % clip)
+        n = note(rec)
+        if n is None or "cap_contracts" not in n:
+            continue
+        seen += 1
+        assert D(n["cap_contracts"]) <= EX.ABS_RESIDUAL_CAP_CONTRACTS, clip
+    assert seen >= 3, "too few rows reached the cap note to be meaningful"
