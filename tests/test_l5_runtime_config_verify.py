@@ -52,7 +52,7 @@ def test_the_approved_configuration_passes_every_row(approved):
     out = V.verify()
     assert out["PASS"] is True, out["failed"]
     # 21, not 22: defensive_execution_enabled moved to observed_not_graded.
-    assert out["checked"] == 21
+    assert out["checked"] == 22
     assert out["failed"] == []
 
 
@@ -196,11 +196,21 @@ def test_defensive_execution_is_reported_and_rolls_back_without_failing(
     assert obs(out, "defensive_execution_enabled")["effective"] is False
     assert out["PASS"] is True, out["failed"]
 
-    # ON: the authorized live posture. Reported, graded nowhere, still PASS.
+    # ON while the approved execution_mode is MAKER_ONLY: still REPORTED, and
+    # now it FAILS -- on the consistency row, not on a constant.
+    #
+    # THIS ASSERTION USED TO READ "the authorized live posture ... still PASS",
+    # and that was the assumption which let 2026-10-23 02:39:04 cross at a pair
+    # cost of 1.04 under a mandate the module issued itself, while
+    # `AUTH.EXECUTION_MODE` -- a field of the digest the OWNER approved -- said
+    # MAKER_ONLY. Arming a crosser is not the authorized posture under a
+    # maker-only mandate, and the verifier now says so.
     approved.setenv("L5_DEFENSIVE_COMPLETION", "1")
     out = V.verify()
     assert obs(out, "defensive_execution_enabled")["effective"] is True
-    assert out["PASS"] is True, out["failed"]
+    assert out["PASS"] is False
+    assert out["failed"] == ["maker_only_forbids_defensive_crossing"]
+    # and it is still not graded against a constant
     assert "defensive_execution_enabled" not in out["failed"]
 
     # OFF again: the rollback. Must also PASS, which is the whole point.
@@ -417,3 +427,54 @@ def test_the_cli_exits_2_and_prints_the_remedy_on_a_secret(capsys, tmp_path):
     out = _json.loads(capsys.readouterr().out)
     assert out["basis"] == "SNAPSHOT_REFUSED"
     assert "xxx" not in capsys.readouterr().out
+
+
+def test_maker_only_forbids_an_armed_crosser_but_permits_rollback(approved,
+                                                                  monkeypatch):
+    """The row that 0230z needed. It grades CONSISTENCY between two things the
+    deployment already states, never a fixed expectation of either, so both
+    postures stay deployable and a safety rollback can never be obstructed."""
+    from src import l5_live_authorization as AUTH
+
+    def row(out):
+        return [r for r in out["rows"]
+                if r["name"] == "maker_only_forbids_defensive_crossing"][0]
+
+    # MAKER_ONLY + defensive OFF -> passes. This is the rollback, and it must
+    # pass unconditionally.
+    monkeypatch.setattr(AUTH, "EXECUTION_MODE", "MAKER_ONLY", raising=False)
+    approved.delenv("L5_DEFENSIVE_COMPLETION", raising=False)
+    assert row(V.verify())["ok"] is True
+
+    # MAKER_ONLY + defensive ON -> the 0230z state, and it fails.
+    approved.setenv("L5_DEFENSIVE_COMPLETION", "1")
+    assert row(V.verify())["ok"] is False
+    assert V.verify()["PASS"] is False
+
+    # a declared crossing mode + defensive ON -> passes. The check does not
+    # forbid crossing; it forbids crossing that the mandate did not approve.
+    monkeypatch.setattr(AUTH, "EXECUTION_MODE", "TAKER_PERMITTED",
+                        raising=False)
+    assert row(V.verify())["ok"] is True
+
+    # FAIL CLOSED. An absent, empty, unreadable or unrecognised mode is NOT
+    # permission to cross: it is treated as MAKER_ONLY. A mode we cannot read
+    # is not consent, and only an EXPLICIT crossing mode is.
+    for bad in ("", "   ", None, "maker_only", "MAKERONLY", "anything"):
+        monkeypatch.setattr(AUTH, "EXECUTION_MODE", bad, raising=False)
+        approved.setenv("L5_DEFENSIVE_COMPLETION", "1")
+        assert row(V.verify())["ok"] is False, bad
+    # and with defensive off, every one of them passes
+    for bad in ("", None, "anything"):
+        monkeypatch.setattr(AUTH, "EXECUTION_MODE", bad, raising=False)
+        approved.delenv("L5_DEFENSIVE_COMPLETION", raising=False)
+        assert row(V.verify())["ok"] is True, bad
+
+
+def test_the_approved_execution_mode_is_inside_the_owner_digest():
+    """Why the row is justified: execution_mode is a SCOPE_FIELD, so the
+    owner's approval digest covers it. Crossing under MAKER_ONLY contradicts
+    the approved envelope itself, not merely a local preference."""
+    from src import l5_live_authorization as AUTH
+    assert "execution_mode" in AUTH.SCOPE_FIELDS
+    assert AUTH.EXECUTION_MODE == "MAKER_ONLY"

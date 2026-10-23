@@ -362,6 +362,48 @@ def verify() -> Dict[str, Any]:
                              "effective": None,
                              "error": type(exc).__name__})
 
+    # ---------------------------------------------------------------- the
+    # CONSISTENCY row that 0230z needed and nobody had.
+    #
+    # `AUTH.EXECUTION_MODE` is "MAKER_ONLY" and it is a field of SCOPE_FIELDS,
+    # so it is inside the digest the OWNER approves. On 2026-10-23 at 02:39:04
+    # the defensive module issued its own mandate -- "permits ONE crossing
+    # order and the defensive pair ceiling for that order alone" -- and crossed
+    # at a pair cost of 1.04. That contradicted a field of the approved
+    # envelope, and no gate noticed, because `defensive_execution_enabled` had
+    # been moved to `observed_not_graded` where nothing grades it.
+    #
+    # THIS IS NOT A RETURN TO GRADING IT AGAINST A CONSTANT. The reason it was
+    # de-graded stands: a fixed expectation fails either the activation or the
+    # rollback. What is graded here is CONSISTENCY BETWEEN TWO THINGS THE
+    # DEPLOYMENT ALREADY STATES -- if the approved execution mode is
+    # MAKER_ONLY then a module that crosses may not be armed. Both postures
+    # stay deployable: turn defensive off and this passes under MAKER_ONLY;
+    # declare a crossing execution mode and it passes with defensive on. Only
+    # the contradiction fails, which is the state that actually spent money
+    # outside the approved scope.
+    #
+    # It is a TIGHTENING and it cannot obstruct a safety rollback: switching
+    # defensive OFF satisfies it unconditionally.
+    #: the only modes that are PERMISSION to cross. Anything else -- including
+    #: an absent, empty or unreadable mode -- is treated as MAKER_ONLY, so the
+    #: check fails CLOSED. A mode we cannot read is not consent.
+    _CROSSING_MODES = ("TAKER_PERMITTED", "DEFENSIVE_PERMITTED")
+
+    def _mode_and_defensive_agree() -> bool:
+        try:
+            mode = str(getattr(AUTH, "EXECUTION_MODE", "") or "").strip().upper()
+        except BaseException:                                  # noqa: BLE001
+            mode = ""
+        if mode in _CROSSING_MODES:
+            return True            # a mode that explicitly permits crossing
+        return not DEF.enabled()   # everything else forbids an armed crosser
+
+    rows.append(_row(
+        "maker_only_forbids_defensive_crossing",
+        "AUTH.EXECUTION_MODE vs DEF.enabled()",
+        _mode_and_defensive_agree, True))
+
     failed = [r for r in rows if not r["ok"]]
     return {
         "label": "L5_EFFECTIVE_RUNTIME_CONFIG",
