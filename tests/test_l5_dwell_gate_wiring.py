@@ -237,3 +237,31 @@ class TestTheRetirementDeadlineLeavesRunway:
         src = inspect.getsource(R.Runner.maybe_ts_deadline)
         assert "complement_retire_from_start" in src
         assert "DEFENSIVE_MIN_EXECUTION_S" in src
+
+
+class TestTheKeyConventionCannotSilentlyMisread:
+    """`apply_fill` writes positions under `canonical_market(...)`, and the
+    live call site passes `handle`'s own `market`. If those two ever disagreed,
+    the lookup must fail CLOSED rather than return a stale or wrong stamp --
+    and it does, because `stranded_since` gates on `self.residual(market)`
+    computed from the SAME key it then reads. A key that finds no position
+    reads zero residual and returns None, which is the arm window."""
+
+    def test_a_key_with_no_position_reads_None_even_with_a_stamp(self, store):
+        fill(store, MKT, "UP", 1.17)
+        assert store.stranded_since(MKT) is not None
+        # a differently-spelled key: stamped, but no position under it
+        store.state["stranded_since"]["NOT-A-REAL-MARKET"] = 1.0
+        assert store.stranded_since("NOT-A-REAL-MARKET") is None
+
+    def test_the_gate_and_the_lookup_use_one_key(self):
+        import inspect
+        src = inspect.getsource(LX.InventoryStore.stranded_since)
+        assert "self.residual(market)" in src
+        assert "(self.state.get(\"stranded_since\") or {}).get(str(market))" in src
+
+    def test_the_writer_canonicalises(self):
+        import inspect
+        src = inspect.getsource(LX.InventoryStore.apply_fill)
+        assert 'own_market = canonical_market(market' in src
+        assert "self._note_stranding(own_market" in src
