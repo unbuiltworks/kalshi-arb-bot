@@ -71,6 +71,131 @@ MIN_GROSS_EDGE = D("0.01")
 MAX_PAIR_COST = D("0.96")
 MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
 
+# ===================================== THE FIRST LEG'S OWN-SIDE PRICE FLOOR
+#
+# SEVEN SETTLED WINDOWS, and the separation is NOT clean. The 2026-10-23
+# campaign:
+#
+#   2145z  DOWN  own 0.35  ->  complement 0.56  pair 0.91   +$0.0927
+#   2200z  DOWN  own 0.29  ->  complement 0.66  pair 0.95   +$0.0495
+#   2215z  DOWN  own 0.33  ->  complement 0.43  pair 0.76   +$0.2424
+#   2300z  DOWN  own 0.36  ->  complement 0.38  pair 0.74   +$0.2678
+#   2230z  UP    own 0.12  ->  never reachable  unmatched   -$0.1764
+#   2245z  UP    own 0.06  ->  never reachable  unmatched   -$0.0930
+#
+# AND THE COUNTER-EXAMPLE, which must not be left out: 1215z on 2026-10-20
+# opened at own 0.06 -- below this floor -- and DID complete, at a pair of
+# exactly 0.96, for an attested +$0.0984. Across all three settled windows
+# that opened below 0.20 the record is ONE WIN and two losses, netting
+# -$0.1710. The subset is negative, which is why the floor is worth having;
+# it is not a clean rule, and this floor declines winners of that shape too.
+#
+# SEVEN WINDOWS IS PRELIMINARY EVIDENCE AND 0.20 IS NOT CLAIMED TO BE OPTIMAL.
+# Any threshold in 0.13..0.28 fits this sample equally well; 0.20 is chosen
+# for margin on both sides of the observed gap, not because the data picks
+# it. What makes the rule worth having is the MECHANISM, which does not rest
+# on those two losses:
+#
+# Feasibility AT PLAN TIME is governed by the spread, not the price level --
+# `pair ~= 1 - spread - 2 * depth_ticks * tick` -- which is why all six
+# planned at a pair of exactly 0.95. What differs is what happens AFTER the
+# fill. A maker bid two ticks under the touch fills BECAUSE the price came
+# down to it, so every first-leg fill is mildly adverse by construction. At
+# an own price of 0.06-0.12 the market sits near a boundary and that move is
+# usually trend: three cents of continuation puts the complement
+# permanently out of reach, because the complement costs 1 - wire_ask - 2
+# ticks and rises as the cheap side gets cheaper. At 0.29-0.36 the same move
+# is more often noise and the complement stays reachable.
+#
+# AND THE ECONOMIC POINT NEEDS NEITHER LOSS. A first leg that cannot complete
+# contributes an EV-NEUTRAL fair lottery instead of a pair edge. Both
+# unmatched legs above were correctly priced bets -- UP at 0.12 pays
+# 0.12 * 1.47 * 0.88 - 0.88 * 0.1764 ~= 0 -- so holding them was not a
+# mistake and completing them as taker would have been worse. They simply
+# are not what this strategy is for: opening below the floor swaps a +0.05
+# pair edge for a coin flip and adds variance.
+MIN_FIRST_LEG_OWN_PRICE = D("0.20")
+MIN_FIRST_LEG_ENV = "L5_TS_MIN_FIRST_LEG_PRICE"
+
+
+def min_first_leg_own_price() -> D:
+    """The own-side floor for OPENING a leg. Never for completing one.
+
+    Configurable, because 0.20 is preliminary: a value in 0..0.50 is
+    honoured, including 0, which DISABLES the rule and is an explicit owner
+    act. Anything unreadable, non-finite or outside that range falls back to
+    0.20 -- a typo must not be able to re-admit the regime this bounds.
+    """
+    raw = (os.getenv(MIN_FIRST_LEG_ENV) or "").strip()
+    if not raw:
+        return MIN_FIRST_LEG_OWN_PRICE
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, TypeError, ArithmeticError):
+        return MIN_FIRST_LEG_OWN_PRICE
+    if not v.is_finite() or v < 0 or v > D("0.50"):
+        return MIN_FIRST_LEG_OWN_PRICE
+    return v
+
+
+def first_leg_entry_refusal(*, side: str, own_px: Any,
+                            legs_claimed: Optional[Mapping[str, Any]] = None,
+                            held_up: Any = 0,
+                            held_down: Any = 0) -> Optional[Dict[str, Any]]:
+    """None to permit this leg, else the named refusal. Read-only.
+
+    SYMMETRIC BY CONSTRUCTION. It reads `own_px` -- the leg's own-outcome
+    economic price, the same number `build_orders` puts in `legs[].price` and
+    `l5_order_body.build` converts to the wire -- and nothing about the side
+    beyond reporting it. UP at 0.12 and DOWN at 0.12 are the same decision.
+
+    IT CAN ONLY REFUSE AN OPENING. Two independent facts make a leg a
+    completion rather than a first leg, and EITHER one permits it
+    unconditionally:
+
+      * a leg of this round is already claimed, so the other side is being
+        matched;
+      * the market already holds filled quantity on either side, so this is
+        inventory being managed.
+
+    That ordering matters: the floor is consulted LAST, so no amount of
+    configuration can turn this rule into something that strands a position
+    it cannot complete.
+
+    FAIL CLOSED on an unreadable price, which is the one case where refusing
+    is the safe direction: an opening we cannot price is one we cannot judge.
+    """
+    if legs_claimed and any(bool(v) for v in legs_claimed.values()):
+        return None                     # completing the other side
+    up, dn = _d(held_up), _d(held_down)
+    if up is None or dn is None:
+        return None                     # unreadable inventory is not ours
+        # to adjudicate: the residual and uncertainty gates own that case
+    if up != 0 or dn != 0:
+        return None                     # managing inventory already held
+    floor = min_first_leg_own_price()
+    if floor <= 0:
+        return None                     # explicitly disabled by the owner
+    # `_d` returns Decimal("NaN") for "nan", which is NOT None and which
+    # RAISES InvalidOperation on comparison -- a crash in the decision path
+    # rather than a refusal. Non-finite is unreadable.
+    p = _d(own_px)
+    if p is None or not p.is_finite():
+        return {"reason": "FIRST_LEG_PRICE_UNREADABLE", "side": str(side),
+                "own_px": str(own_px), "min_own_px": str(floor)}
+    if p < floor:
+        return {"reason": "FIRST_LEG_BELOW_MIN_PRICE", "side": str(side),
+                "own_px": str(p), "min_own_px": str(floor),
+                "env": MIN_FIRST_LEG_ENV,
+                "note": ("an opening leg this cheap has, on the evidence of "
+                         "2230z and 2245z, a complement that the 0.96 pair "
+                         "cap cannot reach once the cheap side gets cheaper. "
+                         "Holding it unmatched is an EV-neutral lottery "
+                         "rather than a pair edge. This refuses OPENING "
+                         "only; completion and inventory management are "
+                         "never blocked by it.")}
+    return None
+
 
 def max_pair_cost() -> D:
     """The pair ceiling. Configurable CHEAPER only; unreadable is not wider."""

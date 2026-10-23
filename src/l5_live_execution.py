@@ -5377,6 +5377,36 @@ class FaithfulExecutor:
                 return prov.refuse("TWO_SIDED_PROBE", "ACCUMULATION_EXHAUSTED")
             leg = legs[nxt]
 
+            # ============== THE OPENING LEG'S OWN-SIDE PRICE FLOOR
+            #
+            # `order` above is sorted by price, so with nothing claimed `nxt`
+            # IS the first leg and it is the cheaper side. On 2026-10-23 the
+            # four windows that opened at own 0.29-0.36 all completed and
+            # settled positive, and the two that opened at own 0.12 and 0.06
+            # never completed and settled -$0.1764 and -$0.0930. See
+            # l5_two_sided_probe.MIN_FIRST_LEG_OWN_PRICE for the mechanism,
+            # and for why six windows is preliminary and 0.20 is not claimed
+            # to be optimal.
+            #
+            # IT IS CONSULTED HERE AND NOWHERE ELSE, so it can only ever
+            # refuse an OPENING. The predicate is additionally handed the
+            # claim state and the held quantities and permits the leg
+            # unconditionally if either says this is a completion -- the
+            # floor is its LAST test, not its first.
+            _floor_no = TS.first_leg_entry_refusal(
+                side=nxt, own_px=leg.get("price"), legs_claimed=claimed,
+                held_up=self.store.position(market, UP),
+                held_down=self.store.position(market, DOWN))
+            if _floor_no is not None:
+                prov.stage("TWO_SIDED_PROBE", dict(
+                    _floor_no, leg_to_place=nxt, legs_claimed=claimed,
+                    pair_cost=plan.get("pair_cost"),
+                    labels=("an OPENING refusal. No order is placed and no "
+                            "round is claimed, so the window stays "
+                            "available to a later, eligible book.")))
+                return prov.refuse("TWO_SIDED_PROBE",
+                                   str(_floor_no["reason"])[:120])
+
             # THE COMPLEMENT IS PRICED NOW, NOT AT PLANNING TIME.
             #
             # With one live-order slot the complement can never rest beside

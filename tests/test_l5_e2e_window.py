@@ -728,11 +728,19 @@ def test_a_complement_that_no_longer_PAYS_is_refused_and_nothing_is_sent(
     assert D(rec["TWO_SIDED_COMPLEMENT"]["pair_cost"]) >= D("0.96")
 
 
-def test_a_round_the_market_has_LEFT_is_retired_and_re_planned(tmp_path):
+def test_a_round_the_market_has_LEFT_is_retired_and_re_planned(tmp_path,
+                                                               monkeypatch):
     """B4. An unfilled plan the book has walked away from is abandoned, and
     the next round is planned at the CURRENT touch -- instead of the same
     unreachable pair being proposed for the rest of the window, which is
     what 0330z did 32 times."""
+    # THE FIRST-LEG PRICE FLOOR IS NEUTRALISED HERE, DELIBERATELY. This test
+    # is about RETIREMENT and re-planning, and at its 0.80/0.82 book the
+    # cheaper leg is DOWN at own 0.16 -- which the floor added on 2026-10-23
+    # declines on purpose. Raising the book instead would mean rewriting the
+    # 0.16 assertion below and changing what is under test; the floor has its
+    # own tests in tests/test_l5_first_leg_price_floor.py.
+    monkeypatch.setenv("L5_TS_MIN_FIRST_LEG_PRICE", "0")
     w = Window(tmp_path)
     w.tick(30.0)                              # round 0 planned and leg sent
     first = D(w.venue.sent[0]["price"])
@@ -1008,7 +1016,7 @@ def test_the_net_pair_cost_ceiling_holds_on_the_repriced_complement(tmp_path):
 # ============================== the REAL 1215z sequence, reproduced exactly
 
 def test_the_1215z_sequence_reproduced_DOWN_then_a_repriced_UP_complement(
-        tmp_path):
+        tmp_path, monkeypatch):
     """THE WINDOW THAT WORKED, from its own production records.
 
     `cpc-btc-updown-15m-2026-10-20-1215z`, round 3 (rounds 0-2 retired):
@@ -1024,6 +1032,14 @@ def test_the_1215z_sequence_reproduced_DOWN_then_a_repriced_UP_complement(
     against the realised first-leg cost -- the cap binding, not a
     coincidence. Two separate per-leg accumulation claims, both legitimate.
     """
+    # AND THIS WINDOW IS THE COUNTER-EXAMPLE TO THE FIRST-LEG PRICE FLOOR.
+    # The floor added on 2026-10-23 refuses an opening below own 0.20 on the
+    # evidence of 2230z (own 0.12) and 2245z (own 0.06), both of which failed
+    # to complete. 1215z opened at own 0.06 and DID complete, at a pair of
+    # exactly 0.96, for a venue-attested +$0.0984. So cheap openings are 1
+    # win and 2 losses, not a clean split, and the floor is neutralised here
+    # so this real history keeps its own test.
+    monkeypatch.setenv("L5_TS_MIN_FIRST_LEG_PRICE", "0")
     w = Window(tmp_path, book=Book("0.91", "0.92"))
 
     w.venue.fill_next()

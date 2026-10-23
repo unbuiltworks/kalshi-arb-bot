@@ -111,6 +111,17 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # branch is `_entering`, and refusing a completion would strand the very
     # inventory the rule protects. An unreadable budget reads as spent.
     "TWO_SIDED_PROBE:DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY",
+    # the own-side price floor for OPENING a leg, from six settled windows
+    # on 2026-10-23: the four that opened at own 0.29-0.36 all completed and
+    # paid, and the two that opened at own 0.12 and 0.06 never completed and
+    # settled -$0.1764 and -$0.0930. Like the defensive budget above it is
+    # an ENTRY rule: `first_leg_entry_refusal` permits the leg
+    # unconditionally when a leg of the round is claimed or the market holds
+    # quantity, so a completion can never be refused by it.
+    # ONE SITE, two reasons: FIRST_LEG_BELOW_MIN_PRICE and, failing closed on
+    # a price it cannot read, FIRST_LEG_PRICE_UNREADABLE. This list counts
+    # refusal SITES in `handle`, so it carries one entry.
+    "TWO_SIDED_PROBE:FIRST_LEG_BELOW_MIN_PRICE",
     # the two gates the 1215z loss added at the COMMON submission boundary:
     # a pair cost judged on venue-confirmed fills, and one strategy per
     # authorized window so two of them cannot share one cash envelope.
