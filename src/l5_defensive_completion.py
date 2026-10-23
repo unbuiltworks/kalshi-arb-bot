@@ -88,6 +88,27 @@ DEFENSIVE_LOSS_BUDGET_USD = D("2.00")
 #: considered. 60s of a 900s window. Short on purpose: see the docstring.
 DEFENSIVE_ARM_S = 60.0
 
+#: HOW LONG THE COMPLEMENT IS GIVEN before the bounded exit may act, measured
+#: from the moment the leg became unmatched -- NOT from the window start, and
+#: NOT as a slot near the terminal.
+#:
+#: WHY A DWELL REPLACES THE ARM WINDOW. `DEFENSIVE_ARM_S` with
+#: `DEFENSIVE_MIN_EXECUTION_S` leaves a 45-SECOND actionable interval
+#: ([T+540, T+585) at the deployed margin), and the executor's evaluation
+#: cadence is irregular -- 32s, 63s and 131s gaps were all observed in one
+#: production window. On 2026-10-23 the 0230z window happened to tick at
+#: T+544 and exited; 0300z stepped T+524 -> T+587 and straddled the whole
+#: interval, so the leg went to settlement for the full -$0.3580. A policy
+#: whose trigger is narrower than its own sampling jitter fires by luck.
+#:
+#: WHY 30s. Accepted COMPLETEs that fill rest a median 8.61s against 30.85s
+#: for those that die unfilled (`analysis/l5/COMPLETION_ECONOMICS.md`), so by
+#: 30s a complement that was going to fill has overwhelmingly filled. The
+#: held-out sweep is flat from 15s to 120s -- 1.6%-2.7% of windows below
+#: -0.30/unit against 20.0% for the arm window -- so this is not a knife
+#: edge. See `analysis/l5/STRANDED_LEG_RECOVERY.md`.
+DEFENSIVE_DWELL_S = 30.0
+
 #: the minimum time that must remain before the terminal for the defensive
 #: SEQUENCE to run: cancel the resting complement, re-read it at the venue to
 #: CONFIRM it is gone, then submit one order. Starting a cancel we cannot
@@ -203,6 +224,8 @@ def decide(*,
            loss_budget_usd: D = DEFENSIVE_LOSS_BUDGET_USD,
            arm_s: float = DEFENSIVE_ARM_S,
            min_execution_s: float = DEFENSIVE_MIN_EXECUTION_S,
+           stranded_since_t: Any = None,
+           dwell_s: float = DEFENSIVE_DWELL_S,
            simulate: bool = False,
            ) -> Dict[str, Any]:
     """Should we pay to unwind this unmatched leg, and at what bounded cost?
@@ -266,10 +289,43 @@ def decide(*,
 
     terminal = binding_terminal_s(complete_cutoff_s, cancel_cutoff_s)
     out["binding_terminal_s"] = terminal
-    if not arm_window_open(now_t, window_start, complete_cutoff_s, arm_s,
-                           cancel_cutoff_s=cancel_cutoff_s):
-        out["reason"] = "OUTSIDE_DEFENSIVE_ARM_WINDOW"
-        return out
+    # THE TIMING GATE. Supplying `stranded_since_t` selects the DWELL gate --
+    # continuous from `dwell_s` after the leg became unmatched all the way to
+    # the terminal. Omitting it keeps the original arm window, so no existing
+    # caller changes behaviour by upgrading this module.
+    #
+    # The dwell does not weaken any economic gate below. It only stops the
+    # 45-second arm window from deciding, by sampling luck, whether the
+    # position that most needs the exit is allowed to have one.
+    if stranded_since_t is None:
+        if not arm_window_open(now_t, window_start, complete_cutoff_s, arm_s,
+                               cancel_cutoff_s=cancel_cutoff_s):
+            out["reason"] = "OUTSIDE_DEFENSIVE_ARM_WINDOW"
+            return out
+        out["timing_gate"] = "ARM_WINDOW"
+    else:
+        try:
+            held_s = float(now_t) - float(stranded_since_t)
+        except (TypeError, ValueError):
+            out["reason"] = "DEFENSIVE_INPUT_UNREADABLE"
+            return out
+        out["timing_gate"] = "DWELL"
+        out["stranded_for_s"] = round(held_s, 3)
+        out["dwell_s"] = float(dwell_s)
+        if held_s < 0:
+            out["reason"] = "DEFENSIVE_INPUT_IMPLAUSIBLE"
+            return out
+        # A STRICT SUPERSET OF THE OLD GATE. The dwell ADDS the interval the
+        # arm window could not reach; it never takes one away, so no position
+        # that would have been exited before is left carrying now.
+        if held_s < float(dwell_s) and not arm_window_open(
+                now_t, window_start, complete_cutoff_s, arm_s,
+                cancel_cutoff_s=cancel_cutoff_s):
+            out["reason"] = "COMPLEMENT_STILL_WITHIN_DWELL"
+            return out
+        if terminal is None:
+            out["reason"] = "DEFENSIVE_INPUT_UNREADABLE"
+            return out
 
     # ENOUGH TIME TO FINISH WHAT WE START. The sequence is cancel ->
     # venue re-read -> submit, and a cancel we cannot follow with a

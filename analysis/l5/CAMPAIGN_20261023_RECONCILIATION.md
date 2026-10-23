@@ -127,17 +127,22 @@ timing reason, not an economic one:
 | 0230z | 02:37:22 | 02:39:04 | 56.374 | **acted**, −0.0468 |
 | 0300z | 03:08:06 | 03:09:47 | 12.463 | **`INSUFFICIENT_EXECUTION_TIME`**, −0.3580 |
 
-The complement is allowed to rest until close to the binding terminal
-(600s). When it is canceled late, the next defensive evaluation can land
-*past* the execution-time floor -- so the position that most needs the exit is
-the one least likely to get it. 0230z was saved by 44 seconds of luck. The
-7.65x difference in realized loss between the two windows is attributable to
-that gap, not to the market.
+**Sharpened after the follow-up analysis.** The framing above ("uncoordinated
+deadlines") was close but not the mechanism. `DEFENSIVE_ARM_S` (60) less
+`DEFENSIVE_MIN_EXECUTION_S` (15) leaves an actionable interval of
+**[T+540, T+585) -- 45 seconds wide** -- and the executor's evaluation cadence
+is irregular: gaps of 32s, 63s and 131s all occurred inside one window. 0300z
+evaluated at T+492, T+524 and then T+587, straddling the entire interval and
+missing its close by **2 seconds**. The trigger is narrower than its own
+sampling jitter, so whether the exit fires is decided by tick alignment. 0230z
+was saved by landing at T+544.
 
-The fix is to make the complement's cancel deadline a function of the
-defensive execution-time floor, so an unfilled complement is always retired
-with enough runway left to unwind. **Not implemented here** -- it changes
-live order timing and belongs behind its own authorization and tests.
+The fix is therefore not a cancel-deadline change: it is to make the timing
+gate **continuous** rather than a slot. See
+`analysis/l5/STRANDED_LEG_RECOVERY.md`, which also shows that the existing
+1.20 pair ceiling already *is* a -0.20/unit stop -- the arm window is what kept
+it from being reachable in time. The module change is in place and inert;
+wiring it into the live executor is **not** done and needs approval.
 
 ## Authorization state
 

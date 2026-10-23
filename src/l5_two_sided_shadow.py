@@ -194,6 +194,11 @@ class Config:
         self.qty = {FM.UP: D(0), FM.DOWN: D(0)}
         self.cost = {FM.UP: D(0), FM.DOWN: D(0)}
         self.qty_opt = {FM.UP: D(0), FM.DOWN: D(0)}
+        #: when the modelled residual of each band first became non-zero, so
+        #: the dwell gate can be measured in shadow. None means flat.
+        self._stranded_since = {"conservative": None, "optimistic": None}
+        #: timing-only refusals, counted rather than stored
+        self.defensive_timing_skips: Dict[str, int] = {}
         self.cost_opt = {FM.UP: D(0), FM.DOWN: D(0)}
         self.rest: Dict[str, Leg] = {}
         self.eligible = 0
@@ -463,17 +468,22 @@ class Config:
         optimistic book is not a rule.
         """
         off = now - window_start
-        if not DEF.arm_window_open(now, window_start,
-                                   SIM_COMPLETE_CUTOFF_S,
-                                   cancel_cutoff_s=SIM_CANCEL_CUTOFF_S):
-            return
+        # THE TIMING GATE NOW BELONGS TO `DEF.decide`, NOT TO THIS LOOP.
+        # Returning here on `arm_window_open` is what made every cell report
+        # defensive_evals 0 outside the last minute -- the shadow could not
+        # see the decision it exists to measure. `decide` is handed the
+        # stranding clock and refuses on its own terms, so both the dwell gate
+        # and the old arm window are observable from the same records.
         for band, qty_map, cost_map in (("conservative", self.qty,
                                          self.cost),
                                         ("optimistic", self.qty_opt,
                                          self.cost_opt)):
             resid = qty_map[FM.UP] - qty_map[FM.DOWN]
             if resid == 0:
+                self._stranded_since[band] = None
                 continue
+            if self._stranded_since[band] is None:
+                self._stranded_since[band] = now
             held = FM.UP if resid > 0 else FM.DOWN
             q = abs(resid)
             held_qty = qty_map[held]
@@ -497,9 +507,24 @@ class Config:
                 maker_complement_price=self.frozen_cpx,
                 taker_fee_per_contract=(TAKER_THETA * exit_px
                                         * (D(1) - exit_px)),
+                stranded_since_t=self._stranded_since[band],
                 simulate=True)
+            # RECORD THE DECISIONS, NOT EVERY TICK. A pure TIMING refusal is
+            # not a decision about this position's economics and there are
+            # hundreds per window, so it is counted and not stored. Anything
+            # that reached the economics, and everything that acts, is kept.
+            if v.get("reason") in ("COMPLEMENT_STILL_WITHIN_DWELL",
+                                   "OUTSIDE_DEFENSIVE_ARM_WINDOW",
+                                   "INSUFFICIENT_EXECUTION_TIME"):
+                self.defensive_timing_skips[band] = \
+                    self.defensive_timing_skips.get(band, 0) + 1
+                continue
             self.defensive.append({
                 "band": band, "t_offset_s": round(off, 1),
+                "stranded_for_s": round(now - self._stranded_since[band], 1),
+                "arm_window_open": DEF.arm_window_open(
+                    now, window_start, SIM_COMPLETE_CUTOFF_S,
+                    cancel_cutoff_s=SIM_CANCEL_CUTOFF_S),
                 "held": held, "unmatched": str(q),
                 "basis": str(basis), "bid": str(bid), "ask": str(ask),
                 "exit_price_own": str(exit_px),
