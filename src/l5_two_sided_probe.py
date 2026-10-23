@@ -353,6 +353,102 @@ def may_enter(now: float, t_start: float, t_end: float) -> Optional[str]:
     return None
 
 
+#: THE MINIMUM USABLE ENTRY RUNWAY a window must still offer to be worth
+#: CLAIMING. A claim is irreversible -- `WindowLedger.reserve` is not
+#: refundable and `retire_settled_market` is the only thing that frees a
+#: campaign -- so claiming a window that cannot realistically enter spends
+#: the authorization for nothing.
+#:
+#: MEASURED, NOT ASSUMED. On 2026-10-23 the executor armed window 0000z at
+#: T+441s. `entry_cutoff_s` is 600, so arithmetic said 159s of runway
+#: remained; `may_enter` actually began refusing TOO_LATE_TO_WITHDRAW at
+#: T+565s, because `t_end` comes from the VENUE (`bounded_by: VENUE_CLOSE`)
+#: and the venue's close can be earlier than start+WINDOW_S implies. The
+#: window produced zero submissions and the single-window campaign was spent.
+#: That is why `usable_entry_runway_s` asks `may_enter` instead of
+#: recomputing the bound: the only trustworthy deadline is the one the gate
+#: itself enforces, against the venue's own t_end.
+#:
+#: RAISE-ONLY. A LARGER runway requirement is strictly more conservative, so
+#: only increases are accepted and an unreadable value is not permission.
+MIN_ENTRY_RUNWAY_S = 300.0
+MIN_ENTRY_RUNWAY_ENV = "L5_TS_MIN_ENTRY_RUNWAY_S"
+
+
+def min_entry_runway_s() -> float:
+    raw = (os.getenv(MIN_ENTRY_RUNWAY_ENV) or "").strip()
+    try:
+        v = float(raw) if raw else MIN_ENTRY_RUNWAY_S
+    except ValueError:
+        return MIN_ENTRY_RUNWAY_S           # unreadable is not permission
+    return max(MIN_ENTRY_RUNWAY_S, v)
+
+
+def usable_entry_runway_s(now: float, t_start: float, t_end: float) -> float:
+    """Seconds of ENTRY opportunity this window still offers, from `now`.
+
+    Derived by asking `may_enter` where it stops allowing entry, rather than
+    re-deriving the bound from constants -- `t_end` is the venue's close and
+    only the gate knows the composite deadline. Zero when entry is already
+    closed; zero also before the window opens, because a window that has not
+    started has no runway to spend yet and `window_eligible` reports that
+    case separately.
+
+    Resolution is one second, which is far finer than the 300s threshold it
+    feeds and costs at most 900 evaluations of a pure predicate.
+    """
+    n = float(now); s = float(t_start); e = float(t_end)
+    if n < s:
+        return 0.0
+    if may_enter(n, s, e) is not None:
+        # already refused at `now`; BEFORE_PLACE_FLOOR is the one refusal
+        # that resolves on its own, so it is not treated as exhausted here.
+        if may_enter(n, s, e) != "BEFORE_PLACE_FLOOR":
+            return 0.0
+    t = n
+    limit = s + float(WINDOW_S)
+    while t <= limit:
+        why = may_enter(t, s, e)
+        if why is not None and why != "BEFORE_PLACE_FLOOR":
+            break
+        t += 1.0
+    return max(0.0, t - n)
+
+
+def window_eligible(now: float, t_start: float, t_end: float
+                    ) -> Dict[str, Any]:
+    """Whether this window is worth an IRREVERSIBLE claim. Read-only.
+
+    SEPARATED FROM THE CLAIM ON PURPOSE. An eligibility question must be
+    answerable without spending anything, so this touches no ledger, writes
+    nothing, and may be called on every tick. The caller claims only after
+    this says ok.
+
+    `WINDOW_NOT_OPEN` is reported as not-eligible-yet rather than as a
+    failure: the correct response is to wait for the next window start, which
+    is exactly the behaviour that was missing when a mid-window deployment
+    claimed an aging window.
+    """
+    n = float(now); s = float(t_start); e = float(t_end)
+    if n < s:
+        return {"ok": False, "reason": "WINDOW_NOT_OPEN_YET",
+                "seconds_until_open": s - n,
+                "runway_s": 0.0, "required_s": min_entry_runway_s(),
+                "labels": ("not a refusal -- wait for this window to open "
+                           "and claim it from the start")}
+    runway = usable_entry_runway_s(n, s, e)
+    need = min_entry_runway_s()
+    if runway < need:
+        return {"ok": False, "reason": "INSUFFICIENT_ENTRY_RUNWAY",
+                "runway_s": runway, "required_s": need,
+                "elapsed_s": n - s,
+                "labels": ("the claim is irreversible and this window cannot "
+                           "use it; wait for the next window rather than "
+                           "spending the campaign on a stub")}
+    return {"ok": True, "reason": None, "runway_s": runway,
+            "required_s": need, "elapsed_s": n - s}
+
+
 def may_complete(now: float, t_start: float, t_end: float) -> Optional[str]:
     """None to allow a COMPLEMENT against existing inventory.
 

@@ -2771,9 +2771,38 @@ class Runner:
         t0, t1 = start.timestamp(), end.timestamp()
         now = float(self.now_t)
         enter = TS.may_enter(now, t0, t1)
+        # ENOUGH RUNWAY, NOT MERELY AN OPEN DOOR. This used to accept any
+        # window where `may_enter` returned None, which is a question about
+        # THIS INSTANT and says nothing about how much entry time is left.
+        # On 2026-10-23 that let a deployment finishing at T+441s claim
+        # 0000z: entry was still permitted, 159s of runway remained,
+        # `may_enter` began refusing TOO_LATE_TO_WITHDRAW at T+565s, the
+        # book collapsed to 0.0100/0.0100, and the single approved window
+        # was spent for zero submissions.
+        #
+        # `window_eligible` measures the runway by asking `may_enter` where
+        # it stops -- `t1` is the VENUE's close and can be earlier than
+        # start + WINDOW_S implies, so the bound cannot be recomputed from
+        # constants. It writes nothing, so asking is free.
+        #
+        # THE INVENTORY BRANCH BELOW IS DELIBERATELY NOT GATED ON RUNWAY.
+        # Runway bounds OPENING a leg; a position already held must stay
+        # completable for as long as `may_complete` allows, because that
+        # path REDUCES risk. Gating it would strand inventory to save a
+        # budget entry, which is the wrong trade.
         if enter is None:
-            return {"usable": True, "because": "A_FIRST_LEG_MAY_STILL_OPEN",
-                    "seconds_into_window": round(now - t0, 1)}
+            elig = TS.window_eligible(now, t0, t1)
+            if elig.get("ok"):
+                return {"usable": True,
+                        "because": "A_FIRST_LEG_MAY_STILL_OPEN",
+                        "seconds_into_window": round(now - t0, 1),
+                        "entry_runway_s": elig.get("runway_s"),
+                        "entry_runway_required_s": elig.get("required_s")}
+            # entry is open but too little of it is left to be worth an
+            # irreversible claim. Fall through to the inventory branch: if
+            # we hold something here the window still earns its place.
+            enter = "INSUFFICIENT_ENTRY_RUNWAY:%s<%s" % (
+                elig.get("runway_s"), elig.get("required_s"))
         complete = TS.may_complete(now, t0, t1)
         held = None
         try:
