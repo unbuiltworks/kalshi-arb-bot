@@ -330,6 +330,200 @@ def not_after_status(now: Optional[dt.datetime] = None) -> Dict[str, Any]:
     return out
 
 
+def authorization_preflight(market: str = "", *,
+                            now: Optional[dt.datetime] = None,
+                            root: Optional[str] = None) -> Dict[str, Any]:
+    """EVERY config-level arming blocker at once, read-only. Nothing is armed.
+
+    WHY THIS EXISTS, and it is an operational scar rather than a nicety.
+    `authorize_arming` raises on the FIRST refusal, which is correct for a
+    money path and useless for preparing a campaign: on 2026-10-23 the owner
+    applied three Railway updates across 40 minutes and three redeploys,
+    each revealing the next refusal in sequence -- step 14
+    CAMPAIGN_LIMITS_WIDER_THAN_APPROVED, then step 26 AUTHORIZATION_EXPIRED --
+    with no way to see whether anything behind them would also refuse. Four
+    approved windows went unused, not through risk but through discovery.
+
+    IT CALLS THE SAME ACCESSORS THE MONEY PATH CALLS. `not_after_status`,
+    `series_prefix`, `role_refusal`, `max_windows_env`, `session_id` and
+    `campaign_approval.campaign_decision` are the real ones, so this cannot
+    drift from what actually enforces. A second implementation that computed
+    these independently would eventually disagree, and then the preflight
+    would be describing a system nobody is running.
+
+    IT RESERVES NOTHING. `campaign_decision` is called with `reserve=False`,
+    so asking "would this window be granted?" never spends one -- the
+    property added after verification consumed the 1600z window.
+
+    IT NEVER EMITS A CONFIGURED VALUE. Deadlines report OPEN/EXPIRED/UNSET
+    and seconds remaining; the series reports set/unset and whether the
+    market matches. A preflight that leaked the values it checks would be a
+    worse problem than the one it solves.
+
+    WHAT IT DOES NOT COVER, named rather than implied: the sequential claim
+    steps -- window bounds, CLAIM_NOT_HELD, MANDATE_SCOPE_CHANGED and the
+    ORDER_STATE/reconciliation reads -- depend on live venue state and on
+    state created earlier in the same call, so they are not independently
+    evaluable here. They are reported as NOT_EVALUATED, never as PASS.
+    """
+    t = now or dt.datetime.now(dt.timezone.utc)
+    rows: List[Dict[str, Any]] = []
+
+    def row(name: str, verdict: str, **d: Any) -> None:
+        rows.append(dict({"check": name, "verdict": verdict}, **d))
+
+    # 1. the two locks the owner controls directly
+    try:
+        from src import l5_pmus_live_runner as _R
+        lock = bool(_R.shadow_only())
+        row("shadow_lock", "FAIL" if lock else "PASS", engaged=lock,
+            blocks="SHADOW_ONLY_LOCK (step 9)")
+    except BaseException as exc:                               # noqa: BLE001
+        row("shadow_lock", "UNKNOWN", error=type(exc).__name__)
+
+    try:
+        row("owner_arm_token", "PASS" if Q1.armed() else "FAIL",
+            blocks="OWNER_AUTHORIZATION_ABSENT (step 11)")
+    except BaseException as exc:                               # noqa: BLE001
+        row("owner_arm_token", "UNKNOWN", error=type(exc).__name__)
+
+    # 2. the absolute deadline -- the step-26 refusal, now visible first.
+    #
+    # UNSET IS NOT UNCONDITIONALLY FINE, and this is the subtlety that makes
+    # a naive preflight wrong. Step 35 refuses MANDATE_HAS_NO_DEADLINE when
+    # `mw > 1` AND no valid campaign is present, because a multi-window
+    # mandate must get its deadline from somewhere. A VALID CAMPAIGN CARRIES
+    # IT, so with one in force the env deadline is genuinely optional --
+    # which also means clearing a stale one is a legitimate fix rather than
+    # a widening.
+    st = not_after_status(now=t)
+    _state = str(st.get("state"))
+    _camp_valid = False
+    try:
+        from src import l5_campaign_approval as _CA
+        _camp_valid = bool(_CA.campaign_decision(
+            market or "", root=root, now=t, reserve=False).get("ok"))
+    except BaseException:                                      # noqa: BLE001
+        _camp_valid = False
+    if _state == "UNSET":
+        _mw_now = max_windows_env()
+        if _mw_now > 1 and not _camp_valid:
+            _v, _n = "FAIL", ("multi-window mandate with no valid campaign "
+                              "must have an env deadline")
+            _b = "MANDATE_HAS_NO_DEADLINE (step 35)"
+        else:
+            _v, _n = "PASS", ("optional: the valid campaign carries the "
+                              "deadline" if _camp_valid else
+                              "single-window mode needs no env deadline")
+            _b = None
+    else:
+        _v = {"OPEN": "PASS", "EXPIRED": "FAIL",
+              "UNREADABLE": "FAIL"}.get(_state, "UNKNOWN")
+        _n, _b = None, "AUTHORIZATION_EXPIRED (step 26)"
+    row("absolute_deadline", _v, state=_state,
+        expires_in_s=st.get("expires_in_s"), env=NOT_AFTER_ENV,
+        blocks=_b, note=_n)
+
+    # 3. the claim TTL
+    raw_ttl = (os.getenv(TTL_ENV) or "").strip()
+    try:
+        ttl = float(raw_ttl) if raw_ttl else float(DEFAULT_TTL_S)
+        row("claim_ttl_s", "PASS" if ttl > 0 else "FAIL", ttl_s=ttl,
+            using_default=not raw_ttl, env=TTL_ENV)
+    except ValueError:
+        row("claim_ttl_s", "FAIL", env=TTL_ENV, note="unparseable")
+
+    # 4. series declaration and whether it covers this market
+    pref = series_prefix()
+    if not pref:
+        row("market_series", "FAIL", env=SERIES_ENV, set=False,
+            blocks="MANDATE_SERIES_NOT_DECLARED (step 31)")
+    elif market and not str(market).startswith(pref):
+        row("market_series", "FAIL", env=SERIES_ENV, set=True,
+            covers_market=False, blocks="AUTHORIZATION_BOUND_TO_MARKET")
+    else:
+        row("market_series", "PASS", env=SERIES_ENV, set=True,
+            covers_market=bool(market) or None)
+
+    # 5. role and session binding
+    rr = role_refusal()
+    row("role_binding", "PASS" if rr is None else "FAIL",
+        reason=(rr or {}).get("reason"),
+        blocks="AUTHORIZATION_SESSION_MISMATCH (step 41)")
+    try:
+        row("session_id", "PASS" if session_id() else "FAIL")
+    except BaseException as exc:                               # noqa: BLE001
+        row("session_id", "UNKNOWN", error=type(exc).__name__)
+
+    # 6. the window budget, as the INTERSECTION the code actually applies
+    mw = max_windows_env()
+    row("window_budget_env", "PASS" if mw >= 1 else "FAIL",
+        max_windows_env=mw, env=MAX_WINDOWS_ENV,
+        note=("unset defers to the campaign; a SET value can only tighten "
+              "it, so a stale 1 silently caps a four-window campaign"))
+
+    # 7. the campaign approval, WITHOUT reserving a window
+    try:
+        from src import l5_campaign_approval as CA
+        d = CA.campaign_decision(market or "", root=root, now=t,
+                                 reserve=False)
+        if not d.get("present"):
+            row("campaign_approval", "FAIL", present=False,
+                reason=d.get("reason"))
+        else:
+            sc = dict(d.get("scope") or {})
+            row("campaign_approval", "PASS" if d.get("ok") else "FAIL",
+                state=d.get("approval_state"), reason=d.get("reason"),
+                max_windows=sc.get("max_windows"),
+                approved_exposure=sc.get("max_total_exposure_usd"),
+                approved_daily_loss=sc.get("max_daily_loss_usd"),
+                document_sha256=d.get("document_sha256"),
+                reserved_nothing=True)
+    except BaseException as exc:                               # noqa: BLE001
+        row("campaign_approval", "UNKNOWN", error=type(exc).__name__)
+
+    # 8. the independent halt
+    try:
+        from src import l5_pmus_live_runner as _R2
+        g = _R2.halt_gate()
+        if g is None:
+            row("halt_gate", "FAIL", present=False,
+                blocks="HALT_GATE_ABSENT (step 16)")
+        else:
+            stt = g.state()
+            row("halt_gate", "PASS" if stt.get("permitted") else "FAIL",
+                permitted=bool(stt.get("permitted")), why=stt.get("why"),
+                blocks="HALTED (step 15)")
+    except BaseException as exc:                               # noqa: BLE001
+        row("halt_gate", "UNKNOWN", error=type(exc).__name__)
+
+    # 9. what cannot be answered here, named rather than assumed PASS
+    for n, why in (
+            ("window_bounds", "needs live venue window metadata"),
+            ("order_state_and_reconciliation",
+             "needs an authoritative venue read"),
+            ("claim_held_and_scope_digest",
+             "created inside authorize_arming itself")):
+        row(n, "NOT_EVALUATED", note=why)
+
+    fails = [r["check"] for r in rows if r["verdict"] == "FAIL"]
+    unknown = [r["check"] for r in rows if r["verdict"] == "UNKNOWN"]
+    return {
+        "label": "L5_AUTHORIZATION_PREFLIGHT",
+        "market": market or None,
+        "utc": t.isoformat(),
+        "ok": not fails and not unknown,
+        "fail": fails,
+        "unknown": unknown,
+        "not_evaluated": [r["check"] for r in rows
+                          if r["verdict"] == "NOT_EVALUATED"],
+        "rows": rows,
+        "labels": ("READ-ONLY. Arms nothing, reserves nothing, emits no "
+                   "configured value. UNKNOWN and NOT_EVALUATED are never "
+                   "PASS. authorize_arming still decides."),
+    }
+
+
 def max_windows_env() -> int:
     """The approved window budget. Unreadable is the tightest value."""
     raw = (os.getenv(MAX_WINDOWS_ENV) or "").strip()
