@@ -1791,3 +1791,47 @@ deploy: 2026-10-22T20:57Z budget-aware planner sizing + record correction; SHADO
 #   python3 -m src.l5_runtime_config_verify
 # must report PASS: true, checked: 21, failed: [].
 deploy: 2026-10-22T21:07Z retry 7fcff843 after snapshot-fetch timeout; no code change
+#
+# ---------------------------------------------------------------------------
+# DEPLOYING ee8509cd: never claim a window with too little entry runway.
+#
+# The live build (7ca036cc, deployment 081236d6) still contains the defect
+# that wasted the 0000z campaign: campaign_window_is_usable asked
+# `may_enter(now) is None`, which is true at ANY instant before the cutoff,
+# so a deployment finishing at T+441s claimed a window with 159s of runway
+# and produced zero submissions. window_eligible now measures the runway by
+# asking may_enter where it STOPS, against the venue's own t_end.
+#
+# Verified, no inventory held: T+0 runway 600 CLAIM, T+300 runway 300 CLAIM,
+# T+441 runway 159 REFUSE, T+565 runway 35 REFUSE, T+700 runway 0 REFUSE.
+# With residual held, T+441 and T+700 stay usable as INVENTORY_STILL_TO_
+# COMPLETE -- runway bounds OPENING only; completion reduces risk.
+#
+# NOT A LIVE ACTIVATION. SHADOW_ONLY_LOCK stays ON, the campaign stays
+# EXHAUSTED (windows_spent 1/1), both authorization documents expire
+# 01:20:57Z and are NOT renewed. No limit moves. This deployment can place
+# no order; it only stops a future authorization being wasted.
+#
+# AND THE ECONOMICS GATE IS NOT MET, measured rather than asserted. The
+# owner's precondition is positive expected net economics under realistic
+# fill assumptions. It fails structurally, not marginally:
+#   * MAKER_COMPLETE_CEILING is 0.96. pair_cost(depth d, spread s) =
+#     (1 - s) - 2*d*tick, so at the 1-tick spread depth=1 prices the pair at
+#     0.97 and is REFUSED by the cap; only depth>=2 fits.
+#   * complete_no_fill_forensics (n=868): FILLED completes rest a median of
+#     1 tick from the opposite ask, UNFILLED a median of 2. Fill outcomes
+#     are 125 filled (14.4%), 581 no-fill-cancelled, 162 rejected.
+#   * so the cap forces us to rest exactly where completes do not fill.
+#   * depth=1 is only legal at spread >= 0.02, and the spread is 0.0100 in
+#     667 of 671 observed shadow ticks (99.40%); >= 0.02 occurs 0.60%. Ten
+#     direct book reads this session were 1 tick, 10 of 10.
+#   * EV/unit = 0.834196*0.057230 + 0.165804*(-0.331449) = -0.007215, and
+#     breakeven completion is 0.852758 against 0.834196 observed.
+# Escaping this needs the 0.96 ceiling raised or depth forced to 1 at 0.97.
+# Both are risk-control changes the owner forbade, so neither is attempted
+# and no live campaign is proposed.
+#
+# POST-DEPLOY, REQUIRED BEFORE ANY ACTIVATION:
+#   python3 -m src.l5_runtime_config_verify
+# must report PASS: true, checked: 21, failed: [].
+deploy: 2026-10-23T00:50Z ee8509cd entry-runway guard; SHADOW_ONLY_LOCK ON, campaign exhausted, no order authorized
