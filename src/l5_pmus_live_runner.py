@@ -478,6 +478,104 @@ class FrameFanout:
                            "each other")}
 
 
+def acc_stale_by_distance(runner: Any, now: float, slug: Any,
+                          live: Mapping[str, Any],
+                          *, skip: Any = ()) -> List[str]:
+    """Which resting legs the book has LEFT far enough to recover.
+
+    READ-ONLY: it reads the durable rows, the authenticated socket book and
+    the submission budget, and returns client order ids. Cancelling is the
+    caller's business and goes through the one deadline route.
+
+    A FUNCTION, NOT A METHOD, and `runner` is read through getattr. Every
+    duck-typed runner stub in the suite grafts `maybe_acc_deadline` onto an
+    object carrying only what that method touched; a new attribute on `self`
+    would break all of them, and worse, it would mean the recovery depended
+    on a shape no caller declares. Anything missing simply yields no
+    recovery.
+
+    FAIL CLOSED EVERYWHERE. No book, a stale book, an unreadable tick, an
+    unreadable budget or an unreadable row all decline the recovery and leave
+    the order to its age deadline -- which is the behaviour that existed
+    before this, so a fault here can only restore it.
+    """
+    from src import l5_two_sided_probe as TSP
+    out: List[str] = []
+    stats = getattr(runner, "stats", None)
+
+    def count(key: str) -> None:
+        if stats is not None:
+            try:
+                stats[key] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
+
+    try:
+        t = getattr(runner, "transport", None)
+        tick = getattr(t, "tick_size", None)
+        if tick is None:
+            return out
+        book = getattr(runner, "book", None)
+        snap = (book.snapshot(str(slug)) or {}) if book is not None else {}
+        if not snap:
+            return out
+        # THE OPEN BUDGET, read once. A recovery that cannot be replaced
+        # is strictly worse than one not taken, so an unreadable budget
+        # declines rather than proceeds.
+        try:
+            rep = AUTH.class_budget_report(AUTH.ledger_path(),
+                                           AUTH.experiment_id())
+            obr = (rep.get("OPEN") or {}).get("remaining")
+        except BaseException as exc:                       # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            obr = "UNREADABLE"
+        used = int((getattr(runner, "acc_recoveries", None)
+                    or {}).get(str(slug), 0))
+        for coid, row in sorted(live.items()):
+            if coid in set(skip or ()):
+                continue
+            if str(row.get("market") or "") != str(slug):
+                continue
+            sub = None
+            try:
+                st = dt.datetime.fromisoformat(str(row.get("t")))
+                if st.tzinfo is not None:
+                    sub = st.timestamp()
+            except BaseException:                          # noqa: BLE001
+                sub = None
+            if sub is None:
+                continue       # the time path halts on this; not ours
+            v = TSP.recover_stale_leg(
+                side=str(row.get("side")), own_px=row.get("price"),
+                qty=row.get("qty"), remaining=row.get("remaining"),
+                state=row.get("state"), submitted_t=sub, now=float(now),
+                bid=snap.get("bid"), ask=snap.get("ask"), tick=tick,
+                depth_ticks=TSP.depth_ticks(),
+                book_age_s=snap.get("stream_age_s"),
+                recoveries_used=used + len(out),
+                open_budget_remaining=obr)
+            count("acc_recover:%s" % (v.get("reason") or "RECOVER"))
+            if v.get("recover"):
+                out.append(coid)
+                emit("L5_ACC_RECOVER", dict(
+                    v, market=str(slug), coid=coid,
+                    venue_order_id=row.get("venue_order_id"),
+                    labels=("PROPOSED. Nothing is cancelled by this "
+                            "record: the deadline route polls the venue, "
+                            "cancels by exact venue order id and proves "
+                            "the cancel terminal before any "
+                            "replacement is priced.")))
+    except BaseException as exc:                           # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        # recovery is an OPTIMISATION. It must never be able to take down the
+        # deadline that bounds real exposure.
+        count("acc_recover:LAYER_FAILED:%s" % type(exc).__name__)
+        return []
+    return out
+
+
 class Runner:
     def __init__(self, *, root: str, book: AB.AuthBook,
                  http: Optional[Any] = None, lam: D = MANIFEST_LAMBDA,
@@ -617,6 +715,12 @@ class Runner:
         self.last_pending_resolve_t = 0.0
         #: preflight's escalating retry index, reset on every window roll
         self.preflight_attempts = 0
+        #: how many stale-by-distance first-leg recoveries each market has
+        #: spent, PER MARKET and never reset -- each one costs an OPEN
+        #: submission and surrenders queue priority, so the ceiling is for
+        #: the market's whole life rather than per attempt. Keyed by slug, so
+        #: a new window starts at zero by construction.
+        self.acc_recoveries: Dict[str, int] = {}
         #: last time the independent latch was consulted for the
         #: CANCEL decision. 0.0, so the first tick with exposure
         #: always asks.
@@ -3874,12 +3978,63 @@ class Runner:
                 t.disarm("acc_deadline_record_unusable")
             return {"halt": True, "reason": "ACC_SUBMIT_TIME_UNPARSEABLE",
                     "coids": unusable}
+        # ============ AND THE SAME DEADLINE, TRIGGERED BY DISTANCE
+        #
+        # A leg the book has LEFT cannot fill however long it rests, and
+        # until now only this clock could rescue it: `retire_blocked_by`
+        # refuses to retire a round while an order is live, so 2200z sat 56
+        # seconds unfillable out of a 540-second entry budget. Drift is now a
+        # second way to become overdue, and it routes through exactly the
+        # same cancel: `poll_orders()` first so a racing fill is BOOKED
+        # rather than cancelled, then `deadman(only=...)` by exact venue id
+        # with proof by re-read.
+        #
+        # NOTHING HERE PRICES THE REPLACEMENT. The recovered leg is re-quoted
+        # by the ordinary plan path, two ticks behind the CURRENT touch, with
+        # the pair cap re-tested. This only decides that the stale order
+        # should stop resting.
+        stale = acc_stale_by_distance(self, now, slug, live,
+                                      skip=set(overdue))
+        if stale:
+            overdue = overdue + [c for c in stale if c not in overdue]
         if not overdue:
             return None
         progress = self.poll_orders()      # a fill is booked, not cancelled
+        # RE-CHECK AFTER THE POLL, for the distance-triggered ones only. The
+        # authoritative read may have just booked a fill, and a leg that
+        # filled must NEVER be abandoned -- it becomes inventory for the
+        # complement path. A leg whose row has gone is terminal already.
+        raced = []
+        if stale:
+            fresh = self.store.live_orders()
+            for coid in list(stale):
+                if not TSP.row_is_zero_fill(fresh.get(coid)):
+                    raced.append(coid)
+                    stale.remove(coid)
+                    if coid in overdue:
+                        overdue.remove(coid)
+        if raced:
+            self.win["acc_recover_raced_a_fill"] += len(raced)
+            emit("L5_ACC_RECOVER_RACED", {
+                "market": slug, "coids": raced,
+                "labels": ("the authoritative poll booked a fill on a leg "
+                           "this was about to recover, so it was NOT "
+                           "cancelled. It is inventory now and the "
+                           "complement path owns it.")})
+        if not overdue:
+            return None
+        if stale:
+            self.win["acc_recovered_stale_first_leg"] += len(stale)
+            acc = getattr(self, "acc_recoveries", None)
+            if acc is not None:
+                acc[str(slug)] = acc.get(str(slug), 0) + len(stale)
         rec = LX.deadman(self.store, t, reason="acc_order_deadline",
                          only=overdue)
         out = dict(rec, market=slug, overdue=overdue,
+                   stale_by_distance=stale,
+                   raced_a_fill=raced,
+                   recoveries_used=(getattr(self, "acc_recoveries", None)
+                                    or {}).get(str(slug), 0),
                    ttl_s=TSP.order_ttl_s(),
                    polled=len(progress or []),
                    labels=("per-order age deadline. `cancelled` means the "

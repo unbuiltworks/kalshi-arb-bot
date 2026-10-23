@@ -1107,6 +1107,256 @@ def completion_decision(*, up_qty: Any, dn_qty: Any,
 STALE_DRIFT_TICKS = 6
 STALE_DRIFT_ENV = "L5_TS_STALE_DRIFT_TICKS"
 
+# ===================================== RECOVERING A RESTING FIRST LEG
+#
+# THE GAP THIS CLOSES, measured live. `plan_executable` detects a stale plan,
+# but `retire_blocked_by` refuses to retire a round while ANY order is live --
+# correctly, because an order we may still own must be cancelled by its own
+# id and proved terminal first. So while a first leg RESTS with zero fills,
+# nothing but the 120-second age deadline can rescue it, however far the book
+# has travelled.
+#
+# 2200z on 2026-10-23 is the case. A DOWN first leg was placed at own 0.2100
+# against an own-side touch of 0.2300 -- correctly two ticks behind. The book
+# then left it:
+#
+#     22:01:45  wire 0.7600/0.7700   own touch 0.23    2 ticks behind
+#     22:02:17  wire 0.5600/0.5700   own touch 0.43   22 ticks behind
+#     22:02:50  wire 0.7400/0.7500   own touch 0.25    4 ticks behind
+#     22:03:23  wire 0.7000/0.7100   own touch 0.29    8 ticks behind
+#
+# It rested unfillable for 56 seconds, was cancelled at zero fill by the age
+# deadline at 22:03:46, re-quoted two ticks from the NEW touch at own 0.2900,
+# and filled in 15 seconds. The 56 seconds were pure loss out of a 540-second
+# entry budget.
+#
+# WHY RE-QUOTING IS NOT CHASING. The replacement is priced by the same
+# `quote_own_price` rule against a fresh book -- two ticks BEHIND the current
+# touch, post-only, pair cap re-tested. It never moves to the touch and never
+# crosses. The one live precedent is 2145z, where a superseded complement was
+# re-derived from the current book at own 0.5600 instead of the frozen 0.6000:
+# the pair improved from 0.95 to 0.91 and settled +$0.0927. Re-pricing against
+# a current book has been MORE profitable, not less.
+#
+# FOUR TICKS, owner-approved 2026-10-23. Wider than the 2-tick placement
+# offset, so an order is never recovered for sitting where it was put, and
+# narrower than STALE_DRIFT_TICKS, which governs retiring a plan nothing is
+# resting on.
+STALE_RECOVER_DRIFT_TICKS = 4
+STALE_RECOVER_DRIFT_ENV = "L5_TS_RECOVER_DRIFT_TICKS"
+
+#: and the floor on how long a leg must have rested before drift may cancel
+#: it. A book that flickers one tick for a moment must not be able to churn
+#: an order that is about to fill: every live first-leg fill so far landed in
+#: 9 to 15 seconds, so anything inside that is still working.
+STALE_RECOVER_MIN_REST_S = 15.0
+STALE_RECOVER_MIN_REST_ENV = "L5_TS_RECOVER_MIN_REST_S"
+
+#: and the churn bound: how many drift recoveries one market may spend. Each
+#: one costs an OPEN submission and surrenders queue priority, so this is a
+#: hard ceiling and not a target.
+STALE_RECOVER_MAX_PER_MARKET = 3
+STALE_RECOVER_MAX_ENV = "L5_TS_RECOVER_MAX_PER_MARKET"
+
+#: the book backing a recovery must be THIS fresh. `snapshot()` already
+#: returns None unless the socket is connected and two-sided; this bounds how
+#: old the last frame may be, because cancelling a live order against a stale
+#: book is how a recovery becomes a mistake.
+STALE_RECOVER_MAX_BOOK_AGE_S = 5.0
+
+
+def recover_drift_ticks() -> int:
+    """The drift that justifies recovering a RESTING leg.
+
+    Configurable LAZIER only. A LOWER number recovers sooner and churns more,
+    so an unreadable or smaller value falls back to the approved 4 rather
+    than becoming more aggressive than the owner authorized.
+    """
+    raw = (os.getenv(STALE_RECOVER_DRIFT_ENV) or "").strip()
+    try:
+        v = int(raw) if raw else STALE_RECOVER_DRIFT_TICKS
+    except ValueError:
+        return STALE_RECOVER_DRIFT_TICKS
+    return max(STALE_RECOVER_DRIFT_TICKS, v)
+
+
+def recover_min_rest_s() -> float:
+    """Configurable LONGER only, for the same reason."""
+    raw = (os.getenv(STALE_RECOVER_MIN_REST_ENV) or "").strip()
+    try:
+        v = float(raw) if raw else STALE_RECOVER_MIN_REST_S
+    except ValueError:
+        return STALE_RECOVER_MIN_REST_S
+    if v != v or v in (float("inf"), float("-inf")):
+        return STALE_RECOVER_MIN_REST_S
+    return max(STALE_RECOVER_MIN_REST_S, v)
+
+
+def recover_max_per_market() -> int:
+    """Configurable SMALLER only: a wider churn budget is the unsafe way."""
+    raw = (os.getenv(STALE_RECOVER_MAX_ENV) or "").strip()
+    try:
+        v = int(raw) if raw else STALE_RECOVER_MAX_PER_MARKET
+    except ValueError:
+        return STALE_RECOVER_MAX_PER_MARKET
+    return max(0, min(STALE_RECOVER_MAX_PER_MARKET, v))
+
+
+def depth_ticks() -> int:
+    """How far behind its touch a maker leg is quoted, in ticks.
+
+    THE SAME READ the two money-path call sites make inline --
+    `int(os.getenv("L5_TS_DEPTH_TICKS", "2"))` in l5_live_execution -- so
+    this is one name for the convention they already use, not a second
+    policy. It differs in one way, deliberately: an unparseable value falls
+    back to 2 instead of raising, because this accessor is consulted from a
+    recovery path that must never be able to take down the deadline that
+    bounds real exposure.
+    """
+    raw = (os.getenv("L5_TS_DEPTH_TICKS") or "").strip()
+    try:
+        v = int(raw) if raw else 2
+    except ValueError:
+        return 2
+    return v if v >= 0 else 2
+
+
+def row_is_zero_fill(row: Optional[Mapping[str, Any]]) -> bool:
+    """Does this durable live-order row prove NOTHING has filled on it?
+
+    True only for a row that is present, in the LIVE state, and still
+    carrying its full submitted quantity. `apply_order_progress` reduces
+    `remaining` and sets PARTIALLY_FILLED on any fill, and a fully filled row
+    is popped entirely -- so an ABSENT row is not zero-filled, it is terminal
+    and possibly filled.
+
+    Every other case is False, including an unreadable quantity: an unknown
+    is never a zero when the question is whether money has moved.
+    """
+    if not row:
+        return False
+    if str(row.get("state") or "").strip().upper() != "LIVE":
+        return False
+    q, rem = _d(row.get("qty")), _d(row.get("remaining"))
+    return q is not None and rem is not None and q > 0 and rem == q
+
+
+def recover_stale_leg(*, side: str, own_px: Any, qty: Any, remaining: Any,
+                      state: Any, submitted_t: Any, now: Any,
+                      bid: Any, ask: Any, tick: Any, depth_ticks: int,
+                      book_age_s: Any,
+                      recoveries_used: int,
+                      open_budget_remaining: Any = None) -> Dict[str, Any]:
+    """Should this RESTING leg be cancelled now and re-quoted? Read-only.
+
+    Returns {"recover": bool, "reason": str, ...}. `recover` is True only
+    when every condition below holds; each failure is named, so the logs say
+    which one declined rather than going quiet.
+
+    PRICES ARE OWN-SIDE THROUGHOUT. `own_px` is the order's own-terms limit
+    -- which is what `record_submit` stores, because `l5_order_body.build`
+    takes own terms and converts with `venue_price`. The comparison is
+    against `quote_own_price`, also own-terms, so no wire conversion happens
+    here and none is needed.
+
+    THE SIGN MATTERS, and it is the whole of requirement five. Drift is
+    `quote_own_price(now) - own_px`. POSITIVE means the fair quote has moved
+    ABOVE where we rest: the touch walked away and we are stranded behind it.
+    NEGATIVE OR ZERO means we are already at or better than where we would
+    quote today -- our order became MORE competitive -- and that is never a
+    reason to cancel. This holds for both sides because everything is in own
+    terms: for DOWN, a falling own price IS a receding touch.
+
+    IT DECIDES NOTHING ABOUT SAFETY. The caller must still poll the venue
+    first, confirm zero cumulative fill on the authoritative read, cancel by
+    exact venue order id, and prove the cancel terminal before replacing.
+    """
+    def no(reason: str, **kw: Any) -> Dict[str, Any]:
+        return dict(kw, recover=False, reason=reason)
+
+    # 1. ZERO CONFIRMED FILLS, from the durable row. `apply_order_progress`
+    #    reduces `remaining` and sets PARTIALLY_FILLED on any fill, so a row
+    #    still carrying its full quantity in the LIVE state is the only one
+    #    that can be abandoned without stranding inventory. Unreadable is
+    #    NOT zero.
+    q, rem = _d(qty), _d(remaining)
+    if q is None or rem is None:
+        return no("FILL_STATE_UNREADABLE", qty=str(qty), remaining=str(remaining))
+    if str(state or "").strip().upper() != "LIVE" or rem != q:
+        return no("NOT_ZERO_FILL", state=str(state), qty=str(q),
+                  remaining=str(rem))
+
+    # 2. A BOOK WORTH ACTING ON. A missing, crossed or locked book judges
+    #    nothing, and a stale one judges it wrongly.
+    tk, b, a = _d(tick), _d(bid), _d(ask)
+    if tk is None or tk <= 0:
+        return no("TICK_UNKNOWN")
+    if b is None or a is None or b <= 0 or a <= 0 or a <= b:
+        return no("BOOK_UNUSABLE", bid=str(bid), ask=str(ask))
+    age = _d(book_age_s)
+    if age is None or age < 0 or age > _d(STALE_RECOVER_MAX_BOOK_AGE_S):
+        return no("BOOK_STALE", book_age_s=str(book_age_s),
+                  max_book_age_s=str(STALE_RECOVER_MAX_BOOK_AGE_S))
+
+    # 3. IT MUST HAVE HAD ITS CHANCE. Every live first-leg fill so far
+    #    arrived within 15 seconds; cancelling inside that is churning an
+    #    order that is still working, and it throws away queue priority.
+    t_now, t_sub = _d(now), _d(submitted_t)
+    if t_now is None or t_sub is None:
+        return no("REST_TIME_UNREADABLE")
+    rest = t_now - t_sub
+    if rest < _d(recover_min_rest_s()):
+        return no("TOO_YOUNG", rest_s=str(rest),
+                  min_rest_s=str(recover_min_rest_s()))
+
+    own = _d(own_px)
+    if own is None:
+        return no("LEG_PRICE_UNREADABLE")
+    now_px = quote_own_price(side, bid=b, ask=a, tick=tk,
+                             depth_ticks=depth_ticks)
+    if now_px is None:
+        return no("TOUCH_UNREADABLE")
+
+    # 4. AWAY, NOT TOWARDS.
+    drift = now_px - own
+    if drift <= 0:
+        return no("NOT_DRIFTED_AWAY", own_px=str(own),
+                  would_quote_now=str(now_px), drift_ticks=str(drift / tk),
+                  note=("the resting price is at or better than today's "
+                        "quote, so the order became more competitive; that "
+                        "is never a reason to cancel it"))
+    ticks = drift / tk
+    allow = _d(recover_drift_ticks())
+    if ticks <= allow:
+        return no("WITHIN_TOLERANCE", own_px=str(own),
+                  would_quote_now=str(now_px), drift_ticks=str(ticks),
+                  allowed_ticks=str(allow))
+
+    # 5. CHURN AND BUDGET. Cancelling without the capacity to re-place is
+    #    strictly worse than leaving the order resting, so an exhausted OPEN
+    #    budget declines the recovery rather than spending the cancel.
+    if int(recoveries_used) >= recover_max_per_market():
+        return no("RECOVERY_BUDGET_SPENT", used=int(recoveries_used),
+                  max_per_market=recover_max_per_market())
+    obr = open_budget_remaining
+    if obr is not None:
+        try:
+            if int(obr) < 1:
+                return no("OPEN_BUDGET_EXHAUSTED", open_remaining=int(obr))
+        except (TypeError, ValueError):
+            return no("OPEN_BUDGET_UNREADABLE", open_remaining=str(obr))
+
+    return {"recover": True, "reason": None, "side": str(side),
+            "own_px": str(own), "would_quote_now": str(now_px),
+            "drift_ticks": str(ticks), "allowed_ticks": str(allow),
+            "rest_s": str(rest), "book_age_s": str(age),
+            "recoveries_used": int(recoveries_used),
+            "max_per_market": recover_max_per_market(),
+            "note": ("stale by distance, zero filled. The replacement is "
+                     "priced by the same rule two ticks BEHIND the current "
+                     "touch and re-tested against the pair cap; it never "
+                     "moves to the touch and never crosses.")}
+
 
 def stale_drift_ticks() -> int:
     """The drift tolerance. Configurable TIGHTER only -- a wider tolerance
