@@ -515,3 +515,38 @@ def test_reports_never_raise_on_a_damaged_ring():
     r._bump("append:TypeError")
     rep = r.report()
     assert rep["errors"] == {"append:TypeError": 1}
+
+
+# ------------------------------- the label must not overclaim the clock
+
+def test_the_located_frame_is_not_called_a_venue_instant_snapshot():
+    """The owner's constraint, pinned: do not claim the observed book is a
+    synchronized snapshot of the exact venue fill instant. Frame boundaries
+    are OUR receipt clock, so the name must not say otherwise."""
+    assert "VENUE_EVENT_TIME_SYNCHRONIZED" != BE.SYNC_AT_EVENT
+    assert "LOCAL_RECEIPT" in BE.SYNC_AT_EVENT
+    assert "synchronised to the exact venue instant" in BE.SYNC_LABELS
+
+
+def test_clock_domains_are_disclosed_on_every_as_of_answer():
+    r = BE.BookRing()
+    r.append("m", dict(ROW, t=100.0), 100.0)
+    for ev in (150.0, 1.0, None):
+        got = r.as_of("m", ev)
+        cd = got["clock_domains"]
+        assert cd["offset_measured"] is False
+        assert "LOCAL_RECEIPT" in cd["frame_boundaries"]
+        assert "VENUE" in cd["event_time"]
+        assert "never as the book at the exact venue instant" in \
+            cd["consequence"]
+
+
+def test_clock_domain_disclosure_reaches_the_fill_record():
+    r = BE.BookRing()
+    r.append("m", dict(ROW, t=100.0), 100.0)
+    rec = BE.fill_evidence(slug="m", coid="c", side="UP", fill_qty="3",
+                           venue_event_t=150.0, processing_t=160.0, ring=r)
+    assert rec["book_at_event"]["sync"]["clock_domains"][
+        "offset_measured"] is False
+    assert "not a snapshot synchronised" in rec["sync_labels"] or \
+        "synchronised to the exact venue instant" in rec["sync_labels"]

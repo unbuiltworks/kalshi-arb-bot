@@ -54,7 +54,18 @@ TICK = D("0.01")
 COMPLEMENT_OF = {UP: DOWN, DOWN: UP}
 
 #: how a book row relates to the event it is being used to describe.
-SYNC_AT_EVENT = "VENUE_EVENT_TIME_SYNCHRONIZED"
+#:
+#: NOT "venue fill instant". The name said VENUE_EVENT_TIME_SYNCHRONIZED and
+#: that was an overclaim, caught on review before any fill was described by
+#: it. The ring's frame boundaries come from `LadderModel._fold`, which
+#: stamps `cur["t"] = now` -- OUR RECEIPT CLOCK for the frame, not the
+#: `transactTime` the venue puts in the frame itself. So locating an event
+#: between two frames compares a venue timestamp against local receipt
+#: boundaries, across two clocks whose offset (feed latency) this module
+#: does not measure. The row is the frame in effect by our receipt clock,
+#: which is a useful and honest thing to report, and it is NOT a snapshot
+#: synchronised to the exact venue instant.
+SYNC_AT_EVENT = "FRAME_IN_EFFECT_BY_LOCAL_RECEIPT_CLOCK"
 SYNC_BEFORE_RING = "NO_FRAME_AT_OR_BEFORE_EVENT"
 SYNC_NO_EVENT_TIME = "NO_VENUE_EVENT_TIME_SUPPLIED"
 SYNC_PROCESSING = "PROCESSING_TIME_SNAPSHOT"
@@ -64,9 +75,26 @@ SYNC_PROCESSING = "PROCESSING_TIME_SNAPSHOT"
 #: happened, the other is the book as we saw it when we got round to
 #: processing the fill, and they are separated by ingestion lag.
 SYNC_LABELS = (
-    "book_at_event: the ring frame in effect at the venue's own event "
-    "timestamp. book_at_processing: the book as read when this record was "
-    "built. They differ by feed and processing lag; neither is a fill.")
+    "book_at_event: the ring frame in effect at the event time, located by "
+    "OUR RECEIPT CLOCK for book frames -- not a snapshot synchronised to the "
+    "exact venue instant, because frame boundaries are local receipt times "
+    "and the event time is the venue's, and the offset between those clocks "
+    "is not measured here. book_at_processing: the book as read when this "
+    "record was built. They differ by feed and processing lag; neither is a "
+    "fill.")
+
+#: stated on every as_of answer, so no reader has to go looking for it.
+CLOCK_DOMAINS = {
+    "frame_boundaries": ("LOCAL_RECEIPT -- LadderModel stamps each frame "
+                         "with our clock, discarding the frame's own "
+                         "transactTime"),
+    "event_time": "VENUE -- whatever the venue supplied on the order row",
+    "offset_measured": False,
+    "consequence": ("an event cannot be placed between two frames to better "
+                    "than the unmeasured feed latency; treat the located "
+                    "frame as approximate, never as the book at the exact "
+                    "venue instant"),
+}
 
 
 def _d(v: Any) -> Optional[D]:
@@ -312,7 +340,7 @@ class BookRing:
         et = _f(event_t)
         if et is None:
             return {"basis": SYNC_NO_EVENT_TIME, "row": None,
-                    "event_t": None}
+                    "event_t": None, "clock_domains": dict(CLOCK_DOMAINS)}
         rows = self._rows.get(str(slug)) or ()
         prev = None
         nxt = None
@@ -325,11 +353,13 @@ class BookRing:
         if prev is None:
             first = rows[0].get("t") if rows else None
             return {"basis": SYNC_BEFORE_RING, "row": None, "event_t": et,
+                    "clock_domains": dict(CLOCK_DOMAINS),
                     "ring_first_t": first,
                     "ring_starts_after_event_by_s": (
                         None if first is None else round(first - et, 4)),
                     "ring_rows": len(rows)}
         return {"basis": SYNC_AT_EVENT, "row": dict(prev), "event_t": et,
+                "clock_domains": dict(CLOCK_DOMAINS),
                 "frame_t": prev.get("t"),
                 "frame_age_at_event_s": round(et - float(prev["t"]), 4),
                 "superseded_at_t": None if nxt is None else nxt.get("t"),
