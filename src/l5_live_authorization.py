@@ -42,7 +42,6 @@ from typing import Any, Dict, List, Mapping, Optional
 import re
 from decimal import Decimal as D
 
-from src import l5_mandate_signature as MS
 from src import pmus_auth as Q1
 
 #: where the spent-authorization ledger lives. On the probe's volume, so it
@@ -1893,6 +1892,14 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #     becomes REQUIRED for live arming and no variable edit can satisfy
     #     it. Turning the gate off therefore takes a repo commit and a
     #     deploy, not an environment change.
+    # IMPORTED HERE, NOT AT MODULE LEVEL, and the reason is concrete: a
+    # top-level import put `l5_mandate_signature` into the import closure of
+    # every image that carries this module, and `l5_live_probe` and
+    # `l5_halt_reset` do not COPY it -- so both images stopped being able to
+    # import their own entrypoint. `test_l5_live_probe_image_closure` caught
+    # it. The gate runs once per arming attempt, so a local import costs
+    # nothing, and this keeps each image's surface to what it actually runs.
+    from src import l5_mandate_signature as MS
     if MS.MANDATE_PUBKEYS:
         # THE HALT LATCH IS STILL REQUIRED, as the FAST revocation route.
         # The signing procedure names three ways to withdraw a mandate and

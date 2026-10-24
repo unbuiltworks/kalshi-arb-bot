@@ -157,3 +157,76 @@ def test_nothing_in_the_watchdog_can_sign_a_mandate():
     src = inspect.getsource(MS)
     assert "Ed25519PrivateKey" not in src
     assert MS.MANDATE_PUBKEYS == {}, "shipped state is an empty registry"
+
+
+# ---------------------------------------- the image must be able to BOOT
+def test_the_watchdog_image_copies_every_module_its_entrypoint_reaches():
+    """THE PRE-DEPLOY CHECK FOR THIS PATCH, and the executor has had one of
+    these for a while while the watchdog never did.
+
+    The entrypoint now imports `l5_mandate_signature`. A module missing from
+    the COPY list is an ImportError at boot -- and a watchdog that cannot
+    boot is a watchdog that is not watching, which is strictly worse than
+    one that cannot publish. Transitive, because an import two deep fails
+    exactly the same way.
+    """
+    import ast
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def path_of(mod):
+        p = os.path.join(root, mod.replace(".", "/") + ".py")
+        if os.path.exists(p):
+            return p
+        p2 = os.path.join(root, mod.replace(".", "/"), "__init__.py")
+        return p2 if os.path.exists(p2) else None
+
+    seen, queue, needed = set(), ["scripts.l5_halt_watchdog"], []
+    while queue:
+        mod = queue.pop(0)
+        if mod in seen:
+            continue
+        seen.add(mod)
+        p = path_of(mod)
+        if not p:
+            continue
+        needed.append(os.path.relpath(p, root))
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            try:
+                tree = ast.parse(fh.read())
+            except SyntaxError:
+                continue
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Import):
+                queue += [a.name for a in n.names
+                          if a.name.split(".")[0] in ("src", "scripts")]
+            elif isinstance(n, ast.ImportFrom) and n.module:
+                if n.module.split(".")[0] in ("src", "scripts"):
+                    queue.append(n.module)
+                    queue += ["%s.%s" % (n.module, a.name)
+                              for a in n.names]
+
+    with open(os.path.join(root, "deploy", "l5_halt_watchdog",
+                           "Dockerfile"), encoding="utf-8") as fh:
+        copied = {ln.split()[1] for ln in fh if ln.startswith("COPY ")}
+    # the entrypoint itself is copied as a directory or a file; allow both
+    missing = {m for m in needed if m not in copied
+               and not any(c.rstrip("/") == os.path.dirname(m)
+                           or c == m for c in copied)}
+    assert missing == set(), sorted(missing)
+
+
+def test_the_cryptography_import_stays_lazy():
+    """`cryptography` is imported INSIDE `_verify_ed25519`, not at module
+    level, so importing this module never requires it. The watchdog image
+    does install it, but a module-level import would also make every other
+    consumer of this file depend on it -- and an ImportError at boot in the
+    watchdog is the failure that matters."""
+    import ast
+    tree = ast.parse(open("src/l5_mandate_signature.py").read())
+    for node in tree.body:                      # MODULE level only
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            name = (getattr(node, "module", "") or "") + "".join(
+                a.name for a in node.names)
+            assert "cryptography" not in name, (
+                "cryptography must not be imported at module level")
