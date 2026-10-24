@@ -226,3 +226,98 @@ class TestTheLifecycleRecordCarriesTheEmittersClock:
         from src import l5_live_validation_gates as VG
         for mod in (LX, VG):
             assert 'clock="emitter"' not in inspect.getsource(mod)
+
+
+class TestAJournalFailureIsObservableNotSilent:
+    """The owner's condition: journal write failures must be observable rather
+    than silently disappearing, WITHOUT making the trading ledger unavailable.
+    Those two requirements pull in opposite directions, so both halves are
+    asserted on the same failure."""
+
+    def _break_journal(self, monkeypatch):
+        orig = CB.json.dumps
+
+        def bad(obj, **kw):
+            if isinstance(obj, dict) and "transition" in obj:
+                raise OSError("read-only file system")
+            return orig(obj, **kw)
+        monkeypatch.setattr(CB.json, "dumps", bad)
+
+    def test_a_fresh_ledger_reports_no_journal_errors(self, led):
+        t = led.telemetry(campaign_id=A)
+        assert t["journal_errors"] == 0
+        assert t["journal_last_error"] is None
+
+    def test_the_failure_is_counted_and_named(self, led, monkeypatch):
+        led.open_or_resume(A, now_iso="t0")
+        led._write(_doc(A, peak="7"))
+        self._break_journal(monkeypatch)
+        led.release_stale(B, legs=(), outstanding=(), now_iso="t1")
+        t = led.telemetry(campaign_id=B)
+        assert t["journal_errors"] == 1
+        assert "OSError" in t["journal_last_error"]
+        assert "read-only" in t["journal_last_error"]
+
+    def test_the_ledger_stays_available_through_that_failure(self, led,
+                                                             monkeypatch):
+        led.open_or_resume(A, now_iso="t0")
+        led._write(_doc(A, peak="7"))
+        self._break_journal(monkeypatch)
+        out = led.release_stale(B, legs=(), outstanding=(), now_iso="t1")
+        assert out["ok"] is True and out["released"] is True
+        assert led.read()["closed"] is True            # the write happened
+        monkeypatch.undo()
+        assert led.open_or_resume(B, now_iso="t1")["ok"] is True
+
+    def test_errors_accumulate_rather_than_overwrite_the_count(self, led,
+                                                               monkeypatch):
+        led.open_or_resume(A, now_iso="t0")
+        self._break_journal(monkeypatch)
+        led.release_stale(B, legs=(), outstanding=(), now_iso="t1")
+        led._write(_doc(B, closed=False, peak="1"))
+        assert led.telemetry(campaign_id=B)["journal_errors"] >= 2
+
+    def test_entry_count_is_reported_so_a_working_journal_is_visible_too(
+            self, led):
+        led.open_or_resume(A, now_iso="t0")
+        assert led.telemetry(campaign_id=A)["journal_entries"] == 0
+        led.release_stale(B, legs=(), outstanding=(), now_iso="t1")
+        assert led.telemetry(campaign_id=B)["journal_entries"] == 1
+
+    def test_telemetry_never_raises_even_with_a_broken_history_file(
+            self, led, monkeypatch):
+        led.open_or_resume(A, now_iso="t0")
+        monkeypatch.setattr(led, "history",
+                            lambda: (_ for _ in ()).throw(OSError("gone")))
+        with pytest.raises(OSError):
+            led.history()
+        # telemetry calls history(); it must not propagate
+        try:
+            t = led.telemetry(campaign_id=A)
+        except OSError:
+            pytest.fail("telemetry must never raise")
+        assert t["readable"] is True
+
+
+class TestIncrementalRoomIsReportingOnly:
+
+    def test_it_is_budget_minus_account_wide_realized_loss(self, led):
+        led.open_or_resume(A, now_iso="t0")
+        t = led.telemetry(campaign_id=A, realized_usd="-7.9019")
+        assert t["incremental_room_usd"] == "21.3981"
+
+    def test_a_profit_does_not_mint_extra_room(self, led):
+        led.open_or_resume(A, now_iso="t0")
+        t = led.telemetry(campaign_id=A, realized_usd="+5")
+        assert t["incremental_room_usd"] == "29.30"
+
+    def test_omitting_it_omits_the_field_rather_than_guessing(self, led):
+        led.open_or_resume(A, now_iso="t0")
+        assert led.telemetry(campaign_id=A)["incremental_room_usd"] is None
+
+    def test_no_gate_reads_it(self):
+        import inspect
+        from src import l5_campaign_budget as M
+        for fn in (M.CampaignBudgetLedger.refuse_arming,
+                   M.CampaignBudgetLedger.refuse_amount):
+            assert "incremental_room" not in inspect.getsource(fn)

@@ -143,6 +143,12 @@ class CampaignBudgetLedger:
                  budget_usd: Any = DEFAULT_BUDGET_USD) -> None:
         self.dir = budget_root(root)
         self.budget_usd = _d(budget_usd)
+        #: journal failures are SWALLOWED so they cannot make the trading
+        #: ledger unavailable -- but they are counted and surfaced in
+        #: `telemetry()`, because a silent audit gap is the thing the journal
+        #: exists to prevent. See `_journal`.
+        self.journal_errors = 0
+        self.journal_last_error: Optional[str] = None
 
     def _path(self) -> str:
         return os.path.join(self.dir, BUDGET_FILE)
@@ -170,11 +176,14 @@ class CampaignBudgetLedger:
         bury the two that matter. A line is appended only when `campaign_id`
         changes or `closed` flips.
 
-        IT CAN NEVER BREAK THE LEDGER. The journal is written BEFORE the
-        document is replaced, and any failure is swallowed: a ledger that
-        refuses to record its own budget because an audit file is unwritable
-        would be a worse outcome than a missing history line. The ledger write
-        is the authority; this is evidence beside it.
+        IT CAN NEVER BREAK THE LEDGER, BUT IT IS NEVER SILENT EITHER. The
+        journal is written BEFORE the document is replaced, and any failure is
+        swallowed: a ledger that refuses to record its own budget because an
+        audit file is unwritable would be a worse outcome than a missing
+        history line. The ledger write is the authority; this is evidence
+        beside it. A swallowed failure is COUNTED and named in `telemetry()`,
+        so an audit gap shows up in the heartbeat instead of disappearing --
+        which is the whole failure mode the journal exists to close.
         """
         try:
             a, b = prev or {}, nxt or {}
@@ -198,6 +207,15 @@ class CampaignBudgetLedger:
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
+            # OBSERVABLE, NOT SILENT. Recorded on the instance and reported by
+            # `telemetry()`; deliberately NOT re-raised, so the ledger write
+            # that follows still happens.
+            self.journal_errors += 1
+            try:
+                self.journal_last_error = "%s: %s" % (
+                    type(exc).__name__, str(exc)[:120])
+            except BaseException:                              # noqa: BLE001
+                self.journal_last_error = type(exc).__name__
             return
 
     def history(self) -> List[Dict[str, Any]]:
@@ -546,6 +564,16 @@ class CampaignBudgetLedger:
             return {"readable": False, "why": str(exc),
                     "budget_usd": str(self.budget_usd)}
         peak = _d(doc.get("peak_usd"))
+        # `history()` is written never to raise, but `telemetry()` PROMISES
+        # never to raise and feeds the heartbeat, so the promise is enforced
+        # here rather than assumed of a collaborator. A journal we cannot even
+        # count must not take the heartbeat down with it.
+        try:
+            entries: Any = len(self.history())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            entries = None
         return {"readable": True,
                 "campaign_id": doc.get("campaign_id"),
                 "closed": bool(doc.get("closed")),
@@ -556,6 +584,14 @@ class CampaignBudgetLedger:
                     None if realized_usd is None
                     else str(max(D(0), self.budget_usd
                                  - max(D(0), -_d(realized_usd))))),
+                "journal_entries": entries,
+                "journal_errors": self.journal_errors,
+                "journal_last_error": self.journal_last_error,
+                "journal_basis": (
+                    "a transition journal failure is swallowed so it cannot "
+                    "make the ledger unavailable, and is counted here so it "
+                    "cannot vanish. journal_errors > 0 means an audit line "
+                    "was lost and the ledger itself is unaffected."),
                 "incremental_room_basis": (
                     "budget_usd - account-wide realized LOSS. Reporting only; "
                     "no gate reads it. A fresh campaign nonce resets peak_usd "
