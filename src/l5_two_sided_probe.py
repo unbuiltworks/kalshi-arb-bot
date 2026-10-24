@@ -139,6 +139,31 @@ MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
 #: orders. Splitting the envelope cannot raise any of them.
 #:
 #: DEFAULT 1 IS CURRENT BEHAVIOUR, byte for byte.
+#: THE OPENING LEG MAY NEVER EXCEED THE APPROVED RESIDUAL CEILING.
+#:
+#: WHY IT HAD TO BE EXPLICIT. The residual cap in `l5_live_execution` refuses
+#: only when the PROSPECTIVE BOOK IS NOT FLAT -- `exempt_open` -- because it
+#: was written to stop accumulation onto existing inventory after the 1130z
+#: burst reached 3.24 against a cap of 1.80. An OPENING leg from a flat book
+#: was therefore never bounded by it, and the opening clip is set by cash
+#: instead: qty = cash / (1 + up_px). At the $5 envelope that produced a
+#: 4.09-contract fill at 13:31:45Z on 2026-10-24, which is a 4.09-contract
+#: residual if it strands -- above the 3 the owner authorized.
+#:
+#: AND LOWERING CASH DOES NOT FIX IT. qty = cash / (1 + up_px) grows as up_px
+#: falls, so no cash figure the owner approved bounds the clip across eligible
+#: prices: at $3.70 a 0.02 leg still sizes 3.62, and only cash <= 3 x 1.01 =
+#: $3.03 would guarantee it. A quantity cap is price-independent and is the
+#: only honest implementation of a CONTRACT ceiling.
+#:
+#: IT BOUNDS THE PLAN, WHICH IS THE OPENING PAIR. Completing inventory already
+#: held is sized against that inventory elsewhere, so this cannot block a
+#: risk-reducing complement for a position that is already open.
+#:
+#: Configurable DOWNWARD only; anything malformed or larger reads as 3.
+OPENING_LEG_MAX_CONTRACTS = D("3")
+OPENING_LEG_MAX_ENV = "L5_TS_OPENING_LEG_MAX_CONTRACTS"
+
 ROUND_ALLOCATIONS = 1
 ROUND_ALLOCATIONS_ENV = "L5_TS_ROUND_ALLOCATIONS"
 #: a divisor beyond this would size rounds below anything the venue grid can
@@ -147,6 +172,42 @@ ROUND_ALLOCATIONS_MAX = 4
 
 MIN_FIRST_LEG_OWN_PRICE = D("0.20")
 MIN_FIRST_LEG_ENV = "L5_TS_MIN_FIRST_LEG_PRICE"
+
+
+def _sized_by(*, by_loss: D, by_cash: D, by_budget: Optional[D],
+              by_opening_cap: D) -> str:
+    """Which bound actually sized the plan: the argmin, with deterministic
+    tie-breaking toward the TIGHTER-sounding constraint so a tie never hides
+    a cap behind a dollar figure."""
+    cands = [("OPENING_LEG_CONTRACT_CAP", by_opening_cap),
+             ("CASH_ENVELOPE", by_cash),
+             ("LOSS_CEILING", by_loss)]
+    if by_budget is not None:
+        cands.append(("CAMPAIGN_BUDGET", by_budget))
+    lo = min(v for _n, v in cands)
+    for name, v in cands:
+        if v == lo:
+            return name
+    return "LOSS_CEILING"
+
+
+def opening_leg_max_contracts() -> D:
+    """The approved residual ceiling, as a hard cap on an opening clip.
+
+    Configurable DOWNWARD only. A malformed, non-finite, non-positive or
+    LARGER value reads as the approved 3: a ceiling that a typo can raise is
+    not a ceiling.
+    """
+    raw = (os.getenv(OPENING_LEG_MAX_ENV) or "").strip()
+    if not raw:
+        return OPENING_LEG_MAX_CONTRACTS
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, TypeError):
+        return OPENING_LEG_MAX_CONTRACTS
+    if not v.is_finite() or v <= 0:
+        return OPENING_LEG_MAX_CONTRACTS
+    return min(v, OPENING_LEG_MAX_CONTRACTS)
 
 
 def round_allocations() -> int:
@@ -1019,7 +1080,12 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     allocs = round_allocations()
     env_per_round = env / allocs
     by_cash = env_per_round / oblig_per_contract
-    qty = min(by_loss, by_cash)
+    # THE OPENING-LEG CONTRACT CEILING, intersected with the dollar bounds.
+    # Price-independent, because the dollar bounds are not: qty grows as
+    # up_px falls and no approved cash figure bounds it across eligible
+    # prices. See OPENING_LEG_MAX_CONTRACTS.
+    by_opening_cap = opening_leg_max_contracts()
+    qty = min(by_loss, by_cash, by_opening_cap)
     # and the campaign budget, on that SAME obligation basis, because
     # `ValidationGates` gate 3b charges the order exactly as the cash gate
     # above does -- a resting BUY_SHORT at a dollar a share.
@@ -1049,6 +1115,7 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                   min_qty=str(mq),
                   obligation_per_contract=str(oblig_per_contract),
                   round_allocations=allocs,
+                  opening_leg_max_contracts=str(by_opening_cap),
                   cash_envelope_total_usd=str(env),
                   cash_envelope_per_round_usd=str(env_per_round),
                   binding=("CAMPAIGN_BUDGET"
@@ -1103,6 +1170,9 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             "gross_cash_usd": str(econ["cost"]),
             "cash_gate_obligation_usd": str(qty * oblig_per_contract),
             "round_allocations": allocs,
+            "opening_leg_max_contracts": str(by_opening_cap),
+            "opening_leg_cap_binds": bool(by_opening_cap <= min(by_loss,
+                                                                by_cash)),
             "cash_envelope_total_usd": str(env),
             "cash_envelope_per_round_usd": str(env_per_round),
             "round_allocation_basis": (
@@ -1118,10 +1188,16 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                            "that basis so the plan the gate sees is the "
                            "plan this built"),
             "budget_headroom_usd": (None if head is None else str(head)),
-            "sized_by": ("CAMPAIGN_BUDGET" if by_budget is not None
-                         and by_budget <= min(by_loss, by_cash)
-                         else "CASH_ENVELOPE" if by_cash <= by_loss
-                         else "LOSS_CEILING"),
+            # THE LABEL NAMES THE ACTUAL SMALLEST BOUND, by argmin rather
+            # than by a fixed precedence. The precedence version reported
+            # CAMPAIGN_BUDGET on a $100 envelope while the opening-leg cap was
+            # the term that actually sized the plan -- a label that names the
+            # wrong constraint is worse than no label, because Priority 4 of
+            # the owner's brief is exactly "report which constraint actually
+            # bound, not merely which configuration limit exists".
+            "sized_by": _sized_by(by_loss=by_loss, by_cash=by_cash,
+                                  by_budget=by_budget,
+                                  by_opening_cap=by_opening_cap),
             "budget_basis": ("the campaign budget is charged on the same "
                              "dollar-a-share obligation as the cash gate, "
                              "so the smaller of the two binds and the plan "

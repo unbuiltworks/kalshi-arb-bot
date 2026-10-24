@@ -553,8 +553,19 @@ def test_the_pair_is_sized_to_fit_the_cash_gate_and_not_one_cent_more(win):
     up = D({l["side"]: l["price"] for l in plan["legs"]}["UP"])
     assert D(plan["cash_gate_obligation_usd"]) == qty * (up + D("1.00"))
     assert D(plan["cash_gate_obligation_usd"]) <= D("4.65")
-    # one more increment would not fit, so the size is the largest that does
-    assert (qty + D("0.01")) * (up + D("1.00")) > D("4.65")
+    # THE ENVELOPE IS NO LONGER THE ONLY BINDING TERM. Since 2026-10-24 an
+    # opening leg is also capped at the approved 3-contract residual ceiling,
+    # because the executor's residual cap exempts a flat book and a $5
+    # envelope therefore opened 4.09 contracts live. Whichever term is
+    # smaller binds, and `sized_by` names it.
+    assert plan["sized_by"] in ("CASH_ENVELOPE", "OPENING_LEG_CONTRACT_CAP",
+                                "LOSS_CEILING", "CAMPAIGN_BUDGET")
+    if plan["sized_by"] == "CASH_ENVELOPE":
+        # one more increment would not fit, so the size is the largest that
+        # does
+        assert (qty + D("0.01")) * (up + D("1.00")) > D("4.65")
+    else:
+        assert qty <= D(plan["opening_leg_max_contracts"])
 
 
 # ======================================= the terminal, settlement, realized

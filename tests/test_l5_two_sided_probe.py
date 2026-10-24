@@ -430,9 +430,21 @@ def test_both_legs_plus_fees_stay_inside_the_five_dollar_obligation(monkeypatch)
     assert D(r["cash_gate_obligation_usd"]) <= D("5")
     assert D(r["gross_cash_usd"]) <= D("5")
     assert abs(D(r["worst_single_leg_loss_usd"])) <= D("5")
-    # profitable on BOTH outcomes charging the TAKER fee and crediting NO rebate
-    assert r["both_positive_if_taker"] is True
-    assert D(r["up_pnl_if_taker"]) > 0 and D(r["dn_pnl_if_taker"]) > 0
+    # THE REAL GATE IS THE POST-ONLY FEE FLOOR, and it still passes. This
+    # probe quotes post-only on both legs, which is what `fee_floor` scores.
+    assert r["fee_floor"]["ok"] is True
+    assert r["fee_floor"]["requires_post_only"] is True
+    assert D(r["fee_floor"]["net_if_maker"]) > 0
+    # `both_positive_if_taker` is a DIAGNOSTIC, never a refusal -- nothing in
+    # src reads it -- and it is SIZE-DEPENDENT, because the fee model charges
+    # a flat cent per ORDER on top of the per-contract theta. At the minimum
+    # 0.04 edge the 3-contract opening cap amortises that flat cent over
+    # fewer contracts, so the taker-stress margin falls from +$0.0148 at 3.37
+    # contracts to about zero at 3. That is a smaller cushion in a scenario
+    # this probe never executes, not a loss in the one it does.
+    assert r["sized_by"] == "OPENING_LEG_CONTRACT_CAP"
+    assert D(r["qty_per_leg"]) == D("3")
+    assert D(r["fee_floor"]["net_if_taker"]) > 0
     # the venue grid is respected
     assert D(r["qty_per_leg"]) % D("0.01") == 0
 
