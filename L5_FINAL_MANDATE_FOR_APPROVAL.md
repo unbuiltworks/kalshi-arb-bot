@@ -14,10 +14,17 @@ One decision is needed before the approved watchdog deployment can happen
 HEAD vs HEAD~2, full suite, run in a **git worktree** so the working tree was
 never stashed.
 
-| | result |
-|---|---|
-| HEAD | 13,179 passed · 60 failed · 23 errors |
-| attributable to this patch | **1** |
+| | failed | errors | passed |
+|---|---|---|---|
+| baseline `HEAD~2` | 58 | 23 | 13,152 |
+| `HEAD` | 60 | 23 | 13,179 |
+| **new, attributable to this patch** | **2 tests, 1 root cause** | 0 | — |
+| no longer failing | **none** | | |
+
+The two new failures were
+`test_l5_live_probe_image_closure::test_image_import_closure_is_complete` and
+`::test_removing_any_closure_module_fails_the_check` — one root cause, now
+fixed and re-verified passing.
 
 **The one regression:** `l5_live_authorization` imported
 `l5_mandate_signature` at module level, which pulled it into the import
