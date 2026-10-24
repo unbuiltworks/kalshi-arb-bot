@@ -5232,13 +5232,34 @@ def validation_gates():
             campaign_id=_campaign_nonce_sid(),
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
-        # a gate we cannot build is announced, never silently skipped
+        # ============ A GATE WE CANNOT BUILD REFUSES. IT DOES NOT VANISH.
+        #
+        # THE FAIL-OPEN THIS REPLACES. This used to `return None`, and the
+        # submission path reads `if vg is not None:` -- so one malformed
+        # value among the ten env reads above dropped the WHOLE additive
+        # layer: the $20 cumulative loss halt, the $1.65 cash envelope, the
+        # 5-contract unmatched cap and the campaign budget, all at once,
+        # while the operator believed they were in force. The old label
+        # said "Pre-existing limits are unaffected", which is true of
+        # SafetyLimits and beside the point: `max_cumulative_loss_usd`
+        # defaults to 20, so it is ALWAYS requested and can never correctly
+        # be absent.
+        #
+        # None still means one thing only -- L5_VALIDATION_GATES=0, an
+        # explicit operator choice made above this try block and never
+        # reachable from an error.
         emit("L5_LIVE_ALARM", {
-            "kind": "validation_gates_unavailable",
+            "kind": "validation_gates_unreadable",
             "error": "%s: %s" % (type(exc).__name__, str(exc)[:120]),
-            "labels": ("the additive gates are NOT active. Pre-existing "
-                       "limits are unaffected.")})
-        return None
+            "labels": ("REQUIRED risk configuration could not be parsed, so "
+                       "every live submission now REFUSES. The $20 "
+                       "cumulative halt, the cash envelope and the unmatched "
+                       "cap are not evaluable, and an unevaluable limit is "
+                       "never permission to trade. Cancellation and "
+                       "reconciliation are unaffected.")})
+        from src import l5_live_validation_gates as VG2
+        return VG2.RefuseAllGates(
+            "%s: %s" % (type(exc).__name__, str(exc)[:120]))
 
 
 def halt_gate():

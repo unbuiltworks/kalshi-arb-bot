@@ -1907,3 +1907,4 @@ deploy: 2026-10-23T13:20Z dwell anchor + coordinated retirement deadline; shadow
 deploy: 2026-10-23T21:06Z residual ceiling intersected with the approved absolute 3; consolidated authorization preflight. No limit, strategy or authorization change.
 deploy: 2026-10-23T21:40Z usability before the claim; authenticated-socket book for a fresh-market 404; residual ceiling in the authorization preflight. Refuse-only and read-only; no limit or authorization change.
 deploy: 2026-10-24T00:00Z consolidated: stale first-leg recovery (cap 1/market), 0.20 own-side opening floor, residual-ceiling telemetry. Campaign exhausted, account flat, nothing resting.
+deploy: 2026-10-24T00:58Z a gate that cannot be built now REFUSES instead of vanishing; the campaign-budget release outcome rides the window claim. Refuse-only and telemetry; no limit, strategy or authorization change.

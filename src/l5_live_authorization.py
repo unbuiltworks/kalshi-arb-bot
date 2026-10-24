@@ -2057,6 +2057,12 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #
     #     ABSENT IS OFF. No budget configured leaves every existing
     #     authorization path byte-for-byte unchanged.
+    # THE RELEASE OUTCOME IS EVIDENCE, SO IT HAS TO LEAVE THIS FUNCTION.
+    # It was computed and dropped on the floor, which made the one ledger
+    # transition that matters -- a finished campaign's budget handed to the
+    # next -- invisible to the heartbeat. It now rides the window claim, the
+    # record the owner already reads in L5_LIVE_ARMED.
+    _budget_release = None
     if _camp_ok:
         _budget = campaign_budget_ledger()
         if _budget is not None:
@@ -2096,6 +2102,12 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
             # the release is reported through the refusal/telemetry channel
             # the caller already reads; this module does not own a logger.
             _budget_release = dict(_rel)
+            _budget_release["labels"] = (
+                "CANNOT_RELEASE_OWN_OPEN_CAMPAIGN is the NORMAL reading once "
+                "this campaign owns the budget: a campaign may not close its "
+                "own live ledger, because that would reset its own peak. "
+                "released=true appears exactly once, on the arm that takes "
+                "the budget over from a campaign proved finished.")
             _why = _budget.refuse_arming(campaign_id=_cid)
             if _why:
                 raise ArmingRefusal(
@@ -2342,6 +2354,7 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         wclaim = dict(claim, event="WINDOW",
                       mandate_session_id=sid, window_key=wkey,
                       windows_spent=len(spent), window_budget=mw,
+                      budget_release=_budget_release,
                       note=("one window of a mandate; the claim is spent on "
                             "this market and is never cleared"))
         # a window already spent is refused here, by the same O_EXCL call that

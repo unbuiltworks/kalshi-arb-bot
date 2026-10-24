@@ -88,6 +88,12 @@ def parse_deficit_bound(raw: Optional[str]) -> Optional[D]:
     return v
 
 
+#: a commitment figure no envelope can accommodate, used by RefuseAllGates
+#: so that any arithmetic which does run on it cannot find headroom. Far
+#: above any configured ceiling, and finite so it never produces a NaN.
+UNREADABLE_COMMITMENT_USD = D("1e9")
+
+
 class ValidationGates:
     """Run-scoped gates for one bounded validation. Refuse-only."""
 
@@ -710,3 +716,71 @@ def combined_refusal(deployed_refusal: Optional[str],
     pre-existing limit is never masked by a validation-scoped one.
     """
     return deployed_refusal or validation_refusal
+
+
+class RefuseAllGates:
+    """The gates when REQUIRED risk configuration could not be parsed.
+
+    THE FAIL-OPEN THIS EXISTS TO CLOSE. `l5_pmus_live_runner.validation_gates`
+    used to return None when construction raised, and the submission path
+    reads `if vg is not None:` -- so one malformed value among ten env reads
+    silently dropped the entire additive layer: the $20 cumulative loss halt,
+    the $1.65 cash envelope, the 5-contract unmatched cap and the campaign
+    budget, while the operator believed all four were in force.
+    `max_cumulative_loss_usd` defaults to 20, so it is always requested and
+    can never correctly be absent.
+
+    This stands in its place and REFUSES EVERY SUBMISSION by name. It is not
+    a degraded gate: it carries no limits, so it cannot be mistaken for one,
+    and every accessor the money path reads either refuses or reports the
+    most conservative answer there is.
+
+    WHAT IT DELIBERATELY DOES NOT BLOCK. Cancellation, reconciliation, the
+    watchdog and the deadman never consult these gates, so an unparseable
+    limit stops new risk without stranding exposure already taken. That is
+    the same asymmetry every other fail-closed path in this system uses.
+    """
+
+    #: so `if vg is not None` sees an object, and a reader can tell at a
+    #: glance that this is not a configured gate set.
+    configured = False
+
+    def __init__(self, error: str) -> None:
+        self.error = str(error)[:200]
+        #: None is "not established" everywhere in this codebase, and every
+        #: consumer of these already treats None as a refusal rather than a
+        #: default. Naming them explicitly keeps attribute access safe.
+        self.max_cash_deployed_usd = None
+        self.max_cumulative_loss_usd = None
+        self.max_worst_case_deficit_usd = None
+        self.campaign_budget = None
+        self.campaign_id = None
+
+    def refuse(self, **_kw: Any) -> str:
+        """Always a refusal, whatever it is asked."""
+        return "REQUIRED_RISK_CONFIG_UNREADABLE"
+
+    def cash_committed(self, legs: Iterable[Mapping[str, Any]]) -> D:
+        """The most conservative answer: nothing is known to be free.
+
+        A caller that reaches this is already being refused by `refuse`; a
+        huge figure here means that if any arithmetic DOES run on it, it
+        cannot conclude there is headroom.
+        """
+        return UNREADABLE_COMMITMENT_USD
+
+    def pending_obligation(self, outstanding: Iterable[Mapping[str, Any]]
+                           ) -> D:
+        return UNREADABLE_COMMITMENT_USD
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "configured": False,
+            "refusing": "REQUIRED_RISK_CONFIG_UNREADABLE",
+            "error": self.error,
+            "labels": ("REQUIRED risk configuration could not be parsed. "
+                       "Every live submission refuses. The $20 cumulative "
+                       "halt, the cash envelope and the unmatched cap are "
+                       "not evaluable, and an unevaluable limit is never "
+                       "permission to trade."),
+        }

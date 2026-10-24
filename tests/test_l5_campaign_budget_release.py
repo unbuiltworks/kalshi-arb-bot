@@ -156,3 +156,53 @@ class TestNoLossIsErasedAndNoHeadroomIsMinted:
         led.open_or_resume(NEW)
         assert led.budget_usd == BUDGET
         assert led.telemetry(campaign_id=NEW)["budget_usd"] == str(BUDGET)
+
+
+class TestTheReleaseOutcomeLeavesTheFunction:
+    """It was computed and dropped, which made the one ledger transition that
+    matters invisible. Production performed the 20261023 -> 20261024a handover
+    at 2026-10-24T00:31:27Z and the only way to see it was to diff two
+    heartbeats. The outcome now rides the window claim.
+
+    Asserted on the SOURCE because `authorize_arming` needs a volume, a
+    store, a preflight and an owner token to call, and the property under
+    test is simply that the value is defined on every path and read back."""
+
+    def _fn(self):
+        import inspect
+        import textwrap
+        from src import l5_live_authorization as A
+        return textwrap.dedent(inspect.getsource(A.authorize_arming))
+
+    def test_it_is_defined_before_the_budget_block_so_no_path_can_unbind_it(
+            self):
+        src = self._fn()
+        init = src.index("_budget_release = None")
+        assert init < src.index("release_stale")
+        assert init < src.index("budget_release=_budget_release")
+
+    def test_the_window_claim_carries_it(self):
+        assert "budget_release=_budget_release" in self._fn()
+
+    def test_it_is_compiled_with_no_unbound_local(self):
+        """An AST check that every read of the name is dominated by the
+        module-level initialisation inside this function."""
+        import ast
+        tree = ast.parse(self._fn())
+        fn = tree.body[0]
+        stores = [n.lineno for n in ast.walk(fn)
+                  if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+                  and n.id == "_budget_release"]
+        loads = [n.lineno for n in ast.walk(fn)
+                 if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+                 and n.id == "_budget_release"]
+        assert stores and loads
+        assert min(stores) < min(loads)
+
+    def test_the_normal_reading_is_labelled_so_it_does_not_read_as_a_fault(
+            self):
+        """Once the campaign owns the budget, every later arm reports
+        CANNOT_RELEASE_OWN_OPEN_CAMPAIGN. That is correct and must not look
+        like a failure in the heartbeat."""
+        assert "CANNOT_RELEASE_OWN_OPEN_CAMPAIGN is the NORMAL reading" \
+            in self._fn()
