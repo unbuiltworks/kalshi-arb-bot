@@ -270,6 +270,22 @@ ONE_TICK_BEHIND = "ONE_TICK_BEHIND"
 #: fixed simultaneous offset; what is evidenced is that his pair cost is
 #: invariant to price range (r = -0.0006) and to his own leg count
 #: (r = +0.0094), and that 40.3% of his price levels fill over >= 30s.
+#:
+#: AND IT DOES NOT TEST THAT HYPOTHESIS, which matters more than it sounds.
+#: This arm PERMITS a second resting side; it does not go looking for one.
+#: The policy decides from inventory, so while inventory is flat it wants the
+#: same side every tick and the arm rests ONE order and then reports
+#: SAME_SIDE for the rest of the window -- measured, not reasoned: eight
+#: ticks from flat give one quote and seven SAME_SIDE refusals. Two sides
+#: rest only once inventory is non-flat and the policy wants the other one,
+#: i.e. extending while a complement rests, or completing while an extend
+#: rests. Those are real and frequent states, and freeing them is what the
+#: owner authorized as the smallest safe change.
+#:
+#: Quoting both legs SIMULTANEOUSLY FROM FLAT is a different and larger
+#: change: it needs a counterfactual second price for inventory we do not
+#: hold, which is a new policy rather than a placement. Nothing here
+#: measures it, and a positive result from this arm is NOT evidence for it.
 TWO_SIDED = "TWO_SIDED"
 PLACEMENTS = (AT_TOUCH, ONE_TICK_BEHIND, TWO_SIDED)
 

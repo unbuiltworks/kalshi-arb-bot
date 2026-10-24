@@ -1666,3 +1666,36 @@ def test_the_split_starting_later_than_the_bucket_is_said_not_hidden():
     assert r["split_covers_whole_bucket"] is False
     # the share is 80/100, NOT 80/66918
     assert r["opposite_side_share_of_classified"] == "0.8000"
+
+
+def test_two_sided_PERMITS_a_second_side_it_does_not_seek_one(tmp_path):
+    """The limitation, pinned so nobody reads this arm as a test of
+    simultaneous two-sided quoting.
+
+    The policy decides from INVENTORY. While inventory is flat it wants the
+    same side every tick, so the arm rests ONE order and then refuses
+    SAME_SIDE -- it never holds two legs without a fill. Two sides rest
+    only once inventory is non-flat and the policy wants the other one.
+    """
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    quotes = []
+    for i in range(8):
+        rec = c.step(WS + 100.0 + i * 5, slug=SLUG,
+                     book=_book("0.50", "0.51"), window_end_ts=WEND,
+                     prints=[], ladder=lad)
+        quotes.append(rec.get("decision"))
+    scen = c._scen(SLUG, sc.HEADLINE_SCENARIO)
+    assert quotes[0] == "quote"
+    assert set(quotes[1:]) == {"no_action"}
+    assert len(c._resting_map(scen)) == 1, "no fill, so no second side"
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["already_resting_same_side"] == 7
+    assert t["already_resting_opposite_side"] == 0
+
+    # and with inventory on one side, the SAME arm does rest both
+    c2 = ctl(tmp_path / "b", placement=sc.TWO_SIDED)
+    _seed_up(c2, lad)
+    c2.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+            window_end_ts=WEND, prints=[], ladder=lad)
+    assert len(c2._resting_map(c2._scen(SLUG, sc.HEADLINE_SCENARIO))) == 2
