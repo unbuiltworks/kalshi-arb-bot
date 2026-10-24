@@ -11,19 +11,38 @@ preserved tapes. Tick distance is measured from the **own-side best bid** —
 `book bid` for an UP order, `1 − book ask` for a DOWN order — at the instant of
 submission, which is the price convention the planner itself uses.
 
-| window | side | role | own | own touch | ticks | queue ahead | outcome | submit→terminal |
-|---|---|---|---|---|---|---|---|---|
-| 0115z | DOWN | first leg | 0.24 | 0.25 | 1 | 760.00 | FILLED | 17.1 s |
-| 0115z | UP | **complement** | 0.70 | 0.72 | 2 | 6357.09 | **CANCELED** | 21.0 s |
-| 0130z | UP | first leg | 0.29 | 0.31 | 2 | 5934.32 | FILLED | 18.8 s |
-| 0130z | DOWN | complement | 0.56 | 0.58 | 2 | 4422.01 | FILLED | 14.5 s |
-| 0145z | DOWN | first leg | 0.35 | 0.37 | 2 | 1468.79 | FILLED | 5.5 s |
-| 0145z | UP | **complement** | 0.61 | 0.63 | 2 | 5477.04 | **CANCELED** | 13.6 s |
-| 0200z | UP | first leg | 0.35 | 0.37 | 2 | 4236.16 | FILLED | 23.5 s |
-| 0200z | DOWN | complement | 0.59 | 0.61 | 2 | 7778.94 | FILLED | 10.8 s |
+| window | side | role | own | ticks | outcome | submit→terminal | rest_s at recovery |
+|---|---|---|---|---|---|---|---|
+| 0100z | DOWN | first leg | 0.28 | 2 | CANCELED | 44.8 s | **44.13** |
+| 0100z | DOWN | **replacement** | 0.37 | 2 | **FILLED** | **73.4 s** | |
+| 0100z | UP | complement | 0.59 | 2 | FILLED | **0.0 s** | |
+| 0115z | DOWN | first leg | 0.24 | 1 | FILLED | 17.1 s | |
+| 0115z | UP | **complement** | 0.70 | 2 | CANCELED | 21.0 s | **16.62** |
+| 0130z | UP | first leg | 0.29 | 2 | FILLED | 18.8 s | |
+| 0130z | DOWN | complement | 0.56 | 2 | FILLED | 14.5 s | |
+| 0145z | DOWN | first leg | 0.35 | 2 | FILLED | 5.5 s | |
+| 0145z | UP | **complement** | 0.61 | 2 | CANCELED | 13.6 s | **16.79** |
+| 0200z | UP | first leg | 0.35 | 2 | FILLED | 23.5 s | |
+| 0200z | DOWN | complement | 0.59 | 2 | FILLED | 10.8 s | |
 
-**Fill latencies: 5.5, 10.8, 14.5, 17.1, 18.8, 23.5 s** (6 of 8).
-**Cancellations: 13.6 and 21.0 s** (2 of 8, both complements).
+**Fill latencies, n=8: 0.0, 5.5, 10.8, 14.5, 17.1, 18.8, 23.5, 73.4 s.**
+**Recoveries fired at rest_s 16.62, 16.79 and 44.13.**
+
+### Correction to an earlier version of this file
+
+An earlier pass of mine, written before the 0100z tape was preserved, reported
+the longest fill as 23.5 s and concluded that 2 of 6 fills (33%) arrived after
+17 s. **Both figures were wrong because 0100z was missing.** The longest fill
+is **73.4 s** — the replacement that produced the campaign's first completed
+pair — and **4 of 8 fills (50%) arrived after 16.8 s**, the rest time at which
+the two complements were cancelled.
+
+That makes the patience problem larger than first stated, and it also weakens
+the preregistered 30-second candidate: a 73.4 s fill means **no short rest
+threshold sits clearly outside our observed fill distribution**. Thirty seconds
+reduces the overlap; it does not remove it. The 44.13 s first-leg cancel is the
+sharpest illustration — even a 44-second floor would have cancelled an order
+whose own replacement then took 73.4 s to fill.
 
 ## 1. The 2–5 tick region is unsampled
 
@@ -65,10 +84,10 @@ order, not that it has.
 
 Registered here before any run, so there is no threshold search to argue about:
 
-1. **`min_rest_s` raised above the observed fill-latency distribution** — e.g.
-   to 30 s, beyond our longest observed fill of 23.5 s. Smallest possible
-   change: one configurable constant, already `max()`-guarded to move in the
-   safe direction only.
+1. **`min_rest_s` raised**, as the preregistered 30 s candidate. State its
+   limit honestly: our longest observed fill is 73.4 s, so 30 s reduces the
+   overlap with the fill distribution rather than clearing it. One configurable
+   constant, already `max()`-guarded to move in the safe direction only.
 2. **Complement recovery disabled entirely**, first-leg recovery unchanged.
    Justified by mechanism rather than by these outcomes: after a complement is
    cancelled, the replacement must still satisfy the pair cap against a moved
