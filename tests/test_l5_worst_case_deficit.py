@@ -537,3 +537,93 @@ def test_per_FILL_cent_rounding_is_NOT_modelled_and_the_gap_is_quantified():
                fee_extra_per_order_usd=D("0.07"))
     assert priced.fee_worst(D("0.4"), D("0.5")) >= pieces
     assert priced.as_dict()["fee_extra_per_order_usd"] == "0.07"
+
+
+# =============== the $2.00 bound proposed for the $5 two-sided campaign
+#
+# WHY THIS NUMBER AND WHY IT IS A TIGHTENING. The residual cap is denominated
+# in CONTRACTS, which is price-blind: 3 contracts admits $0.36 of risk at an
+# own price of 0.12 and $2.49 at 0.83, a 6.9x range under an unchanged "cap".
+# Resting both sides is precisely what makes the DEAR side reachable -- the
+# 2026-10-23 campaign stranded only cheap sides because the cheaper leg was
+# always placed first. $2.00 makes the bound price-AWARE: it permits the
+# proposed 2-contract clip even at the dearest plausible price and refuses the
+# 3-contract dear accumulation, so it binds BEFORE the contract cap exactly
+# where the hazard is.
+
+DEFICIT = D("2.00")
+
+
+def _inv(up_qty=D(0), up_cost=D(0), dn_qty=D(0), dn_cost=D(0)):
+    return {"up_qty": up_qty, "dn_qty": dn_qty,
+            "up_cost": up_cost, "dn_cost": dn_cost}
+
+
+def test_the_proposed_two_contract_clip_is_allowed_at_the_dearest_price():
+    """It must not refuse the campaign it is sized for. 2 at 0.80 can lose
+    $1.60 plus fees on the DOWN outcome, inside $2.00."""
+    g = G(max_worst_case_deficit_usd=DEFICIT)
+    assert g.refuse(order_qty=D(2), order_price=D("0.80"),
+                    order_intent=LONG, inventory=_inv()) is None
+
+
+def test_a_three_contract_dear_side_strand_is_refused_by_the_dollar_bound():
+    """THE B7 MITIGATION. The CONTRACT cap would allow this -- 3 is the cap.
+    The dollar bound refuses it, because 3 at 0.80 loses $2.45 on DOWN."""
+    g = G(max_worst_case_deficit_usd=DEFICIT)
+    why = g.refuse(order_qty=D(3), order_price=D("0.80"),
+                   order_intent=LONG, inventory=_inv())
+    assert why and str(why).startswith("WORST_CASE_DEFICIT:"), why
+
+
+def test_the_same_three_contracts_on_the_CHEAP_side_is_NOT_refused():
+    """Which is the whole point of a dollar bound over a contract count: the
+    cap cannot tell these two apart and this can. 3 at 0.12 risks $0.36."""
+    g = G(max_worst_case_deficit_usd=DEFICIT)
+    assert g.refuse(order_qty=D(3), order_price=D("0.12"),
+                    order_intent=LONG, inventory=_inv()) is None
+
+
+def test_BOTH_legs_filling_leaves_a_pair_and_is_not_refused():
+    """SIMULTANEOUS FILLS. A filled pair pays min(up, dn) on either outcome,
+    so the bound must not refuse the completion that REMOVES the exposure it
+    exists to limit. Holding 2 UP at 0.96 total, completing 2 DOWN at 0.48:
+    cost 1.92 against min(2,2) = 2, so the book is in credit."""
+    g = G(max_worst_case_deficit_usd=DEFICIT)
+    assert g.refuse(order_qty=D(2), order_price=D("0.48"),
+                    order_intent=SHORT,
+                    inventory=_inv(up_qty=D(2), up_cost=D("0.96"))) is None
+
+
+def test_a_PENDING_CANCELLATION_still_counts_against_the_bound():
+    """An order we asked to cancel but cannot prove terminal can still fill,
+    so it is charged in full. Two dear clips together breach $2.00 where one
+    does not -- which is the aggregate worst-case obligation working."""
+    g = G(max_worst_case_deficit_usd=DEFICIT)
+    assert g.refuse(order_qty=D(2), order_price=D("0.80"),
+                    order_intent=LONG, inventory=_inv()) is None
+    why = g.refuse(order_qty=D(2), order_price=D("0.80"),
+                   order_intent=LONG, inventory=_inv(),
+                   outstanding=[{"side": "UP", "qty": D(2),
+                                 "price": D("0.80")}])
+    assert why and str(why).startswith("WORST_CASE_DEFICIT:"), why
+
+
+def test_the_bound_refuses_when_it_cannot_be_ESTABLISHED():
+    """Configured and un-evaluable is a refusal, never a pass -- the bound
+    exists precisely for the states we cannot see."""
+    g = G(max_worst_case_deficit_usd=DEFICIT)
+    for inv in (None, "not a mapping", 42, []):
+        why = g.refuse(order_qty=D(2), order_price=D("0.48"),
+                       order_intent=LONG, inventory=inv)
+        assert why == "WORST_CASE_DEFICIT_NO_INVENTORY", (inv, why)
+
+
+def test_an_outstanding_order_of_UNKNOWN_SIDE_still_fails_closed_at_this_bound():
+    """Carried into the campaign's own configuration, not just the generic
+    one: an obligation we cannot attribute to a side cannot be bounded."""
+    g = G(max_worst_case_deficit_usd=DEFICIT)
+    why = g.refuse(order_qty=D(1), order_price=D("0.20"),
+                   order_intent=LONG, inventory=_inv(),
+                   outstanding=[{"qty": D(1), "price": D("0.20")}])
+    assert why and "WORST_CASE_DEFICIT" in str(why), why

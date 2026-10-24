@@ -5349,6 +5349,56 @@ def apply_ledger_adjustments(store) -> Optional[Dict[str, Any]]:
 
 
 #: SHADOW-ONLY LOCK. "0" releases it; anything else (including unset) locks.
+def mandate_store_probe() -> Dict[str, Any]:
+    """Fetch the watchdog's replay floor and revocation list. READ-ONLY.
+
+    Nothing here arms, submits or authorizes. It reports whether the two
+    documents the signature gate depends on are actually reachable, fresh
+    and well-formed, using the gate's own clients so the answer is the
+    gate's answer rather than a separate opinion.
+
+    ABSENT CONFIGURATION IS REPORTED, NOT FAILED. With no store URL the gate
+    refuses MANDATE_STORE_UNCONFIGURED only when a trusted key exists, and
+    none does yet, so an unconfigured probe is the expected state rather
+    than a fault.
+    """
+    from src import l5_mandate_signature as MS
+    url = (os.getenv(MS.STORE_URL_ENV) or "").strip()
+    out: Dict[str, Any] = {
+        "ran": True, "env": MS.STORE_URL_ENV, "configured": bool(url),
+        "serves": [MS.FLOOR_KEY, MS.REVOCATION_KEY],
+        "max_age_s": MS.DEFAULT_MAX_AGE_S,
+        "trusted_key_ids": sorted(MS.MANDATE_PUBKEYS) or None,
+        "gate_binds_when": "MANDATE_PUBKEYS is non-empty",
+        "labels": ("READ-ONLY. Authorizes nothing. A success means the "
+                   "documents exist, parse, carry a usable asof_utc and sit "
+                   "inside the staleness bound -- the same checks the "
+                   "arming gate makes, through the same GET-only clients.")}
+    if not url:
+        out["verdict"] = "STORE_UNCONFIGURED"
+        return out
+    # the host only. Not a secret -- the order registry URL is already in
+    # these logs -- but there is no reason to echo a path or a query.
+    out["host"] = url.split("//")[-1].split("/")[0]
+    for label, call in (
+            ("floor", lambda: MS.HttpSeqFloorStore(url).floor("probe")),
+            ("revocations", lambda: sorted(
+                MS.HttpRevocationStore(url).revoked()))):
+        try:
+            out[label] = {"ok": True, "value": call()}
+        except BaseException as exc:                            # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out[label] = {"ok": False,
+                          "refusal": type(exc).__name__,
+                          "detail": ("%s" % exc)[:200]}
+    out["verdict"] = ("BOTH_DOCUMENTS_FRESH"
+                      if out.get("floor", {}).get("ok")
+                      and out.get("revocations", {}).get("ok")
+                      else "DOCUMENT_UNAVAILABLE")
+    return out
+
+
 SHADOW_ONLY_ENV = "L5_SHADOW_ONLY"
 
 
@@ -5993,6 +6043,26 @@ def main() -> int:
             raise
         emit("L5_BUDGET_SELFCHECK", {"ran": False, "all_passed": False,
                                      "error": type(_exc).__name__})
+    # THE WATCHDOG'S MANDATE DOCUMENTS, FETCHED OVER THE REAL ENDPOINTS.
+    #
+    # READ-ONLY, AND IT AUTHORIZES NOTHING. It exists because those documents
+    # are served on private networking and the watchdog has no public domain
+    # -- correctly, since one would expose the halt latch -- so the executor
+    # is the only client that can reach them at all. Without this, "the
+    # endpoints work" could only be inferred from the watchdog's own log.
+    #
+    # It uses the SAME GET-only clients the arming gate uses, so a success
+    # here means the gate's own reads would succeed: the documents exist,
+    # parse, carry a usable asof_utc and are inside the staleness bound. A
+    # failure names the refusal the gate would have raised.
+    try:
+        emit("L5_MANDATE_STORE_PROBE", mandate_store_probe())
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_MANDATE_STORE_PROBE",
+             {"ran": False, "error": type(_exc).__name__,
+              "detail": T.redact("%s" % _exc)[:200]})
     # THE EFFECTIVE RUNTIME CONFIGURATION, once, at boot.
     #
     # `l5_runtime_config_verify` was written to be run INSIDE the deployed

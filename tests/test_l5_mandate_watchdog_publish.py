@@ -230,3 +230,76 @@ def test_the_cryptography_import_stays_lazy():
                 a.name for a in node.names)
             assert "cryptography" not in name, (
                 "cryptography must not be imported at module level")
+
+
+# ------------------------- the executor's side: the real HTTP endpoints
+def test_the_probe_reports_unconfigured_rather_than_failing(monkeypatch):
+    """With no store URL the arming gate refuses only when a trusted key
+    exists, and none does yet -- so an unconfigured probe is the expected
+    state, not a fault."""
+    from src import l5_pmus_live_runner as R
+    monkeypatch.delenv(MS.STORE_URL_ENV, raising=False)
+    d = R.mandate_store_probe()
+    assert d["ran"] is True and d["configured"] is False
+    assert d["verdict"] == "STORE_UNCONFIGURED"
+    assert d["serves"] == [MS.FLOOR_KEY, MS.REVOCATION_KEY]
+
+
+def test_an_unreachable_watchdog_is_reported_as_unavailable(monkeypatch):
+    """Not as empty, and not as fresh. This is the shape the probe returns
+    from anywhere that cannot reach Railway private networking."""
+    from src import l5_pmus_live_runner as R
+    monkeypatch.setenv(MS.STORE_URL_ENV, "http://127.0.0.1:1/")
+    d = R.mandate_store_probe()
+    assert d["verdict"] == "DOCUMENT_UNAVAILABLE"
+    assert d["floor"]["ok"] is False and d["revocations"]["ok"] is False
+    assert d["host"] == "127.0.0.1:1"
+
+
+def test_both_documents_fresh_is_reported_when_they_are(monkeypatch, vol):
+    """Driven through the REAL clients against really-published documents,
+    with only the socket replaced."""
+    from src import l5_pmus_live_runner as R
+    MS.WatchdogSeqWriter(str(vol)).observe("probe", 9)
+    MS.WatchdogPublisher(str(vol), str(vol)).publish(revoked=["rev-1"])
+    op = _opener_for(vol)
+    monkeypatch.setenv(MS.STORE_URL_ENV, "http://wd.internal:8080")
+    # capture the REAL classes first: binding the lambda to the patched
+    # attribute makes it call itself, which the probe's broad except then
+    # reports as a RecursionError-shaped "document unavailable"
+    floor_cls, rev_cls = MS.HttpSeqFloorStore, MS.HttpRevocationStore
+    monkeypatch.setattr(MS, "HttpSeqFloorStore",
+                        lambda u, **k: floor_cls(u, opener=op))
+    monkeypatch.setattr(MS, "HttpRevocationStore",
+                        lambda u, **k: rev_cls(u, opener=op))
+    d = R.mandate_store_probe()
+    assert d["verdict"] == "BOTH_DOCUMENTS_FRESH"
+    assert d["floor"]["value"] == 9
+    assert d["revocations"]["value"] == ["rev-1"]
+
+
+def test_the_probe_cannot_arm_submit_or_write():
+    """It is boot telemetry. It must not be able to become anything else.
+
+    Checked on the CODE OBJECT, not the source text: the first version of
+    this grepped the source for "submit" and failed on the docstring that
+    says it does not submit. Prose is not the thing to assert on.
+    """
+    import types
+
+    from src import l5_pmus_live_runner as R
+
+    def all_names(code):
+        out = set(code.co_names)
+        for c in code.co_consts:
+            if isinstance(c, types.CodeType):      # the nested lambdas
+                out |= all_names(c)
+        return out
+
+    names = all_names(R.mandate_store_probe.__code__)
+    for forbidden in ("submit", "cancel", "authorize_arming", "put",
+                      "write", "arm", "open"):
+        assert forbidden not in names, (forbidden, sorted(names))
+    # what it DOES reference: the two GET-only clients, and nothing else
+    # that could reach a venue
+    assert {"HttpSeqFloorStore", "HttpRevocationStore"} <= names
