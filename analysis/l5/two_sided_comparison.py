@@ -1,10 +1,10 @@
 """ARGMAX@ONE_TICK_BEHIND versus ARGMAX@TWO_SIDED, offline.
 
-A THIN WRAPPER, deliberately. The comparison itself lives in
-`src.l5_shadow_controller.compare_two_sided`, because the running service
-emits it as `L5_SHADOW_TWO_SIDED` and a second copy here would be a second
-implementation free to drift from the one that produces the production
-numbers. This file only feeds it a document and prints the result.
+A THIN WRAPPER, deliberately. The comparison itself lives in `src.l5_shadow_controller.compare_all`,
+because the running service emits it as `L5_SHADOW_TWO_SIDED` and a second
+copy here would be a second implementation free to drift from the one that
+produces the production numbers. This file only feeds it a document and
+prints the result.
 
 Usage:
     python3 analysis/l5/two_sided_comparison.py HEARTBEAT.json
@@ -26,7 +26,7 @@ from typing import Any, List, Mapping
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
-from src.l5_shadow_controller import compare_two_sided   # noqa: E402
+from src.l5_shadow_controller import compare_all   # noqa: E402
 
 
 def reports_from(doc: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -44,8 +44,8 @@ def main(argv: List[str]) -> int:
     raw = (open(argv[1]).read() if len(argv) > 1 else sys.stdin.read())
     doc = json.loads(raw)
     # an already-computed comparison passes straight through
-    out = (doc if "verdict" in doc and "per_scenario" in doc
-           else compare_two_sided(reports_from(doc)))
+    out = (doc if "comparisons" in doc and "mechanics" in doc
+           else compare_all(reports_from(doc)))
     print(json.dumps(out, indent=2, sort_keys=False))
     return 0
 

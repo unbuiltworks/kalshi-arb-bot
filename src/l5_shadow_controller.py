@@ -287,15 +287,46 @@ ONE_TICK_BEHIND = "ONE_TICK_BEHIND"
 #: hold, which is a new policy rather than a placement. Nothing here
 #: measures it, and a positive result from this arm is NOT evidence for it.
 TWO_SIDED = "TWO_SIDED"
-PLACEMENTS = (AT_TOUCH, ONE_TICK_BEHIND, TWO_SIDED)
 
-#: offset in ticks, by placement
-PLACEMENT_TICKS = {AT_TOUCH: 0, ONE_TICK_BEHIND: 1, TWO_SIDED: 1}
+#: AND THE ARM THAT ACTUALLY GOES LOOKING FOR THE SECOND SIDE.
+#:
+#: TWO_SIDED only PERMITS a second resting side; because the policy decides
+#: from inventory, a flat arm wants the same side every tick and never holds
+#: two legs. This placement quotes the FREE side on its own merits while
+#: flat, which is the L5-style ladder the hypothesis is actually about.
+#:
+#: THE SECOND LEG IS PRICED FROM ITS OWN SIDE OF THE BOOK, not from the
+#: first leg's fill -- there is no fill to price against, which is the whole
+#: point. `complement_target` cannot be used for it: that function prices a
+#: completion against the average cost already PAID on the surplus side, and
+#: a ladder from flat has paid nothing.
+#:
+#: SO THE PAIR BOUND HAS TO BE ENFORCED HERE, and the arithmetic decides the
+#: depth rather than a preference. With both legs d ticks behind their own
+#: touch and a spread of s ticks, the bid cancels and the planned pair is
+#: exactly 1 - s*t - 2*d*t. At the median one-tick spread d=1 gives 0.97,
+#: ABOVE the 0.96 cap, so a one-tick ladder's second leg would be refused on
+#: essentially every tick. d=2 gives 0.95. The depth is therefore computed
+#: per tick from the live spread -- max(nominal, the depth the cap needs) --
+#: and reported, so the arm is never silently quoting an unfee-safe pair and
+#: never silently refusing to quote at all.
+TWO_SIDED_LADDER = "TWO_SIDED_LADDER"
+PLACEMENTS = (AT_TOUCH, ONE_TICK_BEHIND, TWO_SIDED, TWO_SIDED_LADDER)
+
+#: offset in ticks, by placement. The ladder's is a NOMINAL FLOOR: the pair
+#: bound may deepen it per tick and never shallows it.
+PLACEMENT_TICKS = {AT_TOUCH: 0, ONE_TICK_BEHIND: 1, TWO_SIDED: 1,
+                   TWO_SIDED_LADDER: 1}
 
 #: may this arm rest both sides at once? Keyed by placement so the runner,
 #: the state filename and the variant label all keep working unchanged.
 PLACEMENT_TWO_SIDED = {AT_TOUCH: False, ONE_TICK_BEHIND: False,
-                       TWO_SIDED: True}
+                       TWO_SIDED: True, TWO_SIDED_LADDER: True}
+
+#: does this arm QUOTE the free side while flat, rather than merely allow
+#: it? Only the ladder. Everything else keeps its exact prior behaviour.
+PLACEMENT_LADDER_FROM_FLAT = {AT_TOUCH: False, ONE_TICK_BEHIND: False,
+                              TWO_SIDED: False, TWO_SIDED_LADDER: True}
 
 
 def _utc_now() -> str:
@@ -306,6 +337,10 @@ def _utc_now() -> str:
 JUSTIFIED_REFUSALS = (
     # this module's own
     "no_two_sided_book", "would_cross_not_a_maker_quote", "already_resting",
+    # the ladder's own: a pair above the cap is not fee-safe and quoting it
+    # would be the error, not the refusal; the other two admit ignorance
+    "ladder_pair_above_cap", "ladder_resting_price_unknown",
+    "ladder_depth_not_priceable",
     # the frozen model admitting it has no state here
     "v2_off_distribution",
     # plan_action's protective refusals, read from its source rather than
@@ -374,7 +409,12 @@ SHADOW_VARIANTS = tuple(
        # the two-sided arm, at the SAME offset as the arm above it, so the
        # pair is a controlled comparison of two-sidedness alone.
        (variant_label(BASELINE_POLICY, TWO_SIDED),
-        BASELINE_POLICY, TWO_SIDED)])
+        BASELINE_POLICY, TWO_SIDED),
+       # and the ladder, which quotes the free side while flat. Same
+       # BASELINE policy, so behaviour AFTER a fill is inventory-aware and
+       # identical to the other arms'; only the flat state differs.
+       (variant_label(BASELINE_POLICY, TWO_SIDED_LADDER),
+        BASELINE_POLICY, TWO_SIDED_LADDER)])
 
 #: the arm pair the two-sided comparison is about, CONTROL FIRST.
 #:
@@ -383,7 +423,19 @@ SHADOW_VARIANTS = tuple(
 #: different depth and is NOT a valid control for this question.
 TWO_SIDED_CONTROL = variant_label(BASELINE_POLICY, ONE_TICK_BEHIND)
 TWO_SIDED_TREATMENT = variant_label(BASELINE_POLICY, TWO_SIDED)
+#: the arm that actually quotes both sides while flat
+LADDER_TREATMENT = variant_label(BASELINE_POLICY, TWO_SIDED_LADDER)
 TWO_SIDED_ARMS = (TWO_SIDED_CONTROL, TWO_SIDED_TREATMENT)
+
+#: WHAT EACH PAIRING ISOLATES, stated so a difference is never attributed
+#: to more than the one thing that actually varies. Both treatments share
+#: the control's policy and nominal offset.
+TWO_SIDED_COMPARISONS = (
+    (TWO_SIDED_TREATMENT,
+     "PERMISSION to rest a second side (the arm never seeks one)"),
+    (LADDER_TREATMENT,
+     "QUOTING both sides while flat, plus that permission"),
+)
 
 #: the buckets `already_resting` splits into, which is requirement 1
 RESTING_SPLIT = ("already_resting_opposite_side",
@@ -479,6 +531,7 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
     split = dict(o.get("already_resting_split") or {})
     episodes = int(o.get("already_resting_opposite_side_episodes") or 0)
     opp_windows = int(o.get("windows_with_opposite_side_want") or 0)
+    reasons = dict(o.get("reasons") or {})
     return {
         "counters_since": x.get("counters_since"),
         "quotes_placed": int(x.get("quotes_placed") or 0),
@@ -496,6 +549,18 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
         "resting_split": {k: int(split.get(k) or 0) for k in RESTING_SPLIT},
         "opposite_side_episodes": episodes,
         "windows_with_opposite_side_want": opp_windows,
+        # THE LADDER'S MECHANICAL VALIDITY, which requirement 8 asks be
+        # checked EARLY: if it never quotes a second leg, or never holds
+        # two sides in a window, it is not testing anything and should be
+        # rejected rather than left running.
+        "ladder_second_legs_quoted": int(
+            o.get("ladder_second_legs_quoted") or 0),
+        "windows_with_both_sides_resting": int(
+            o.get("windows_with_both_sides_resting") or 0),
+        "ladder_refused_pair_above_cap": int(
+            reasons.get("ladder_pair_above_cap") or 0),
+        "ladder_refused_depth_not_priceable": int(
+            reasons.get("ladder_depth_not_priceable") or 0),
         "already_resting_split_accounts_for_the_bucket": (
             sum(int(split.get(k) or 0) for k in RESTING_SPLIT)
             == int(o.get("already_resting_total") or 0)),
@@ -535,8 +600,36 @@ def _req1(x: Mapping[str, Any]) -> Dict[str, Any]:
         "counters_since": x.get("counters_since")})
 
 
-def _common_windows(reports: Mapping[str, Any],
-                    scenario: str) -> Tuple[List[str], Dict[str, Any]]:
+def fee_safe_ladder_depth(book: Mapping[str, Any], cap: D,
+                          floor_ticks: int = 1) -> Optional[int]:
+    """How many ticks behind EACH touch a two-sided ladder must rest for the
+    planned pair to clear `cap`.
+
+    With both legs d ticks behind their own touch and bid/ask b and a, the
+    planned pair is (b - d*t) + (1 - a - d*t) = 1 - (a - b) - 2*d*t. The bid
+    CANCELS, so this is an identity in the spread alone, not an average over
+    books: at one tick of spread d=1 plans 0.97 and d=2 plans 0.95.
+
+    Returns None when the book has no two-sided touch to measure.
+    """
+    bid, ask = _d(book.get("bid")), _d(book.get("ask"))
+    if bid is None or ask is None:
+        return None
+    t = l5d.TICK
+    need = D(0)
+    # smallest d with 1 - (ask-bid) - 2*d*t <= cap, in exact ticks
+    gap = (D(1) - (ask - bid) - cap)
+    if gap > 0:
+        need = (gap / (2 * t))
+        # ceiling in Decimal, without float
+        if need != need.to_integral_value():
+            need = need.to_integral_value(rounding="ROUND_CEILING")
+    return max(int(floor_ticks), int(need))
+
+
+def _common_windows(reports: Mapping[str, Any], scenario: str,
+                    treatment: str = TWO_SIDED_TREATMENT
+                    ) -> Tuple[List[str], Dict[str, Any]]:
     """The slugs BOTH arms report a settled line for.
 
     THE RESTRICTION IS THE WHOLE POINT. Each arm keeps its own durable
@@ -556,7 +649,7 @@ def _common_windows(reports: Mapping[str, Any],
             reports.get(TWO_SIDED_CONTROL) or {},
             scenario).get("windows_folded_into_carry"),
         "treatment_folded_into_carry": _arm_scenario(
-            reports.get(TWO_SIDED_TREATMENT) or {},
+            reports.get(treatment) or {},
             scenario).get("windows_folded_into_carry"),
         "labels": ("a window present for only one arm is EXCLUDED from "
                    "every figure here; a carry total cannot be restricted "
@@ -564,7 +657,9 @@ def _common_windows(reports: Mapping[str, Any],
                    "are context and never the comparison")}
 
 
-def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
+def compare_two_sided(reports: Mapping[str, Any],
+                      treatment: str = TWO_SIDED_TREATMENT,
+                      isolates: str = "") -> Dict[str, Any]:
     """ARGMAX@ONE_TICK_BEHIND versus ARGMAX@TWO_SIDED, same states.
 
     Takes `{label: report()}` and answers, in MONEY, what two-sidedness is
@@ -576,15 +671,17 @@ def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
     a print sweeps the level. A touch is not a fill. Nothing here is
     realized, filled or even submitted.
     """ % HEADLINE_SCENARIO
-    missing = [a for a in TWO_SIDED_ARMS if a not in reports]
+    _arms = (TWO_SIDED_CONTROL, treatment)
+    missing = [a for a in _arms if a not in reports]
     out: Dict[str, Any] = {
         "control": TWO_SIDED_CONTROL,
-        "treatment": TWO_SIDED_TREATMENT,
+        "treatment": treatment,
+        "isolates": isolates,
         "arms_missing": missing,
         "two_sided_flag": {a: (reports.get(a) or {}).get("two_sided")
-                           for a in TWO_SIDED_ARMS},
+                           for a in _arms},
         "offset_ticks": {a: (reports.get(a) or {}).get("offset_ticks")
-                         for a in TWO_SIDED_ARMS},
+                         for a in _arms},
         "fill_rule": FILL_RULE,
         "headline_scenario": HEADLINE_SCENARIO}
     if missing:
@@ -599,9 +696,10 @@ def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
     out["controlled"] = (len(offs) == 1 and flags == {False, True})
     per = {}
     for scenario in SCENARIOS:
-        slugs, cov = _common_windows(reports, scenario)
+        slugs, cov = _common_windows(reports, scenario,
+                                     treatment)
         ec = _arm_scenario(reports[TWO_SIDED_CONTROL], scenario)
-        et = _arm_scenario(reports[TWO_SIDED_TREATMENT], scenario)
+        et = _arm_scenario(reports[treatment], scenario)
         c, t = _fold_windows(ec, slugs), _fold_windows(et, slugs)
         xc, xt = _fold_execution(ec), _fold_execution(et)
         inc = t["net"] - c["net"]
@@ -710,6 +808,15 @@ def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
                 "treatment": {k: v for k, v in xt.items()
                               if k != "resting_split"},
                 "labels": "LIFETIME counters, read as rates."}}
+    # THE LABELS ARE IDENTICAL IN EVERY SCENARIO, and repeating them three
+    # times per comparison took the document to 34,083 characters -- which
+    # is how the heartbeat got to a quarter of a megabyte in the first
+    # place. They are kept in FULL on the headline scenario, which is the
+    # one promotion is judged on and therefore the one that gets read, and
+    # replaced by a pointer elsewhere. No figure is dropped.
+    for scen, block in per.items():
+        if scen != HEADLINE_SCENARIO:
+            _point_labels(block, HEADLINE_SCENARIO)
     head = per[HEADLINE_SCENARIO]
     n = head["common_windows"]
     inc = D(head["economic_value"]["incremental_net"])
@@ -724,6 +831,76 @@ def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
         "not submitted. A positive incremental figure below %d common "
         "windows is PRELIMINARY and authorizes nothing."
         % (HEADLINE_SCENARIO, TWO_SIDED_MIN_COMMON_WINDOWS))
+    return out
+
+
+def _point_labels(node: Any, headline: str) -> None:
+    """Replace every `labels` string in a nested block with a pointer to
+    the headline scenario's copy, in place. Only prose moves; not one
+    number is touched."""
+    if isinstance(node, dict):
+        for k, v in list(node.items()):
+            if k == "labels" and isinstance(v, str):
+                node[k] = "see %s" % headline
+            else:
+                _point_labels(v, headline)
+    elif isinstance(node, list):
+        for v in node:
+            _point_labels(v, headline)
+
+
+def compare_all(reports: Mapping[str, Any]) -> Dict[str, Any]:
+    """Both pairings against the one control, in one emittable document.
+
+    The owner asked for the new policy to be compared with the EXISTING
+    control, and that is the `ARGMAX@TWO_SIDED_LADDER` entry. The
+    `ARGMAX@TWO_SIDED` entry is kept beside it because the two treatments
+    differ from each other by the SEEKING alone, so the pair of
+    comparisons separates permission from pursuit instead of confounding
+    them in a single number.
+
+    `mechanics` is the requirement-8 early check, hoisted to the top of
+    the document so it is read before any economics: if the ladder never
+    quotes a second leg or never holds two sides in a window, it is
+    testing nothing and should be rejected rather than left running.
+    """
+    out: Dict[str, Any] = {"control": TWO_SIDED_CONTROL,
+                           "comparisons": {}}
+    for treatment, isolates in TWO_SIDED_COMPARISONS:
+        out["comparisons"][treatment] = compare_two_sided(
+            reports, treatment, isolates)
+    lad = _fold_execution(_arm_scenario(reports.get(LADDER_TREATMENT) or {},
+                                        HEADLINE_SCENARIO))
+    ctl = _fold_execution(_arm_scenario(reports.get(TWO_SIDED_CONTROL) or {},
+                                        HEADLINE_SCENARIO))
+    legs = lad["ladder_second_legs_quoted"]
+    both = lad["windows_with_both_sides_resting"]
+    out["mechanics"] = {
+        "ladder_arm_present": LADDER_TREATMENT in reports,
+        "ladder_from_flat": (reports.get(LADDER_TREATMENT)
+                             or {}).get("ladder_from_flat"),
+        "ladder_second_legs_quoted": legs,
+        "windows_with_both_sides_resting": both,
+        "ladder_refused_pair_above_cap": lad["ladder_refused_pair_above_cap"],
+        "ladder_refused_depth_not_priceable":
+            lad["ladder_refused_depth_not_priceable"],
+        "ladder_quotes_placed": lad["quotes_placed"],
+        "control_quotes_placed": ctl["quotes_placed"],
+        "ladder_windows_observed": lad["windows_observed"],
+        "control_second_legs_quoted": ctl["ladder_second_legs_quoted"],
+        "verdict": (
+            "ARM_NOT_RUNNING" if LADDER_TREATMENT not in reports else
+            "NO_DATA_YET" if not lad["quotes_placed"] else
+            # it quoted, and never got a second leg down: either the cap
+            # refuses it everywhere or the state never arises. Both mean
+            # the arm is not testing the hypothesis.
+            "MECHANICALLY_INERT" if not legs else
+            "QUOTES_BOTH_SIDES" if both else "SECOND_LEGS_BUT_NEVER_BOTH"),
+        "labels": ("REQUIREMENT 8, read FIRST. A ladder that never quotes "
+                   "a second leg tests nothing, however good its "
+                   "economics look. `control_second_legs_quoted` must be "
+                   "0: a non-zero value means the control is not the "
+                   "one-sided arm it is supposed to be.")}
     return out
 
 
@@ -749,6 +926,7 @@ class ShadowController:
         self.placement = str(placement)
         self.offset_ticks = PLACEMENT_TICKS[self.placement]
         self.two_sided = PLACEMENT_TWO_SIDED[self.placement]
+        self.ladder_from_flat = PLACEMENT_LADDER_FROM_FLAT[self.placement]
         #: THE VARIANT'S OWN NAME, on every record. `policy` alone cannot
         #: identify a variant once two share a policy: the placement
         #: variant IS ARGMAX, and a consumer filtering on policy would
@@ -1027,6 +1205,7 @@ class ShadowController:
                 # MARKET, so a fresh window starts a fresh count and
                 # `windows_with_opposite_side_want` counts windows.
                 "last_resting_diag": "", "opp_want_seen_this_window": False,
+                "both_sides_seen_this_window": False,
                 "settled": None}
 
     def _slot(self, slug: str) -> Dict[str, Any]:
@@ -1087,6 +1266,64 @@ class ShadowController:
         if len(seen) > 4000:                 # bounded; oldest identity wins
             self._seen[slug] = set(list(seen)[-2000:])
         return fresh
+
+    def _ladder_leg(self, free: str, sc: Dict[str, Any],
+                    book: Mapping[str, Any]) -> Dict[str, Any]:
+        """Quote the FREE side on its own merits, while flat.
+
+        A plan-shaped dict, so the normal placement and order-construction
+        path below handles it unchanged -- the only thing that differs is
+        that the side was chosen because it is FREE rather than because the
+        inventory policy asked for it.
+
+        PRICED FROM ITS OWN SIDE OF THE BOOK. `complement_target` is not
+        usable here and is deliberately not used: it prices a completion
+        against the average cost already PAID on the surplus side, and a
+        ladder from flat has paid nothing. So the price is this side's own
+        touch, set back by the depth the PAIR BOUND requires, and the
+        resulting planned pair is checked against the cap explicitly rather
+        than assumed to be safe.
+        """
+        depth = fee_safe_ladder_depth(book, self.pair_cap, self.offset_ticks)
+        if depth is None:
+            return {"decision": "no_action", "reason": "no_two_sided_book"}
+        side_yes = (free == FM.UP)
+        touch = l5d._touch_for(side_yes, book)
+        if touch is None:
+            return {"decision": "no_action", "reason": "one_sided_book"}
+        px = touch - (l5d.TICK * depth)
+        # THE RESTING LEG'S OWN PRICE, as recorded when it was placed --
+        # never re-derived from the current book, which has moved.
+        other = (self._resting_map(sc)
+                 .get(FM.UP if free == FM.DOWN else FM.DOWN) or {})
+        rp = _d(other.get("price"))
+        if rp is None:
+            return {"decision": "no_action",
+                    "reason": "ladder_resting_price_unknown"}
+        pair = rp + px
+        common = {"ladder_leg": True, "ladder_depth_ticks": depth,
+                  "ladder_resting_leg_price": str(rp),
+                  "ladder_planned_pair": str(pair),
+                  "max_pair_cost": str(self.pair_cap)}
+        if px < l5d.TICK:
+            return {"decision": "no_action",
+                    "reason": "ladder_depth_not_priceable", **common}
+        if pair > self.pair_cap:
+            # NOT a missed opportunity: a pair above the cap is not fee-safe
+            # and quoting it would be the error. At one tick of spread this
+            # is what a one-tick ladder would hit on every tick.
+            return {"decision": "no_action",
+                    "reason": "ladder_pair_above_cap", **common}
+        # relation stays in the KNOWN vocabulary -- it is an open, on a side
+        # we hold nothing of -- because `last_rel` feeds the v2 proposal and
+        # an invented relation string would reach the model as a state it
+        # has never seen.
+        return {"decision": "quote", "relation": "open",
+                "side": "YES" if side_yes else "NO",
+                "target_price": str(px), "q1_size": 1,
+                "inventory_effect": ("+1 YES" if side_yes else "+1 NO"),
+                "_px": touch, "_side_yes": side_yes, "_offset_ticks": depth,
+                **common}
 
     def _advance_resting(self, slug: str, scenario: str, book: Mapping,
                          prints: list) -> Optional[dict]:
@@ -1233,6 +1470,7 @@ class ShadowController:
         # newer price is chasing under another name, and the deployed engine
         # has no method for it. What the two-sided arm adds is the OPPOSITE
         # side, which is a different order, not a re-price.
+        lad_plan: Optional[Dict[str, Any]] = None
         resting = dict(self._orders_for(slug, scenario))
         if resting:
             # WHICH side would we have wanted? The old counter could not say,
@@ -1276,7 +1514,25 @@ class ShadowController:
                 if not sc.get("opp_want_seen_this_window"):
                     sc["opp_want_seen_this_window"] = True
                     t["windows_with_opposite_side_want"] += 1
-            if (not self.two_sided) or (not want) or (want in resting):
+            # THE LADDER ARM GOES LOOKING. While flat with exactly one
+            # side resting, the inventory policy wants that same side
+            # again, so TWO_SIDED alone refuses here forever and never
+            # holds two legs. This arm instead quotes the FREE side on its
+            # own merits -- which is the two-sided ladder the hypothesis is
+            # about, rather than permission to hold one.
+            #
+            # Only while FLAT. With inventory on the books the baseline
+            # policy's complete/extend logic is the inventory-aware
+            # behaviour we want and is left strictly alone.
+            if (self.ladder_from_flat and inv.residual == 0
+                    and len(resting) == 1):
+                lad_plan = self._ladder_leg(
+                    FM.DOWN if FM.UP in resting else FM.UP, sc, book)
+                if lad_plan.get("decision") != "quote":
+                    return self._out({**rec, **lad_plan,
+                                      "already_resting_side": diag,
+                                      "resting_sides": sorted(resting)})
+            elif (not self.two_sided) or (not want) or (want in resting):
                 return self._out({**rec, "decision": "no_action",
                                   "reason": "already_resting",
                                   "already_resting_side": diag,
@@ -1289,9 +1545,14 @@ class ShadowController:
             # nothing resting, so the next OPPOSITE_SIDE refusal begins a
             # NEW episode rather than continuing the last one
             sc["last_resting_diag"] = ""
-        rel = self.policy_fn(prop, inv, book, tte)
-        rec["model_argmax"] = prop.get("recommended_relation")
-        plan = l5d.plan_action(rel, inv, book, pair_cap=self.pair_cap)
+        if lad_plan is not None:
+            # the free-side leg already IS the plan; the inventory policy
+            # would only have re-chosen the side we are already resting
+            plan = lad_plan
+        else:
+            rel = self.policy_fn(prop, inv, book, tte)
+            rec["model_argmax"] = prop.get("recommended_relation")
+            plan = l5d.plan_action(rel, inv, book, pair_cap=self.pair_cap)
         rec = {**rec, **l5d._public(plan)}
         if plan.get("decision") != "quote":
             return self._out(rec)
@@ -1303,8 +1564,12 @@ class ShadowController:
         # cost, so the 0.96 cap stays satisfied; and it rests further from
         # crossing, so `restable` cannot be made worse by it.
         px = plan["_px"]
-        if self.offset_ticks:
-            px = px - (l5d.TICK * self.offset_ticks)
+        # THE LADDER'S DEPTH IS COMPUTED PER TICK from the live spread, so
+        # the offset comes from the plan when it carries one and from the
+        # placement otherwise. Every other arm is unaffected.
+        offset = int(plan.get("_offset_ticks", self.offset_ticks))
+        if offset:
+            px = px - (l5d.TICK * offset)
             if px < l5d.TICK:
                 # NEVER rounded back to the touch: an arm that cannot quote
                 # at its own depth must be visible as that, not as a low
@@ -1315,6 +1580,7 @@ class ShadowController:
                                   "target_price": str(plan["_px"])})
             rec["target_price"] = str(px)
             rec["at_touch_price"] = str(plan["_px"])
+            rec["offset_ticks_applied"] = offset
         order = FM.HypoOrder(
             slug, FM.UP if plan["_side_yes"] else FM.DOWN,
             px, D(1), float(now), ladder=ladder,
@@ -1333,6 +1599,13 @@ class ShadowController:
                               "relation": plan.get("relation"), "t": now,
                               "_side_key": str(order.side)}
         self._set_resting(sc, m)
+        if plan.get("ladder_leg"):
+            t = self._tally(scenario)
+            t["ladder_second_legs_quoted"] += 1
+            if (len(m) >= 2
+                    and not sc.get("both_sides_seen_this_window")):
+                sc["both_sides_seen_this_window"] = True
+                t["windows_with_both_sides_resting"] += 1
         sc["last_rel"] = str(plan.get("relation") or "")
         rec["queue_ahead_at_placement"] = (
             None if order.queue_ahead is None else str(order.queue_ahead))
@@ -1675,6 +1948,10 @@ class ShadowController:
                         t.get("already_resting_opposite_side_episodes") or 0),
                     "windows_with_opposite_side_want": int(
                         t.get("windows_with_opposite_side_want") or 0),
+                    "ladder_second_legs_quoted": int(
+                        t.get("ladder_second_legs_quoted") or 0),
+                    "windows_with_both_sides_resting": int(
+                        t.get("windows_with_both_sides_resting") or 0),
                     "already_resting_total": int(
                         (t.get("refusal_reasons") or {})
                         .get("already_resting") or 0),
@@ -1738,6 +2015,10 @@ class ShadowController:
                 # the per-tick counts above measure dwell, not opportunity
                 "already_resting_opposite_side_episodes": 0,
                 "windows_with_opposite_side_want": 0,
+                # the ladder's own second legs, and the windows in which it
+                # actually held two sides at once
+                "ladder_second_legs_quoted": 0,
+                "windows_with_both_sides_resting": 0,
                 # a two-sided arm can fill both sides in one tick
                 "both_sides_filled_same_tick": 0}
 
@@ -1852,6 +2133,83 @@ class ShadowController:
         d = self.state.get("discontinuity")
         return dict(d) if isinstance(d, Mapping) else None
 
+    def outstanding(self) -> Dict[str, Any]:
+        """EVERY outstanding shadow leg, and what it obliges if it fills.
+
+        REQUIREMENT 4. A two-sided arm can have BOTH sides resting, so a
+        figure that reports one of them understates the obligation by the
+        other -- and the arm that introduces the second leg is exactly the
+        one whose exposure must not be read off the first.
+
+        Three numbers per scenario, because they answer different
+        questions:
+
+          cash_if_all_fill   every resting leg fills: the cash that leaves.
+                             This is the obligation, and for a ladder it is
+                             BOTH legs, not the larger of them.
+          worst_residual     the imbalance if the WORST single side fills
+                             and the other does not -- the ladder's real
+                             hazard, since a filled pair is flat and a
+                             half-filled ladder is not.
+          worst_residual_if_all_fill
+                             the imbalance if everything fills, which for a
+                             balanced ladder is SMALLER than one side
+                             filling alone. Reported so the two cannot be
+                             confused.
+
+        Held inventory is included, because an obligation on top of
+        existing inventory is what the residual cap exists to bound.
+        MODELLED: these are hypothetical legs, never submitted orders.
+        """
+        out: Dict[str, Any] = {}
+        for scenario in SCENARIOS:
+            legs = []
+            cash = D(0)
+            for slug in list(self._orders):
+                for side, order in (self._orders_for(slug, scenario)
+                                    or {}).items():
+                    # OWN-OUTCOME cost, which is what we actually pay per
+                    # contract. `wire_px` is the price it rests at on the
+                    # wire and for a DOWN leg the two differ (wire = 1 -
+                    # own), so summing wire prices would report a DOWN
+                    # leg's obligation as 1 - its cost.
+                    px = _d(getattr(order, "own_px", None))
+                    qty = _d(getattr(order, "qty", None)) or D(1)
+                    if px is None:
+                        continue
+                    legs.append({"market": slug, "side": str(side),
+                                 "own_px": str(px), "qty": str(qty),
+                                 "wire_px": str(
+                                     getattr(order, "wire_px", px))})
+                    cash += px * qty
+            # inventory the legs land on top of
+            resid = 0
+            for slug in list(self._orders):
+                try:
+                    resid += int(self.inventory_for(slug, scenario)
+                                 .snapshot().get("residual") or 0)
+                except Exception:                          # noqa: BLE001
+                    pass
+            up = sum((_d(l["qty"]) or D(0) for l in legs
+                      if l["side"] == str(FM.UP)), D(0))
+            dn = sum((_d(l["qty"]) or D(0) for l in legs
+                      if l["side"] == str(FM.DOWN)), D(0))
+            out[scenario] = {
+                "legs": legs,
+                "legs_resting": len(legs),
+                "cash_if_all_fill": str(cash),
+                "held_residual": resid,
+                "worst_residual": str(max(
+                    abs(D(resid) + up), abs(D(resid) - dn))),
+                "worst_residual_if_all_fill": str(abs(D(resid) + up - dn)),
+                "labels": ("MODELLED hypothetical legs, never submitted. "
+                           "cash_if_all_fill counts EVERY resting leg, so a "
+                           "two-sided arm's obligation is not read off one "
+                           "side. worst_residual is the single worst side "
+                           "filling alone, which for a balanced ladder is "
+                           "LARGER than everything filling.")}
+        return out
+
     def report(self) -> Dict[str, Any]:
         return {"provenance": CONTROLLER_PROVENANCE,
                 "policy": self.policy,
@@ -1873,6 +2231,8 @@ class ShadowController:
                 "boot": self.state.get("boot"),
                 "tally_reset": self.state.get("tally_reset"),
                 "two_sided": self.two_sided,
+                "ladder_from_flat": self.ladder_from_flat,
+                "outstanding": self.outstanding(),
                 "resting_now": {sc: sorted(
                     ((self._orders.get(k) or {}).get(sc) or {}))
                     for sc in SCENARIOS

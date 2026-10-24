@@ -602,7 +602,8 @@ def test_both_policies_run_with_separate_inventories(tmp_path, monkeypatch):
     deep = sorted(lbl for lbl, c in cs.items() if c.placement != SC.AT_TOUCH)
     assert deep == sorted([
         "%s@%s" % (SC.BASELINE_POLICY, SC.ONE_TICK_BEHIND),
-        "%s@%s" % (SC.BASELINE_POLICY, SC.TWO_SIDED)]), deep
+        "%s@%s" % (SC.BASELINE_POLICY, SC.TWO_SIDED),
+        "%s@%s" % (SC.BASELINE_POLICY, SC.TWO_SIDED_LADDER)]), deep
     for lbl in deep:
         assert cs[lbl].policy == SC.BASELINE_POLICY
         assert cs[lbl].offset_ticks == 1
@@ -998,11 +999,36 @@ def test_the_heartbeat_emits_the_two_sided_comparison_as_its_own_line(
     assert len(lines) == 1, [k for k, _ in out]
     doc = lines[0]
     assert doc["control"] == SC.TWO_SIDED_CONTROL
-    assert doc["treatment"] == SC.TWO_SIDED_TREATMENT
-    assert doc["arms_missing"] == []
-    assert doc["controlled"] is True
-    # and it must actually be SHORT -- that is the entire reason it exists
-    assert len(json.dumps(doc)) < 20000, len(json.dumps(doc))
+    # BOTH pairings against the one control, so permission and pursuit are
+    # separated rather than confounded in a single number
+    assert set(doc["comparisons"]) == {SC.TWO_SIDED_TREATMENT,
+                                       SC.LADDER_TREATMENT}
+    for t, cmp in doc["comparisons"].items():
+        assert cmp["treatment"] == t
+        assert cmp["arms_missing"] == []
+        assert cmp["controlled"] is True
+        assert cmp["isolates"]
+    # requirement 8 rides at the top, to be read before any economics
+    assert doc["mechanics"]["ladder_arm_present"] is True
+    assert doc["mechanics"]["ladder_from_flat"] is True
+    assert doc["mechanics"]["control_second_legs_quoted"] == 0
+    # AND IT MUST FIT ONE LOG FRAGMENT -- that is the entire reason it
+    # exists. The transport splits a line at 81,920 characters, which is
+    # how the heartbeat became four unreadable pieces; the bound is set
+    # below that with headroom rather than at it.
+    assert len(json.dumps(doc)) < 60000, len(json.dumps(doc))
+    # the per-scenario prose is identical across scenarios, so it is kept
+    # in full on the headline only. No FIGURE may be dropped that way.
+    for cmp in doc["comparisons"].values():
+        head = cmp["per_scenario"][SC.HEADLINE_SCENARIO]
+        assert len(head["coverage"]["labels"]) > 100
+        for scen in ("BASE", "OPTIMISTIC"):
+            other = cmp["per_scenario"][scen]
+            assert other["coverage"]["labels"] == "see %s" % (
+                SC.HEADLINE_SCENARIO,)
+            assert set(other) == set(head)
+            assert set(other["economic_value"]) == set(
+                head["economic_value"])
 
 
 def test_the_comparison_line_is_absent_rather_than_empty_with_no_arms(
@@ -1026,7 +1052,7 @@ def test_a_failure_in_the_comparison_cannot_cost_us_the_heartbeat(
 
     def boom(_reports):
         raise ValueError("synthetic")
-    monkeypatch.setattr(SC, "compare_two_sided", boom)
+    monkeypatch.setattr(SC, "compare_all", boom)
     r.heartbeat()                              # must not raise
     assert [k for k, _ in out if k == "L5_LIVE_HB"]
     assert not [k for k, _ in out if k == "L5_SHADOW_TWO_SIDED"]
@@ -1043,6 +1069,6 @@ def test_the_comparison_agrees_with_an_offline_run_of_the_same_reports(
     r.heartbeat()
     live = [d for k, d in out if k == "L5_SHADOW_TWO_SIDED"][0]
     offline = json.loads(json.dumps(
-        SC.compare_two_sided({n: c.report() for n, c in arms.items()}),
+        SC.compare_all({n: c.report() for n, c in arms.items()}),
         default=str))
     assert live == offline

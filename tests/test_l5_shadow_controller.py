@@ -1157,29 +1157,33 @@ def test_the_two_variants_keep_separate_books_and_files(tmp_path):
     assert b.inventory_for(SLUG).yes == 0, "the books are shared"
 
 
-def test_the_canonical_variant_set_is_five_and_names_both_offset_arms():
-    """Four at-touch/depth arms plus the two-sided arm. The two-sided arm
-    sits at the SAME offset as the depth arm, so the pair differs in
-    two-sidedness alone."""
+def test_the_canonical_variant_set_is_six_and_names_all_three_depth_arms():
+    """Three at-touch policy arms, plus THREE arms on the baseline policy
+    that vary placement alone: one-sided, two-sided-by-permission, and the
+    ladder that actually quotes both sides. All three share the nominal
+    offset, so each pair differs in exactly one thing."""
     labels = [v[0] for v in sc.SHADOW_VARIANTS]
-    assert len(labels) == 5, labels
+    assert len(labels) == 6, labels
     assert labels.count("ARGMAX") == 1
-    deep = [v for v in sc.SHADOW_VARIANTS if v[2] == sc.ONE_TICK_BEHIND]
-    assert len(deep) == 1
-    assert deep[0] == ("ARGMAX@ONE_TICK_BEHIND", sc.BASELINE_POLICY,
-                       sc.ONE_TICK_BEHIND)
-    two = [v for v in sc.SHADOW_VARIANTS if v[2] == sc.TWO_SIDED]
-    assert len(two) == 1
-    assert two[0] == ("ARGMAX@TWO_SIDED", sc.BASELINE_POLICY, sc.TWO_SIDED)
-    # the controlled comparison: same policy, same offset, differing only
-    # in whether both sides may rest
-    assert sc.PLACEMENT_TICKS[sc.TWO_SIDED] == \
-        sc.PLACEMENT_TICKS[sc.ONE_TICK_BEHIND]
-    assert sc.PLACEMENT_TWO_SIDED[sc.TWO_SIDED] is True
+    for place, label in ((sc.ONE_TICK_BEHIND, "ARGMAX@ONE_TICK_BEHIND"),
+                         (sc.TWO_SIDED, "ARGMAX@TWO_SIDED"),
+                         (sc.TWO_SIDED_LADDER, "ARGMAX@TWO_SIDED_LADDER")):
+        hits = [v for v in sc.SHADOW_VARIANTS if v[2] == place]
+        assert hits == [(label, sc.BASELINE_POLICY, place)], hits
+        # same NOMINAL offset throughout, so neither pairing is confounded
+        # by depth. The ladder may deepen its own second leg per tick to
+        # clear the pair cap, which is a property of that leg and reported.
+        assert sc.PLACEMENT_TICKS[place] == \
+            sc.PLACEMENT_TICKS[sc.ONE_TICK_BEHIND]
+    # permission versus pursuit, which is what the two pairings separate
     assert sc.PLACEMENT_TWO_SIDED[sc.ONE_TICK_BEHIND] is False
+    assert sc.PLACEMENT_TWO_SIDED[sc.TWO_SIDED] is True
+    assert sc.PLACEMENT_TWO_SIDED[sc.TWO_SIDED_LADDER] is True
+    assert sc.PLACEMENT_LADDER_FROM_FLAT[sc.TWO_SIDED] is False
+    assert sc.PLACEMENT_LADDER_FROM_FLAT[sc.TWO_SIDED_LADDER] is True
     # distinct durable files, so no two variants can share state
     files = {sc.variant_state_filename(l) for l in labels}
-    assert len(files) == 5, files
+    assert len(files) == 6, files
 
 
 def test_a_tally_from_an_older_taxonomy_is_discarded_not_merged(tmp_path):
@@ -1761,3 +1765,178 @@ def test_a_second_window_counts_a_second_window(tmp_path):
     t = c._tally(sc.HEADLINE_SCENARIO)
     assert t["already_resting_opposite_side"] == 8
     assert t["windows_with_opposite_side_want"] == 2
+
+
+# --------------------------------------------------------------------------
+# The LADDER arm: it QUOTES the free side while flat, which TWO_SIDED does
+# not. These guard the three ways it could be quietly wrong -- never
+# quoting a second leg at all, quoting an unfee-safe pair, or reporting an
+# obligation that counts only one of its two legs.
+# --------------------------------------------------------------------------
+def test_the_ladder_rests_BOTH_sides_from_flat_and_the_others_do_not(
+        tmp_path):
+    """REQUIREMENT 8, and the whole point of the arm. From flat, with no
+    fill, the control and the permission arm hold ONE side forever; the
+    ladder holds two."""
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    held = {}
+    for place in (sc.ONE_TICK_BEHIND, sc.TWO_SIDED, sc.TWO_SIDED_LADDER):
+        c = ctl(tmp_path / place, placement=place)
+        for i in range(4):
+            c.step(WS + 100.0 + i * 5, slug=SLUG,
+                   book=_book("0.50", "0.51"), window_end_ts=WEND,
+                   prints=[], ladder=lad)
+        scen = c._scen(SLUG, sc.HEADLINE_SCENARIO)
+        held[place] = {k: v["price"]
+                       for k, v in c._resting_map(scen).items()}
+    assert len(held[sc.ONE_TICK_BEHIND]) == 1
+    assert len(held[sc.TWO_SIDED]) == 1
+    assert len(held[sc.TWO_SIDED_LADDER]) == 2, held[sc.TWO_SIDED_LADDER]
+    # independently priced: each leg off its OWN touch, not off the other
+    assert set(held[sc.TWO_SIDED_LADDER]) == {FM.UP, FM.DOWN}
+
+
+def test_the_ladders_planned_pair_never_exceeds_the_cap(tmp_path):
+    """The pair bound is enforced on the SECOND leg explicitly, because
+    `complement_target` cannot price it -- that function prices against an
+    average already PAID, and a ladder from flat has paid nothing."""
+    for bid, ask in (("0.50", "0.51"), ("0.50", "0.52"), ("0.30", "0.32"),
+                     ("0.80", "0.81")):
+        c = ctl(tmp_path / ("%s%s" % (bid, ask)),
+                placement=sc.TWO_SIDED_LADDER)
+        lad = _ladder(bid=bid, ask=ask, bid_qty="0", ask_qty="0")
+        for i in range(4):
+            c.step(WS + 100.0 + i * 5, slug=SLUG, book=_book(bid, ask),
+                   window_end_ts=WEND, prints=[], ladder=lad)
+        m = c._resting_map(c._scen(SLUG, sc.HEADLINE_SCENARIO))
+        if len(m) == 2:
+            pair = sum(D(v["price"]) for v in m.values())
+            assert pair <= c.pair_cap, (bid, ask, pair, c.pair_cap)
+
+
+def test_a_one_tick_ladder_depth_would_breach_the_cap_so_it_deepens(
+        tmp_path):
+    """THE ARITHMETIC THAT DECIDES THE DEPTH. With both legs d ticks behind
+    their own touch and a spread of s ticks the bid cancels and the planned
+    pair is exactly 1 - s*t - 2*d*t. At one tick of spread d=1 plans 0.97,
+    ABOVE the 0.96 cap, so the nominal one-tick offset is NOT enough and
+    the arm must rest deeper of its own accord."""
+    assert sc.fee_safe_ladder_depth(
+        {"bid": "0.50", "ask": "0.51"}, D("0.96")) == 2
+    assert sc.fee_safe_ladder_depth(
+        {"bid": "0.50", "ask": "0.52"}, D("0.96")) == 1
+    # a one-sided book cannot be measured, and None says so
+    assert sc.fee_safe_ladder_depth(
+        {"bid": "0.50", "ask": None}, D("0.96")) is None
+    # ... and the floor is never undercut
+    assert sc.fee_safe_ladder_depth(
+        {"bid": "0.50", "ask": "0.60"}, D("0.96"), floor_ticks=3) == 3
+
+    c = ctl(tmp_path, placement=sc.TWO_SIDED_LADDER)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    recs = [c.step(WS + 100.0 + i * 5, slug=SLUG,
+                   book=_book("0.50", "0.51"), window_end_ts=WEND,
+                   prints=[], ladder=lad) for i in range(2)]
+    second = recs[1]
+    assert second["decision"] == "quote"
+    assert second["ladder_leg"] is True
+    assert second["ladder_depth_ticks"] == 2
+    assert second["offset_ticks_applied"] == 2
+    assert D(second["ladder_planned_pair"]) <= c.pair_cap
+
+
+def test_an_unfee_safe_second_leg_is_refused_by_name_not_quoted(tmp_path):
+    """A pair above the cap is not a missed opportunity -- quoting it would
+    be the error. So it refuses, by name, and lands in the JUSTIFIED
+    bucket rather than in possible_misses."""
+    assert "ladder_pair_above_cap" in sc.JUSTIFIED_REFUSALS
+    c = ctl(tmp_path, placement=sc.TWO_SIDED_LADDER)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    # SEED THE FIRST LEG AT THE TOUCH, not one tick behind it. At a one-tick
+    # spread the deepest fee-safe second leg is 1 - ask - 2t = 0.47, so a
+    # first leg at 0.49 pairs to exactly 0.96 and is ALLOWED -- only a first
+    # leg at the touch, 0.50, puts the pair at 0.97 and out of reach.
+    o = FM.HypoOrder(SLUG, FM.UP, D("0.50"), D(1), WS + 300.0, ladder=lad,
+                     bid="0.50", ask="0.51", coid="seed-at-touch")
+    c._orders_for(SLUG, sc.HEADLINE_SCENARIO)[FM.UP] = o
+    c._set_resting(c._scen(SLUG, sc.HEADLINE_SCENARIO),
+                   {FM.UP: {"side": "YES", "price": "0.50",
+                            "relation": "open", "t": WS + 300.0,
+                            "_side_key": FM.UP}})
+    rec = c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+                 window_end_ts=WEND, prints=[], ladder=lad)
+    assert rec["decision"] == "no_action", rec
+    assert rec["reason"] == "ladder_pair_above_cap", rec
+    assert D(rec["ladder_planned_pair"]) == D("0.97")
+    assert D(rec["ladder_planned_pair"]) > c.pair_cap
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["refusal_reasons"]["ladder_pair_above_cap"] >= 1
+    # JUSTIFIED, not a missed opportunity: quoting it would be the error
+    assert t["possible_misses"] == 0
+    assert t["justified_refusals"] >= 1
+
+
+def test_the_obligation_counts_BOTH_legs_not_the_larger_one(tmp_path):
+    """REQUIREMENT 4. A two-sided arm can have both sides resting, and a
+    figure that reports one understates the obligation by the other."""
+    c = ctl(tmp_path, placement=sc.TWO_SIDED_LADDER)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    for i in range(3):
+        c.step(WS + 100.0 + i * 5, slug=SLUG, book=_book("0.50", "0.51"),
+               window_end_ts=WEND, prints=[], ladder=lad)
+    m = c._resting_map(c._scen(SLUG, sc.HEADLINE_SCENARIO))
+    assert len(m) == 2
+    o = c.outstanding()[sc.HEADLINE_SCENARIO]
+    assert o["legs_resting"] == 2
+    # the cash that leaves if everything fills is the SUM, not the max
+    assert D(o["cash_if_all_fill"]) == sum(D(v["price"])
+                                           for v in m.values())
+    # own-outcome cost, not the wire price: for a DOWN leg the two differ
+    # and summing wire prices would misreport its obligation as 1 - cost
+    assert {l["side"]: l["own_px"] for l in o["legs"]} == {
+        k: v["price"] for k, v in m.items()}
+    # one side filling alone is the hazard; both filling is flat
+    assert D(o["worst_residual"]) == D(1)
+    assert D(o["worst_residual_if_all_fill"]) == D(0)
+    assert o["held_residual"] == 0
+    assert c.report()["outstanding"][sc.HEADLINE_SCENARIO][
+        "legs_resting"] == 2
+
+
+def test_the_ladder_leaves_inventory_aware_behaviour_alone(tmp_path):
+    """Only the FLAT state differs. With inventory on the books the
+    baseline policy's complete/extend logic is what we want and must be
+    untouched -- so a seeded one-sided inventory produces the same
+    decision on the ladder arm as on the permission arm."""
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    out = {}
+    for place in (sc.TWO_SIDED, sc.TWO_SIDED_LADDER):
+        c = ctl(tmp_path / ("inv" + place), placement=place)
+        inv = c.inventory_for(SLUG, sc.HEADLINE_SCENARIO)
+        inv.record(True, D("0.48"))            # one YES on the books
+        rec = c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+                     window_end_ts=WEND, prints=[], ladder=lad)
+        out[place] = (rec.get("decision"), rec.get("side"),
+                      rec.get("target_price"), rec.get("relation"))
+    assert out[sc.TWO_SIDED] == out[sc.TWO_SIDED_LADDER], out
+
+
+def test_the_mechanics_block_rejects_an_inert_ladder(tmp_path):
+    """REQUIREMENT 8 as a verdict, so an arm that tests nothing is
+    rejected promptly instead of accruing windows."""
+    model = {"full": {}, "base": {}, "marginal": {}, "cadence_modal": {}}
+    reports = {}
+    for lab, pol, pl in sc.SHADOW_VARIANTS:
+        reports[lab] = sc.ShadowController(
+            state_path=str(tmp_path / sc.variant_state_filename(lab)),
+            model=model, policy=pol, placement=pl).report()
+    doc = sc.compare_all(reports)
+    assert doc["mechanics"]["verdict"] == "NO_DATA_YET"
+    assert doc["mechanics"]["ladder_arm_present"] is True
+    assert doc["mechanics"]["ladder_from_flat"] is True
+    assert doc["mechanics"]["control_second_legs_quoted"] == 0
+
+    # an arm that quoted but never got a second leg down is INERT
+    del reports[sc.LADDER_TREATMENT]
+    assert sc.compare_all(reports)["mechanics"]["verdict"] \
+        == "ARM_NOT_RUNNING"

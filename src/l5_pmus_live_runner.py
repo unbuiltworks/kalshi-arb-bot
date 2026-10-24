@@ -3817,10 +3817,12 @@ class Runner:
         and unreadable. This emits just the comparison -- a few kilobytes,
         one line, one fragment.
 
-        It computes NOTHING of its own: `compare_two_sided` is the same
+        It computes NOTHING of its own: `compare_all` is the same
         function `analysis/l5/two_sided_comparison.py` calls, so the
         production line and an offline run of the same reports cannot
-        disagree.
+        disagree. It carries BOTH pairings against the one control --
+        permission to rest a second side, and actually quoting both --
+        with the requirement-8 mechanical check hoisted to the top.
 
         REPORTING ONLY. It gates nothing, no money path reads it, and a
         failure here must not cost the heartbeat that has already been
@@ -3829,7 +3831,7 @@ class Runner:
         if not self._shadow:
             return
         try:
-            emit("L5_SHADOW_TWO_SIDED", SHADOW.compare_two_sided(
+            emit("L5_SHADOW_TWO_SIDED", SHADOW.compare_all(
                 {n: c.report() for n, c in self._shadow.items()}))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
