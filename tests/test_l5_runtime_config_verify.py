@@ -24,7 +24,30 @@ APPROVED_ENV = {
     "L5_TS_CANCEL_MARGIN_S": "300",
     "L5_WINDOW_STRATEGY": "TWO_SIDED",
     "L5_MAX_LIVE_ORDERS": "1",
+    # THE APPROVED AGGREGATE CEILING, and it has to be HERE rather than
+    # left to the code default. `R.PROBE_LIMITS` defaults to the $20 of the
+    # earlier eight-window mandate, so omitting this variable tested the
+    # default instead of the configuration the owner approved -- and
+    # production, which sets it to 5, was graded against a number nobody
+    # had approved.
+    "L5_MAX_TOTAL_EXPOSURE_USD": "5",
 }
+
+
+@pytest.fixture(autouse=True)
+def _pin_the_frozen_ceiling(monkeypatch):
+    """Pin `PROBE_LIMITS` to the approved $5 for every test in this module.
+
+    `R.PROBE_LIMITS` is built ONCE at import, so its value depends on what
+    the environment held when the runner module was FIRST imported -- which
+    in a full-suite run is decided by whichever test module imported it
+    first. That made these tests pass alone and fail in the suite, and it
+    also means `verify_snapshot` cannot express this row through a snapshot.
+    Pinning it here is what a correctly restarted service looks like; the
+    restart-pending state gets its own test below.
+    """
+    from src import l5_pmus_live_runner as _R
+    monkeypatch.setitem(_R.PROBE_LIMITS, "max_total_exposure_usd", D("5"))
 
 
 @pytest.fixture()
@@ -54,7 +77,7 @@ def test_the_approved_configuration_passes_every_row(approved):
     # 21 -> 22 when defensive_execution_enabled moved to
     # observed_not_graded; 22 -> 23 with the phase-1 invariant that the
     # mandate signing key is never reachable from the runtime.
-    assert out["checked"] == 23
+    assert out["checked"] == 24
     assert out["failed"] == []
 
 
@@ -269,7 +292,7 @@ def test_the_approved_set_is_code_so_drift_shows_as_a_failing_row():
     assert V.APPROVED["submission_budget_replace"] == 32
     assert V.APPROVED["defensive_loss_budget_usd"] == D("2")
     # RAISED 5 -> 20 by owner decision; the daily halt stays $5.
-    assert V.APPROVED["aggregate_exposure_usd"] == D("20")
+    assert V.APPROVED["aggregate_exposure_usd"] == D("5")
     assert V.APPROVED["daily_realized_loss_halt_usd"] == D("5")
     assert V.APPROVED["maker_pair_ceiling"] == D("0.96")
     assert V.APPROVED["defensive_pair_ceiling"] == D("1.20")
@@ -299,6 +322,7 @@ APPROVED_SNAPSHOT = {
     "L5_WINDOW_STRATEGY": "TWO_SIDED",
     "L5_MAX_LIVE_ORDERS": "1",
     "L5_SHADOW_ONLY": "1",
+    "L5_MAX_TOTAL_EXPOSURE_USD": "5",
 }
 
 #: what production is believed to hold TODAY: the four-window campaign's
@@ -521,3 +545,42 @@ def test_the_mandate_verdict_is_reported_and_not_graded(approved):
 def test_the_shipped_state_has_no_trusted_keys(approved):
     assert obs(V.verify(), "mandate_trusted_key_ids")["effective"] \
         == "(none)"
+
+
+def test_a_variable_changed_without_a_restart_FAILS_rather_than_passing(
+        approved):
+    """The aggregate ceiling is the one limit where intent and enforcement
+    can diverge.
+
+    `R.PROBE_LIMITS` is built at import and `SafetyLimits` is constructed
+    from it, so the ceiling in force is the one the process booted with.
+    An owner who edits the Railway variable and does not restart has a
+    service still enforcing the OLD number. That must be a failing row, not
+    a passing one, because the alternative is discovering it through an
+    order that was admitted under a ceiling nobody approved.
+    """
+    from src import l5_pmus_live_runner as _R
+    # the variable now says 5 (the fixture) but the booted ceiling is 20
+    approved.setitem(_R.PROBE_LIMITS, "max_total_exposure_usd", D("20"))
+    out = V.verify()
+    assert out["PASS"] is False
+    assert row(out, "aggregate_exposure_usd")["ok"] is True
+    assert row(out, "aggregate_exposure_usd")["effective"] == "5"
+    assert row(out, "aggregate_exposure_in_force_usd")["ok"] is False
+    assert row(out, "aggregate_exposure_in_force_usd")["effective"] \
+        == "20"
+    assert "aggregate_exposure_in_force_usd" in out["failed"]
+    assert "frozen at boot" in \
+        row(out, "aggregate_exposure_in_force_usd")["source"]
+
+
+def test_a_tighter_ceiling_than_the_code_constant_still_passes(approved):
+    """$5 deployed against CA.MAX_TOTAL_EXPOSURE_USD = $20 is correct, not a
+    drift. `_looser` flags a field only when the deployed value is GREATER
+    than the approved one, so a tighter deployed ceiling arms normally --
+    which is why the approved row is 5 and the code-constant row is 20 at
+    the same time."""
+    out = V.verify()
+    assert out["PASS"] is True, out["failed"]
+    assert row(out, "aggregate_exposure_usd")["effective"] == "5"
+    assert row(out, "approval_exposure_ceiling_usd")["effective"] == "20"

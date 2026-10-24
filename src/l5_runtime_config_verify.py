@@ -42,11 +42,19 @@ APPROVED: Dict[str, Any] = {
     "submission_budget_replace": 32,
     "submission_backstop": 56,
     "defensive_loss_budget_usd": D("2"),
-    # RAISED 5 -> 20 in lockstep with CA.MAX_TOTAL_EXPOSURE_USD and
-    # R.PROBE_LIMITS. The two must agree or _looser() refuses arming, so a
-    # verifier row that still expected 5 would pass only a configuration
-    # that could never arm.
-    "aggregate_exposure_usd": D("20"),
+    # BACK TO 5, which is the owner-approved aggregate ceiling for the
+    # no-key campaign and the value `R.PROBE_LIMITS` actually carries.
+    #
+    # THE EARLIER NOTE HERE WAS WRONG ON THE MECHANISM and that is why it
+    # is replaced rather than edited: it claimed this row had to equal
+    # CA.MAX_TOTAL_EXPOSURE_USD because "_looser() refuses arming" when
+    # they disagree. `_looser` flags a field only when the DEPLOYED value
+    # is greater than the approved one, so a deployed ceiling TIGHTER than
+    # the code constant arms perfectly well. Requiring 20 therefore did
+    # not protect arming; it just reported PASS false against the $5
+    # configuration the owner asked for, which hides a real regression
+    # behind a permanent failure.
+    "aggregate_exposure_usd": D("5"),
     "daily_realized_loss_halt_usd": D("5"),
     "maker_pair_ceiling": D("0.96"),
     "defensive_pair_ceiling": D("1.20"),
@@ -131,6 +139,12 @@ SNAPSHOT_ALLOWED = (
     "L5_DAILY_REALIZED_LOSS_HALT_USD",
     "L5_DEFENSIVE_COMPLETION",
     "L5_SHADOW_ONLY",
+    # THE AGGREGATE CEILING'S OWN VARIABLE, which this list omitted. Without
+    # it a snapshot could not predict `aggregate_exposure_usd` -- the name
+    # was silently dropped as non-allowlisted, the variable was never
+    # applied, and the row reported the running process's boot value as
+    # though it had been predicted from the input.
+    "L5_MAX_TOTAL_EXPOSURE_USD",
 )
 
 #: Name fragments that mean "this is a secret, and it must not be in a file
@@ -285,8 +299,31 @@ def verify() -> Dict[str, Any]:
              "DEF.DEFENSIVE_LOSS_BUDGET_USD (code constant)",
              lambda: DEF.DEFENSIVE_LOSS_BUDGET_USD,
              A["defensive_loss_budget_usd"]),
+        # THE AGGREGATE CEILING, SPLIT IN TWO, because in this one case the
+        # variable and the limit in force can differ.
+        #
+        # `R.PROBE_LIMITS` is built ONCE at import and `SafetyLimits` is
+        # constructed from it, so the ceiling that actually binds is the one
+        # the PROCESS BOOTED WITH. Setting the Railway variable does not move
+        # it until the service restarts.
+        #
+        # Reading only the frozen dict -- which this row used to do -- made
+        # `verify_snapshot` unable to predict this row at all: the snapshot
+        # sets the variable and then the row reported the running process's
+        # boot value regardless, i.e. a prediction that silently ignored the
+        # input it was given. Reading only the accessor would be worse: it
+        # would report the owner's intent as though it were enforced.
+        #
+        # So both are graded against the same approved number. They agree on
+        # a correctly restarted service; a disagreement is precisely the
+        # "variable changed, service not restarted" state, and it fails here
+        # rather than being discovered by an order that used the old ceiling.
         _row("aggregate_exposure_usd",
-             "R.PROBE_LIMITS['max_total_exposure_usd']",
+             "R.max_total_exposure_usd() (the variable)",
+             lambda: R.max_total_exposure_usd(),
+             A["aggregate_exposure_usd"]),
+        _row("aggregate_exposure_in_force_usd",
+             "R.PROBE_LIMITS['max_total_exposure_usd'] (frozen at boot)",
              lambda: D(str(R.PROBE_LIMITS["max_total_exposure_usd"])),
              A["aggregate_exposure_usd"]),
         _row("daily_realized_loss_halt_usd",
