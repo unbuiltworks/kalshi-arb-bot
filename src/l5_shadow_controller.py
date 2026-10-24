@@ -557,6 +557,7 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
             o.get("ladder_second_legs_quoted") or 0),
         "windows_with_both_sides_resting": int(
             o.get("windows_with_both_sides_resting") or 0),
+        "ladder_depth_hist": dict(o.get("ladder_depth_hist") or {}),
         "ladder_refused_pair_above_cap": int(
             reasons.get("ladder_pair_above_cap") or 0),
         "ladder_refused_depth_not_priceable": int(
@@ -885,6 +886,13 @@ def compare_all(reports: Mapping[str, Any]) -> Dict[str, Any]:
         "ladder_refused_depth_not_priceable":
             lad["ladder_refused_depth_not_priceable"],
         "ladder_quotes_placed": lad["quotes_placed"],
+        # the second leg's DEPTH, because the pair bound usually puts it
+        # deeper than the control's single leg and a deeper leg fills less
+        # often by arithmetic. Without this a lower fill rate on the second
+        # leg would read as a property of two-sidedness.
+        "ladder_depth_hist": lad["ladder_depth_hist"],
+        "control_offset_ticks": (reports.get(TWO_SIDED_CONTROL)
+                                 or {}).get("offset_ticks"),
         "control_quotes_placed": ctl["quotes_placed"],
         "ladder_windows_observed": lad["windows_observed"],
         "control_second_legs_quoted": ctl["ladder_second_legs_quoted"],
@@ -1602,6 +1610,9 @@ class ShadowController:
         if plan.get("ladder_leg"):
             t = self._tally(scenario)
             t["ladder_second_legs_quoted"] += 1
+            dk = str(plan.get("ladder_depth_ticks"))
+            t["ladder_depth_hist"][dk] = \
+                int(t["ladder_depth_hist"].get(dk, 0)) + 1
             if (len(m) >= 2
                     and not sc.get("both_sides_seen_this_window")):
                 sc["both_sides_seen_this_window"] = True
@@ -1952,6 +1963,8 @@ class ShadowController:
                         t.get("ladder_second_legs_quoted") or 0),
                     "windows_with_both_sides_resting": int(
                         t.get("windows_with_both_sides_resting") or 0),
+                    "ladder_depth_hist": dict(
+                        t.get("ladder_depth_hist") or {}),
                     "already_resting_total": int(
                         (t.get("refusal_reasons") or {})
                         .get("already_resting") or 0),
@@ -2019,6 +2032,12 @@ class ShadowController:
                 # actually held two sides at once
                 "ladder_second_legs_quoted": 0,
                 "windows_with_both_sides_resting": 0,
+                # BY DEPTH, because the pair bound often puts the second leg
+                # DEEPER than the control's single leg (d=2 against d=1 at a
+                # one-tick spread). A lower fill rate on a deeper leg is
+                # arithmetic, not a finding, and without this the two could
+                # not be told apart.
+                "ladder_depth_hist": {},
                 # a two-sided arm can fill both sides in one tick
                 "both_sides_filled_same_tick": 0}
 

@@ -1940,3 +1940,29 @@ def test_the_mechanics_block_rejects_an_inert_ladder(tmp_path):
     del reports[sc.LADDER_TREATMENT]
     assert sc.compare_all(reports)["mechanics"]["verdict"] \
         == "ARM_NOT_RUNNING"
+
+
+def test_the_second_legs_depth_is_recorded_so_fills_stay_interpretable(
+        tmp_path):
+    """The pair bound usually puts the second leg DEEPER than the control's
+    single leg -- d=2 against d=1 at a one-tick spread -- and a deeper leg
+    fills less often by arithmetic. Without the depth recorded, a lower
+    fill rate on it would read as a property of two-sidedness."""
+    c = ctl(tmp_path, placement=sc.TWO_SIDED_LADDER)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    for i in range(3):
+        c.step(WS + 100.0 + i * 5, slug=SLUG, book=_book("0.50", "0.51"),
+               window_end_ts=WEND, prints=[], ladder=lad)
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["ladder_depth_hist"] == {"2": 1}, t["ladder_depth_hist"]
+    assert t["ladder_second_legs_quoted"] == 1
+    econ = c.economics()["per_scenario"][sc.HEADLINE_SCENARIO]
+    assert econ["opportunities"]["ladder_depth_hist"] == {"2": 1}
+
+    # a two-tick spread needs only one tick of depth, and is recorded apart
+    c2 = ctl(tmp_path / "wide", placement=sc.TWO_SIDED_LADDER)
+    lad2 = _ladder(bid="0.50", ask="0.52", bid_qty="0", ask_qty="0")
+    for i in range(3):
+        c2.step(WS + 100.0 + i * 5, slug=SLUG, book=_book("0.50", "0.52"),
+                window_end_ts=WEND, prints=[], ladder=lad2)
+    assert c2._tally(sc.HEADLINE_SCENARIO)["ladder_depth_hist"] == {"1": 1}
