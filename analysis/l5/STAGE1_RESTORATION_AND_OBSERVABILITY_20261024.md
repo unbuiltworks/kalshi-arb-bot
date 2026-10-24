@@ -433,3 +433,161 @@ fee-safe complement survives long enough to be reached, nor what fraction of
 first legs strand this way, and it does not price any remedy. Those need the
 fill-and-interval distribution the evidence module collects. **No policy change
 is recommended or included here.**
+
+---
+
+## 7. Stage 1 final: closed, reconciled, evidence deployed and verified
+
+### Closure, by two independent mechanisms
+
+- **Budget exhausted**: `windows_spent 8` of 8 at 16:35Z. Refusals read
+  `arm_refused_campaign_windows_exhausted` (81 in the 1700z window).
+- **Authorization expired**: 17:24:27Z passed, after which refusals read
+  `arm_refused_approval_not_valid` (40 in the 1715z window).
+
+Neither the $5 daily halt nor the $20 cumulative halt fired. Nothing was
+renewed, re-armed or extended, and no new authorization was granted.
+
+### Reconciliation, 16:59:06Z
+
+`open_orders_at_venue 0`, `live_orders_pending_terminal []`,
+`pending_terminal_total 0`, `live_orders_released_unacked []`,
+`quarantined []`, `uncertainty_cleared true`, `armed false`. Every
+fill-bearing window is venue-settled with `venue_state MARKET_STATE_EXPIRED`
+and `resolution_source VENUE_SETTLEMENT_PX`.
+
+Two drift rows remain — `2026-10-12-0030z|DOWN` ours 2 / venue 0, and
+`2026-10-14-2230z|UP` ours 2.90 / venue 0 — both flagged
+`stranded_without_stamp` and `gross_detail_lost`. They predate this campaign
+by ten days, the venue is authority and reports zero, and they carry no
+exposure. Named here so they are not mistaken for this campaign's.
+
+### The venue-confirmed lines
+
+| Window | Position | Own px | Outcome | Settled |
+|---|---|---|---|---|
+| 1330z | 4.09 UP | 0.2200 | stranded | −$0.8998 |
+| 1500z | 3.00 UP | 0.4400 | stranded | −$1.3200 |
+| **1515z** | **3 pairs (3 UP + 3 DOWN)** | **0.92 pair** | **completed** | **+$0.2400** |
+| 1530z | 3.00 DOWN | 0.4000 | stranded | −$1.2000 |
+| 1545z | 2.84 DOWN | 0.1900 | stranded | −$0.5396 |
+| 1600z / 1615z / 1630z | — | — | no fills | $0.0000 |
+| | | | **TOTAL** | **−$3.7194** |
+
+Cross-checked against the cumulative ledger rather than trusted as a sum:
+`realized_today` −7.9019 before the campaign, −11.6213 after. Delta
+−3.7194 exactly.
+
+- **Windows**: 8 spent, 5 with fills, 3 without.
+- **Fills**: 6 filled orders, 6 fill events, **0 partial fills**, 18.93
+  contracts.
+- **Paired volume**: 3 pairs = 6 contract-legs, +$0.2400, **+$0.0800 per
+  pair**.
+- **Residual**: 12.93 contracts stranded, **−$3.9594**, **−$0.3062 per
+  contract**.
+- **Commissions**: **$0.0000** — maker-only throughout, 6 maker orders, 0
+  taker orders.
+- **Credited rebates**: **$0.00**. Estimates existed (0.0092 in 1500z, 0.0143
+  in 1515z, 0.2059 campaign-wide) and are reported in their own column with
+  `eligibility UNVERIFIED_NO_VENUE_CREDIT_RECORD`. **No estimate is inside
+  realized_net_usd**, and none was credited.
+- **Completion rate**: 1 of 5 fill-bearing windows, 20%.
+
+Sides are balanced — two UP strands and two DOWN strands — so this is a
+completion failure, not a directional bias.
+
+### Evidence deployment, verified in production
+
+Three DEPLOY_TRIGGER deploys: `fb7b76cb` (module + wiring, SUCCESS 17:06:49Z),
+`a6fab1f2` (self-report), `dbe887a8`/`95bca059` (clock-domain relabel,
+SUCCESS). Verified from the running container:
+
+```
+book_evidence: attached true, attach_errors {}
+ring: appended 2088, deduped 1298, errors {}, rungs_kept 8   (1700z)
+ring: appended  963, deduped  245, errors {}                 (1715z)
+sampler: every_s 5.0, emitted 0, tracked_slugs 0
+```
+
+`attached: true` with no `attach_errors` is positive proof
+`l5_book_evidence.py` is **in the production image** — a missing file would
+have read `evidence_attach_error:ModuleNotFoundError`. The ring is taking
+real frames off the authenticated feed and deduplicating unchanged ladders.
+
+`sampler.emitted 0` is **expected and not a fault**: the sampler needs
+unmatched inventory and the book is flat. Likewise no
+`L5_FILL_BOOK_EVIDENCE` — it needs a fill, and the campaign cannot arm. Both
+remain **unexercised on live data** and that is stated rather than glossed.
+
+### Labelling, corrected rather than asserted
+
+Checking the owner's constraint against my own code found it violated. The
+ring's frame boundaries come from `LadderModel._fold`, which stamps
+`cur["t"] = now` — **our receipt clock** — and discards the frame's own
+`transactTime`. Locating a venue event between those boundaries therefore
+crosses two clocks whose offset is unmeasured, so the old constant name
+`VENUE_EVENT_TIME_SYNCHRONIZED` overclaimed. It is now
+`FRAME_IN_EFFECT_BY_LOCAL_RECEIPT_CLOCK`, and every `as_of` answer carries
+`clock_domains{frame_boundaries: LOCAL_RECEIPT, event_time: VENUE,
+offset_measured: false}` with a `consequence` field saying in words that the
+located frame is never the book at the exact venue instant.
+
+**Still unverified, and not implied otherwise:** whether the venue supplies an
+order-level timestamp at all. `order_progress` extracts none, and
+`_ack_epoch`'s own comment contemplates them being absent on ACKs. The raw
+order row is passed to `venue_event_t`, which returns None rather than
+substituting our receipt — so a real fill will read either
+`FRAME_IN_EFFECT_BY_LOCAL_RECEIPT_CLOCK` or `NO_VENUE_EVENT_TIME_SUPPLIED`,
+and which one needs a fill to learn. True venue-clock alignment would require
+the ring to keep each frame's `transactTime`; that is not done.
+
+---
+
+## 8. The next highest-impact profitability bottleneck
+
+**Complement completion, and it is now quantified rather than asserted.**
+
+The unit economics from this campaign:
+
+- a completed pair earns **+$0.0800**
+- a stranded contract loses **−$0.3062**
+
+So break-even requires **7.66 paired contract-legs per stranded contract**
+(3.83 completed pairs per stranded contract). The campaign achieved **0.464**
+— a **16.5× shortfall**. Pairs are not the problem: every pair this system
+has ever completed has been profitable, 5 of 5 across all windows, and the
+1515z pair returned +0.0800 against the +0.0824 the frozen corpus implies.
+The problem is solely how rarely a first leg gets completed.
+
+**And §6 identifies the mechanism, not just the symptom.** Two structural
+properties compound:
+
+1. `max_live_orders = 1` makes the pair **strictly sequential**, so the
+   complement is always priced against a later book than the plan. The
+   0.9500 in 1500z was both legs priced off one snapshot — at no instant
+   could both have been live orders.
+2. The complement is re-priced only about **every 33 seconds**, so a
+   fee-safe condition narrower than that is missed regardless of the book.
+
+Our first leg rests two ticks *behind* the touch, so it fills only when the
+market comes through it. The fill is therefore itself evidence of adverse
+movement, and the sequential structure converts that into a systematic cost.
+
+**What the deployed evidence will decide, and why I am not choosing now.**
+The next authorized campaign's `L5_FILL_BOOK_EVIDENCE` and
+`L5_RESIDUAL_BOOK_SAMPLE` give the distribution of whether a fee-safe
+complement was ever *displayed* during unmatched intervals, and the
+queue-ahead when it was. That discriminates between four remedies —
+concurrent legs, a faster complement cadence, less aggressive entry, or
+accepting the residual — which are not equivalent and which one window cannot
+rank.
+
+One pointer worth recording, because prior work already priced part of it:
+only **concurrent legs** removes the structural cause rather than mitigating
+it, `L5_MAX_LIVE_ORDERS` already exists as a variable, and the N=2 audit
+(commit `1b5ccb45`) found the **cash obligation does not rise at N=2**,
+because the gate already reserves both legs whether they rest together or in
+sequence. It also introduces a state the live system has never been in — both
+legs filling against a transient imbalance — which that audit said must be
+exercised in shadow first. **This is not a recommendation to deploy and no
+such change is included. It requires separate authorization.**
