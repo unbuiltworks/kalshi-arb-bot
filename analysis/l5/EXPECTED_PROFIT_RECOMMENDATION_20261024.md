@@ -1,3 +1,7 @@
+> **RETRACTED 2026-10-24.** Its L5 figures came from a corrupt dedup (+$45,751 instead of the authoritative +$345,525.64), its action mix from a broken classifier (96.3% COMPLEMENT instead of 44.91% REDUCE), its decomposition from a convention it did not test, and its 66/66 claim from treating a later complement as impossible. See
+> `analysis/l5/CRITICAL_REVIEW_RECONCILIATION_20261024.md`
+> for the reconciliation and the retractions.
+
 # One recommendation: complete on the fill event, at the price the fill makes available
 
 **2026-10-24.** Stage 1 lost **−$3.7194** venue-confirmed. Live trading is

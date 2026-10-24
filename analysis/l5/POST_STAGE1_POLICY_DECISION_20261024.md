@@ -1,3 +1,7 @@
+> **RETRACTED 2026-10-24.** Its rejection of option B rested on 33s-sampled observations and missed that the fill instant was never sampled; its ceiling arithmetic stands but its conclusion does not. See
+> `analysis/l5/CRITICAL_REVIEW_RECONCILIATION_20261024.md`
+> for the reconciliation and the retractions.
+
 # Post-Stage-1 profitability decision: A / B / C / D
 
 **2026-10-24.** Stage 1 closed and reconciled at **−$3.7194** realized net.

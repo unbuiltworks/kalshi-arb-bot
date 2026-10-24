@@ -1,3 +1,18 @@
+"""SUPERSEDED AND KNOWN WRONG -- see
+analysis/l5/CRITICAL_REVIEW_RECONCILIATION_20261024.md
+
+Two defects, both material:
+  1. the dedup key included `price`, so the 18 repeated fetch passes
+     over the early offsets survived as 16,170 duplicate rows and
+     +$327,737 of phantom spend;
+  2. the action classifier tested `held_other > 0`, which calls
+     buying the already-short side a complement.
+
+Use analysis/l5/l5_authoritative_reconstruction.py instead: it
+reproduces the pinned artefact to the cent and classifies on
+|imbalance|.
+"""
+
 """Split L5's realized BTC15m P&L into MATCHED and RESIDUAL components.
 
 WHY IT MATTERS. If L5's residual carrying is a net cost that his matched
