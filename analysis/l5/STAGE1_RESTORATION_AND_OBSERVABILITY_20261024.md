@@ -243,6 +243,30 @@ AST. It is handed books as data and returns dicts; it has no object through whic
 it could size, price, submit, cancel or refuse anything. Entry, sizing,
 repricing and cancellation policy are untouched, and no new service is involved.
 
+### Regression, measured by stashing rather than asserted
+
+| Run | Failed | Passed | Errors |
+|---|---|---|---|
+| Baseline (these files moved aside) | 58 | 13023 | 23 |
+| Module only | 58 | 13062 | 23 |
+| **Module + wiring (committed)** | **58** | **13074** | **23** |
+
+The failure and error ID sets are **byte-identical** across all three — 81 ids,
+empty `diff` — and passes rise by exactly the test count each time (+39, then
++51 with the venue-timestamp tests). The 58 failures and 23 errors are all
+pre-existing: `test_gemini_q1_runner_wiring`, byte-identity pins on files this
+work does not touch, `test_pmus_auth` signature pins, and the three `httpx`
+collection errors.
+
+The one new failure this work did cause was
+`test_l5_live_runner_graft.py::test_the_image_copies_every_module_the_entrypoint_can_reach`
+— absent from the baseline, so unambiguously mine. The new module is reachable
+from the entrypoint and was missing from the Dockerfile `COPY` list, exactly as
+`l5_window_accounting` was last time. Added and re-run green. Without it the
+module would have been absent from the image and the wiring would have failed
+closed into `evidence_attach_error:ModuleNotFoundError` — recording nothing,
+and breaking nothing.
+
 **Deployment is deliberately held.** Wiring it in requires a restart, and the
 restart at 14:55 already cost the 1445z window (`PAST_ENTRY_WITH_NO_INVENTORY`,
 603s in, `claim_taken: false`). With a live 3-contract residual carried to
