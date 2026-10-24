@@ -1157,17 +1157,29 @@ def test_the_two_variants_keep_separate_books_and_files(tmp_path):
     assert b.inventory_for(SLUG).yes == 0, "the books are shared"
 
 
-def test_the_canonical_variant_set_is_four_and_names_the_depth_arm():
+def test_the_canonical_variant_set_is_five_and_names_both_offset_arms():
+    """Four at-touch/depth arms plus the two-sided arm. The two-sided arm
+    sits at the SAME offset as the depth arm, so the pair differs in
+    two-sidedness alone."""
     labels = [v[0] for v in sc.SHADOW_VARIANTS]
-    assert len(labels) == 4, labels
+    assert len(labels) == 5, labels
     assert labels.count("ARGMAX") == 1
     deep = [v for v in sc.SHADOW_VARIANTS if v[2] == sc.ONE_TICK_BEHIND]
     assert len(deep) == 1
     assert deep[0] == ("ARGMAX@ONE_TICK_BEHIND", sc.BASELINE_POLICY,
                        sc.ONE_TICK_BEHIND)
+    two = [v for v in sc.SHADOW_VARIANTS if v[2] == sc.TWO_SIDED]
+    assert len(two) == 1
+    assert two[0] == ("ARGMAX@TWO_SIDED", sc.BASELINE_POLICY, sc.TWO_SIDED)
+    # the controlled comparison: same policy, same offset, differing only
+    # in whether both sides may rest
+    assert sc.PLACEMENT_TICKS[sc.TWO_SIDED] == \
+        sc.PLACEMENT_TICKS[sc.ONE_TICK_BEHIND]
+    assert sc.PLACEMENT_TWO_SIDED[sc.TWO_SIDED] is True
+    assert sc.PLACEMENT_TWO_SIDED[sc.ONE_TICK_BEHIND] is False
     # distinct durable files, so no two variants can share state
     files = {sc.variant_state_filename(l) for l in labels}
-    assert len(files) == 4, files
+    assert len(files) == 5, files
 
 
 def test_a_tally_from_an_older_taxonomy_is_discarded_not_merged(tmp_path):
@@ -1232,3 +1244,193 @@ def test_the_residual_cap_really_does_land_in_justified_now():
     t = c._tally(sc.HEADLINE_SCENARIO)
     assert t["possible_misses"] == 0
     assert t["justified_refusals"] == 202
+
+
+# ================================================ TWO-SIDED RESTING ARM
+#
+# The hypothesis under test: our pair cost is a market outcome rather than a
+# quoting parameter because only one side may rest, so an adversely selected
+# fill has no opposite leg already positioned. Nothing here asserts the
+# hypothesis is TRUE -- these pin the mechanism so the shadow comparison
+# measures two-sidedness and nothing else.
+
+def _seed_up(c, lad):
+    """Hand-place an UP order so the policy's wanted DOWN is the OPPOSITE
+    side. Discovered empirically: from flat, the fixture policy quotes NO."""
+    o = FM.HypoOrder(SLUG, FM.UP, D("0.49"), D(1), WS + 300.0, ladder=lad,
+                     bid="0.50", ask="0.51", coid="seed")
+    c._orders_for(SLUG, sc.HEADLINE_SCENARIO)[FM.UP] = o
+    scn = c._scen(SLUG, sc.HEADLINE_SCENARIO)
+    c._set_resting(scn, {FM.UP: {"side": "YES", "price": "0.49",
+                                 "relation": "open", "t": WS + 300.0,
+                                 "_side_key": FM.UP}})
+    return o
+
+
+def test_from_flat_both_arms_quote_the_same_side_at_the_same_price(tmp_path):
+    """The controlled comparison: differing only in two-sidedness means the
+    FIRST quote must be identical."""
+    seen = {}
+    for placement in (sc.ONE_TICK_BEHIND, sc.TWO_SIDED):
+        c = ctl(tmp_path / placement, placement=placement)
+        lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+        r = c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+                   window_end_ts=WEND, prints=[], ladder=lad)
+        seen[placement] = (r.get("decision"), r.get("side"),
+                           r.get("target_price"))
+        assert c.offset_ticks == 1
+    assert seen[sc.ONE_TICK_BEHIND] == seen[sc.TWO_SIDED], seen
+
+
+def test_the_same_side_is_never_requoted_on_either_arm(tmp_path):
+    """Re-pricing a resting order toward a newer price is chasing. Neither
+    arm may do it -- two-sidedness adds the OPPOSITE side, not a re-quote."""
+    for placement in (sc.ONE_TICK_BEHIND, sc.TWO_SIDED):
+        c = ctl(tmp_path / placement, placement=placement)
+        lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+        c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+               window_end_ts=WEND, prints=[], ladder=lad)
+        resting = sorted(c._orders_for(SLUG, sc.HEADLINE_SCENARIO))
+        r2 = c.step(WS + 330.0, slug=SLUG, book=_book("0.50", "0.51"),
+                    window_end_ts=WEND, prints=[], ladder=lad)
+        assert r2.get("reason") == "already_resting", placement
+        assert r2.get("already_resting_side") == "SAME_SIDE", placement
+        assert sorted(c._orders_for(SLUG, sc.HEADLINE_SCENARIO)) == resting
+
+
+def test_one_sided_refuses_the_opposite_side_and_says_which(tmp_path):
+    """REQUIREMENT 1. The old counter fired before the side was decided, so
+    66,044 `already_resting` refusals could not be split. Now they can."""
+    c = ctl(tmp_path, placement=sc.ONE_TICK_BEHIND)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    _seed_up(c, lad)
+    r = c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+               window_end_ts=WEND, prints=[], ladder=lad)
+    assert r.get("decision") == "no_action"
+    assert r.get("reason") == "already_resting"
+    assert r.get("already_resting_side") == "OPPOSITE_SIDE"
+    assert r.get("resting_sides") == [FM.UP]
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["already_resting_opposite_side"] == 1
+    assert t["already_resting_same_side"] == 0
+    # the reason STRING is unchanged, so the taxonomy version need not move
+    assert "already_resting" in sc.JUSTIFIED_REFUSALS
+    assert sc.TALLY_TAXONOMY == 2
+
+
+def test_two_sided_rests_the_opposite_side_instead_of_refusing(tmp_path):
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    _seed_up(c, lad)
+    r = c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+               window_end_ts=WEND, prints=[], ladder=lad)
+    assert r.get("decision") == "quote", r.get("reason")
+    assert sorted(c._orders_for(SLUG, sc.HEADLINE_SCENARIO)) == [FM.DOWN,
+                                                                 FM.UP]
+
+
+def test_a_fill_on_one_side_leaves_the_other_resting(tmp_path):
+    """The whole point: an adversely selected fill must not take the
+    opposite leg down with it."""
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    _seed_up(c, lad)
+    c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+           window_end_ts=WEND, prints=[], ladder=lad)
+    orders = c._orders_for(SLUG, sc.HEADLINE_SCENARIO)
+    assert sorted(orders) == [FM.DOWN, FM.UP]
+    up_px = orders[FM.UP].own_px
+    # volume through the UP level only
+    r = c.step(WS + 340.0, slug=SLUG, book=_book("0.50", "0.51"),
+               window_end_ts=WEND,
+               prints=[_print(up_px, "500", t=WS + 335.0)], ladder=lad)
+    still = sorted(c._orders_for(SLUG, sc.HEADLINE_SCENARIO))
+    if r.get("modelled_fills"):
+        assert FM.UP not in still, still          # the filled side cleared
+        assert FM.DOWN in still, still            # the other still resting
+        assert c._scen(SLUG, sc.HEADLINE_SCENARIO)["resting"] is not None
+
+
+def test_inventory_and_the_residual_cap_still_see_TOTAL_inventory(tmp_path):
+    """AGGREGATE EXPOSURE IS PRESERVED. Per-side ORDER state must not become
+    per-side INVENTORY, or the residual cap would be evaluated twice over
+    halves of the book and bound nothing."""
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    inv = c.inventory_for(SLUG, sc.HEADLINE_SCENARIO)
+    inv.record(True, D("0.40"))
+    inv.record(True, D("0.41"))
+    c._store_inventory(SLUG, inv, sc.HEADLINE_SCENARIO)
+    snap = c.inventory_for(SLUG, sc.HEADLINE_SCENARIO).snapshot()
+    assert snap["yes"] == 2 and snap["no"] == 0
+    assert snap["residual"] == 2 and snap["matched"] == 0
+    # one inventory object per scenario, not one per side
+    assert c.inventory_for(SLUG, sc.HEADLINE_SCENARIO).snapshot() == snap
+
+
+def test_resting_keeps_its_legacy_single_shape_for_existing_readers(tmp_path):
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    _seed_up(c, lad)
+    c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+           window_end_ts=WEND, prints=[], ladder=lad)
+    rest = c._scen(SLUG, sc.HEADLINE_SCENARIO)["resting"]
+    # still ONE dict with the original keys, so nothing downstream breaks
+    assert isinstance(rest, dict)
+    for k in ("side", "price", "relation", "t"):
+        assert k in rest, k
+    assert len(c._resting_map(c._scen(SLUG, sc.HEADLINE_SCENARIO))) == 2
+
+
+def test_a_legacy_state_file_migrates_rather_than_being_discarded(tmp_path):
+    """Persisted state from before this change holds a single `resting`
+    dict with no side key. The inventory beside it is real."""
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    scn = c._scen(SLUG, sc.HEADLINE_SCENARIO)
+    scn["resting"] = {"side": "NO", "price": "0.49", "relation": "open",
+                      "t": WS}
+    scn.pop("resting_sides", None)
+    m = c._resting_map(scn)
+    assert list(m) == [FM.DOWN], m
+    scn["resting"] = {"side": "YES", "price": "0.49", "relation": "open",
+                      "t": WS}
+    assert list(c._resting_map(scn)) == [FM.UP]
+
+
+def test_both_unfilled_sides_are_counted_at_expiry(tmp_path):
+    """Counting one would flatter a two-sided arm's fill rate."""
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    _seed_up(c, lad)
+    c.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
+           window_end_ts=WEND, prints=[], ladder=lad)
+    assert len(c._resting_map(c._scen(SLUG, sc.HEADLINE_SCENARIO))) == 2
+    before = c._tally(sc.HEADLINE_SCENARIO)["unfilled_at_expiry"]
+    c.window_close(SLUG)
+    after = c._tally(sc.HEADLINE_SCENARIO)["unfilled_at_expiry"]
+    assert after - before == 2, (before, after)
+    assert c._scen(SLUG, sc.HEADLINE_SCENARIO)["resting"] is None
+    assert not c._resting_map(c._scen(SLUG, sc.HEADLINE_SCENARIO))
+
+
+def test_the_report_names_the_arm_and_its_resting_sides(tmp_path):
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    rep = c.report()
+    assert rep["two_sided"] is True
+    assert rep["placement"] == sc.TWO_SIDED
+    assert rep["offset_ticks"] == 1
+    one = ctl(tmp_path / "b", placement=sc.ONE_TICK_BEHIND).report()
+    assert one["two_sided"] is False
+
+
+def test_two_fills_in_one_tick_are_both_counted(tmp_path):
+    """A one-sided arm's list holds 0 or 1 and the count is unchanged; a
+    two-sided arm can fill both sides at once and must not report one."""
+    c = ctl(tmp_path, placement=sc.TWO_SIDED)
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    f = {"swept": True, "queue_ahead_at_placement": "0",
+         "adverse_selection": {"adverse": True, "moved_against_us": "0.01"}}
+    c._tally_record({"scenario": sc.HEADLINE_SCENARIO, "decision": "no_action",
+                     "modelled_fill": f, "modelled_fills": [f, dict(f)]})
+    assert t["fills"] == 2
+    assert t["both_sides_filled_same_tick"] == 1
+    assert t["adverse_fills"] == 2

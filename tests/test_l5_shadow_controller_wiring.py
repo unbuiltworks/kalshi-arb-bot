@@ -597,12 +597,18 @@ def test_both_policies_run_with_separate_inventories(tmp_path, monkeypatch):
     cs = runner.shadow_controller()
     assert set(cs) == {a[0] for a in SC.SHADOW_VARIANTS}
     assert SC.BASELINE_POLICY in cs
-    # the placement arm is present, is the baseline policy, and is the only
-    # arm resting away from the touch
-    deep = [lbl for lbl, c in cs.items() if c.placement != SC.AT_TOUCH]
-    assert deep == ["%s@%s" % (SC.BASELINE_POLICY, SC.ONE_TICK_BEHIND)], deep
-    assert cs[deep[0]].policy == SC.BASELINE_POLICY
-    assert cs[deep[0]].offset_ticks == 1
+    # the two offset arms are present, both on the baseline policy, both
+    # one tick behind the touch, and they differ ONLY in two-sidedness
+    deep = sorted(lbl for lbl, c in cs.items() if c.placement != SC.AT_TOUCH)
+    assert deep == sorted([
+        "%s@%s" % (SC.BASELINE_POLICY, SC.ONE_TICK_BEHIND),
+        "%s@%s" % (SC.BASELINE_POLICY, SC.TWO_SIDED)]), deep
+    for lbl in deep:
+        assert cs[lbl].policy == SC.BASELINE_POLICY
+        assert cs[lbl].offset_ticks == 1
+    one = cs["%s@%s" % (SC.BASELINE_POLICY, SC.ONE_TICK_BEHIND)]
+    two = cs["%s@%s" % (SC.BASELINE_POLICY, SC.TWO_SIDED)]
+    assert one.two_sided is False and two.two_sided is True
     paths = {c.state_path for c in cs.values()}
     assert len(paths) == len(cs), paths
     for name in (a[0] for a in SC.SHADOW_VARIANTS):

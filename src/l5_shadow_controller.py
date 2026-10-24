@@ -256,10 +256,30 @@ def normalise_book(book: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]
 #: results.
 AT_TOUCH = "AT_TOUCH"
 ONE_TICK_BEHIND = "ONE_TICK_BEHIND"
-PLACEMENTS = (AT_TOUCH, ONE_TICK_BEHIND)
+
+#: TWO_SIDED rests UP and DOWN INDEPENDENTLY, one order per side, at the
+#: SAME one-tick offset as ONE_TICK_BEHIND -- so the only difference between
+#: those two arms is two-sidedness, not depth. It exists to test one
+#: hypothesis: that our pair cost is a market outcome rather than a quoting
+#: parameter because `max_live_orders = 1` lets only one side rest, so an
+#: adversely selected fill has no opposite leg already positioned to
+#: complete it. 66,044 `already_resting` refusals is the mechanical
+#: expression of that limit.
+#:
+#: IT IS A HYPOTHESIS, NOT A FINDING. No direct evidence shows L5 quotes a
+#: fixed simultaneous offset; what is evidenced is that his pair cost is
+#: invariant to price range (r = -0.0006) and to his own leg count
+#: (r = +0.0094), and that 40.3% of his price levels fill over >= 30s.
+TWO_SIDED = "TWO_SIDED"
+PLACEMENTS = (AT_TOUCH, ONE_TICK_BEHIND, TWO_SIDED)
 
 #: offset in ticks, by placement
-PLACEMENT_TICKS = {AT_TOUCH: 0, ONE_TICK_BEHIND: 1}
+PLACEMENT_TICKS = {AT_TOUCH: 0, ONE_TICK_BEHIND: 1, TWO_SIDED: 1}
+
+#: may this arm rest both sides at once? Keyed by placement so the runner,
+#: the state filename and the variant label all keep working unchanged.
+PLACEMENT_TWO_SIDED = {AT_TOUCH: False, ONE_TICK_BEHIND: False,
+                       TWO_SIDED: True}
 
 
 def _utc_now() -> str:
@@ -330,7 +350,11 @@ def variant_state_filename(label: str) -> str:
 SHADOW_VARIANTS = tuple(
     [(p, p, AT_TOUCH) for p in sorted(POLICIES)]
     + [(variant_label(BASELINE_POLICY, ONE_TICK_BEHIND),
-        BASELINE_POLICY, ONE_TICK_BEHIND)])
+        BASELINE_POLICY, ONE_TICK_BEHIND),
+       # the two-sided arm, at the SAME offset as the arm above it, so the
+       # pair is a controlled comparison of two-sidedness alone.
+       (variant_label(BASELINE_POLICY, TWO_SIDED),
+        BASELINE_POLICY, TWO_SIDED)])
 
 
 class ShadowController:
@@ -354,6 +378,7 @@ class ShadowController:
         #: through theirs.
         self.placement = str(placement)
         self.offset_ticks = PLACEMENT_TICKS[self.placement]
+        self.two_sided = PLACEMENT_TWO_SIDED[self.placement]
         #: THE VARIANT'S OWN NAME, on every record. `policy` alone cannot
         #: identify a variant once two share a policy: the placement
         #: variant IS ARGMAX, and a consumer filtering on policy would
@@ -502,6 +527,7 @@ class ShadowController:
                 if isinstance(sc, dict) and sc.get("resting") is not None:
                     dropped.append("%s|%s" % (slug, scenario))
                     sc["resting"] = None
+                    sc["resting_sides"] = None
         return {"dropped_resting_records": len(dropped),
                 "dropped": sorted(dropped)[:STRANDED_REPORT_CAP],
                 "inventory_carried": True,
@@ -572,11 +598,62 @@ class ShadowController:
         except OSError:
             pass                      # state is a diagnostic, never a gate
 
+    # ------------------------------------------------- per-side resting
+    #
+    # `sc["resting"]` IS PERSISTED, and older state files hold either None or
+    # a single {"side":...,"price":...} dict from when one order could rest.
+    # Both shapes are migrated on read rather than discarded, because the
+    # inventory beside them is real.
+    @staticmethod
+    def _resting_map(sc: Dict[str, Any]) -> Dict[str, Any]:
+        """Per-side resting metadata, keyed by FM.UP / FM.DOWN.
+
+        `sc["resting"]` KEEPS ITS ORIGINAL SHAPE -- one dict or None -- so
+        every existing reader, report and test sees exactly what it saw
+        before. The per-side map lives beside it under `resting_sides` and is
+        migrated from the legacy single on first read, because the inventory
+        next to it is real and must not be discarded.
+        """
+        m = sc.get("resting_sides")
+        if isinstance(m, Mapping) and m:
+            return {str(k): v for k, v in m.items() if v is not None}
+        r = sc.get("resting")
+        if isinstance(r, Mapping) and r.get("_side_key"):
+            return {str(r["_side_key"]): dict(r)}
+        if isinstance(r, Mapping):                    # legacy, side unknown
+            return {FM.UP if str(r.get("side", "")).upper() in ("YES", "UP")
+                    else FM.DOWN: dict(r)}
+        return {}
+
+    @staticmethod
+    def _set_resting(sc: Dict[str, Any], m: Mapping[str, Any]) -> None:
+        clean = {k: v for k, v in m.items() if v is not None}
+        sc["resting_sides"] = clean or None
+        # the legacy single view: the most recently placed side, or None.
+        if not clean:
+            sc["resting"] = None
+        else:
+            newest = max(clean.values(), key=lambda v: (v or {}).get("t") or 0)
+            sc["resting"] = dict(newest)
+
+    def _orders_for(self, slug: str, scenario: str) -> Dict[str, Any]:
+        """This scenario's live order objects, keyed by side. Not persisted."""
+        per = self._orders.setdefault(slug, {})
+        cur = per.get(scenario)
+        if cur is None:
+            cur = {}
+            per[scenario] = cur
+        elif not isinstance(cur, dict):           # legacy single order object
+            cur = {getattr(cur, "side", FM.UP): cur}
+            per[scenario] = cur
+        return cur
+
     # ---------------------------------------------------------- inventory
     @staticmethod
     def _fresh_scenario() -> Dict[str, Any]:
         return {"yes": 0, "no": 0, "yes_cost": "0", "no_cost": "0",
-                "last_rel": "", "resting": None, "settled": None}
+                "last_rel": "", "resting": None, "resting_sides": None,
+                "settled": None}
 
     def _slot(self, slug: str) -> Dict[str, Any]:
         m = self.state.setdefault("markets", {})
@@ -648,21 +725,37 @@ class ShadowController:
         assuming cancels help us is the easiest way to manufacture a fill.
         An unknown queue NEVER fills except on a sweep.
         """
-        order = (self._orders.get(slug) or {}).get(scenario)
-        if order is None:
-            return None
-        if prints:
-            order.advance(prints)
-        if not order.filled.get(scenario):
-            return None
+        orders = self._orders_for(slug, scenario)
+        if not orders:
+            return []
+        out = []
+        for side in list(orders):
+            order = orders.get(side)
+            if order is None:
+                orders.pop(side, None)
+                continue
+            if prints:
+                order.advance(prints)
+            if not order.filled.get(scenario):
+                continue
+            got = self._book_one_fill(slug, scenario, side, order, book)
+            if got is not None:
+                out.append(got)
+        return out
+
+    def _book_one_fill(self, slug, scenario, side, order, book):
+        """One modelled fill: inventory, state, and its record. Only the
+        side that filled is cleared -- the opposite side keeps resting, which
+        is the whole point of the two-sided arm."""
         sc = self._scen(slug, scenario)
         inv = self.inventory_for(slug, scenario)
         inv.record(order.side == FM.UP, order.own_px)
         self._store_inventory(slug, inv, scenario)
-        rest = sc.get("resting") or {}
-        sc["resting"] = None
+        m = self._resting_map(sc)
+        rest = m.pop(str(side), None) or {}
+        self._set_resting(sc, m)
         sc["last_rel"] = str(rest.get("relation") or sc.get("last_rel") or "")
-        self._orders.setdefault(slug, {})[scenario] = None
+        self._orders_for(slug, scenario).pop(str(side), None)
         rec = order.record()
         return {"filled_by": FILL_RULE, "scenario": scenario,
                 "side": "YES" if order.side == FM.UP else "NO",
@@ -741,27 +834,57 @@ class ShadowController:
     def _step_one(self, now, slug, scenario, book, fresh, ladder, tte,
                   base, window_end_ts) -> Dict[str, Any]:
         """This scenario's own decision, over its own inventory."""
-        fill = self._advance_resting(slug, scenario, book, fresh)
+        fills = self._advance_resting(slug, scenario, book, fresh)
         sc = self._scen(slug, scenario)
         inv = self.inventory_for(slug, scenario)
         rec = {**base, "scenario": scenario,
                "tte_s": round(float(tte), 1),
                "inventory": inv.snapshot(),
                "window_end_ts": window_end_ts,
-               "modelled_fill": fill}
+               # `modelled_fill` keeps its old shape -- the first fill, or
+               # None -- so every existing reader is unaffected. Two sides
+               # CAN fill in one tick, so the full list rides alongside and
+               # the tally counts from it.
+               "modelled_fill": (fills[0] if fills else None),
+               "modelled_fills": fills}
         prop = l5d._proposal(self.model, float(book["bid"]), inv,
                              str(sc.get("last_rel") or ""), tte_s=tte)
         rec["state"] = prop.get("state")
         if prop.get("off_distribution"):
             return self._out({**rec, "decision": "no_action",
                               "reason": "v2_off_distribution"})
-        # ONE OUTSTANDING ORDER PER SCENARIO, as live allows one live order.
-        # A scenario already resting does not re-quote: re-pricing a
-        # resting maker order toward a newer price is chasing under another
-        # name, and the deployed engine has no method for it.
-        if (self._orders.get(slug) or {}).get(scenario) is not None:
-            return self._out({**rec, "decision": "no_action",
-                              "reason": "already_resting"})
+        # ONE OUTSTANDING ORDER PER SIDE -- or, on a one-sided arm, per
+        # scenario, exactly as before. A scenario already resting does not
+        # RE-QUOTE THE SAME SIDE: re-pricing a resting maker order toward a
+        # newer price is chasing under another name, and the deployed engine
+        # has no method for it. What the two-sided arm adds is the OPPOSITE
+        # side, which is a different order, not a re-price.
+        resting = dict(self._orders_for(slug, scenario))
+        if resting:
+            # WHICH side would we have wanted? The old counter could not say,
+            # because this gate fired before the side was decided -- so
+            # 66,044 `already_resting` refusals could not be split into
+            # genuine opposite-side opportunities and mere same-side
+            # re-quotes. Computed for the diagnostic only, and wrapped: a
+            # modelling failure here must not become a controller_error that
+            # the old code would never have raised.
+            want = ""
+            try:
+                _rel = self.policy_fn(prop, inv, book, tte)
+                _plan = l5d.plan_action(_rel, inv, book,
+                                        pair_cap=self.pair_cap)
+                if _plan.get("decision") == "quote":
+                    want = FM.UP if _plan.get("_side_yes") else FM.DOWN
+            except Exception:                              # noqa: BLE001
+                want = ""
+            diag = ("SIDE_UNKNOWN" if not want else
+                    ("SAME_SIDE" if want in resting else "OPPOSITE_SIDE"))
+            if (not self.two_sided) or (not want) or (want in resting):
+                return self._out({**rec, "decision": "no_action",
+                                  "reason": "already_resting",
+                                  "already_resting_side": diag,
+                                  "resting_sides": sorted(resting)})
+            # two-sided, and the side we want is free: fall through.
         rel = self.policy_fn(prop, inv, book, tte)
         rec["model_argmax"] = prop.get("recommended_relation")
         plan = l5d.plan_action(rel, inv, book, pair_cap=self.pair_cap)
@@ -800,9 +923,12 @@ class ShadowController:
             return self._out({**rec, "decision": "no_action",
                               "relation": plan.get("relation"),
                               "reason": "would_cross_not_a_maker_quote"})
-        self._orders.setdefault(slug, {})[scenario] = order
-        sc["resting"] = {"side": plan["side"], "price": str(px),
-                         "relation": plan.get("relation"), "t": now}
+        self._orders_for(slug, scenario)[str(order.side)] = order
+        m = self._resting_map(sc)
+        m[str(order.side)] = {"side": plan["side"], "price": str(px),
+                              "relation": plan.get("relation"), "t": now,
+                              "_side_key": str(order.side)}
+        self._set_resting(sc, m)
         sc["last_rel"] = str(plan.get("relation") or "")
         rec["queue_ahead_at_placement"] = (
             None if order.queue_ahead is None else str(order.queue_ahead))
@@ -830,9 +956,17 @@ class ShadowController:
         for scenario in SCENARIOS:
             sc = slot["scen"][scenario]
             inv = self.inventory_for(slug, scenario)
-            dropped, sc["resting"] = sc.get("resting"), None
+            dropped_map = self._resting_map(sc)
+            legacy_dropped = sc.get("resting")
+            sc["resting"] = None
+            sc["resting_sides"] = None
             t = self._tally(scenario)
             t["windows_observed"] += 1
+            for _ in range(max(0, len(dropped_map) - 1)):
+                # a two-sided arm can leave TWO unfilled quotes at expiry,
+                # and counting one would flatter its fill rate.
+                t["unfilled_at_expiry"] += 1
+            dropped = legacy_dropped
             if dropped is not None:
                 # A quote that never filled and cannot survive expiry. This
                 # is the denominator half of the fill rate: counting fills
@@ -1161,7 +1295,17 @@ class ShadowController:
                 "queue_known_fills": 0, "queue_unknown_fills": 0,
                 "swept_fills": 0,
                 "ticks_with_book": 0, "ticks_without_book": 0,
-                "windows_observed": 0, "windows_zero_trade": 0}
+                "windows_observed": 0, "windows_zero_trade": 0,
+                # REQUIREMENT 1: split `already_resting` into the refusals a
+                # two-sided arm could actually have acted on and the ones it
+                # could not. The reason string is deliberately UNCHANGED, so
+                # TALLY_TAXONOMY stays at 2 and the bucket remains
+                # comparable across this change.
+                "already_resting_opposite_side": 0,
+                "already_resting_same_side": 0,
+                "already_resting_side_unknown": 0,
+                # a two-sided arm can fill both sides in one tick
+                "both_sides_filled_same_tick": 0}
 
     def _tally(self, scenario: str) -> Dict[str, Any]:
         t = self.state.setdefault("tally", {})
@@ -1204,8 +1348,23 @@ class ShadowController:
             key = reason or "policy_declined"
             t["refusal_reasons"][key] = \
                 int(t["refusal_reasons"].get(key, 0)) + 1
-        f = d.get("modelled_fill")
-        if isinstance(f, Mapping):
+        side_diag = d.get("already_resting_side")
+        if side_diag == "OPPOSITE_SIDE":
+            t["already_resting_opposite_side"] += 1
+        elif side_diag == "SAME_SIDE":
+            t["already_resting_same_side"] += 1
+        elif side_diag == "SIDE_UNKNOWN":
+            t["already_resting_side_unknown"] += 1
+        # COUNT EVERY FILL, not just the first. On a one-sided arm the list
+        # holds 0 or 1 and this is identical to what it replaced.
+        many = d.get("modelled_fills")
+        fills = [x for x in (many if isinstance(many, list) else [])
+                 if isinstance(x, Mapping)]
+        if not fills and isinstance(d.get("modelled_fill"), Mapping):
+            fills = [d["modelled_fill"]]
+        if len(fills) > 1:
+            t["both_sides_filled_same_tick"] += 1
+        for f in fills:
             t["fills"] += 1
             if f.get("swept"):
                 t["swept_fills"] += 1
@@ -1279,8 +1438,10 @@ class ShadowController:
                 "state_discontinuity": self.discontinuity(),
                 "boot": self.state.get("boot"),
                 "tally_reset": self.state.get("tally_reset"),
-                "resting_now": {sc: bool((self._orders.get(k) or {}).get(sc))
-                                for sc in SCENARIOS
-                                for k in list(self._orders)[:1]} or None,
+                "two_sided": self.two_sided,
+                "resting_now": {sc: sorted(
+                    ((self._orders.get(k) or {}).get(sc) or {}))
+                    for sc in SCENARIOS
+                    for k in list(self._orders)[:1]} or None,
                 "labels": ("independent inventory-driven decision source; "
                            "holds no transport and defines no order path")}

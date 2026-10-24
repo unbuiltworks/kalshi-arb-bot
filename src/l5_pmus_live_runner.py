@@ -2892,13 +2892,18 @@ class Runner:
         A modelled fill is never suppressed -- it is the only event here
         that changes state.
         """
-        pol = "%s|%s" % (doc.get("policy") or "?", doc.get("scenario"))
+        # KEYED PER VARIANT, not per policy. Three arms share the policy
+        # name ARGMAX, and two of them now share an offset as well, so their
+        # (decision, relation, side, target_price, reason) keys are
+        # identical tick after tick -- whichever decided first muted the
+        # other entirely and the controlled comparison silently stopped
+        # existing. It did not bite while the two ARGMAX arms differed in
+        # target_price; adding a second arm at the same depth exposed it.
+        pol = "%s|%s" % (doc.get("variant") or doc.get("policy") or "?",
+                         doc.get("scenario"))
         key = (doc.get("decision"), doc.get("relation"), doc.get("side"),
                doc.get("target_price"), doc.get("reason"))
         t = float(self.now_t or 0.0)
-        # KEYED PER POLICY. A shared key would let whichever policy decided
-        # first mute the other's identical-looking record, and the pair
-        # would stop being comparable.
         if (key == self._shadow_last_key.get(pol)
                 and (t - self._shadow_last_emit_t.get(pol, 0.0)) < SHADOW_EMIT_S
                 and not doc.get("modelled_fill")):
