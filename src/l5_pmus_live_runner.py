@@ -478,6 +478,18 @@ class FrameFanout:
                            "each other")}
 
 
+def _gates_realized(runner: Any) -> Any:
+    """The account's realized figure for the campaign-budget telemetry block,
+    or None. REPORTING ONLY, and it must never break a heartbeat: an
+    unreadable store yields None, which simply omits the derived field."""
+    try:
+        return runner.store.realized_today()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+
 def acc_stale_by_distance(runner: Any, now: float, slug: Any,
                           live: Mapping[str, Any],
                           *, skip: Any = ()) -> List[str]:
@@ -1132,8 +1144,10 @@ class Runner:
         # refuses to arm -- never that cash is unlimited.
         self.executor.available_cash_usd = None
         emit("L5_LIVE_GATES", {
-            "validation_gates": (self.executor.validation_gates.as_dict()
-                                 if self.executor.validation_gates else None),
+            "validation_gates": (
+                self.executor.validation_gates.as_dict(
+                    realized_usd=_gates_realized(self))
+                if self.executor.validation_gates else None),
             "halt_gate_configured": self.executor.halt_gate is not None,
             "halt_url_env": HALT_URL_ENV,
             "available_cash_usd": None,
@@ -2338,9 +2352,30 @@ class Runner:
             # invisible in the one place it should have been obvious.
             # Missing identity stays missing, and is named.
             m = e.get("market")
+            # ===== THE EMITTER'S OWN CLOCK, because the log's is not ours.
+            #
+            # Railway stamps a line when it INGESTS it, and that lag is
+            # bimodal: across the eleven live orders of the 20261024a
+            # campaign it ran 0.029, 0.047, 0.069, 0.106, 0.129, 2.905,
+            # 3.675, 5.337, 7.588, 8.925 and 9.641 seconds. Six under a
+            # sixth of a second, five between three and ten.
+            #
+            # `L5_FILL_CALIB_PRESUBMIT` already carries `utc`, so a SUBMIT
+            # time is knowable. This record did not, so no submit-to-terminal
+            # latency could be measured from the stream: an interval computed
+            # from two log stamps carries an unknown error at each end, which
+            # is how a 16.785s rest came to be read as 9.142s. `rest_s` was
+            # right all along because the engine computes it internally.
+            #
+            # Additive telemetry only. No gate, limit, price or order path
+            # reads this field; it exists so a latency question can be
+            # answered without the on-volume tape.
             emit("L5_LIVE_LIFECYCLE", dict(
                 e, market=(m if m else None),
-                market_identity=("PRESENT" if m else "MISSING")))
+                market_identity=("PRESENT" if m else "MISSING"),
+                t=self.now_t,
+                utc=dt.datetime.now(dt.timezone.utc).isoformat(),
+                clock="emitter"))
 
     def order_progress_latency_s(self, now: float) -> Dict[str, Any]:
         """How stale our knowledge of any live order is, right now.

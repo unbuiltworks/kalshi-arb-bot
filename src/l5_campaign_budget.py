@@ -51,16 +51,22 @@ whole budget, exactly as `WindowLedger.read` already argues.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import tempfile
 from decimal import Decimal as D
 from decimal import InvalidOperation
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 #: the campaign budget lives beside the window ledger, on the same volume.
 BUDGET_DIR = "campaign_budget"
 BUDGET_FILE = "active.json"
+
+#: append-only record of every superseded campaign document. The ledger holds
+#: ONE document; without this, closing a campaign erased the campaign it
+#: closed. See `CampaignBudgetLedger._journal`.
+HISTORY_FILE = "history.ndjson"
 ROOT_ENV = "L5_LIVE_ROOT"
 
 #: THE OWNER-APPROVED CAMPAIGN WORST-CASE CEILING.
@@ -141,6 +147,80 @@ class CampaignBudgetLedger:
     def _path(self) -> str:
         return os.path.join(self.dir, BUDGET_FILE)
 
+    def _history_path(self) -> str:
+        return os.path.join(self.dir, HISTORY_FILE)
+
+    # ------------------------------------------------------------- journal
+
+    def _journal(self, prev: Mapping[str, Any],
+                 nxt: Mapping[str, Any]) -> None:
+        """Append the OUTGOING document when a campaign's identity or closed
+        state changes. Append-only, one JSON object per line.
+
+        WHY THIS HAD TO EXIST. `_write` is an atomic replace of a single
+        document, so `open_or_resume` destroyed the closed campaign's entry in
+        place. Production performed exactly that on 2026-10-24T00:31:27Z,
+        handing the budget from ...20261023 (final peak_usd 10.35520000 of
+        29.30, eight windows exhausted) to ...20261024a, and the only surviving
+        record of the campaign it closed was a heartbeat line in a log stream
+        with a retention window.
+
+        IT JOURNALS TRANSITIONS, NOT EVERY WRITE. `peak_usd` rises many times
+        per campaign and those are not lifecycle events; recording them would
+        bury the two that matter. A line is appended only when `campaign_id`
+        changes or `closed` flips.
+
+        IT CAN NEVER BREAK THE LEDGER. The journal is written BEFORE the
+        document is replaced, and any failure is swallowed: a ledger that
+        refuses to record its own budget because an audit file is unwritable
+        would be a worse outcome than a missing history line. The ledger write
+        is the authority; this is evidence beside it.
+        """
+        try:
+            a, b = prev or {}, nxt or {}
+            same_id = str(a.get("campaign_id")) == str(b.get("campaign_id"))
+            same_state = bool(a.get("closed")) == bool(b.get("closed"))
+            if same_id and same_state:
+                return
+            if not a.get("campaign_id") and a.get("closed"):
+                return                      # the empty placeholder is not news
+            rec = dict(a)
+            rec["journalled_utc"] = dt.datetime.now(
+                dt.timezone.utc).isoformat()
+            rec["superseded_by"] = b.get("campaign_id")
+            rec["transition"] = ("CLOSED" if bool(b.get("closed"))
+                                 and same_id else "REPLACED")
+            os.makedirs(self.dir, exist_ok=True)
+            with open(self._history_path(), "a") as fh:
+                fh.write(json.dumps(rec, sort_keys=True) + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return
+
+    def history(self) -> List[Dict[str, Any]]:
+        """Every superseded campaign document, oldest first. Never raises."""
+        out: List[Dict[str, Any]] = []
+        try:
+            with open(self._history_path(), "r") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(rec, dict):
+                        out.append(rec)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return out
+        return out
+
     # ---------------------------------------------------------------- read
 
     def read(self) -> Dict[str, Any]:
@@ -161,6 +241,16 @@ class CampaignBudgetLedger:
         return doc
 
     def _write(self, doc: Mapping[str, Any]) -> None:
+        # the outgoing document is journalled FIRST, so a transition cannot be
+        # lost even if the process dies between the two writes. A duplicate
+        # history line is harmless; a missing one is not recoverable.
+        try:
+            prev = self.read()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            prev = {}
+        self._journal(prev, doc)
         os.makedirs(self.dir, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=self.dir, suffix=".tmp")
         try:
@@ -431,8 +521,25 @@ class CampaignBudgetLedger:
                     % (peak, self.budget_usd))
         return None
 
-    def telemetry(self, *, campaign_id: str = "") -> Dict[str, Any]:
-        """Non-secret state for the heartbeat. Never raises."""
+    def telemetry(self, *, campaign_id: str = "",
+                  realized_usd: Any = None) -> Dict[str, Any]:
+        """Non-secret state for the heartbeat. Never raises.
+
+        `realized_usd` is optional and REPORTING ONLY. With it, the block also
+        carries `incremental_room_usd` -- the figure the planner actually sizes
+        against, which is NOT `budget_usd`.
+
+        WHY IT IS WORTH REPORTING. `open_or_resume` writes peak_usd "0", so a
+        new campaign's own usage does start at zero, but the next evaluation
+        re-absorbs the account's standing realized loss because
+        `worst_case_usd` is account-wide. At the 20261024a handover that read
+        peak_usd 10.21 against 8.56 of realized loss plus 1.65 outstanding, so
+        the real room was 29.30 - 8.56 = 20.74 and the headline 29.30 invited
+        the opposite reading. A fresh nonce buys a fresh WINDOW budget, never a
+        fresh loss allowance.
+
+        No gate reads this field.
+        """
         try:
             doc = self.read()
         except CampaignBudgetUnavailable as exc:
@@ -445,6 +552,14 @@ class CampaignBudgetLedger:
                 "peak_usd": str(peak),
                 "budget_usd": str(self.budget_usd),
                 "remaining_usd": str(max(D(0), self.budget_usd - peak)),
+                "incremental_room_usd": (
+                    None if realized_usd is None
+                    else str(max(D(0), self.budget_usd
+                                 - max(D(0), -_d(realized_usd))))),
+                "incremental_room_basis": (
+                    "budget_usd - account-wide realized LOSS. Reporting only; "
+                    "no gate reads it. A fresh campaign nonce resets peak_usd "
+                    "but never this."),
                 "owns_budget": (bool(doc.get("campaign_id"))
                                 and str(doc.get("campaign_id"))
                                 == str(campaign_id)),

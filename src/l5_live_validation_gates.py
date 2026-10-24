@@ -192,13 +192,18 @@ class ValidationGates:
         # test_the_four_corners_equal_the_exhaustive_worst_case.
         self.fee_extra_per_order_usd = _d(fee_extra_per_order_usd)
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self, realized_usd: Any = None) -> Dict[str, Any]:
+        """`realized_usd` is optional and reporting only. Supplying it makes
+        the campaign block carry `incremental_room_usd` -- budget minus the
+        account's standing realized LOSS, which is the figure the planner
+        actually sizes against. No gate reads it."""
         return {"max_cash_deployed_usd": str(self.max_cash_deployed_usd),
                 "max_unmatched_contracts": str(self.max_unmatched_contracts),
                 "max_cumulative_loss_usd": str(self.max_cumulative_loss_usd),
                 "campaign_budget": (None if self.campaign_budget is None
                                     else self.campaign_budget.telemetry(
-                                        campaign_id=self.campaign_id or "")),
+                                        campaign_id=self.campaign_id or "",
+                                        realized_usd=realized_usd)),
                 "campaign_id": self.campaign_id,
                 "max_strategy_loss_usd": (None if self.max_strategy_loss_usd
                                           is None else str(self.max_strategy_loss_usd)),
