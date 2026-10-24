@@ -1771,12 +1771,88 @@ class Runner:
         try:
             res = t.arm()
             self.arm_claim = claim
+            # THE CAMPAIGN'S STARTING POINT, CAPTURED ONCE AND PERSISTED.
+            #
+            # HERE rather than inside `authorize_arming` because this is the
+            # only place that holds all four figures at once: the authoritative
+            # buying power from /v1/account/balances, the executor's store, and
+            # the approval's own nonce. Immediately AFTER the arm succeeds, so
+            # a refused window never moves the zero point.
+            #
+            # IT IS IDEMPOTENT, so being on the per-window path is safe: the
+            # first window of a campaign writes the baseline and every later
+            # one reads it back unchanged. A failure here cannot create risk --
+            # with the bound configured and no baseline, `ValidationGates`
+            # refuses every order with CAMPAIGN_BASELINE_ABSENT -- so this
+            # reports rather than raises.
+            emit("L5_CAMPAIGN_BASELINE", self.capture_campaign_baseline())
             emit("L5_LIVE_ARMED", dict(res, claim=claim))
         except LX.NotArmed as exc:
             self.win["arm_refused"] += 1
             if self.win["arm_refused"] == 1:
                 emit("L5_LIVE_DISARMED", {"market": t.market_slug,
                                           "why": str(exc)[:300]})
+
+    def capture_campaign_baseline(self) -> Dict[str, Any]:
+        """Persist this campaign's starting cash, inventory, open orders and
+        realized loss. Read-only with respect to every existing figure.
+
+        WHAT IT DOES NOT DO: it does not reset, net off or reclassify any
+        realized loss. It records what the account-wide realized total WAS at
+        the campaign's start so the $5 additional-loss bound has a fixed point
+        to measure from; the lifetime ceiling goes on reading the full figure
+        on every evaluation, unchanged.
+
+        NEVER RAISES. The bound fails closed on a missing baseline, so a
+        capture failure already stops every order; turning it into an exception
+        here would only convert a refusal into a crash.
+        """
+        from src import l5_campaign_baseline as CBL
+        out: Dict[str, Any] = {"ok": False, "reason": None}
+        try:
+            cid = _campaign_nonce_sid()
+            if not cid:
+                return {"ok": False, "reason": "NO_CAMPAIGN_ID",
+                        "note": "no valid approval, so there is no campaign "
+                                "to measure; the bound refuses on its own"}
+            ex = self.executor
+            store = None if ex is None else ex.store
+            inv, opens = None, None
+            if store is not None:
+                try:
+                    inv = {m: str(store.residual(m))
+                           for m in (store.markets_with_exposure() or ())}
+                except BaseException:                          # noqa: BLE001
+                    inv = "UNREADABLE"
+                try:
+                    opens = sorted((store.live_orders() or {}).keys())
+                except BaseException:                          # noqa: BLE001
+                    opens = "UNREADABLE"
+            realized = None
+            if store is not None:
+                try:
+                    realized = store.realized_today()
+                except BaseException:                          # noqa: BLE001
+                    realized = None
+            res = CBL.CampaignBaseline().capture(
+                cid,
+                account_wide_realized=realized,
+                cash_usd=self.available_cash_usd,
+                inventory=inv, open_orders=opens,
+                now_iso=dt.datetime.now(dt.timezone.utc).isoformat())
+            out = dict(res)
+            out["cash_source"] = ("/v1/account/balances"
+                                  if self.available_cash_usd is not None
+                                  else "UNAVAILABLE")
+            out["limit_in_force_usd"] = (
+                None if CBL.limit_from_env() is None
+                else str(CBL.limit_from_env()))
+            return out
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"ok": False, "reason": "CAPTURE_ERROR:%s"
+                    % type(exc).__name__}
 
     def close_window(self) -> None:
         t = self.transport
@@ -5695,6 +5771,7 @@ def validation_gates():
     if str(os.getenv(GATES_ENV, "1")).strip() == "0":
         return None
     from src import l5_live_validation_gates as VG
+    from src import l5_campaign_baseline as CBL
     # parsed FIRST and outside the swallow below, so it cannot be absorbed
     deficit = VG.parse_deficit_bound(os.getenv(DEFICIT_ENV))
     try:
@@ -5751,6 +5828,22 @@ def validation_gates():
             # is already refused by the campaign layer itself.
             campaign_budget=AUTH.campaign_budget_ledger(),
             campaign_id=_campaign_nonce_sid(),
+            # THE CAMPAIGN'S OWN ADDITIONAL-LOSS BOUND, measured from a
+            # persisted starting point rather than from account inception.
+            #
+            # BOTH HALVES COME FROM THE SAME PLACE, as with the budget above:
+            # the store is on the volume and the campaign id is the approval's
+            # own nonce_sid, so the bound is owned by the APPROVAL and a new
+            # approval is exactly what moves the zero point.
+            #
+            # UNSET IS OFF, so this changes nothing until the owner configures
+            # it. A value that was TYPED and cannot be parsed resolves to $0 in
+            # `limit_from_env`, which refuses everything -- the tightest
+            # reading, never the default. That is why it needs no special
+            # handling outside the swallow below the way the deficit bound
+            # does: it cannot raise, and its error case is already fail-closed.
+            campaign_baseline=CBL.CampaignBaseline(),
+            max_campaign_additional_loss_usd=CBL.limit_from_env(),
             cash_policy=VG.NO_RECYCLING)
     except Exception as exc:                                   # noqa: BLE001
         # ============ A GATE WE CANNOT BUILD REFUSES. IT DOES NOT VANISH.

@@ -55,6 +55,14 @@ APPROVED: Dict[str, Any] = {
     # configuration the owner asked for, which hides a real regression
     # behind a permanent failure.
     "aggregate_exposure_usd": D("5"),
+    # THE CAMPAIGN'S OWN ADDITIONAL-LOSS BOUND (OWNER 2026-10-24). Graded,
+    # not merely reported, because the owner required it to be in force for
+    # this campaign: "Ensure the campaign has an independently enforced
+    # maximum $5 additional loss... Do not assume the existing $20 lifetime
+    # gate supplies this." An unset variable leaves the gate inert, which is
+    # a configuration that does NOT match what was approved, so it must fail
+    # here rather than pass quietly.
+    "campaign_additional_loss_usd": D("5.00"),
     "daily_realized_loss_halt_usd": D("5"),
     "maker_pair_ceiling": D("0.96"),
     "defensive_pair_ceiling": D("1.20"),
@@ -145,6 +153,8 @@ SNAPSHOT_ALLOWED = (
     # applied, and the row reported the running process's boot value as
     # though it had been predicted from the input.
     "L5_MAX_TOTAL_EXPOSURE_USD",
+    # the campaign additional-loss bound's own variable, for the same reason
+    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD",
 )
 
 #: Name fragments that mean "this is a secret, and it must not be in a file
@@ -279,6 +289,7 @@ def verify() -> Dict[str, Any]:
     from src import l5_pmus_live_runner as R
     from src import l5_two_sided_probe as TS
     from src import l5_live_validation_gates as VG
+    from src import l5_campaign_baseline as CBL
 
     A = APPROVED
     rows: List[Dict[str, Any]] = [
@@ -322,6 +333,10 @@ def verify() -> Dict[str, Any]:
              "R.max_total_exposure_usd() (the variable)",
              lambda: R.max_total_exposure_usd(),
              A["aggregate_exposure_usd"]),
+        _row("campaign_additional_loss_usd",
+             "CBL.limit_from_env() clamped by CBL.MAX_ADDITIONAL_LOSS_USD",
+             lambda: CBL.limit_from_env(),
+             A["campaign_additional_loss_usd"]),
         _row("aggregate_exposure_in_force_usd",
              "R.PROBE_LIMITS['max_total_exposure_usd'] (frozen at boot)",
              lambda: D(str(R.PROBE_LIMITS["max_total_exposure_usd"])),

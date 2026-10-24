@@ -112,7 +112,9 @@ class ValidationGates:
                  max_l5_daily_loss_usd: Optional[D] = None,
                  max_l5_cumulative_loss_usd: Optional[D] = None,
                  max_unresolved_unknown_usd: Optional[D] = None,
-                 max_account_wide_delta_loss_usd: Optional[D] = None
+                 max_account_wide_delta_loss_usd: Optional[D] = None,
+                 campaign_baseline: Any = None,
+                 max_campaign_additional_loss_usd: Optional[D] = None
                  ) -> None:
         if cash_policy not in (NO_RECYCLING, RECYCLE_ON_COMPLETE):
             raise ValueError("unknown cash policy: %r" % cash_policy)
@@ -164,6 +166,27 @@ class ValidationGates:
         self.max_unresolved_unknown_usd = (
             None if max_unresolved_unknown_usd is None
             else _d(max_unresolved_unknown_usd))
+        #: THE CAMPAIGN'S OWN ADDITIONAL-LOSS BOUND (OWNER 2026-10-24),
+        #: measured from a persisted starting point rather than from account
+        #: inception.
+        #:
+        #: WHY IT IS NOT THE LIFETIME CEILING. That one measures
+        #: `max(0, -account_wide_realized) + unrealized` against $20 from the
+        #: beginning of the account, and that figure was already -$11.6213 --
+        #: so it permitted $8.3787 more, a number nobody chose and one that
+        #: moves on every settlement in either direction. "How much may THIS
+        #: campaign lose" had no stable answer. The campaign worst-case
+        #: budget cannot answer it either, because its input is the same
+        #: all-time figure, which is why that budget has to sit at $29.30 to
+        #: clear history at all.
+        #:
+        #: ADDITIVE, and the ordering below makes that structural: every
+        #: existing ceiling has already run and already returned if breached,
+        #: so this can only ADD a refusal. None leaves behaviour unchanged.
+        self.campaign_baseline = campaign_baseline
+        self.max_campaign_additional_loss_usd = (
+            None if max_campaign_additional_loss_usd is None
+            else _d(max_campaign_additional_loss_usd))
         if (self.max_strategy_loss_usd is not None and
                 (not self.max_strategy_loss_usd.is_finite() or
                  self.max_strategy_loss_usd <= 0)):
@@ -674,6 +697,61 @@ class ValidationGates:
                 return ("WORST_CASE_DEFICIT:%s>%s:%s"
                         % (wc["deficit"], self.max_worst_case_deficit_usd,
                            wc["scenario"]))
+
+        # 4b. THE CAMPAIGN'S ADDITIONAL LOSS, FROM ITS OWN STARTING POINT.
+        #
+        #     Placed HERE, after every account-wide and L5-scoped ceiling has
+        #     already run and already returned, so it is additive by
+        #     construction: it can only refuse an order the others allowed.
+        #
+        #     IT COMPUTES ITS OWN WORST CASE rather than reusing the $2 gate's
+        #     result, and that duplication is deliberate. The owner's
+        #     instruction was not to assume an existing gate supplies this
+        #     bound, and a gate that only worked when ANOTHER optional gate
+        #     happened to be configured would be exactly that assumption.
+        #     `worst_case_deficit` is a pure function of its arguments, so
+        #     calling it twice costs arithmetic and buys independence.
+        #
+        #     THE DEFICIT IS THE RIGHT OPEN-BOOK TERM, not the gross cost. It
+        #     is `C - min(up, dn)`, so a completing leg that matches inventory
+        #     contributes its real worst case -- which is negative for a pair
+        #     that pays on both outcomes. Using gross cost here would make the
+        #     bound refuse the completions that REDUCE risk, which is the one
+        #     behaviour a loss ceiling must never have.
+        #
+        #     FAIL CLOSED: no baseline, a baseline belonging to another
+        #     campaign, no campaign id, an unreadable figure or an
+        #     uncomputable book all refuse inside the helper.
+        if self.max_campaign_additional_loss_usd is not None:
+            if self.campaign_baseline is None:
+                return "CAMPAIGN_BASELINE_UNCONFIGURED"
+            if not isinstance(inventory, Mapping):
+                return "CAMPAIGN_ADDITIONAL_LOSS_NO_INVENTORY"
+            wcb = self.worst_case_deficit(
+                up_qty=inventory.get("up_qty"),
+                dn_qty=inventory.get("dn_qty"),
+                up_cost=inventory.get("up_cost"),
+                dn_cost=inventory.get("dn_cost"),
+                order_side=("DOWN" if str(order_intent or "").upper()
+                            .endswith("BUY_SHORT") else "UP"),
+                order_qty=q, order_price=px, outstanding=outstanding)
+            if not wcb.get("ok"):
+                return ("CAMPAIGN_ADDITIONAL_LOSS_DEFICIT:%s"
+                        % wcb.get("reason"))
+            try:
+                why = self.campaign_baseline.refuse(
+                    self.campaign_id,
+                    account_wide_realized=cumulative_realized,
+                    open_worst_case_usd=wcb["deficit"],
+                    limit_usd=self.max_campaign_additional_loss_usd)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # a bound that cannot answer is a refusal, never a pass
+                return ("CAMPAIGN_ADDITIONAL_LOSS_ERROR:%s"
+                        % type(exc).__name__)
+            if why:
+                return why
 
         # an authoritative balance, when we have one, binds too. Absent is
         # NOT treated as unlimited -- see require_cash_evidence().

@@ -31,6 +31,10 @@ APPROVED_ENV = {
     # production, which sets it to 5, was graded against a number nobody
     # had approved.
     "L5_MAX_TOTAL_EXPOSURE_USD": "5",
+    # THE CAMPAIGN'S OWN ADDITIONAL-LOSS BOUND. Part of the approved
+    # configuration, so the fixture carries it: unset leaves the gate inert,
+    # which is not the configuration that was approved.
+    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "5.00",
 }
 
 
@@ -77,7 +81,7 @@ def test_the_approved_configuration_passes_every_row(approved):
     # 21 -> 22 when defensive_execution_enabled moved to
     # observed_not_graded; 22 -> 23 with the phase-1 invariant that the
     # mandate signing key is never reachable from the runtime.
-    assert out["checked"] == 24
+    assert out["checked"] == 25
     assert out["failed"] == []
 
 
@@ -323,11 +327,17 @@ APPROVED_SNAPSHOT = {
     "L5_MAX_LIVE_ORDERS": "1",
     "L5_SHADOW_ONLY": "1",
     "L5_MAX_TOTAL_EXPOSURE_USD": "5",
+    "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "5.00",
 }
 
 #: what production is believed to hold TODAY: the four-window campaign's
 #: values, which is the drift the owner must not change blind.
-CURRENT_SNAPSHOT = dict(APPROVED_SNAPSHOT,
+#: production carries no campaign additional-loss bound at all, which leaves
+#: that gate INERT -- so it is one of the rows the owner must change, and the
+#: prediction has to say so instead of inheriting the approved value.
+_CUR = dict(APPROVED_SNAPSHOT)
+_CUR.pop("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", None)
+CURRENT_SNAPSHOT = dict(_CUR,
                         **{"L5_LIVE_AUTH_MAX_OPEN": "8",
                            "L5_LIVE_AUTH_MAX_COMPLETE": "12",
                            "L5_LIVE_AUTH_MAX_REPLACE": "16",
@@ -348,7 +358,9 @@ def test_todays_production_values_predict_exactly_the_rows_that_must_change():
     assert set(out["failed"]) == {
         "submission_budget_open", "submission_budget_complete",
         "submission_budget_replace", "submission_backstop",
-        "max_windows_authorization"}
+        "max_windows_authorization",
+        # unset in production, so the campaign bound is inert
+        "campaign_additional_loss_usd"}
     # and the margin and the whole derived guard already hold at 300
     for name in ("cancel_margin_s", "defensive_terminal_s",
                  "defensive_guard_opens_s", "defensive_last_actionable_s"):
