@@ -454,10 +454,13 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
     CANNOT be restricted to the common set; every caller labels them."""
     x = dict(e.get("execution") or {})
     o = dict(e.get("opportunities") or {})
-    reasons = dict(o.get("reasons") or {})
     fills = int(x.get("filled") or 0)
     adverse = _num(x.get("adverse_usd"))
     swept = int(x.get("swept_fills") or 0)
+    # from `already_resting_split`, NOT from `refusal_reasons`: the reason
+    # string is unchanged by design, so the split lives at the tally's top
+    # level and `economics` lifts it into its own key.
+    split = dict(o.get("already_resting_split") or {})
     return {
         "counters_since": x.get("counters_since"),
         "quotes_placed": int(x.get("quotes_placed") or 0),
@@ -471,11 +474,13 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
         "swept_share": (None if not fills else _q(D(swept) / D(fills))),
         "controller_errors": int(x.get("controller_errors") or 0),
         "windows_observed": int(e.get("windows_observed") or 0),
-        "already_resting": int(reasons.get("already_resting") or 0),
-        "resting_split": {k: int(reasons.get(k) or 0)
-                          for k in RESTING_SPLIT},
+        "already_resting": int(o.get("already_resting_total") or 0),
+        "resting_split": {k: int(split.get(k) or 0) for k in RESTING_SPLIT},
+        "already_resting_split_accounts_for_the_bucket": (
+            sum(int(split.get(k) or 0) for k in RESTING_SPLIT)
+            == int(o.get("already_resting_total") or 0)),
         "both_sides_filled_same_tick": int(
-            reasons.get("both_sides_filled_same_tick") or 0)}
+            x.get("both_sides_filled_same_tick") or 0)}
 
 
 def _common_windows(reports: Mapping[str, Any],
@@ -1544,6 +1549,10 @@ class ShadowController:
                                               .quantize(D("0.0001")))),
                     "adverse_usd": str(t.get("adverse_usd") or "0"),
                     "swept_fills": int(t.get("swept_fills") or 0),
+                    # a two-sided arm can fill both sides in one tick; on a
+                    # one-sided arm this is structurally always 0
+                    "both_sides_filled_same_tick": int(
+                        t.get("both_sides_filled_same_tick") or 0),
                     "controller_errors": int(t.get("controller_errors") or 0)},
                 "opportunities": {
                     "justified_refusals": int(t.get("justified_refusals")
@@ -1554,10 +1563,26 @@ class ShadowController:
                         else str((D(int(t.get("possible_misses") or 0))
                                   / D(refusals)).quantize(D("0.0001")))),
                     "reasons": dict(t.get("refusal_reasons") or {}),
+                    # REQUIREMENT 1. These are counted at the tally's top
+                    # level, NOT inside `refusal_reasons`, because the reason
+                    # STRING is deliberately unchanged -- so they have to be
+                    # lifted here explicitly or they are counted and never
+                    # reported, which is exactly what happened: the first
+                    # version of the comparison read them out of `reasons`
+                    # and would have printed three zeros forever.
+                    "already_resting_split": {k: int(t.get(k) or 0)
+                                              for k in RESTING_SPLIT},
+                    "already_resting_total": int(
+                        (t.get("refusal_reasons") or {})
+                        .get("already_resting") or 0),
                     "labels": ("a JUSTIFIED refusal protects money or admits "
                                "ignorance; a POSSIBLE MISS is the only "
                                "bucket that can hold forgone profit. "
-                               "Neither is a loss until priced.")},
+                               "Neither is a loss until priced. The "
+                               "already_resting SPLIT says how many of "
+                               "those refusals wanted the side we were not "
+                               "resting, which is the only bucket a "
+                               "two-sided arm could have acted on.")},
                 "data_completeness": {
                     "records": int(t.get("records") or 0),
                     "ticks_with_book": int(t.get("ticks_with_book") or 0),

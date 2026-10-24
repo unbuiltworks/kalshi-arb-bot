@@ -1442,14 +1442,24 @@ def test_two_fills_in_one_tick_are_both_counted(tmp_path):
 # slip here would be invisible -- it would simply report a different answer.
 # --------------------------------------------------------------------------
 def _arm(two_sided, windows, *, offset=1, resting=None, execu=None):
-    """A minimal {label: report()}-shaped arm over the three scenarios."""
+    """A minimal {label: report()}-shaped arm over the three scenarios.
+
+    `resting` goes into `already_resting_split`, NOT into
+    `refusal_reasons`, because that is where `economics` actually puts it.
+    The first version of this helper put it in `reasons` and the
+    requirement-1 test passed against a shape the controller never emits --
+    which is why `test_the_split_reaches_the_comparison_from_a_real_arm`
+    below drives a real controller instead of a hand-built dict.
+    """
     scen = {
         "per_window": list(windows),
         "windows_folded_into_carry": 0,
         "windows_observed": 10,
         "execution": dict(execu or {}),
-        "opportunities": {"justified_refusals": 0, "possible_misses": 0,
-                          "reasons": dict(resting or {})}}
+        "opportunities": {
+            "justified_refusals": 0, "possible_misses": 0, "reasons": {},
+            "already_resting_total": sum((resting or {}).values()),
+            "already_resting_split": dict(resting or {})}}
     return {"two_sided": two_sided, "offset_ticks": offset,
             "economics": {"per_scenario": {s: dict(scen)
                                            for s in sc.SCENARIOS}}}
@@ -1525,8 +1535,7 @@ def test_arms_that_stop_sharing_an_offset_are_not_a_controlled_comparison():
 
 def test_requirement_1_reports_the_opposite_side_split_per_arm():
     out = sc.compare_two_sided(_pair(
-        [], [], resting={"already_resting": 500,
-                         "already_resting_opposite_side": 420,
+        [], [], resting={"already_resting_opposite_side": 420,
                          "already_resting_same_side": 70,
                          "already_resting_side_unknown": 10}))
     r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
@@ -1586,3 +1595,45 @@ def test_a_real_controller_report_is_an_acceptable_input(tmp_path):
     assert out["controlled"] is True
     assert out["verdict"] == "INSUFFICIENT_COMMON_WINDOWS"
     assert set(out["per_scenario"]) == set(sc.SCENARIOS)
+
+
+def test_the_split_reaches_the_comparison_from_a_real_arm(tmp_path):
+    """END TO END, and it exists because the hand-built version of this
+    test passed while the real path reported three zeros.
+
+    The counters are kept at the TALLY's top level, because the refusal
+    REASON string is deliberately unchanged -- so unless `economics` lifts
+    them into their own key they are counted on every tick and never
+    reported. They were. This drives a real one-sided controller into the
+    `already_resting` branch and asserts the number survives all the way
+    into `compare_two_sided`.
+    """
+    one = ctl(tmp_path / "a", placement=sc.ONE_TICK_BEHIND)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    _seed_up(one, lad)
+    for i in range(3):
+        one.step(WS + 320.0 + i, slug=SLUG, book=_book("0.50", "0.51"),
+                 window_end_ts=WEND, prints=[], ladder=lad)
+    t = one._tally(sc.HEADLINE_SCENARIO)
+    seen = {k: t[k] for k in sc.RESTING_SPLIT}
+    assert sum(seen.values()) > 0, seen
+
+    # it must survive the trip through economics() ...
+    econ = one.economics()["per_scenario"][sc.HEADLINE_SCENARIO]
+    assert econ["opportunities"]["already_resting_split"] == seen
+    assert (econ["opportunities"]["already_resting_total"]
+            == econ["opportunities"]["reasons"].get("already_resting"))
+
+    # ... and all the way into the comparison line
+    out = sc.compare_two_sided({
+        sc.TWO_SIDED_CONTROL: one.report(),
+        sc.TWO_SIDED_TREATMENT: ctl(tmp_path / "b",
+                                    placement=sc.TWO_SIDED).report()})
+    r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
+         ["requirement_1_already_resting"])
+    assert {k: r["control"][k] for k in sc.RESTING_SPLIT} == seen
+    assert r["control"]["total"] == sum(seen.values())
+    # the reason bucket and its split must account for each other, or the
+    # split is not a split of it
+    assert out["per_scenario"][sc.HEADLINE_SCENARIO]["fill_model"][
+        "control"]["already_resting_split_accounts_for_the_bucket"] is True
