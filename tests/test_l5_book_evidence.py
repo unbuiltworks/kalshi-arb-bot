@@ -485,3 +485,33 @@ def test_venue_event_t_prefers_the_money_paths_key_order():
 def test_venue_event_t_rejects_implausible_epochs():
     for bad in (0, -1, 12345, 1e20, float("nan")):
         assert BE.venue_event_t({"transactTime": bad}) == (None, None), bad
+
+
+# --------------------------------- the recorders report on themselves
+
+def test_ring_report_distinguishes_attached_from_silent():
+    """Zero fill records on a flat window must not look like a missing
+    module, which is the whole reason the window summary carries this."""
+    r = BE.BookRing()
+    rep = r.report()
+    assert rep["appended"] == 0 and rep["slugs"] == {}
+    r.append("m", ROW, 1.0)
+    rep = r.report()
+    assert rep["appended"] == 1 and rep["slugs"] == {"m": 1}
+    assert rep["errors"] == {}
+
+
+def test_sampler_report_shows_it_was_asked_even_when_silent():
+    s = BE.ResidualSampler(every_s=5.0)
+    s.sample(slug="m", now=1.0, residual="0", book=ROW)      # matched: silent
+    rep = s.report()
+    assert rep["emitted"] == 0
+    s.sample(slug="m", now=2.0, residual="3", book=ROW)
+    assert s.report()["emitted"] == 1
+
+
+def test_reports_never_raise_on_a_damaged_ring():
+    r = BE.BookRing()
+    r._bump("append:TypeError")
+    rep = r.report()
+    assert rep["errors"] == {"append:TypeError": 1}

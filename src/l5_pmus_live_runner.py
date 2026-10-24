@@ -1812,6 +1812,34 @@ class Runner:
                     raise
                 out["venue_position_error"] = type(exc).__name__
             t.disarm("window_end")
+        # OBSERVABILITY OF THE OBSERVABILITY, and it is not decoration.
+        # L5_FILL_BOOK_EVIDENCE needs a fill and L5_RESIDUAL_BOOK_SAMPLE
+        # needs unmatched inventory, so with an exhausted campaign and a
+        # flat book NEITHER can fire -- and their silence is then
+        # indistinguishable from the module being absent from the image or
+        # failing to attach. This report fires every window regardless of
+        # arming, and says whether the ring is actually taking frames off
+        # the authenticated feed. Reporting only; wrapped, because a
+        # self-report must never be why a window summary is lost.
+        try:
+            ring = getattr(self, "book_ring", None)
+            samp = getattr(self, "residual_sampler", None)
+            out["book_evidence"] = {
+                "attached": ring is not None,
+                "ring": None if ring is None else ring.report(),
+                "sampler": None if samp is None else samp.report(),
+                "attach_errors": {k: v for k, v in self.stats.items()
+                                  if "evidence" in k},
+                "labels": ("ring counts frames taken off the authenticated "
+                           "feed. A fill record needs a fill and a residual "
+                           "sample needs unmatched inventory, so zero of "
+                           "either is expected on a flat window and is NOT "
+                           "evidence of a fault."),
+            }
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["book_evidence"] = {"error": type(exc).__name__}
         emit("L5_LIVE_WINDOW", out)
 
     # ------------------------------------------------------------ actions
