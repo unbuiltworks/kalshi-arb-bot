@@ -114,8 +114,58 @@ MAX_PAIR_COST_ENV = "L5_TS_MAX_PAIR_COST"
 # mistake and completing them as taker would have been worse. They simply
 # are not what this strategy is for: opening below the floor swaps a +0.05
 # pair edge for a coin flip and adds variance.
+#: HOW MANY SEQUENTIAL CYCLES THE CASH ENVELOPE IS SPLIT ACROSS.
+#:
+#: WHY THIS EXISTS. Every plan the 20261024a campaign produced was
+#: `sized_by: CASH_ENVELOPE` with a cash-gate obligation of 1.6366 to 1.6480
+#: against the $1.65 envelope -- 99.2% to 99.9% of it spent by round 0. The
+#: round cap was never the limit (`ACC_MAX_ROUNDS_DEFAULT` is 8 and every plan
+#: reported 8) and neither was the campaign budget (headroom stayed above
+#: $20.38 of $29.30). And `cash_policy` is NO_RECYCLING: matching releases
+#: nothing, only settlement does, which was observed at about T+16 minutes --
+#: after the 15-minute window had closed. A second cycle was arithmetically
+#: impossible, not policy-refused.
+#:
+#: IT ONLY EVER SHRINKS A ROUND. The divisor applies to the cash envelope
+#: alone, which is the constraint that bound; the loss ceiling and the
+#: campaign budget are untouched because they were never binding and
+#: tightening them would refuse plans for the wrong reason. A divisor of N
+#: makes every round at most 1/N of the clip it is today, so each individual
+#: order is strictly smaller and strictly safer than the campaign's were.
+#:
+#: IT MINTS NO HEADROOM. Aggregate exposure is enforced account-wide on every
+#: order by the $2 ceiling, the 3-contract residual cap and both loss halts,
+#: each of which counts filled inventory plus still-fillable outstanding
+#: orders. Splitting the envelope cannot raise any of them.
+#:
+#: DEFAULT 1 IS CURRENT BEHAVIOUR, byte for byte.
+ROUND_ALLOCATIONS = 1
+ROUND_ALLOCATIONS_ENV = "L5_TS_ROUND_ALLOCATIONS"
+#: a divisor beyond this would size rounds below anything the venue grid can
+#: express at our clip, so it is refused rather than silently floored to zero.
+ROUND_ALLOCATIONS_MAX = 4
+
 MIN_FIRST_LEG_OWN_PRICE = D("0.20")
 MIN_FIRST_LEG_ENV = "L5_TS_MIN_FIRST_LEG_PRICE"
+
+
+def round_allocations() -> int:
+    """How many sequential cycles to split the cash envelope across.
+
+    UNPARSEABLE OR ABSENT IS 1, which is today's behaviour. Anything outside
+    1..ROUND_ALLOCATIONS_MAX is also 1: a divisor is a sizing decision and the
+    safe reading of a malformed one is "do what we already do", never "guess".
+    """
+    raw = (os.getenv(ROUND_ALLOCATIONS_ENV) or "").strip()
+    if not raw:
+        return ROUND_ALLOCATIONS
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return ROUND_ALLOCATIONS
+    if n < 1 or n > ROUND_ALLOCATIONS_MAX:
+        return ROUND_ALLOCATIONS
+    return n
 
 
 def min_first_leg_own_price() -> D:
@@ -960,7 +1010,15 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     # exactly what happened the first time this was wired. The conservative
     # accounting is preserved and respected, not worked around.
     oblig_per_contract = D(1) + up_px
-    by_cash = env / oblig_per_contract
+    # SPLIT THE ENVELOPE ACROSS CYCLES, if configured. Default 1 leaves this
+    # line arithmetically identical to `env / oblig_per_contract`. The divisor
+    # touches the CASH envelope only -- the constraint that actually bound
+    # every plan of the 20261024a campaign -- and never the loss ceiling or
+    # the campaign budget, which had headroom to spare and would then refuse
+    # plans for the wrong reason.
+    allocs = round_allocations()
+    env_per_round = env / allocs
+    by_cash = env_per_round / oblig_per_contract
     qty = min(by_loss, by_cash)
     # and the campaign budget, on that SAME obligation basis, because
     # `ValidationGates` gate 3b charges the order exactly as the cash gate
@@ -979,7 +1037,7 @@ def build_orders(*, market: str, bid: Any, ask: Any,
         if qty < mq:
             break
         if (qty * dear + worst_fee(qty, dear) <= cap
-                and qty * oblig_per_contract <= env
+                and qty * oblig_per_contract <= env_per_round
                 and (head is None or qty * oblig_per_contract <= head)):
             break
         qty -= mq
@@ -990,6 +1048,9 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                   budget_headroom_usd=(None if head is None else str(head)),
                   min_qty=str(mq),
                   obligation_per_contract=str(oblig_per_contract),
+                  round_allocations=allocs,
+                  cash_envelope_total_usd=str(env),
+                  cash_envelope_per_round_usd=str(env_per_round),
                   binding=("CAMPAIGN_BUDGET"
                            if by_budget is not None
                            and by_budget <= min(by_loss, by_cash)
@@ -1041,6 +1102,17 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             "qty_per_leg": str(qty),
             "gross_cash_usd": str(econ["cost"]),
             "cash_gate_obligation_usd": str(qty * oblig_per_contract),
+            "round_allocations": allocs,
+            "cash_envelope_total_usd": str(env),
+            "cash_envelope_per_round_usd": str(env_per_round),
+            "round_allocation_basis": (
+                "the cash envelope is split across this many sequential "
+                "cycles. 1 is the historical behaviour. It only ever shrinks "
+                "a round: aggregate exposure stays bounded account-wide by "
+                "the $2 ceiling, the residual cap and both loss halts, each "
+                "counting filled inventory plus still-fillable outstanding "
+                "orders. Matched inventory does NOT release cash before "
+                "settlement."),
             "cash_basis": ("a resting DOWN leg is a BUY_SHORT and the cash "
                            "gate charges it a dollar a share; sizing uses "
                            "that basis so the plan the gate sees is the "
