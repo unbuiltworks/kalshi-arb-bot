@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import re
 from decimal import Decimal as D
 
+from src import l5_mandate_signature as MS
 from src import pmus_auth as Q1
 
 #: where the spent-authorization ledger lives. On the probe's volume, so it
@@ -1868,6 +1869,133 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         raise ArmingRefusal("SHADOW_ONLY_LOCK",
                             {"note": "submit() is structurally blocked; "
                                      "arming would change nothing"})
+    # 1b. THE OWNER'S SIGNATURE, and it is the control the campaign document
+    #     is not. `l5_campaign_approval` says Claude cannot write its
+    #     document; `l5_mandate_signature` records that this is false in
+    #     practice, because anyone holding a Railway token can set the
+    #     variable. A signature fixes that by making writing the bytes
+    #     INSUFFICIENT: the payload must carry an Ed25519 signature from a
+    #     key whose private half the owner holds offline and which this
+    #     process has never seen and cannot produce.
+    #
+    #     IT IS A NECESSARY ADDITIONAL CONDITION, NOT A REPLACEMENT, and
+    #     it is checked FIRST so that an unsigned mandate is named as such
+    #     rather than reported as some incidental inner failure. The campaign
+    #     document still does its own job below -- bounding windows and
+    #     reserving one durably -- but writing that variable alone no longer
+    #     authorizes anything, which is the entire fix.
+    #
+    #     SELF-ACTIVATING, AND THAT IS DELIBERATE. The gate binds exactly
+    #     when `MANDATE_PUBKEYS` is non-empty. With no trusted key -- the
+    #     shipped state -- behaviour is unchanged, which keeps every existing
+    #     one-window probe and test authorized as before. The moment the
+    #     owner's public half is committed in a reviewed change, a signature
+    #     becomes REQUIRED for live arming and no variable edit can satisfy
+    #     it. Turning the gate off therefore takes a repo commit and a
+    #     deploy, not an environment change.
+    if MS.MANDATE_PUBKEYS:
+        # THE HALT LATCH IS STILL REQUIRED, as the FAST revocation route.
+        # The signing procedure names three ways to withdraw a mandate and
+        # the latch is the first: no redeploy, and this process cannot
+        # clear it. The revocation LIST below handles a named mandate; the
+        # latch stops everything immediately. A signed mandate with no
+        # latch has no immediate withdrawal path and is refused.
+        if not halt_gate_present:
+            raise ArmingRefusal(
+                "MANDATE_REVOCATION_UNAVAILABLE",
+                {"needs": ["L5_HALT_URL"],
+                 "note": "the halt latch is the immediate withdrawal path "
+                         "for a signed mandate; with no latch there is no "
+                         "way to stop it quickly and it is refused"})
+        _mraw = os.getenv(MS.MANDATE_ENV)
+        _mkey = ""
+        try:
+            _mkey = str((json.loads(_mraw or "{}") or {}).get("key_id") or "")
+        except BaseException:                                  # noqa: BLE001
+            _mkey = ""
+        # THE REPLAY FLOOR AND THE REVOCATION LIST, BOTH FROM THE WATCHDOG,
+        # over the GET-only clients that already exist for them. They are
+        # read from the watchdog and not from our own disk on purpose: a
+        # floor this process can write is a floor this process can roll
+        # back, and rolling it back would let an older, looser owner-signed
+        # mandate be replayed. Neither is defaulted -- absence, staleness, a
+        # malformed document and an unreachable host all refuse, which is
+        # the rule `HaltGate` already applies to the latch.
+        _store_url = os.getenv(MS.STORE_URL_ENV, "").strip()
+        if not _store_url:
+            raise ArmingRefusal(
+                "MANDATE_STORE_UNCONFIGURED",
+                {"needs": [MS.STORE_URL_ENV],
+                 "serves": [MS.FLOOR_KEY, MS.REVOCATION_KEY],
+                 "note": "the watchdog must publish the replay floor and "
+                         "the revocation list; without them this process "
+                         "cannot establish that its mandate is current and "
+                         "unrevoked, and an unestablished answer is a "
+                         "refusal"})
+        try:
+            _floor = MS.HttpSeqFloorStore(_store_url).floor(_mkey)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise ArmingRefusal("MANDATE_SEQ_FLOOR_UNAVAILABLE",
+                                {"error": type(exc).__name__,
+                                 "detail": ("%s" % exc)[:160]})
+        try:
+            _revoked = MS.HttpRevocationStore(_store_url).revoked()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise ArmingRefusal("MANDATE_REVOCATION_UNAVAILABLE",
+                                {"error": type(exc).__name__,
+                                 "detail": ("%s" % exc)[:160]})
+        _v = MS.verify(
+            _mraw,
+            environment=os.getenv("RAILWAY_ENVIRONMENT_NAME", ""),
+            service_role=os.getenv(SERVICE_ROLE_ENV, ""),
+            series=(series or os.getenv(SERIES_ENV, "")),
+            now=now,
+            seq_floor=_floor, revoked=_revoked)
+        if not _v.get("ok"):
+            raise ArmingRefusal(
+                str(_v.get("reason") or "MANDATE_REFUSED"),
+                {"detail": _v.get("detail"),
+                 "trusted_key_ids": sorted(MS.MANDATE_PUBKEYS),
+                 "note": "a trusted key is registered, so a valid "
+                         "owner-SIGNED mandate is required and no variable "
+                         "edit can substitute for one"})
+        # THE SIGNED SCOPE MUST BOUND THE RUNNING LIMITS, by the same
+        # intersection discipline the campaign approval uses: a limit
+        # widened after signing invalidates the signature's scope rather
+        # than inheriting it.
+        # the verdict carries the payload under `scope`, not `payload`
+        _mp = dict(_v.get("scope") or {})
+        _mcap = dict(_mp.get("capital") or {})
+        _mloss = dict(_mp.get("loss_limits") or {})
+        _sig_exp = _dec_or_none(_mcap.get("max_total_exposure_usd"))
+        _sig_loss = _dec_or_none(_mloss.get("daily_realized_loss_halt_usd"))
+        _run_exp = _limit_of(limits, "max_total_exposure_usd")
+        _run_loss = _limit_of(limits, "daily_realized_loss_halt_usd")
+        if _sig_exp is None or _sig_loss is None:
+            raise ArmingRefusal("MANDATE_SCOPE_UNREADABLE", {})
+        if _run_exp is None or _run_loss is None:
+            raise ArmingRefusal(
+                "MANDATE_RUNNING_LIMITS_UNREADABLE",
+                {"note": "limits that cannot be read cannot be shown to be "
+                         "inside the signed scope"})
+        if _run_exp > _sig_exp or _run_loss > _sig_loss:
+            raise ArmingRefusal(
+                "MANDATE_LIMITS_WIDER_THAN_SIGNED",
+                {"signed_exposure": str(_sig_exp),
+                 "running_exposure": str(_run_exp),
+                 "signed_daily_loss": str(_sig_loss),
+                 "running_daily_loss": str(_run_loss)})
+        # MAKER ONLY IS A SIGNED TERM, re-asserted here so a signed mandate
+        # cannot be read as authorizing a crossing order even if some other
+        # layer were to permit one.
+        if str(_mp.get("execution_mode") or "").upper() != "MAKER_ONLY":
+            raise ArmingRefusal("MANDATE_EXECUTION_MODE_NOT_MAKER_ONLY",
+                                {"mode": str(_mp.get("execution_mode"))[:40]})
+
     # 2. EXPLICIT OWNER AUTHORIZATION, from EITHER of two owner-held
     #    objects. Not both, and neither is weaker than the other.
     #

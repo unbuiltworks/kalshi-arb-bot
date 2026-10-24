@@ -107,6 +107,13 @@ SEQ_ROOT_ENV = "L5_LIVE_ROOT"
 #: the owner-set document, read by the existing EnvApprovalStore medium.
 MANDATE_ENV = "L5_MANDATE_DOC"
 
+#: the watchdog base URL serving `mandate_floor.json` and
+#: `mandate_revocations.json`. UNSET REFUSES: an executor that cannot find
+#: out whether its mandate was superseded or revoked is not authorized, which
+#: is the rule `HaltGate` already applies to the latch. Normally the same
+#: host as L5_HALT_URL, because the watchdog owns the volume both live on.
+STORE_URL_ENV = "L5_MANDATE_STORE_URL"
+
 
 class MandateUnavailable(RuntimeError):
     """The answer could not be established. NOT the same as 'no mandate'."""
