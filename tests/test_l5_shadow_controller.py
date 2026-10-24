@@ -2031,3 +2031,25 @@ def test_the_comparison_always_gets_the_FULL_reports(tmp_path):
         # runner hands it the full one
         assert thin["comparisons"][t]["per_scenario"][
             sc.HEADLINE_SCENARIO]["common_windows"] == 0
+
+
+def test_the_campaign_budget_cannot_exceed_the_proposed_envelope():
+    """A CEILING DERIVED FROM A MEASURED BALANCE GOES STALE.
+
+    `DEFAULT_BUDGET_USD` was 11.10, computed as the unspent part of the
+    account-wide $20 cumulative gate when all-time realized was -8.8988.
+    All-time realized is now -11.6213, leaving $8.3787 unspent -- so 11.10
+    exceeded the account-wide headroom by $2.7213 and had become decoration,
+    the account-wide gate refusing first every time.
+
+    This pins the budget to the PROPOSED ENVELOPE instead of to a
+    remembered balance, so it cannot go stale the same way again.
+    """
+    from decimal import Decimal as Dc
+    from src import l5_campaign_budget as CB
+    proposed_envelope = Dc("5")
+    assert CB.DEFAULT_BUDGET_USD <= proposed_envelope, CB.DEFAULT_BUDGET_USD
+    # and it must still be inside the account-wide headroom as measured at
+    # the 2026-10-24T20:54Z reconcile
+    account_ceiling, all_time_realized = Dc("20"), Dc("-11.6213")
+    assert CB.DEFAULT_BUDGET_USD <= account_ceiling + all_time_realized

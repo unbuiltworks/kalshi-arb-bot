@@ -54,6 +54,7 @@ from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
 from src import l5_two_sided_shadow as TS
 from src import l5_campaign_approval as CAMP
+from src import l5_runtime_config_verify as CFGV
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
@@ -5992,6 +5993,32 @@ def main() -> int:
             raise
         emit("L5_BUDGET_SELFCHECK", {"ran": False, "all_passed": False,
                                      "error": type(_exc).__name__})
+    # THE EFFECTIVE RUNTIME CONFIGURATION, once, at boot.
+    #
+    # `l5_runtime_config_verify` was written to be run INSIDE the deployed
+    # container -- "the only configuration that matters is the one the
+    # running process actually has" -- and then nothing ever ran it there.
+    # So the effective limits could only be established by reading
+    # variables, which is both the wrong answer (a name can hold a value the
+    # accessor clamps, floors or ignores, and several approved figures are
+    # code constants with no variable at all) and the one answer that cannot
+    # be obtained without handling secrets.
+    #
+    # It reads configuration and returns a verdict. It arms nothing, submits
+    # nothing and touches no venue, and it is secret-aware by construction:
+    # values are echoed only for allowlisted names and one row exists purely
+    # to assert no private key is present in the runtime at all.
+    try:
+        emit("L5_EFFECTIVE_RUNTIME_CONFIG", CFGV.verify())
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        # A CONFIGURATION WE CANNOT ESTABLISH IS A FAILED CHECK, never a
+        # silent pass -- the same rule the module applies to its own rows.
+        emit("L5_EFFECTIVE_RUNTIME_CONFIG",
+             {"label": "L5_EFFECTIVE_RUNTIME_CONFIG", "PASS": False,
+              "ran": False, "error": type(_exc).__name__,
+              "detail": T.redact("%s" % _exc)[:200]})
     # THE BOUNDED CANCELLATION-MECHANISM MODE, chosen once and announced.
     # It REPLACES the trading tick: see Runner.mechanism_tick for why the
     # strategy and our own two cancellers must be out of the way for the

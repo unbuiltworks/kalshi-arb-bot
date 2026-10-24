@@ -68,6 +68,17 @@ COPY src/l5_book_evidence.py src/l5_book_evidence.py
 # no order path, and cannot arm, submit or cancel -- asserted by
 # test_nothing_in_the_verifier_can_submit_arm_or_reach_a_venue.
 COPY src/l5_runtime_config_verify.py src/l5_runtime_config_verify.py
+# Ed25519 owner-mandate VERIFICATION. Verification only: the private key is
+# not in this repository, not in Railway and not in any environment the
+# executor can read, and `MANDATE_PUBKEYS` ships EMPTY so nothing verifies
+# until the owner commits a public half in a reviewed change.
+#
+# It is here because the verifier imports it and the runner now runs the
+# verifier at boot -- without this COPY that import raises inside the
+# container and the configuration check silently reports its own failure
+# instead of the configuration. test_the_image_copies_every_module_the_
+# entrypoint_can_reach caught exactly that.
+COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_queue_measurement.py src/l5_queue_measurement.py
 COPY src/l5_defensive_completion.py src/l5_defensive_completion.py
 COPY src/l5_two_sided_probe.py src/l5_two_sided_probe.py

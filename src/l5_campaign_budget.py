@@ -71,14 +71,24 @@ ROOT_ENV = "L5_LIVE_ROOT"
 
 #: THE OWNER-APPROVED CAMPAIGN WORST-CASE CEILING.
 #:
-#: RE-SCOPED 20 -> 11.10 and the reason is arithmetic, not caution. The
-#: ACCOUNT-WIDE cumulative gate is $20 and `all_time_realized_usd` is
-#: -8.8988, so only $11.1012 of that ceiling is unspent. The owner's
-#: instruction is to preserve the account-wide limit and never bypass it, so
-#: a $20 campaign budget could never bind: the account-wide gate would refuse
-#: first, every time, and the campaign number would be decoration. The
-#: smaller of the two relevant limits is the real one.
-DEFAULT_BUDGET_USD = D("11.10")
+#: RE-SCOPED 20 -> 11.10 -> 5.00, and the reason is arithmetic, not caution.
+#:
+#: The 11.10 was computed as the unspent part of the ACCOUNT-WIDE $20
+#: cumulative gate when `all_time_realized_usd` was -8.8988. That figure has
+#: moved: the 2026-10-24T20:54Z venue reconcile reports all-time realized
+#: -11.6213, so only $8.3787 of the $20 ceiling is now unspent and an $11.10
+#: campaign budget EXCEEDS the account-wide headroom by $2.7213. It had
+#: become decoration again, in the same way and for the same reason -- the
+#: account-wide gate would refuse first, every time.
+#:
+#: 5.00 is the owner's proposed aggregate exposure for the next campaign and
+#: is the smallest of the three relevant bounds ($5 proposed, $8.3787
+#: account-wide headroom, $20 account-wide ceiling), so it is the one that
+#: actually binds. A constant derived from a measured balance goes stale
+#: every time the balance moves, which is why this one is now pinned by a
+#: test to stay at or under the proposed envelope rather than at or under a
+#: remembered balance.
+DEFAULT_BUDGET_USD = D("5.00")
 
 
 class CampaignBudgetUnavailable(RuntimeError):
