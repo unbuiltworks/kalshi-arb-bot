@@ -28,7 +28,15 @@ TAPES = sorted(glob.glob(
 #: venue-confirmed settlement_pnl per preserved window, from L5_LIVE_SETTLED
 EXPECTED = {"0100z": D("0.0416"), "0115z": D("-0.2304"),
             "0130z": D("0.1905"), "0145z": D("-0.3605"),
-            "0200z": D("0.0732")}
+            "0200z": D("0.0732"), "0215z": D("0.8625"),
+            "0230z": D("0.0812")}
+
+#: the campaign's venue-reconciled total across all EIGHT authorized windows.
+#: Seven of them settled; 0030z submitted one order, it was cancelled with
+#: zero fill, and it therefore has no settlement record and contributed
+#: exactly $0.0000. So seven preserved windows sum to the eight-window total,
+#: and that is an identity rather than a coincidence.
+CAMPAIGN_EIGHT_WINDOW_TOTAL = D("0.6581")
 
 
 def load(path):
@@ -69,7 +77,27 @@ class TestItReproducesTheSettledCampaign:
     def test_the_rolling_total_matches_the_reconciled_sum(self):
         roll = WA.campaign_rolling([r for _s, r in records()])
         assert roll["realized_net_usd"] == sum(EXPECTED.values())
-        assert roll["realized_net_usd"] == D("-0.2856")
+
+    def test_it_reproduces_the_FULL_eight_window_campaign_total(self):
+        """Seven settled windows plus a zero-fill eighth. The earlier
+        -$0.2856 figure was a FIVE-window subset -- a coverage artifact of
+        which tapes had been captured at the time, never a discrepancy. The
+        difference, +$0.9437, is 0215z (+0.8625) plus 0230z (+0.0812)."""
+        roll = WA.campaign_rolling([r for _s, r in records()])
+        assert roll["realized_net_usd"] == CAMPAIGN_EIGHT_WINDOW_TOTAL
+        assert roll["windows_confirmed"] == 7
+        subset = sum(EXPECTED[k] for k in
+                     ("0100z", "0115z", "0130z", "0145z", "0200z"))
+        assert subset == D("-0.2856")
+        assert CAMPAIGN_EIGHT_WINDOW_TOTAL - subset == D("0.9437")
+        assert EXPECTED["0215z"] + EXPECTED["0230z"] == D("0.9437")
+
+    def test_matched_and_residual_split_the_total_without_overlap(self):
+        roll = WA.campaign_rolling([r for _s, r in records()])
+        assert roll["matched_surplus_usd"] == D("0.3865")
+        assert roll["residual_pnl_usd"] == D("0.2716")
+        assert (roll["matched_surplus_usd"] + roll["residual_pnl_usd"]
+                == roll["realized_net_usd"])
 
     def test_first_leg_and_complement_reconcile_to_the_venue_lines(self):
         """min(first, complement) must equal the venue's matched quantity and
@@ -93,12 +121,29 @@ class TestItReproducesTheSettledCampaign:
 
     def test_the_counts_are_what_was_counted_by_hand(self):
         roll = WA.campaign_rolling([r for _s, r in records()])
-        assert roll["orders_submitted"] == 11
-        assert roll["filled_orders"] == 8
-        assert roll["fill_events"] == 8
+        assert roll["orders_submitted"] == 15
+        assert roll["filled_orders"] == 11
+        assert roll["fill_events"] == 11
         assert roll["partial_fills"] == 0
-        assert roll["windows_with_a_completed_pair"] == 3
+        assert roll["windows_with_a_completed_pair"] == 4
         assert roll["actual_fees_usd"] == D(0)
+
+    def test_the_l5_reference_is_labelled_and_not_a_target(self):
+        roll = WA.campaign_rolling([r for _s, r in records()])
+        ref = roll["l5_reference"]
+        assert ref["fills_per_window"] == D("32.48")
+        # ours, on this coverage: 11 fill events over 7 windows
+        assert ref["ours_fills_per_window"] == D(11) / D(7)
+        assert "COMPARISON REFERENCE ONLY" in ref["basis"]
+        assert "not a target" in ref["basis"]
+
+    def test_no_gate_or_planner_reads_the_reference(self):
+        import inspect
+        from src import l5_live_execution as LX
+        from src import l5_two_sided_probe as TS
+        for mod in (LX, TS):
+            assert "L5_REFERENCE_FILLS_PER_WINDOW" not in inspect.getsource(
+                mod)
 
 
 class TestTrapOnePartialFillIsOneOrder:

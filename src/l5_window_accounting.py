@@ -42,6 +42,26 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 FIRST_LEG = "FIRST_LEG"
 COMPLEMENT = "COMPLEMENT"
 
+#: L5's own BTC15m fill rate, as a COMPARISON REFERENCE ONLY.
+#:
+#: 693,916 fills across 5,546 windows of the frozen Polymarket corpus
+#: (2026-03-19 to 08-31) = 32.48 fills per window. Reported beside our own
+#: rate so the throughput gap is visible without arithmetic; see
+#: analysis/l5/L5_INVENTORY_TRANSLATION.md.
+#:
+#: IT IS NOT A TARGET AND NOTHING READS IT. His rate is what let thin matched
+#: margins accumulate, and the same corpus shows his per-fill edge falling 45x
+#: inside it, with 98.0% of BTC15m net earned before the holdout. Copying the
+#: rate is separately contraindicated at our size: our residuals sit at the
+#: 5.7th-15.3rd percentile of his, where his demonstrated behaviour is
+#: EXTEND 0.713 / COMPLEMENT 0.027.
+L5_REFERENCE_FILLS_PER_WINDOW = D("32.48")
+L5_REFERENCE_BASIS = ("L5 BTC15m frozen corpus: 693,916 fills / 5,546 "
+                      "windows = 32.48 per window, 2026-03-19 to 08-31. "
+                      "COMPARISON REFERENCE ONLY -- not a target, not read by "
+                      "any gate, and his per-fill edge fell 45x inside that "
+                      "same corpus.")
+
 
 def _d(v: Any) -> Optional[D]:
     """A Decimal, or None. Never raises, never guesses a zero: an unreadable
@@ -363,6 +383,15 @@ def campaign_rolling(records: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         + s(prov, "incentives", "rebate_estimate_usd"),
         "rebate_credited_usd": s(conf, "incentives", "rebate_credited_usd")
         + s(prov, "incentives", "rebate_credited_usd"),
+        "l5_reference": {
+            "fills_per_window": L5_REFERENCE_FILLS_PER_WINDOW,
+            "ours_fills_per_window": (
+                None if not (len(conf) + len(prov))
+                else (D(int(s(conf, "orders", "fill_events")
+                             + s(prov, "orders", "fill_events")))
+                      / D(len(conf) + len(prov)))),
+            "basis": L5_REFERENCE_BASIS,
+        },
         "labels": ("realized_net_usd is the sum of venue-confirmed "
                    "settlement lines over CONFIRMED windows only. "
                    "Provisional windows are counted and never netted. No "
