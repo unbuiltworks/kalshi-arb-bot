@@ -72,10 +72,31 @@ the gate's own answer: the documents exist, parse, carry a usable `asof_utc`
 and sit inside the 900 s bound. It authorizes nothing and writes nothing,
 pinned by walking its code object.
 
-`L5_MANDATE_STORE_URL` is set to the watchdog's private URL. **Result
-reported separately once the boot completes.** Freshness is proved by the
-publish being inside the sweep loop at a 20 s cadence against the 900 s
-bound — a watchdog that stops refreshing **stops authorizing**.
+### VERIFIED, 2026-10-24T22:17:45Z
+
+```
+L5_MANDATE_STORE_PROBE
+  configured  : true
+  host        : l5-halt-watchdog.railway.internal:8080
+  floor       : {ok: true, value: 0}
+  revocations : {ok: true, value: []}
+  verdict     : BOTH_DOCUMENTS_FRESH
+```
+
+Both endpoints are **reachable, well-formed and inside the 900 s staleness
+bound**, read by the real consumer over the real private network using the
+arming gate's own clients.
+
+- `floor: 0` for an unseen key is a **positive statement** by the watchdog
+  that it has seen no sequence for it — not a default.
+- `revocations: []` is a **positive statement** that nothing is revoked,
+  published with a fresh stamp — deliberately not the same as the document
+  being absent, which refuses.
+- `trusted_key_ids: null` — the gate is still correctly **inert**.
+
+Freshness is maintained by the publish sitting inside the sweep loop at a
+20 s cadence against the 900 s bound, so a watchdog that stops refreshing
+**stops authorizing**.
 
 ---
 
@@ -138,7 +159,8 @@ Rest both sides when justified · work multiple price levels · respond
 continuously to fills and movement · **EXTEND and REDUCE both available** ·
 replenish automatically · continue across windows without restart · **do not
 force pairs, fills or rebalancing when economics are unfavourable** (the pair
-cap, the price floor and the deficit bound each refuse by name).
+cap and the deficit bound each refuse by name; the price floor will too
+once set — see the correction below).
 
 ### Automatic halts
 
@@ -171,11 +193,30 @@ realized net P&L**. Nothing simulated or unsettled will be called profit.
 | `L5_TS_TWO_ORDER_PAIR` | off | `1` |
 | `L5_TS_ROUND_ALLOCATIONS` | 1 | `2` |
 | `L5_TS_OPENING_LEG_MAX_CONTRACTS` | 3 | `2` |
+| `L5_TS_MIN_FIRST_LEG_PRICE` | **0** (not 0.20) | `0.20` |
 | `L5_LIVE_AUTH_NOT_AFTER` | expired | your window |
 | campaign approval document | stale | fresh |
 
-Already set (tightenings): `L5_LIVE_AUTH_MAX_OPEN=16`,
-`L5_MAX_WORST_CASE_DEFICIT_USD=2.00`, `L5_MANDATE_STORE_URL`.
+Already set (tightenings only): `L5_LIVE_AUTH_MAX_OPEN=16` — **verified
+in-container, `effective: 16, ok: true`**, where the same row read
+`32 / FAIL` an hour earlier — plus `L5_MAX_WORST_CASE_DEFICIT_USD=2.00` and
+`L5_MANDATE_STORE_URL`.
+
+### Two things the in-container config corrected
+
+I had both from module defaults rather than from the running process.
+
+1. **The first-leg price floor is `0` in production, not `0.20`.**
+   `L5_TS_MIN_FIRST_LEG_PRICE` overrides the module default, so the $0.20
+   floor is **not in force** and is listed above as a change to make. I have
+   not set it: it changes what the engine may open, so it belongs to your
+   signature rather than to a tightening I apply unasked.
+2. **The $2.00 deficit bound was not observable in-container.** The verifier
+   graded 23 limits and the one *new* risk control of this campaign was not
+   among them — so I could assert its value but not read it, which is the
+   exact failure mode that module exists to prevent. It is now an observed
+   row read through the money path's own parser, so a malformed value appears
+   as the refusal it would be at boot rather than as a number.
 
 ---
 
@@ -246,6 +287,31 @@ Paste `signed_mandate.json` into **`L5_MANDATE_DOC`** on `l5-pmus-live`.
 1. **Halt latch** on the watchdog — fastest, no redeploy, executor cannot clear.
 2. `L5_MANDATE_REVOKED` on the **watchdog** (the executor cannot write it).
 3. Raise `seq` with a new mandate, or clear `L5_MANDATE_DOC`.
+
+---
+
+### In-container configuration, 22:17:45Z
+
+| row | effective | verdict |
+|---|---|---|
+| `submission_budget_open` | **16** | ok ✓ |
+| `daily_realized_loss_halt_usd` | 5 | ok |
+| `maker_pair_ceiling` | 0.96 | ok |
+| `max_live_orders` | 1 | ok |
+| `cancel_margin_s` | 300.0 | ok |
+| `maker_only_forbids_defensive_crossing` | true | ok |
+| `mandate_signing_key_absent_from_runtime` | **true** | ok |
+| `aggregate_exposure_usd` | **5** vs expected 20 | FAIL — **runtime is tighter**; the expectation is stale against your $5 restoration |
+| `mandate_trusted_key_ids` | **(none)** | gate inert |
+| `mandate_enforcing` | **false** | gate inert |
+| `ts_two_order_pair_enabled` | **false** | not armed |
+| `ts_round_allocations` | 1 | → 2 on signature |
+| `ts_opening_leg_max_contracts` | 3 | → 2 on signature |
+| `ts_min_first_leg_own_price` | **0** | → 0.20 on signature |
+| `ts_active_any_market` / `ts_named_market` | true / `cpc-btc-updown-15m-*` | scoped |
+
+The single graded failure is the exposure row, where the runtime is **tighter**
+than the figure the verifier carries. No dollar bound is breached.
 
 ---
 
