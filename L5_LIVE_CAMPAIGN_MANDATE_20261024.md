@@ -118,11 +118,14 @@ leaves $3.3787 of account-wide headroom untouched.
 5. Residual ≥ 3 contracts → `residual_cap` refusal.
 6. Authorization expiry (`L5_LIVE_AUTH_NOT_AFTER`) → `AUTHORIZATION_EXPIRED`.
 7. Window budget spent (8) → no further windows reserved.
-8. **Timing floors, per window:** entry cutoff 600 s after start, complete
-   cutoff 720 s, cancel margin 180 s before close, order TTL 120 s, minimum
-   entry runway 300 s. Entering late is the dangerous side, so `entry` and
-   `complete` are raise-only in the *earlier* direction — neither knob can
-   extend trading.
+8. **Timing floors, per window** (production-verified at 21:12:05Z): entry
+   cutoff 600 s after start, complete cutoff 720 s, **cancel margin 300 s**
+   before close, order TTL 120 s, minimum entry runway 300 s. Defensive
+   terminal 600 s, guard opens 540 s, last actionable 585 s. Entering late is
+   the dangerous side, so `entry` and `complete` are raise-only in the
+   *earlier* direction — neither knob can extend trading.
+   *(Corrected: I first read 180 s for the cancel margin from the module
+   default locally. Production is 300 s.)*
 9. Unresolved accounting → blocks live authorization outright.
 10. No automatic relaunch after a completed or crashed money-moving session.
 
@@ -133,6 +136,51 @@ exact-order cancellation by venue id; an order absent from the venue's open
 orders is treated as terminal but **not released until an authoritative
 `/v1/order` read books its final `cumQuantity`**, because releasing it
 unbooked is how 2.25 DOWN shares once arrived with no cost basis.
+
+---
+
+## 3b. Effective runtime configuration, read inside the container
+
+`L5_EFFECTIVE_RUNTIME_CONFIG` at **2026-10-24T21:12:05Z** — 23 graded rows,
+each the value the money path's own accessor returns, not the text of a
+variable. **`PASS: false`, 2 failed.**
+
+| row | effective | expected | verdict |
+|---|---|---|---|
+| `aggregate_exposure_usd` | **$5** | $20 | FAIL — **not a risk** |
+| `submission_budget_open` | **32** | 16 | **FAIL — real** |
+| `daily_realized_loss_halt_usd` | $5 | $5 | ok |
+| `max_live_orders` | 1 | 1 | ok |
+| `maker_pair_ceiling` | 0.96 | 0.96 | ok |
+| `max_windows_authorization` | 8 | 8 | ok |
+| `campaign_duration_ceiling_s` | 14400 | 14400 | ok |
+| `series_allowlist` | `cpc-btc-updown-15m-` | same | ok |
+| `maker_only_forbids_defensive_crossing` | true | true | ok |
+| `mandate_signing_key_absent_from_runtime` | **true** | true | ok |
+
+- **`aggregate_exposure_usd` $5 vs $20 is the restored envelope, not a
+  breach.** The runtime is *tighter* than the figure the verifier carries;
+  the verifier's expected value is stale against your $5 restoration. No
+  action needed, and it is the number this mandate proposes.
+- **`submission_budget_open` 32 vs 16 is real.** The OPEN submission class is
+  running at twice its approved daily rate. It is a *rate* ceiling, not a
+  capital one, so no dollar bound is breached — the $5 cash gate, the $5
+  campaign budget and the $5 daily halt all still bind. But it is looser than
+  approved and should be corrected to 16 before or with this campaign. **I
+  have not changed it**: it is an approved figure, so moving it is yours.
+
+Observed, not graded:
+
+| row | effective |
+|---|---|
+| `shadow_only` | **false** |
+| `window_strategy` | **TWO_SIDED** |
+| `experiment_id` | `l5-1w-20261022T191823Z` |
+| `mandate_trusted_key_ids` | **(none)** |
+| `mandate_verdict` | **`MANDATE_NO_TRUSTED_KEY`** |
+| `mandate_enforcing` | **false** |
+
+The last three confirm by observation what §6 establishes by construction.
 
 ---
 
@@ -151,7 +199,12 @@ Three prerequisites, all committed, none of which arms anything:
    imports it lazily, so without the COPY the boot check would have reported
    its own `ImportError` in place of the configuration. Verification only —
    `MANDATE_PUBKEYS` ships empty.
-3. **The campaign budget was stale by $2.72.** It was $11.10, computed as the
+3. **The probe's own scope is now readable in-container** — order size,
+   round allocations, the price floor, the TTL, the three timing cutoffs and
+   `two_order_pair_enabled`, the switch that decides whether both legs may
+   rest at once. None was visible before, so a campaign's stated size could
+   only be asserted from module defaults.
+4. **The campaign budget was stale by $2.72.** It was $11.10, computed as the
    unspent part of the $20 account-wide gate when all-time realized was
    −$8.8988. It is now −$11.6213, leaving $8.3787 — so $11.10 *exceeded* the
    headroom and had become decoration, the account-wide gate refusing first
