@@ -124,6 +124,7 @@ def main() -> int:
     # stops authorizing arming -- which is the liveness property that bound
     # exists to create.
     _pub = MS.WatchdogPublisher(root, root)
+    _first_publish = True
     wd = W.from_env(store=store)
     emit("L5_WATCHDOG_BOOT", {
         "state_dir": root, "port": port, "poll_s": poll_s,
@@ -161,8 +162,18 @@ def main() -> int:
             # refuse, not stop the watchdog from watching.
             try:
                 _p = _pub.publish()
-                if _p.get("revoked"):
-                    emit("L5_MANDATE_PUBLISHED", _p)
+                # EMIT THE FIRST SUCCESS OF EACH PROCESS, and thereafter
+                # only when something is revoked. Silence on the happy path
+                # kept the log clean and made the fix UNVERIFIABLE: these
+                # documents are served over private networking and this
+                # service has no public domain, so this line is the only
+                # evidence available that publishing works at all and that
+                # its stamp is fresh. Still bounded -- one line per process,
+                # not one per 20-second sweep.
+                if _first_publish or _p.get("revoked"):
+                    emit("L5_MANDATE_PUBLISHED",
+                         dict(_p, first_of_process=_first_publish))
+                    _first_publish = False
             except BaseException as _pexc:                     # noqa: BLE001
                 if isinstance(_pexc, (KeyboardInterrupt, SystemExit)):
                     raise

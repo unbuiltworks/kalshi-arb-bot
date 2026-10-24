@@ -230,3 +230,21 @@ def test_the_cryptography_import_stays_lazy():
                 a.name for a in node.names)
             assert "cryptography" not in name, (
                 "cryptography must not be imported at module level")
+
+
+def test_the_first_publish_of_each_process_is_logged_exactly_once():
+    """VERIFIABILITY. These documents are served over private networking and
+    the service has no public domain, so the log is the only evidence that
+    publishing works and that its stamp is fresh. Silence on the happy path
+    made the fix unverifiable; one line per sweep would be 4,320 lines a day.
+    So: the FIRST success of each process, and thereafter only a revocation.
+    """
+    with open("scripts/l5_halt_watchdog.py") as fh:
+        src = fh.read()
+    body = src[src.index("    while True:"):]
+    assert "_first_publish or _p.get(\"revoked\")" in body
+    assert "_first_publish = False" in body
+    # initialised once, OUTSIDE the loop, or every sweep would be "first"
+    head = src[:src.index("    while True:")]
+    assert "_first_publish = True" in head
+    assert "first_of_process" in body
