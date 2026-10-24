@@ -1254,13 +1254,13 @@ def test_the_residual_cap_really_does_land_in_justified_now():
 # hypothesis is TRUE -- these pin the mechanism so the shadow comparison
 # measures two-sidedness and nothing else.
 
-def _seed_up(c, lad):
+def _seed_up(c, lad, slug=SLUG):
     """Hand-place an UP order so the policy's wanted DOWN is the OPPOSITE
     side. Discovered empirically: from flat, the fixture policy quotes NO."""
-    o = FM.HypoOrder(SLUG, FM.UP, D("0.49"), D(1), WS + 300.0, ladder=lad,
+    o = FM.HypoOrder(slug, FM.UP, D("0.49"), D(1), WS + 300.0, ladder=lad,
                      bid="0.50", ask="0.51", coid="seed")
-    c._orders_for(SLUG, sc.HEADLINE_SCENARIO)[FM.UP] = o
-    scn = c._scen(SLUG, sc.HEADLINE_SCENARIO)
+    c._orders_for(slug, sc.HEADLINE_SCENARIO)[FM.UP] = o
+    scn = c._scen(slug, sc.HEADLINE_SCENARIO)
     c._set_resting(scn, {FM.UP: {"side": "YES", "price": "0.49",
                                  "relation": "open", "t": WS + 300.0,
                                  "_side_key": FM.UP}})
@@ -1441,7 +1441,8 @@ def test_two_fills_in_one_tick_are_both_counted(tmp_path):
 # because the production numbers come from this function, and an arithmetic
 # slip here would be invisible -- it would simply report a different answer.
 # --------------------------------------------------------------------------
-def _arm(two_sided, windows, *, offset=1, resting=None, execu=None):
+def _arm(two_sided, windows, *, offset=1, resting=None, execu=None,
+         episodes=0, opp_windows=0):
     """A minimal {label: report()}-shaped arm over the three scenarios.
 
     `resting` goes into `already_resting_split`, NOT into
@@ -1459,7 +1460,9 @@ def _arm(two_sided, windows, *, offset=1, resting=None, execu=None):
         "opportunities": {
             "justified_refusals": 0, "possible_misses": 0, "reasons": {},
             "already_resting_total": sum((resting or {}).values()),
-            "already_resting_split": dict(resting or {})}}
+            "already_resting_split": dict(resting or {}),
+            "already_resting_opposite_side_episodes": episodes,
+            "windows_with_opposite_side_want": opp_windows}}
     return {"two_sided": two_sided, "offset_ticks": offset,
             "economics": {"per_scenario": {s: dict(scen)
                                            for s in sc.SCENARIOS}}}
@@ -1541,11 +1544,11 @@ def test_requirement_1_reports_the_opposite_side_split_per_arm():
     r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
          ["requirement_1_already_resting"])
     assert r["control"]["already_resting_opposite_side"] == 420
-    assert r["control"]["classified"] == 500
+    assert r["control"]["classified_ticks"] == 500
     assert sum(r["control"][k] for k in sc.RESTING_SPLIT) == 500
     # the SHARE is over the classified refusals, which is the only
     # denominator the split actually covers
-    assert r["control"]["opposite_side_share_of_classified"] == "0.8400"
+    assert r["control"]["opposite_side_share_of_classified_TICKS"] == "0.8400"
 
 
 def test_a_positive_result_on_too_few_windows_authorizes_nothing():
@@ -1633,10 +1636,10 @@ def test_the_split_reaches_the_comparison_from_a_real_arm(tmp_path):
     r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
          ["requirement_1_already_resting"])
     assert {k: r["control"][k] for k in sc.RESTING_SPLIT} == seen
-    assert r["control"]["classified"] == sum(seen.values())
+    assert r["control"]["classified_ticks"] == sum(seen.values())
     assert r["control"]["lifetime_bucket"] == sum(seen.values())
     assert r["control"]["split_covers_whole_bucket"] is True
-    assert r["control"]["opposite_side_share_of_classified"] == "1.0000"
+    assert r["control"]["opposite_side_share_of_classified_TICKS"] == "1.0000"
     # the reason bucket and its split must account for each other, or the
     # split is not a split of it
     assert out["per_scenario"][sc.HEADLINE_SCENARIO]["fill_model"][
@@ -1661,11 +1664,11 @@ def test_the_split_starting_later_than_the_bucket_is_said_not_hidden():
     out = sc.compare_two_sided(arms)
     r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
          ["requirement_1_already_resting"]["control"])
-    assert r["classified"] == 100
+    assert r["classified_ticks"] == 100
     assert r["lifetime_bucket"] == 66918
     assert r["split_covers_whole_bucket"] is False
     # the share is 80/100, NOT 80/66918
-    assert r["opposite_side_share_of_classified"] == "0.8000"
+    assert r["opposite_side_share_of_classified_TICKS"] == "0.8000"
 
 
 def test_two_sided_PERMITS_a_second_side_it_does_not_seek_one(tmp_path):
@@ -1699,3 +1702,62 @@ def test_two_sided_PERMITS_a_second_side_it_does_not_seek_one(tmp_path):
     c2.step(WS + 320.0, slug=SLUG, book=_book("0.50", "0.51"),
             window_end_ts=WEND, prints=[], ladder=lad)
     assert len(c2._resting_map(c2._scen(SLUG, sc.HEADLINE_SCENARIO))) == 2
+
+
+def test_a_long_refusal_run_is_ONE_episode_and_ONE_window(tmp_path):
+    """THE MEASUREMENT-DESIGN BUG, pinned.
+
+    Over three consecutive production minutes OPPOSITE_SIDE sat frozen at
+    17 while SAME_SIDE ran 60 -> 76 -> 95, so the reported share fell
+    0.2208 -> 0.1828 -> 0.1518 with nothing whatever changing. A tick count
+    measures how long an order SAT there, which is a function of our poll
+    rate -- so a rate built on it drifts toward zero the longer we look.
+
+    The episode and window counters are the denominators that do not.
+    """
+    c = ctl(tmp_path, placement=sc.ONE_TICK_BEHIND)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    _seed_up(c, lad)
+    for i in range(12):
+        c.step(WS + 320.0 + i, slug=SLUG, book=_book("0.50", "0.51"),
+               window_end_ts=WEND, prints=[], ladder=lad)
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    # twelve ticks of the SAME standing situation
+    assert t["already_resting_opposite_side"] == 12
+    # ... but one episode, and one window
+    assert t["already_resting_opposite_side_episodes"] == 1
+    assert t["windows_with_opposite_side_want"] == 1
+
+    # and the comparison reports the window share, not the tick share
+    out = sc.compare_two_sided({
+        sc.TWO_SIDED_CONTROL: c.report(),
+        sc.TWO_SIDED_TREATMENT: ctl(tmp_path / "b",
+                                    placement=sc.TWO_SIDED).report()})
+    r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
+         ["requirement_1_already_resting"]["control"])
+    assert r["opposite_side_episodes"] == 1
+    assert r["windows_with_opposite_side_want"] == 1
+    assert r["classified_ticks"] == 12
+    # the tick share says 1.0000 -- which is exactly how misleading it is
+    assert r["opposite_side_share_of_classified_TICKS"] == "1.0000"
+    # no window has CLOSED here, so the window denominator does not exist
+    # yet and the share is None. A missing denominator is not a zero rate.
+    assert r["windows_observed"] == 0
+    assert r["share_of_windows_wanting_the_other_side"] is None
+
+
+def test_a_second_window_counts_a_second_window(tmp_path):
+    """`windows_with_opposite_side_want` must count WINDOWS, so the
+    once-per-window latch has to live on the market slot and not the
+    tally."""
+    c = ctl(tmp_path, placement=sc.ONE_TICK_BEHIND)
+    lad = _ladder(bid="0.50", ask="0.51", bid_qty="0", ask_qty="0")
+    other = SLUG.replace("1315z", "1330z")
+    for slug in (SLUG, other):
+        _seed_up(c, lad, slug=slug)
+        for i in range(4):
+            c.step(WS + 320.0 + i, slug=slug, book=_book("0.50", "0.51"),
+                   window_end_ts=WEND, prints=[], ladder=lad)
+    t = c._tally(sc.HEADLINE_SCENARIO)
+    assert t["already_resting_opposite_side"] == 8
+    assert t["windows_with_opposite_side_want"] == 2

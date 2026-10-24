@@ -18,30 +18,51 @@ recorded without recording whether the policy wanted the side we were
 already resting or the other one. The gate now computes the wanted side as
 a diagnostic and tallies three buckets.
 
-**Production, `ARGMAX@ONE_TICK_BEHIND` (the one-sided control), classified
-refusals since 2026-10-24T20:06Z:**
-
-| bucket | count | share |
-|---|---|---|
-| `already_resting_OPPOSITE_SIDE` | 17 | **22.08%** |
-| `already_resting_SAME_SIDE` | 60 | 77.92% |
-| `already_resting_SIDE_UNKNOWN` | 0 | 0.00% |
-| classified | 77 | |
-
 **Only the OPPOSITE_SIDE bucket is addressable by two-sidedness.** A
 SAME_SIDE refusal is a re-quote of a side already resting — the one-order
 limit was right to refuse it, and a two-sided arm refuses it too.
 
-So the 66,044-refusal figure that motivated this work is **not** the
-opportunity. On this sample the addressable share is a little over a fifth
-of it. Scaling naively, ~14,600 of the 66,966 lifetime refusals, not
-66,966.
+### The first rate I reported was measuring the wrong thing
 
-**N = 77 is small and this rate is provisional.** The lifetime bucket
-(66,966) was counted since 2026-10-19; the split only since today's
-deploy, so the two have different denominators and the share must not be
-read against the lifetime figure. The line reports
-`split_covers_whole_bucket: false` for exactly this reason.
+Three consecutive production readings, one minute apart, on the one-sided
+control arm:
+
+| time | OPPOSITE | SAME | classified ticks | reported share |
+|---|---|---|---|---|
+| 20:24:46Z | **17** | 60 | 77 | 0.2208 |
+| 20:25:47Z | **17** | 76 | 93 | 0.1828 |
+| 20:26:48Z | **17** | 95 | 112 | 0.1518 |
+
+**OPPOSITE_SIDE is frozen at 17 while SAME_SIDE grows every tick, so the
+share fell by a third in two minutes with nothing whatever changing.**
+
+A per-tick count measures *how long an order sat there* — a function of our
+poll rate. Once a side rests and inventory is flat, every later tick in the
+window is SAME_SIDE by construction, so any rate built on that denominator
+drifts toward zero the longer you look at it. The 22.08% I reported first
+is not a property of the market.
+
+So the counters now also record the denominators that do not drift:
+
+- `opposite_side_episodes` — a new episode only on the **transition** into
+  wanting the other side, so a twelve-tick standing situation is one
+  episode, not twelve;
+- `windows_with_opposite_side_want` — each window counted once however
+  long it lasts, against `windows_observed`.
+
+The per-tick counts are kept, because they are what the earlier 66,044
+figure was and dropping them would leave the two unreconcilable. They are
+now named `..._TICKS` so they cannot be read as an opportunity rate.
+
+**What this means for the 66,044 premise:** it is a tick-dwell count, not
+a count of opportunities. The number of occasions on which the one-order
+limit actually cost us a decision is far smaller, and the episode and
+window counters are what will size it. **That figure is not yet available
+at useful N** — it begins accruing from this deploy.
+
+The lifetime bucket (66,966) was counted since 2026-10-19 while the split
+began today, so `split_covers_whole_bucket` reads false and the tick share
+must not be read against the lifetime figure either.
 
 **The mechanism is confirmed working.** On the two-sided arm the same
 counter reads OPPOSITE_SIDE **0** and SAME_SIDE 76: two-sidedness removes

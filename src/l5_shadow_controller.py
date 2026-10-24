@@ -477,6 +477,8 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
     # string is unchanged by design, so the split lives at the tally's top
     # level and `economics` lifts it into its own key.
     split = dict(o.get("already_resting_split") or {})
+    episodes = int(o.get("already_resting_opposite_side_episodes") or 0)
+    opp_windows = int(o.get("windows_with_opposite_side_want") or 0)
     return {
         "counters_since": x.get("counters_since"),
         "quotes_placed": int(x.get("quotes_placed") or 0),
@@ -492,6 +494,8 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
         "windows_observed": int(e.get("windows_observed") or 0),
         "already_resting": int(o.get("already_resting_total") or 0),
         "resting_split": {k: int(split.get(k) or 0) for k in RESTING_SPLIT},
+        "opposite_side_episodes": episodes,
+        "windows_with_opposite_side_want": opp_windows,
         "already_resting_split_accounts_for_the_bucket": (
             sum(int(split.get(k) or 0) for k in RESTING_SPLIT)
             == int(o.get("already_resting_total") or 0)),
@@ -511,15 +515,24 @@ def _req1(x: Mapping[str, Any]) -> Dict[str, Any]:
     split = dict(x.get("resting_split") or {})
     classified = sum(split.values())
     opp = int(split.get("already_resting_opposite_side") or 0)
+    wins = int(x.get("windows_observed") or 0)
+    opp_wins = int(x.get("windows_with_opposite_side_want") or 0)
     return dict(split, **{
-        "classified": classified,
+        "classified_ticks": classified,
         "lifetime_bucket": int(x.get("already_resting") or 0),
         "split_covers_whole_bucket": bool(
             x.get("already_resting_split_accounts_for_the_bucket")),
-        "opposite_side_share_of_classified": (
+        # KEPT, and labelled for what it is. It was the first number I
+        # reported and it is the one that moves on its own.
+        "opposite_side_share_of_classified_TICKS": (
             None if not classified else _q(D(opp) / D(classified))),
-        "counters_since": x.get("counters_since"),
-        "windows_observed": int(x.get("windows_observed") or 0)})
+        # THE DENOMINATORS A RATE CAN ACTUALLY BE READ AGAINST
+        "opposite_side_episodes": int(x.get("opposite_side_episodes") or 0),
+        "windows_with_opposite_side_want": opp_wins,
+        "windows_observed": wins,
+        "share_of_windows_wanting_the_other_side": (
+            None if not wins else _q(D(opp_wins) / D(wins))),
+        "counters_since": x.get("counters_since")})
 
 
 def _common_windows(reports: Mapping[str, Any],
@@ -615,7 +628,14 @@ def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
                            "`split_covers_whole_bucket` is expected to be "
                            "false until the two share a start and the "
                            "share must not be read against "
-                           "`lifetime_bucket`.")},
+                           "`lifetime_bucket`. AND THE TICK SHARE IS THE "
+                           "WRONG RATE: a tick count measures how long an "
+                           "order sat there, so OPPOSITE_SIDE froze at 17 "
+                           "while SAME_SIDE ran 60->76->95 over three "
+                           "minutes and the share fell 0.2208->0.1518 with "
+                           "nothing changing. Read "
+                           "`share_of_windows_wanting_the_other_side` and "
+                           "`opposite_side_episodes` instead.")},
             "economic_value": {
                 "control_net": str(c["net"]),
                 "treatment_net": str(t["net"]),
@@ -1003,6 +1023,10 @@ class ShadowController:
     def _fresh_scenario() -> Dict[str, Any]:
         return {"yes": 0, "no": 0, "yes_cost": "0", "no_cost": "0",
                 "last_rel": "", "resting": None, "resting_sides": None,
+                # episode bookkeeping for the opposite-side want. Per
+                # MARKET, so a fresh window starts a fresh count and
+                # `windows_with_opposite_side_want` counts windows.
+                "last_resting_diag": "", "opp_want_seen_this_window": False,
                 "settled": None}
 
     def _slot(self, slug: str) -> Dict[str, Any]:
@@ -1229,12 +1253,42 @@ class ShadowController:
                 want = ""
             diag = ("SIDE_UNKNOWN" if not want else
                     ("SAME_SIDE" if want in resting else "OPPOSITE_SIDE"))
+            # PER-TICK COUNTS ARE THE WRONG DENOMINATOR, and the first
+            # production reading showed it: over three consecutive minutes
+            # OPPOSITE_SIDE sat frozen at 17 while SAME_SIDE ran 60 -> 76 ->
+            # 95, so the share fell 0.2208 -> 0.1828 -> 0.1518 without a
+            # single thing changing. A tick count measures HOW LONG AN ORDER
+            # SAT THERE, which is a function of our poll rate; once a side
+            # rests and inventory is flat, every later tick in the window is
+            # SAME_SIDE by construction.
+            #
+            # So the episode is counted too: a new OPPOSITE_SIDE episode only
+            # on the TRANSITION into it, and the window is counted once
+            # however many ticks it lasts. Those are the denominators an
+            # opportunity rate can be read against. The per-tick counts stay,
+            # because they are what the earlier 66,044 figure was, and
+            # dropping them would make the two unreconcilable.
+            prev = str(sc.get("last_resting_diag") or "")
+            sc["last_resting_diag"] = diag
+            if diag == "OPPOSITE_SIDE" and prev != "OPPOSITE_SIDE":
+                t = self._tally(scenario)
+                t["already_resting_opposite_side_episodes"] += 1
+                if not sc.get("opp_want_seen_this_window"):
+                    sc["opp_want_seen_this_window"] = True
+                    t["windows_with_opposite_side_want"] += 1
             if (not self.two_sided) or (not want) or (want in resting):
                 return self._out({**rec, "decision": "no_action",
                                   "reason": "already_resting",
                                   "already_resting_side": diag,
                                   "resting_sides": sorted(resting)})
-            # two-sided, and the side we want is free: fall through.
+            # two-sided, and the side we want is free: fall through. The
+            # episode run is deliberately NOT cleared here -- falling
+            # through means we are about to place that opposite side, which
+            # ends the refusal run on its own.
+        else:
+            # nothing resting, so the next OPPOSITE_SIDE refusal begins a
+            # NEW episode rather than continuing the last one
+            sc["last_resting_diag"] = ""
         rel = self.policy_fn(prop, inv, book, tte)
         rec["model_argmax"] = prop.get("recommended_relation")
         plan = l5d.plan_action(rel, inv, book, pair_cap=self.pair_cap)
@@ -1615,6 +1669,12 @@ class ShadowController:
                     # and would have printed three zeros forever.
                     "already_resting_split": {k: int(t.get(k) or 0)
                                               for k in RESTING_SPLIT},
+                    # the denominators a RATE can be read against; the
+                    # per-tick split above measures dwell, not opportunity
+                    "already_resting_opposite_side_episodes": int(
+                        t.get("already_resting_opposite_side_episodes") or 0),
+                    "windows_with_opposite_side_want": int(
+                        t.get("windows_with_opposite_side_want") or 0),
                     "already_resting_total": int(
                         (t.get("refusal_reasons") or {})
                         .get("already_resting") or 0),
@@ -1674,6 +1734,10 @@ class ShadowController:
                 "already_resting_opposite_side": 0,
                 "already_resting_same_side": 0,
                 "already_resting_side_unknown": 0,
+                # ... and the denominators a RATE can be read against, since
+                # the per-tick counts above measure dwell, not opportunity
+                "already_resting_opposite_side_episodes": 0,
+                "windows_with_opposite_side_want": 0,
                 # a two-sided arm can fill both sides in one tick
                 "both_sides_filled_same_tick": 0}
 
