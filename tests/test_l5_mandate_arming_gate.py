@@ -325,3 +325,42 @@ def test_the_floor_is_read_from_the_watchdog_not_our_own_disk():
     assert "HttpSeqFloorStore" in src
     assert "HttpRevocationStore" in src
     assert "WatchdogSeqWriter" not in src
+
+
+# ----------------------------------------------------------------------
+# THE SIGNATURE GATE IS NOT A BLOCKER, and this is the proof of it.
+#
+# I told the owner the public key was the remaining blocker to live trading.
+# That was WRONG and this pins why: with the registry empty -- the shipped
+# state -- step 1b is skipped entirely and the pre-existing campaign /
+# handshake path decides exactly as it did before the gate existed. The key
+# is needed to make the approval UNFORGEABLE, which is a different claim
+# from "needed to trade".
+# ----------------------------------------------------------------------
+def test_an_empty_registry_does_not_block_arming_at_all(monkeypatch,
+                                                        tmp_path):
+    """No key, no store URL, no halt gate, no mandate document -- and the
+    refusal is still the ORDINARY one, not a mandate refusal."""
+    monkeypatch.setattr(MS, "MANDATE_PUBKEYS", {}, raising=False)
+    monkeypatch.delenv(MS.MANDATE_ENV, raising=False)
+    monkeypatch.delenv(MS.STORE_URL_ENV, raising=False)
+    monkeypatch.setenv("L5_LIVE_ROOT", str(tmp_path))
+    exc = _arm(halt_gate_present=False)
+    reason = _reason(exc)
+    assert not reason.startswith("MANDATE_"), reason
+    # it is the pre-existing authorization requirement that refuses
+    assert reason == "OWNER_AUTHORIZATION_ABSENT", reason
+
+
+def test_the_gate_adds_no_refusal_the_old_code_could_not_raise(monkeypatch,
+                                                              tmp_path):
+    """Across every ordinary refusal path, an empty registry must leave the
+    named reason untouched -- the gate is additive only once a key exists."""
+    monkeypatch.setattr(MS, "MANDATE_PUBKEYS", {}, raising=False)
+    monkeypatch.setenv("L5_LIVE_ROOT", str(tmp_path))
+    cases = {
+        "SHADOW_ONLY_LOCK": dict(shadow_locked=True),
+        "OWNER_AUTHORIZATION_ABSENT": dict(),
+    }
+    for expected, kw in cases.items():
+        assert _reason(_arm(**kw)) == expected, (expected, kw)
