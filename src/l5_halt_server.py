@@ -24,6 +24,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
 
 from src import l5_halt_gate as HG
+from src import l5_mandate_signature as MS
+
+#: THE SERVED KEYS, AS AN EXACT ALLOWLIST. Two reasons it is a list of exact
+#: names rather than "whatever is on the volume": the volume also holds the
+#: watchdog's own working state, and `FileStore._path` maps a key straight
+#: onto a filesystem path, so an unconstrained key would be a traversal.
+#:
+#: The two mandate documents are served here because the executor's
+#: `HttpSeqFloorStore` and `HttpRevocationStore` read them, and because the
+#: watchdog is the only process that may write them -- the same asymmetry
+#: this file already establishes for the latch, one key over.
+SERVED_KEYS = (HG.HALT_KEY, MS.FLOOR_KEY, MS.REVOCATION_KEY)
 
 
 def make_handler(store: Any):
@@ -35,10 +47,10 @@ def make_handler(store: Any):
             path = self.path.split("?", 1)[0].lstrip("/")
             if path in ("health", "healthz"):
                 return self._send(200, b'{"ok":true}')
-            if path != HG.HALT_KEY:
+            if path not in SERVED_KEYS:
                 return self._send(404, b'{"error":"no such key"}')
             try:
-                raw = store.get(HG.HALT_KEY)
+                raw = store.get(path)
             except BaseException:                      # noqa: BLE001
                 # a store that cannot be read is not an empty store
                 return self._send(503, b'{"error":"store unreadable"}')

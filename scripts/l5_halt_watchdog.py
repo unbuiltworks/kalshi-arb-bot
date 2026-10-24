@@ -27,6 +27,7 @@ import sys
 import time
 
 from src import l5_halt_gate as HG
+from src import l5_mandate_signature as MS
 from src import l5_halt_server as SRV
 from src import l5_watchdog as W
 
@@ -115,9 +116,20 @@ def main() -> int:
     poll_s = float(os.getenv("L5_WATCHDOG_POLL_S", "20"))
     store = HG.FileStore(root)
     SRV.serve(store, port=port)
+    # THE OWNER-MANDATE DOCUMENTS. The watchdog publishes the replay floor
+    # and the revocation list for the same reason it owns the latch: the
+    # executor must not be able to change what governs it. The executor
+    # REFUSES a document older than MS.DEFAULT_MAX_AGE_S, so these are
+    # re-stamped on every sweep and a watchdog that stops refreshing them
+    # stops authorizing arming -- which is the liveness property that bound
+    # exists to create.
+    _pub = MS.WatchdogPublisher(root, root)
     wd = W.from_env(store=store)
     emit("L5_WATCHDOG_BOOT", {
         "state_dir": root, "port": port, "poll_s": poll_s,
+        "mandate_documents_served": list(SRV.SERVED_KEYS),
+        "mandate_doc_max_age_s": MS.DEFAULT_MAX_AGE_S,
+        "mandate_trusted_keys": len(MS.MANDATE_PUBKEYS),
         "max_order_age_s": wd.max_order_age_s,
         "cancel_enabled": wd.cancel_enabled,
         "credential_free": A is None,
@@ -144,6 +156,21 @@ def main() -> int:
         emit(*boot_reset(store))
     while True:
         try:
+            # BEFORE the sweep, and never allowed to break it: a
+            # publishing failure must leave the documents to go stale and
+            # refuse, not stop the watchdog from watching.
+            try:
+                _p = _pub.publish()
+                if _p.get("revoked"):
+                    emit("L5_MANDATE_PUBLISHED", _p)
+            except BaseException as _pexc:                     # noqa: BLE001
+                if isinstance(_pexc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                emit("L5_MANDATE_PUBLISH_FAILED",
+                     {"error": type(_pexc).__name__,
+                      "detail": str(_pexc)[:200],
+                      "effect": ("the served documents will go stale and "
+                                 "the executor will refuse to arm")})
             emit("L5_WATCHDOG_SWEEP", wd.sweep())
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):

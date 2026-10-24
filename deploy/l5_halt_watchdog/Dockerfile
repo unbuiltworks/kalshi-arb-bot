@@ -55,6 +55,7 @@ COPY src/__init__.py          src/__init__.py
 COPY src/pmus_auth.py         src/pmus_auth.py
 COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 COPY src/l5_halt_server.py    src/l5_halt_server.py
+COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
 # the ownership contract's constants (REGISTRY_KEY). The watchdog imports it
 # to name the key it reads; it serves nothing and holds no venue route.
