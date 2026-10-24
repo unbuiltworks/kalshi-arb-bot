@@ -478,6 +478,32 @@ class FrameFanout:
                            "each other")}
 
 
+def _window_submits(runner: Any, market: str) -> List[Dict[str, Any]]:
+    """The pre-submit records for one market, in submission order.
+
+    Read from `FillCalibration.orders`, which already folds one slot per
+    client order id -- so this adds no new bookkeeping and cannot disagree
+    with what was published. Never raises into the reporting path.
+    """
+    out: List[Dict[str, Any]] = []
+    try:
+        orders = getattr(getattr(runner, "fill_calibration", None),
+                         "orders", None) or {}
+        for coid, row in orders.items():
+            ps = (row or {}).get("pre_submit") or {}
+            if str(ps.get("slug") or "") != str(market):
+                continue
+            if not str(coid).startswith("l5f-"):
+                continue              # shadow and calibration ids are not ours
+            out.append(dict(ps, coid=str(coid)))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return out
+    out.sort(key=lambda r: (r.get("t") or 0.0, str(r.get("coid"))))
+    return out
+
+
 def _gates_realized(runner: Any) -> Any:
     """The account's realized figure for the campaign-budget telemetry block,
     or None. REPORTING ONLY, and it must never break a heartbeat: an
@@ -733,6 +759,14 @@ class Runner:
         #: the market's whole life rather than per attempt. Keyed by slug, so
         #: a new window starts at zero by construction.
         self.acc_recoveries: Dict[str, int] = {}
+        #: per-market lifecycle rows, for the window accounting report. Bounded
+        #: so a long-running process cannot grow it without limit; the only
+        #: consumer is `l5_window_accounting`, which cannot trade.
+        self.win_lifecycle: Dict[str, List[Dict[str, Any]]] = {}
+        #: the latest report per market, provisional then confirmed. One entry
+        #: per window, overwritten in place, so a window is never double
+        #: counted in the rolling totals.
+        self.window_reports: Dict[str, Dict[str, Any]] = {}
         #: last time the independent latch was consulted for the
         #: CANCEL decision. 0.0, so the first tick with exposure
         #: always asks.
@@ -917,6 +951,19 @@ class Runner:
         self.arm_claim = None
         self.ws = ws
         slug = AB.slug_for(ws)
+        # THE OUTGOING WINDOW'S PROVISIONAL REPORT, before anything about the
+        # new one is built. Fill counts and provisional inventory are knowable
+        # now; realized P&L is not, and is deliberately absent until the venue
+        # settles the market -- at which point `emit_window_accounting` is
+        # called again for the SAME market and rewrites that one entry.
+        prev = getattr(self, "last_rolled_slug", None)
+        if getattr(self, "window_reports", None) is None:
+            self.window_reports = {}
+        if prev and str(prev) != str(slug):
+            if (self.window_reports.get(str(prev)) or {}
+                    ).get("phase") != "CONFIRMED":
+                self.emit_window_accounting(str(prev), settlement=None)
+        self.last_rolled_slug = str(slug)
         self.two_sided_close()
         self.two_sided = TS.TwoSidedShadow(slug, window_start=float(ws))
         # MODELLED fill session for this window. Attaching the ladder
@@ -1290,9 +1337,11 @@ class Runner:
                               "the loss halt with it")})
                 continue
             if out.get("retired"):
-                emit("L5_LIVE_SETTLED", dict(
+                settled = dict(
                     out, venue_state=rep["state"],
-                    cash_deployed=self.store.cash_deployed_usd(market)))
+                    cash_deployed=self.store.cash_deployed_usd(market))
+                emit("L5_LIVE_SETTLED", settled)
+                self.emit_window_accounting(market, settlement=settled)
             else:
                 self.stats["retire_refused:%s"
                            % out.get("reason", "?")] += 1
@@ -2370,12 +2419,70 @@ class Runner:
             # Additive telemetry only. No gate, limit, price or order path
             # reads this field; it exists so a latency question can be
             # answered without the on-volume tape.
-            emit("L5_LIVE_LIFECYCLE", dict(
+            rec = dict(
                 e, market=(m if m else None),
                 market_identity=("PRESENT" if m else "MISSING"),
                 t=self.now_t,
                 utc=dt.datetime.now(dt.timezone.utc).isoformat(),
-                clock="emitter"))
+                clock="emitter")
+            emit("L5_LIVE_LIFECYCLE", rec)
+            # kept for the per-window accounting report. A missing market is
+            # NOT filed under the transport slug -- that fallback is exactly
+            # the defect the identity rule above exists to prevent -- so an
+            # unidentified row is simply not accumulated and the report says
+            # so by counting fewer orders than were submitted.
+            if m:
+                # LAZILY INITIALISED ON PURPOSE. Several construction paths
+                # build a Runner without running the __init__ that declares
+                # this, and a REPORTING accumulator must never be the reason
+                # a poll raises. Found by the continuous-lifecycle suite.
+                if getattr(self, "win_lifecycle", None) is None:
+                    self.win_lifecycle = {}
+                rows = self.win_lifecycle.setdefault(str(m), [])
+                if len(rows) < 4096:
+                    rows.append(rec)
+
+    def emit_window_accounting(self, market: str, *,
+                               settlement: Optional[Mapping[str, Any]] = None
+                               ) -> None:
+        """One window's fill, inventory and incentive report.
+
+        Emitted TWICE for the same window and never as two windows: once
+        PROVISIONAL when the window's orders are done, and again CONFIRMED
+        once the venue has settled it, carrying the venue's own lines.
+
+        REPORTING ONLY. `l5_window_accounting` imports nothing that can reach
+        a venue and exposes no submit, cancel or refuse. A failure here is
+        swallowed and counted: an accounting report must never be able to stop
+        trading or break a settlement path.
+        """
+        try:
+            from src import l5_window_accounting as WA
+            rec = WA.window_record(
+                market=str(market),
+                submits=_window_submits(self, str(market)),
+                lifecycle=(getattr(self, "win_lifecycle", None)
+                           or {}).get(str(market)) or (),
+                settlement=settlement,
+                # ONLY ACTUALLY CREDITED rebates, and we hold none: no venue
+                # credit record is reachable from this process, so the field
+                # stays empty rather than being filled with the estimate.
+                rebate_credits=(),
+                rebate_eligibility="UNVERIFIED_NO_VENUE_CREDIT_RECORD")
+            if getattr(self, "window_reports", None) is None:
+                self.window_reports = {}
+            self.window_reports[str(market)] = rec
+            emit("L5_WINDOW_ACCOUNTING", rec)
+            emit("L5_CAMPAIGN_ROLLING",
+                 WA.campaign_rolling(list(self.window_reports.values())))
+            if settlement is not None:
+                (getattr(self, "win_lifecycle", None)
+                 or {}).pop(str(market), None)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["window_accounting_failed:%s"
+                       % type(exc).__name__] += 1
 
     def order_progress_latency_s(self, now: float) -> Dict[str, Any]:
         """How stale our knowledge of any live order is, right now.
