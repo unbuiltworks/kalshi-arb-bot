@@ -113,7 +113,7 @@ Freshness is maintained by the publish sitting inside the sweep loop at a
 | **Residual cap** | **3 contracts, PRESERVED** ✓ — the dollar bound is additive |
 | **Daily realized loss halt** | $5.00, on the UTC-day figure |
 | **Cumulative account-wide** | $20.00 — $11.6213 used, **$8.3787 remaining** |
-| **Campaign worst-case budget** | $5.00 |
+| **Campaign worst-case budget** | **$29.30 ledger, $12.6790 remaining — NOT $5.00. See the correction below.** |
 | **Duration** | ≤ 8 windows and ≤ 4 hours, whichever first |
 | Series | `cpc-btc-updown-15m-` only |
 | Execution | **maker-only, post-only both legs**; no action name expresses crossing |
@@ -315,10 +315,60 @@ than the figure the verifier carries. No dollar bound is breached.
 
 ---
 
+### ⚠ CORRECTION: the campaign budget is not $5.00
+
+`L5_LIVE_GATES` at 22:19:26Z reports the open budget ledger as:
+
+```
+budget_usd   : 29.30        peak_usd : 16.6210
+remaining_usd: 12.6790      owns_budget: false
+campaign_id  : camp1.l5-btc15m-stage1-20261024T1324Z-8a56b1d9
+```
+
+**My re-scoping of `DEFAULT_BUDGET_USD` from $11.10 to $5.00 did not take
+effect**, and the reason is the same class of mistake I flagged in the $11.10
+constant itself: that constant only applies when a **new** ledger is created,
+and a ledger from the Stage 1 campaign is still **open** carrying $29.30. The
+code change is correct for the next campaign and is not in force now.
+
+So the campaign-budget line in §C is wrong as written. What actually bounds
+this campaign, tightest first:
+
+| bound | value | binds? |
+|---|---|---|
+| `max_cash_deployed_usd` (instantaneous) | **$5.00** | yes, at every instant |
+| worst-case deficit, per order | **$2.00** | yes |
+| **account-wide cumulative remaining** | **$8.3787** | **yes — before the ledger** |
+| campaign ledger remaining | $12.6790 | no, the account-wide gate refuses first |
+
+**The $5 instantaneous ceiling you approved is enforced.** The *campaign-wide*
+worst case is bounded at **$8.3787** by the account-wide cumulative gate, not
+at $5.00 by the campaign ledger.
+
+Two ways to make the campaign ledger bind at $5, for your decision:
+
+- **close the Stage 1 ledger** — it closes only when nothing is outstanding
+  and nothing unsettled, which is *earned, not asserted*; there is unsettled
+  residual in two markets, so this may refuse; or
+- **accept $8.3787** as the campaign-wide worst case, since it already binds
+  below the ledger and above the $5 instantaneous ceiling.
+
+I have not attempted either. Closing a budget ledger is a risk-accounting
+action and the choice of bound is yours.
+
+Also note `max_unmatched_contracts` in the validation gates is **5**, while
+the residual *ceiling* check reports `absolute_cap_contracts: 3` with
+`which_binds: ABSOLUTE`. The tighter one governs, so the effective residual
+cap is **3 contracts** as stated — but the two figures differ and the 3 comes
+from the ceiling check, not from this gate.
+
+---
+
 ## E. The remaining blocker
 
-**One: your public key.** Everything else is deployed, tested or is a term of
-this document. On receiving the key I commit it, you sign, and the campaign
+**One: your public key.** Plus two items for your decision that I will not
+settle myself: the campaign-ledger bound above, and the first-leg price floor.
+Everything else is deployed, tested or is a term of this document. On receiving the key I commit it, you sign, and the campaign
 runs within these limits and reports actual filled, settled, realized results.
 
 ## Accounting labels
