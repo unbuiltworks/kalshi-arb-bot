@@ -1828,6 +1828,9 @@ class Runner:
                 "attached": ring is not None,
                 "ring": None if ring is None else ring.report(),
                 "sampler": None if samp is None else samp.report(),
+                "shadow_sampler": (
+                    None if getattr(self, "shadow_residual_sampler", None)
+                    is None else self.shadow_residual_sampler.report()),
                 "attach_errors": {k: v for k, v in self.stats.items()
                                   if "evidence" in k},
                 "labels": ("ring counts frames taken off the authenticated "
@@ -2634,11 +2637,17 @@ class Runner:
         """
         self.book_ring = None
         self.residual_sampler = None
+        self.shadow_residual_sampler = None
         self.evidence_ladder = None
         try:
             from src import l5_book_evidence as BE
             self.book_ring = BE.BookRing()
             self.residual_sampler = BE.ResidualSampler(
+                every_s=float(os.getenv("L5_EVIDENCE_SAMPLE_S") or 5.0))
+            # A SEPARATE instance for shadow. Sharing one would let shadow
+            # traffic advance the money path's interval and counters, and
+            # then neither number would describe anything.
+            self.shadow_residual_sampler = BE.ResidualSampler(
                 every_s=float(os.getenv("L5_EVIDENCE_SAMPLE_S") or 5.0))
             lad = FM.Ladder()
             self.evidence_ladder = lad
@@ -2655,8 +2664,102 @@ class Runner:
                 raise
             self.book_ring = None
             self.residual_sampler = None
+            self.shadow_residual_sampler = None
             self.evidence_ladder = None
             self.stats["evidence_attach_error:%s" % type(exc).__name__] += 1
+
+    def shadow_book_evidence(self, variant: str, rec: Mapping[str, Any], *,
+                             slug: str, now: float) -> None:
+        """SHADOW validation of the book-evidence FILL path, on live books.
+
+        WHY THIS EXISTS. The money path's fill record needs a fill, and the
+        campaign is exhausted, so that path would never run again before a
+        new authorization -- leaving it deployed and unexercised. The shadow
+        controller models fills continuously against the same authenticated
+        ladder, so pointing the same record builder at those exercises every
+        branch (`as_of`, the reachability arithmetic, the taker walk, the
+        pair terms) on real book rows with nothing at risk.
+
+        A MODELLED FILL IS NOT A FILL, and three things say so: the label,
+        an explicit `basis`, and `venue_event_t=None` -- a modelled fill has
+        no venue timestamp and must not borrow one, so the event-time book
+        correctly reads NO_VENUE_EVENT_TIME_SUPPLIED rather than being
+        quietly satisfied by our own clock.
+        """
+        try:
+            from src import l5_book_evidence as BE
+            ring = getattr(self, "book_ring", None)
+            if ring is None:
+                return
+            f = rec.get("modelled_fill") or {}
+            inv = f.get("inventory_after") or rec.get("inventory") or {}
+            resid = inv.get("residual") if isinstance(inv, Mapping) else None
+            out = BE.fill_evidence(
+                slug=str(slug), coid="shadow|%s" % variant,
+                side=f.get("side"), fill_qty=f.get("qty"),
+                fill_own_px=f.get("price"),
+                venue_event_t=None,
+                processing_t=now,
+                residual_after=resid,
+                first_leg_own_px=f.get("price"),
+                qty_needed=resid,
+                ring=ring, order_resting=False,
+                depth_ticks=_evidence_depth_ticks())
+            out["label"] = "L5_SHADOW_FILL_BOOK_EVIDENCE"
+            out["shadow_variant"] = str(variant)
+            out["basis"] = (
+                "MODELLED fill from the queue-aware shadow model, NOT a "
+                "venue fill and NOT realized P&L. Emitted to exercise the "
+                "book-evidence fill path on live books while no live "
+                "authorization exists.")
+            out["modelled_fill"] = {
+                k: f.get(k) for k in
+                ("filled_by", "scenario", "relation", "swept",
+                 "ticks_behind_touch", "queue_ahead_at_placement",
+                 "volume_through_level")}
+            emit("L5_SHADOW_FILL_BOOK_EVIDENCE", out)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_fill_evidence_error:%s"
+                       % type(exc).__name__] += 1
+
+    def shadow_residual_book(self, variant: str, rec: Mapping[str, Any], *,
+                             slug: str, now: float) -> None:
+        """SHADOW validation of the UNMATCHED-INVENTORY path.
+
+        Driven by the modelled residual being non-zero, exactly as the money
+        path's is driven by the real one, and on its OWN sampler instance so
+        the two sets of counters stay separable.
+        """
+        try:
+            s = getattr(self, "shadow_residual_sampler", None)
+            ring = getattr(self, "book_ring", None)
+            if s is None or ring is None:
+                return
+            inv = rec.get("inventory")
+            if not isinstance(inv, Mapping):
+                return
+            out = s.sample(
+                slug="%s|%s" % (slug, variant), now=now,
+                residual=inv.get("residual"),
+                first_leg_own_px=inv.get("pair_unit_cost"),
+                order_resting=bool((rec.get("resting") or {}) or False),
+                book=ring.latest(str(slug)),
+                depth_ticks=_evidence_depth_ticks())
+            if out is None:
+                return
+            out["label"] = "L5_SHADOW_RESIDUAL_BOOK_SAMPLE"
+            out["shadow_variant"] = str(variant)
+            out["basis"] = ("MODELLED inventory, not a venue position. "
+                            "Exercises the unmatched-inventory path on live "
+                            "books with nothing at risk.")
+            emit("L5_SHADOW_RESIDUAL_BOOK_SAMPLE", out)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_residual_book_error:%s"
+                       % type(exc).__name__] += 1
 
     def emit_fill_evidence(self, ev: Mapping[str, Any]) -> None:
         """The opposite side at one fill, on both time bases.
@@ -2891,6 +2994,8 @@ class Runner:
                                                    or "?"))] += 1
             if rec.get("modelled_fill"):
                 self.stats["shadow_modelled_fills:%s" % name] += 1
+                self.shadow_book_evidence(name, rec, slug=slug, now=now)
+            self.shadow_residual_book(name, rec, slug=slug, now=now)
             if name == SHADOW.BASELINE_POLICY:
                 # L5's observed action is compared against the BASELINE,
                 # which is what the money path would have done.

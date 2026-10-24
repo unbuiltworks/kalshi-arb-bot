@@ -550,3 +550,40 @@ def test_clock_domain_disclosure_reaches_the_fill_record():
         "offset_measured"] is False
     assert "not a snapshot synchronised" in rec["sync_labels"] or \
         "synchronised to the exact venue instant" in rec["sync_labels"]
+
+
+# ------------------------- a MODELLED fill must not borrow a venue clock
+
+def test_a_modelled_fill_gets_no_event_time_book():
+    """The shadow path passes venue_event_t=None deliberately: a modelled
+    fill has no venue timestamp, and substituting our own would manufacture
+    an event-time book out of nothing."""
+    r = BE.BookRing()
+    r.append("m", dict(ROW, t=100.0), 100.0)
+    rec = BE.fill_evidence(slug="m", coid="shadow|BASELINE", side="YES",
+                           fill_qty=None, fill_own_px="0.44",
+                           venue_event_t=None, processing_t=120.0,
+                           residual_after="3", ring=r, depth_ticks=2)
+    assert rec["book_at_event"]["sync"]["basis"] == BE.SYNC_NO_EVENT_TIME
+    assert rec["book_at_event"]["row"] is None
+    # but the processing-time book IS available and fully priced
+    pr = rec["book_at_processing"]["reachability"]
+    assert pr["pair_if_maker_behind_touch"]["pair_own_cost"] is not None
+    assert rec["processing_lag_s"] is None
+
+
+def test_yes_and_no_are_read_as_up_and_down():
+    """The shadow controller reports sides as YES/NO, the money path as
+    UP/DOWN, and one record builder serves both."""
+    for word, want in (("YES", "UP"), ("NO", "DOWN")):
+        got = BE.complement_reachability(held_side=word, row=ROW)
+        assert got["held_side"] == want
+
+
+def test_missing_fill_quantity_is_absent_not_zero():
+    """A modelled fill carries no quantity; the record must say so rather
+    than imply a zero-size fill."""
+    rec = BE.fill_evidence(slug="m", coid="c", side="YES", fill_qty=None,
+                           fill_own_px="0.44", processing_t=1.0,
+                           book_at_processing=ROW)
+    assert rec["fill_qty"] is None
