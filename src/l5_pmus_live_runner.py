@@ -1785,74 +1785,13 @@ class Runner:
             # with the bound configured and no baseline, `ValidationGates`
             # refuses every order with CAMPAIGN_BASELINE_ABSENT -- so this
             # reports rather than raises.
-            emit("L5_CAMPAIGN_BASELINE", self.capture_campaign_baseline())
+            emit("L5_CAMPAIGN_BASELINE", capture_campaign_baseline(self))
             emit("L5_LIVE_ARMED", dict(res, claim=claim))
         except LX.NotArmed as exc:
             self.win["arm_refused"] += 1
             if self.win["arm_refused"] == 1:
                 emit("L5_LIVE_DISARMED", {"market": t.market_slug,
                                           "why": str(exc)[:300]})
-
-    def capture_campaign_baseline(self) -> Dict[str, Any]:
-        """Persist this campaign's starting cash, inventory, open orders and
-        realized loss. Read-only with respect to every existing figure.
-
-        WHAT IT DOES NOT DO: it does not reset, net off or reclassify any
-        realized loss. It records what the account-wide realized total WAS at
-        the campaign's start so the $5 additional-loss bound has a fixed point
-        to measure from; the lifetime ceiling goes on reading the full figure
-        on every evaluation, unchanged.
-
-        NEVER RAISES. The bound fails closed on a missing baseline, so a
-        capture failure already stops every order; turning it into an exception
-        here would only convert a refusal into a crash.
-        """
-        from src import l5_campaign_baseline as CBL
-        out: Dict[str, Any] = {"ok": False, "reason": None}
-        try:
-            cid = _campaign_nonce_sid()
-            if not cid:
-                return {"ok": False, "reason": "NO_CAMPAIGN_ID",
-                        "note": "no valid approval, so there is no campaign "
-                                "to measure; the bound refuses on its own"}
-            ex = self.executor
-            store = None if ex is None else ex.store
-            inv, opens = None, None
-            if store is not None:
-                try:
-                    inv = {m: str(store.residual(m))
-                           for m in (store.markets_with_exposure() or ())}
-                except BaseException:                          # noqa: BLE001
-                    inv = "UNREADABLE"
-                try:
-                    opens = sorted((store.live_orders() or {}).keys())
-                except BaseException:                          # noqa: BLE001
-                    opens = "UNREADABLE"
-            realized = None
-            if store is not None:
-                try:
-                    realized = store.realized_today()
-                except BaseException:                          # noqa: BLE001
-                    realized = None
-            res = CBL.CampaignBaseline().capture(
-                cid,
-                account_wide_realized=realized,
-                cash_usd=self.available_cash_usd,
-                inventory=inv, open_orders=opens,
-                now_iso=dt.datetime.now(dt.timezone.utc).isoformat())
-            out = dict(res)
-            out["cash_source"] = ("/v1/account/balances"
-                                  if self.available_cash_usd is not None
-                                  else "UNAVAILABLE")
-            out["limit_in_force_usd"] = (
-                None if CBL.limit_from_env() is None
-                else str(CBL.limit_from_env()))
-            return out
-        except BaseException as exc:                           # noqa: BLE001
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            return {"ok": False, "reason": "CAPTURE_ERROR:%s"
-                    % type(exc).__name__}
 
     def close_window(self) -> None:
         t = self.transport
@@ -5756,6 +5695,78 @@ def _campaign_nonce_sid():
         if isinstance(exc, (KeyboardInterrupt, SystemExit)):
             raise
         return None
+
+
+def capture_campaign_baseline(runner: Any) -> Dict[str, Any]:
+    """Persist this campaign's starting cash, inventory, open orders and
+    realized loss. Read-only with respect to every existing figure.
+
+    WHAT IT DOES NOT DO: it does not reset, net off or reclassify any realized
+    loss. It records what the account-wide realized total WAS at the campaign's
+    start, so the $5 additional-loss bound has a fixed point to measure from.
+    The lifetime ceiling goes on reading the full figure on every evaluation,
+    unchanged.
+
+    MODULE-LEVEL, AND READING THE RUNNER DEFENSIVELY, for a reason the test
+    suite made plain: the arm path is exercised with partial runner doubles
+    that implement only what arming needs, so a `self.`-method here raised
+    AttributeError and took the whole arm down with it. A baseline capture must
+    never be able to do that. Every field is read with getattr and every read
+    is individually guarded.
+
+    NEVER RAISES, AND A FAILURE CANNOT CREATE RISK. With the bound configured
+    and no baseline stored, `ValidationGates` refuses every order with
+    CAMPAIGN_BASELINE_ABSENT -- so a failed capture stops trading rather than
+    permitting it, and reporting is the right response here.
+    """
+    try:
+        from src import l5_campaign_baseline as CBL
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"ok": False, "reason": "CAPTURE_IMPORT_FAILED:%s"
+                % type(exc).__name__}
+    try:
+        cid = _campaign_nonce_sid()
+        if not cid:
+            return {"ok": False, "reason": "NO_CAMPAIGN_ID",
+                    "note": "no valid approval, so there is no campaign to "
+                            "measure; the bound refuses on its own"}
+        ex = getattr(runner, "executor", None)
+        store = getattr(ex, "store", None)
+        cash = getattr(runner, "available_cash_usd", None)
+        inv: Any = None
+        opens: Any = None
+        realized: Any = None
+        if store is not None:
+            try:
+                inv = {m: str(store.residual(m))
+                       for m in (store.markets_with_exposure() or ())}
+            except BaseException:                              # noqa: BLE001
+                inv = "UNREADABLE"
+            try:
+                opens = sorted((store.live_orders() or {}).keys())
+            except BaseException:                              # noqa: BLE001
+                opens = "UNREADABLE"
+            try:
+                realized = store.realized_today()
+            except BaseException:                              # noqa: BLE001
+                realized = None
+        res = dict(CBL.CampaignBaseline().capture(
+            cid,
+            account_wide_realized=realized,
+            cash_usd=cash, inventory=inv, open_orders=opens,
+            now_iso=dt.datetime.now(dt.timezone.utc).isoformat()))
+        res["cash_source"] = ("/v1/account/balances" if cash is not None
+                              else "UNAVAILABLE")
+        lim = CBL.limit_from_env()
+        res["limit_in_force_usd"] = None if lim is None else str(lim)
+        return res
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return {"ok": False,
+                "reason": "CAPTURE_ERROR:%s" % type(exc).__name__}
 
 
 def validation_gates():
