@@ -483,6 +483,29 @@ def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
             x.get("both_sides_filled_same_tick") or 0)}
 
 
+def _req1(x: Mapping[str, Any]) -> Dict[str, Any]:
+    """Requirement 1 for one arm, with the two denominators kept apart.
+
+    `lifetime_bucket` has been counted since `counters_since`; the SPLIT has
+    only been counted since the split existed. Dividing one by the other
+    would understate the opposite-side share by however long the bucket ran
+    unclassified, so the share is taken over the classified refusals and the
+    mismatch is reported rather than hidden.
+    """
+    split = dict(x.get("resting_split") or {})
+    classified = sum(split.values())
+    opp = int(split.get("already_resting_opposite_side") or 0)
+    return dict(split, **{
+        "classified": classified,
+        "lifetime_bucket": int(x.get("already_resting") or 0),
+        "split_covers_whole_bucket": bool(
+            x.get("already_resting_split_accounts_for_the_bucket")),
+        "opposite_side_share_of_classified": (
+            None if not classified else _q(D(opp) / D(classified))),
+        "counters_since": x.get("counters_since"),
+        "windows_observed": int(x.get("windows_observed") or 0)})
+
+
 def _common_windows(reports: Mapping[str, Any],
                     scenario: str) -> Tuple[List[str], Dict[str, Any]]:
     """The slugs BOTH arms report a settled line for.
@@ -562,17 +585,21 @@ def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
             # could have acted on. The treatment's own count sits beside it
             # and should be far smaller -- that is the change working.
             "requirement_1_already_resting": {
-                "control": xc["resting_split"] | {
-                    "total": xc["already_resting"],
-                    "windows_observed": xc["windows_observed"]},
-                "treatment": xt["resting_split"] | {
-                    "total": xt["already_resting"],
-                    "windows_observed": xt["windows_observed"]},
+                "control": _req1(xc),
+                "treatment": _req1(xt),
                 "labels": ("OPPOSITE_SIDE is the only bucket a two-sided "
                            "arm could have acted on. SAME_SIDE is a "
                            "re-quote the one-order limit was right to "
                            "refuse and SIDE_UNKNOWN is admitted ignorance; "
-                           "neither is a forgone opportunity.")},
+                           "neither is a forgone opportunity. The SHARE is "
+                           "over the CLASSIFIED refusals, never over the "
+                           "lifetime bucket: the bucket has been counted "
+                           "since the counters began and the split only "
+                           "since the split existed, so "
+                           "`split_covers_whole_bucket` is expected to be "
+                           "false until the two share a start and the "
+                           "share must not be read against "
+                           "`lifetime_bucket`.")},
             "economic_value": {
                 "control_net": str(c["net"]),
                 "treatment_net": str(t["net"]),

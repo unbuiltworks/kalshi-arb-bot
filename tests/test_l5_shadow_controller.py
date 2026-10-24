@@ -1541,10 +1541,11 @@ def test_requirement_1_reports_the_opposite_side_split_per_arm():
     r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
          ["requirement_1_already_resting"])
     assert r["control"]["already_resting_opposite_side"] == 420
-    assert r["control"]["total"] == 500
-    # the three buckets must account for the whole bucket, or the split is
-    # not a split
+    assert r["control"]["classified"] == 500
     assert sum(r["control"][k] for k in sc.RESTING_SPLIT) == 500
+    # the SHARE is over the classified refusals, which is the only
+    # denominator the split actually covers
+    assert r["control"]["opposite_side_share_of_classified"] == "0.8400"
 
 
 def test_a_positive_result_on_too_few_windows_authorizes_nothing():
@@ -1632,8 +1633,36 @@ def test_the_split_reaches_the_comparison_from_a_real_arm(tmp_path):
     r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
          ["requirement_1_already_resting"])
     assert {k: r["control"][k] for k in sc.RESTING_SPLIT} == seen
-    assert r["control"]["total"] == sum(seen.values())
+    assert r["control"]["classified"] == sum(seen.values())
+    assert r["control"]["lifetime_bucket"] == sum(seen.values())
+    assert r["control"]["split_covers_whole_bucket"] is True
+    assert r["control"]["opposite_side_share_of_classified"] == "1.0000"
     # the reason bucket and its split must account for each other, or the
     # split is not a split of it
     assert out["per_scenario"][sc.HEADLINE_SCENARIO]["fill_model"][
         "control"]["already_resting_split_accounts_for_the_bucket"] is True
+
+
+def test_the_split_starting_later_than_the_bucket_is_said_not_hidden():
+    """THE PRODUCTION CASE. The `already_resting` bucket has been counted
+    since the counters began -- 66,918 on the tape when the split shipped
+    -- while the split only counts from the deploy that added it. Dividing
+    the split by the lifetime bucket would understate the opposite-side
+    share by however long the bucket ran unclassified, so the share is
+    taken over the CLASSIFIED refusals and the mismatch is reported.
+    """
+    arms = _pair([], [], resting={"already_resting_opposite_side": 80,
+                                  "already_resting_same_side": 20,
+                                  "already_resting_side_unknown": 0})
+    for a in arms.values():
+        for scen in sc.SCENARIOS:
+            o = (a["economics"]["per_scenario"][scen]["opportunities"])
+            o["already_resting_total"] = 66918      # lifetime, predates it
+    out = sc.compare_two_sided(arms)
+    r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
+         ["requirement_1_already_resting"]["control"])
+    assert r["classified"] == 100
+    assert r["lifetime_bucket"] == 66918
+    assert r["split_covers_whole_bucket"] is False
+    # the share is 80/100, NOT 80/66918
+    assert r["opposite_side_share_of_classified"] == "0.8000"
