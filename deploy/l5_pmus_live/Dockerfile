@@ -59,6 +59,7 @@ COPY src/l5_live_authorization.py src/l5_live_authorization.py
 COPY src/l5_campaign_approval.py src/l5_campaign_approval.py
 COPY src/l5_campaign_budget.py src/l5_campaign_budget.py
 COPY src/l5_window_accounting.py src/l5_window_accounting.py
+COPY src/l5_book_evidence.py src/l5_book_evidence.py
 # The effective-runtime-configuration verifier. Shipped because the
 # only configuration that matters is the one the RUNNING process has,
 # so it has to be runnable in here:

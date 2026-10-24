@@ -478,6 +478,19 @@ class FrameFanout:
                            "each other")}
 
 
+def _evidence_depth_ticks() -> Optional[int]:
+    """How far behind the touch the probe rests, from the same env var it
+    reads (`L5_TS_DEPTH_TICKS`, default 2). Reporting only: this feeds the
+    book record so a reader can compare against the engine's own quote, and
+    nothing here changes what the engine does. None if unreadable, which the
+    record then reports as an absent behind-touch figure rather than zero.
+    """
+    try:
+        return int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+    except (ValueError, TypeError):
+        return None
+
+
 def _window_submits(runner: Any, market: str) -> List[Dict[str, Any]]:
     """The pre-submit records for one market, in submission order.
 
@@ -997,6 +1010,7 @@ class Runner:
         # like the None it replaces.
         self.fanout = FrameFanout(primary)
         self.shadow_attach_ladder(slug)
+        self.evidence_attach(slug)
         self.book.frame_observer = (self.fanout
                                     if (primary is not None
                                         or self.fanout.extra) else None)
@@ -2385,6 +2399,23 @@ class Runner:
             for k in ("avg_px", "commission", "leaves", "cum_qty", "state"):
                 if prog.get(k) is not None and k not in res:
                     res[k] = str(prog.get(k))
+            # THE VENUE'S OWN EVENT TIME, additively and with no fallback.
+            # Without it a fill can only ever be placed against the book as
+            # WE later read it; with it, against the book as the venue had
+            # it. `venue_event_t` returns None rather than substituting our
+            # receipt, so an absent timestamp reads as absent. Reporting
+            # only: no gate, deadline, price or order path reads either key.
+            try:
+                from src import l5_book_evidence as _BE
+                vt, vk = _BE.venue_event_t(row)
+                res["venue_event_t"] = vt
+                res["venue_event_t_key"] = vk
+                res["side_tracked"] = str(o.get("side") or "") or None
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["venue_event_t_error:%s"
+                           % type(_exc).__name__] += 1
             out.append(res)
         if out:
             self.lifecycle(out)
@@ -2441,6 +2472,14 @@ class Runner:
                 rows = self.win_lifecycle.setdefault(str(m), [])
                 if len(rows) < 4096:
                     rows.append(rec)
+            # one book record per POSITIVE delta: a partial fill is several
+            # deltas and each one saw its own book, while a zero-delta
+            # progress poll saw nothing new and is not a fill.
+            try:
+                if D(str(e.get("delta") or 0)) > 0:
+                    self.emit_fill_evidence(rec)
+            except (ArithmeticError, ValueError, TypeError):
+                pass
 
     def emit_window_accounting(self, market: str, *,
                                settlement: Optional[Mapping[str, Any]] = None
@@ -2551,6 +2590,112 @@ class Runner:
                 raise
             self.shadow_ladder = None
             self.stats["shadow_ladder_error:%s" % type(exc).__name__] += 1
+
+    def evidence_attach(self, slug: str) -> None:
+        """Book-evidence recorders for this window. REPORTING ONLY.
+
+        ITS OWN LADDER, not the shadow one. `shadow_attach_ladder` returns
+        early when shadow is off, so hanging the evidence off it would make
+        the answer to the owner's question depend on an unrelated switch.
+        One extra `Ladder` costs one parse per frame -- a few per second --
+        and the fanout wraps extra observers individually, so neither the
+        ladder nor the ring can reach the money path's observer.
+
+        A failure here leaves both recorders None and is counted. Every
+        caller treats None as "no evidence this window", never as an error.
+        """
+        self.book_ring = None
+        self.residual_sampler = None
+        self.evidence_ladder = None
+        try:
+            from src import l5_book_evidence as BE
+            self.book_ring = BE.BookRing()
+            self.residual_sampler = BE.ResidualSampler(
+                every_s=float(os.getenv("L5_EVIDENCE_SAMPLE_S") or 5.0))
+            lad = FM.Ladder()
+            self.evidence_ladder = lad
+            ring = self.book_ring
+
+            def _observe(msg: Any, now: float, _l=lad, _r=ring) -> None:
+                _l.ingest(msg, now)
+                _r.observe_ladder(_l, now)
+
+            if self.fanout is not None:
+                self.fanout.add(_observe)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.book_ring = None
+            self.residual_sampler = None
+            self.evidence_ladder = None
+            self.stats["evidence_attach_error:%s" % type(exc).__name__] += 1
+
+    def emit_fill_evidence(self, ev: Mapping[str, Any]) -> None:
+        """The opposite side at one fill, on both time bases.
+
+        REPORTING ONLY, and wrapped: a book record must never be the reason
+        a fill fails to be processed.
+        """
+        try:
+            from src import l5_book_evidence as BE
+            ring = getattr(self, "book_ring", None)
+            if ring is None:
+                return
+            m = ev.get("market")
+            if not m:
+                return                      # unidentified rows are not filed
+            coid = str(ev.get("coid") or "")
+            orders = getattr(getattr(self, "fill_calibration", None),
+                             "orders", None) or {}
+            sub = ((orders.get(coid) or {}).get("pre_submit")) or {}
+            side = ev.get("side_tracked") or sub.get("side")
+            rec = BE.fill_evidence(
+                slug=str(m), coid=coid, side=side,
+                fill_qty=ev.get("delta"), fill_own_px=ev.get("avg_px"),
+                venue_event_t=ev.get("venue_event_t"),
+                processing_t=self.now_t,
+                residual_after=self.store.residual(str(m)),
+                first_leg_own_px=sub.get("own_px") or ev.get("avg_px"),
+                qty_needed=self.store.residual(str(m)),
+                ring=ring, order_resting=None,
+                depth_ticks=_evidence_depth_ticks())
+            rec["venue_event_t_key"] = ev.get("venue_event_t_key")
+            emit("L5_FILL_BOOK_EVIDENCE", rec)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["fill_evidence_error:%s" % type(exc).__name__] += 1
+
+    def sample_residual_book(self, market: Optional[str]) -> None:
+        """Book snapshots while inventory is unmatched, order or no order.
+
+        Driven by the residual, NOT by an order existing, because the
+        intervals with nothing resting are exactly the ones no existing
+        record covers. REPORTING ONLY and wrapped.
+        """
+        try:
+            s = getattr(self, "residual_sampler", None)
+            ring = getattr(self, "book_ring", None)
+            if s is None or ring is None or not market:
+                return
+            resid = self.store.residual(str(market))
+            live = 0
+            try:
+                for _c, _o in (self.store.live_orders() or {}).items():
+                    if str((_o or {}).get("market") or "") == str(market):
+                        live += 1
+            except BaseException:                              # noqa: BLE001
+                live = 0
+            rec = s.sample(
+                slug=str(market), now=self.now_t, residual=resid,
+                order_resting=bool(live), ring=ring,
+                depth_ticks=_evidence_depth_ticks())
+            if rec is not None:
+                emit("L5_RESIDUAL_BOOK_SAMPLE", rec)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["residual_sample_error:%s" % type(exc).__name__] += 1
 
     def shadow_controller(self) -> Dict[str, Any]:
         """Built once, lazily, and never allowed to fail the tick.
@@ -4273,6 +4418,11 @@ class Runner:
         # overdue leg must be withdrawn before anything new is priced
         # against the inventory it would have left.
         self.maybe_acc_deadline(now)
+        # REPORTING ONLY: the opposite side while we hold unmatched
+        # inventory, sampled whether or not an order is resting.
+        self.sample_residual_book(
+            getattr(self.transport, "market_slug", None)
+            if self.transport is not None else None)
         # BEFORE the deadline sweep, deliberately. The completion
         # decision needs the order still resting to be worth making;
         # after the cutoff there is nothing left to complete against.
