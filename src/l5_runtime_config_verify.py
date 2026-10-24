@@ -264,6 +264,7 @@ def verify() -> Dict[str, Any]:
     from src import l5_live_authorization as AUTH
     from src import l5_pmus_live_runner as R
     from src import l5_two_sided_probe as TS
+    from src import l5_live_validation_gates as VG
 
     A = APPROVED
     rows: List[Dict[str, Any]] = [
@@ -416,7 +417,20 @@ def verify() -> Dict[str, Any]:
             ("ts_complete_cutoff_s", "TS.complete_cutoff_s()",
              TS.complete_cutoff_s),
             ("ts_min_entry_runway_s", "TS.min_entry_runway_s()",
-             TS.min_entry_runway_s)):
+             TS.min_entry_runway_s),
+            # THE DOLLAR-DENOMINATED RESIDUAL BOUND. The residual cap is
+            # denominated in CONTRACTS and is therefore price-blind -- three
+            # contracts admits $0.36 at an own price of 0.12 and $2.49 at
+            # 0.83 -- so this is the control that makes it price-aware, and
+            # it is the one new risk limit in the campaign. Reported through
+            # the parser the money path uses, so a value that would be fatal
+            # at boot is visible here as the refusal it is. OBSERVED rather
+            # than graded, because it is default-disabled and grading it
+            # would fail every deployment that has not configured it.
+            ("max_worst_case_deficit_usd",
+             "VG.parse_deficit_bound(env %s)" % R.DEFICIT_ENV,
+             lambda: (lambda v: "UNSET" if v is None else str(v))(
+                 VG.parse_deficit_bound(os.getenv(R.DEFICIT_ENV))))):
         try:
             observed.append({"name": name, "source": source,
                              "effective": _s(read())})
