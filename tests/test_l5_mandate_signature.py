@@ -542,14 +542,31 @@ class TestWhatMustNotReset:
         not -- so this module has no writer for any of them.
 
         Checked structurally rather than by grepping for words: the only
-        thing it writes is the seq high-water mark, and the only thing that
-        writes is SeqStore.record."""
+        things it writes are the seq high-water mark and the served copies
+        of it, and EVERY writer belongs to the WATCHDOG.
+
+        THIS USED TO ASSERT `count(', "w")') == 1`, which was the right
+        invariant checked the wrong way: a second WATCHDOG-side writer
+        (`WatchdogPublisher`, which publishes the served floor and
+        revocation documents) is not a weakening, while a second
+        EXECUTOR-side writer would be. So the check now locates each write
+        and requires it to sit in a watchdog class, which is strictly
+        stronger than counting -- a count of one would have passed a single
+        write path in the wrong class."""
         import inspect
         src = inspect.getsource(M)
-        # EXACTLY ONE write path in the whole module, and it belongs to the
-        # WATCHDOG's floor writer -- not to anything the executor calls.
-        assert src.count(', "w")') == 1, "a second write path appeared"
+        watchdog_src = "".join(inspect.getsource(c) for c in
+                               (M.WatchdogSeqWriter, M.WatchdogPublisher))
+        # EVERY write in the module belongs to a WATCHDOG writer
+        assert src.count(', "w")') == watchdog_src.count(', "w")') > 0, (
+            "a write path appeared outside the watchdog's own writers")
         assert 'open(tmp, "w")' in inspect.getsource(M.WatchdogSeqWriter)
+        # and the publisher writes ONLY the two served documents
+        pub = inspect.getsource(M.WatchdogPublisher)
+        assert "FLOOR_KEY" in pub and "REVOCATION_KEY" in pub
+        assert sorted(n for n, f in vars(M.WatchdogPublisher).items()
+                      if callable(f) and not n.startswith("__")) == [
+            "_write", "publish"]
         writers = sorted(n for n, f in vars(M.WatchdogSeqWriter).items()
                          if callable(f) and not n.startswith("__"))
         assert writers == ["_path", "observe", "read"]

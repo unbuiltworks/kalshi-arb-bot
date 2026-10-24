@@ -10,7 +10,9 @@ money-capable service, which is the thing being guarded.
 GET ONLY, AND STRUCTURALLY. `do_POST`, `do_PUT` and `do_DELETE` are not
 defined, so `BaseHTTPRequestHandler` answers 501 to all of them: there is no
 code here that could be persuaded to write a halt, let alone clear one.
-The one served path is the one key `HaltGate` reads.
+The served paths are an exact allowlist: the key `HaltGate` reads, plus the
+replay floor and revocation list the executor's mandate gate reads. Nothing
+here can write any of them.
 
 A MISSING LATCH IS A 404, NOT AN EMPTY SUCCESS. `HttpHaltStore` maps every
 failure -- including 404 -- to "could not be established", and `HaltGate`
@@ -24,6 +26,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
 
 from src import l5_halt_gate as HG
+from src import l5_mandate_signature as MS
+
+#: THE SERVED KEYS, AS AN EXACT ALLOWLIST. Two reasons it is a list of exact
+#: names rather than "whatever is on the volume": the volume also holds the
+#: watchdog's own working state, and `FileStore._path` maps a key straight
+#: onto a filesystem path, so an unconstrained key would be a traversal.
+#:
+#: The two mandate documents are served here because the executor's
+#: `HttpSeqFloorStore` and `HttpRevocationStore` read them, and because the
+#: watchdog is the only process that may write them -- the same asymmetry
+#: this file already establishes for the latch, one key over.
+SERVED_KEYS = (HG.HALT_KEY, MS.FLOOR_KEY, MS.REVOCATION_KEY)
 
 
 def make_handler(store: Any):
@@ -35,15 +49,20 @@ def make_handler(store: Any):
             path = self.path.split("?", 1)[0].lstrip("/")
             if path in ("health", "healthz"):
                 return self._send(200, b'{"ok":true}')
-            if path != HG.HALT_KEY:
+            if path not in SERVED_KEYS:
                 return self._send(404, b'{"error":"no such key"}')
             try:
-                raw = store.get(HG.HALT_KEY)
+                raw = store.get(path)
             except BaseException:                      # noqa: BLE001
                 # a store that cannot be read is not an empty store
                 return self._send(503, b'{"error":"store unreadable"}')
             if raw is None:
-                return self._send(404, b'{"error":"no halt record"}')
+                # 404, NEVER an invented body. `HttpHaltStore` reads a 404
+                # as "no halt", while the two mandate stores read it as
+                # "could not be established" and REFUSE -- so serving
+                # nothing fails closed on both, in opposite directions,
+                # exactly as each caller needs.
+                return self._send(404, b'{"error":"no record"}')
             return self._send(200, raw)
 
         def _send(self, code: int, body: bytes) -> None:

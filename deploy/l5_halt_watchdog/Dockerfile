@@ -5,6 +5,15 @@
 #   src/l5_halt_gate.py     the latch: asserter (no clear), gate, FileStore
 #   src/l5_halt_server.py   GET-only HTTP for the executor to read the latch
 #   src/l5_watchdog.py      RegistryOrderSource + the sweep
+#   src/l5_mandate_signature.py
+#       the owner-mandate replay floor and revocation list. VERIFICATION
+#       AND PUBLISHING ONLY: no private key exists in this image, in the
+#       repository, or in any environment either service can read, and
+#       MANDATE_PUBKEYS ships EMPTY. The watchdog holds these for the same
+#       reason it holds the latch -- the executor must not be able to
+#       change what governs it -- and `WatchdogPublisher` re-stamps both
+#       documents on every sweep, so a watchdog that stops refreshing them
+#       stops authorizing arming.
 #
 # AUTHENTICATED CANCEL-ONLY (OWNER 2026-10-18). This REVERSES the
 # credential-free rule of 2026-10-14, by explicit owner approval, and the
@@ -55,6 +64,7 @@ COPY src/__init__.py          src/__init__.py
 COPY src/pmus_auth.py         src/pmus_auth.py
 COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 COPY src/l5_halt_server.py    src/l5_halt_server.py
+COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
 # THE OWNER'S EMERGENCY HALT. Reads a signed marker from a URL and
 # can reach exactly one call: HaltAsserter.assert_halt. It holds no

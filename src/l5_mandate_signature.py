@@ -265,6 +265,75 @@ class WatchdogSeqWriter:
         return out
 
 
+#: how the OWNER revokes a named mandate: set this on the WATCHDOG, which
+#: the executor cannot write. Comma-separated mandate ids, or
+#: "<mandate_id>#<seq>". Empty means nothing revoked -- which is a positive
+#: statement by the watchdog, published with a fresh timestamp, and is not
+#: the same as the document being absent.
+REVOKED_ENV = "L5_MANDATE_REVOKED"
+
+
+def revoked_from_env(raw: Optional[str] = None) -> list:
+    val = os.getenv(REVOKED_ENV, "") if raw is None else raw
+    return [x.strip() for x in str(val or "").split(",") if x.strip()]
+
+
+class WatchdogPublisher:
+    """Publishes the two documents the executor GETs, with a FRESH stamp.
+
+    WHY THIS EXISTS AND WHY IT IS NOT `WatchdogSeqWriter`. That class is the
+    AUTHORITATIVE floor and lives in a `mandate_seq/` subdirectory, where it
+    is only ever raised. The executor's `HttpSeqFloorStore` reads
+    `mandate_floor.json` at the SERVED root, which is a different path -- so
+    the authoritative floor existing does not make it readable, and the
+    server would have answered 404 to a floor that was sitting on disk.
+    This writes the served copies.
+
+    THE STAMP IS THE POINT. `_HttpDoc` refuses a document older than
+    `DEFAULT_MAX_AGE_S`, so these must be REPUBLISHED periodically: a
+    watchdog that has stopped refreshing them stops authorizing arming,
+    which is the liveness property the staleness bound exists to create. A
+    static file written once would authorize for fifteen minutes and then
+    correctly refuse forever.
+
+    Writes are atomic -- temp file then `replace` -- for the reason
+    `FileStore` gives: a torn document would read as unparseable, which
+    refuses, so even the failure is safe.
+    """
+
+    def __init__(self, served_root: str,
+                 seq_root: Optional[str] = None) -> None:
+        self.root = str(served_root)
+        self.seq = WatchdogSeqWriter(seq_root)
+
+    def _write(self, key: str, doc: Mapping[str, Any]) -> str:
+        path = os.path.join(self.root, key)
+        os.makedirs(self.root, exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(dict(doc), fh, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+        return path
+
+    def publish(self, *, revoked: Any = None,
+                now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+        """Republish both documents. Returns what was written, for logging."""
+        stamp = (now or _utc()).isoformat()
+        floors = dict((self.seq.read().get("floors") or {}))
+        rev = (revoked_from_env() if revoked is None
+               else [str(x) for x in revoked])
+        self._write(FLOOR_KEY, {"asof_utc": stamp, "floors": floors})
+        self._write(REVOCATION_KEY, {"asof_utc": stamp, "revoked": rev})
+        return {"asof_utc": stamp, "floors": floors, "revoked": rev,
+                "served": [FLOOR_KEY, REVOCATION_KEY],
+                "max_age_s": DEFAULT_MAX_AGE_S,
+                "labels": ("republished on every sweep; the executor refuses "
+                           "a document older than max_age_s, so a watchdog "
+                           "that stops refreshing stops authorizing")}
+
+
 class _HttpDoc:
     """Shared GET-only client. Every failure is UNAVAILABLE, never absent.
 
