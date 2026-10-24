@@ -390,7 +390,33 @@ def verify() -> Dict[str, Any]:
              lambda: ",".join(sorted(MS.MANDATE_PUBKEYS)) or "(none)"),
             ("mandate_verdict", "MS.verify(reporting only)",
              _mandate_verdict_reason),
-            ("mandate_enforcing", "phase 1 constant", lambda: False)):
+            ("mandate_enforcing", "phase 1 constant", lambda: False),
+            # THE TWO-SIDED PROBE'S OWN SCOPE. These are mandate
+            # parameters -- order size and whether BOTH legs may rest at
+            # once -- and none of them was visible in-container, so a
+            # campaign's stated size could only be asserted from the
+            # module defaults rather than read from the running process.
+            # OBSERVED, not graded: they are activation switches, and
+            # grading them would make this fail at the moment activation
+            # succeeds.
+            ("ts_two_order_pair_enabled", "TS.two_order_pair_enabled()",
+             TS.two_order_pair_enabled),
+            ("ts_active_any_market", "TS.active()", TS.active),
+            ("ts_named_market", "TS.named_market()", TS.named_market),
+            ("ts_opening_leg_max_contracts",
+             "TS.opening_leg_max_contracts()",
+             TS.opening_leg_max_contracts),
+            ("ts_round_allocations", "TS.round_allocations()",
+             TS.round_allocations),
+            ("ts_min_first_leg_own_price", "TS.min_first_leg_own_price()",
+             TS.min_first_leg_own_price),
+            ("ts_order_ttl_s", "TS.order_ttl_s()", TS.order_ttl_s),
+            ("ts_entry_cutoff_s", "TS.entry_cutoff_s()",
+             TS.entry_cutoff_s),
+            ("ts_complete_cutoff_s", "TS.complete_cutoff_s()",
+             TS.complete_cutoff_s),
+            ("ts_min_entry_runway_s", "TS.min_entry_runway_s()",
+             TS.min_entry_runway_s)):
         try:
             observed.append({"name": name, "source": source,
                              "effective": _s(read())})
