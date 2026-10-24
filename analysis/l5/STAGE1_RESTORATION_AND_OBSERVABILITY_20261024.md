@@ -367,3 +367,69 @@ remedies — quote further behind the touch, require a stability condition befor
 the first leg, or accept the residual as a cost of the pair — and I cannot
 honestly rank them without it. **No policy change is recommended on this
 evidence, and none is included in the code.**
+
+---
+
+## 6. Was the 1500z 0.9500 pair executable as a maker order? No — and not because the book was fast
+
+Answered from the engine's own `two_sided_complement` records rather than from
+reconstructed frames, which supersedes the frame-based reading in §2: that used
+the handful of book blocks visible in logs, and the engine's record is both
+authoritative and denser.
+
+### The complement evaluation timeline
+
+| Time (UTC) | Book (wire UP) | Engine complement | Pair | Gap |
+|---|---|---|---|---|
+| 15:01:26.499 | 0.46 / 0.47 | plan | **0.9500** | — |
+| **15:01:31.437** | — | **FIRST LEG FILLS, 3.00 @ own 0.4400** | — | — |
+| 15:02:01.504 | 0.32 / 0.33 | 0.6500 | 1.0900 | **+30.07s after the fill** |
+| 15:02:37.016 | 0.37 / 0.38 | 0.6000 | 1.0400 | 35.5s |
+| 15:03:09.094 | 0.27 / 0.28 | 0.7000 | 1.1400 | 32.1s |
+| 15:03:33.540 | 0.19 / 0.20 | 0.7800 | 1.2200 | 24.4s |
+| 15:04:10.013 | 0.21 / 0.22 | 0.7600 | 1.2000 | 36.5s |
+| 15:04:37.643 | 0.12 / 0.13 | 0.8500 | 1.2900 | 27.6s |
+| 15:05:10.891 | 0.10 / 0.11 | 0.8700 | 1.3100 | 33.2s |
+| 15:05:42.234 | 0.08 / 0.09 | 0.8900 | 1.3300 | 31.3s |
+
+Every complement price is exactly `1 - (ask + 2 ticks)`, confirmed at nine
+separate points, so the engine's quoting rule is not in doubt.
+
+### The verdict: MERELY A QUOTED PRICE, and structurally unreachable
+
+**It was never executable as a maker order**, for two compounding reasons that
+are properties of the implementation rather than of that particular minute:
+
+1. **One order slot makes the pair strictly sequential.** `max_live_orders` is
+   `1` in production. The complement cannot rest while the first leg rests, so
+   it can only be submitted once the first leg is terminal — 15:01:31.437. The
+   0.9500 was computed at 15:01:26.499 by pricing BOTH legs off ONE book
+   snapshot, which is a planning construct: at no instant could both of those
+   prices have been live orders.
+2. **The complement is re-priced about every 33 seconds.** The first look after
+   the fill was 30.07s later, with no decision emitted in between. A fee-safe
+   condition that closes faster than the evaluation cadence is missed entirely,
+   whatever the book does.
+
+And the pair did not merely miss narrowly. With the first leg at 0.4400, a 0.96
+pair needs the complement at or below 0.5200, i.e. `1 - (ask + 0.02) <= 0.52`,
+which requires **ask >= 0.4600**. The highest post-fill ask in the whole window
+was **0.3800**. The book bounced twice — 0.32 to 0.37, and 0.19 to 0.21 — so
+this was not a one-way collapse, but it never came within eight cents of
+fee-safe. **No achievable maker complement existed after the fill**, at any
+cadence.
+
+### Why this is adverse selection rather than bad luck
+
+Our first leg was a maker bid two ticks BEHIND the touch: planned at 0.44 while
+the bid was 0.46. Such an order fills only when the market comes down through
+it. So the fill itself is evidence that the book was moving against UP, and the
+complement is therefore priced — necessarily, every time — against a book that
+has already moved away from the plan. The sequential structure converts that
+into a systematic cost rather than a symmetric risk.
+
+**What this does NOT establish.** One window. It does not show how often a
+fee-safe complement survives long enough to be reached, nor what fraction of
+first legs strand this way, and it does not price any remedy. Those need the
+fill-and-interval distribution the evidence module collects. **No policy change
+is recommended or included here.**
