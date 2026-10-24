@@ -129,6 +129,23 @@ leaves $3.3787 of account-wide headroom untouched.
 9. Unresolved accounting → blocks live authorization outright.
 10. No automatic relaunch after a completed or crashed money-moving session.
 
+### Configuration changes this campaign requires
+
+Approving the mandate approves these three. None widens a dollar bound.
+
+| change | from | to | why |
+|---|---|---|---|
+| `L5_TS_TWO_ORDER_PAIR` | unset (**off**) | `1` | **Without this the campaign is not two-sided.** Both legs rest simultaneously only when the second maker slot is enabled; the slot is still granted only to the opposite leg of the same round in the same market. |
+| `L5_TS_MARKET` / experiment id | experiment present, market pattern required | the one target market | `TS.active()` is false until both an experiment id and a matching market pattern exist — there is no partial arming. |
+| `submission_budget_open` | **32** | **16** | Restores the approved OPEN rate. A tightening. |
+
+`L5_TS_OPENING_LEG_MAX_CONTRACTS` 3, `L5_TS_ROUND_ALLOCATIONS` 1,
+`L5_TS_MIN_FIRST_LEG_PRICE` 0.20, `L5_TS_ORDER_TTL_S` 120 and the cutoffs are
+left at the values §3 states. I added all of these to the in-container
+verifier this session, so the next boot emission reports each as the running
+process actually has it rather than as a module default — the figures in §3
+should be re-read against that line before arming.
+
 ### Reconciliation during the campaign
 
 Venue-authoritative reconcile on every uncertainty and periodically;
