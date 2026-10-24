@@ -976,3 +976,73 @@ def test_the_quoting_book_reader_is_unchanged_by_the_new_read(monkeypatch):
     assert md2["_source"] == "book_levels"
     assert md2["_fallback_from"] == "bbo_empty"
     assert any(u.endswith("/book") for u in seen2), seen2
+
+
+# --------------------------------------------------------------------------
+# The compact comparison line.
+#
+# The arm reports already ride in the heartbeat, but that document reached a
+# quarter of a megabyte in production and the log transport splits it into
+# four fragments -- the numbers that answer the question were present and
+# unreadable. These guard the short line that replaces reading them, and
+# guard it the way the rest of this file guards wiring: by driving the real
+# runner and asserting on what the process actually printed.
+# --------------------------------------------------------------------------
+def test_the_heartbeat_emits_the_two_sided_comparison_as_its_own_line(
+        tmp_path, monkeypatch):
+    out = capture(monkeypatch)
+    r = build(tmp_path, monkeypatch)
+    r.shadow_controller()                      # build the arms
+    r.heartbeat()
+    lines = [d for k, d in out if k == "L5_SHADOW_TWO_SIDED"]
+    assert len(lines) == 1, [k for k, _ in out]
+    doc = lines[0]
+    assert doc["control"] == SC.TWO_SIDED_CONTROL
+    assert doc["treatment"] == SC.TWO_SIDED_TREATMENT
+    assert doc["arms_missing"] == []
+    assert doc["controlled"] is True
+    # and it must actually be SHORT -- that is the entire reason it exists
+    assert len(json.dumps(doc)) < 20000, len(json.dumps(doc))
+
+
+def test_the_comparison_line_is_absent_rather_than_empty_with_no_arms(
+        tmp_path, monkeypatch):
+    """A shadow that failed to build must not print a comparison of
+    nothing, which would read as a measured result of zero."""
+    out = capture(monkeypatch)
+    r = build(tmp_path, monkeypatch)
+    r._shadow, r._shadow_off = {}, True
+    r.heartbeat()
+    assert not [k for k, _ in out if k == "L5_SHADOW_TWO_SIDED"]
+
+
+def test_a_failure_in_the_comparison_cannot_cost_us_the_heartbeat(
+        tmp_path, monkeypatch):
+    """It is reporting on reporting. It gates nothing, and it must not be
+    able to take down the line an operator actually reads."""
+    out = capture(monkeypatch)
+    r = build(tmp_path, monkeypatch)
+    r.shadow_controller()
+
+    def boom(_reports):
+        raise ValueError("synthetic")
+    monkeypatch.setattr(SC, "compare_two_sided", boom)
+    r.heartbeat()                              # must not raise
+    assert [k for k, _ in out if k == "L5_LIVE_HB"]
+    assert not [k for k, _ in out if k == "L5_SHADOW_TWO_SIDED"]
+    assert r.stats["two_sided_compare_error:ValueError"] == 1
+
+
+def test_the_comparison_agrees_with_an_offline_run_of_the_same_reports(
+        tmp_path, monkeypatch):
+    """The offline wrapper must not be able to disagree with production:
+    both call the same function, and this is what pins that."""
+    out = capture(monkeypatch)
+    r = build(tmp_path, monkeypatch)
+    arms = r.shadow_controller()
+    r.heartbeat()
+    live = [d for k, d in out if k == "L5_SHADOW_TWO_SIDED"][0]
+    offline = json.loads(json.dumps(
+        SC.compare_two_sided({n: c.report() for n, c in arms.items()}),
+        default=str))
+    assert live == offline

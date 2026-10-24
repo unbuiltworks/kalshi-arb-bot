@@ -1434,3 +1434,155 @@ def test_two_fills_in_one_tick_are_both_counted(tmp_path):
     assert t["fills"] == 2
     assert t["both_sides_filled_same_tick"] == 1
     assert t["adverse_fills"] == 2
+
+
+# --------------------------------------------------------------------------
+# compare_two_sided: the requirement 3-6 comparison. These tests exist
+# because the production numbers come from this function, and an arithmetic
+# slip here would be invisible -- it would simply report a different answer.
+# --------------------------------------------------------------------------
+def _arm(two_sided, windows, *, offset=1, resting=None, execu=None):
+    """A minimal {label: report()}-shaped arm over the three scenarios."""
+    scen = {
+        "per_window": list(windows),
+        "windows_folded_into_carry": 0,
+        "windows_observed": 10,
+        "execution": dict(execu or {}),
+        "opportunities": {"justified_refusals": 0, "possible_misses": 0,
+                          "reasons": dict(resting or {})}}
+    return {"two_sided": two_sided, "offset_ticks": offset,
+            "economics": {"per_scenario": {s: dict(scen)
+                                           for s in sc.SCENARIOS}}}
+
+
+def _w(market, net, pair, resid, cost, matched, residual_units):
+    return {"market": market, "net": net, "pair_net": pair,
+            "residual_net": resid, "capital_deployed": cost,
+            "matched_units": matched, "residual_units": residual_units}
+
+
+def _pair(control_windows, treatment_windows, **kw):
+    return {sc.TWO_SIDED_CONTROL: _arm(False, control_windows, **kw),
+            sc.TWO_SIDED_TREATMENT: _arm(True, treatment_windows, **kw)}
+
+
+def test_a_missing_arm_is_named_and_nothing_is_invented():
+    out = sc.compare_two_sided({sc.TWO_SIDED_CONTROL: _arm(False, [])})
+    assert out["verdict"] == "ARM_NOT_RUNNING"
+    assert out["arms_missing"] == [sc.TWO_SIDED_TREATMENT]
+    assert "per_scenario" not in out
+
+
+def test_only_windows_BOTH_arms_settled_are_compared():
+    """Each arm keeps its own state, so differencing lifetime totals would
+    compare different weather. m2 exists for one arm only and must not
+    reach a single figure."""
+    out = sc.compare_two_sided(_pair(
+        [_w("m1", "-1.00", "0.00", "-1.00", "1.00", 0, 3),
+         _w("m2", "-9.00", "0.00", "-9.00", "9.00", 0, 9)],
+        [_w("m1", "0.50", "0.50", "0.00", "0.50", 1, 0)]))
+    h = out["per_scenario"][sc.HEADLINE_SCENARIO]
+    assert h["common_windows"] == 1
+    assert h["coverage"]["control_only"] == 1
+    assert h["economic_value"]["control_net"] == "-1.00"
+    assert h["economic_value"]["incremental_net"] == "1.50"
+
+
+def test_pair_acquisition_cost_is_the_exact_identity_not_an_estimate():
+    """settle writes pair_net = matched - pair_cost against a $1 pair
+    redemption, so cost per pair is exactly 1 - pair_net/matched. Two pairs
+    bought at 0.96 each net 2 - 1.92 = 0.08."""
+    out = sc.compare_two_sided(_pair(
+        [_w("m1", "0.08", "0.08", "0.00", "1.92", 2, 0)],
+        [_w("m1", "0.08", "0.08", "0.00", "1.92", 2, 0)]))
+    m = out["per_scenario"][sc.HEADLINE_SCENARIO]["matched"]
+    assert m["control_pair_acquisition_cost_per_matched"] == "0.9600"
+    assert m["treatment_pair_acquisition_cost_per_matched"] == "0.9600"
+
+
+def test_a_window_with_no_split_is_left_out_of_the_split_totals():
+    """A window settled before the split existed has no split, and calling
+    it 0.0000 would be a missing value wearing the costume of a
+    measurement -- but its NET is real and must still count."""
+    out = sc.compare_two_sided(_pair(
+        [_w("m1", "-0.40", "NOT_RECORDED", "NOT_RECORDED", "0.40", 0, 2)],
+        [_w("m1", "-0.40", "NOT_RECORDED", "NOT_RECORDED", "0.40", 0, 2)]))
+    h = out["per_scenario"][sc.HEADLINE_SCENARIO]
+    assert h["pair_economics"]["control_windows_without_split"] == 1
+    assert h["pair_economics"]["control_pair_net"] == "0"
+    assert h["economic_value"]["control_net"] == "-0.40"
+    assert h["matched"]["control_pair_acquisition_cost_per_matched"] is None
+
+
+def test_arms_that_stop_sharing_an_offset_are_not_a_controlled_comparison():
+    reports = _pair([], [])
+    reports[sc.TWO_SIDED_TREATMENT]["offset_ticks"] = 7
+    out = sc.compare_two_sided(reports)
+    assert out["controlled"] is False
+    assert out["verdict"] == "ARMS_NOT_CONTROLLED"
+    assert sc.compare_two_sided(_pair([], []))["controlled"] is True
+
+
+def test_requirement_1_reports_the_opposite_side_split_per_arm():
+    out = sc.compare_two_sided(_pair(
+        [], [], resting={"already_resting": 500,
+                         "already_resting_opposite_side": 420,
+                         "already_resting_same_side": 70,
+                         "already_resting_side_unknown": 10}))
+    r = (out["per_scenario"][sc.HEADLINE_SCENARIO]
+         ["requirement_1_already_resting"])
+    assert r["control"]["already_resting_opposite_side"] == 420
+    assert r["control"]["total"] == 500
+    # the three buckets must account for the whole bucket, or the split is
+    # not a split
+    assert sum(r["control"][k] for k in sc.RESTING_SPLIT) == 500
+
+
+def test_a_positive_result_on_too_few_windows_authorizes_nothing():
+    out = sc.compare_two_sided(_pair(
+        [_w("m1", "-1.00", "0.00", "-1.00", "1.00", 0, 3)],
+        [_w("m1", "1.00", "1.00", "0.00", "1.00", 1, 0)]))
+    assert out["per_scenario"][sc.HEADLINE_SCENARIO][
+        "economic_value"]["incremental_net"] == "2.00"
+    assert out["verdict"] == "INSUFFICIENT_COMMON_WINDOWS"
+    assert out["min_common_windows"] == sc.TWO_SIDED_MIN_COMMON_WINDOWS
+
+
+def test_the_verdict_turns_on_money_and_not_on_matched_count():
+    """More matched pairs bought too dearly is not an improvement, and the
+    verdict must not say otherwise."""
+    ws = [_w("m%d" % i, "0.00", "0.00", "0.00", "0", 0, 0)
+          for i in range(sc.TWO_SIDED_MIN_COMMON_WINDOWS)]
+    ctrl = list(ws)
+    treat = list(ws)
+    treat[0] = _w("m0", "-0.10", "-0.10", "0.00", "1.10", 1, 0)
+    out = sc.compare_two_sided(_pair(ctrl, treat))
+    h = out["per_scenario"][sc.HEADLINE_SCENARIO]
+    assert h["matched"]["incremental_matched_units"] == 1
+    assert h["economic_value"]["incremental_net"] == "-0.10"
+    assert out["verdict"] == "TWO_SIDED_NOT_BETTER"
+
+
+def test_three_plus_residual_windows_are_counted_on_both_arms():
+    out = sc.compare_two_sided(_pair(
+        [_w("m1", "-0.90", "0.00", "-0.90", "0.90", 0, 3)],
+        [_w("m1", "-1.20", "0.00", "-1.20", "1.20", 0, -4)]))
+    u = out["per_scenario"][sc.HEADLINE_SCENARIO]["unmatched_inventory"]
+    assert u["control_resid_3plus_windows"] == 1
+    assert u["treatment_resid_3plus_windows"] == 1
+    assert u["treatment_residual_units_abs"] == 4
+
+
+def test_a_real_controller_report_is_an_acceptable_input(tmp_path):
+    """The offline wrapper and the production emission both feed report()
+    straight in, so the shapes must actually match."""
+    reports = {
+        sc.TWO_SIDED_CONTROL: ctl(
+            tmp_path / "a", placement=sc.ONE_TICK_BEHIND).report(),
+        sc.TWO_SIDED_TREATMENT: ctl(
+            tmp_path / "b", placement=sc.TWO_SIDED).report()}
+    out = sc.compare_two_sided(reports)
+    assert out["arms_missing"] == []
+    assert out["controlled"] is True
+    assert out["verdict"] == "INSUFFICIENT_COMMON_WINDOWS"
+    assert set(out["per_scenario"]) == set(sc.SCENARIOS)

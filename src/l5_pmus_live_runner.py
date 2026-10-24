@@ -2846,18 +2846,20 @@ class Runner:
         try:
             model = None
             built: Dict[str, Any] = {}
-            # THREE POLICIES AT THE TOUCH, plus ONE placement arm.
+            # THREE POLICIES AT THE TOUCH, plus TWO placement arms.
             #
             # The fourth is the pre-registered AT_TOUCH versus
             # ONE_TICK_BEHIND comparison
-            # (analysis/l5/TICK_DEPTH_PREREGISTRATION.md). It is a SEPARATE
-            # controller with its own durable state, deliberately not a new
-            # axis inside the other three: that way the nine existing
-            # simulations keep their exact state layout and behaviour, and
-            # the arm can be removed by deleting one entry.
+            # (analysis/l5/TICK_DEPTH_PREREGISTRATION.md), and the fifth is
+            # TWO_SIDED at that same depth. Each is a SEPARATE controller
+            # with its own durable state, deliberately not a new axis inside
+            # the other three: that way the nine original simulations keep
+            # their exact state layout and behaviour, and either arm can be
+            # removed by deleting one entry.
             #
-            # Its policy is the BASELINE, so a difference between it and
-            # ARGMAX is a difference in RESTING DEPTH alone.
+            # Both run the BASELINE policy, so ARGMAX vs ARGMAX@ONE_TICK_BEHIND
+            # isolates RESTING DEPTH and ARGMAX@ONE_TICK_BEHIND vs
+            # ARGMAX@TWO_SIDED isolates TWO-SIDEDNESS.
             for label, name, placement in SHADOW.SHADOW_VARIANTS:
                 c = SHADOW.ShadowController(
                     state_path=os.path.join(
@@ -3804,6 +3806,36 @@ class Runner:
                           "qty). Contracts. A leg that shrinks |prospective| "
                           "is never refused at any depth.")},
             "frozen_rule": "030d8bf"})
+        self.emit_two_sided_comparison()
+
+    def emit_two_sided_comparison(self) -> None:
+        """The two-sided comparison, as ONE SHORT LINE.
+
+        The arm reports already ride in the heartbeat, but that document is
+        now a quarter of a megabyte and the log transport splits it into
+        four fragments, so the numbers that answer the question are present
+        and unreadable. This emits just the comparison -- a few kilobytes,
+        one line, one fragment.
+
+        It computes NOTHING of its own: `compare_two_sided` is the same
+        function `analysis/l5/two_sided_comparison.py` calls, so the
+        production line and an offline run of the same reports cannot
+        disagree.
+
+        REPORTING ONLY. It gates nothing, no money path reads it, and a
+        failure here must not cost the heartbeat that has already been
+        emitted above.
+        """
+        if not self._shadow:
+            return
+        try:
+            emit("L5_SHADOW_TWO_SIDED", SHADOW.compare_two_sided(
+                {n: c.report() for n, c in self._shadow.items()}))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["two_sided_compare_error:%s"
+                       % type(exc).__name__] += 1
 
     def venue_cooling(self) -> float:
         """Seconds of venue cool-off remaining, or 0.

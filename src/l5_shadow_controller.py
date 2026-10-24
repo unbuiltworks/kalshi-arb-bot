@@ -52,7 +52,7 @@ import json
 import os
 import tempfile
 from decimal import Decimal as D
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from src import l5_maker_fill_model as FM
 from src import pmus_l5_persistence_v2 as pv2
@@ -343,10 +343,14 @@ def variant_state_filename(label: str) -> str:
 
 #: THE CANONICAL ARM SET: (label, policy, placement).
 #:
-#: Three policies at the touch, plus the one pre-registered placement arm
-#: on the BASELINE policy, so a difference between it and ARGMAX is a
-#: difference in RESTING DEPTH alone. Twelve simulations in all: four arms
-#: times three fill scenarios.
+#: Three policies at the touch, plus TWO arms on the BASELINE policy that
+#: vary placement alone: ONE_TICK_BEHIND, so a difference between it and
+#: ARGMAX is a difference in RESTING DEPTH alone, and TWO_SIDED, which sits
+#: at the SAME depth as ONE_TICK_BEHIND, so a difference between THOSE two
+#: is a difference in TWO-SIDEDNESS alone. Each arm differs from exactly one
+#: other arm in exactly one dimension, which is what makes either
+#: comparison attributable. Fifteen simulations in all: five arms times
+#: three fill scenarios.
 SHADOW_VARIANTS = tuple(
     [(p, p, AT_TOUCH) for p in sorted(POLICIES)]
     + [(variant_label(BASELINE_POLICY, ONE_TICK_BEHIND),
@@ -355,6 +359,304 @@ SHADOW_VARIANTS = tuple(
        # pair is a controlled comparison of two-sidedness alone.
        (variant_label(BASELINE_POLICY, TWO_SIDED),
         BASELINE_POLICY, TWO_SIDED)])
+
+#: the arm pair the two-sided comparison is about, CONTROL FIRST.
+#:
+#: Both run the BASELINE policy at the SAME offset, so a difference between
+#: them is a difference in two-sidedness alone. ARGMAX at the touch is a
+#: different depth and is NOT a valid control for this question.
+TWO_SIDED_CONTROL = variant_label(BASELINE_POLICY, ONE_TICK_BEHIND)
+TWO_SIDED_TREATMENT = variant_label(BASELINE_POLICY, TWO_SIDED)
+TWO_SIDED_ARMS = (TWO_SIDED_CONTROL, TWO_SIDED_TREATMENT)
+
+#: the buckets `already_resting` splits into, which is requirement 1
+RESTING_SPLIT = ("already_resting_opposite_side",
+                 "already_resting_same_side",
+                 "already_resting_side_unknown")
+
+#: below this many COMMON settled windows the comparison is preliminary and
+#: authorizes nothing. The baseline measurement ran over 475 windows; a
+#: handful of windows cannot separate a policy from the weather.
+TWO_SIDED_MIN_COMMON_WINDOWS = 200
+
+
+def _num(v: Any) -> D:
+    """A missing or unrecorded number is NOT a zero measurement, but it
+    contributes nothing to a sum. Callers that must distinguish the two read
+    the `windows_without_split` counts beside the totals."""
+    if v is None or v == "NOT_RECORDED":
+        return D(0)
+    return D(str(v))
+
+
+def _q(v: Optional[D], places: str = "0.0001") -> Optional[str]:
+    return None if v is None else str(v.quantize(D(places)))
+
+
+def _arm_scenario(report: Mapping[str, Any],
+                  scenario: str) -> Mapping[str, Any]:
+    return (((report.get("economics") or {}).get("per_scenario") or {})
+            .get(scenario) or {})
+
+
+def _arm_windows(e: Mapping[str, Any]) -> Dict[str, Mapping[str, Any]]:
+    return {w["market"]: w for w in (e.get("per_window") or [])
+            if w.get("market")}
+
+
+def _fold_windows(e: Mapping[str, Any],
+                  slugs: List[str]) -> Dict[str, Any]:
+    """Sum ONE arm over EXACTLY the given windows.
+
+    Pair acquisition cost is EXACT rather than inferred: `settle` writes
+    pair_net = matched - pair_cost against a pair redemption of exactly $1
+    per unit, so the cost per pair is 1 - pair_net/matched. That is the
+    figure comparable to the pair cap; pair_net alone is not, because it
+    scales with volume.
+    """
+    have = _arm_windows(e)
+    rows = [have[k] for k in slugs if k in have]
+    split = [r for r in rows if r.get("pair_net") != "NOT_RECORDED"]
+    matched_split = sum(int(r.get("matched_units") or 0) for r in split)
+    pair_net = sum((_num(r.get("pair_net")) for r in split), D(0))
+    net = sum((_num(r.get("net")) for r in rows), D(0))
+    run = peak = dd = D(0)
+    for r in rows:
+        run += _num(r.get("net"))
+        peak = max(peak, run)
+        dd = max(dd, peak - run)
+    return {
+        "windows": len(rows),
+        "windows_without_split": len(rows) - len(split),
+        "net": net,
+        "pair_net": pair_net,
+        "residual_net": sum((_num(r.get("residual_net")) for r in split),
+                            D(0)),
+        "matched_units": sum(int(r.get("matched_units") or 0) for r in rows),
+        "matched_units_with_split": matched_split,
+        "residual_units_abs": sum(abs(int(r.get("residual_units") or 0))
+                                  for r in rows),
+        "capital_deployed": sum((_num(r.get("capital_deployed"))
+                                 for r in rows), D(0)),
+        "net_per_window": (None if not rows else net / D(len(rows))),
+        "pair_acquisition_cost_per_matched": (
+            None if not matched_split
+            else D(1) - pair_net / D(matched_split)),
+        "windows_matching_nothing": sum(
+            1 for r in rows if not int(r.get("matched_units") or 0)),
+        "resid_3plus_windows": sum(
+            1 for r in rows if abs(int(r.get("residual_units") or 0)) >= 3),
+        "max_drawdown": dd}
+
+
+def _fold_execution(e: Mapping[str, Any]) -> Dict[str, Any]:
+    """LIFETIME execution counters. They are not kept per window and so
+    CANNOT be restricted to the common set; every caller labels them."""
+    x = dict(e.get("execution") or {})
+    o = dict(e.get("opportunities") or {})
+    reasons = dict(o.get("reasons") or {})
+    fills = int(x.get("filled") or 0)
+    adverse = _num(x.get("adverse_usd"))
+    swept = int(x.get("swept_fills") or 0)
+    return {
+        "counters_since": x.get("counters_since"),
+        "quotes_placed": int(x.get("quotes_placed") or 0),
+        "filled": fills,
+        "unfilled_at_expiry": int(x.get("unfilled_at_expiry") or 0),
+        "fill_rate": x.get("fill_rate"),
+        "adverse_rate": x.get("adverse_rate"),
+        "adverse_usd": str(adverse),
+        "adverse_per_fill": (None if not fills
+                             else _q(adverse / D(fills))),
+        "swept_share": (None if not fills else _q(D(swept) / D(fills))),
+        "controller_errors": int(x.get("controller_errors") or 0),
+        "windows_observed": int(e.get("windows_observed") or 0),
+        "already_resting": int(reasons.get("already_resting") or 0),
+        "resting_split": {k: int(reasons.get(k) or 0)
+                          for k in RESTING_SPLIT},
+        "both_sides_filled_same_tick": int(
+            reasons.get("both_sides_filled_same_tick") or 0)}
+
+
+def _common_windows(reports: Mapping[str, Any],
+                    scenario: str) -> Tuple[List[str], Dict[str, Any]]:
+    """The slugs BOTH arms report a settled line for.
+
+    THE RESTRICTION IS THE WHOLE POINT. Each arm keeps its own durable
+    state and folds older windows into a carry TOTAL, so the two arms'
+    lifetime figures can cover different window sets and differencing them
+    would compare different weather.
+    """
+    have = {a: _arm_windows(_arm_scenario(reports.get(a) or {}, scenario))
+            for a in TWO_SIDED_ARMS}
+    c, t = have[TWO_SIDED_CONTROL], have[TWO_SIDED_TREATMENT]
+    return sorted(set(c) & set(t)), {
+        "control_settled": len(c),
+        "treatment_settled": len(t),
+        "control_only": len(set(c) - set(t)),
+        "treatment_only": len(set(t) - set(c)),
+        "control_folded_into_carry": _arm_scenario(
+            reports.get(TWO_SIDED_CONTROL) or {},
+            scenario).get("windows_folded_into_carry"),
+        "treatment_folded_into_carry": _arm_scenario(
+            reports.get(TWO_SIDED_TREATMENT) or {},
+            scenario).get("windows_folded_into_carry"),
+        "labels": ("a window present for only one arm is EXCLUDED from "
+                   "every figure here; a carry total cannot be restricted "
+                   "to common windows at all, which is why lifetime totals "
+                   "are context and never the comparison")}
+
+
+def compare_two_sided(reports: Mapping[str, Any]) -> Dict[str, Any]:
+    """ARGMAX@ONE_TICK_BEHIND versus ARGMAX@TWO_SIDED, same states.
+
+    Takes `{label: report()}` and answers, in MONEY, what two-sidedness is
+    worth -- plus requirement 1, how many of the ONE-SIDED arm's own
+    `already_resting` refusals wanted the side it was not resting.
+
+    WHAT THIS CANNOT SAY. Every fill behind these numbers is MODELLED by
+    the queue-aware model under %s, where an unknown queue fills only when
+    a print sweeps the level. A touch is not a fill. Nothing here is
+    realized, filled or even submitted.
+    """ % HEADLINE_SCENARIO
+    missing = [a for a in TWO_SIDED_ARMS if a not in reports]
+    out: Dict[str, Any] = {
+        "control": TWO_SIDED_CONTROL,
+        "treatment": TWO_SIDED_TREATMENT,
+        "arms_missing": missing,
+        "two_sided_flag": {a: (reports.get(a) or {}).get("two_sided")
+                           for a in TWO_SIDED_ARMS},
+        "offset_ticks": {a: (reports.get(a) or {}).get("offset_ticks")
+                         for a in TWO_SIDED_ARMS},
+        "fill_rule": FILL_RULE,
+        "headline_scenario": HEADLINE_SCENARIO}
+    if missing:
+        out["verdict"] = "ARM_NOT_RUNNING"
+        return out
+    # THE CONTROLLED-COMPARISON PRECONDITION, asserted rather than assumed:
+    # if the two arms ever stop sharing an offset, or both report the same
+    # two_sidedness, the pair no longer isolates two-sidedness and the
+    # difference below is not attributable to it.
+    offs = set(out["offset_ticks"].values())
+    flags = set(out["two_sided_flag"].values())
+    out["controlled"] = (len(offs) == 1 and flags == {False, True})
+    per = {}
+    for scenario in SCENARIOS:
+        slugs, cov = _common_windows(reports, scenario)
+        ec = _arm_scenario(reports[TWO_SIDED_CONTROL], scenario)
+        et = _arm_scenario(reports[TWO_SIDED_TREATMENT], scenario)
+        c, t = _fold_windows(ec, slugs), _fold_windows(et, slugs)
+        xc, xt = _fold_execution(ec), _fold_execution(et)
+        inc = t["net"] - c["net"]
+        dcap = t["capital_deployed"] - c["capital_deployed"]
+        per[scenario] = {
+            "common_windows": len(slugs),
+            "coverage": cov,
+            # REQUIREMENT 1, answered on the CONTROL arm: the question is
+            # how many of the ONE-SIDED policy's refusals a two-sided arm
+            # could have acted on. The treatment's own count sits beside it
+            # and should be far smaller -- that is the change working.
+            "requirement_1_already_resting": {
+                "control": xc["resting_split"] | {
+                    "total": xc["already_resting"],
+                    "windows_observed": xc["windows_observed"]},
+                "treatment": xt["resting_split"] | {
+                    "total": xt["already_resting"],
+                    "windows_observed": xt["windows_observed"]},
+                "labels": ("OPPOSITE_SIDE is the only bucket a two-sided "
+                           "arm could have acted on. SAME_SIDE is a "
+                           "re-quote the one-order limit was right to "
+                           "refuse and SIDE_UNKNOWN is admitted ignorance; "
+                           "neither is a forgone opportunity.")},
+            "economic_value": {
+                "control_net": str(c["net"]),
+                "treatment_net": str(t["net"]),
+                "incremental_net": str(inc),
+                "incremental_net_per_common_window": _q(
+                    None if not slugs else inc / D(len(slugs))),
+                "control_net_per_window": _q(c["net_per_window"]),
+                "treatment_net_per_window": _q(t["net_per_window"]),
+                "labels": ("THIS is the incremental economic value. Order "
+                           "count and completion rate are below and are "
+                           "NOT it.")},
+            "matched": {
+                "control_matched_units": c["matched_units"],
+                "treatment_matched_units": t["matched_units"],
+                "incremental_matched_units": (t["matched_units"]
+                                              - c["matched_units"]),
+                "control_windows_matching_nothing":
+                    c["windows_matching_nothing"],
+                "treatment_windows_matching_nothing":
+                    t["windows_matching_nothing"],
+                "control_pair_acquisition_cost_per_matched": _q(
+                    c["pair_acquisition_cost_per_matched"]),
+                "treatment_pair_acquisition_cost_per_matched": _q(
+                    t["pair_acquisition_cost_per_matched"]),
+                "control_matched_units_with_split":
+                    c["matched_units_with_split"],
+                "treatment_matched_units_with_split":
+                    t["matched_units_with_split"],
+                "labels": ("matched units are MODELLED executable pairs "
+                           "under the conservative queue rule, not venue "
+                           "fills. Acquisition cost is per PAIR on the "
+                           "average-cost basis, comparable to the pair "
+                           "cap, over the windows that HAVE a split.")},
+            "unmatched_inventory": {
+                "control_residual_units_abs": c["residual_units_abs"],
+                "treatment_residual_units_abs": t["residual_units_abs"],
+                "control_resid_3plus_windows": c["resid_3plus_windows"],
+                "treatment_resid_3plus_windows": t["resid_3plus_windows"],
+                "control_residual_net": str(c["residual_net"]),
+                "treatment_residual_net": str(t["residual_net"]),
+                "labels": ("the 3+ stratum is where the measured loss "
+                           "lives; two-sidedness must not merely move "
+                           "windows into it")},
+            "pair_economics": {
+                "control_pair_net": str(c["pair_net"]),
+                "treatment_pair_net": str(t["pair_net"]),
+                "control_windows_without_split": c["windows_without_split"],
+                "treatment_windows_without_split":
+                    t["windows_without_split"]},
+            "risk": {
+                "control_capital_deployed": str(c["capital_deployed"]),
+                "treatment_capital_deployed": str(t["capital_deployed"]),
+                "control_max_drawdown": str(c["max_drawdown"]),
+                "treatment_max_drawdown": str(t["max_drawdown"]),
+                "incremental_capital_deployed": str(dcap),
+                "incremental_net_per_incremental_dollar": _q(
+                    None if dcap == 0 else inc / dcap)},
+            "adverse_selection": {
+                "control_adverse_rate": xc["adverse_rate"],
+                "treatment_adverse_rate": xt["adverse_rate"],
+                "control_adverse_per_fill": xc["adverse_per_fill"],
+                "treatment_adverse_per_fill": xt["adverse_per_fill"],
+                "control_swept_share": xc["swept_share"],
+                "treatment_swept_share": xt["swept_share"],
+                "labels": ("LIFETIME, not restricted to common windows. "
+                           "Measured from PLACEMENT to window close "
+                           "against our own outcome. A high swept share "
+                           "means the conservative assumption binds.")},
+            "fill_model": {
+                "control": {k: v for k, v in xc.items()
+                            if k != "resting_split"},
+                "treatment": {k: v for k, v in xt.items()
+                              if k != "resting_split"},
+                "labels": "LIFETIME counters, read as rates."}}
+    head = per[HEADLINE_SCENARIO]
+    n = head["common_windows"]
+    inc = D(head["economic_value"]["incremental_net"])
+    out["per_scenario"] = per
+    out["verdict"] = (
+        "ARMS_NOT_CONTROLLED" if not out["controlled"] else
+        "INSUFFICIENT_COMMON_WINDOWS" if n < TWO_SIDED_MIN_COMMON_WINDOWS
+        else "TWO_SIDED_BETTER" if inc > 0 else "TWO_SIDED_NOT_BETTER")
+    out["min_common_windows"] = TWO_SIDED_MIN_COMMON_WINDOWS
+    out["labels"] = (
+        "MODELLED, queue-aware, headline %s. Not realized, not filled, "
+        "not submitted. A positive incremental figure below %d common "
+        "windows is PRELIMINARY and authorizes nothing."
+        % (HEADLINE_SCENARIO, TWO_SIDED_MIN_COMMON_WINDOWS))
+    return out
 
 
 class ShadowController:
