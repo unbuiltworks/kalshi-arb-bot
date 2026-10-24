@@ -14,6 +14,14 @@ Accepts an `L5_LIVE_HB` document, its `shadow_controller` block, a bare
 {label: report()} map, or an already-computed `L5_SHADOW_TWO_SIDED`
 document (which it passes through, so a production line can be re-read
 without recomputation).
+
+ONE CAVEAT ON HEARTBEATS. The heartbeat carries COMPACT reports -- the
+per-window rows are 96% of a full report and six arms once a minute came
+to about 1.8 GB of logs a day -- and the comparison needs those rows to
+restrict itself to windows both arms settled. Recomputing from a heartbeat
+therefore finds zero common windows and says so. Read the production
+`L5_SHADOW_TWO_SIDED` line instead, which this passes through; it was
+computed in-process from the full reports.
 """
 from __future__ import annotations
 

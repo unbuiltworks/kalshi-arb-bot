@@ -1966,3 +1966,68 @@ def test_the_second_legs_depth_is_recorded_so_fills_stay_interpretable(
         c2.step(WS + 100.0 + i * 5, slug=SLUG, book=_book("0.50", "0.52"),
                 window_end_ts=WEND, prints=[], ladder=lad2)
     assert c2._tally(sc.HEADLINE_SCENARIO)["ladder_depth_hist"] == {"1": 1}
+
+
+def test_the_compact_report_drops_only_rows_and_says_how_many(tmp_path):
+    """The per-window lists are 96% of a report -- 204,795 of 212,565
+    characters at 369 settled windows -- so six arms on a once-a-minute
+    heartbeat is about 1.8 GB of logs a day for rows already durable in
+    the state file. Compact drops them and NOTHING else, and reports the
+    count so it can never read as an arm that settled nothing."""
+    c = ctl(tmp_path, placement=sc.ONE_TICK_BEHIND)
+    mk = c.state.setdefault("markets", {})
+    for i in range(5):
+        mk["slug-%d" % i] = {
+            "window_end_ts": float(i), "window_source": "x",
+            "scen": {s: {"settled": {
+                "modelled_net": "-0.10", "pair_net": "0.00",
+                "residual_net": "-0.10", "cost_total": "0.10",
+                "matched_units": 0, "residual_units": 1}}
+                for s in sc.SCENARIOS}}
+    full, small = c.report(), c.report(compact=True)
+    assert "compact" not in full
+    assert small["compact"] is True
+    # same keys, same every figure outside per_window
+    assert set(full) | {"compact"} == set(small)
+    for scen in sc.SCENARIOS:
+        f = full["economics"]["per_scenario"][scen]
+        s2 = small["economics"]["per_scenario"][scen]
+        assert len(f["per_window"]) == 5
+        assert s2["per_window_omitted"] == 5
+        assert "per_window" not in s2
+        for k in f:
+            if k != "per_window":
+                assert s2[k] == f[k], k
+    assert len(json.dumps(small, default=str)) \
+        < len(json.dumps(full, default=str))
+
+
+def test_the_comparison_always_gets_the_FULL_reports(tmp_path):
+    """A compact report has no per-window rows, so a comparison fed one
+    would silently find zero common windows and report 0.0000 as though it
+    had measured something."""
+    model = {"full": {}, "base": {}, "marginal": {}, "cadence_modal": {}}
+    arms = {}
+    for lab, pol, pl in sc.SHADOW_VARIANTS:
+        c = sc.ShadowController(
+            state_path=str(tmp_path / sc.variant_state_filename(lab)),
+            model=model, policy=pol, placement=pl)
+        mk = c.state.setdefault("markets", {})
+        mk["shared-slug"] = {
+            "window_end_ts": 1.0, "window_source": "x",
+            "scen": {s: {"settled": {
+                "modelled_net": "-0.10", "pair_net": "0.00",
+                "residual_net": "-0.10", "cost_total": "0.10",
+                "matched_units": 0, "residual_units": 1}}
+                for s in sc.SCENARIOS}}
+        arms[lab] = c
+    full = sc.compare_all({n: c.report() for n, c in arms.items()})
+    thin = sc.compare_all({n: c.report(compact=True)
+                           for n, c in arms.items()})
+    for t in (sc.TWO_SIDED_TREATMENT, sc.LADDER_TREATMENT):
+        assert full["comparisons"][t]["per_scenario"][
+            sc.HEADLINE_SCENARIO]["common_windows"] == 1
+        # a compact report CANNOT support the comparison, which is why the
+        # runner hands it the full one
+        assert thin["comparisons"][t]["per_scenario"][
+            sc.HEADLINE_SCENARIO]["common_windows"] == 0

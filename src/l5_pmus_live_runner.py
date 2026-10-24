@@ -3700,7 +3700,13 @@ class Runner:
             # THE INDEPENDENT DECISION SOURCE, on every heartbeat. Phase A's
             # deliverable is that it emits continuously, and a counter an
             # operator has to go looking for does not demonstrate that.
-            "shadow_controller": ({n: c.report()
+            # COMPACT. The per-window lists are 96% of a full report, so
+            # six arms once a minute is 1.28 MB a heartbeat -- about 1.8 GB
+            # of logs a day -- for rows already durable in the state files
+            # and already aggregated into L5_SHADOW_TWO_SIDED. The omitted
+            # COUNT is reported, so this can never read as an arm that has
+            # settled nothing.
+            "shadow_controller": ({n: c.report(compact=True)
                                    for n, c in self._shadow.items()}
                                   if self._shadow
                                   else {"off": self._shadow_off}),

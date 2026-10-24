@@ -2229,7 +2229,37 @@ class ShadowController:
                            "LARGER than everything filling.")}
         return out
 
-    def report(self) -> Dict[str, Any]:
+    def report(self, compact: bool = False) -> Dict[str, Any]:
+        """The arm's full state. `compact` drops the per-window lists.
+
+        WHY COMPACT EXISTS. The per-window lists are 96% of this document:
+        one arm with 369 settled windows reports 212,565 characters of
+        which 204,795 are per_window, so six arms on a once-a-minute
+        heartbeat is 1.28 MB a minute -- about 1.8 GB of logs a day, for
+        rows that are already durable in the state file and already
+        aggregated into `L5_SHADOW_TWO_SIDED`. Compact is 67 MB a day.
+
+        NOTHING IS LOST, and the count of what was omitted is reported so
+        a reader can never mistake a compact document for an arm that has
+        settled no windows. The comparison itself always gets the FULL
+        report -- it is computed in-process and never round-trips through
+        a log -- because it restricts to windows both arms settled and
+        needs the per-window rows to do it.
+        """
+        out = self._report_full()
+        if not compact:
+            return out
+        for scen in (out.get("economics") or {}).get("per_scenario", {}
+                                                     ).values():
+            rows = scen.pop("per_window", None)
+            scen["per_window_omitted"] = len(rows or [])
+            scen["per_window_note"] = (
+                "omitted from this COMPACT report; durable in the state "
+                "file and aggregated in L5_SHADOW_TWO_SIDED")
+        out["compact"] = True
+        return out
+
+    def _report_full(self) -> Dict[str, Any]:
         return {"provenance": CONTROLLER_PROVENANCE,
                 "policy": self.policy,
                 "decisions": self.decisions,
