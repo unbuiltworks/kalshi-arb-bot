@@ -1,0 +1,6 @@
+{
+  "th": "0.10",
+  "train_net": "-2.669352480203502",
+  "baseline": "-7.130492760564487",
+  "config": "ceiling 1.00, notional 4.00, rebates credited"
+}
