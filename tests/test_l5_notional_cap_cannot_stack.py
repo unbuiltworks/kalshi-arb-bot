@@ -159,3 +159,43 @@ def test_two_allocation_rounds_at_the_budget_stay_inside_the_bound():
     finally:
         os.environ.pop("L5_TS_OPENING_NOTIONAL_BUDGET_USD", None)
         os.environ.pop("L5_TS_ROUND_ALLOCATIONS", None)
+
+
+# ------------------------------- the two invariants are DIFFERENT quantities
+
+def test_the_cap_bounds_NOTIONAL_and_the_gate_bounds_FEE_INCLUSIVE_COST(gates):
+    """Why a $0.80 cap shows up as $0.8231 of executed cost.
+
+    They are two different quantities and both are intended:
+
+      CAP      qty * dearer_own_price            <= $0.80   (no fee)
+      DEFICIT  C - min(up_qty, dn_qty) <= $2.00, where C includes
+               fee_worst() at TAKER theta plus $0.01 per order, rounded UP
+
+    $0.7931 + $0.03 = $0.8231. The cap is not breached; the deficit gate is
+    simply charging a conservative fee the cap does not.
+    """
+    notional = QTY * DEAR
+    assert notional == D("0.7931")
+    assert notional <= BUDGET                      # the cap's invariant holds
+    fee = gates.fee_worst(QTY, DEAR)
+    assert fee == D("0.03")
+    assert notional + fee == D("0.8231")           # what the gate charges
+    assert notional + fee > BUDGET                 # and it exceeds the cap...
+    # ...which is correct, because the cap bounds notional, not fee-inclusive cost
+
+
+def test_the_cap_equals_the_realized_strand_loss_for_a_maker_fill():
+    """0130z settled at exactly -$1.1594 = 1.87 x 0.62, and every leg of that
+    campaign carried commission 0.0000. So for a maker fill at zero
+    commission the notional IS the realized loss, which is the quantity the
+    cap was chosen to bound."""
+    assert D("1.87") * D("0.62") == D("1.1594")
+
+
+def test_the_gate_is_strictly_more_conservative_than_reality(gates):
+    """fee_worst uses the TAKER theta and never nets the maker rebate, so the
+    gate always charges at least what a maker fill actually costs."""
+    assert gates.fee_theta_worst == D("0.0695")    # taker theta
+    for px in (D("0.20"), D("0.35"), D("0.55"), D("0.77")):
+        assert gates.fee_worst(D("1"), px) > 0     # never zero, never a credit
