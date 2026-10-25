@@ -244,6 +244,10 @@ action type.
 
 ## 4. The two orders that never reached terminal states
 
+> **SUPERSEDED — see §9. Both were venue-confirmed CANCELLED. The
+> record was in `L5_ACC_DEADLINE`, not the lifecycle stream. My
+> "auditability defect" conclusion below was wrong.**
+
 | coid | window | side | polled | last state | venue id |
 |---|---|---|---|---|---|
 | `dd9b1c54` | 0115z | DOWN | 18× 01:21:30→01:23:27 | `ORDER_STATE_NEW`, cum 0, `terminal: false` | `DA5Y75NG11MQ` |
@@ -389,3 +393,96 @@ wanted: add Policy B's worst-case opening notional cap ($0.60). D + B gives
 
 **No deployment, rearming, limit change, or sell-exit enablement is proposed or
 performed here. All of the above requires fresh explicit owner authorization.**
+
+---
+
+## 9. Item 1 RESOLVED — both orders were venue-confirmed cancelled
+
+Searching by **venue order id** rather than client order id found the
+authoritative record. It was always there, under `L5_ACC_DEADLINE`.
+
+### `dd9b1c54` (0115z DOWN) — cancelled 01:23:27.944Z on the 120s TTL
+
+```
+reason      : acc_order_deadline        overdue : [l5f-dd9b1c54...]
+ttl_s       : 120.0                     polled  : 1
+cancelled   : [{ venue_order_id : "DA5Y75NG11MQ",
+                 venue_state    : "ORDER_STATE_CANCELED",
+                 cum_qty        : "0",   leaves_qty : "0",
+                 cancel_error   : null }]
+errors: []   unverified: []   no_venue_id: []   still_open: []   filled: []
+```
+
+Placed 01:21:25, cancelled 01:23:27 — **122s, the TTL exactly.**
+
+### `be31b2bd` (0130z UP) — cancelled 01:32:05.209Z on stale-by-distance
+
+Preceded by `L5_ACC_RECOVER` at 01:32:04.959:
+
+```
+side UP   own_px 0.3300   would_quote_now 0.4100
+drift_ticks 8.00   allowed_ticks 4   rest_s 37.24   book_age_s 0.101
+recoveries_used 0   max_per_market 1
+note: "stale by distance, zero filled."
+```
+
+then
+
+```
+cancelled : [{ venue_order_id : "DA62T9S011TB",
+               venue_state    : "ORDER_STATE_CANCELED",
+               cum_qty        : "0",  leaves_qty : "0",
+               cancel_error   : null }]
+errors: []  unverified: []  no_venue_id: []  still_open: []  filled: []
+stale_by_distance: [be31b2bd]   recoveries_used: 1
+```
+
+### Verdict
+
+| coid | disposition | authority | cause |
+|---|---|---|---|
+| `dd9b1c54` | **CANCELLED, zero fill** | venue re-read, `cancel_error: null` | 120s TTL |
+| `be31b2bd` | **CANCELLED, zero fill** | venue re-read, `cancel_error: null` | 8-tick drift > 4 allowed |
+
+Neither filled, neither expired, neither remains unknown, and nothing was
+`unverified` or `still_open`.
+
+**Fail-closed behavior was preserved and demonstrably worked.** The deadline
+route polls the venue, cancels by exact venue order id, and proves the cancel
+terminal before any replacement is priced — as its own label states. The store
+marks UNCERTAIN on anything other than a venue-confirmed terminal; that path was
+not needed here.
+
+The only residual gap is **cosmetic**: the deadline route emits no *terminal*
+`L5_LIVE_LIFECYCLE` row, so a reader following only the lifecycle stream sees
+the order stop at `ORDER_STATE_NEW`. That is what misled me. The authoritative
+record exists and is complete. A one-line terminal lifecycle emit on the
+deadline path would remove the trap for future readers; **no safety change is
+required and none is proposed.**
+
+### What this reveals about 0130z — a sharper mechanism
+
+The cancel timings change the strand story materially:
+
+| time | event |
+|---|---|
+| 01:31:27.756 | UP `be31b2bd` placed at own 0.33 (book 0.35/0.36), DOWN `491f0e82` at own 0.62 |
+| ~01:31:28 | **DOWN fills.** UP rests. |
+| 01:32:04.959 | drift 8 ticks > 4 allowed → recovery proposed, `recoveries_used 0 / max 1` |
+| 01:32:05.209 | **UP cancelled, venue-confirmed, zero fill** |
+| 01:32:05 → 01:33:03 | **no UP order resting at all — 58 seconds** |
+| **01:32:56.650** | **pair achievable at 0.95 by crossing (ask 0.3300 × 244.72)** |
+| **01:33:03.007** | **pair achievable at 0.96 by crossing (ask 0.3400 × 1277.39)** |
+| 01:33:03.366 | replacement `d2f217fb` placed at own **0.31**, two ticks behind the 0.33 bid → pair 0.93, never fills |
+| 01:44 → | ask side **empty**; no exit at any price |
+
+The engine detected the drift correctly and spent its single allowed recovery
+correctly. But the re-price rule — *"priced by the same rule two ticks BEHIND
+the current touch and re-tested against the pair cap; it never moves to the
+touch and never crosses"* — means that at **01:33:03.366**, 359 ms after a frame
+showing an executable 0.96 pair, it quoted 0.93 instead of taking 0.96.
+
+So the strand was not a failure to try. It was a maker-only re-price rule
+quoting *through* a 6.4-second executable window, with its one recovery already
+spent. That is a far more specific finding than "the complement never filled",
+and it is the mechanism any candidate policy has to beat.
