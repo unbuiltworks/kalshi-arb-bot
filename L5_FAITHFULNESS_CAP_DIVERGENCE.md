@@ -146,6 +146,60 @@ and it needs no authorization expansion at all.
 The fidelity gap and the profit gap still have one cause. But the multiplier on
 it is **clip granularity**, not inventory capacity.
 
+### Bound: the lever is NOT available at $5 of capital
+
+A peer session put a floor under the clip, and I verified it against
+`src/pmus_fees.py`. It holds, and it is **sharper than they stated, against us.**
+
+The credited rebate is banker-rounded to the cent, so there is a minimum clip
+below which it pays nothing: `0.0125·q·p(1−p) > 0.005`, i.e. **q > 0.4/p(1−p)**
+— about **1.60–1.62 contracts**. At our authorized **$0.80 notional**:
+
+| price | contracts | raw rebate | **credited** |
+|---|---|---|---|
+| 0.44 | 1.8182 | 0.0056 | **$0.01** |
+| 0.50 | 1.6000 | 0.0050 | **$0.00** |
+| 0.56 | 1.4286 | 0.0044 | **$0.00** |
+
+**We are not sitting exactly on the floor — we are already below it at and above
+p = 0.50.** A fixed *notional* clip buys fewer contracts as price rises, so the
+rebate drops out across the entire upper half of the price range. We capture it
+only when p ≲ 0.49.
+
+And the fill count is capital-bound, not policy-bound: at $5.00 with no
+recycling and $0.80 a print the ceiling is **6 prints per window**, against L5's
+median of **119** — **19.8×**.
+
+**So "cut the clip and raise the fill count" is a diagnosis, not an available
+action, and I was wrong to present it as the latter.** Both halves are blocked
+at $5:
+
+* cutting the clip forfeits a rebate we already forfeit above p = 0.49, and at
+  these sizes the forfeit (~$0.01/print) is comparable to the adverse selection
+  it would save (~$0.012/print at 1.6 contracts on the measured $0.0074/contract)
+  — roughly a wash, and not a reason to act;
+* raising the fill count cannot exceed 6 at $5 ÷ $0.80, however the clip is set.
+
+Nor is switching the clip from fixed-notional to fixed-contracts a way out: 1.63
+contracts at p = 0.56 costs **$0.9128** against $0.80, i.e. paying $0.113 more to
+earn $0.01 of rebate. A bad trade, and I checked it rather than proposing it.
+
+**The honest statement is the peer's: the diagnosis is right and the lever is not
+available at $5.** The 34× normalised clip gap closes only with **more capital at
+the same clip** — which is an authorization question, and precisely the kind of
+thing neither session should advocate from a model. It is also falsifiable: if
+the venue stopped cent-rounding the rebate, or the floor moved, the lever would
+open.
+
+### Reconciled figures, conservative end
+
+The peer and I computed two different statistics, both correctly: **median of
+ratios** (each fill against its own window's capital) 0.2514 %, versus **ratio of
+medians** 0.4069 % — my 0.3903 % lands within 4 % of the latter. Their statistic
+is the better one for "a typical clip against the capital available in that same
+window". Agreed figures, conservative end of each row: **34× larger per clip**,
+**9.6× looser residual tolerance**. The 64× and 14.2× figures are retired.
+
 It also dissolves a mechanism I proposed and should withdraw.
 
 ## 4. Withdrawn: my cap → accumulation → drift chain
