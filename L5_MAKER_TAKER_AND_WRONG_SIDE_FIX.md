@@ -250,3 +250,94 @@ returned. That is a latent loss, not a realized one.
 **The economic bottleneck remains open** and the maker/taker evidence has moved
 where it points: from crossing to complete, to **crossing to open**. Both need
 authorization neither has.
+
+---
+
+## PART 4 — Campaign 2 reconciled, and it confirms the diagnosis
+
+The campaign finished on its own: **8/8 windows spent, OPEN budget 16/16
+exhausted**, 25 of 56 submissions used, flat at close, no halt
+(`would_halt: false`, $3.67 of daily room unused).
+
+### Settled, per window — venue `VENUE_SETTLEMENT_PX`, nothing modelled
+
+| window | matched | pair P&L | residual | residual P&L | **settled net** |
+|---|---|---|---|---|---|
+| 1245z | 1.40 | +0.1540 | 1.40 DOWN | −0.4480 | **−0.2940** |
+| 1300z | 0 | 0 | 1.26 UP | −0.7938 | **−0.7938** |
+| 1315z | 1.63 | +0.0815 | — | 0 | **+0.0815** |
+| 1330z | 1.29 | +0.4858 | 0.93 DOWN | −0.2728 | **+0.2130** |
+| 1345z | 1.50 | +0.0903 | 1.56 UP | −0.8109 | **−0.7206** |
+| 1400z | 1.11 | +0.0555 | — | 0 | **+0.0555** |
+| 1415z | no fills | — | — | — | 0 |
+| 1430z | flat, OPEN exhausted | — | — | — | 0 |
+| **total** | | **+0.8671** | | **−2.3255** | **−1.4584** |
+
+Chain-verified against the venue `realized_today_after` ledger at every step:
+start of UTC day **−11.62130** → earlier windows **+0.1256** → this campaign
+**−1.4584** → **−12.95410**, and `utc_day_realized_usd: −1.332800`. Exact.
+
+### The finding
+
+**Matched-pair economics are positive: +$0.8671 across six traded windows.
+Stranded residual cost −$2.3255 — 2.68× the pair profit. Stranding is the
+entire deficit, and four of six traded windows stranded.**
+
+**The pair strategy works. The entry mechanism loses more than the pairs make.**
+
+### Independently confirmed at 453-window scale
+
+The shadow controller, running continuously beside the money path (**shadow, not
+realized**), reports the same shape on a vastly larger sample:
+
+| | live, 6 windows | shadow, **453 settled windows** |
+|---|---|---|
+| pair net | **+$0.8671** | **+$73.4802** |
+| residual net | **−$2.3255** | **−$149.1802** |
+| net | −$1.4584 | **−$77.4100** |
+| residual ÷ pair | **2.68×** | **2.03×** |
+| net per settled window | −$0.2431 | **−$0.1709** |
+
+And it names the mechanism outright:
+
+- **fill rate 0.8192** — our quotes do fill
+- **adverse rate 0.7754** — **1,219 of 1,572 fills were adverse, $89.10**
+- all three scenarios (CONSERVATIVE/BASE/OPTIMISTIC) land within $0.33 of each
+  other, so this is not a fill-model artefact
+- `possible_misses: 0` against 117,937 justified refusals — **we are not losing
+  money by being too cautious.** Every refusal protected money or admitted
+  ignorance.
+
+**Three quarters of our maker fills are adverse.** That is what a resting
+opening leg *is*: it fills when the market is coming to take it, which is when
+it is about to be wrong. The $0.80 cap scales the loss down; it does not change
+the sign.
+
+### This is the same fact as the L5 evidence, from the other end
+
+L5 opens **87.2% taker**. He does not rest an opening leg to be adversely
+selected — he pays the spread to choose his moment, then rests to work the
+position (18.2% extend, 15.5% complete). Our engine rests **100%** of its
+openings. The adverse rate is the price of that difference.
+
+**So the single highest-impact change is the entry mechanism, and the evidence
+now agrees from three directions:** L5's own 87.2%, our 77.5% adverse rate over
+1,572 shadow fills, and −$2.33 of live stranding against +$0.87 of working pair
+economics.
+
+It requires taker authorization at entry. **I have not built it and am not
+asking to deploy it** — the next step is a replay of taker-at-entry against the
+453 shadow windows, which needs no authorization and no capital.
+
+### What this does to the other candidates
+
+- **Raise the completion ceiling** — superseded. L5 completes as a maker 84.5%
+  of the time. Completion is not where he pays.
+- **Change the 120 s TTL** — not the constraint. Confirmed in Part 2.
+- **Open less often** — contradicted. `possible_misses: 0`, and pair economics
+  are positive; fewer openings shrink both sides.
+- **The wrong-side fix** — keep it, but for the right reason. It recovered
+  $0.00 in the two measured windows, yet the shadow shows
+  **`already_resting_opposite_side: 1,745` across 46 windows** where the
+  controller wanted the side it was not resting. The state recurs. It is
+  correctness with a real forward-looking frequency, not a revenue change.
