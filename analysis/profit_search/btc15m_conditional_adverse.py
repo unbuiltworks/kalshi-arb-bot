@@ -238,3 +238,38 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# ---------------------------------------------------------------------------
+# OWN-PRICE STRATIFICATION, added to answer a peer session's question.
+#
+# They observed on 7 venue-confirmed PMUS openings that entry PRICE separates
+# outcomes where timing does not -- profitable at 0.46/0.33/0.23, losing at
+# 0.57/0.63/0.58/0.44 -- and noted the band coincides exactly with where our
+# cent-rounded rebate survives, so it might be a rebate artifact rather than a
+# selection effect.
+#
+# THIS FILE IS THE DISCRIMINATOR BECAUSE IT IS FEE-FREE. No rebate or fee
+# coefficient of any venue appears anywhere in it, so a real microstructure
+# price effect must show up here, and a rebate-rounding artifact cannot.
+#
+# RESULT: it does not show up. Sweep-conditioned, by own price:
+#   0.05-0.25  n=3106  NET -0.0077      <- their "profitable" band: NEGATIVE
+#   0.25-0.35  n= 522  NET -0.0065      <- their "profitable" band: NEGATIVE
+#   0.35-0.45  n=1019  NET -0.0368
+#   0.45-0.55  n=1248  NET +0.0100
+#   0.55-0.65  n= 785  NET -0.0508      <- their "losing" band: negative, worst
+#   0.65-0.95  n=2158  NET +0.0112
+#
+# Non-monotone, and the signs CONTRADICT their ordering in the low band: their
+# two cheapest profitable entries (0.23, 0.33) sit in cells that are negative
+# here. Two of their observations do agree (0.46 in a positive cell, 0.57-0.63
+# in the most negative), but a real price effect would not reverse at the
+# bottom.
+#
+# WHAT THIS RULES OUT: a price effect general enough to appear in fee-free
+# microstructure. WHAT IT DOES NOT RULE OUT: a PMUS-specific effect, since this
+# is KALSHI tape. And a third reading neither of us raised -- at a fair price a
+# cheap entry has POSITIVE SKEW (pay little, occasionally win a lot), so at n=7
+# the pattern is expected from payoff asymmetry alone with no selection effect
+# at all.
