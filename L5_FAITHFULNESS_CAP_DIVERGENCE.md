@@ -100,8 +100,51 @@ third independent reason beyond the two objections I had already accepted.
 **And it is the reason not to act.** Raising `MAX_UNMATCHED` is a risk-limit
 increase, and the drift figure — now correctly scoped to *selection* rather than
 *carrying* — says our residual loses. Scaling toward L5's inventory scales **our
-measured loss, not his profit.** The fidelity gap and the profit gap have one
-cause, and inventory capacity is the multiplier on it, not the fix.
+measured loss, not his profit.**
+
+### Correction: normalised by capital, our limits are PERMISSIVE, not tight
+
+I wrote that "inventory capacity is the multiplier on it, not the fix", framing
+us as far below L5's scale. **That framing is wrong, and the absolute ratios are
+what misled me.** A peer session normalised by capital; I recomputed
+independently from `data/l5/raw/activity.jsonl` (66,949 of his BTC15m trades,
+527 windows) and confirm the direction, with different magnitudes:
+
+| | their figure | **my independent figure** |
+|---|---|---|
+| L5 clip as % of his window capital | 0.2514 % | **0.3903 %** |
+| our clip as % of authorized capital | 16.00 % | **13.73 %** |
+| → **we trade LARGER per clip by** | 64× | **35×** |
+| L5 median residual as % of capital | 3.53 % | **4.58 %** |
+| our residual tolerance | 50 % | **44 %** |
+| → **our tolerance is LOOSER by** | 14.2× | **9.6×** |
+
+*(His median clip is 10.53 contracts / $3.988 against median per-window capital
+of $1,021.73. The magnitude differences are price- and denominator-dependent and
+worth reconciling; the direction is not in doubt.)*
+
+**So the absolute ratios — 165× on matched, 23× on residual — made our limits
+look tight. Normalised, they are permissive, and the CLIP is what is
+mis-scaled.** We are not too small. **We take too few, too large bets.**
+
+This is coherent with everything else measured, and it is the first framing that
+makes all of it fit at once:
+
+* adverse selection scales with clip, and ours is **35× his** normalised — so we
+  are 35× more exposed per decision to the sweep that fills us;
+* his one-sided carrying is benign at **4.58 %** of capital while ours is
+  permitted to **44 %**, ~10× looser — which is why his accumulation is fine and
+  our residual drift is destructive;
+* his ~100 fills of tiny clips against our ~4.5 fills of large ones is the same
+  fact seen from the other side.
+
+**And it changes the direction of the fix.** Not "raise the limits" — the
+opposite: **cut the clip and raise the fill count.** That is a strategy change
+rather than a risk-limit increase, which is both cheaper and safer to propose,
+and it needs no authorization expansion at all.
+
+The fidelity gap and the profit gap still have one cause. But the multiplier on
+it is **clip granularity**, not inventory capacity.
 
 It also dissolves a mechanism I proposed and should withdraw.
 
