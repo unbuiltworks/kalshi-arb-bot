@@ -250,6 +250,7 @@ class ContinuousRunner:
         summary, joined by symbol and cycle.
         """
         from src.gemini_execution import run_continuous as RC
+        from src.gemini_execution import inventory_shadow as IVS
         presented = RC.presented_book(market_state)
         our_prices = []
         for w in (working or []):
@@ -284,10 +285,21 @@ class ContinuousRunner:
                 "cancel": len(plan.get("cancel") or []),
                 "mutations": plan.get("mutations"),
                 "SHADOW_NOT_SENT": self.mode == SHADOW},
+            # PARALLEL OPINION, NOT A SECOND CONTROLLER. The inventory engine
+            # is evaluated on the SAME state this cycle's live controller just
+            # decided on, and its verdict is recorded beside the live one so the
+            # two are comparable on identical inputs. It has no order path from
+            # here, and it currently runs uncalibrated, which means it WAITs by
+            # gate rather than asserting an edge it has not shown out of sample.
+            "inventory_decision": IVS.shadow_decision(
+                symbol=symbol, tte_s=tte_s, presented=presented, depth=depth,
+                flow=flow, inventory=inventory, working=working),
             "labels": ("SHADOW records what the unchanged policy WOULD do; no "
                        "order path is reachable from this mode. Accounting "
                        "stays SUBMITTED -> FILLED -> SETTLED -> REALIZED and "
-                       "a shadow plan is none of them."),
+                       "a shadow plan is none of them. `inventory_decision` is "
+                       "a recorded opinion of the inventory engine on this same "
+                       "state and is likewise none of them."),
         }
 
     # ------------------------------------------------------------- reporting

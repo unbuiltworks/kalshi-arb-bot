@@ -1,0 +1,4516 @@
+{
+ "asset": "btc",
+ "windows": 527,
+ "trades": 63569,
+ "action_mix": {
+  "EXTEND": 32611,
+  "COMPLETE": 99,
+  "REDUCE": 28056,
+  "FLIP": 2803
+ },
+ "overlap_windows": 33,
+ "ended_flat": 0,
+ "ended_with_residual": 527,
+ "per_window": [
+  {
+   "open_epoch": 1773917100,
+   "n": 1,
+   "up": "5",
+   "dn": "0",
+   "resid": "5",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "5"
+  },
+  {
+   "open_epoch": 1774440000,
+   "n": 1,
+   "up": "1.05262",
+   "dn": "0",
+   "resid": "1.05262",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "1.05262"
+  },
+  {
+   "open_epoch": 1774441800,
+   "n": 1,
+   "up": "0",
+   "dn": "1.369862",
+   "resid": "-1.369862",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "1.369862"
+  },
+  {
+   "open_epoch": 1774442700,
+   "n": 1,
+   "up": "3.846152",
+   "dn": "0",
+   "resid": "3.846152",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "3.846152"
+  },
+  {
+   "open_epoch": 1774450800,
+   "n": 1,
+   "up": "0",
+   "dn": "1.0204",
+   "resid": "-1.0204",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "1.0204"
+  },
+  {
+   "open_epoch": 1774526400,
+   "n": 1,
+   "up": "2",
+   "dn": "0",
+   "resid": "2",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "2"
+  },
+  {
+   "open_epoch": 1774527300,
+   "n": 1,
+   "up": "8.148147",
+   "dn": "0",
+   "resid": "8.148147",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "8.148147"
+  },
+  {
+   "open_epoch": 1774528200,
+   "n": 1,
+   "up": "0",
+   "dn": "5.470586",
+   "resid": "-5.470586",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "5.470586"
+  },
+  {
+   "open_epoch": 1774539000,
+   "n": 3,
+   "up": "15",
+   "dn": "0",
+   "resid": "15",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "15"
+  },
+  {
+   "open_epoch": 1774539900,
+   "n": 12,
+   "up": "27.125787",
+   "dn": "30",
+   "resid": "-2.874213",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "17.125787"
+  },
+  {
+   "open_epoch": 1774540800,
+   "n": 15,
+   "up": "70",
+   "dn": "5",
+   "resid": "65",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "65"
+  },
+  {
+   "open_epoch": 1774541700,
+   "n": 40,
+   "up": "112.950802",
+   "dn": "85",
+   "resid": "27.950802",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "35.230802"
+  },
+  {
+   "open_epoch": 1774543500,
+   "n": 55,
+   "up": "171.861159",
+   "dn": "99.133903",
+   "resid": "72.727256",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "72.727256"
+  },
+  {
+   "open_epoch": 1774605600,
+   "n": 39,
+   "up": "85",
+   "dn": "110.401802",
+   "resid": "-25.401802",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "25.401802"
+  },
+  {
+   "open_epoch": 1774607400,
+   "n": 16,
+   "up": "35.12195",
+   "dn": "45.402809",
+   "resid": "-10.280859",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30.12195"
+  },
+  {
+   "open_epoch": 1774612800,
+   "n": 33,
+   "up": "55.128204",
+   "dn": "110.585961",
+   "resid": "-55.457757",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "60.457757"
+  },
+  {
+   "open_epoch": 1774614600,
+   "n": 33,
+   "up": "55.086204",
+   "dn": "108.434256",
+   "resid": "-53.348052",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "53.348052"
+  },
+  {
+   "open_epoch": 1774615500,
+   "n": 50,
+   "up": "110.693578",
+   "dn": "144.920207",
+   "resid": "-34.226629",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40.21739"
+  },
+  {
+   "open_epoch": 1774623600,
+   "n": 61,
+   "up": "150.586200",
+   "dn": "150",
+   "resid": "0.586200",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.586200"
+  },
+  {
+   "open_epoch": 1774624500,
+   "n": 54,
+   "up": "178.782653",
+   "dn": "90.084268",
+   "resid": "88.698385",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "88.698385"
+  },
+  {
+   "open_epoch": 1774628100,
+   "n": 28,
+   "up": "85.147057",
+   "dn": "52.244744",
+   "resid": "32.902313",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "56.89"
+  },
+  {
+   "open_epoch": 1774629000,
+   "n": 30,
+   "up": "60.375",
+   "dn": "89.541664",
+   "resid": "-29.166664",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "34.000"
+  },
+  {
+   "open_epoch": 1774629900,
+   "n": 27,
+   "up": "85.119046",
+   "dn": "50",
+   "resid": "35.119046",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "45.119046"
+  },
+  {
+   "open_epoch": 1774630800,
+   "n": 28,
+   "up": "79.87",
+   "dn": "55.889787",
+   "resid": "23.980213",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "23.980213"
+  },
+  {
+   "open_epoch": 1774638900,
+   "n": 4,
+   "up": "3.64",
+   "dn": "15",
+   "resid": "-11.36",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "11.36"
+  },
+  {
+   "open_epoch": 1774639800,
+   "n": 52,
+   "up": "353.315329",
+   "dn": "155.770369",
+   "resid": "197.544960",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "197.544960"
+  },
+  {
+   "open_epoch": 1774640700,
+   "n": 32,
+   "up": "220.585467",
+   "dn": "100.232557",
+   "resid": "120.352910",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "130.585467"
+  },
+  {
+   "open_epoch": 1774641600,
+   "n": 39,
+   "up": "183.119355",
+   "dn": "197.050400",
+   "resid": "-13.931045",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "53.280400"
+  },
+  {
+   "open_epoch": 1774642500,
+   "n": 41,
+   "up": "178.172411",
+   "dn": "210.012557",
+   "resid": "-31.840146",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "41.840146"
+  },
+  {
+   "open_epoch": 1774643400,
+   "n": 41,
+   "up": "186.555554",
+   "dn": "200.679821",
+   "resid": "-14.124267",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "59"
+  },
+  {
+   "open_epoch": 1774644300,
+   "n": 9,
+   "up": "70",
+   "dn": "20",
+   "resid": "50",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1774645200,
+   "n": 9,
+   "up": "50",
+   "dn": "40",
+   "resid": "10",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30"
+  },
+  {
+   "open_epoch": 1774646100,
+   "n": 47,
+   "up": "225.883125",
+   "dn": "233.815327",
+   "resid": "-7.932202",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "78.715327"
+  },
+  {
+   "open_epoch": 1774647000,
+   "n": 9,
+   "up": "10",
+   "dn": "80",
+   "resid": "-70",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "70"
+  },
+  {
+   "open_epoch": 1774647900,
+   "n": 16,
+   "up": "65",
+   "dn": "90",
+   "resid": "-25",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30"
+  },
+  {
+   "open_epoch": 1774648800,
+   "n": 9,
+   "up": "37.26",
+   "dn": "40",
+   "resid": "-2.74",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "10"
+  },
+  {
+   "open_epoch": 1774649700,
+   "n": 36,
+   "up": "90",
+   "dn": "242.194727",
+   "resid": "-152.194727",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "152.194727"
+  },
+  {
+   "open_epoch": 1774650600,
+   "n": 20,
+   "up": "70.9375",
+   "dn": "126.056001",
+   "resid": "-55.118501",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "55.543182"
+  },
+  {
+   "open_epoch": 1774651500,
+   "n": 50,
+   "up": "194.20857",
+   "dn": "299.626891",
+   "resid": "-105.418321",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "105.418321"
+  },
+  {
+   "open_epoch": 1774652400,
+   "n": 26,
+   "up": "107.486057",
+   "dn": "146.300424",
+   "resid": "-38.814367",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "101.300424"
+  },
+  {
+   "open_epoch": 1774653300,
+   "n": 25,
+   "up": "130",
+   "dn": "115.66",
+   "resid": "14.34",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "54.34"
+  },
+  {
+   "open_epoch": 1774683900,
+   "n": 4,
+   "up": "10",
+   "dn": "30.833332",
+   "resid": "-20.833332",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30.833332"
+  },
+  {
+   "open_epoch": 1774684800,
+   "n": 21,
+   "up": "100.75",
+   "dn": "105.083332",
+   "resid": "-4.333332",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.75"
+  },
+  {
+   "open_epoch": 1774685700,
+   "n": 18,
+   "up": "65",
+   "dn": "110.743704",
+   "resid": "-45.743704",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "55.743704"
+  },
+  {
+   "open_epoch": 1774686600,
+   "n": 10,
+   "up": "72",
+   "dn": "30",
+   "resid": "42",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "52"
+  },
+  {
+   "open_epoch": 1774687500,
+   "n": 38,
+   "up": "212.859140",
+   "dn": "148.355796",
+   "resid": "64.503344",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "91.685915"
+  },
+  {
+   "open_epoch": 1774688400,
+   "n": 9,
+   "up": "50.25",
+   "dn": "40",
+   "resid": "10.25",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20.25"
+  },
+  {
+   "open_epoch": 1774697400,
+   "n": 12,
+   "up": "10",
+   "dn": "110.018557",
+   "resid": "-100.018557",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "100.018557"
+  },
+  {
+   "open_epoch": 1774698300,
+   "n": 37,
+   "up": "114.589229",
+   "dn": "266.151011",
+   "resid": "-151.561782",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "151.561782"
+  },
+  {
+   "open_epoch": 1774699200,
+   "n": 37,
+   "up": "150.238094",
+   "dn": "209.085997",
+   "resid": "-58.847903",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "103.259669"
+  },
+  {
+   "open_epoch": 1774700100,
+   "n": 21,
+   "up": "74.317459",
+   "dn": "131.088234",
+   "resid": "-56.770775",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "76.770775"
+  },
+  {
+   "open_epoch": 1774718100,
+   "n": 1,
+   "up": "0",
+   "dn": "10",
+   "resid": "-10",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "10"
+  },
+  {
+   "open_epoch": 1774719000,
+   "n": 23,
+   "up": "108.43",
+   "dn": "102.547776",
+   "resid": "5.882224",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "72.547776"
+  },
+  {
+   "open_epoch": 1774719900,
+   "n": 41,
+   "up": "171.292764",
+   "dn": "217.875581",
+   "resid": "-46.582817",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "46.795581"
+  },
+  {
+   "open_epoch": 1774720800,
+   "n": 7,
+   "up": "40",
+   "dn": "30",
+   "resid": "10",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30"
+  },
+  {
+   "open_epoch": 1774721700,
+   "n": 6,
+   "up": "10",
+   "dn": "46.174635",
+   "resid": "-36.174635",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "36.174635"
+  },
+  {
+   "open_epoch": 1774886400,
+   "n": 1,
+   "up": "0",
+   "dn": "10",
+   "resid": "-10",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "10"
+  },
+  {
+   "open_epoch": 1774887300,
+   "n": 17,
+   "up": "105.84",
+   "dn": "60",
+   "resid": "45.84",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "55.84"
+  },
+  {
+   "open_epoch": 1774888200,
+   "n": 30,
+   "up": "151.438573",
+   "dn": "126.217946",
+   "resid": "25.220627",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.96"
+  },
+  {
+   "open_epoch": 1774889100,
+   "n": 19,
+   "up": "119.12",
+   "dn": "53.74",
+   "resid": "65.38",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "65.38"
+  },
+  {
+   "open_epoch": 1774890000,
+   "n": 24,
+   "up": "112.81",
+   "dn": "91.56",
+   "resid": "21.25",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "35.44"
+  },
+  {
+   "open_epoch": 1774890900,
+   "n": 15,
+   "up": "65",
+   "dn": "76.41",
+   "resid": "-11.41",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "36.41"
+  },
+  {
+   "open_epoch": 1774891800,
+   "n": 14,
+   "up": "45",
+   "dn": "89.211466",
+   "resid": "-44.211466",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "59.211466"
+  },
+  {
+   "open_epoch": 1774892700,
+   "n": 26,
+   "up": "137.591149",
+   "dn": "116",
+   "resid": "21.591149",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "57.591149"
+  },
+  {
+   "open_epoch": 1774893600,
+   "n": 35,
+   "up": "130.284544",
+   "dn": "219.217387",
+   "resid": "-88.932843",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "99.17"
+  },
+  {
+   "open_epoch": 1774894500,
+   "n": 27,
+   "up": "132.550852",
+   "dn": "110",
+   "resid": "22.550852",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "58.550852"
+  },
+  {
+   "open_epoch": 1774898100,
+   "n": 28,
+   "up": "155",
+   "dn": "107.35714",
+   "resid": "47.64286",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "67.64286"
+  },
+  {
+   "open_epoch": 1774899000,
+   "n": 30,
+   "up": "156.467216",
+   "dn": "141.165497",
+   "resid": "15.301719",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.256409"
+  },
+  {
+   "open_epoch": 1774899900,
+   "n": 16,
+   "up": "58.2",
+   "dn": "100.620297",
+   "resid": "-42.420297",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "52.420297"
+  },
+  {
+   "open_epoch": 1774904400,
+   "n": 9,
+   "up": "50.769229",
+   "dn": "40.749997",
+   "resid": "10.019232",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30.769229"
+  },
+  {
+   "open_epoch": 1774905300,
+   "n": 18,
+   "up": "70.158729",
+   "dn": "111.128361",
+   "resid": "-40.969632",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.969632"
+  },
+  {
+   "open_epoch": 1774906200,
+   "n": 30,
+   "up": "152.43",
+   "dn": "140.441593",
+   "resid": "11.988407",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "58.011593"
+  },
+  {
+   "open_epoch": 1774907100,
+   "n": 14,
+   "up": "60",
+   "dn": "74.151514",
+   "resid": "-14.151514",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20"
+  },
+  {
+   "open_epoch": 1774908000,
+   "n": 29,
+   "up": "132.833332",
+   "dn": "145.163933",
+   "resid": "-12.330601",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "55"
+  },
+  {
+   "open_epoch": 1774908900,
+   "n": 22,
+   "up": "86.22",
+   "dn": "120",
+   "resid": "-33.78",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "45.78"
+  },
+  {
+   "open_epoch": 1774909800,
+   "n": 44,
+   "up": "196.25",
+   "dn": "235.489743",
+   "resid": "-39.239743",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "59.239743"
+  },
+  {
+   "open_epoch": 1774960200,
+   "n": 3,
+   "up": "30.77777",
+   "dn": "0",
+   "resid": "30.77777",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30.77777"
+  },
+  {
+   "open_epoch": 1774962900,
+   "n": 1,
+   "up": "16.551723",
+   "dn": "0",
+   "resid": "16.551723",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "16.551723"
+  },
+  {
+   "open_epoch": 1774965600,
+   "n": 2,
+   "up": "14.545453",
+   "dn": "12.5641",
+   "resid": "1.981353",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "12.5641"
+  },
+  {
+   "open_epoch": 1774967400,
+   "n": 8,
+   "up": "20",
+   "dn": "60",
+   "resid": "-40",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40"
+  },
+  {
+   "open_epoch": 1774970100,
+   "n": 32,
+   "up": "118.16",
+   "dn": "177.00147",
+   "resid": "-58.84147",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "58.84147"
+  },
+  {
+   "open_epoch": 1774971000,
+   "n": 45,
+   "up": "222.671752",
+   "dn": "193.271175",
+   "resid": "29.400577",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "59.717271"
+  },
+  {
+   "open_epoch": 1774986300,
+   "n": 42,
+   "up": "205.803390",
+   "dn": "210",
+   "resid": "-4.196610",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20.21739"
+  },
+  {
+   "open_epoch": 1774987200,
+   "n": 24,
+   "up": "105",
+   "dn": "130",
+   "resid": "-25",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "35"
+  },
+  {
+   "open_epoch": 1774988100,
+   "n": 13,
+   "up": "55",
+   "dn": "70",
+   "resid": "-15",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "25"
+  },
+  {
+   "open_epoch": 1774989000,
+   "n": 27,
+   "up": "120",
+   "dn": "144.677776",
+   "resid": "-24.677776",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "34.677776"
+  },
+  {
+   "open_epoch": 1775034900,
+   "n": 15,
+   "up": "64.99",
+   "dn": "80",
+   "resid": "-15.01",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "25.01"
+  },
+  {
+   "open_epoch": 1775035800,
+   "n": 32,
+   "up": "160",
+   "dn": "152.130269",
+   "resid": "7.869731",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "27.869731"
+  },
+  {
+   "open_epoch": 1775036700,
+   "n": 18,
+   "up": "98.58",
+   "dn": "70",
+   "resid": "28.58",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "28.58"
+  },
+  {
+   "open_epoch": 1775037600,
+   "n": 20,
+   "up": "102",
+   "dn": "90",
+   "resid": "12",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "52"
+  },
+  {
+   "open_epoch": 1775149200,
+   "n": 18,
+   "up": "90",
+   "dn": "90.376697",
+   "resid": "-0.376697",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1775150100,
+   "n": 5,
+   "up": "50.377357",
+   "dn": "0",
+   "resid": "50.377357",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.377357"
+  },
+  {
+   "open_epoch": 1775151000,
+   "n": 9,
+   "up": "60",
+   "dn": "30",
+   "resid": "30",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1775152800,
+   "n": 30,
+   "up": "150.759244",
+   "dn": "141.28205",
+   "resid": "9.477194",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "41.28205"
+  },
+  {
+   "open_epoch": 1775153700,
+   "n": 19,
+   "up": "77",
+   "dn": "105.256409",
+   "resid": "-28.256409",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "55"
+  },
+  {
+   "open_epoch": 1775154600,
+   "n": 11,
+   "up": "45",
+   "dn": "60",
+   "resid": "-15",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "15"
+  },
+  {
+   "open_epoch": 1775156400,
+   "n": 8,
+   "up": "20",
+   "dn": "60.882351",
+   "resid": "-40.882351",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40.882351"
+  },
+  {
+   "open_epoch": 1775157300,
+   "n": 27,
+   "up": "129.68",
+   "dn": "140",
+   "resid": "-10.32",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20.32"
+  },
+  {
+   "open_epoch": 1775158200,
+   "n": 23,
+   "up": "101.95",
+   "dn": "105",
+   "resid": "-3.05",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30"
+  },
+  {
+   "open_epoch": 1775506500,
+   "n": 4,
+   "up": "15",
+   "dn": "20",
+   "resid": "-5",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20"
+  },
+  {
+   "open_epoch": 1775507400,
+   "n": 18,
+   "up": "111.169769",
+   "dn": "70.138885",
+   "resid": "41.030884",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "51.169769"
+  },
+  {
+   "open_epoch": 1775508300,
+   "n": 9,
+   "up": "53.89",
+   "dn": "30",
+   "resid": "23.89",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "33.89"
+  },
+  {
+   "open_epoch": 1775509200,
+   "n": 6,
+   "up": "10",
+   "dn": "50",
+   "resid": "-40",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40"
+  },
+  {
+   "open_epoch": 1775510100,
+   "n": 4,
+   "up": "10",
+   "dn": "28.39",
+   "resid": "-18.39",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "28.39"
+  },
+  {
+   "open_epoch": 1775740500,
+   "n": 25,
+   "up": "110.500310",
+   "dn": "142.70608",
+   "resid": "-32.205770",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "32.205770"
+  },
+  {
+   "open_epoch": 1775741400,
+   "n": 32,
+   "up": "119.7",
+   "dn": "178.47415",
+   "resid": "-58.77415",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "58.77415"
+  },
+  {
+   "open_epoch": 1775742300,
+   "n": 18,
+   "up": "90",
+   "dn": "73.064614",
+   "resid": "16.935386",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "48.064614"
+  },
+  {
+   "open_epoch": 1775743200,
+   "n": 21,
+   "up": "90.398886",
+   "dn": "110.238934",
+   "resid": "-19.840048",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1775744100,
+   "n": 24,
+   "up": "110.95",
+   "dn": "107.73",
+   "resid": "3.22",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1775745000,
+   "n": 17,
+   "up": "60.09",
+   "dn": "95",
+   "resid": "-34.91",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "44.91"
+  },
+  {
+   "open_epoch": 1775745900,
+   "n": 7,
+   "up": "60",
+   "dn": "10",
+   "resid": "50",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1775746800,
+   "n": 24,
+   "up": "105.06",
+   "dn": "116.892278",
+   "resid": "-11.832278",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.06"
+  },
+  {
+   "open_epoch": 1775747700,
+   "n": 33,
+   "up": "162.985968",
+   "dn": "165.317141",
+   "resid": "-2.331173",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "52.678165"
+  },
+  {
+   "open_epoch": 1775748600,
+   "n": 5,
+   "up": "50",
+   "dn": "0",
+   "resid": "50",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1775749500,
+   "n": 15,
+   "up": "70.96949",
+   "dn": "80",
+   "resid": "-9.03051",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.8"
+  },
+  {
+   "open_epoch": 1775750400,
+   "n": 23,
+   "up": "100.962205",
+   "dn": "125.5575",
+   "resid": "-24.595295",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50"
+  },
+  {
+   "open_epoch": 1775751300,
+   "n": 21,
+   "up": "125.44",
+   "dn": "75",
+   "resid": "50.44",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.44"
+  },
+  {
+   "open_epoch": 1775752200,
+   "n": 10,
+   "up": "67.95",
+   "dn": "10.12",
+   "resid": "57.83",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "57.83"
+  },
+  {
+   "open_epoch": 1775753100,
+   "n": 22,
+   "up": "114.91",
+   "dn": "100",
+   "resid": "14.91",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "30"
+  },
+  {
+   "open_epoch": 1775764800,
+   "n": 2,
+   "up": "0",
+   "dn": "16",
+   "resid": "-16",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "16"
+  },
+  {
+   "open_epoch": 1775828700,
+   "n": 12,
+   "up": "69.67",
+   "dn": "44.09",
+   "resid": "25.58",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "59.67"
+  },
+  {
+   "open_epoch": 1775829600,
+   "n": 14,
+   "up": "60.78",
+   "dn": "65.72",
+   "resid": "-4.94",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40"
+  },
+  {
+   "open_epoch": 1775830500,
+   "n": 12,
+   "up": "70.6",
+   "dn": "40",
+   "resid": "30.6",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "55"
+  },
+  {
+   "open_epoch": 1775831400,
+   "n": 17,
+   "up": "70",
+   "dn": "82.606278",
+   "resid": "-12.606278",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "46.49"
+  },
+  {
+   "open_epoch": 1775832300,
+   "n": 12,
+   "up": "51.38",
+   "dn": "36.49",
+   "resid": "14.89",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "36.61"
+  },
+  {
+   "open_epoch": 1775835900,
+   "n": 7,
+   "up": "10",
+   "dn": "60.125",
+   "resid": "-50.125",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "50.125"
+  },
+  {
+   "open_epoch": 1775844900,
+   "n": 4,
+   "up": "19.72",
+   "dn": "20",
+   "resid": "-0.28",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "10.28"
+  },
+  {
+   "open_epoch": 1775845800,
+   "n": 21,
+   "up": "95.81",
+   "dn": "100.144925",
+   "resid": "-4.334925",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20"
+  },
+  {
+   "open_epoch": 1775846700,
+   "n": 7,
+   "up": "20",
+   "dn": "49",
+   "resid": "-29",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "39"
+  },
+  {
+   "open_epoch": 1776069900,
+   "n": 9,
+   "up": "20.208332",
+   "dn": "65",
+   "resid": "-44.791668",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "44.791668"
+  },
+  {
+   "open_epoch": 1776083400,
+   "n": 21,
+   "up": "92.32",
+   "dn": "100",
+   "resid": "-7.68",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "37.32"
+  },
+  {
+   "open_epoch": 1776084300,
+   "n": 10,
+   "up": "60",
+   "dn": "40",
+   "resid": "20",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20"
+  },
+  {
+   "open_epoch": 1776085200,
+   "n": 19,
+   "up": "81.349088",
+   "dn": "83.92",
+   "resid": "-2.570912",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "51.349088"
+  },
+  {
+   "open_epoch": 1776086100,
+   "n": 32,
+   "up": "221.620394",
+   "dn": "217",
+   "resid": "4.620394",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "46.53846"
+  },
+  {
+   "open_epoch": 1776087000,
+   "n": 17,
+   "up": "110.3",
+   "dn": "81.30",
+   "resid": "29.00",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "56.89"
+  },
+  {
+   "open_epoch": 1776087900,
+   "n": 12,
+   "up": "117.500174",
+   "dn": "31.28",
+   "resid": "86.220174",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "86.220174"
+  },
+  {
+   "open_epoch": 1776088800,
+   "n": 29,
+   "up": "197.238296",
+   "dn": "191.01",
+   "resid": "6.228296",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "83.108296"
+  },
+  {
+   "open_epoch": 1776089700,
+   "n": 46,
+   "up": "298.975949",
+   "dn": "311.100587",
+   "resid": "-12.124638",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "107.666665"
+  },
+  {
+   "open_epoch": 1776090600,
+   "n": 19,
+   "up": "137.54",
+   "dn": "125.39",
+   "resid": "12.15",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "102.63"
+  },
+  {
+   "open_epoch": 1776091500,
+   "n": 23,
+   "up": "123.992243",
+   "dn": "170.85",
+   "resid": "-46.857757",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "66.142243"
+  },
+  {
+   "open_epoch": 1776092400,
+   "n": 11,
+   "up": "49.44",
+   "dn": "105",
+   "resid": "-55.56",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "55.56"
+  },
+  {
+   "open_epoch": 1776096000,
+   "n": 1,
+   "up": "0",
+   "dn": "15",
+   "resid": "-15",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "15"
+  },
+  {
+   "open_epoch": 1776099600,
+   "n": 14,
+   "up": "101.80",
+   "dn": "60.47",
+   "resid": "41.33",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "41.33"
+  },
+  {
+   "open_epoch": 1776100500,
+   "n": 20,
+   "up": "96.22",
+   "dn": "141.29",
+   "resid": "-45.07",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "45.07"
+  },
+  {
+   "open_epoch": 1776101400,
+   "n": 25,
+   "up": "168.144283",
+   "dn": "156.104284",
+   "resid": "12.039999",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "18"
+  },
+  {
+   "open_epoch": 1776102300,
+   "n": 14,
+   "up": "62.29",
+   "dn": "107.3",
+   "resid": "-45.01",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "45.01"
+  },
+  {
+   "open_epoch": 1776105900,
+   "n": 9,
+   "up": "45",
+   "dn": "65.97",
+   "resid": "-20.97",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "35.97"
+  },
+  {
+   "open_epoch": 1776106800,
+   "n": 6,
+   "up": "43.79",
+   "dn": "38.25",
+   "resid": "5.54",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20.54"
+  },
+  {
+   "open_epoch": 1776150900,
+   "n": 18,
+   "up": "82.25",
+   "dn": "189.95",
+   "resid": "-107.70",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "107.70"
+  },
+  {
+   "open_epoch": 1776151800,
+   "n": 8,
+   "up": "80.3",
+   "dn": "80",
+   "resid": "0.3",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40"
+  },
+  {
+   "open_epoch": 1776152700,
+   "n": 18,
+   "up": "159.34",
+   "dn": "156",
+   "resid": "3.34",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20"
+  },
+  {
+   "open_epoch": 1776153600,
+   "n": 28,
+   "up": "278.340347",
+   "dn": "260.15625",
+   "resid": "18.184097",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "45.21"
+  },
+  {
+   "open_epoch": 1776156300,
+   "n": 4,
+   "up": "20",
+   "dn": "60",
+   "resid": "-40",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40"
+  },
+  {
+   "open_epoch": 1776157200,
+   "n": 25,
+   "up": "208.99",
+   "dn": "223.92",
+   "resid": "-14.93",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "63.38"
+  },
+  {
+   "open_epoch": 1776159900,
+   "n": 6,
+   "up": "80",
+   "dn": "27.57",
+   "resid": "52.43",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "52.43"
+  },
+  {
+   "open_epoch": 1776160800,
+   "n": 14,
+   "up": "125.754714",
+   "dn": "130",
+   "resid": "-4.245286",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "35"
+  },
+  {
+   "open_epoch": 1776161700,
+   "n": 17,
+   "up": "148.55",
+   "dn": "180",
+   "resid": "-31.45",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40"
+  },
+  {
+   "open_epoch": 1776162600,
+   "n": 8,
+   "up": "40",
+   "dn": "110.37",
+   "resid": "-70.37",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "70.37"
+  },
+  {
+   "open_epoch": 1776166200,
+   "n": 23,
+   "up": "237.863635",
+   "dn": "209.829654",
+   "resid": "28.033981",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "73.776365"
+  },
+  {
+   "open_epoch": 1776167100,
+   "n": 21,
+   "up": "179.027387",
+   "dn": "181.812443",
+   "resid": "-2.785056",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "41.324443"
+  },
+  {
+   "open_epoch": 1776168000,
+   "n": 18,
+   "up": "240.073825",
+   "dn": "90.438694",
+   "resid": "149.635131",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "149.635131"
+  },
+  {
+   "open_epoch": 1776168900,
+   "n": 46,
+   "up": "418.650668",
+   "dn": "397.015213",
+   "resid": "21.635455",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "140.047867"
+  },
+  {
+   "open_epoch": 1776169800,
+   "n": 46,
+   "up": "393.585382",
+   "dn": "365.27",
+   "resid": "28.315382",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "69.69"
+  },
+  {
+   "open_epoch": 1776170700,
+   "n": 8,
+   "up": "40",
+   "dn": "99.59",
+   "resid": "-59.59",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "59.59"
+  },
+  {
+   "open_epoch": 1776175200,
+   "n": 41,
+   "up": "343.530269",
+   "dn": "351.417327",
+   "resid": "-7.887058",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "75.970662"
+  },
+  {
+   "open_epoch": 1776176100,
+   "n": 30,
+   "up": "287.45",
+   "dn": "250.12",
+   "resid": "37.33",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "145.28"
+  },
+  {
+   "open_epoch": 1776177000,
+   "n": 13,
+   "up": "52.74",
+   "dn": "196.321888",
+   "resid": "-143.581888",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "143.581888"
+  },
+  {
+   "open_epoch": 1776177900,
+   "n": 20,
+   "up": "245.1",
+   "dn": "100.26",
+   "resid": "144.84",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "144.84"
+  },
+  {
+   "open_epoch": 1776178800,
+   "n": 21,
+   "up": "264.63",
+   "dn": "117.1",
+   "resid": "147.53",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "155.10"
+  },
+  {
+   "open_epoch": 1776261600,
+   "n": 32,
+   "up": "267.349332",
+   "dn": "272.180815",
+   "resid": "-4.831483",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "60"
+  },
+  {
+   "open_epoch": 1776262500,
+   "n": 19,
+   "up": "190",
+   "dn": "133.77",
+   "resid": "56.23",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "80"
+  },
+  {
+   "open_epoch": 1776263400,
+   "n": 4,
+   "up": "45",
+   "dn": "0.81",
+   "resid": "44.19",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "44.19"
+  },
+  {
+   "open_epoch": 1776276900,
+   "n": 17,
+   "up": "181.05263",
+   "dn": "148.97",
+   "resid": "32.08263",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "52.08263"
+  },
+  {
+   "open_epoch": 1776277800,
+   "n": 28,
+   "up": "190.333379",
+   "dn": "275.14",
+   "resid": "-84.806621",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "84.806621"
+  },
+  {
+   "open_epoch": 1776278700,
+   "n": 12,
+   "up": "69.2",
+   "dn": "149.391303",
+   "resid": "-80.191303",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "80.191303"
+  },
+  {
+   "open_epoch": 1776426300,
+   "n": 1,
+   "up": "0",
+   "dn": "5",
+   "resid": "-5",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "5"
+  },
+  {
+   "open_epoch": 1776430800,
+   "n": 1,
+   "up": "3.455695",
+   "dn": "0",
+   "resid": "3.455695",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "3.455695"
+  },
+  {
+   "open_epoch": 1776431700,
+   "n": 1,
+   "up": "5",
+   "dn": "0",
+   "resid": "5",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "5"
+  },
+  {
+   "open_epoch": 1776434400,
+   "n": 5,
+   "up": "0",
+   "dn": "25",
+   "resid": "-25",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "25"
+  },
+  {
+   "open_epoch": 1776443400,
+   "n": 21,
+   "up": "98.991816",
+   "dn": "30",
+   "resid": "68.991816",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "73.991816"
+  },
+  {
+   "open_epoch": 1776454200,
+   "n": 22,
+   "up": "80.11",
+   "dn": "190",
+   "resid": "-109.89",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "109.89"
+  },
+  {
+   "open_epoch": 1776455100,
+   "n": 31,
+   "up": "263.33",
+   "dn": "269.81",
+   "resid": "-6.48",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "58.52"
+  },
+  {
+   "open_epoch": 1776456000,
+   "n": 18,
+   "up": "150.555186",
+   "dn": "168.076485",
+   "resid": "-17.521299",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "40"
+  },
+  {
+   "open_epoch": 1776456900,
+   "n": 18,
+   "up": "177.91",
+   "dn": "180",
+   "resid": "-2.09",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "80"
+  },
+  {
+   "open_epoch": 1776689100,
+   "n": 14,
+   "up": "90.89",
+   "dn": "108.608860",
+   "resid": "-17.718860",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "28.608860"
+  },
+  {
+   "open_epoch": 1776690000,
+   "n": 70,
+   "up": "577.842506",
+   "dn": "468.977278",
+   "resid": "108.865228",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "108.865228"
+  },
+  {
+   "open_epoch": 1776690900,
+   "n": 29,
+   "up": "295.887140",
+   "dn": "202.673332",
+   "resid": "93.213808",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "105.613808"
+  },
+  {
+   "open_epoch": 1776691800,
+   "n": 142,
+   "up": "1029.379362",
+   "dn": "1041.854104",
+   "resid": "-12.474742",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "132.796510"
+  },
+  {
+   "open_epoch": 1776692700,
+   "n": 88,
+   "up": "557.252784",
+   "dn": "572.064237",
+   "resid": "-14.811453",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "116.259547"
+  },
+  {
+   "open_epoch": 1776693600,
+   "n": 72,
+   "up": "566.619705",
+   "dn": "505.937532",
+   "resid": "60.682173",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "84.622173"
+  },
+  {
+   "open_epoch": 1776694500,
+   "n": 19,
+   "up": "194.37",
+   "dn": "133.95",
+   "resid": "60.42",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "60.42"
+  },
+  {
+   "open_epoch": 1776695400,
+   "n": 60,
+   "up": "403.374957",
+   "dn": "446.115554",
+   "resid": "-42.740597",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "130.280640"
+  },
+  {
+   "open_epoch": 1776696300,
+   "n": 45,
+   "up": "274.036440",
+   "dn": "327.21",
+   "resid": "-53.173560",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "125.416046"
+  },
+  {
+   "open_epoch": 1776697200,
+   "n": 5,
+   "up": "20",
+   "dn": "39.446412",
+   "resid": "-19.446412",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "20"
+  },
+  {
+   "open_epoch": 1776704400,
+   "n": 67,
+   "up": "467.804947",
+   "dn": "435.997480",
+   "resid": "31.807467",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "146.687409"
+  },
+  {
+   "open_epoch": 1776705300,
+   "n": 47,
+   "up": "336.423845",
+   "dn": "376.309951",
+   "resid": "-39.886106",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "113.923845"
+  },
+  {
+   "open_epoch": 1776706200,
+   "n": 43,
+   "up": "277.503966",
+   "dn": "348.318629",
+   "resid": "-70.814663",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "70.814663"
+  },
+  {
+   "open_epoch": 1776707100,
+   "n": 42,
+   "up": "211.386793",
+   "dn": "378.945196",
+   "resid": "-167.558403",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "167.558403"
+  },
+  {
+   "open_epoch": 1776708000,
+   "n": 25,
+   "up": "220.779829",
+   "dn": "115.482387",
+   "resid": "105.297442",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "141.487442"
+  },
+  {
+   "open_epoch": 1776708900,
+   "n": 61,
+   "up": "534.917773",
+   "dn": "431.780058",
+   "resid": "103.137715",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "171.647264"
+  },
+  {
+   "open_epoch": 1776709800,
+   "n": 58,
+   "up": "494.500949",
+   "dn": "494.844527",
+   "resid": "-0.343578",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "107.246422"
+  },
+  {
+   "open_epoch": 1776710700,
+   "n": 53,
+   "up": "478.098491",
+   "dn": "528.11111",
+   "resid": "-50.012619",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "96.012619"
+  },
+  {
+   "open_epoch": 1776711600,
+   "n": 111,
+   "up": "717.182146",
+   "dn": "708.880235",
+   "resid": "8.301911",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "109.567677"
+  },
+  {
+   "open_epoch": 1776712500,
+   "n": 34,
+   "up": "263.208128",
+   "dn": "251.873332",
+   "resid": "11.334796",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "121.183336"
+  },
+  {
+   "open_epoch": 1776713400,
+   "n": 56,
+   "up": "394.878216",
+   "dn": "422.649081",
+   "resid": "-27.770865",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "67.992349"
+  },
+  {
+   "open_epoch": 1776714300,
+   "n": 88,
+   "up": "632.214543",
+   "dn": "600.004093",
+   "resid": "32.210450",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "61.566006"
+  },
+  {
+   "open_epoch": 1776715200,
+   "n": 65,
+   "up": "457.782950",
+   "dn": "446.562411",
+   "resid": "11.220539",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "98.9273"
+  },
+  {
+   "open_epoch": 1776716100,
+   "n": 105,
+   "up": "811.334944",
+   "dn": "748.872099",
+   "resid": "62.462845",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "83.054005"
+  },
+  {
+   "open_epoch": 1776717000,
+   "n": 17,
+   "up": "173.58",
+   "dn": "108.69",
+   "resid": "64.89",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "64.89"
+  },
+  {
+   "open_epoch": 1776754800,
+   "n": 46,
+   "up": "359.963287",
+   "dn": "348.553266",
+   "resid": "11.410021",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "63.111973"
+  },
+  {
+   "open_epoch": 1776755700,
+   "n": 16,
+   "up": "84.09",
+   "dn": "219.663918",
+   "resid": "-135.573918",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "135.573918"
+  },
+  {
+   "open_epoch": 1776756600,
+   "n": 89,
+   "up": "753.965010",
+   "dn": "905.364960",
+   "resid": "-151.399950",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "183.441742"
+  },
+  {
+   "open_epoch": 1776757500,
+   "n": 27,
+   "up": "307.699233",
+   "dn": "142.153308",
+   "resid": "165.545925",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "165.545925"
+  },
+  {
+   "open_epoch": 1776758400,
+   "n": 63,
+   "up": "535.488717",
+   "dn": "501.083462",
+   "resid": "34.405255",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "100.61"
+  },
+  {
+   "open_epoch": 1787903100,
+   "n": 154,
+   "up": "1691.419699",
+   "dn": "1737.222861",
+   "resid": "-45.803162",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "185.138847"
+  },
+  {
+   "open_epoch": 1787904000,
+   "n": 123,
+   "up": "1068.108750",
+   "dn": "1435.920993",
+   "resid": "-367.812243",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "381.332243"
+  },
+  {
+   "open_epoch": 1787904900,
+   "n": 174,
+   "up": "1952.810611",
+   "dn": "1882.937463",
+   "resid": "69.873148",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "359.751463"
+  },
+  {
+   "open_epoch": 1787905800,
+   "n": 178,
+   "up": "2005.548640",
+   "dn": "1630.581262",
+   "resid": "374.967378",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "643.359437"
+  },
+  {
+   "open_epoch": 1787906700,
+   "n": 80,
+   "up": "651.832398",
+   "dn": "786.828810",
+   "resid": "-134.996412",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "239.820071"
+  },
+  {
+   "open_epoch": 1787907600,
+   "n": 206,
+   "up": "1635.834595",
+   "dn": "1893.410436",
+   "resid": "-257.575841",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "347.171255"
+  },
+  {
+   "open_epoch": 1787908500,
+   "n": 380,
+   "up": "3726.543749",
+   "dn": "2793.545529",
+   "resid": "932.998220",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "932.998220"
+  },
+  {
+   "open_epoch": 1787909400,
+   "n": 86,
+   "up": "595.902326",
+   "dn": "895.037180",
+   "resid": "-299.134854",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "364.154854"
+  },
+  {
+   "open_epoch": 1787910300,
+   "n": 216,
+   "up": "2466.394475",
+   "dn": "1884.989174",
+   "resid": "581.405301",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "581.405301"
+  },
+  {
+   "open_epoch": 1787911200,
+   "n": 207,
+   "up": "2091.541977",
+   "dn": "2117.696707",
+   "resid": "-26.154730",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "334.109987"
+  },
+  {
+   "open_epoch": 1787912100,
+   "n": 218,
+   "up": "1745.958224",
+   "dn": "2333.863859",
+   "resid": "-587.905635",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "687.905635"
+  },
+  {
+   "open_epoch": 1787913000,
+   "n": 122,
+   "up": "674.170860",
+   "dn": "1022.903627",
+   "resid": "-348.732767",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "348.732767"
+  },
+  {
+   "open_epoch": 1787913900,
+   "n": 130,
+   "up": "1179.738632",
+   "dn": "1077.039644",
+   "resid": "102.698988",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "326.435500"
+  },
+  {
+   "open_epoch": 1787914800,
+   "n": 135,
+   "up": "1029.610172",
+   "dn": "753.054709",
+   "resid": "276.555463",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "343.662493"
+  },
+  {
+   "open_epoch": 1787915700,
+   "n": 168,
+   "up": "1730.483512",
+   "dn": "1800.921598",
+   "resid": "-70.438086",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "336.274561"
+  },
+  {
+   "open_epoch": 1787916600,
+   "n": 189,
+   "up": "2039.509737",
+   "dn": "1742.046600",
+   "resid": "297.463137",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "371.721188"
+  },
+  {
+   "open_epoch": 1787917500,
+   "n": 215,
+   "up": "2097.437460",
+   "dn": "2111.510298",
+   "resid": "-14.072838",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "278.635719"
+  },
+  {
+   "open_epoch": 1787918400,
+   "n": 200,
+   "up": "2145.874075",
+   "dn": "1542.458827",
+   "resid": "603.415248",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "603.415248"
+  },
+  {
+   "open_epoch": 1787919300,
+   "n": 270,
+   "up": "2606.008906",
+   "dn": "2804.021104",
+   "resid": "-198.012198",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "359.691854"
+  },
+  {
+   "open_epoch": 1787920200,
+   "n": 166,
+   "up": "1845.827855",
+   "dn": "1040.764692",
+   "resid": "805.063163",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "805.063163"
+  },
+  {
+   "open_epoch": 1787921100,
+   "n": 237,
+   "up": "2557.358986",
+   "dn": "2904.690400",
+   "resid": "-347.331414",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "359.033145"
+  },
+  {
+   "open_epoch": 1787922000,
+   "n": 172,
+   "up": "1773.092852",
+   "dn": "1607.701414",
+   "resid": "165.391438",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "204.151469"
+  },
+  {
+   "open_epoch": 1787922900,
+   "n": 121,
+   "up": "1532.426194",
+   "dn": "1054.564482",
+   "resid": "477.861712",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "477.861712"
+  },
+  {
+   "open_epoch": 1787923800,
+   "n": 228,
+   "up": "2324.386066",
+   "dn": "1986.333089",
+   "resid": "338.052977",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "338.052977"
+  },
+  {
+   "open_epoch": 1787924700,
+   "n": 137,
+   "up": "1269.642991",
+   "dn": "1475.393426",
+   "resid": "-205.750435",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "402.293667"
+  },
+  {
+   "open_epoch": 1787925600,
+   "n": 127,
+   "up": "1209.880122",
+   "dn": "1309.777516",
+   "resid": "-99.897394",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "335.962987"
+  },
+  {
+   "open_epoch": 1787926500,
+   "n": 186,
+   "up": "1917.597328",
+   "dn": "2327.428598",
+   "resid": "-409.831270",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "664.761564"
+  },
+  {
+   "open_epoch": 1787927400,
+   "n": 80,
+   "up": "984.835257",
+   "dn": "823.559607",
+   "resid": "161.275650",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "276.305125"
+  },
+  {
+   "open_epoch": 1787928300,
+   "n": 201,
+   "up": "1625.127073",
+   "dn": "2258.429739",
+   "resid": "-633.302666",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "747.291266"
+  },
+  {
+   "open_epoch": 1787929200,
+   "n": 172,
+   "up": "2218.205332",
+   "dn": "1494.114216",
+   "resid": "724.091116",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "815.214750"
+  },
+  {
+   "open_epoch": 1787930100,
+   "n": 197,
+   "up": "2171.256374",
+   "dn": "2015.481477",
+   "resid": "155.774897",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "314.069953"
+  },
+  {
+   "open_epoch": 1787931000,
+   "n": 120,
+   "up": "1653.886911",
+   "dn": "1077.918448",
+   "resid": "575.968463",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "575.968463"
+  },
+  {
+   "open_epoch": 1787931900,
+   "n": 99,
+   "up": "1177.152095",
+   "dn": "1164.146692",
+   "resid": "13.005403",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "204.295110"
+  },
+  {
+   "open_epoch": 1787932800,
+   "n": 170,
+   "up": "1815.367507",
+   "dn": "1797.843180",
+   "resid": "17.524327",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "266.666627"
+  },
+  {
+   "open_epoch": 1787933700,
+   "n": 170,
+   "up": "1807.888009",
+   "dn": "1615.476969",
+   "resid": "192.411040",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "285.334575"
+  },
+  {
+   "open_epoch": 1787934600,
+   "n": 118,
+   "up": "1379.435217",
+   "dn": "1877.750696",
+   "resid": "-498.315479",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "664.148011"
+  },
+  {
+   "open_epoch": 1787935500,
+   "n": 204,
+   "up": "2025.868445",
+   "dn": "2322.658781",
+   "resid": "-296.790336",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "543.733127"
+  },
+  {
+   "open_epoch": 1787936400,
+   "n": 185,
+   "up": "1849.660408",
+   "dn": "2013.653956",
+   "resid": "-163.993548",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "236.912862"
+  },
+  {
+   "open_epoch": 1787937300,
+   "n": 255,
+   "up": "2759.649039",
+   "dn": "3130.556700",
+   "resid": "-370.907661",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "493.360582"
+  },
+  {
+   "open_epoch": 1787938200,
+   "n": 126,
+   "up": "1841.225390",
+   "dn": "1694.782677",
+   "resid": "146.442713",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "288.016712"
+  },
+  {
+   "open_epoch": 1787939100,
+   "n": 127,
+   "up": "1104.149990",
+   "dn": "1586.396433",
+   "resid": "-482.246443",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "519.746443"
+  },
+  {
+   "open_epoch": 1787940000,
+   "n": 134,
+   "up": "1592.875407",
+   "dn": "1241.457127",
+   "resid": "351.418280",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "376.459764"
+  },
+  {
+   "open_epoch": 1787940900,
+   "n": 72,
+   "up": "911.070206",
+   "dn": "784.559600",
+   "resid": "126.510606",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "284.571122"
+  },
+  {
+   "open_epoch": 1787941800,
+   "n": 106,
+   "up": "1484.517208",
+   "dn": "1479.957758",
+   "resid": "4.559450",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "233.57"
+  },
+  {
+   "open_epoch": 1787942700,
+   "n": 151,
+   "up": "1453.423810",
+   "dn": "1975.572295",
+   "resid": "-522.148485",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "522.148485"
+  },
+  {
+   "open_epoch": 1787943600,
+   "n": 151,
+   "up": "1500.744050",
+   "dn": "1768.793139",
+   "resid": "-268.049089",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "273.168756"
+  },
+  {
+   "open_epoch": 1787944500,
+   "n": 122,
+   "up": "1082.094509",
+   "dn": "1328.938019",
+   "resid": "-246.843510",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "301.845360"
+  },
+  {
+   "open_epoch": 1787945400,
+   "n": 88,
+   "up": "1140.663664",
+   "dn": "846.738546",
+   "resid": "293.925118",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "293.925118"
+  },
+  {
+   "open_epoch": 1787946300,
+   "n": 269,
+   "up": "2765.536650",
+   "dn": "2707.391121",
+   "resid": "58.145529",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "436.984056"
+  },
+  {
+   "open_epoch": 1787947200,
+   "n": 234,
+   "up": "2710.605812",
+   "dn": "3329.249063",
+   "resid": "-618.643251",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "618.643251"
+  },
+  {
+   "open_epoch": 1787948100,
+   "n": 160,
+   "up": "1964.458560",
+   "dn": "1506.531137",
+   "resid": "457.927423",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "457.927423"
+  },
+  {
+   "open_epoch": 1787949000,
+   "n": 139,
+   "up": "1420.854450",
+   "dn": "1492.428583",
+   "resid": "-71.574133",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "260.221034"
+  },
+  {
+   "open_epoch": 1787949900,
+   "n": 226,
+   "up": "2003.702277",
+   "dn": "2000.833068",
+   "resid": "2.869209",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "311.954690"
+  },
+  {
+   "open_epoch": 1787950800,
+   "n": 237,
+   "up": "2358.287775",
+   "dn": "2035.585003",
+   "resid": "322.702772",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "339.562772"
+  },
+  {
+   "open_epoch": 1787951700,
+   "n": 271,
+   "up": "3368.083205",
+   "dn": "2869.183853",
+   "resid": "498.899352",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "598.295713"
+  },
+  {
+   "open_epoch": 1787952600,
+   "n": 280,
+   "up": "2171.765914",
+   "dn": "2814.960119",
+   "resid": "-643.194205",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "692.962006"
+  },
+  {
+   "open_epoch": 1787953500,
+   "n": 202,
+   "up": "2101.183415",
+   "dn": "1858.600566",
+   "resid": "242.582849",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "314.707849"
+  },
+  {
+   "open_epoch": 1787954400,
+   "n": 120,
+   "up": "709.151249",
+   "dn": "1246.588478",
+   "resid": "-537.437229",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "537.437229"
+  },
+  {
+   "open_epoch": 1787955300,
+   "n": 165,
+   "up": "1555.275634",
+   "dn": "1671.808164",
+   "resid": "-116.532530",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "225.569918"
+  },
+  {
+   "open_epoch": 1787956200,
+   "n": 102,
+   "up": "763.282581",
+   "dn": "1023.727646",
+   "resid": "-260.445065",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "279.932265"
+  },
+  {
+   "open_epoch": 1787957100,
+   "n": 137,
+   "up": "1563.813377",
+   "dn": "1915.123913",
+   "resid": "-351.310536",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "386.015050"
+  },
+  {
+   "open_epoch": 1787958000,
+   "n": 304,
+   "up": "2791.356609",
+   "dn": "3165.384303",
+   "resid": "-374.027694",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "374.027694"
+  },
+  {
+   "open_epoch": 1787958900,
+   "n": 138,
+   "up": "1509.839920",
+   "dn": "798.590678",
+   "resid": "711.249242",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "880.229242"
+  },
+  {
+   "open_epoch": 1787963400,
+   "n": 134,
+   "up": "1263.720678",
+   "dn": "1281.382858",
+   "resid": "-17.662180",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "319.528216"
+  },
+  {
+   "open_epoch": 1787964300,
+   "n": 216,
+   "up": "2347.880462",
+   "dn": "1889.910802",
+   "resid": "457.969660",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "457.969660"
+  },
+  {
+   "open_epoch": 1787965200,
+   "n": 216,
+   "up": "2307.693132",
+   "dn": "1945.868837",
+   "resid": "361.824295",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "537.486395"
+  },
+  {
+   "open_epoch": 1787966100,
+   "n": 158,
+   "up": "1606.153219",
+   "dn": "1672.456712",
+   "resid": "-66.303493",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "257.683769"
+  },
+  {
+   "open_epoch": 1787967000,
+   "n": 461,
+   "up": "4842.320502",
+   "dn": "5080.187661",
+   "resid": "-237.867159",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "420.292482"
+  },
+  {
+   "open_epoch": 1787967900,
+   "n": 234,
+   "up": "2647.127721",
+   "dn": "2402.425214",
+   "resid": "244.702507",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "349.403113"
+  },
+  {
+   "open_epoch": 1787968800,
+   "n": 130,
+   "up": "1629.729847",
+   "dn": "1209.764547",
+   "resid": "419.965300",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "419.965300"
+  },
+  {
+   "open_epoch": 1787969700,
+   "n": 169,
+   "up": "1370.201051",
+   "dn": "1603.692404",
+   "resid": "-233.491353",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "302.618688"
+  },
+  {
+   "open_epoch": 1787970600,
+   "n": 354,
+   "up": "4026.644538",
+   "dn": "3638.675940",
+   "resid": "387.968598",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "634.483728"
+  },
+  {
+   "open_epoch": 1787971500,
+   "n": 125,
+   "up": "1463.389287",
+   "dn": "1353.317504",
+   "resid": "110.071783",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "306.274174"
+  },
+  {
+   "open_epoch": 1787972400,
+   "n": 202,
+   "up": "1674.345965",
+   "dn": "2070.942789",
+   "resid": "-396.596824",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "396.596824"
+  },
+  {
+   "open_epoch": 1787973300,
+   "n": 207,
+   "up": "2013.231051",
+   "dn": "1836.709967",
+   "resid": "176.521084",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "425.413220"
+  },
+  {
+   "open_epoch": 1787974200,
+   "n": 243,
+   "up": "2679.732759",
+   "dn": "2451.365684",
+   "resid": "228.367075",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "415.750407"
+  },
+  {
+   "open_epoch": 1787975100,
+   "n": 168,
+   "up": "1676.127468",
+   "dn": "1233.594516",
+   "resid": "442.532952",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "442.532952"
+  },
+  {
+   "open_epoch": 1787976000,
+   "n": 190,
+   "up": "780.253495",
+   "dn": "1638.091502",
+   "resid": "-857.838007",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "907.838007"
+  },
+  {
+   "open_epoch": 1787976900,
+   "n": 133,
+   "up": "902.776203",
+   "dn": "1412.431882",
+   "resid": "-509.655679",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "564.065679"
+  },
+  {
+   "open_epoch": 1787977800,
+   "n": 155,
+   "up": "1364.466881",
+   "dn": "1722.568388",
+   "resid": "-358.101507",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "501.650266"
+  },
+  {
+   "open_epoch": 1787978700,
+   "n": 130,
+   "up": "1446.882945",
+   "dn": "1210.257290",
+   "resid": "236.625655",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "315.344188"
+  },
+  {
+   "open_epoch": 1787979600,
+   "n": 135,
+   "up": "869.689354",
+   "dn": "1465.949732",
+   "resid": "-596.260378",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "596.260378"
+  },
+  {
+   "open_epoch": 1787980500,
+   "n": 157,
+   "up": "1248.513155",
+   "dn": "1409.084319",
+   "resid": "-160.571164",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "267.859183"
+  },
+  {
+   "open_epoch": 1787981400,
+   "n": 172,
+   "up": "1824.796191",
+   "dn": "1960.460838",
+   "resid": "-135.664647",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "240.322398"
+  },
+  {
+   "open_epoch": 1787982300,
+   "n": 140,
+   "up": "1583.754565",
+   "dn": "1470.183858",
+   "resid": "113.570707",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "288.530707"
+  },
+  {
+   "open_epoch": 1787983200,
+   "n": 187,
+   "up": "1366.805232",
+   "dn": "1326.597593",
+   "resid": "40.207639",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "275.324543"
+  },
+  {
+   "open_epoch": 1787984100,
+   "n": 38,
+   "up": "416.285186",
+   "dn": "295.238333",
+   "resid": "121.046853",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "192.223391"
+  },
+  {
+   "open_epoch": 1787985000,
+   "n": 197,
+   "up": "1514.197683",
+   "dn": "1962.231538",
+   "resid": "-448.033855",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "498.033855"
+  },
+  {
+   "open_epoch": 1787985900,
+   "n": 153,
+   "up": "1093.812149",
+   "dn": "1602.832470",
+   "resid": "-509.020321",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "509.020321"
+  },
+  {
+   "open_epoch": 1787986800,
+   "n": 285,
+   "up": "2201.343910",
+   "dn": "2928.383549",
+   "resid": "-727.039639",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "752.059639"
+  },
+  {
+   "open_epoch": 1787987700,
+   "n": 158,
+   "up": "1464.204864",
+   "dn": "1574.424748",
+   "resid": "-110.219884",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "253.956404"
+  },
+  {
+   "open_epoch": 1787988600,
+   "n": 123,
+   "up": "972.832655",
+   "dn": "1305.117157",
+   "resid": "-332.284502",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "440.910902"
+  },
+  {
+   "open_epoch": 1787989500,
+   "n": 275,
+   "up": "2582.251682",
+   "dn": "2822.099291",
+   "resid": "-239.847609",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "458.934609"
+  },
+  {
+   "open_epoch": 1787990400,
+   "n": 77,
+   "up": "749.877133",
+   "dn": "977.171482",
+   "resid": "-227.294349",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "292.738729"
+  },
+  {
+   "open_epoch": 1787991300,
+   "n": 170,
+   "up": "1349.661374",
+   "dn": "1884.416626",
+   "resid": "-534.755252",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "534.755252"
+  },
+  {
+   "open_epoch": 1787992200,
+   "n": 271,
+   "up": "2893.534448",
+   "dn": "2751.226701",
+   "resid": "142.307747",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "469.442439"
+  },
+  {
+   "open_epoch": 1787993100,
+   "n": 231,
+   "up": "1791.859454",
+   "dn": "2028.930918",
+   "resid": "-237.071464",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "262.077686"
+  },
+  {
+   "open_epoch": 1787994000,
+   "n": 263,
+   "up": "2461.889136",
+   "dn": "2871.747238",
+   "resid": "-409.858102",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "522.632791"
+  },
+  {
+   "open_epoch": 1787994900,
+   "n": 181,
+   "up": "1711.982407",
+   "dn": "1460.018524",
+   "resid": "251.963883",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "263.256415"
+  },
+  {
+   "open_epoch": 1787995800,
+   "n": 103,
+   "up": "1230.712543",
+   "dn": "1145.181815",
+   "resid": "85.530728",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "348.205528"
+  },
+  {
+   "open_epoch": 1787996700,
+   "n": 200,
+   "up": "1945.535424",
+   "dn": "1912.801690",
+   "resid": "32.733734",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "315.236970"
+  },
+  {
+   "open_epoch": 1787997600,
+   "n": 82,
+   "up": "636.251389",
+   "dn": "695.153763",
+   "resid": "-58.902374",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "158.469446"
+  },
+  {
+   "open_epoch": 1787998500,
+   "n": 74,
+   "up": "823.422305",
+   "dn": "678.515956",
+   "resid": "144.906349",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "230.257122"
+  },
+  {
+   "open_epoch": 1787999400,
+   "n": 133,
+   "up": "943.180272",
+   "dn": "1192.239748",
+   "resid": "-249.059476",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "332.799681"
+  },
+  {
+   "open_epoch": 1788000300,
+   "n": 207,
+   "up": "1498.798661",
+   "dn": "1630.084409",
+   "resid": "-131.285748",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "247.689756"
+  },
+  {
+   "open_epoch": 1788001200,
+   "n": 192,
+   "up": "1676.764554",
+   "dn": "2007.883331",
+   "resid": "-331.118777",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "496.274777"
+  },
+  {
+   "open_epoch": 1788002100,
+   "n": 139,
+   "up": "1400.117887",
+   "dn": "834.359487",
+   "resid": "565.758400",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "615.758400"
+  },
+  {
+   "open_epoch": 1788003000,
+   "n": 136,
+   "up": "1340.469017",
+   "dn": "1475.003280",
+   "resid": "-134.534263",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "234.198281"
+  },
+  {
+   "open_epoch": 1788003900,
+   "n": 243,
+   "up": "2781.028079",
+   "dn": "2367.544517",
+   "resid": "413.483562",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "459.188562"
+  },
+  {
+   "open_epoch": 1788004800,
+   "n": 300,
+   "up": "3182.171341",
+   "dn": "3546.963055",
+   "resid": "-364.791714",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "434.571714"
+  },
+  {
+   "open_epoch": 1788005700,
+   "n": 311,
+   "up": "2803.729510",
+   "dn": "2572.388289",
+   "resid": "231.341221",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "468.089553"
+  },
+  {
+   "open_epoch": 1788006600,
+   "n": 164,
+   "up": "1849.085008",
+   "dn": "1643.687595",
+   "resid": "205.397413",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "309.688403"
+  },
+  {
+   "open_epoch": 1788007500,
+   "n": 247,
+   "up": "2550.114457",
+   "dn": "2489.799128",
+   "resid": "60.315329",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "318.502839"
+  },
+  {
+   "open_epoch": 1788008400,
+   "n": 183,
+   "up": "1813.355568",
+   "dn": "1996.721121",
+   "resid": "-183.365553",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "287.605193"
+  },
+  {
+   "open_epoch": 1788009300,
+   "n": 319,
+   "up": "3126.023076",
+   "dn": "3648.501310",
+   "resid": "-522.478234",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "606.325449"
+  },
+  {
+   "open_epoch": 1788010200,
+   "n": 212,
+   "up": "2224.411124",
+   "dn": "2525.213555",
+   "resid": "-300.802431",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "350.802431"
+  },
+  {
+   "open_epoch": 1788011100,
+   "n": 112,
+   "up": "804.067969",
+   "dn": "990.094082",
+   "resid": "-186.026113",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "257.289287"
+  },
+  {
+   "open_epoch": 1788012000,
+   "n": 339,
+   "up": "3510.462252",
+   "dn": "3749.004156",
+   "resid": "-238.541904",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "662.208843"
+  },
+  {
+   "open_epoch": 1788012900,
+   "n": 230,
+   "up": "2099.842211",
+   "dn": "2543.605063",
+   "resid": "-443.762852",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "541.922852"
+  },
+  {
+   "open_epoch": 1788013800,
+   "n": 126,
+   "up": "837.509478",
+   "dn": "1080.771150",
+   "resid": "-243.261672",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "309.473672"
+  },
+  {
+   "open_epoch": 1788014700,
+   "n": 150,
+   "up": "1493.428069",
+   "dn": "1283.504951",
+   "resid": "209.923118",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "326.643411"
+  },
+  {
+   "open_epoch": 1788015600,
+   "n": 234,
+   "up": "2359.050576",
+   "dn": "2255.162749",
+   "resid": "103.887827",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "258.910950"
+  },
+  {
+   "open_epoch": 1788016500,
+   "n": 225,
+   "up": "2677.435912",
+   "dn": "2207.406427",
+   "resid": "470.029485",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "470.029485"
+  },
+  {
+   "open_epoch": 1788017400,
+   "n": 246,
+   "up": "1839.694944",
+   "dn": "1332.523558",
+   "resid": "507.171386",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "553.461386"
+  },
+  {
+   "open_epoch": 1788018300,
+   "n": 225,
+   "up": "2116.963003",
+   "dn": "2060.217577",
+   "resid": "56.745426",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "467.624291"
+  },
+  {
+   "open_epoch": 1788019200,
+   "n": 114,
+   "up": "1114.738272",
+   "dn": "854.963614",
+   "resid": "259.774658",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "286.621064"
+  },
+  {
+   "open_epoch": 1788020100,
+   "n": 263,
+   "up": "2409.903924",
+   "dn": "2472.056283",
+   "resid": "-62.152359",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "258.045910"
+  },
+  {
+   "open_epoch": 1788021000,
+   "n": 165,
+   "up": "1574.424491",
+   "dn": "1578.454095",
+   "resid": "-4.029604",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "296.386317"
+  },
+  {
+   "open_epoch": 1788021900,
+   "n": 285,
+   "up": "2719.884045",
+   "dn": "3006.978038",
+   "resid": "-287.093993",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "378.521339"
+  },
+  {
+   "open_epoch": 1788023700,
+   "n": 266,
+   "up": "2569.264305",
+   "dn": "1925.373849",
+   "resid": "643.890456",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "651.390456"
+  },
+  {
+   "open_epoch": 1788024600,
+   "n": 263,
+   "up": "2326.922319",
+   "dn": "2475.276811",
+   "resid": "-148.354492",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "312.043815"
+  },
+  {
+   "open_epoch": 1788025500,
+   "n": 254,
+   "up": "2728.111458",
+   "dn": "2171.175546",
+   "resid": "556.935912",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "718.935912"
+  },
+  {
+   "open_epoch": 1788026400,
+   "n": 258,
+   "up": "2760.318671",
+   "dn": "2989.077023",
+   "resid": "-228.758352",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "325.712747"
+  },
+  {
+   "open_epoch": 1788027300,
+   "n": 290,
+   "up": "2880.417736",
+   "dn": "3448.437683",
+   "resid": "-568.019947",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "568.019947"
+  },
+  {
+   "open_epoch": 1788028200,
+   "n": 205,
+   "up": "2351.689920",
+   "dn": "2517.997191",
+   "resid": "-166.307271",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "339.387485"
+  },
+  {
+   "open_epoch": 1788029100,
+   "n": 159,
+   "up": "1516.081405",
+   "dn": "1886.812889",
+   "resid": "-370.731484",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "370.731484"
+  },
+  {
+   "open_epoch": 1788030000,
+   "n": 160,
+   "up": "1266.633821",
+   "dn": "1718.651364",
+   "resid": "-452.017543",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "452.017543"
+  },
+  {
+   "open_epoch": 1788030900,
+   "n": 251,
+   "up": "2586.242945",
+   "dn": "2304.033359",
+   "resid": "282.209586",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "373.459836"
+  },
+  {
+   "open_epoch": 1788031800,
+   "n": 361,
+   "up": "4111.731245",
+   "dn": "4411.297352",
+   "resid": "-299.566107",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "362.126107"
+  },
+  {
+   "open_epoch": 1788032700,
+   "n": 169,
+   "up": "1948.592268",
+   "dn": "1937.944209",
+   "resid": "10.648059",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "227.310808"
+  },
+  {
+   "open_epoch": 1788033600,
+   "n": 204,
+   "up": "1743.280093",
+   "dn": "1998.073261",
+   "resid": "-254.793168",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "280.237973"
+  },
+  {
+   "open_epoch": 1788034500,
+   "n": 205,
+   "up": "1722.802106",
+   "dn": "1452.258509",
+   "resid": "270.543597",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "320.543597"
+  },
+  {
+   "open_epoch": 1788035400,
+   "n": 263,
+   "up": "2194.986454",
+   "dn": "2233.584497",
+   "resid": "-38.598043",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "280.176443"
+  },
+  {
+   "open_epoch": 1788036300,
+   "n": 179,
+   "up": "2119.502252",
+   "dn": "1859.232477",
+   "resid": "260.269775",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "264.409775"
+  },
+  {
+   "open_epoch": 1788037200,
+   "n": 185,
+   "up": "1504.749565",
+   "dn": "1853.074929",
+   "resid": "-348.325364",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "448.400627"
+  },
+  {
+   "open_epoch": 1788038100,
+   "n": 143,
+   "up": "1397.122343",
+   "dn": "1430.688531",
+   "resid": "-33.566188",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "284.324080"
+  },
+  {
+   "open_epoch": 1788039000,
+   "n": 241,
+   "up": "1907.420603",
+   "dn": "1963.252138",
+   "resid": "-55.831535",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "318.886515"
+  },
+  {
+   "open_epoch": 1788039900,
+   "n": 193,
+   "up": "2079.053284",
+   "dn": "1929.254708",
+   "resid": "149.798576",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "334.850010"
+  },
+  {
+   "open_epoch": 1788040800,
+   "n": 230,
+   "up": "2567.555290",
+   "dn": "2258.915894",
+   "resid": "308.639396",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "487.204931"
+  },
+  {
+   "open_epoch": 1788041700,
+   "n": 279,
+   "up": "2525.486039",
+   "dn": "3192.465256",
+   "resid": "-666.979217",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "666.979217"
+  },
+  {
+   "open_epoch": 1788051600,
+   "n": 264,
+   "up": "1891.868256",
+   "dn": "2172.510962",
+   "resid": "-280.642706",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "327.264515"
+  },
+  {
+   "open_epoch": 1788052500,
+   "n": 241,
+   "up": "2398.185072",
+   "dn": "2498.196849",
+   "resid": "-100.011777",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "314.206578"
+  },
+  {
+   "open_epoch": 1788053400,
+   "n": 180,
+   "up": "1396.041621",
+   "dn": "1543.141595",
+   "resid": "-147.099974",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "427.009974"
+  },
+  {
+   "open_epoch": 1788055200,
+   "n": 311,
+   "up": "3324.173584",
+   "dn": "3429.373978",
+   "resid": "-105.200394",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "324.525577"
+  },
+  {
+   "open_epoch": 1788056100,
+   "n": 169,
+   "up": "1626.707971",
+   "dn": "1813.112479",
+   "resid": "-186.404508",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "233.287068"
+  },
+  {
+   "open_epoch": 1788057000,
+   "n": 173,
+   "up": "1518.962423",
+   "dn": "1695.014782",
+   "resid": "-176.052359",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "309.549942"
+  },
+  {
+   "open_epoch": 1788057900,
+   "n": 258,
+   "up": "2160.537491",
+   "dn": "2694.300810",
+   "resid": "-533.763319",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "650.190970"
+  },
+  {
+   "open_epoch": 1788058800,
+   "n": 205,
+   "up": "2190.728464",
+   "dn": "1800.602605",
+   "resid": "390.125859",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "390.125859"
+  },
+  {
+   "open_epoch": 1788059700,
+   "n": 176,
+   "up": "1497.797703",
+   "dn": "1833.816375",
+   "resid": "-336.018672",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "414.398672"
+  },
+  {
+   "open_epoch": 1788060600,
+   "n": 238,
+   "up": "2075.396072",
+   "dn": "1861.044716",
+   "resid": "214.351356",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "322.624698"
+  },
+  {
+   "open_epoch": 1788061500,
+   "n": 203,
+   "up": "2046.457134",
+   "dn": "1947.403027",
+   "resid": "99.054107",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "275.987378"
+  },
+  {
+   "open_epoch": 1788062400,
+   "n": 190,
+   "up": "1757.687320",
+   "dn": "2479.389068",
+   "resid": "-721.701748",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "728.411748"
+  },
+  {
+   "open_epoch": 1788063300,
+   "n": 199,
+   "up": "1767.315578",
+   "dn": "1920.145255",
+   "resid": "-152.829677",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "363.638687"
+  },
+  {
+   "open_epoch": 1788064200,
+   "n": 139,
+   "up": "939.748831",
+   "dn": "1076.706381",
+   "resid": "-136.957550",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "236.957550"
+  },
+  {
+   "open_epoch": 1788065100,
+   "n": 163,
+   "up": "1145.086331",
+   "dn": "1812.778277",
+   "resid": "-667.691946",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "667.691946"
+  },
+  {
+   "open_epoch": 1788066000,
+   "n": 134,
+   "up": "1431.243631",
+   "dn": "1258.004652",
+   "resid": "173.238979",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "409.821938"
+  },
+  {
+   "open_epoch": 1788066900,
+   "n": 157,
+   "up": "1745.247227",
+   "dn": "827.877919",
+   "resid": "917.369308",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "917.369308"
+  },
+  {
+   "open_epoch": 1788067800,
+   "n": 175,
+   "up": "1774.599933",
+   "dn": "1964.416765",
+   "resid": "-189.816832",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "237.691581"
+  },
+  {
+   "open_epoch": 1788068700,
+   "n": 236,
+   "up": "2334.199712",
+   "dn": "2441.128460",
+   "resid": "-106.928748",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "443.691070"
+  },
+  {
+   "open_epoch": 1788069600,
+   "n": 114,
+   "up": "1469.047592",
+   "dn": "1128.901787",
+   "resid": "340.145805",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "378.595805"
+  },
+  {
+   "open_epoch": 1788070500,
+   "n": 94,
+   "up": "900.007177",
+   "dn": "612.686832",
+   "resid": "287.320345",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "288.056592"
+  },
+  {
+   "open_epoch": 1788071400,
+   "n": 121,
+   "up": "1191.459767",
+   "dn": "1391.707950",
+   "resid": "-200.248183",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "364.549916"
+  },
+  {
+   "open_epoch": 1788072300,
+   "n": 157,
+   "up": "1393.945370",
+   "dn": "2190.106226",
+   "resid": "-796.160856",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "796.160856"
+  },
+  {
+   "open_epoch": 1788073200,
+   "n": 131,
+   "up": "1464.654923",
+   "dn": "774.779908",
+   "resid": "689.875015",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "689.875015"
+  },
+  {
+   "open_epoch": 1788074100,
+   "n": 129,
+   "up": "1295.695213",
+   "dn": "1092.645747",
+   "resid": "203.049466",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "224.339466"
+  },
+  {
+   "open_epoch": 1788075000,
+   "n": 90,
+   "up": "1068.800238",
+   "dn": "1180.970999",
+   "resid": "-112.170761",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "253.754803"
+  },
+  {
+   "open_epoch": 1788075900,
+   "n": 234,
+   "up": "2619.177772",
+   "dn": "2641.344289",
+   "resid": "-22.166517",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "459.196386"
+  },
+  {
+   "open_epoch": 1788076800,
+   "n": 163,
+   "up": "1668.351332",
+   "dn": "1352.296638",
+   "resid": "316.054694",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "352.895240"
+  },
+  {
+   "open_epoch": 1788077700,
+   "n": 237,
+   "up": "2080.099037",
+   "dn": "2370.233120",
+   "resid": "-290.134083",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "290.512810"
+  },
+  {
+   "open_epoch": 1788078600,
+   "n": 127,
+   "up": "1528.615578",
+   "dn": "1337.514636",
+   "resid": "191.100942",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "592.537739"
+  },
+  {
+   "open_epoch": 1788079500,
+   "n": 123,
+   "up": "1625.773409",
+   "dn": "1336.525231",
+   "resid": "289.248178",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "407.641993"
+  },
+  {
+   "open_epoch": 1788080400,
+   "n": 137,
+   "up": "734.179371",
+   "dn": "1348.523645",
+   "resid": "-614.344274",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "664.344274"
+  },
+  {
+   "open_epoch": 1788081300,
+   "n": 172,
+   "up": "1128.329952",
+   "dn": "1335.321207",
+   "resid": "-206.991255",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "427.892184"
+  },
+  {
+   "open_epoch": 1788082200,
+   "n": 297,
+   "up": "2798.913649",
+   "dn": "3220.733433",
+   "resid": "-421.819784",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "421.819784"
+  },
+  {
+   "open_epoch": 1788083100,
+   "n": 208,
+   "up": "2104.567900",
+   "dn": "2181.275052",
+   "resid": "-76.707152",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "527.350502"
+  },
+  {
+   "open_epoch": 1788084000,
+   "n": 249,
+   "up": "2198.973940",
+   "dn": "2648.014061",
+   "resid": "-449.040121",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "551.364958"
+  },
+  {
+   "open_epoch": 1788084900,
+   "n": 167,
+   "up": "1823.806421",
+   "dn": "2060.989057",
+   "resid": "-237.182636",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "251.757502"
+  },
+  {
+   "open_epoch": 1788085800,
+   "n": 122,
+   "up": "1006.216123",
+   "dn": "1168.586879",
+   "resid": "-162.370756",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "271.966756"
+  },
+  {
+   "open_epoch": 1788086700,
+   "n": 126,
+   "up": "985.370701",
+   "dn": "703.281560",
+   "resid": "282.089141",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "324.839141"
+  },
+  {
+   "open_epoch": 1788087600,
+   "n": 262,
+   "up": "2311.437886",
+   "dn": "2555.802556",
+   "resid": "-244.364670",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "251.247326"
+  },
+  {
+   "open_epoch": 1788088500,
+   "n": 169,
+   "up": "1866.840030",
+   "dn": "1878.687048",
+   "resid": "-11.847018",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "480.629037"
+  },
+  {
+   "open_epoch": 1788089400,
+   "n": 309,
+   "up": "3255.904282",
+   "dn": "2671.555264",
+   "resid": "584.349018",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "584.349018"
+  },
+  {
+   "open_epoch": 1788090300,
+   "n": 112,
+   "up": "1040.289660",
+   "dn": "1416.440380",
+   "resid": "-376.150720",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "377.955346"
+  },
+  {
+   "open_epoch": 1788091200,
+   "n": 188,
+   "up": "2208.705703",
+   "dn": "1907.262453",
+   "resid": "301.443250",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "301.443250"
+  },
+  {
+   "open_epoch": 1788092100,
+   "n": 132,
+   "up": "1199.106436",
+   "dn": "746.941313",
+   "resid": "452.165123",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "502.165123"
+  },
+  {
+   "open_epoch": 1788093000,
+   "n": 235,
+   "up": "2010.488257",
+   "dn": "2197.979504",
+   "resid": "-187.491247",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "515.807063"
+  },
+  {
+   "open_epoch": 1788093900,
+   "n": 271,
+   "up": "1980.070240",
+   "dn": "2625.054300",
+   "resid": "-644.984060",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "644.984060"
+  },
+  {
+   "open_epoch": 1788094800,
+   "n": 121,
+   "up": "931.548658",
+   "dn": "829.471247",
+   "resid": "102.077411",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "293.406784"
+  },
+  {
+   "open_epoch": 1788095700,
+   "n": 163,
+   "up": "1199.430646",
+   "dn": "1846.935356",
+   "resid": "-647.504710",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "682.784710"
+  },
+  {
+   "open_epoch": 1788096600,
+   "n": 176,
+   "up": "1705.858687",
+   "dn": "1928.763510",
+   "resid": "-222.904823",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "322.904823"
+  },
+  {
+   "open_epoch": 1788097500,
+   "n": 112,
+   "up": "1097.638821",
+   "dn": "1105.120088",
+   "resid": "-7.481267",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "251.083553"
+  },
+  {
+   "open_epoch": 1788098400,
+   "n": 307,
+   "up": "3201.154554",
+   "dn": "2972.883604",
+   "resid": "228.270950",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "505.223805"
+  },
+  {
+   "open_epoch": 1788099300,
+   "n": 210,
+   "up": "2270.848530",
+   "dn": "1998.650360",
+   "resid": "272.198170",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "359.288170"
+  },
+  {
+   "open_epoch": 1788100200,
+   "n": 129,
+   "up": "1247.225197",
+   "dn": "1036.217317",
+   "resid": "211.007880",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "301.200827"
+  },
+  {
+   "open_epoch": 1788101100,
+   "n": 230,
+   "up": "1567.213566",
+   "dn": "2337.099816",
+   "resid": "-769.886250",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "769.886250"
+  },
+  {
+   "open_epoch": 1788102000,
+   "n": 187,
+   "up": "1789.090310",
+   "dn": "1779.502806",
+   "resid": "9.587504",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "322.778207"
+  },
+  {
+   "open_epoch": 1788102900,
+   "n": 95,
+   "up": "1196.147065",
+   "dn": "1345.276244",
+   "resid": "-149.129179",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "297.901782"
+  },
+  {
+   "open_epoch": 1788103800,
+   "n": 114,
+   "up": "741.384190",
+   "dn": "1345.303980",
+   "resid": "-603.919790",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "653.919790"
+  },
+  {
+   "open_epoch": 1788104700,
+   "n": 134,
+   "up": "1791.617978",
+   "dn": "1599.484687",
+   "resid": "192.133291",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "306.467956"
+  },
+  {
+   "open_epoch": 1788105600,
+   "n": 66,
+   "up": "652.515289",
+   "dn": "435.474900",
+   "resid": "217.040389",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "288.696463"
+  },
+  {
+   "open_epoch": 1788106500,
+   "n": 264,
+   "up": "3179.328054",
+   "dn": "3221.556184",
+   "resid": "-42.228130",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "253.630401"
+  },
+  {
+   "open_epoch": 1788107400,
+   "n": 219,
+   "up": "1894.971231",
+   "dn": "2350.333721",
+   "resid": "-455.362490",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "458.280740"
+  },
+  {
+   "open_epoch": 1788108300,
+   "n": 135,
+   "up": "878.799727",
+   "dn": "1347.954908",
+   "resid": "-469.155181",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "469.155181"
+  },
+  {
+   "open_epoch": 1788109200,
+   "n": 157,
+   "up": "1999.848867",
+   "dn": "1536.487347",
+   "resid": "463.361520",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "523.421520"
+  },
+  {
+   "open_epoch": 1788110100,
+   "n": 168,
+   "up": "1650.636124",
+   "dn": "1746.605738",
+   "resid": "-95.969614",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "274.936693"
+  },
+  {
+   "open_epoch": 1788111000,
+   "n": 146,
+   "up": "968.489753",
+   "dn": "2122.521018",
+   "resid": "-1154.031265",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "1154.031265"
+  },
+  {
+   "open_epoch": 1788111900,
+   "n": 151,
+   "up": "1723.374969",
+   "dn": "1757.856716",
+   "resid": "-34.481747",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "318.118570"
+  },
+  {
+   "open_epoch": 1788114600,
+   "n": 157,
+   "up": "1408.919232",
+   "dn": "1322.743473",
+   "resid": "86.175759",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "277.136254"
+  },
+  {
+   "open_epoch": 1788115500,
+   "n": 166,
+   "up": "2084.790453",
+   "dn": "1195.481113",
+   "resid": "889.309340",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "919.309340"
+  },
+  {
+   "open_epoch": 1788116400,
+   "n": 229,
+   "up": "2160.866951",
+   "dn": "1742.060350",
+   "resid": "418.806601",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "441.656601"
+  },
+  {
+   "open_epoch": 1788117300,
+   "n": 115,
+   "up": "1063.895990",
+   "dn": "941.326859",
+   "resid": "122.569131",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "238.983417"
+  },
+  {
+   "open_epoch": 1788118200,
+   "n": 131,
+   "up": "1276.608913",
+   "dn": "1524.987465",
+   "resid": "-248.378552",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "248.378552"
+  },
+  {
+   "open_epoch": 1788119100,
+   "n": 172,
+   "up": "1416.085651",
+   "dn": "2227.198344",
+   "resid": "-811.112693",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "811.112693"
+  },
+  {
+   "open_epoch": 1788120000,
+   "n": 211,
+   "up": "2134.754931",
+   "dn": "2350.290822",
+   "resid": "-215.535891",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "463.786223"
+  },
+  {
+   "open_epoch": 1788120900,
+   "n": 369,
+   "up": "3258.705143",
+   "dn": "4020.753115",
+   "resid": "-762.047972",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "762.047972"
+  },
+  {
+   "open_epoch": 1788121800,
+   "n": 94,
+   "up": "827.643172",
+   "dn": "760.162835",
+   "resid": "67.480337",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "280.414211"
+  },
+  {
+   "open_epoch": 1788122700,
+   "n": 304,
+   "up": "2469.523965",
+   "dn": "3637.956945",
+   "resid": "-1168.432980",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "1179.741561"
+  },
+  {
+   "open_epoch": 1788123600,
+   "n": 223,
+   "up": "2000.583336",
+   "dn": "1930.506110",
+   "resid": "70.077226",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "418.019876"
+  },
+  {
+   "open_epoch": 1788124500,
+   "n": 120,
+   "up": "1145.840745",
+   "dn": "1391.534693",
+   "resid": "-245.693948",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "261.008454"
+  },
+  {
+   "open_epoch": 1788125400,
+   "n": 240,
+   "up": "2277.816743",
+   "dn": "2031.129290",
+   "resid": "246.687453",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "327.777453"
+  },
+  {
+   "open_epoch": 1788126300,
+   "n": 193,
+   "up": "1639.081689",
+   "dn": "2117.297906",
+   "resid": "-478.216217",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "478.216217"
+  },
+  {
+   "open_epoch": 1788127200,
+   "n": 292,
+   "up": "3660.649856",
+   "dn": "3253.069875",
+   "resid": "407.579981",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "457.579981"
+  },
+  {
+   "open_epoch": 1788128100,
+   "n": 139,
+   "up": "1671.329396",
+   "dn": "1249.008050",
+   "resid": "422.321346",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "422.321346"
+  },
+  {
+   "open_epoch": 1788129000,
+   "n": 163,
+   "up": "2179.262033",
+   "dn": "2062.277517",
+   "resid": "116.984516",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "365.181133"
+  },
+  {
+   "open_epoch": 1788129900,
+   "n": 437,
+   "up": "4905.884794",
+   "dn": "4345.912147",
+   "resid": "559.972647",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "613.339992"
+  },
+  {
+   "open_epoch": 1788130800,
+   "n": 368,
+   "up": "4467.657178",
+   "dn": "4322.820072",
+   "resid": "144.837106",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "361.959676"
+  },
+  {
+   "open_epoch": 1788131700,
+   "n": 373,
+   "up": "4551.819850",
+   "dn": "4151.178394",
+   "resid": "400.641456",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "400.641456"
+  },
+  {
+   "open_epoch": 1788132600,
+   "n": 189,
+   "up": "2281.838397",
+   "dn": "1726.906165",
+   "resid": "554.932232",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "619.248440"
+  },
+  {
+   "open_epoch": 1788133500,
+   "n": 251,
+   "up": "1987.164276",
+   "dn": "2684.759218",
+   "resid": "-697.594942",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "844.714942"
+  },
+  {
+   "open_epoch": 1788134400,
+   "n": 260,
+   "up": "2516.312649",
+   "dn": "2147.629728",
+   "resid": "368.682921",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "744.120413"
+  },
+  {
+   "open_epoch": 1788135300,
+   "n": 143,
+   "up": "1281.257813",
+   "dn": "1554.571384",
+   "resid": "-273.313571",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "367.787905"
+  },
+  {
+   "open_epoch": 1788136200,
+   "n": 154,
+   "up": "1728.082652",
+   "dn": "2050.049606",
+   "resid": "-321.966954",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "371.966954"
+  },
+  {
+   "open_epoch": 1788138900,
+   "n": 118,
+   "up": "996.842958",
+   "dn": "806.831636",
+   "resid": "190.011322",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "286.331522"
+  },
+  {
+   "open_epoch": 1788139800,
+   "n": 266,
+   "up": "3011.497810",
+   "dn": "2450.555649",
+   "resid": "560.942161",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "691.167161"
+  },
+  {
+   "open_epoch": 1788140700,
+   "n": 168,
+   "up": "2179.063637",
+   "dn": "1762.866987",
+   "resid": "416.196650",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "416.196650"
+  },
+  {
+   "open_epoch": 1788141600,
+   "n": 287,
+   "up": "2017.172846",
+   "dn": "2604.358598",
+   "resid": "-587.185752",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "587.185752"
+  },
+  {
+   "open_epoch": 1788142500,
+   "n": 202,
+   "up": "1914.030799",
+   "dn": "1292.833041",
+   "resid": "621.197758",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "621.197758"
+  },
+  {
+   "open_epoch": 1788143400,
+   "n": 126,
+   "up": "1580.972991",
+   "dn": "692.577355",
+   "resid": "888.395636",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "934.395636"
+  },
+  {
+   "open_epoch": 1788144300,
+   "n": 92,
+   "up": "766.275221",
+   "dn": "857.194845",
+   "resid": "-90.919624",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "198.930781"
+  },
+  {
+   "open_epoch": 1788145200,
+   "n": 97,
+   "up": "447.692584",
+   "dn": "805.845382",
+   "resid": "-358.152798",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "358.152798"
+  },
+  {
+   "open_epoch": 1788146100,
+   "n": 163,
+   "up": "1230.903456",
+   "dn": "1956.073468",
+   "resid": "-725.170012",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "725.170012"
+  },
+  {
+   "open_epoch": 1788147000,
+   "n": 173,
+   "up": "1559.534912",
+   "dn": "1939.189038",
+   "resid": "-379.654126",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "405.073572"
+  },
+  {
+   "open_epoch": 1788147900,
+   "n": 134,
+   "up": "1353.944077",
+   "dn": "1406.160343",
+   "resid": "-52.216266",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "267.709020"
+  },
+  {
+   "open_epoch": 1788148800,
+   "n": 98,
+   "up": "951.095020",
+   "dn": "949.793602",
+   "resid": "1.301418",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "219.478578"
+  },
+  {
+   "open_epoch": 1788149700,
+   "n": 271,
+   "up": "3364.995841",
+   "dn": "3127.281312",
+   "resid": "237.714529",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "385.094236"
+  },
+  {
+   "open_epoch": 1788150600,
+   "n": 373,
+   "up": "4025.191729",
+   "dn": "4403.464208",
+   "resid": "-378.272479",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "408.630479"
+  },
+  {
+   "open_epoch": 1788151500,
+   "n": 220,
+   "up": "2473.251367",
+   "dn": "2108.373540",
+   "resid": "364.877827",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "389.105455"
+  },
+  {
+   "open_epoch": 1788152400,
+   "n": 158,
+   "up": "1451.633103",
+   "dn": "1532.317337",
+   "resid": "-80.684234",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "274.850891"
+  },
+  {
+   "open_epoch": 1788153300,
+   "n": 297,
+   "up": "2492.076043",
+   "dn": "3219.682450",
+   "resid": "-727.606407",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "727.606407"
+  },
+  {
+   "open_epoch": 1788154200,
+   "n": 319,
+   "up": "2992.310220",
+   "dn": "2752.189726",
+   "resid": "240.120494",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "443.577039"
+  },
+  {
+   "open_epoch": 1788155100,
+   "n": 387,
+   "up": "2116.036679",
+   "dn": "2310.547277",
+   "resid": "-194.510598",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "487.172942"
+  },
+  {
+   "open_epoch": 1788156900,
+   "n": 230,
+   "up": "2415.844315",
+   "dn": "2038.571723",
+   "resid": "377.272592",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "379.747779"
+  },
+  {
+   "open_epoch": 1788157800,
+   "n": 37,
+   "up": "306.731194",
+   "dn": "413.739111",
+   "resid": "-107.007917",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "240.856036"
+  },
+  {
+   "open_epoch": 1788172200,
+   "n": 39,
+   "up": "549.14",
+   "dn": "428.970999",
+   "resid": "120.169001",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "231"
+  },
+  {
+   "open_epoch": 1788173100,
+   "n": 128,
+   "up": "1278.285014",
+   "dn": "1103.930448",
+   "resid": "174.354566",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "309.388063"
+  },
+  {
+   "open_epoch": 1788174000,
+   "n": 173,
+   "up": "1674.314607",
+   "dn": "1335.013109",
+   "resid": "339.301498",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "339.301498"
+  },
+  {
+   "open_epoch": 1788174900,
+   "n": 128,
+   "up": "1223.510953",
+   "dn": "1000.025645",
+   "resid": "223.485308",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "273.485308"
+  },
+  {
+   "open_epoch": 1788175800,
+   "n": 129,
+   "up": "1317.219878",
+   "dn": "931.438529",
+   "resid": "385.781349",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "389.481349"
+  },
+  {
+   "open_epoch": 1788176700,
+   "n": 137,
+   "up": "1595.051002",
+   "dn": "1461.373318",
+   "resid": "133.677684",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "238.415646"
+  },
+  {
+   "open_epoch": 1788177600,
+   "n": 105,
+   "up": "1226.656912",
+   "dn": "1228.808464",
+   "resid": "-2.151552",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "305.306456"
+  },
+  {
+   "open_epoch": 1788178500,
+   "n": 127,
+   "up": "1059.981745",
+   "dn": "965.183688",
+   "resid": "94.798057",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "171.821893"
+  },
+  {
+   "open_epoch": 1788179400,
+   "n": 157,
+   "up": "1848.809988",
+   "dn": "1208.619046",
+   "resid": "640.190942",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "640.190942"
+  },
+  {
+   "open_epoch": 1788180300,
+   "n": 203,
+   "up": "2401.260147",
+   "dn": "2544.267966",
+   "resid": "-143.007819",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "352.704717"
+  },
+  {
+   "open_epoch": 1788181200,
+   "n": 121,
+   "up": "842.041262",
+   "dn": "1525.346322",
+   "resid": "-683.305060",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "683.305060"
+  },
+  {
+   "open_epoch": 1788182100,
+   "n": 114,
+   "up": "1360.686915",
+   "dn": "1081.045305",
+   "resid": "279.641610",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "279.641610"
+  },
+  {
+   "open_epoch": 1788183000,
+   "n": 239,
+   "up": "2262.168676",
+   "dn": "2587.169720",
+   "resid": "-325.001044",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "397.011044"
+  },
+  {
+   "open_epoch": 1788183900,
+   "n": 146,
+   "up": "1115.867656",
+   "dn": "1115.701191",
+   "resid": "0.166465",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "304.334923"
+  },
+  {
+   "open_epoch": 1788184800,
+   "n": 171,
+   "up": "1530.061276",
+   "dn": "1753.612896",
+   "resid": "-223.551620",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "298.013100"
+  },
+  {
+   "open_epoch": 1788185700,
+   "n": 165,
+   "up": "1877.849345",
+   "dn": "1985.186473",
+   "resid": "-107.337128",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "240.634178"
+  },
+  {
+   "open_epoch": 1788186600,
+   "n": 87,
+   "up": "1035.618671",
+   "dn": "1092.730144",
+   "resid": "-57.111473",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "198.598888"
+  },
+  {
+   "open_epoch": 1788187500,
+   "n": 269,
+   "up": "2880.989683",
+   "dn": "3181.690008",
+   "resid": "-300.700325",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "330.169860"
+  },
+  {
+   "open_epoch": 1788188400,
+   "n": 146,
+   "up": "1373.145613",
+   "dn": "1032.026736",
+   "resid": "341.118877",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "343.378877"
+  },
+  {
+   "open_epoch": 1788189300,
+   "n": 103,
+   "up": "950.011922",
+   "dn": "1120.897213",
+   "resid": "-170.885291",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "197.000625"
+  },
+  {
+   "open_epoch": 1788190200,
+   "n": 108,
+   "up": "945.270362",
+   "dn": "1232.250587",
+   "resid": "-286.980225",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "286.980225"
+  },
+  {
+   "open_epoch": 1788192000,
+   "n": 75,
+   "up": "995.825181",
+   "dn": "1078.751555",
+   "resid": "-82.926374",
+   "overlaps_kalshi": true,
+   "max_abs_resid": "167.067421"
+  },
+  {
+   "open_epoch": 1788192900,
+   "n": 167,
+   "up": "1560.034665",
+   "dn": "1630.755300",
+   "resid": "-70.720635",
+   "overlaps_kalshi": false,
+   "max_abs_resid": "296.214875"
+  }
+ ]
+}
