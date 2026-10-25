@@ -111,11 +111,26 @@ def test_accumulation_keeps_working_pairs_past_the_first(probe, tmp_path,
     for _ in range(8):
         seen.append(ex.handle(_row(H), _book(), market="m",
                               window="21:00").get("refused_reason"))
-    # MORE THAN ONE PAIR, which is the whole point, and always CHEAPER leg
-    # first within each pair.
+    # MORE THAN ONE PAIR, which is the whole point.
+    #
+    # THE ORDERING RULE CHANGED, and this is the test that recorded the old
+    # one. It used to assert a rigid ["DOWN","UP"] alternation, on the
+    # rationale that the cheaper leg filling alone is the smaller worst
+    # case. That is right while FLAT and wrong while a residual is held:
+    # measured here, the engine carries a DOWN-heavy prospective imbalance
+    # of -3, then -2, then -1 across these rounds, and the old rule opened
+    # ANOTHER DOWN leg on top of it each time. That is the shape that
+    # stranded 0130z and 1245z.
+    #
+    # The invariant is now: the leg that REDUCES a held residual goes
+    # first, and cheapest-first applies only when there is nothing to
+    # reduce. The resulting inventory is just as balanced -- equal counts
+    # below -- but the path never deepens an imbalance it could have cut.
     sides = [s["side"] for s in t.sent]
     assert len(sides) >= 4 and len(sides) % 2 == 0, sides
-    assert sides == ["DOWN", "UP"] * (len(sides) // 2), sides
+    assert sides.count("UP") == sides.count("DOWN"), sides
+    # the FIRST leg of all, placed from flat, is still the cheaper one
+    assert sides[0] == "DOWN", sides
     # HOW MANY PAIRS IS NOT PINNED, deliberately. The complement is now sized
     # to the quantity that actually FILLED rather than to the planned leg
     # size, and this harness fills 1 of each, so each pair costs the envelope
@@ -274,7 +289,14 @@ def test_restart_recovery_cannot_replace_a_claimed_leg(probe, tmp_path):
     assert ex3.acc_leg_attempt("m", 0, "UP") is None
     assert ex3.acc_leg_attempt("m", 0, "DOWN") is None
     ex3.handle(_row(H), _book(), market="m", window="21:00")
-    assert [s["side"] for s in t3.sent] == ["DOWN"]
+    # ONE order, and it is the leg that REDUCES the prospective residual.
+    # Realized inventory is balanced here (1 of each filled), but the two
+    # resting remainders are DOWN-heavy by 2, so UP is the reducing side.
+    # This assertion used to read ["DOWN"] -- cheapest-first -- which would
+    # have added a third DOWN leg to an already DOWN-heavy book. The claim
+    # behaviour this test exists to pin is unchanged: exactly one order, a
+    # fresh client order id, and round 1.
+    assert [s["side"] for s in t3.sent] == ["UP"]
     assert ex3.probe_round("m") == 1
     assert {s["client_order_id"] for s in t3.sent}.isdisjoint(
         {s["client_order_id"] for s in t.sent + t2.sent})

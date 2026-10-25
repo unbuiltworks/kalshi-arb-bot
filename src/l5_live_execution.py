@@ -4456,6 +4456,71 @@ class FaithfulExecutor:
             return "STATE_UNREADABLE:%s" % type(exc).__name__
         return None
 
+    def probe_leg_order(self, market: str, legs: Mapping[str, Any],
+                        cheapest_first: Sequence[str]) -> List[str]:
+        """Which leg to offer next: the one that REDUCES a held residual.
+
+        THE DEFECT THIS FIXES, and it cost two windows. The side came only
+        from the frozen plan, cheapest leg first. That rule is right while
+        flat and wrong the instant one leg has filled alone: on 1245z the
+        book was `up 1.4 / dn 2.8` and the engine spent the last nine
+        minutes of the window quoting DOWN -- the side it ALREADY HELD --
+        while the UP that would have completed the pair was never offered
+        once. 0130z shows the same shape against a DOWN 1.87 residual.
+
+        THE SIGNED RESIDUAL IS THE ONLY INPUT, and it is the PROSPECTIVE
+        one: realized inventory plus every outstanding order as if it
+        filled, which is the same basis `prospective_residual` and the
+        residual cap use. So a partial fill counts its filled part, a
+        resting order counts its remainder, and a complement already on the
+        book does not get ordered twice.
+
+        CHEAPEST-FIRST IS PRESERVED EXACTLY WHEN THERE IS NOTHING TO
+        REDUCE, so a flat market's behaviour is byte-for-byte what it was.
+        An unreadable residual also keeps today's rule: this is a
+        preference between two already-gated legs, not a safety gate, and
+        failing it closed would stop the engine quoting at all.
+        """
+        try:
+            signed = (D(str(self.store.residual(market)))
+                      + D(str(self.store.outstanding_residual(market))))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return list(cheapest_first)
+        if signed == 0:
+            return list(cheapest_first)
+        need = DOWN if signed > 0 else UP
+        if need not in legs:
+            return list(cheapest_first)
+        return [need] + [k for k in cheapest_first if k != need]
+
+    def probe_leg_qty_cap(self, market: str, side: str, qty: D) -> D:
+        """Never overshoot a residual into a reversal on the other side.
+
+        A reducing leg sized by the PAIR plan can be larger than the
+        residual it is reducing -- 1.4 offered against 0.5 held flips the
+        book to 0.9 the other way and is an opening dressed as a
+        completion. The quantity is therefore capped at the magnitude of
+        the prospective residual whenever this leg is the reducing one.
+
+        Only ever shrinks, never grows, and leaves an opening leg alone.
+        """
+        try:
+            signed = (D(str(self.store.residual(market)))
+                      + D(str(self.store.outstanding_residual(market))))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return qty
+        if signed == 0:
+            return qty
+        reducing = (str(side).upper() == DOWN and signed > 0) or \
+                   (str(side).upper() == UP and signed < 0)
+        if not reducing:
+            return qty
+        return min(qty, abs(signed))
+
     def probe_round(self, market: str) -> Optional[int]:
         """The first round of this market with a leg still unspent, or None.
 
@@ -5459,6 +5524,8 @@ class FaithfulExecutor:
             # deterministic: the CHEAPER leg first, because a cheap leg
             # filling alone is the smaller worst case.
             order = sorted(legs, key=lambda k: D(legs[k]["price"]))
+            # A HELD RESIDUAL OUTRANKS CHEAPNESS. See probe_leg_order.
+            order = self.probe_leg_order(market, legs, order)
             nxt = next((k for k in order if not claimed.get(k)), None)
             if nxt is None:
                 # probe_round only returns an INCOMPLETE round, so this is
@@ -5690,7 +5757,7 @@ class FaithfulExecutor:
             # enough: the lambda quantity would come back and the override
             # would silently become a lambda-sized order. Found by the
             # money-field integrity check. Both are set here.
-            executable = D(leg["qty"])
+            executable = self.probe_leg_qty_cap(market, nxt, D(leg["qty"]))
             # THE LEG'S OWN MODE. Every leg this path builds is MAKER except
             # the defensive unwind, which must cross or it is not an unwind;
             # a missing mode falls back to MAKER, so nothing else changes.
