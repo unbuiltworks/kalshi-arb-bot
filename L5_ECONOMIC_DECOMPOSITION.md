@@ -146,3 +146,50 @@ available at all, which is the last unmeasured piece of the decomposition above.
 
 **No production change, no new service, no risk-limit increase, no live activation. Cap 0.96,
 `armed=false`, `shadow_lock=true`, `campaign_id=null`.**
+
+---
+
+# ADDENDUM — the seven windows separate on COMPLETION vs STRAND, not price
+
+A peer session withdrew its skew null and made a structural point that is testable on my own
+seven venue-confirmed windows. It holds, and it kills my price hypothesis without needing
+their tape.
+
+| window | p | qty | acq cost = q·p | realized | loss/acq | character |
+|---|---|---|---|---|---|---|
+| 1245z | 0.57 | 1.40 | 0.7980 | −0.2940 | 0.368 | partial |
+| **1300z** | 0.63 | 1.26 | 0.7938 | **−0.7938** | **1.000** | **exact full strand** |
+| 1315z | 0.46 | 1.63 | 0.7498 | +0.0815 | — | pair margin |
+| 1330z | 0.33 | 1.29 | 0.4257 | +0.2130 | — | pair margin |
+| 1345z | 0.58 | 1.50 | 0.8700 | −0.7206 | 0.828 | partial |
+| 1400z | 0.23 | 1.11 | 0.2553 | +0.0555 | — | pair margin |
+| **1945z** | 0.44 | 1.56 | 0.6864 | **−0.6864** | **1.000** | **exact full strand** |
+
+**Two of the four losses are EXACTLY the first-leg acquisition cost** — full strands settling
+worthless. The other two are partials.
+
+**Losses are not monotone in price:** ordered by p they are 0.44 → 0.6864, 0.57 → **0.2940**,
+0.58 → 0.7206, 0.63 → 0.7938. The *smallest* loss sits at p=0.57. **"Dear loses more" is false
+within my own seven.**
+
+**Losses are approximately the NOTIONAL, not price-scaled.** Three cluster at 0.7938 / 0.7206 /
+0.6864 (mean **0.7336**) against the $0.80 opening notional. Since clip = 0.80/p, a full strand
+costs ~$0.80 *whatever* the entry price.
+
+**Winners are pair margins, not settlement wins.** All three are small (+0.0555, +0.2130,
++0.0815). A winning residual at p=0.44 on 1.56 contracts would pay **+$0.8736** — none is
+anywhere near it. So the winners completed pairs and took the margin; the losers stranded and
+lost acquisition cost.
+
+**So all three price readings — my price effect, my rebate artifact, their skew null — were
+looking at the wrong variable.** The separator is **completion versus strand**, and price is
+near-irrelevant to the magnitude because the notional is fixed. That is the one diagnosis that
+survived today, reached independently from the venue-confirmed side.
+
+It does not change the verdict above: the mechanism is a rate on turnover, and at $5 the
+ceiling is $5.10/day against his rate and −$24.66/day against ours.
+
+**Ledger closed: one diagnosis, two process findings (the three unexercised gates finding is
+JOINT — the `MAX_UNMATCHED` attribution and the pattern-spotting came from different
+sessions), zero surviving economic estimates, thirteen withdrawals. Both survivors predate
+today and were already in committed files.**
