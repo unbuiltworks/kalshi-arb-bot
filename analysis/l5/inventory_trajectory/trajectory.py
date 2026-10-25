@@ -42,12 +42,30 @@ WINDOW_S = 900
 CHECKPOINTS = (2, 5, 10, 20, 40, 60, 80, 100)
 
 
-def load(path: str, prefix: str = SLUG_PREFIX) -> Dict[str, List[dict]]:
+def _open(path: str):
+    """Transparently read a .gz capture. The gap capture ships compressed."""
+    if path.endswith(".gz"):
+        import gzip
+        return gzip.open(path, "rt")
+    return open(path)
+
+
+def load(path, prefix: str = SLUG_PREFIX) -> Dict[str, List[dict]]:
     """Chronological BUY fills per window. REDEEM rows are settlement, not
-    inventory, and are excluded from the trajectory."""
+    inventory, and are excluded from the trajectory.
+
+    `path` is one path or several. SEVERAL MATTERS: the activity corpus ships in
+    two captures -- activity.jsonl and the 40MB-compressed activity_gap.jsonl.gz
+    -- and the gap capture holds roughly ten times the BTC15m windows of the
+    first. Reading one file silently analyses ~9.5% of the corpus. The dedup
+    `seen` set below is shared across every path in one call, which is the whole
+    reason the paths are read together rather than merged by the caller: the two
+    captures overlap, and a fill present in both must count once.
+    """
+    paths = [path] if isinstance(path, str) else list(path)
     wins: Dict[str, List[dict]] = {}
     seen = set()
-    for line in open(path):
+    for line in (ln for pth in paths for ln in _open(pth)):
         line = line.strip()
         if not line:
             continue
@@ -216,12 +234,13 @@ def first_formation(traj: Sequence[Sequence[dict]]) -> Dict[str, Any]:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--activity", default="data/l5/raw/activity.jsonl")
+    ap.add_argument("--activity", action="append", default=None,
+                    help="repeatable; pass every capture so the corpus is whole")
     ap.add_argument("--out",
                     default="analysis/l5/inventory_trajectory/trajectory.json")
     a = ap.parse_args(argv)
 
-    wins = load(a.activity)
+    wins = load(a.activity or ["data/l5/raw/activity.jsonl"])
     traj = [trajectory(s, f) for s, f in sorted(wins.items())]
     traj = [t for t in traj if t]
     rep = {
