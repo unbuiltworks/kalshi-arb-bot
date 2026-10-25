@@ -102,3 +102,69 @@ is the one question PMUS data **cannot** answer. The completion lever, which bot
 and the peer independently concluded is where the money is (a 1945z-style loss is settlement
 of an unpaired residual at roughly 50x fill-time adverse selection), **is** answerable from
 data we already hold.
+
+## 6. THE COMPLETION CAP IS THE BINDING CONSTRAINT — and the ceiling is not separable from clip size
+
+The test proposed in §5 was run by the peer session (`1cbb1f1b`,
+`L5_PMUS_COMPLETION_CAP_FINDING.md`): 19 venue-native PMUS windows, 407 book frames,
+`pair_cost = bid + (1-ask)`, giving min 0.9700 / median 0.9900 / max 0.9900 and **0 of 407
+frames clearing the 0.96 cap**.
+
+**Independently reproduced here** on a different slice — `data/pmus_btc15m_tape`, 42 two-sided
+frames, 1 market, 2026-09-27:
+
+| | |
+|---|---|
+| pair_cost | min **0.9600**, median 0.9900, max 0.9900 |
+| spread | min 0.0100, median 0.0100, max **0.0400** |
+| `<= 0.960` — cap accepts | **4 frames, 9.5%** |
+| `0.960-1.004` — refused, inside break-even | 38 frames, 90.5% |
+| `> 1.004` — correctly refused | 0 frames, 0.0% |
+
+**One correction to the peer's result: "completely unreachable" is too strong.** Four frames sat
+at pair cost exactly 0.9600 (spread exactly 0.0400) and the cap is `<= 0.96`, so it accepts
+them. Both samples are small, so neither 0% nor 9.5% is the rate. The defensible statement is
+that **the cap binds on roughly 90-100% of frames, so it is the dominant constraint and it is
+configuration rather than market.** The gamma scan agrees wider spreads occur:
+`share_spread_le_0_01` is 0.5769 for crypto, so 42% of crypto markets sit above a cent.
+
+`pair_cost = bid + (1-ask) = 1 - (ask-bid) = 1 - spread` is an **identity**, so the
+"pair-cost distribution" IS the spread distribution and the finding reduces to: **PMUS BTC15m
+spreads are a cent, and a 0.96 cap requires four.** Triangulated by the 37,116-market gamma
+universe scan: crypto `median_spread` 0.010, `median_tick` 0.01.
+
+This also closes the `possible_misses: 0` contradiction. Both figures were honest: **nothing
+was missed, everything was declined, by configuration.** The 1945z lifecycle is the confirming
+case — `COMPLEMENT_PAIR_ABOVE_CAP` 12 with `order_resting FALSE` at close.
+
+### The ceiling is a function of clip size, because the rebate is a step
+
+`net/pair = q*(1-pair) - 2*$0.01 + rebate(leg1) + rebate(leg2)`
+
+| q per leg | rebate/pair | fees/pair | break-even ceiling | net at pair 0.99 |
+|---|---|---|---|---|
+| **1.56** (authorized clip) | **$0.00** | $0.02 | **0.9872** | **−$0.0044 LOSS** |
+| 2.00 | $0.02 | $0.02 | 1.0000 | +$0.0200 |
+| 3.00 | $0.02 | $0.02 | 1.0000 | +$0.0300 |
+| 5.00 | $0.04 | $0.02 | 1.0040 | +$0.0700 |
+| 10.00 | $0.06 | $0.02 | 1.0040 | +$0.1400 |
+
+The 1.004-1.008 ceiling is the **q=5** answer. At the authorized $0.80 opening notional the
+clip is ~1.56-2.7 contracts, where the rebate rounds to zero, the ceiling falls to **~0.987**,
+and a 0.99 completion **loses $0.0044** because two per-order fees exceed a cent of spread on
+1.56 contracts. It needs **q >= 2.0 contracts per leg** just to cover the per-order fee at a
+0.99 pair.
+
+**So raising the cap to 1.00 at the currently authorized clip does not make completion
+profitable.** Ceiling and clip size are not separable, and a ceiling sweep at a fixed small
+clip measures the wrong thing.
+
+### Size of the prize, stated so it cannot be misread
+
+A 0.99 pair redeems 1.00, so it is **about one cent per completed pair**, maker fee zero,
+rebate rounding to nothing at authorized clips. At a cent a pair, **$480/day is ~48,000
+completed pairs/day — three to four orders of magnitude past the authorized envelope.**
+
+This changes the **diagnosis** — the cap, not the market, is why we never complete — and it
+does **not** produce the target. No cap change is proposed here: `TS.max_pair_cost` is a risk
+control, the service is in shadow with `armed=false`, and the decision is the owner's.
