@@ -217,3 +217,78 @@ series.** That is an argument for concurrency and capital — the owner's decisi
 more sweeping by either of us.
 
 **Production untouched: `armed=false`, `shadow_lock=true`, `campaign_id=null`, cap 0.96.**
+
+---
+
+# ADDENDUM 2 — requirement 7, answered from L5's own data, and a confound in the drift claim
+
+## The peer's residual-drift correction: arithmetic verified, mechanism not
+
+They withdrew their own "zero-mean residual" premise. Every figure checks out exactly:
+
+- `residual_net` **−$85.2296** over 355 settled windows; at a per-window sd of $0.44 the sd of
+  that total is $8.29, so it sits **−10.3 sd** below zero, and stays past −7.5 sd at any
+  plausible per-window sd (0.30 -> −15.1, 0.60 -> −7.5)
+- stratified: `|resid| 1-2` **+$0.2112/window** (159 windows); `|resid| 3+`
+  **−$0.6932/window** (167 windows) — **3.3x worse**
+- the strata sum to −$82.19 over 326 windows against a −$85.2296 total over 355, so **29
+  windows and $3.04 are unaccounted** — presumably `|resid| = 0` plus fractional `|resid| < 1`,
+  which our 1.56-contract clips produce. Minor, but the strata are not exhaustive.
+
+**The residual is not zero-mean noise. That part is established.** But their *mechanism* —
+the cap refuses completion, forcing accumulation into the 3+ stratum where the drift lives —
+is **not** established by the stratification, for two reasons:
+
+1. **Confound.** A large adverse move causes *both* a large unmatched residual *and* a large
+   loss. The stratification is observational, so "3+ residual windows lose more" is equally
+   consistent with the move causing both. Nothing here controls for the move.
+2. **Their own sweep is evidence against it.** If the cap caused the drift via accumulation,
+   raising the ceiling should have reduced accumulation and improved net. It did the opposite
+   at n=14, at every clip.
+
+## And L5's own data is the control that breaks the causal story
+
+From `analysis/l5/inventory_trajectory/trajectory.json` — **L5's own 527 windows, 62,020
+fills, all buys** — at his second fill:
+
+| | |
+|---|---|
+| windows two-sided by fill 2 | **165 of 512** |
+| `inventory_imbalance_rel` median | **1.0000** (entirely one-sided) |
+| `matched_qty` median | **0.0** — typically nothing matched yet |
+| fills before his first pair | median **3**, p90 **9** |
+
+**L5 carries one-sided inventory as a matter of course, and he is profitable.** So a negative
+drift cannot be a property of accumulation as such. It is a property of **our** accumulation —
+i.e. of what we are selected into — which is the adverse-selection finding, not a cap finding.
+
+## REQUIREMENT 7, answered properly at last
+
+L5's **actual pair cost at first formation**, 506 windows:
+
+| p10 | median | mean | p90 |
+|---|---|---|---|
+| 0.9018 | **0.9900** | 0.9911 | **1.0821** |
+
+His matched VWAP pair cost after two fills: median **0.99**, p90 **1.06**.
+
+**Our cap is 0.9600 — below L5's median.** Interpolating p10 -> median (an estimate, not a
+measurement) puts the share of his formations at or under 0.96 at **~36%**, so **our cap
+refuses roughly 64% of what L5 himself did.**
+
+That is a **replication divergence by construction**, and it is independent of whether
+changing the cap pays. `CLAUDE.md` makes sequential behavioural replication the primary
+strategy and sets the standard as "at this exact market state, what did L5 do next, and what
+would our clone have done?" On this dimension the answer is: he formed at 0.99, and our clone
+is configured to refuse it.
+
+**Both of these are true and must travel together:**
+
+- **0.99 is behaviourally faithful to L5** — established, from his own data.
+- **0.99 is not shown to pay** — the sweep reversed at n=14, and ~812 windows are needed to
+  separate the arms.
+
+So the cap is a **confirmed replication divergence** and an **unresolved economic question**.
+Those call for different justifications, and neither on its own justifies a live change.
+
+**Production untouched: `armed=false`, `shadow_lock=true`, `campaign_id=null`, cap 0.96.**
