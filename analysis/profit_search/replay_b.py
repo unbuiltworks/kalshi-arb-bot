@@ -43,6 +43,7 @@ class Cfg:
         s.defensive_ceiling=None
         s.defensive_arm_s=540.0      # only inside the last N seconds of the window
         s.entry_filter=None          # callable(frame)->bool for selective entry
+        s.imb_min=D("0")             # minimum |book imbalance| conviction
         s.__dict__.update(kw)
 
 def mid_at(frames, t):
@@ -131,7 +132,16 @@ def run_window(w, policy, cfg):
         # 2x2: execution type {MAKER,TAKER} x selection {cheapest-first, L5 band}
         kind = "MAKER" if policy in ("A","D") else "TAKER"
         oup, odn = (own_up_m, own_dn_m) if kind=="MAKER" else (own_up_t, own_dn_t)
-        if policy in ("A","B"):                              # cheapest-first (our engine)
+        if policy == "IMB":
+            # BOOK-IMBALANCE SIDE SELECTION. Rest on the side the book is moving
+            # TOWARD: a fill then arrives on a dip into a rising mid rather than
+            # in front of a falling one. Signal measured out-of-sample at
+            # beta +0.906c / 6.5s, 48 of 54 markets positive, t=+6.41.
+            imb = (ybq-nbq)/(ybq+nbq) if (ybq+nbq) > 0 else D(0)
+            if abs(imb) < cfg.imb_min: continue          # no conviction -> WAIT
+            side = "UP" if imb > 0 else "DOWN"
+            own  = oup if side=="UP" else odn
+        elif policy in ("A","B"):                            # cheapest-first (our engine)
             side = "UP" if oup <= odn else "DOWN"
             own  = oup if side=="UP" else odn
         else:                                                # L5's own opening band
