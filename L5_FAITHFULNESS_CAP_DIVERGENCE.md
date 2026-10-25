@@ -66,10 +66,42 @@ reading; this figure does not establish it.
 an outcome of working inventory across ~100 fills.** We require at the first
 trade what he achieves at the hundredth.
 
-That is a divergence of *mechanism*, not of parameter. Raising our cap to 0.99
-would make our entry gate behaviourally faithful; it would not make us L5, who
-also takes 20× our fill count and converges imbalance over a horizon we never
-reach.
+That is a divergence of *mechanism*, not of parameter.
+
+### Correction: raising the cap would not even make the entry gate faithful
+
+I wrote that raising our cap to 0.99 "would make our entry gate behaviourally
+faithful". **A peer session's decision-by-decision pass over all 527 windows and
+62,020 decisions, using the deployed gate values, says it would not** — reported
+here as *their* measurement, which I have not independently reproduced:
+
+| | cap 0.96 | cap 0.99 |
+|---|---|---|
+| fidelity | 22 / 62,020 = **0.04 %** | 22 / 62,020 = **0.04 %** |
+| `PAIR_CEILING` refusals | 11,912 | 10,020 |
+| `MAX_UNMATCHED_CONTRACTS` refusals | 44,202 | 46,094 |
+
+**Zero decisions flip.** The same 1,892 move from cap-refusal straight to
+unmatched-refusal. The cap touches only completions (42.16 % of them) and never
+an opening or an extension. Fidelity tracks `MAX_UNMATCHED_CONTRACTS`, not the
+ceiling: 0.14 % at a 5-contract limit, 11.47 % at 50, 43.37 % at 250, 66.21 % at
+1000.
+
+So the faithfulness divergence is real but I mislocated its binding gate. What I
+can corroborate from the data I hold is the scale, and it is unambiguous either
+way: our `max_unmatched_contracts` is **5**, while L5's median *matched* quantity
+by fill 100 is **827.48** — a ratio of **165×**.
+
+**This also over-determines my withdrawn drift mechanism.** The cap was never
+driving accumulation, because `MAX_UNMATCHED` was already binding first on
+71.27 % of decisions. So the chain could not have operated even in principle — a
+third independent reason beyond the two objections I had already accepted.
+
+**And it is the reason not to act.** Raising `MAX_UNMATCHED` is a risk-limit
+increase, and the drift figure — now correctly scoped to *selection* rather than
+*carrying* — says our residual loses. Scaling toward L5's inventory scales **our
+measured loss, not his profit.** The fidelity gap and the profit gap have one
+cause, and inventory capacity is the multiplier on it, not the fix.
 
 It also dissolves a mechanism I proposed and should withdraw.
 
@@ -113,6 +145,20 @@ change.** A faithfulness divergence is cheap to state and does not require 812
 windows to weigh; an economic claim does. I am not proposing a cap change —
 `TS.max_pair_cost` is a risk control on a money-capable service another session
 owns, and the decision is the owner's.
+
+### The file had already written down the test, and the answer
+
+`first_formation.reads`, committed before either session looked:
+
+> *"if the median here is already ~0.96 the economics are available at
+> acquisition; if it sits near par they are EMERGENT and a pair-forming gate
+> rejects the entry"*
+
+The median at formation is **0.9900**. So by the benchmark's own stated
+criterion, the economics are **emergent** and a pair-forming gate rejects the
+entry. Whoever built that file wrote down both the test and its answer; two
+sessions spent a day rediscovering it the expensive way. That is worth recording
+as plainly as the finding itself.
 
 **What I would put to the owner** is the faithfulness question, not the economic
 one: *the controller is configured to decline the majority of what L5 does, and
