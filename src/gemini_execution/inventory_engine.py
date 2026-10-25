@@ -35,7 +35,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field, replace
 from decimal import Decimal as D, ROUND_CEILING
-from typing import Callable, List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 LABEL = "L5_INVENTORY_ENGINE_V1"
 
@@ -250,6 +250,17 @@ class Config:
     tte_min_extend_s: float = 300.0   # do not ADD exposure this late
     allow_taker: bool = True
     allow_extend: bool = True
+    # --- VENUE EXECUTION MODEL. None keeps the generic modelled behaviour that
+    # the unit tests pin. A provider (see pmus_execution_model) replaces BOTH
+    # the fee model and the invented fill probability with the venue's real
+    # schedule and a P(fill) calibrated on our own submitted orders. When the
+    # provider cannot estimate P(fill) at the rest horizon it returns None, and
+    # that is a REFUSAL -- never zero, never the last observed value.
+    venue: Any = None
+    #: how long a maker order is assumed to rest when pricing P(fill). Capped
+    #: to the provider's estimable horizon so a decision is never priced on an
+    #: extrapolation.
+    maker_rest_s: float = 30.0
 
 
 # ---- candidate ---------------------------------------------------------------
@@ -406,12 +417,33 @@ def _buy_candidate(side: str, kind: str, inv: Inventory, book: Book, prob: Prob,
         return c
     c.qty = qty
 
-    # --- fees
+    # --- fees and P(fill): the venue's own schedule and our own measured
+    # fill outcomes when a provider is supplied; the generic model otherwise.
     wire = book.wire(side, own)
-    theta = TAKER_THETA if kind == TAKER else MAKER_THETA
-    c.fee = fee_dollars(theta, qty, wire) + PER_ORDER
-    c.fill_prob = (ONE if kind == TAKER
-                   else maker_fill_prob(book, side, own, qty, tte, cfg))
+    if cfg.venue is not None:
+        c.fee = (cfg.venue.taker_fee(qty, wire) if kind == TAKER
+                 else cfg.venue.maker_fee(qty, wire))
+        if kind == TAKER:
+            c.fill_prob = ONE
+        else:
+            if own < book.maker_own(side) or own > book.maker_own(side):
+                c.reason = "NO_FILL_PATH"
+                return c
+            rest = min(cfg.maker_rest_s, tte)
+            pf = cfg.venue.p_fill(
+                leg=cfg.venue.leg_for(resid_before=resid_before, side=side),
+                rest_s=rest)
+            if pf is None:
+                # beyond the horizon our own orders have ever reached. The only
+                # instrument that can settle it is a live run that rests longer.
+                c.reason = "FILL_UNESTIMABLE"
+                return c
+            c.fill_prob = D(str(round(pf, 6)))
+    else:
+        theta = TAKER_THETA if kind == TAKER else MAKER_THETA
+        c.fee = fee_dollars(theta, qty, wire) + PER_ORDER
+        c.fill_prob = (ONE if kind == TAKER
+                       else maker_fill_prob(book, side, own, qty, tte, cfg))
     if c.fill_prob <= 0:
         c.reason = "NO_FILL_PATH"
         return c
@@ -565,7 +597,7 @@ def evaluate(*, market: str, t: float, tte: float, inv: Inventory, book: Book,
         reasons = [c.reason for c in d.candidates]
         for pref in ("PROB_STALE", "PROB_TOO_OLD", "PROB_UNCERTAIN",
                      "DAILY_LOSS_HALT", "WORST_CASE_LIMIT", "RESID_LIMIT",
-                     "CAPITAL_LIMIT"):
+                     "CAPITAL_LIMIT", "FILL_UNESTIMABLE"):
             if pref in reasons:
                 d.reason = pref
                 return d

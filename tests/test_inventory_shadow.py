@@ -90,10 +90,29 @@ def test_the_row_carries_the_full_decision_chain():
 
 
 def test_the_adapter_has_no_order_path():
+    """Checks the module's actual call surface, not its prose -- the docstrings
+    legitimately discuss submitted orders, and a substring match on them was a
+    false positive."""
+    import ast
     import inspect
-    src = inspect.getsource(IVS)
-    for forbidden in ("requests", "httpx", "post(", "create_order", "submit"):
-        assert forbidden not in src, forbidden
+    tree = ast.parse(inspect.getsource(IVS))
+    imported = set()
+    called = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.add((node.module or "").split(".")[0])
+        elif isinstance(node, ast.Call):
+            f = node.func
+            called.add(f.attr if isinstance(f, ast.Attribute)
+                       else getattr(f, "id", ""))
+    # no transport library can be reached from here
+    assert not imported & {"requests", "httpx", "urllib", "aiohttp", "socket",
+                           "websockets", "http"}
+    # and nothing that mutates an order is called
+    assert not called & {"post", "put", "delete", "create_order", "submit",
+                         "submit_order", "cancel_order", "place"}
 
 
 def test_a_calibrated_signal_would_be_acted_on_proving_the_gate_is_the_blocker():

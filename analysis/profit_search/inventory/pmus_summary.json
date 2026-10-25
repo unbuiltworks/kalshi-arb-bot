@@ -1,0 +1,100 @@
+{
+ "fill_model": {
+  "label": "PMUS_EXECUTION_MODEL_V1",
+  "source": "analysis/l5/pmus_fill_model.json",
+  "estimable_horizon_s": 32.192,
+  "orders_calibrated_on": 965,
+  "p_fill_30s": {
+   "complement": 0.42685513736882197,
+   "first_leg": 0.43248090459049204
+  },
+  "note": "cancels CENSORED, not counted as permanent no-fills; None past the horizon rather than an extrapolation"
+ },
+ "calibration": {
+  "b_flow": 0.0,
+  "b_imb": 0.0,
+  "intercept": 0.0,
+  "n_train": 0,
+  "note": "too few training samples to fit; no tilt",
+  "resid_sd": 0.5,
+  "t_flow": 0.0,
+  "t_imb": 0.0,
+  "train_until": 0.0,
+  "train_windows": 0
+ },
+ "windows": 19,
+ "oos": [
+  "cpc-btc-updown-15m-2026-10-25-1515z",
+  "cpc-btc-updown-15m-2026-10-25-1545z",
+  "cpc-btc-updown-15m-2026-10-25-1600z",
+  "cpc-btc-updown-15m-2026-10-25-1615z",
+  "cpc-btc-updown-15m-2026-10-25-1630z",
+  "cpc-btc-updown-15m-2026-10-25-1645z",
+  "cpc-btc-updown-15m-2026-10-25-1700z",
+  "cpc-btc-updown-15m-2026-10-25-1745z",
+  "cpc-btc-updown-15m-2026-10-25-1800z",
+  "cpc-btc-updown-15m-2026-10-25-1815z"
+ ],
+ "arms": {
+  "B inventory [OOS, PMUS fees+fills]": {
+   "net_mean": 0.0,
+   "net_sd": 0.0,
+   "net_worst": 0.0,
+   "net_best": 0.0,
+   "per_window": 0.0,
+   "dd_mean": 0.0,
+   "traded": 0,
+   "wait_pct": 100.0,
+   "resid": 0.0,
+   "rebate": 0.0,
+   "worst_case": 0.0,
+   "unestimable": 0,
+   "seeds": 40
+  },
+  "C WAIT baseline": {
+   "net_mean": 0.0,
+   "net_sd": 0.0,
+   "net_worst": 0.0,
+   "net_best": 0.0,
+   "per_window": 0.0,
+   "dd_mean": 0.0,
+   "traded": 0,
+   "wait_pct": 100.0,
+   "resid": 0.0,
+   "rebate": 0.0,
+   "worst_case": 0.0,
+   "unestimable": 0.0,
+   "seeds": 40
+  },
+  "O inventory + ORACLE p (bound)": {
+   "net_mean": 198.47008,
+   "net_sd": 1.1020430698456671,
+   "net_worst": 196.8771,
+   "net_best": 200.7188,
+   "per_window": 19.847008,
+   "dd_mean": 0.0,
+   "traded": 10,
+   "wait_pct": 56.67763157894737,
+   "resid": 481.5,
+   "rebate": 0.0186475,
+   "worst_case": -39.9107,
+   "unestimable": 0,
+   "seeds": 40
+  },
+  "B inventory [train, in-sample]": {
+   "net_mean": 0.0,
+   "net_sd": 0.0,
+   "net_worst": 0.0,
+   "net_best": 0.0,
+   "per_window": 0.0,
+   "dd_mean": 0.0,
+   "traded": 0,
+   "wait_pct": 100.0,
+   "resid": 0.0,
+   "rebate": 0.0,
+   "worst_case": 0.0,
+   "unestimable": 0,
+   "seeds": 40
+  }
+ }
+}

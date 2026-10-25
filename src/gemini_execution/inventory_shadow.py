@@ -125,9 +125,16 @@ def shadow_decision(*, symbol: str, tte_s: Any, presented: Any, depth: Any,
         book_age_s=0.0, n_prints=int(n_prints))
 
     prob = IP.estimate(feats, cal)
+    if cfg is None:
+        # PMUS fees and PMUS-MEASURED fills by default. The shadow was shown to
+        # be wrong about fills, so it no longer models them: P(fill) comes from
+        # 965 of our own submitted orders and refuses past the 32.2 s horizon
+        # those orders reached.
+        from src.gemini_execution.pmus_execution_model import pmus_config
+        cfg = pmus_config()
     d = evaluate(market=symbol, t=0.0, tte=float(tte), inv=inv, book=book,
                  prob=prob, resting=resting_from_working(working, book),
-                 limits=limits or Limits(), cfg=cfg or Config())
+                 limits=limits or Limits(), cfg=cfg)
     row = d.as_row()
     row["label"] = LABEL
     row["symbol"] = symbol

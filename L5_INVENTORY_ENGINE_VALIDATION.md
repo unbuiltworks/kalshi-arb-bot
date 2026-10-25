@@ -265,3 +265,103 @@ the calibration needs. None has been requested or created.
 * Parameter sweeps ran on `kappa` and the probability gate. Nothing was tuned on
   the held-out windows, no 48-window BTC held-out set was fitted, and the
   reported arms come from a single pre-declared configuration.
+
+---
+
+# Addendum — PMUS, and three errors in the above
+
+Owner direction: *"Use live tests when possible. The shadow does not reliably
+show accurate results as we've proven it wrong getting fills. Don't worry about
+Kalshi. Focus on PMUS."*
+
+Both points were right, and the second one invalidated part of the work above.
+Everything in sections 1–7 was computed with **Kalshi's** constants out of
+`replay_b`, on **Kalshi** `KX*` windows, with a **modelled** fill probability.
+
+## The three errors, and what each cost
+
+| # | error | truth | effect |
+|---|---|---|---|
+| 1 | charged `PER_ORDER = $0.01` per order | PMUS's published schedule (`src/pmus_fees.py`, reproducing all 99 rows of `docs.polymarket.us/fees`) has **no per-order fee** | taxed every decision. **The "≈$293/day in fees at L5's cadence" figure is WITHDRAWN** — it was an artefact of a fee PMUS does not levy |
+| 2 | netted the maker rebate as `theta = −0.0125` into cost | the rebate is a **credit**, income only when the venue credits it; `pmus_fees` never subtracts it | flattered every maker candidate with money not yet received |
+| 3 | invented `P(fill)` from displayed depth — returned **~0.05** at the touch | **0.43** measured on **965 of our own submitted orders**, cancels CENSORED not counted as permanent no-fills (`analysis/l5/pmus_fill_model.json`) | **wrong by ~9×, biased toward suppressing maker trading.** This is the error the live campaign exposed |
+
+Error 3 is the one that mattered: a shadow that underestimates its own fills by
+an order of magnitude cannot be trusted about fills, exactly as observed.
+
+## What was fixed
+
+`src/gemini_execution/pmus_execution_model.py` — one object answering both
+questions the engine asks of a venue: what does this cost, and will it fill.
+PMUS fees (no per-order, banker's rounding, rebate reported not netted) and
+`CalibratedFillModel`, which serves the measured Kaplan-Meier curve and
+**returns `None` past 32.2 s** — the longest any of our orders has ever rested.
+The engine turns `None` into a refusal, `FILL_UNESTIMABLE`, rather than an
+extrapolation. `pmus_config()` caps `maker_rest_s` and `order_ttl_s` to that
+horizon. The shadow adapter now uses this profile by default. 20 new tests.
+
+## PMUS data, built because none existed
+
+`pmus-btc15m-tape` has **no volume**, so its `--out-dir` is ephemeral and the
+echoed log stream is the only durable source.
+`analysis/profit_search/pmus_windows_from_logs.py` assembles real
+`cpc-btc-updown-15m-*` windows from it, settled from the venue's **own terminal
+print after `MARKET_STATE_EXPIRED`** (`last ≥ 0.90` → YES won, `≤ 0.10` → lost;
+anything else dropped as UNRESOLVED, 11 of 30 were).
+
+**19 settled PMUS windows, 2026-10-25 11:45Z → 18:30Z, median 23 frames each,
+8 up / 11 down.** This is a small sample and is reported as such.
+
+## PMUS replay — fills drawn from the measured curve, 40 seeds
+
+`analysis/profit_search/replay_pmus_inventory.py`. A resting order fills by a
+Bernoulli draw at the **measured** probability; every arm runs over 40 seeds and
+is reported as mean ± sd with its worst seed, so no result can be a lucky path.
+
+| arm | traded | net mean | sd | worst seed | per window | WAIT % |
+|---|---|---|---|---|---|---|
+| **B inventory (PMUS fees + measured fills)** | 0 | **$0.0000** | 0 | 0 | $0.0000 | **100 %** |
+| C WAIT baseline | 0 | $0.0000 | — | — | — | 100 % |
+| O inventory + oracle p *(bound, not a return)* | 10 | +$198.47 | 1.10 | +196.88 | +$19.85 | 56.7 % |
+| B on the train split (in-sample) | 0 | $0.0000 | — | — | — | 100 % |
+
+**Arm A (pairing controller) is NOT RUN and is not reported as zero.**
+`replay_b` clears its maker queue from a trade tape; this quote-only stream has
+none. Substituting a fill rule it never had would be inventing its result.
+
+**Break-even requirement on PMUS: α ≈ 0.13** (α 0.125 → no trades, α 0.130 →
++$4.90). Against **α ≈ 0.125 on Kalshi**.
+
+## The verdict survives the corrections
+
+This is the part worth stating plainly: **fixing all three errors moved the
+break-even requirement from 0.125 to 0.13 — i.e. not at all.** Removing a fee
+PMUS never charged and raising the fill probability 9× did not rescue the
+economics, because the requirement is set by the **settlement variance of a
+near-coin-flip binary**, not by execution frictions. The engine still WAITs
+100 % of the time, and still for the right reason: on the PMUS quote-only
+stream there is no trade flow at all, so no tilt can even be fitted
+(`n_train = 0`, `resid_sd = 0.5`), and the gate refuses.
+
+So: the fee claim was wrong and is withdrawn; the fill model was badly wrong
+and is replaced with measured data; **and the conclusion that the binding
+constraint is the settlement forecast is unchanged and now rests on PMUS's own
+fees, PMUS's own windows and our own real fill outcomes.**
+
+## What only a live test can answer
+
+One thing in this system is structurally unmeasurable from any shadow or
+replay, and it is not the probability:
+
+> **P(fill) is unestimable past 32.2 s. L5's median complement gap is 47 s.**
+
+We have never once rested an order at the horizon his behaviour lives at. The
+engine returns `FILL_UNESTIMABLE` there and refuses — correctly, but that means
+the single most load-bearing execution parameter for an inventory strategy that
+rests orders is **outside our evidence, and no replay can extend it.** Resting
+real orders longer is the only instrument that measures it.
+
+That is a maker-only, bounded, directional-exposure-free measurement, and it is
+the next thing worth doing live. It is **proposed, not armed** — see the issue
+comment for the concrete envelope. Nothing in this addendum arms, deploys or
+authorizes anything.
