@@ -3926,6 +3926,114 @@ class InventoryStore:
                 "authority": "VENUE"}
 
 
+class _SelfCheckStore:
+    """A store stub that can answer two questions and do nothing else.
+
+    It holds no transport, no credentials, no file handle and no venue client,
+    so the self-check below cannot submit, cancel, amend or persist anything
+    even if a future edit tried to.
+    """
+
+    __slots__ = ("_res", "_out", "_raise")
+
+    def __init__(self, res: str, out: str = "0", raise_it: bool = False) -> None:
+        self._res, self._out, self._raise = res, out, raise_it
+
+    def residual(self, market: str) -> D:                      # noqa: ARG002
+        if self._raise:
+            raise RuntimeError("unreadable residual (self-check case)")
+        return D(self._res)
+
+    def outstanding_residual(self, market: str) -> D:           # noqa: ARG002
+        if self._raise:
+            raise RuntimeError("unreadable residual (self-check case)")
+        return D(self._out)
+
+
+class _SelfCheckShim:
+    """Carries only `store`, which is all the side-selection logic reads."""
+
+    __slots__ = ("store",)
+
+    def __init__(self, store: "_SelfCheckStore") -> None:
+        self.store = store
+
+
+#: the states that cost 1245z and 0130z, plus the counterexample that must not
+#: change and the flat case that must stay byte-for-byte cheapest-first.
+SELFCHECK_CASES = (
+    # label, residual, outstanding, qty offered, want_leg, want_qty
+    ("1245z up 1.4 / dn 2.8",        "-1.4",  "0", "1.4",  UP,   "1.4"),
+    ("0130z dn 1.87",                "-1.87", "0", "1.87", UP,   "1.87"),
+    ("0145z dn 1.56 (must not move)", "-1.56", "0", "1.56", UP,   "1.56"),
+    ("flat -> cheapest-first",        "0",     "0", "1.4",  DOWN, "1.4"),
+    ("resting complement counted",    "0",    "-2", "2",    UP,   "2"),
+    ("overshoot capped to residual",  "-0.5",  "0", "1.4",  UP,   "0.5"),
+)
+
+
+def residual_side_selfcheck() -> Dict[str, Any]:
+    """Run the DEPLOYED side-selection logic against the recorded states.
+
+    WHY THIS EXISTS. The wrong-side fix is deliberately inert while flat, and a
+    shadow-locked executor can never acquire a residual, because shadow blocks
+    submission and therefore blocks fills. So no shadow window can distinguish
+    the fixed code from the old code, and "observe one correct shadow residual
+    decision" is unsatisfiable by construction. This closes that gap the way
+    `l5_runtime_config_verify` closes it for configuration: by asking the
+    RUNNING PROCESS what its own code does.
+
+    It calls `FaithfulExecutor.probe_leg_order` and `.probe_leg_qty_cap`
+    themselves through an unbound call on a stub, so a PASS is evidence about
+    the deployed methods and not about a reimplementation. It builds no
+    executor, opens no socket, reads no real store, and lifts no lock.
+    """
+    rows: List[Dict[str, Any]] = []
+    legs = {UP: {"price": D("0.45")}, DOWN: {"price": D("0.40")}}
+    cheapest = [DOWN, UP]                       # DOWN is cheaper in `legs`
+    for label, res, out, qty, want_leg, want_qty in SELFCHECK_CASES:
+        row: Dict[str, Any] = {"case": label, "residual": res,
+                               "outstanding": out, "want_leg": want_leg}
+        try:
+            shim = _SelfCheckShim(_SelfCheckStore(res, out))
+            order = FaithfulExecutor.probe_leg_order(
+                shim, "selfcheck-market", legs, list(cheapest))
+            got_leg = order[0] if order else None
+            got_qty = FaithfulExecutor.probe_leg_qty_cap(
+                shim, "selfcheck-market", got_leg, D(qty))
+            row.update(got_leg=got_leg, want_qty=want_qty, got_qty=str(got_qty),
+                       both_legs_once=sorted(order) == sorted([UP, DOWN]),
+                       ok=(got_leg == want_leg and got_qty == D(want_qty)
+                           and sorted(order) == sorted([UP, DOWN])))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            row.update(ok=False, error=type(exc).__name__)
+        rows.append(row)
+    # an unreadable residual must keep today's rule rather than halt
+    try:
+        shim = _SelfCheckShim(_SelfCheckStore("0", "0", raise_it=True))
+        order = FaithfulExecutor.probe_leg_order(
+            shim, "selfcheck-market", legs, list(cheapest))
+        rows.append({"case": "unreadable residual -> cheapest-first",
+                     "want_leg": DOWN, "got_leg": order[0] if order else None,
+                     "ok": list(order) == list(cheapest)})
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        rows.append({"case": "unreadable residual -> cheapest-first",
+                     "ok": False, "error": type(exc).__name__})
+    failed = [r for r in rows if not r.get("ok")]
+    return {"label": "L5_RESIDUAL_SIDE_SELFCHECK", "PASS": not failed,
+            "checked": len(rows), "failed": failed, "cases": rows,
+            "labels": ("exercises the DEPLOYED probe_leg_order / "
+                       "probe_leg_qty_cap through an unbound call on a stub "
+                       "holding only a store. Builds no executor, opens no "
+                       "socket, reads no real store, submits nothing and lifts "
+                       "no lock. An unreadable case FAILS rather than passing "
+                       "silently.")}
+
+
 class FaithfulExecutor:
     """Drives one L5 action through the whole path. Cannot transmit alone."""
 

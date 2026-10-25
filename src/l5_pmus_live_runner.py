@@ -6182,6 +6182,26 @@ def main() -> int:
     # nothing and touches no venue, and it is secret-aware by construction:
     # values are echoed only for allowlisted names and one row exists purely
     # to assert no private key is present in the runtime at all.
+    # THE DEPLOYED SIDE-SELECTION LOGIC, asked of the running process.
+    #
+    # The wrong-side fix is inert while flat by design, and a shadow-locked
+    # executor can never hold a residual (shadow blocks submission, so no fill,
+    # so no inventory). No shadow window can therefore distinguish the fixed
+    # code from the old code, which made "observe one correct shadow residual
+    # decision" unsatisfiable. This answers it the same way the config verifier
+    # answers configuration: by exercising the deployed methods here.
+    #
+    # It submits nothing and lifts nothing: the stub it runs against holds only
+    # a two-reader store, and an unreadable case FAILS rather than passing.
+    try:
+        emit("L5_RESIDUAL_SIDE_SELFCHECK", LX.residual_side_selfcheck())
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        emit("L5_RESIDUAL_SIDE_SELFCHECK",
+             {"label": "L5_RESIDUAL_SIDE_SELFCHECK", "PASS": False,
+              "ran": False, "error": type(_exc).__name__,
+              "detail": T.redact("%s" % _exc)[:200]})
     try:
         emit("L5_EFFECTIVE_RUNTIME_CONFIG", CFGV.verify())
     except BaseException as _exc:                              # noqa: BLE001
