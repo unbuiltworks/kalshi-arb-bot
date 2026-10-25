@@ -106,3 +106,83 @@ PMUS data, not a cap or inventory question.
 **Requirement honoured: production cap stays 0.96, `shadow_lock=true`, `armed=false`,
 `campaign_id=null`, no live order, no deployment, no new service.** No claim of improved
 profitability is made anywhere above.
+
+---
+
+# ADDENDUM — the exact figure, and what the cap actually is
+
+## The direct count, replacing my estimate
+
+I interpolated p10 -> median and estimated our cap refuses ~64% of L5's formations. **The
+file carries the exact count and it is worse:** `within_0_96_at_formation = 141` of 506
+formations = **27.9%**, so **our cap refuses 72.1% of what L5 himself did.** Estimate
+withdrawn, direct count recorded.
+
+## The file states the test, and answers it against us
+
+`first_formation.reads`, written by whoever built the benchmark:
+
+> *"if the median here is already ~0.96 the economics are available at acquisition; if it sits
+> near par they are EMERGENT and a pair-forming gate rejects the entry"*
+
+The median is **0.9900** — near par. **So by the benchmark's own stated criterion the pair
+economics are EMERGENT, and a pair-forming gate rejects the entry.** That is our gate.
+
+## L5 converges imbalance over ~100 fills; we permit 5 contracts and ~4.5 fills
+
+Nested checkpoints (windows *reaching* fill N, so comparable across rows):
+
+| checkpoint | imbalance_rel median | matched pair VWAP | matched qty median | windows |
+|---|---|---|---|---|
+| after 2 | **1.0000** (fully one-sided) | 0.9900 | 0.00 | 512 |
+| after 5 | 0.4999 | 0.9911 | 19.2 | 501 |
+| after 10 | 0.2777 | 0.9938 | 50.24 | 474 |
+| after 40 | 0.1431 | 0.9912 | 311.19 | 349 |
+| after 100 | **0.0761** | **0.9828** | **827.48** | 290 |
+
+He **begins fully one-sided**, takes a median of 3 fills to his first pair (p90 nine), and
+grinds matched VWAP from 0.9938 down to 0.9828 between fills 10 and 100 while carrying a
+median 827 matched contracts, in 290 of 527 windows. We run ~4.5 fills a sequence with a
+5-contract unmatched limit.
+
+## THE SHARP STATEMENT — this is what the cap is
+
+**Our 0.96 is applied as a PRECONDITION for every completion. L5's comparable number is an
+OUTCOME of working inventory over ~100 fills. We require at the first trade what he achieves
+at the hundredth.**
+
+That reconciles the two halves of this document. The cap touches **only completions** (42.16%
+of them) and never an opening or extension, and raising it to 0.99 buys **zero** fidelity
+because `MAX_UNMATCHED_CONTRACTS` absorbs the same 1,892 decisions. The cap is a **symptom of
+the structure, not its cause**: a precondition carved out of one of L5's outcomes.
+
+Raising it to 0.99 would make the *entry gate* faithful. It would not make us L5, who also
+takes ~20x our fill count and converges imbalance over a horizon we never reach.
+
+## A caveat recorded so neither session quotes it
+
+`final` reports matched pair VWAP median **0.9603** — almost exactly our cap — and it is
+tempting to call 0.96 "L5's destination". **It must not be read that way.** Unlike `after_N`,
+`final` takes `rows[-1]` of every window (n=527), mixing a 3-fill endpoint with a 400-fill
+one, so it is not on the same axis as the nested series (after_100 is n=290). The clean trend
+only reaches **0.9828** by fill 100. Direction supports the reading; that figure does not
+establish it.
+
+## Peer corrections resolved
+
+The peer **withdrew** their residual-drift *mechanism* on both objections: the confound (a
+large adverse move causes residual and loss alike, and the stratification controls for
+nothing) and the self-contradiction (their own sweep reversed, when the mechanism predicts
+improvement). The **drift number survives as evidence about SELECTION, not about carrying** —
+L5 carries fully one-sided inventory routinely and is profitable. My strata reconciliation
+(−82.19 over 326 windows vs −85.2296 over 355, leaving 29 windows and $3.04 of fractional
+residuals) is accepted; the 3+ figure is a stratum mean, not a decomposition.
+
+## Standing conclusion, unchanged
+
+**Fidelity: 0.99 buys nothing (0.04% -> 0.04%). Economics: unresolved and negative so far.**
+The binding constraint is inventory scale (~23x) against a residual whose drift is measured
+negative for us. Chasing fidelity through the unmatched limit would scale a measured loss.
+
+**Cap stays 0.96. `shadow_lock=true`, `armed=false`, `campaign_id=null`. No live order, no
+deployment, no new service, no profitability claim.**
