@@ -1928,3 +1928,27 @@ deploy: 2026-10-24T21:30Z CAMPAIGN PREPARATION, NO ARMING. (1) Emit L5_EFFECTIVE
 deploy: 2026-10-24T21:20Z MANDATE PREP, NO ARMING: add the two-sided probe's own scope to the in-container config verifier as OBSERVED rows -- two_order_pair_enabled, active, named_market, opening_leg_max_contracts, round_allocations, min_first_leg_own_price, order_ttl_s, entry/complete cutoffs, min_entry_runway_s. These are mandate parameters (order size, and whether BOTH legs may rest at once) and none was readable in-container, so a campaign's stated size could only be asserted from module defaults instead of read from the running process. Observed, not graded. NOTHING ARMED.
 deploy: 2026-10-24T22:30Z EXECUTOR REPORTING ONLY: L5_MANDATE_STORE_PROBE at boot. Fetches the watchdog's mandate_floor.json and mandate_revocations.json over the REAL GET-only clients the arming gate uses, and reports whether they exist, parse, carry a usable asof_utc and sit inside the 900s staleness bound. It exists because those documents are on private networking and the watchdog has no public domain, so the executor is the only client that can reach them -- without it "the endpoints work" could only be inferred from the watchdog's own log. Authorizes nothing, submits nothing, writes nothing; pinned by a test on the code object. Also: the $2.00 worst-case deficit bound now has B7-specific tests (2-contract dear clip allowed, 3-contract dear strand refused, same 3 cheap allowed, simultaneous fills not refused, pending cancellation charged, unestablished bound refused). NO LIMIT IS SET BY THIS DEPLOY and nothing is armed.
 deploy: 2026-10-24T22:35Z EXECUTOR REPORTING ONLY: make max_worst_case_deficit_usd an OBSERVED row in the in-container config verifier. It graded 23 limits and the one NEW risk control of this campaign was not among them, so its value could only be asserted rather than read. Reported through the money path's own parser, so a value that would be fatal at boot shows up as the refusal it is. No limit is set by this deploy and nothing is armed.
+
+# 2026-10-25 — owner-authorized SHADOW-ONLY deployment of the wrong-side residual
+# lifecycle fix, ahead of a three-window maker-only BTC15m live validation.
+#
+# CODE: src/l5_live_execution.py only, +68/-1, exactly the tested fix in
+# 0febc315. `git diff --stat 0febc315..HEAD -- src/ tests/ deploy/` is EMPTY,
+# so nothing else in the engine moved. probe_leg_order derives the complement
+# side from the PROSPECTIVE signed residual (realized + outstanding, so filled,
+# partial, pending and resting all count); probe_leg_qty_cap caps a reducing leg
+# at abs(residual) so it cannot overshoot into a reversal. Cheapest-first is
+# preserved byte-for-byte when flat and on any read error.
+#
+# 22 new tests reproduce the 1245z and 0130z wrong-side states and pin 0145z
+# unchanged. Full regression 58 failed / 13,351 passed / 23 errors -- exactly
+# the established baseline, zero new failures.
+#
+# NO new capability: maker-only, no taker path exists, no budget or limit moved.
+# Round retirement deliberately NOT loosened.
+#
+# BOTH TRADING LOCKS ON FOR THIS DEPLOY: L5_SHADOW_ONLY=1 (set before this
+# push, deploy skipped) and the campaign approval is spent and expired
+# (windows 8/8, not_after 2026-10-25T15:15:00Z). Arming is a separate, later
+# act requiring a fresh approval payload.
+deploy: 2026-10-25T15:20Z shadow-only — wrong-side residual lifecycle fix
