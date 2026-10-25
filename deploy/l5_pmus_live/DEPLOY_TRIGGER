@@ -1982,3 +1982,45 @@ deploy: 2026-10-25T15:20Z shadow-only — wrong-side residual lifecycle fix
 # the campaign approval is spent and expired. Arming is a separate later act
 # requiring a fresh payload.
 deploy: 2026-10-25 shadow-only — residual-side boot self-check
+
+# ---------------------------------------------------------------------------
+# DEPLOY: the fill-horizon probe, SHIPPED UNARMED AND FAIL-CLOSED.
+#
+# WHAT IS ADDED. src/pmus_fill_horizon_probe.py (stdlib only, no transport, no
+# order path) plus ONE additive emission in the entrypoint's boot block, beside
+# the existing self-checks:
+#     emit("PMUS_FILL_HORIZON_PREFLIGHT", FHP.preflight())
+# It reads three environment flags, recomputes the probe's own worst-case bound
+# from module constants, and reports why it is not armed. It echoes no secret:
+# the flags are an arm flag and an authorization label, not credentials.
+#
+# WHY IT IS EMITTED AT BOOT rather than read from outside. The same reason
+# L5_EFFECTIVE_RUNTIME_CONFIG exists: the only arming state that matters is the
+# one the running process actually has, and those variables cannot be read
+# externally without handling secrets. The process reports its own verdict.
+#
+# NOTHING IS ARMED BY THIS DEPLOY, and nothing can be. The probe requires
+# PMUS_FILL_HORIZON_LIVE=YES, PMUS_FILL_HORIZON_AUTH matching
+# EXPECTED_AUTH_ID -- a constant in this build -- and a non-absent expiry.
+# None of the three is set. The identifier lives in the build precisely so that
+# neither half of the control can be supplied by the same party: this change
+# installs the code half only. L5_SHADOW_ONLY and the existing L5_LIVE_AUTH_*
+# envelope are untouched, as is every other executor.
+#
+# A BUG THIS DEPLOY ALMOST SHIPPED, caught by the existing tests. The new
+# import put the module inside the entrypoint's reachable closure, which
+# test_the_image_copies_every_module_the_entrypoint_can_reach and the three
+# image-closure tests immediately failed on -- without the matching
+# `COPY src/pmus_fill_horizon_probe.py`, the container would have died at boot
+# with ImportError. The Dockerfile closure is updated in the same commit.
+#
+# REGRESSION, measured on the same machine at both commits, on the live-runner
+# and continuous selection (1,100 tests):
+#   base cabd2621 : 0 failed, 1,058 passed, 14 errors
+#   this commit   : 0 failed, 1,088 passed, 14 errors   (+30 = the new tests)
+# Zero new failures, zero new errors. The 14 errors are
+# tests/test_pmus_status_live_handoff.py, pre-existing and identical at base.
+#
+# THE 20-WINDOW / $90-WORST-CASE PROBE REMAINS UNAUTHORIZED. Arming it is a
+# separate owner act. This deploy only makes the preflight observable.
+deploy: 2026-10-25 shadow-only — fill-horizon probe, UNARMED

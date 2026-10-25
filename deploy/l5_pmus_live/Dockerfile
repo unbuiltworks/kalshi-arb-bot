@@ -69,6 +69,18 @@ COPY src/l5_book_evidence.py src/l5_book_evidence.py
 # no order path, and cannot arm, submit or cancel -- asserted by
 # test_nothing_in_the_verifier_can_submit_arm_or_reach_a_venue.
 COPY src/l5_runtime_config_verify.py src/l5_runtime_config_verify.py
+# The fill-horizon probe. Shipped for the SAME reason as the verifier above:
+# the only arming state that matters is the one the RUNNING process has, and
+# the flags that decide it cannot be read from outside without handling
+# secrets. The entrypoint emits its unarmed preflight at boot, so the module
+# has to be importable in here.
+#   python3 -m src.pmus_fill_horizon_probe        (preflight only, places nothing)
+# Stdlib only, no transport, no order path, and its own main() deliberately
+# never calls run_one_window. Its envelope is module constants rather than
+# environment variables, so this file is part of what bounds it. NOT ARMED:
+# EXPECTED_AUTH_ID is a constant in the build and a human installs the
+# matching flag, so neither half of the control comes from one party.
+COPY src/pmus_fill_horizon_probe.py src/pmus_fill_horizon_probe.py
 # Ed25519 owner-mandate VERIFICATION. Verification only: the private key is
 # not in this repository, not in Railway and not in any environment the
 # executor can read, and `MANDATE_PUBKEYS` ships EMPTY so nothing verifies

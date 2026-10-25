@@ -55,6 +55,7 @@ from src import l5_maker_fill_model as FM
 from src import l5_two_sided_shadow as TS
 from src import l5_campaign_approval as CAMP
 from src import l5_runtime_config_verify as CFGV
+from src import pmus_fill_horizon_probe as FHP
 from src import l5_cancel_mechanism as MECH
 from src import l5_pmus_auth_book as AB
 from src import l5_pmus_realtime_observer as OBS
@@ -6212,6 +6213,34 @@ def main() -> int:
         emit("L5_EFFECTIVE_RUNTIME_CONFIG",
              {"label": "L5_EFFECTIVE_RUNTIME_CONFIG", "PASS": False,
               "ran": False, "error": type(_exc).__name__,
+              "detail": T.redact("%s" % _exc)[:200]})
+    # THE FILL-HORIZON PROBE'S UNARMED PREFLIGHT, asked of the running process.
+    #
+    # Same reason as the configuration verifier above: the only arming state
+    # that matters is the one this process actually has, and the variables that
+    # decide it cannot be read from outside without handling secrets. So the
+    # process reports its own verdict, here, at boot.
+    #
+    # It is READ-ONLY and ARMS NOTHING. `preflight()` reads three environment
+    # flags, recomputes the probe's own worst-case bound from module constants,
+    # and returns why it is not armed. It holds no venue handle and cannot
+    # reach an order path; `main()` in that module deliberately never calls
+    # `run_one_window`. No secret is echoed -- the flags it reports are an arm
+    # flag and an authorization label, not credentials.
+    #
+    # Expect "armed": false until an owner installs the matching flag. The
+    # authorization identifier is a constant in this build precisely so that
+    # neither half of the control can be supplied by the same party.
+    try:
+        emit("PMUS_FILL_HORIZON_PREFLIGHT", FHP.preflight())
+    except BaseException as _exc:                              # noqa: BLE001
+        if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        # An arming state we cannot establish is a FAILED check, never a
+        # silent pass -- the same rule every other boot row here follows.
+        emit("PMUS_FILL_HORIZON_PREFLIGHT",
+             {"label": "PMUS_FILL_HORIZON_PREFLIGHT", "ran": False,
+              "armed": False, "error": type(_exc).__name__,
               "detail": T.redact("%s" % _exc)[:200]})
     # THE BOUNDED CANCELLATION-MECHANISM MODE, chosen once and announced.
     # It REPLACES the trading tick: see Runner.mechanism_tick for why the
