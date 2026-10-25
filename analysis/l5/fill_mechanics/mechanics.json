@@ -1,0 +1,41 @@
+{
+ "windows": 5502,
+ "fills": 677518,
+ "first_fill_s": {
+  "10": 6,
+  "50": 16,
+  "90": 106
+ },
+ "both_sides_live_s": {
+  "10": 13,
+  "50": 58,
+  "90": 204
+ },
+ "swept_ladder_window_share": 0.9262,
+ "ladder_prices_in_one_second": {
+  "10": 2,
+  "50": 2,
+  "90": 3
+ },
+ "levels_per_side": {
+  "10": 11,
+  "50": 23,
+  "90": 40
+ },
+ "gap_s": {
+  "10": 0,
+  "50": 2,
+  "90": 16
+ },
+ "contracts_per_fill": {
+  "10": 2.0,
+  "50": 13.06,
+  "90": 46.34
+ },
+ "peak_cash_at_risk_usd": {
+  "10": 47.325102999999956,
+  "50": 130.24476900000172,
+  "90": 214.25211899999977
+ },
+ "labels": "fill times are OBSERVED; submit times and queue positions are NOT in this data and are not claimed. a same-second two-price fill on one side cannot come from one order, which is the only direct evidence of a resting ladder available."
+}
