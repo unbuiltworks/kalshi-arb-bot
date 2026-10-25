@@ -78,3 +78,6 @@ analysis/gemini/p10_capture/
 # L5: data/l5_master is a 375MB derivation of data/l5/raw (the source of
 # truth), rebuilt on demand by scripts/l5_settlement_decomposition_audit.py.
 data/l5_master/
+
+# derived, 28MB, rebuilt by analysis/l5/taker_entry/extract.py
+analysis/l5/taker_entry/windows.json
