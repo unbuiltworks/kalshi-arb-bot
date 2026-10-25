@@ -120,3 +120,102 @@ The alternative — raising the pair ceiling to 0.98 so the validated version ca
 separate risk change I have not made and would not recommend on current evidence: I tested the
 ceiling and returned FAIL, and verified by execution that above 0.99 it is inert while at
 one-cent spreads it is worth exactly one tick.
+
+---
+
+# FINISHED EVALUATION — **FAIL**, and the blocker is not the flag
+
+Three things were outstanding. All three are now closed, and one of them retracts my own proposal
+from the previous turn.
+
+## A. My "cap-respecting reprice" is withdrawn — it is vacuous
+
+I proposed re-posting only at a price that still clears 0.96. Tested against the replay's own 15
+rows:
+
+| | |
+|---|---|
+| reprices that move **UPWARD** (pay more) | **15 of 15** |
+| resting COMPLETE orders legal under the deployed 0.96 cap | **3 of 15** |
+| rows with any price both **legal** and **closer to the touch** | **2 of 15** |
+
+Every observed reprice pays more, because the trigger is the touch moving up. A cap that forbids
+paying more therefore forbids the move itself. The two surviving rows allow 1–2 cents of travel.
+**Withdrawn.**
+
+The deeper fact: **12 of 15 of these COMPLETE orders would never have rested at all** under the
+deployed cap — pair at our own resting price is already 0.98–1.16. The replay's population is
+mostly unreachable for us before repricing is even considered.
+
+## B. Does repricing improve fill probability enough? **The gain was never measured; all three costs were**
+
+| term | measured? | value |
+|---|---|---|
+| **fill-probability gain** | **NO** | the replay measured `book_reached_requote_px` = **45 of 72 (62.5%)** — price **reachability**, not fill. Queue position is not published, so reached ≠ filled. The numerator of the question has no measurement anywhere in the evidence base |
+| lost queue priority | yes | **79.0%** of moves enter a **deeper** queue, median **4.3x**, p90 46.2x — and at the **back** of it (n=501 live venue books) |
+| above-par cost | yes | **−$1.7128**, −$0.0317/unit, 10 of 15 above par |
+| additional adverse selection | yes, by construction | every reprice is **upward**: the touch moved up because our complement got more expensive, and the rule buys it immediately after. The trigger *is* an adverse-selection event |
+
+**Answer: no.** An unmeasured gain against three measured costs.
+
+## C. The economics against the deployed $5 envelope — the real blocker
+
+Venue-confirmed openings (acquisition and realized are venue-confirmed; the completion column is a
+**counterfactual**, not a shadow fill):
+
+| window | px | units | basis | realized | lost 100% of basis | completion @0.99 |
+|---|---|---|---|---|---|---|
+| 1245z | 0.57 | 1.4 | 0.7980 | −0.2940 | no | +0.0140 |
+| 1300z | 0.63 | 1.26 | 0.7938 | **−0.7938** | **YES** | +0.0126 |
+| 1315z | 0.46 | 1.63 | 0.7498 | +0.0815 | no | +0.0163 |
+| 1330z | 0.33 | 1.29 | 0.4257 | +0.2130 | no | +0.0129 |
+| 1345z | 0.58 | 1.5 | 0.8700 | −0.7206 | no | +0.0150 |
+| 1400z | 0.23 | 1.11 | 0.2553 | +0.0555 | no | +0.0111 |
+| 1945z | 0.44 | 1.56 | 0.6864 | **−0.6864** | **YES** | +0.0156 |
+
+- venue-confirmed acquisition **$4.5790**, venue-confirmed realized **−$2.1448 (−46.8%)**
+- completing only the two full-basis losses: **+$1.5084 → portfolio −$0.6364**, still negative
+- **PERFECT completion of all seven at pair 0.99: +$0.0975 total**
+
+That last line is the ceiling of the entire mechanism at this envelope:
+
+| | |
+|---|---|
+| per window | **+$0.0139** |
+| x 96 windows/day | **+$1.34/day** |
+| against the objective | **0.28% of $480/day** |
+
+**9.75 units of inventory x $0.01 locked per pair is all there is.** A maker pair at a one-cent
+spread earns a cent, the PMUS maker fee is zero, and the rebate rounds to $0.00 at these prices.
+No version of the completion mechanism — repriced, capped, uncapped, perfectly executed — clears
+one half of one percent of the objective at a $0.80 clip.
+
+## THE EXACT BLOCKER
+
+Not the flag. Not the 0.96 cap. **Clip size against a fixed per-pair margin.** The margin is set by
+the book (a one-cent spread pays one cent); the clip is set by the $0.80 opening notional. Their
+product is $0.0139/window, and the objective is 345x that.
+
+## THE SMALLEST CHANGE THAT RESOLVES IT
+
+Capital, not code — and two independent routes agree on the size:
+
+| route | requirement |
+|---|---|
+| idealised $0.01/pair | 500 pairs/window → **~$495 gross outlay/window** |
+| **L5's measured blended 1.107% of turnover** | **$43,360/day → ~$452/window** |
+| L5's measured settlement edge alone, 0.185% | $259,459/day → $2,703/window |
+
+The first two agree within ~10% and both say **~90–100x the deployed $5 envelope**. The third says
+that without incentive income the objective is out of reach by another order of magnitude — which
+is the same conclusion the economic decomposition reached from the other direction, and it is why
+the reward line matters more than any completion rule.
+
+(The $0.01/pair route is an idealisation and **overstates**: L5's median *final* VWAP pair cost is
+0.9709, not every unit of turnover is a matched pair, and his measured settlement edge is 0.185%.
+Route B is the authoritative one.)
+
+## What I did not do
+
+No flag armed, no code changed, no deployment, no risk limit touched, no new service, no branch.
+Production remains shadow-only with `armed=false` and the Oct 25 campaign expired and not re-armed.
