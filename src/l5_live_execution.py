@@ -1852,6 +1852,42 @@ class InventoryStore:
                 return None          # an unreadable row makes the sum unknown
         return total
 
+    def l5_realized_today(self, day_utc: Optional[str] = None) -> Optional[D]:
+        """Attested L5 settlement P&L for ONE UTC DAY, or None without a baseline.
+
+        Identical population and attestation rule to
+        l5_realized_since_baseline -- post-baseline and
+        l5_owner_attribution_verified only -- narrowed to settlements stamped
+        with `day_utc` (default: today, UTC).
+
+        It exists because the ceiling named L5_DAILY_LOSS_LIMIT used to read the
+        cumulative post-baseline figure, so a "daily" budget never reset. This
+        is the day-scoped measure that ceiling now reads. It does NOT replace
+        or relax l5_realized_since_baseline, which the independent cumulative
+        ceiling still reads in full.
+        """
+        base = self.state.get("l5_baseline")
+        if not isinstance(base, Mapping) or not base.get("t"):
+            return None
+        t0 = str(base["t"])
+        day = (day_utc or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d"))
+        total = D(0)
+        for _mkt, row in (self.state.get("retired_markets") or {}).items():
+            if not isinstance(row, Mapping):
+                continue
+            stamp = str(row.get("t") or "")
+            if stamp <= t0:
+                continue
+            if not stamp.startswith(day):
+                continue
+            if not row.get("l5_owner_attribution_verified"):
+                continue
+            try:
+                total += D(str(row.get("settlement_pnl") or 0))
+            except (InvalidOperation, TypeError, ValueError):
+                return None          # an unreadable row makes the sum unknown
+        return total
+
     def l5_baseline_lines(self) -> Dict[str, Any]:
         """Everything an operator needs to judge the baseline, apart."""
         base = self.state.get("l5_baseline")
@@ -5151,6 +5187,7 @@ class FaithfulExecutor:
                 cumulative_realized=self.store.realized_today(),
                 verified_strategy_net=self.store.verified_l5_net_for_gates(),
                 l5_scoped_realized=self.store.l5_realized_since_baseline(),
+                l5_scoped_realized_today=self.store.l5_realized_today(),
                 # ADDITIVE and INERT until the ceiling is configured.
                 # `cumulative_realized` above still carries the LIFETIME
                 # account-wide figure and still gates on it; this supplies the
@@ -6012,6 +6049,7 @@ class FaithfulExecutor:
                     cumulative_realized=self.store.realized_today(),
                     verified_strategy_net=self.store.verified_l5_net_for_gates(),
                 l5_scoped_realized=self.store.l5_realized_since_baseline(),
+                l5_scoped_realized_today=self.store.l5_realized_today(),
                     cumulative_unrealized_loss=(
                         self.unrealized_loss_for_gates()),
                     available_cash_usd=self.available_cash_usd,
