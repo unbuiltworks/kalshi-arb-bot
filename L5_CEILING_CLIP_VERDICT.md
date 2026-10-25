@@ -136,3 +136,84 @@ Concretely, and in this order:
 
 Requirement 8 is satisfied by doing nothing to production: `armed=false`, `shadow_lock=true`,
 `campaign_id=null`, cap unchanged at 0.96.
+
+---
+
+# ADDENDUM — the peer widened n and the result REVERSED. FAIL is now empirical.
+
+Commit `9ce6dd0b`. Harvested four more hours from the running collector: 19 -> 27 windows,
+10 -> 14 OOS. **The central finding reversed sign at every clip.**
+
+| marginal effect of 0.96 -> 0.99 | clip 1.56 | clip 2.50 | clip 5.00 |
+|---|---|---|---|
+| n=10 OOS | +0.0897 | +0.1438 | +0.2875 |
+| **n=14 OOS** | **−0.1576** | **−0.2525** | **−0.5050** |
+
+Worst seed negative on both runs and worse at n=14: −1.0920, −1.7500, −3.5000.
+
+**This is the outcome §2 predicted.** I argued the +$0.9212 was ≥49% residual settlement
+variance rather than completion economics, and that re-running would therefore land
+differently. It did, and it landed on the other side. **The FAIL verdict is no longer an
+argument from arithmetic; it is an observed reversal.**
+
+## It inverts the shared thesis, and that has to be recorded
+
+**At n=14, more completion produced LESS money.** Clip 5: the 0.96 arm matched 10.6 windows
+for **+2.8237**; the 0.99 arm matched 11.3 windows for **+2.3188**. If completion were the
+money, that could not happen.
+
+Both this session and the peer independently converged on "the money is in completion, not
+capture", and I reported it upward as the better-supported reading. **It is withdrawn as
+established.** It remains the best available hypothesis and the residual decomposition still
+implies it, but the first real test did not cooperate and at n=14 it points mildly the wrong
+way. The peer's own caution is worth preserving verbatim in substance: *agreement between two
+sessions is not evidence; we were agreeing about a hypothesis.*
+
+## Power: their number supersedes mine
+
+| | quantity | sd | n required |
+|---|---|---|---|
+| mine (§3) | total pair income/window vs zero, 0.0468 | 0.2733 | 267 at 80% |
+| **theirs** | **marginal difference between arms, 0.0113** | **0.1604** | **~812 at 2 sigma** |
+
+Checked: `(2 x 0.1604 / 0.0113)^2 = 806`, and 806/96 = 8.4 days — matches their ~812 / ~8.5
+days, and all three clips independently agree at ~811. **Theirs is the correct quantity**: the
+experiment asks whether two ceilings differ from each other, not whether pair income differs
+from zero. ~812 windows is **~8.5 days** of continuous single-series collection.
+
+## A known gap worth recording: every Kalshi number here rests on an unsourced fee rate
+
+Verified independently at the peer's prompting, and the asymmetry is real:
+
+| | Kalshi | PMUS |
+|---|---|---|
+| venue capture | **NONE** | `analysis/pmus/pmus_published_fee_schedule.json`, **99 rows** with source/effective/formula/thetas |
+| validation | none | **20 tests** in `tests/test_pmus_fees.py` |
+| what exists | `config/settings.py:63 TAKER_FEE_RATE = 0.07` and a docstring in `src/fee_calc.py` — repo assertions only | row-by-row validated |
+
+So **every Kalshi economic figure in this repo rests on an unverified fee rate**, including the
+130-window baselines and the peer's own Kalshi adverse-selection measurement. Not necessarily
+wrong — **unsourced**. This is why the `PER_ORDER` relabel kept "reportedly" rather than
+claiming a source.
+
+## Revised next action — same action, different and stronger justification
+
+§6 proposed measuring the achievable strand rate on the premise that completion is where the
+money is. **That premise is now weakened, but the action survives and matters more**, for a
+reason that does not depend on it:
+
+**The residual variance is what blocks every P&L question, not just this one.** A completed
+pair is worth ~1.5 cents; an unmatched residual carries ~$0.44 of zero-mean sd at clip 1.56 —
+about thirty times the effect. So which arm "wins" is decided by residual luck. If the strand
+rate can be driven near zero the variance collapses and the economics become measurable at
+small n; if it cannot, **no P&L question on a single series is resolvable by analysis at all**,
+whatever the ceiling.
+
+Strand rate is a **proportion**, so it is measurable at n=27 where a cent is not.
+
+That reframes the program's open question exactly as both sessions now independently reach it:
+**the per-window edge is too small relative to residual variance for analysis to settle on one
+series.** That is an argument for concurrency and capital — the owner's decision — and not for
+more sweeping by either of us.
+
+**Production untouched: `armed=false`, `shadow_lock=true`, `campaign_id=null`, cap 0.96.**
