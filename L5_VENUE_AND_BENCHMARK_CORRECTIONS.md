@@ -190,3 +190,68 @@ venue's published schedule, in opposite directions. `src/pmus_fees.py` is the ef
 reconciled source of truth. The replay harnesses in `analysis/adverse_entry/` carry their own
 `TAKER_THETA` / `MAKER_THETA` / `PER_ORDER` constants and operate on **Kalshi** tape; their
 outputs must never be quoted as PMUS economics. Warning headers have been added to all four.
+
+## 7. The ceiling sweep result — the answer is "set it to 0.99", not "raise it"
+
+Peer session ran the 2-D sweep (`30087e14`, `L5_PMUS_CEILING_SWEEP_RESULT.md`): ceiling
+{0.96, 0.99, 1.004, 1.008} x clip {1.56, 2.5, 5}, chronologically out of sample, measured
+per-leg P(fill) 0.4325, proper residual settlement.
+
+### My consistency check failed, and that sharpened the result
+
+I predicted the 1.004 and 1.008 arms at clip 1.56 would come back negative, since the
+break-even ceiling there is exactly 1.0000. They came back **positive (+0.8367)**. The model
+is not broken — **my check tested the wrong quantity.**
+
+**A ceiling is a permission, not a price.** The market offers a pair at `1 - spread`, and
+**0 of 228 OOS frames offer one above 1.0000** (max 0.9900). Independently confirmed on my own
+slice: 42 frames, max offered pair **0.9900**, zero frames above 1.0000. So a 1.004 ceiling
+permits something never on offer; its cell completes at 0.99 and is positive for that reason.
+
+Restated as the **marginal** effect of loosening, it passes exactly as predicted:
+
+| clip (break-even) | 0.96 -> 0.99 | 0.99 -> 1.004 | 1.004 -> 1.008 |
+|---|---|---|---|
+| 1.56 (1.0000) | **+0.0897** | −0.0845 | 0.0000 |
+| 2.50 (1.0080) | **+0.1438** | −0.1354 | 0.0000 |
+| 5.00 (1.0080) | **+0.2875** | −0.2708 | 0.0000 |
+
+Loosening **into** the offered range pays; past break-even it costs; beyond what the market
+offers it is **exactly inert**. All three signs right at all three clips. That 0.99 -> 1.004
+costs anything at all is correctly located: the completion test is
+`held + own_complement <= ceiling` where `held` is the **realized** first-leg cost, not the
+current touch, so raising the ceiling permits completing windows whose first leg filled
+expensively — precisely the marginal ones.
+
+### The result
+
+| ceiling | clip | matched windows /10 | net | sd | worst seed |
+|---|---|---|---|---|---|
+| 0.96 | 1.56 | 7.9 | +0.8315 | 0.695 | −0.5928 |
+| **0.99** | **1.56** | **8.9** | **+0.9212** | **0.528** | **−0.1560** |
+| 0.96 | 5.00 | 7.9 | +2.6650 | 2.228 | −1.9000 |
+| **0.99** | **5.00** | **8.9** | **+2.9525** | **1.691** | **−0.5000** |
+
+**0.99 is optimal at every clip, with identical ordering across all three.** The finding
+locates a **value**, not a direction: 0.99 is the modal offered pair cost. Confirmed on my
+slice — a 0.96 ceiling accepts 9.5% of offered frames, 0.99 accepts 100%, and 1.004 accepts
+no more than 0.99 does because nothing above it is ever offered.
+
+### How weak this is — quote this, not the headline
+
+- **n = 10** OOS windows from one ~7-hour slice
+- at the best cell **sd 1.691 against a mean of 2.9525 — 57%**
+- **worst seed is NEGATIVE** at every cell (−0.1560 at clip 1.56, −0.5000 at clip 5)
+- fills are a **Bernoulli draw on a measured rate**, not observed fills
+- capacity: 0.295/window at clip 5 is about **$28/day** on one series; **$480/day needs ~17x
+  more**, and a clip-5 pair costs ~$5.00 — **the entire authorized $5 aggregate exposure**, so
+  that cell is not executable under current limits at all
+
+**Suggestive, not established.** The peer's own decision rule, which I endorse: adopt only if
+net stays positive **with a worst seed above zero** on a materially larger sample. At n=10
+with a negative worst seed it does not meet that bar. **Neither of us is proposing the cap
+change.**
+
+Earlier framing corrected: I had reported the gap as three-to-four orders of magnitude from
+the venue ranking. With an economic number it is ~17x on one series — better, and still a gap
+this evidence does not justify closing.

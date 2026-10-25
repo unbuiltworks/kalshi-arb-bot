@@ -11,6 +11,14 @@ inverted the sign of a 0.99 completion).
 
 For PMUS economics use src/pmus_fees.py (effective-dated, reconciled against all
 99 published rows) and src/pmus_incentive_audit.rebate_at for credited rebates.
+
+PER_ORDER IS KEPT, RELABELLED, NOT ZEROED. It is best read as a per-ORDER
+ROUNDING ALLOWANCE rather than a venue fee: Kalshi's published taker fee is
+reportedly ceil(0.07*C*p*(1-p)) with no additive term, the same shape as
+pmus_fees._fee. That reading is UNVERIFIED here -- this container has no network
+to either venue's fee page -- so the constant stays at its measured value because
+zeroing it would bias these Kalshi results optimistic. Mislabelling it as a fee is
+what caused the 2026-10-25 error; the value was never the problem.
 """
 """Timestamp-causal replay: maker-open vs taker-open, on independent Aug-2026 windows.
 
