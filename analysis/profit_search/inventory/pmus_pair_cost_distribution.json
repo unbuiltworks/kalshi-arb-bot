@@ -1,0 +1,16 @@
+{
+ "venue": "PMUS",
+ "windows": 19,
+ "frames": 407,
+ "controller_cap": "0.96",
+ "empirical_breakeven": [
+  "1.004",
+  "1.008"
+ ],
+ "median_pair_cost": 0.99,
+ "pct_accepted_by_cap": 0.0,
+ "pct_refused_but_inside_breakeven": 100.0,
+ "pct_above_breakeven": 0.0,
+ "windows_with_any_frame_under_cap": 0,
+ "windows_total": 19
+}
