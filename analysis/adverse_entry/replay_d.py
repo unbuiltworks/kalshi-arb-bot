@@ -1,3 +1,17 @@
+"""!! VENUE WARNING -- KALSHI DATA, KALSHI CONSTANTS, NOT PMUS !!
+
+This harness reads analysis/adverse_entry/windows.json, which is KALSHI tape
+(analysis/l5/taker_entry/extract.py filters venue == 'kalshi'; the series are
+KX*). Its TAKER_THETA / MAKER_THETA / PER_ORDER constants are local to this
+harness and are NOT the PMUS schedule. In particular PER_ORDER has NO PMUS
+equivalent: src/pmus_fees._fee is purely theta * C * p * (1-p) with no additive
+term. Quoting any per-contract or per-pair figure from this file as PMUS
+economics produced a real error on 2026-10-25 (a phantom $0.02/pair that
+inverted the sign of a 0.99 completion).
+
+For PMUS economics use src/pmus_fees.py (effective-dated, reconciled against all
+99 published rows) and src/pmus_incentive_audit.rebate_at for credited rebates.
+"""
 """Timestamp-causal replay: maker-open vs taker-open, on independent Aug-2026 windows.
 
 Own-cost convention throughout. The wire is YES.

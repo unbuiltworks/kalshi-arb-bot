@@ -137,34 +137,56 @@ This also closes the `possible_misses: 0` contradiction. Both figures were hones
 was missed, everything was declined, by configuration.** The 1945z lifecycle is the confirming
 case — `COMPLEMENT_PAIR_ABOVE_CAP` 12 with `order_resting FALSE` at close.
 
-### The ceiling is a function of clip size, because the rebate is a step
+### CORRECTED — the ceiling moves with clip size, but 0.99 pays at EVERY clip
 
-`net/pair = q*(1-pair) - 2*$0.01 + rebate(leg1) + rebate(leg2)`
+**I first published this table with a $0.02/pair per-order fee and concluded that a 0.99
+completion LOSES $0.0044 at the authorized clip. That was wrong and is withdrawn.** The
+$0.01/order came from `analysis/adverse_entry/replay_c.py`'s `PER_ORDER` — a **Kalshi harness
+constant** — which I applied to a PMUS calculation. The peer session caught it (`8f1ccd5e`);
+it is the same phantom fee they had themselves found and withdrawn earlier in `569c42d8`.
 
-| q per leg | rebate/pair | fees/pair | break-even ceiling | net at pair 0.99 |
-|---|---|---|---|---|
-| **1.56** (authorized clip) | **$0.00** | $0.02 | **0.9872** | **−$0.0044 LOSS** |
-| 2.00 | $0.02 | $0.02 | 1.0000 | +$0.0200 |
-| 3.00 | $0.02 | $0.02 | 1.0000 | +$0.0300 |
-| 5.00 | $0.04 | $0.02 | 1.0040 | +$0.0700 |
-| 10.00 | $0.06 | $0.02 | 1.0040 | +$0.1400 |
+Verified here independently before accepting: **`src/pmus_fees._fee` is purely
+`theta * C * p * (1 - p)`** — no additive term, no flat component anywhere in that module,
+which is effective-dated and reconciled against all 99 published rows. And the committed
+1.004-1.008 ceiling reproduces exactly at **zero** per-pair fee (1.004 from a one-cent-a-leg
+credit, 1.008 from two), which is how `PMUS_INCENTIVE_BREAKEVEN.md` describes the range; with
+a $0.01/order fee the same inputs would give 1.000 and 1.004 instead.
 
-The 1.004-1.008 ceiling is the **q=5** answer. At the authorized $0.80 opening notional the
-clip is ~1.56-2.7 contracts, where the rebate rounds to zero, the ceiling falls to **~0.987**,
-and a 0.99 completion **loses $0.0044** because two per-order fees exceed a cent of spread on
-1.56 contracts. It needs **q >= 2.0 contracts per leg** just to cover the per-order fee at a
-0.99 pair.
+`net/pair = q*(1-pair) + credited_rebate(leg1) + credited_rebate(leg2)`
 
-**So raising the cap to 1.00 at the currently authorized clip does not make completion
-profitable.** Ceiling and clip size are not separable, and a ceiling sweep at a fixed small
-clip measures the wrong thing.
+| q per leg | credited/pair | ceiling | net at pair 0.99 |
+|---|---|---|---|
+| **1.56** (authorized clip) | $0.00 | **1.0000** | **+$0.0156** |
+| 2.00 | $0.02 | 1.0100 | +$0.0400 |
+| 2.70 | $0.02 | 1.0074 | +$0.0470 |
+| 5.00 | $0.04 | 1.0080 | +$0.0900 |
+| 10.00 | $0.06 | 1.0060 | +$0.1600 |
 
-### Size of the prize, stated so it cannot be misread
+**A 0.99 completion is profitable at every clip, including the authorized 1.56.**
 
-A 0.99 pair redeems 1.00, so it is **about one cent per completed pair**, maker fee zero,
-rebate rounding to nothing at authorized clips. At a cent a pair, **$480/day is ~48,000
-completed pairs/day — three to four orders of magnitude past the authorized envelope.**
+The underlying insight survives in weaker form: the ceiling **does** move with clip size
+because the rebate is a step — but that sets how much headroom exists **above 1.00**
+(1.0000 at q=1.56 vs 1.0100 at q=2.00), not whether 0.99 pays. The 2-D sweep design stands;
+only its hypothesis changes, from "needs q >= 2 to pay at all" to "profitable at all clips,
+headroom above 1.00 needs q >= 2".
+
+Note on `fee_extra_per_order_usd: "0.01"` in `L5_LIVE_GATES`, since it looks like a
+contradiction: it is a conservative allowance for per-**fill** rounding on **taker** fees
+inside the worst-case deficit bound. It is not a venue charge and it is not on the maker path.
+
+### Size of the prize, recomputed
+
+A 0.99 pair at the authorized clip nets **$0.0156**. At that rate **$480/day is ~30,800
+completed pairs/day — still three to four orders of magnitude past the authorized envelope.**
 
 This changes the **diagnosis** — the cap, not the market, is why we never complete — and it
 does **not** produce the target. No cap change is proposed here: `TS.max_pair_cost` is a risk
 control, the service is in shadow with `armed=false`, and the decision is the owner's.
+
+### Process note: fee constants must come from one module
+
+Within about four hours we each caught the other reintroducing a fee that is not on the
+venue's published schedule, in opposite directions. `src/pmus_fees.py` is the effective-dated,
+reconciled source of truth. The replay harnesses in `analysis/adverse_entry/` carry their own
+`TAKER_THETA` / `MAKER_THETA` / `PER_ORDER` constants and operate on **Kalshi** tape; their
+outputs must never be quoted as PMUS economics. Warning headers have been added to all four.
