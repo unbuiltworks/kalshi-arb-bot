@@ -238,12 +238,30 @@ asserts no order path exists in the module.
 * The next useful work is therefore a **settlement-probability estimator built
   on the reference index** — strike vs `GRR-KAIKO_RFR_*_60S`, whose 60-second
   rolling mean makes (60−τ)/60 of the settlement value already determined at τ
-  before expiry. That needs the 1 s BTC15m tape, which is the access blocker
-  already filed in checkpoint 4: the full-cadence file is on a Railway volume
-  this session cannot mount, and the echoed stream polls at ~30 s. Minimum
-  useful capture ≈ 200 settled windows ≈ 50 hours at 1 s. **That change needs
-  explicit approval** (it multiplies one read-only service's log volume
-  ~15–30×); it is proposed, not done.
+  before expiry (≈83 % at τ = 10 s). It is the only candidate with a mechanical
+  reason to clear α 0.125, and the engine is already built to consume it: hand
+  it a calibrated `Prob` and it trades; hand it nothing and it waits.
+  **No authorization is needed for that step** — see the correction below.
+
+### Correction to checkpoint 1/4's infrastructure claims
+
+Both were wrong, and they change the stated blocker.
+
+1. **`pmus-btc15m-tape` has no volume mounted** (`volumes: []`), and runs
+   `--out-dir /state/pmus-btc15m` onto ephemeral container disk. The
+   "2,191,558-row file on a Railway volume this session cannot mount" therefore
+   **does not exist as a durable file**; it is not the blocker, and volume
+   access would not retrieve it. `btc-ref-collector` likewise has no volume.
+2. **It already runs `--interval 2`, not ~30 s.** Measured on the live echoed
+   stream: **median gap 10.30 s, p90 18.57 s, max 34.19 s** over 61 rows in
+   10 minutes, at full depth. The proposed `--interval 1` change, and the
+   ~15–30× log-volume cost it carried, **is withdrawn as unnecessary.**
+
+Consequently the estimator can be built and validated **read-only from what is
+already running**, bounded by log retention rather than instrumentation. The
+only approval worth coming back for is *durable* persistence (a volume on an
+existing collector) if retention proves too short for the ≈200 settled windows
+the calibration needs. None has been requested or created.
 * Parameter sweeps ran on `kappa` and the probability gate. Nothing was tuned on
   the held-out windows, no 48-window BTC held-out set was fitted, and the
   reported arms come from a single pre-declared configuration.
