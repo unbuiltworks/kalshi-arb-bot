@@ -164,3 +164,49 @@ def test_a_fully_elapsed_window_is_simply_decided():
     assert (p, u) == (1.0, 0.0)
     st2 = B.PartialState(k=60, tau=0, partial=60 * 99_999.0, strike=100_000.0)
     assert st2.p_up(sigma_per_obs=3.0)[0] == 0.0
+
+
+# ------------------------------------------- wiring into the inventory layer
+def test_a_proxy_derived_state_is_REFUSED_not_merely_widened():
+    """The guard against the mistake this audit found: predicting a different
+    statistic than the one that settles the contract is not noise, so it is a
+    refusal rather than a wide sigma."""
+    from src.gemini_execution import inventory_prob as IP
+    st = B.PartialState(k=50, tau=10, partial=50 * 100_050.0, strike=100_000.0,
+                        source=B.SOURCE_PROXY)
+    pr = IP.brti_prob(st, sigma_per_obs=3.0)
+    assert pr.stale is True
+    assert IP.WRONG_BENCHMARK in pr.source
+    assert pr.p_up == D("0.5")
+
+
+def test_absent_benchmark_observations_are_their_own_named_refusal():
+    from src.gemini_execution import inventory_prob as IP
+    pr = IP.brti_prob(None, sigma_per_obs=3.0)
+    assert pr.stale is True and IP.NO_BENCHMARK in pr.source
+
+
+def test_a_benchmark_state_produces_a_usable_probability():
+    from src.gemini_execution import inventory_prob as IP
+    st = B.PartialState(k=50, tau=10, partial=50 * 100_050.0, strike=100_000.0,
+                        source=B.SOURCE_BENCHMARK)
+    pr = IP.brti_prob(st, sigma_per_obs=3.0)
+    assert pr.stale is False and pr.p_up > D("0.9")
+    assert "BRTI" in pr.source and "tau=10" in pr.source
+
+
+def test_the_engine_waits_on_a_refused_benchmark_probability():
+    """End to end: the audit's finding reaches the controller as a WAIT."""
+    from decimal import Decimal as DD
+    from src.gemini_execution import inventory_prob as IP
+    from src.gemini_execution.inventory_engine import (
+        Book, Inventory, Limits, evaluate,
+    )
+    from src.gemini_execution.pmus_execution_model import pmus_config
+    book = Book(yes_bid=DD("0.50"), yes_bid_qty=DD(100),
+                no_bid=DD("0.49"), no_bid_qty=DD(100))
+    pr = IP.brti_prob(None, sigma_per_obs=3.0)
+    d = evaluate(market="PMUS-T", t=0.0, tte=600.0, inv=Inventory(), book=book,
+                 prob=pr, limits=Limits(), cfg=pmus_config())
+    assert d.action == "WAIT"
+    assert d.reason in ("PROB_STALE", "PROB_UNCERTAIN")

@@ -216,3 +216,42 @@ def fit(samples: Sequence[Tuple[Features, int]], *, train_until: float = 0.0,
                        n_train=n, t_imb=t1, t_flow=t2,
                        train_windows=train_windows, train_until=train_until,
                        note="OLS of (yes_won - mid) on [imb, flow], train split only")
+
+
+# ---- the venue's ACTUAL settlement statistic -------------------------------
+#: Why this exists: an earlier checkpoint planned this estimator on
+#: GRR-KAIKO_RFR_*_60S, which is GEMINI's benchmark, not PMUS's or Kalshi's.
+#: See L5_BENCHMARK_AUDIT_AND_SETTLEMENT_ESTIMATOR.md. The guard below makes
+#: that class of mistake a refusal rather than a silent wrong answer.
+NO_BENCHMARK = "NO_BENCHMARK_OBSERVATIONS"
+WRONG_BENCHMARK = "WRONG_BENCHMARK_SOURCE"
+
+
+def brti_prob(state, *, sigma_per_obs: float, drift: float = 0.0) -> Prob:
+    """P(UP) from the REAL PMUS/Kalshi statistic: a partial BRTI closing
+    average against the already-determined opening average.
+
+    `state` is a `brti_settlement.PartialState`. It must carry
+    `source == SOURCE_BENCHMARK`: a probability derived from a proxy series is
+    refused outright rather than returned with a wide sigma, because the
+    failure mode being guarded here is not noise, it is predicting a different
+    statistic than the one that settles the contract.
+
+    We currently hold ZERO BRTI observations, so in production this returns the
+    NO_BENCHMARK refusal and the engine WAITs. That is the correct behaviour and
+    the reason is recorded precisely, rather than as a generic uncertainty.
+    """
+    from src.gemini_execution import brti_settlement as BS
+
+    if state is None:
+        return Prob(p_up=D("0.5"), sigma=D("0.50"), stale=True,
+                    source=f"{LABEL}:{NO_BENCHMARK}")
+    if getattr(state, "source", None) != BS.SOURCE_BENCHMARK:
+        # a proxy cannot settle a window; see btc_ref_recorder.py's own warning
+        return Prob(p_up=D("0.5"), sigma=D("0.50"), stale=True,
+                    source=f"{LABEL}:{WRONG_BENCHMARK}"
+                           f"({getattr(state, 'source', None)})")
+    p, sens = state.p_up(sigma_per_obs=sigma_per_obs, drift=drift)
+    return Prob(p_up=D(str(round(p, 4))), sigma=D(str(round(max(sens, 0.0), 4))),
+                age_s=0.0, stale=False,
+                source=f"{LABEL}:BRTI(k={state.k},tau={state.tau})")
