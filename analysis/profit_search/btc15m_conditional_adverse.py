@@ -30,9 +30,29 @@ eligible regardless of how their outcome was labelled. That sidesteps the
 cross-venue label contamination entirely.
 
 Capture is half the spread AT THE FILL, which is what a maker at the touch earns
-if the mid is fair. The comparison is per contract and fee-free on both sides,
-because PMUS charges a maker nothing and the credited rebate (<= $0.02/print,
-rounding DOWN below ~$0.008) is too small to change any sign here.
+if the mid is fair. The comparison is per contract and FEE-FREE on both sides:
+no fee or rebate coefficient of any venue is applied anywhere in this file, so
+the numbers are pure microstructure (spread and mid moves) and carry no venue's
+fee schedule.
+
+THE VENUE IS KALSHI, NOT PMUS. SAID HERE BECAUSE IT IS EASY TO MISREAD.
+`windows.json` is filtered to series == "KXBTC15M", and KX* tickers are KALSHI
+instruments (the generating extract filters venue == 'kalshi'). So every number
+this script prints is a **Kalshi BTC15m** measurement.
+
+It is NOT a PMUS number and must not be used as one. The two venues differ in
+tick structure (Kalshi tapers to 0.001 in the tails, PMUS is uniform 0.01), in
+book shape, and in who provides liquidity -- all three feed directly into
+half-spread and into which prints sweep a level. Whether $0.0074 transfers to
+PMUS is an open question, not an inference.
+
+WHY THERE IS NO PMUS EQUIVALENT IN THIS REPO. The measurement needs a TRADE
+TAPE: a sweep is a print whose size consumes the touch, and adverse selection is
+the mid move after it. `pmus_windows.json` is assembled from the PMUS tape
+service's echoed stream, which carries `bbo` and `book` rows and **no trade
+rows** -- all 19 windows have zero prints. So sweeps cannot be identified on the
+PMUS data we hold, and this measurement cannot be run there until a PMUS trade
+tape exists.
 """
 from __future__ import annotations
 

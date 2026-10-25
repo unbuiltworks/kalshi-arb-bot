@@ -1,7 +1,20 @@
 # BTC15m: fill-time adverse selection is $0.0074, not $0.0827 — a correction
 
 Read-only. 48 KXBTC15M windows, **330,701 reconstructed maker fills, 26.3 M
-contracts**, from book and tape only. No settlement label is used, so the
+contracts**, from book and tape only.
+
+> **VENUE: KALSHI, not PMUS.** `KXBTC15M` is a Kalshi instrument. Every
+> per-contract number below is a **Kalshi BTC15m** measurement and must not be
+> quoted as a PMUS one. No fee or rebate coefficient of any venue is applied
+> anywhere in it, so the figures are pure microstructure, but tick structure,
+> book shape and who provides liquidity all differ between the venues and all
+> three feed into half-spread and into which prints sweep a level. Whether
+> $0.0074 transfers to PMUS is an open question, not an inference.
+>
+> **There is no PMUS equivalent, and it cannot be produced from data we hold.**
+> The measurement needs a trade tape — a sweep is a print that consumes the
+> touch — and the PMUS tape service's echoed stream carries `bbo` and `book`
+> rows only. All 19 windows in `pmus_windows.json` have **zero prints**. No settlement label is used, so the
 cross-venue label contamination is irrelevant here. No deploy, no orders, no
 limit change; the $90 probe stays unarmed.
 
