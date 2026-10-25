@@ -189,6 +189,10 @@ def main():
     ap.add_argument("--kappa", default="0.10")
     ap.add_argument("--max-sigma", default="0.08")
     ap.add_argument("--clip", default="5")
+    ap.add_argument("--resid-cap-sweep", default="",
+                    help="pre-registered residual-cap grid (see "
+                         "RESIDUAL_CAP_PREREGISTRATION.md). Every cell is "
+                         "reported, never just the best one.")
     ap.add_argument("--alpha-sweep", default="")
     ap.add_argument("--out", default="")
     a = ap.parse_args()
@@ -230,6 +234,28 @@ def main():
               f"{r['net_sd']:7.4f} {r['net_worst']:8.4f} {r['per_window']:8.4f} "
               f"{r['dd_mean']:7.4f} {r['wait_pct']:6.1f} {r['resid']:7.1f} "
               f"{r['rebate']:6.3f}")
+
+    if a.resid_cap_sweep:
+        print("\npre-registered residual-cap sweep (grid fixed before this ran)")
+        print(f"{'cap':>5s} {'trd':>5s} {'trd%':>6s} {'net_mean':>9s} {'sd':>7s} "
+              f"{'per_win':>8s} {'maxDD':>7s} {'WAIT%':>6s}")
+        for c in [D(x) for x in a.resid_cap_sweep.split(",")]:
+            r = run_arm(oos, cal, cfg, Limits(max_resid_qty=c), seeds=a.seeds)
+            tp = 100.0 * r["traded"] / max(1, len(oos))
+            print(f"{float(c):5.0f} {r['traded']:5.1f} {tp:6.1f} "
+                  f"{r['net_mean']:9.4f} {r['net_sd']:7.4f} "
+                  f"{r['per_window']:8.4f} {r['dd_mean']:7.4f} {r['wait_pct']:6.1f}")
+
+    if a.resid_cap_sweep:
+        print("\npre-registered residual-cap sweep (grid fixed before this ran)")
+        print(f"{'cap':>5s} {'trd':>5s} {'trd%':>6s} {'net_mean':>9s} {'sd':>7s} "
+              f"{'per_win':>8s} {'maxDD':>7s} {'WAIT%':>6s}")
+        for c in [D(x) for x in a.resid_cap_sweep.split(",")]:
+            r = run_arm(oos, cal, cfg, Limits(max_resid_qty=c), seeds=a.seeds)
+            tp = 100.0 * r["traded"] / max(1, len(oos))
+            print(f"{float(c):5.0f} {r['traded']:5.1f} {tp:6.1f} "
+                  f"{r['net_mean']:9.4f} {r['net_sd']:7.4f} "
+                  f"{r['per_window']:8.4f} {r['dd_mean']:7.4f} {r['wait_pct']:6.1f}")
 
     if a.alpha_sweep:
         print("\npartial-oracle requirement sweep on PMUS "

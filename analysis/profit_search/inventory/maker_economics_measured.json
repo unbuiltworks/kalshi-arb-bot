@@ -1,0 +1,17 @@
+{
+ "windows": 19,
+ "median_spread": "0.01",
+ "p_fill_30s": "0.4325",
+ "half_spread": "0.0050",
+ "max_rebate": "0.0031",
+ "gross_capture": "0.0081",
+ "adverse_per_filled_contract": "0.0827",
+ "adverse_rate": "0.9163",
+ "net_per_filled_contract": "-0.0746",
+ "adverse_multiple_of_capture": 10.21,
+ "sources": [
+  "analysis/l5/ADVERSE_SELECTION_MEASUREMENT_20261024.md",
+  "analysis/l5/pmus_fill_model.json",
+  "src/pmus_fees.py (docs.polymarket.us/fees)"
+ ]
+}

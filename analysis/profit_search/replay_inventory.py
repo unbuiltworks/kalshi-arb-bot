@@ -249,6 +249,8 @@ def main():
                     help="comma-separated alphas for the partial-oracle "
                          "requirement sweep (how much settlement uncertainty a "
                          "forecaster must resolve to break even)")
+    ap.add_argument("--resid-cap-sweep", default="",
+                    help="pre-registered residual-cap grid; every cell reported")
     ap.add_argument("--ledger-out", default="")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
@@ -341,6 +343,18 @@ def main():
             R = [run_inventory_window(w, cal, cfg, limits, alpha=a) for w in oos]
             s2 = replay_b.summarise(R, f"alpha={a}")
             print(f"{a:6.3f} {s2['traded']:4d} {float(s2['net']):10.4f} "
+                  f"{float(s2['per_window']):9.4f} {float(s2['max_dd']):8.4f} "
+                  f"{float(s2['stranded_units']):8.2f}")
+
+    if args.resid_cap_sweep:
+        print("\npre-registered residual-cap sweep (grid fixed before this ran)")
+        print(f"{'cap':>5s} {'trd':>5s} {'net':>10s} {'per_win':>9s} "
+              f"{'maxDD':>8s} {'resid':>8s}")
+        for c in [D(x) for x in args.resid_cap_sweep.split(",")]:
+            R = [run_inventory_window(w, cal, cfg, Limits(max_resid_qty=c))
+                 for w in oos]
+            s2 = replay_b.summarise(R, f"cap={c}")
+            print(f"{float(c):5.0f} {s2['traded']:5d} {float(s2['net']):10.4f} "
                   f"{float(s2['per_window']):9.4f} {float(s2['max_dd']):8.4f} "
                   f"{float(s2['stranded_units']):8.2f}")
 
