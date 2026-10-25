@@ -4114,6 +4114,77 @@ class FaithfulExecutor:
             return {}                      # unreadable is not a fresh book
         return fresh if isinstance(fresh, Mapping) else {}
 
+    def presend_cross_refusal(self, market: str,
+                              intent: Mapping[str, Any],
+                              tr: Mapping[str, Any]
+                              ) -> Optional[Dict[str, Any]]:
+        """None to send; a record when this MAKER leg would cross RIGHT NOW.
+
+        `intent["price"]` is the leg's OWN price -- the two-sided override
+        sets `tr["price"] = D(leg["price"])` from the plan, and the wire
+        conversion happens later in `l5_order_body.from_intent` -- so it is
+        passed to `leg_crosses` unconverted, which is what that helper
+        expects.
+
+        THE BOOK IS RE-READ, NOT REUSED. `ts_authenticated_book(market, {})`
+        takes a fresh mirror snapshot, because a book carried down from
+        planning is exactly the stale input this check exists to replace.
+
+        FAILS OPEN ON EVERY UNKNOWN. This is an efficiency guard and not a
+        safety gate: every risk control has already run by the call site, so
+        the only thing it can do is decline an order the venue would have
+        rejected anyway. A missing book, an unreadable price or side, or a
+        raising helper therefore returns None and the order proceeds to the
+        venue's own post-only check. Failing closed here would turn a
+        budget-saving guard into a new way to stop trading, which is a larger
+        behavioural change than the waste it removes.
+
+        COUNTS WHAT IT AVOIDS, so the saving is measurable rather than
+        asserted. The counter is per side plus a total, lazily initialised so
+        this adds nothing to `__init__`.
+        """
+        if str(tr.get("mode") or "").upper() != FT.MAKER:
+            return None                      # a taker order cannot post-only
+        side = str(intent.get("side") or "")
+        if side not in (UP, DOWN):
+            return None
+        own = intent.get("price")
+        if own is None:
+            return None
+        try:
+            book = self.ts_authenticated_book(market, {}) or {}
+            bid, ask = book.get("bid"), book.get("ask")
+            if bid is None or ask is None:
+                return None                  # no book to judge against
+            if not TS.leg_crosses(side, own, bid=bid, ask=ask):
+                return None
+            wire = TS.wire_price(side, own)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                      # unreadable is not a refusal
+        counts = getattr(self, "presend_cross_skips", None)
+        if not isinstance(counts, dict):
+            counts = {"UP": 0, "DOWN": 0, "total": 0}
+            self.presend_cross_skips = counts
+        counts[side] = int(counts.get(side) or 0) + 1
+        counts["total"] = int(counts.get("total") or 0) + 1
+        return {
+            "reason": "PRESEND_WOULD_CROSS:%s" % side,
+            "side": side,
+            "own_px": str(own),
+            "wire_px": None if wire is None else str(wire),
+            "bid": str(bid), "ask": str(ask),
+            "stream_age_s": (None if book.get("stream_age_s") is None
+                             else str(book.get("stream_age_s"))),
+            "skips": dict(counts),
+            "labels": ("a post-only leg the book has left is rejected by the "
+                       "venue and its submission claim is never returned, so "
+                       "this declines it BEFORE the claim is consumed. No "
+                       "price, size, depth, TTL or cutoff is changed; the "
+                       "order is simply not sent."),
+        }
+
     def probe_plan(self, market: str,
                    authenticated: Mapping[str, Any],
                    loss_ceiling: Optional[D] = None) -> Dict[str, Any]:
@@ -6128,6 +6199,38 @@ class FaithfulExecutor:
                                        str(_bal.get("note"))[:160])
                 return prov.refuse("BALANCING_DOES_NOT_REDUCE",
                                    str(_bal.get("note"))[:160])
+
+            # PRE-SEND CROSSING RE-CHECK, against the freshest book, and
+            # placed HERE for one reason: it is the last point before the
+            # submission claim is consumed.
+            #
+            # WHAT IT IS FOR. A post-only leg the book has already left is
+            # rejected by the venue outright, and the claim it spent is never
+            # returned -- "not by a cancellation, a partial or zero fill, a
+            # reconnect, a restart, or a rejected or ambiguous
+            # acknowledgement". Windows 0030z and 0045z on 2026-10-25 spent 3
+            # of 12 submissions on exactly that: ORDER_STATE_REJECTED with
+            # cum_qty 0 at 00:39:03, 00:49:41 and 00:50:46. `plan_executable`
+            # already computes LEG_WOULD_CROSS, but it judges the plan at
+            # PLANNING time; the book moves between then and the wire.
+            #
+            # IT IS AN EFFICIENCY GUARD, NOT A SAFETY GATE, and the
+            # distinction decides every fail direction below. Every risk
+            # control has already run and already returned by this line, so
+            # this can only ever skip an order that the venue was certain to
+            # reject. It therefore FAILS OPEN on anything it cannot establish
+            # -- no book, no prices, an unreadable side, a raising helper --
+            # because a budget-saving check that could halt trading on a
+            # mirror hiccup would be a worse change than the waste it
+            # removes. The venue's own post-only check remains the backstop.
+            #
+            # IT CHANGES NO PRICE, SIZE, DEPTH, TTL OR CUTOFF. It either
+            # lets the order through untouched or does not send it.
+            _xr = self.presend_cross_refusal(market, intent, tr)
+            if _xr is not None:
+                prov.stage("PRESEND_CROSS", _xr)
+                return prov.refuse("PRESEND_CROSS",
+                                   str(_xr.get("reason"))[:120])
 
             try:
                 # ACCUMULATION NEEDS MANY SUBMISSIONS, so it claims a

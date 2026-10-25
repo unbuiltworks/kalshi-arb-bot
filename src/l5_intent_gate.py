@@ -144,6 +144,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     "SAFETY_OVERLAY:DAY_REALIZED_UNAVAILABLE",
     "SAFETY_OVERLAY:SAFETY_LIMITS_REFUSE",
     "SAFETY_OVERLAY:RESIDUAL_ABOVE_CAP",
+    # the pre-send crossing re-check, immediately BEFORE the claim below:
+    # a post-only leg the book has left is certain to be rejected and the
+    # claim it would spend is never returned, so it is declined first. An
+    # efficiency guard, not a safety control -- it fails OPEN on a book it
+    # cannot read, because every risk gate above has already run.
+    "PRESEND_CROSS:PRESEND_WOULD_CROSS",
     "SUBMISSION_CLAIM:CLAIM_REASON",
     "SAFETY_OVERLAY:INTENT_MUTATED_AFTER_GATES",
     "SAFETY_OVERLAY:REFUSED_BEFORE_ORDER_POST",
