@@ -1,0 +1,39 @@
+{
+  "A_no_extend": {
+    "mean": 12.649223394761469,
+    "sd": 6.066136269353703,
+    "worst": 2.9407667779402455,
+    "best": 22.33615788034376,
+    "pairs": "535.1594330508749242632987465",
+    "traded": 487,
+    "strand": 134,
+    "rebate": "1.78",
+    "gate": {
+      "NO_FILL": 1179,
+      "OPENING_NOTIONAL_BUDGET": 576,
+      "OPENING_LEG_MAX_CONTRACTS": 360,
+      "FILLED": 876,
+      "EXTEND_REFUSED_BY_POLICY": 31544,
+      "PAIR_CEILING": 11665
+    }
+  },
+  "B_extend": {
+    "mean": 15.223383050778542,
+    "sd": 8.297888478706582,
+    "worst": -0.06586591453066783,
+    "best": 30.85965309908201,
+    "pairs": "1424.098658398253290213374004",
+    "traded": 487,
+    "strand": 259,
+    "rebate": "7.07",
+    "gate": {
+      "NO_FILL": 3181,
+      "OPENING_NOTIONAL_BUDGET": 4131,
+      "OPENING_LEG_MAX_CONTRACTS": 17412,
+      "FILLED": 2346,
+      "PAIR_CEILING": 12126,
+      "MAX_UNMATCHED_CONTRACTS": 1523,
+      "MAX_CASH_DEPLOYED": 8963
+    }
+  }
+}

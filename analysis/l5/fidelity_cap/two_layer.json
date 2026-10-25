@@ -1,0 +1,32 @@
+{
+  "windows": 527,
+  "layer1": {
+    "DISAGREE": 55309,
+    "AGREE": 6711
+  },
+  "layer2": {
+    "PERMITTED": 2103,
+    "PERMITTED_NO_FILL": 1203,
+    "OPENING_NOTIONAL_BUDGET": 597,
+    "OPENING_LEG_MAX_CONTRACTS": 401,
+    "FILLED": 900
+  },
+  "mismatch": {
+    "TIMING": 5841,
+    "OTHER_OPENING_vs_EXTENSION": 1040,
+    "OTHER_OPENING_vs_COMPLETION": 579,
+    "EXTENSION_we_never_extend": 31001,
+    "COMPLETION_price_ceiling": 11167,
+    "OTHER_COMPLETION_vs_EXTENSION": 5619,
+    "PRICE_entry_floor": 62
+  },
+  "econ": {
+    "pairs": "557.6171838524728240831107874",
+    "pair_net": "65.78149248145490448537772892",
+    "rebate": "0.56",
+    "resid_qty": "175.8935288199365522187731445",
+    "resid_cost": "94.85185185185185185185185185",
+    "windows_traded": "492",
+    "windows_stranded": "121"
+  }
+}
