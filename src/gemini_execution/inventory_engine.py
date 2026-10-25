@@ -238,8 +238,19 @@ class Config:
     max_prob_age_s: float = 30.0
     # --- execution realism
     maker_fill_ref_s: float = 120.0   # horizon a resting order is given
-    adverse_shift: D = D("0.015")     # maker fills are selected against: p moves
-                                      # against the side we got filled on
+    # MEASURED, not assumed. analysis/l5/ADVERSE_SELECTION_MEASUREMENT_20261024.md,
+    # 956 modelled fills over 475 live windows from the deployed shadow
+    # controller on authenticated books: adverse_rate 0.9163 and
+    # **-$0.0827 per filled contract**. On a binary settling at 0 or 1 that is
+    # a probability shift of 0.0827 against the side we were filled on.
+    #
+    # The 0.015 this field previously held was invented, and it was optimistic
+    # by 5.5x. The mechanism is in the same measurement: 98.0% of fills came
+    # from a SWEEP -- a print consuming our whole level -- so we fill precisely
+    # when the market runs through us. That is why the pessimistic queue
+    # assumption is already the binding one and the figure is not a modelling
+    # artefact.
+    adverse_shift: D = D("0.0827")
     taker_slip: D = D("0.00")         # own-cost slippage assumed on a cross
     min_qty: D = D("0.50")
     clip_qty: D = D(5)                # target contracts per action
