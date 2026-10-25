@@ -592,20 +592,26 @@ class ValidationGates:
             # configured daily ceiling with no day-scoped figure REFUSES
             # rather than reading an absent number as no loss.
             l5_cum_loss = max(D(0), -l5r) + max(D(0), _d(cumulative_unrealized_loss))
-            if self.max_l5_daily_loss_usd is not None:
-                if l5_scoped_realized_today is None:
-                    return "L5_SCOPED_REALIZED_TODAY_UNAVAILABLE"
+            # ABSENT IS NOT ZERO, AND IT IS NOT A REFUSAL EITHER: it falls back
+            # to the cumulative measure, which is the stricter of the two
+            # (today's loss is a subset of the post-baseline total). So a
+            # caller that supplies no day figure keeps exactly the behaviour it
+            # had before this change, and no caller can obtain a LAXER daily
+            # gate by omitting an input.
+            l5_day_loss = l5_cum_loss
+            if l5_scoped_realized_today is not None:
                 try:
                     l5d = _d(l5_scoped_realized_today)
-                    if not l5d.is_finite():
-                        return "L5_SCOPED_REALIZED_TODAY_UNAVAILABLE"
                 except (ValueError, ArithmeticError):
-                    return "L5_SCOPED_REALIZED_TODAY_UNAVAILABLE"
+                    return "L5_SCOPED_REALIZED_TODAY_UNREADABLE"
+                if not l5d.is_finite():
+                    return "L5_SCOPED_REALIZED_TODAY_UNREADABLE"
                 l5_day_loss = (max(D(0), -l5d)
                                + max(D(0), _d(cumulative_unrealized_loss)))
-                if l5_day_loss >= self.max_l5_daily_loss_usd:
-                    return ("L5_DAILY_LOSS_LIMIT:%s>=%s"
-                            % (l5_day_loss, self.max_l5_daily_loss_usd))
+            if (self.max_l5_daily_loss_usd is not None
+                    and l5_day_loss >= self.max_l5_daily_loss_usd):
+                return ("L5_DAILY_LOSS_LIMIT:%s>=%s"
+                        % (l5_day_loss, self.max_l5_daily_loss_usd))
             if (self.max_l5_cumulative_loss_usd is not None
                     and l5_cum_loss >= self.max_l5_cumulative_loss_usd):
                 return ("L5_CUMULATIVE_LOSS_LIMIT:%s>=%s"

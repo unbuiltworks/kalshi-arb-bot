@@ -203,9 +203,19 @@ def test_gate_input_changes_no_policy_by_itself():
     # and the L5-scoped rescoping has NOT been slipped in at any gate: the
     # two loss-gate keywords only ever take a sanctioned right-hand side.
     import re
-    fed = set(re.findall(r"(?:cumulative_realized|realized_today)=([^,\n]+)",
-                         whole))
+    # ANCHORED to the start of the keyword. Without the lookbehind this also
+    # matched `realized_today=` INSIDE `l5_scoped_realized_today=`, which is a
+    # different keyword feeding the L5-scoped ceilings rather than the
+    # account-wide daily halt this guard is about. The guard is unchanged in
+    # strength for the two keywords it was written to protect.
+    fed = set(re.findall(
+        r"(?<![A-Za-z0-9_])(?:cumulative_realized|realized_today)=([^,\n]+)",
+        whole))
     assert fed == {"self.store.realized_today()", "day_realized"}, fed
+    # AND the L5-scoped day keyword is policed the same way: it may only ever
+    # take the attested L5 day measure, never an account-wide figure.
+    fed_l5 = set(re.findall(r"l5_scoped_realized_today=([^,\n]+)", whole))
+    assert fed_l5 <= {"self.store.l5_realized_today()"}, fed_l5
     assert 'gate_input("verified_l5")' not in whole
 
 

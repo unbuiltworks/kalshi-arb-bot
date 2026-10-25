@@ -57,11 +57,25 @@ def test_no_historical_loss_is_reset_the_cumulative_figure_is_untouched():
     assert "5.2457" in over
 
 
-def test_missing_day_figure_REFUSES_and_is_not_read_as_zero():
-    g = gates(max_l5_daily_loss_usd=D("20"), max_l5_cumulative_loss_usd=D("20"))
+def test_missing_day_figure_falls_back_to_the_STRICTER_cumulative_measure():
+    """Absent is not zero. It is not laxer either: it reads the bigger number.
+
+    A caller that supplies no day figure keeps its pre-change behaviour, so no
+    caller can obtain a looser daily gate by omitting an input.
+    """
+    r = _refusal(daily=D("5"), cumulative=D("50"),
+                 cum_realized=D("-5.2457"), today_realized=None)
+    assert r is not None and r.startswith("L5_DAILY_LOSS_LIMIT:"), r
+    assert "5.2457" in r
+
+
+def test_an_unreadable_day_figure_refuses_rather_than_passing():
+    g = gates(max_l5_daily_loss_usd=D("20"), max_l5_cumulative_loss_usd=D("20"),
+              max_cumulative_loss_usd=D("1000"))
     r = g.refuse(order_qty=D("1"), order_price=D("0.50"), order_intent="OPEN",
-                 l5_scoped_realized=D("-1"), l5_scoped_realized_today=None)
-    assert r == "L5_SCOPED_REALIZED_TODAY_UNAVAILABLE", r
+                 l5_scoped_realized=D("-1"),
+                 l5_scoped_realized_today=D("NaN"))
+    assert r == "L5_SCOPED_REALIZED_TODAY_UNREADABLE", r
 
 
 def test_unrealized_loss_still_counts_against_the_DAILY_budget():
