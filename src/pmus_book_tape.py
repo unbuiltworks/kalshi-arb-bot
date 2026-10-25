@@ -218,6 +218,76 @@ def snapshot(slug: str) -> Optional[dict]:
     }
 
 
+#: hard ceiling on a one-time dump, so a mistyped range cannot flood the logs
+DUMP_MAX_ROWS = 20000
+
+
+def dump_existing(out_dir: Path, since: str = "", until: str = "",
+                  max_rows: int = DUMP_MAX_ROWS,
+                  slug_contains: str = "") -> dict:
+    """Print a BOUNDED slice of the tape ALREADY on disk, then return.
+
+    WHY THIS EXISTS. This module's own header records the problem: the dense
+    tape lands "onto a Railway volume this container cannot reach, and the
+    export routes all cost either a redeploy or a credential." Measured on
+    2026-10-25, storage runs at one row every 1.09 s (2,191,674 rows) while the
+    stdout echo is deduped to a ~30 s heartbeat, and 80 of 81 consecutive
+    echoed snapshots differ -- so the echo is lossy and the analysis needs the
+    file.
+
+    This reads the file and writes to stdout. It opens no socket, takes no
+    credential, never writes to the tape, and cannot place an order. It is
+    bounded twice over -- by the time range and by `max_rows` -- so a one-time
+    dump cannot turn into a sustained log-volume increase.
+    """
+    files = sorted(out_dir.glob("pmus_*.jsonl"))
+    sent = scanned = 0
+    stopped = None
+    for fp in files:
+        if sent >= max_rows:
+            stopped = "max_rows"
+            break
+        try:
+            fh = fp.open("r", encoding="utf-8", errors="replace")
+        except OSError as exc:
+            print("PMUS_TAPE_DUMP_ERR %s" % json.dumps(
+                {"file": fp.name, "error": type(exc).__name__}), flush=True)
+            continue
+        with fh:
+            for line in fh:
+                scanned += 1
+                line = line.strip()
+                if not line:
+                    continue
+                if slug_contains and slug_contains not in line:
+                    continue
+                if since or until:
+                    # the written row carries an ISO "t"; compare as strings,
+                    # which is correct for ISO-8601 in a fixed timezone
+                    try:
+                        t = json.loads(line).get("t") or ""
+                    except Exception:            # noqa: BLE001
+                        continue
+                    if since and t < since:
+                        continue
+                    if until and t > until:
+                        continue
+                print("PMUS_TAPE_DUMP %s" % line, flush=True)
+                sent += 1
+                if sent >= max_rows:
+                    stopped = "max_rows"
+                    break
+    out = {"kind": "tape_dump_done", "files": [f.name for f in files],
+           "scanned": scanned, "emitted": sent, "max_rows": max_rows,
+           "since": since, "until": until, "slug_contains": slug_contains,
+           "stopped": stopped,
+           "labels": ("READ-ONLY replay of rows already on disk. No socket, no "
+                      "credential, no write to the tape, no order path. Bounded "
+                      "by the range AND by max_rows.")}
+    print("PMUS_TAPE_DUMP_DONE %s" % json.dumps(out), flush=True)
+    return out
+
+
 def run(out_dir: Path, minutes: float, interval_s: float = 5.0,
         cap: int = 60, series: Optional[str] = None,
         with_book: bool = False, echo_rows: bool = False) -> int:
@@ -370,10 +440,29 @@ def main() -> int:
                          "Default None keeps the sports live slate.")
     ap.add_argument("--with-book", action="store_true",
                     help="also record the full ladder, for depth")
+    ap.add_argument("--dump-existing", action="store_true",
+                    help="before collecting, print a BOUNDED slice of the tape "
+                         "already on disk as PMUS_TAPE_DUMP, so it can be "
+                         "retrieved where the volume is unreachable")
+    ap.add_argument("--dump-since", default="",
+                    help="ISO lower bound for --dump-existing (inclusive)")
+    ap.add_argument("--dump-until", default="",
+                    help="ISO upper bound for --dump-existing (inclusive)")
+    ap.add_argument("--dump-max", type=int, default=DUMP_MAX_ROWS,
+                    help="hard row ceiling for --dump-existing")
+    ap.add_argument("--dump-slug", default="",
+                    help="only dump rows whose line contains this substring")
+    ap.add_argument("--dump-only", action="store_true",
+                    help="exit after the dump instead of starting collection")
     ap.add_argument("--echo-rows", action="store_true",
                     help="also print every row to stdout as PMUS_TAPE_ROW, so "
                          "the tape can be retrieved where no volume exists")
     a = ap.parse_args()
+    if a.dump_existing:
+        dump_existing(Path(a.out_dir), since=a.dump_since, until=a.dump_until,
+                      max_rows=a.dump_max, slug_contains=a.dump_slug)
+        if a.dump_only:
+            return 0
     return run(Path(a.out_dir), a.minutes, a.interval, a.cap,
                series=a.series, with_book=a.with_book,
                echo_rows=a.echo_rows)
