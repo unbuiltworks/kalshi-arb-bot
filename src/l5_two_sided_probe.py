@@ -173,15 +173,51 @@ ROUND_ALLOCATIONS_MAX = 4
 MIN_FIRST_LEG_OWN_PRICE = D("0.20")
 MIN_FIRST_LEG_ENV = "L5_TS_MIN_FIRST_LEG_PRICE"
 
+#: THE WORST-CASE OPENING NOTIONAL, IN DOLLARS. The replay's answer to the
+#: one window that lost money.
+#:
+#: 0130z opened DOWN 1.87 at own 0.62, the dearer leg of a 0.95 plan. Its
+#: complement never filled and it settled worthless: -$1.1594, which is 90.2%
+#: of everything the seven completed pairs earned. Nothing was broken -- the
+#: pair cap, the TTL and the drift recovery all behaved as specified. The leg
+#: was simply too large for the loss it could take.
+#:
+#: WHY NOTIONAL AND NOT PRICE. A maximum opening PRICE was the obvious
+#: alternative and the replay rejected it: it is non-monotonic in its own
+#: threshold (+$1.2506 at 0.60 but -$0.0344 at 0.65, worse than doing
+#: nothing), only one of eight episodes sat above 0.60 so a single
+#: observation would set it, and the completion-rate curve behind it could
+#: not be validated on PMUS -- the public tape holds 2 windows and the other
+#: tapes are a different venue. A notional cap improved net settlement at
+#: EVERY budget tried ($0.50 .. $1.00), has no cliff, and protects whatever
+#: the opening price turns out to be. See L5_FOUR_POLICY_REPLAY.md.
+#:
+#: IT BOUNDS THE DEARER LEG, which is the one whose solo fill is the strand.
+#: `qty * dear <= budget`, so the worst single-leg loss is the budget by
+#: construction rather than by luck.
+#:
+#: IT BOUNDS OPENING PLANS ONLY. Completing inventory already held is sized
+#: against that inventory elsewhere, so this can never throttle a
+#: risk-reducing complement -- throttling one is what stranded 0130z.
+#:
+#: UNSET IS INERT, so the deployed default is byte-for-byte today's sizing.
+#: UNREADABLE IS ZERO, which refuses rather than guesses: a budget we cannot
+#: count is not a budget we may assume exists. Clamped to the approved
+#: instantaneous exposure, so a typo cannot raise it.
+OPENING_NOTIONAL_ENV = "L5_TS_OPENING_NOTIONAL_BUDGET_USD"
+OPENING_NOTIONAL_MAX_USD = D("5")
+
 
 def _sized_by(*, by_loss: D, by_cash: D, by_budget: Optional[D],
-              by_opening_cap: D) -> str:
+              by_opening_cap: D, by_notional: Optional[D] = None) -> str:
     """Which bound actually sized the plan: the argmin, with deterministic
     tie-breaking toward the TIGHTER-sounding constraint so a tie never hides
     a cap behind a dollar figure."""
-    cands = [("OPENING_LEG_CONTRACT_CAP", by_opening_cap),
+    cands = [("OPENING_NOTIONAL_CAP", by_notional),
+             ("OPENING_LEG_CONTRACT_CAP", by_opening_cap),
              ("CASH_ENVELOPE", by_cash),
              ("LOSS_CEILING", by_loss)]
+    cands = [(n, v) for n, v in cands if v is not None]
     if by_budget is not None:
         cands.append(("CAMPAIGN_BUDGET", by_budget))
     lo = min(v for _n, v in cands)
@@ -227,6 +263,27 @@ def round_allocations() -> int:
     if n < 1 or n > ROUND_ALLOCATIONS_MAX:
         return ROUND_ALLOCATIONS
     return n
+
+
+def opening_notional_budget_usd() -> Optional[D]:
+    """Dollars of worst-case loss an OPENING leg may carry. None is inert.
+
+    Absent means inert, which keeps the deployed default identical to
+    today. Anything present but unreadable, non-finite or negative reads as
+    ZERO and therefore refuses every opening plan: a bound we cannot parse
+    must not silently become no bound. A value above the approved
+    instantaneous exposure is clamped down to it.
+    """
+    raw = (os.getenv(OPENING_NOTIONAL_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, TypeError, ArithmeticError):
+        return D(0)
+    if not v.is_finite() or v < 0:
+        return D(0)
+    return min(v, OPENING_NOTIONAL_MAX_USD)
 
 
 def min_first_leg_own_price() -> D:
@@ -1086,6 +1143,24 @@ def build_orders(*, market: str, bid: Any, ask: Any,
     # prices. See OPENING_LEG_MAX_CONTRACTS.
     by_opening_cap = opening_leg_max_contracts()
     qty = min(by_loss, by_cash, by_opening_cap)
+    # THE WORST-CASE OPENING NOTIONAL, on the dearer leg -- the one whose
+    # solo fill is the strand. Inert when unconfigured. A budget that cannot
+    # fund even one grid step is refused HERE and by name, rather than
+    # surfacing later as a generic "no legal quantity".
+    notional_budget = opening_notional_budget_usd()
+    by_notional = None
+    if notional_budget is not None:
+        if mq * dear > notional_budget:
+            return no("OPENING_NOTIONAL_CAP_BELOW_VENUE_MINIMUM",
+                      opening_notional_budget_usd=str(notional_budget),
+                      min_qty=str(mq), dearer_leg_own_px=str(dear),
+                      min_notional_usd=str(mq * dear),
+                      labels=("the venue minimum is one grid step; a "
+                              "worst-case opening budget that cannot fund "
+                              "even that cannot open a leg at this price, "
+                              "and says so rather than sizing to zero"))
+        by_notional = notional_budget / dear
+        qty = min(qty, by_notional)
     # and the campaign budget, on that SAME obligation basis, because
     # `ValidationGates` gate 3b charges the order exactly as the cash gate
     # above does -- a resting BUY_SHORT at a dollar a share.
@@ -1104,6 +1179,7 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             break
         if (qty * dear + worst_fee(qty, dear) <= cap
                 and qty * oblig_per_contract <= env_per_round
+                and (notional_budget is None or qty * dear <= notional_budget)
                 and (head is None or qty * oblig_per_contract <= head)):
             break
         qty -= mq
@@ -1116,6 +1192,9 @@ def build_orders(*, market: str, bid: Any, ask: Any,
                   obligation_per_contract=str(oblig_per_contract),
                   round_allocations=allocs,
                   opening_leg_max_contracts=str(by_opening_cap),
+                  opening_notional_budget_usd=(
+                      None if notional_budget is None else str(notional_budget)),
+                  by_notional=(None if by_notional is None else str(by_notional)),
                   cash_envelope_total_usd=str(env),
                   cash_envelope_per_round_usd=str(env_per_round),
                   binding=("CAMPAIGN_BUDGET"
@@ -1173,6 +1252,19 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             "opening_leg_max_contracts": str(by_opening_cap),
             "opening_leg_cap_binds": bool(by_opening_cap <= min(by_loss,
                                                                 by_cash)),
+            "opening_notional_budget_usd": (
+                None if notional_budget is None else str(notional_budget)),
+            "opening_notional_contracts": (
+                None if by_notional is None else str(by_notional)),
+            "opening_notional_binds": bool(
+                by_notional is not None
+                and by_notional <= min(by_loss, by_cash, by_opening_cap)),
+            "worst_case_opening_notional_usd": str(qty * dear),
+            "opening_notional_basis": (
+                "the dearer leg is the one whose solo fill is the strand, so "
+                "the cap is qty * dear and the worst single-leg loss is the "
+                "budget by construction. Opening plans only: completing held "
+                "inventory is sized elsewhere and is never throttled here."),
             "cash_envelope_total_usd": str(env),
             "cash_envelope_per_round_usd": str(env_per_round),
             "round_allocation_basis": (
@@ -1197,7 +1289,8 @@ def build_orders(*, market: str, bid: Any, ask: Any,
             # bound, not merely which configuration limit exists".
             "sized_by": _sized_by(by_loss=by_loss, by_cash=by_cash,
                                   by_budget=by_budget,
-                                  by_opening_cap=by_opening_cap),
+                                  by_opening_cap=by_opening_cap,
+                                  by_notional=by_notional),
             "budget_basis": ("the campaign budget is charged on the same "
                              "dollar-a-share obligation as the cash gate, "
                              "so the smaller of the two binds and the plan "

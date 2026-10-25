@@ -63,6 +63,13 @@ APPROVED: Dict[str, Any] = {
     # a configuration that does NOT match what was approved, so it must fail
     # here rather than pass quietly.
     "campaign_additional_loss_usd": D("5.00"),
+    # THE WORST-CASE OPENING NOTIONAL (OWNER 2026-10-25). Graded, not merely
+    # reported, for the same reason as the row above: the owner approved this
+    # campaign AS the single-variable notional-cap experiment, so an unset
+    # variable leaves the cap inert and that is NOT the configuration that
+    # was approved. It must fail here rather than pass quietly and open a
+    # 1.87-contract leg at own 0.62 again.
+    "opening_notional_budget_usd": D("0.80"),
     "daily_realized_loss_halt_usd": D("5"),
     "maker_pair_ceiling": D("0.96"),
     "defensive_pair_ceiling": D("1.20"),
@@ -155,6 +162,8 @@ SNAPSHOT_ALLOWED = (
     "L5_MAX_TOTAL_EXPOSURE_USD",
     # the campaign additional-loss bound's own variable, for the same reason
     "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD",
+    # and the opening-notional cap's, so a snapshot can predict its row
+    "L5_TS_OPENING_NOTIONAL_BUDGET_USD",
 )
 
 #: Name fragments that mean "this is a secret, and it must not be in a file
@@ -337,6 +346,11 @@ def verify() -> Dict[str, Any]:
              "CBL.limit_from_env() clamped by CBL.MAX_ADDITIONAL_LOSS_USD",
              lambda: CBL.limit_from_env(),
              A["campaign_additional_loss_usd"]),
+        _row("opening_notional_budget_usd",
+             "TS.opening_notional_budget_usd() clamped by "
+             "TS.OPENING_NOTIONAL_MAX_USD",
+             lambda: TS.opening_notional_budget_usd(),
+             A["opening_notional_budget_usd"]),
         _row("aggregate_exposure_in_force_usd",
              "R.PROBE_LIMITS['max_total_exposure_usd'] (frozen at boot)",
              lambda: D(str(R.PROBE_LIMITS["max_total_exposure_usd"])),

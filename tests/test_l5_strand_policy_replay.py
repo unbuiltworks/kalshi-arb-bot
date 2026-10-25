@@ -132,3 +132,73 @@ def test_the_opening_price_cap_is_a_cliff_not_a_gradient():
 def test_the_published_taker_fee_formula():
     assert R.taker_fee(D("1.87"), D("0.34")) == D("0.03")
     assert R.taker_fee(D("0.43"), D("0.20")) == D("0.00")
+
+
+# ---------------------------------------- the approved cap, as implemented
+
+def test_the_cap_sizes_on_the_dearer_leg_not_the_one_that_filled():
+    """For three of eight episodes the dearer leg is NOT the one that
+    filled, and the cap sizes on the dearer one because that is the leg
+    whose solo fill is the strand. Sizing on the filled leg would have
+    understated 0100z's exposure by half."""
+    a = [e for e in R.EPISODES if e["w"] == "0100z" and e["own"] == D("0.20")][0]
+    assert R.dearer_leg_own(a) == D("0.76") != a["own"]
+    s = [e for e in R.EPISODES if e["w"] == "0130z"][0]
+    assert R.dearer_leg_own(s) == D("0.62")
+
+
+def test_the_cap_bounds_the_worst_single_leg_notional_everywhere():
+    for b in (D("0.40"), D("0.60"), D("0.80"), D("1.00")):
+        for ep in R.EPISODES:
+            q = R.capped_qty(ep, b)
+            if q is None:
+                continue
+            assert q * R.dearer_leg_own(ep) <= b, (ep["w"], b)
+
+
+def test_uncapped_worst_case_was_larger_than_the_strand_that_happened():
+    """$1.52 on 0100z (2.00 at own 0.76) against the $1.1594 that actually
+    stranded -- the realized loss was not even the worst the book allowed."""
+    worst = max(ep["q"] * R.dearer_leg_own(ep) for ep in R.EPISODES)
+    assert worst == D("1.5200")
+    assert worst > D("1.1594")
+
+
+def test_the_cap_changes_no_completion_outcome():
+    """Every episode still opens and all seven completions survive, which is
+    the property the owner required: no profitable delayed completion lost."""
+    for b in (D("0.40"), D("0.60"), D("0.80"), D("1.00")):
+        rows = [R.capped_episode(e, b) for e in R.EPISODES]
+        assert all(r["opened"] for r in rows), b
+        assert sum(1 for r in rows if r["completed"]) == 7, b
+
+
+def test_0145z_the_counterexample_survives_the_cap():
+    ep = [e for e in R.EPISODES if e["w"] == "0145z"][0]
+    r = R.capped_episode(ep, D("0.80"))
+    assert r["opened"] and r["completed"]
+    assert r["qty"] == D("1.53")                 # 1.56 -> 1.53, one grid step
+    assert r["pnl"] > D("0.19")                  # 0.2028 -> 0.1989
+
+
+def test_eighty_cents_is_the_optimum_on_this_campaign():
+    base = sum(R.baseline_pnl(e) for e in R.EPISODES)
+    nets = {b: sum(R.capped_episode(e, b)["pnl"] for e in R.EPISODES)
+            for b in (D("0.40"), D("0.60"), D("0.80"), D("1.00"), D("1.20"))}
+    assert nets[D("0.80")] == max(nets.values())
+    assert nets[D("0.80")] > base
+    assert nets[D("1.20")] < base                # too loose to help
+
+
+def test_a_budget_below_one_grid_step_refuses_rather_than_sizing_to_zero():
+    ep = [e for e in R.EPISODES if e["w"] == "0130z"][0]
+    assert R.capped_qty(ep, D("0.001")) is None
+    assert R.capped_episode(ep, D("0.001"))["opened"] is False
+
+
+def test_quantities_stay_on_the_grid_and_only_shrink():
+    for ep in R.EPISODES:
+        q = R.capped_qty(ep, D("0.80"))
+        assert q is not None
+        assert q % D("0.01") == 0
+        assert q <= ep["q"]

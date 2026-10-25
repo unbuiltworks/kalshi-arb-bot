@@ -317,6 +317,70 @@ def replay_episode(frames: List[Dict[str, Any]], ep: Mapping[str, Any],
             "total": taker_pnl + tail}
 
 
+#: The planned complement own price for the episode that never completed.
+#: 0130z's UP leg `be31b2bd` was presubmitted at own 0.3300 against a
+#: 0.3500/0.3600 book, so the plan was 0.62 + 0.33 = 0.95.
+PLANNED_COMPLEMENT_OWN = {"0130z": D("0.33")}
+
+
+def dearer_leg_own(ep: Mapping[str, Any]) -> D:
+    """The leg the cap sizes on: the dearer of the two in the opening plan.
+
+    For a completed pair both own prices are the realized ones. For the
+    episode that stranded, the complement's own price is the one its
+    presubmit record carries.
+    """
+    comp = ep.get("complete_own")
+    if comp is None:
+        comp = PLANNED_COMPLEMENT_OWN.get(ep["w"], D(0))
+    return max(ep["own"], comp)
+
+
+def capped_qty(ep: Mapping[str, Any], budget: Optional[D],
+               min_qty: D = D("0.01")) -> Optional[D]:
+    """The quantity `build_orders` would emit under a notional budget.
+
+    Mirrors the implementation: bound by budget / dearer, quantised DOWN to
+    the venue grid, and refused outright when one grid step already costs
+    more than the budget. None means the leg is NOT OPENED.
+    """
+    if budget is None:
+        return ep["q"]
+    dear = dearer_leg_own(ep)
+    if dear <= 0:
+        return ep["q"]
+    if min_qty * dear > budget:
+        return None
+    by_notional = budget / dear
+    q = min(ep["q"], by_notional)
+    q = (q / min_qty).to_integral_value(rounding="ROUND_FLOOR") * min_qty
+    return q if q >= min_qty else None
+
+
+def capped_episode(ep: Mapping[str, Any], budget: Optional[D]
+                   ) -> Dict[str, Any]:
+    """Settled outcome of one episode under the cap, scaled from realized.
+
+    THE ONE MODELLING ASSUMPTION, stated plainly: a smaller clip is assumed
+    to fill and complete exactly as the realized one did. That is
+    CONSERVATIVE for the cap -- a smaller maker clip fills at least as
+    easily, never less -- and it is the only assumption, because every price
+    here is the realized one.
+    """
+    q = capped_qty(ep, budget)
+    if q is None:
+        return {"window": ep["w"], "qty": D(0), "pnl": D(0),
+                "residual": D(0), "opened": False,
+                "completed": ep["complete_t"] is not None}
+    if ep["complete_t"] is None:
+        return {"window": ep["w"], "qty": q,
+                "pnl": -(q * ep["own"]), "residual": q,
+                "opened": True, "completed": False}
+    pair = ep["own"] + ep["complete_own"]
+    return {"window": ep["w"], "qty": q, "pnl": q * (D(1) - pair),
+            "residual": D(0), "opened": True, "completed": True}
+
+
 def baseline_pnl(ep: Mapping[str, Any]) -> D:
     if ep["complete_t"] is None:
         return -(ep["q"] * ep["own"])

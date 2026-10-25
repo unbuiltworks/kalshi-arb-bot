@@ -35,6 +35,10 @@ APPROVED_ENV = {
     # configuration, so the fixture carries it: unset leaves the gate inert,
     # which is not the configuration that was approved.
     "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "5.00",
+    # THE WORST-CASE OPENING NOTIONAL. Same reasoning: the owner approved
+    # this campaign AS the notional-cap experiment, so unset -- which leaves
+    # the cap inert -- is not the approved configuration.
+    "L5_TS_OPENING_NOTIONAL_BUDGET_USD": "0.80",
 }
 
 
@@ -81,7 +85,7 @@ def test_the_approved_configuration_passes_every_row(approved):
     # 21 -> 22 when defensive_execution_enabled moved to
     # observed_not_graded; 22 -> 23 with the phase-1 invariant that the
     # mandate signing key is never reachable from the runtime.
-    assert out["checked"] == 25
+    assert out["checked"] == 26
     assert out["failed"] == []
 
 
@@ -328,6 +332,7 @@ APPROVED_SNAPSHOT = {
     "L5_SHADOW_ONLY": "1",
     "L5_MAX_TOTAL_EXPOSURE_USD": "5",
     "L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD": "5.00",
+    "L5_TS_OPENING_NOTIONAL_BUDGET_USD": "0.80",
 }
 
 #: what production is believed to hold TODAY: the four-window campaign's
@@ -337,6 +342,10 @@ APPROVED_SNAPSHOT = {
 #: prediction has to say so instead of inheriting the approved value.
 _CUR = dict(APPROVED_SNAPSHOT)
 _CUR.pop("L5_MAX_CAMPAIGN_ADDITIONAL_LOSS_USD", None)
+#: production has never carried the opening-notional cap either, so it is
+#: the OTHER row the owner must set, and the prediction must name it rather
+#: than inherit the approved value.
+_CUR.pop("L5_TS_OPENING_NOTIONAL_BUDGET_USD", None)
 CURRENT_SNAPSHOT = dict(_CUR,
                         **{"L5_LIVE_AUTH_MAX_OPEN": "8",
                            "L5_LIVE_AUTH_MAX_COMPLETE": "12",
@@ -360,7 +369,9 @@ def test_todays_production_values_predict_exactly_the_rows_that_must_change():
         "submission_budget_replace", "submission_backstop",
         "max_windows_authorization",
         # unset in production, so the campaign bound is inert
-        "campaign_additional_loss_usd"}
+        "campaign_additional_loss_usd",
+        # likewise the opening-notional cap: unset means no cap at all
+        "opening_notional_budget_usd"}
     # and the margin and the whole derived guard already hold at 300
     for name in ("cancel_margin_s", "defensive_terminal_s",
                  "defensive_guard_opens_s", "defensive_last_actionable_s"):
