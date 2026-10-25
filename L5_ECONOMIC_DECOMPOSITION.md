@@ -193,3 +193,62 @@ ceiling is $5.10/day against his rate and −$24.66/day against ours.
 JOINT — the `MAX_UNMATCHED` attribution and the pattern-spotting came from different
 sessions), zero surviving economic estimates, thirteen withdrawals. Both survivors predate
 today and were already in committed files.**
+
+---
+
+# ADDENDUM 2 — the designated benchmark is ~10% of the corpus, and the incentive side is now venue-confirmed
+
+## A. The 527-window benchmark is a PARTIAL CAPTURE
+
+`data/l5/raw/activity_gap.jsonl.gz` — **40 MB compressed, committed, never decompressed** — plus
+`data/l5/raw/sep/`. My entire benchmark was built from `activity.jsonl` alone.
+
+| | activity.jsonl (what I used) | activity_gap.jsonl.gz | ratio |
+|---|---|---|---|
+| btc-updown-15m windows | **527** | **5,094** | **9.7x** |
+| btc-updown-15m TRADE rows | **62,020** | **630,551** | **10.2x** |
+| MAKER_REBATE rows | 4 | 107 | 27x |
+| TAKER_REBATE rows | 3 | 70 | 23x |
+| REWARD rows | 3 | 17 | 6x |
+
+**So every figure I derived from the designated 527-window benchmark rests on ~9.5% of L5's
+actual BTC15m corpus**, including: median residual 117.1, the opening-time distribution
+(median 15s into the window), two-layer fidelity 10.82%, median window capital $937.68, the
+62,020-decision comparison, and `trajectory.json`'s own checkpoints and `first_formation`.
+
+**None of those are withdrawn — they are re-labelled as a 9.5% sample.** The direction of each
+may hold; no magnitude should be quoted as corpus-wide until rebuilt.
+
+A peer session found this independently from the other side (their activity.jsonl turnover was
+10x short of a committed realized-economics figure). Their cited
+`l5_btc15m_realized_economics.json` is **not** at that path on this branch, so I have not
+adopted its 5,546-window / $6,070,392 numbers; what I verified is the gap file itself.
+
+## B. The incentive decomposition is now VENUE-CONFIRMED
+
+Summing deduplicated `MAKER_REBATE` / `TAKER_REBATE` / `REWARD` rows across **both** files —
+primary venue records, not a report summary:
+
+| line | venue rows | audit header | delta |
+|---|---|---|---|
+| maker rebates | **$35,228.32** (110 rows) | $33,929 | +3.8% |
+| taker rebates | **$7,525.73** (73 rows) | $7,323 | +2.8% |
+| **REWARD / liquidity** | **$28,797.69** (20 rows) | $26,956 | +6.8% |
+| **total** | **$71,551.74** | $68,208 | +4.9% |
+
+**Every line agrees within 7%.** This is the first independent verification of L5's incentive
+side from primary venue records, and it confirms the mechanism rather than a summary of it.
+
+**`REWARD` is 40% of his incentive income, paid in 20 lumps averaging $1,440** — and it is the
+line our account has captured **$0.00** of, ever.
+
+## C. What this changes
+
+The **verdict does not move**: the mechanism is still a rate on turnover, and $480/day still
+needs turnover of the same order as L5's entire operation. On the denominator a peer offers a
+defensible range rather than one multiple — per window-day 0.41x, per calendar day 1.18x, mine
+0.97x — all within a factor of three and **all saying the same thing**. The range is the
+honest form.
+
+What it does change is **the evidence base under the behavioural work**, which is now known to
+be a 9.5% sample, and **the standing of the incentive mechanism**, which is now venue-confirmed.
