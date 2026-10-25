@@ -25,7 +25,8 @@ venue-confirmed or read from the running process, never inferred from a variable
 | filled orders / fill events / partial fills | 1 / 1 / 0 |
 | cancelled / rejected | 0 / 0 |
 | maker orders / taker orders | 1 / 0 |
-| contracts filled (first leg / complement) | **1.56 UP** / 0 |
+| contracts filled (first leg / complement) | **1.56 UP @ $0.44/contract** / 0 |
+| acquisition cost | **$0.6864** = 1.56 x $0.44 |
 | venue commission `actual_fees_usd` | $0 (maker-only charges none) |
 | settled matched qty / matched P&L | 0 / $0.0000 |
 | settled residual qty / side | 1.56 / UP |
@@ -34,8 +35,45 @@ venue-confirmed or read from the running process, never inferred from a variable
 | venue state | `MARKET_STATE_EXPIRED` |
 | **realized net** | **−$0.686400** |
 
-The complement was never acquired. The controller refused it, correctly: the fee-safe pair
-had moved to ~1.38 against a 0.96 ceiling, so completing would have locked a ~38c/unit loss.
+**CORRECTION to my own earlier wording.** I previously wrote this fill as "1.56 UP @
+$0.6864". $0.6864 is the ACQUISITION COST, not the per-contract price. The price was **$0.44**
+and 1.56 x $0.44 = $0.6864 exactly. A peer session (session_01255E3fhWg7BWTviGCMRknt) caught
+the inconsistency and asked whether the realized figure was understated by $0.3844. It is
+not: the venue's -$0.686400 is correct and equals the full acquisition cost of a residual that
+settled worthless. Only my description of the price was wrong, so neither the day total
+(-$2.0192) nor the 5.2457 that refused 2000z/2015z moves.
+
+### The complement order lifecycle, since it decides whether completion is raisable
+
+`L5_LIVE_WINDOW` for 1945z:
+
+```
+ORDER:SUBMITTED: 1                                   <- one order all window
+TWO_SIDED_PROBE:COMPLEMENT_PAIR_ABOVE_CAP: 12        <- complement EVALUATED 12x, refused on price
+TWO_SIDED_PROBE:PAST_COMPLETE_CUTOFF: 153
+TWO_SIDED_PROBE:PAST_TERMINAL: 22
+VALIDATION_GATES:L5_DAILY_LOSS_LIMIT:5.245700>=5: 2  <- the loss gate fired inside 1945z too
+arm_refused_window_not_usable: 18
+```
+
+`L5_RESIDUAL_BOOK_SAMPLE` at 19:59:44Z, 19:59:50Z and 19:59:57Z — seconds before close:
+
+```
+residual 1.56   held_side UP   order_resting: FALSE
+book: bids [] , n_bids 0 , asks [["0.0100","31387.83"], ["0.0200","2605.83"], ...]
+```
+
+So, precisely: **no complement was ever POSTED, and none was resting at close. But the
+complement was EVALUATED twelve times and refused because the pair was above cap** — our YES
+side had collapsed to ~1c with no bids at all, so the complement cost ~$0.98 against a held
+leg of $0.44, a pair of ~1.42 against the 0.96 ceiling. The controller was right to refuse:
+completing would have locked ~42c/unit.
+
+For this window the answer is therefore neither "the measure is too narrow" nor "we simply
+never posted". Completion was **evaluated and economically unavailable**. That does not
+settle the 299 matched-0 windows in the other dataset, which remain open and are the right
+place to look, because `COMPLEMENT_PAIR_ABOVE_CAP` is a decision our cap makes, not a fact
+about the market.
 
 ### 2000z — PROVISIONAL, zero orders
 
