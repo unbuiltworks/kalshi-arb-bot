@@ -1,0 +1,38 @@
+{
+ "source": "PROXY_NOT_SETTLEMENT_GRADE",
+ "note": "Coinbase proxy; NOT a settlement replay and not BRTI",
+ "per_second_sd": 3.000376226644777,
+ "observations": 2075,
+ "by_tau": {
+  "60": {
+   "windows": 211,
+   "decided": 0,
+   "pct": 0.0,
+   "median_z": 0.0
+  },
+  "30": {
+   "windows": 211,
+   "decided": 203,
+   "pct": 96.2085308056872,
+   "median_z": 12.046942472596104
+  },
+  "10": {
+   "windows": 211,
+   "decided": 211,
+   "pct": 100.0,
+   "median_z": 55.23026711299697
+  },
+  "5": {
+   "windows": 211,
+   "decided": 210,
+   "pct": 99.5260663507109,
+   "median_z": 146.5957736180827
+  },
+  "1": {
+   "windows": 211,
+   "decided": 211,
+   "pct": 100.0,
+   "median_z": 1084.3136219611774
+  }
+ }
+}
