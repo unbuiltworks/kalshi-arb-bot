@@ -1,3 +1,78 @@
+# WITHDRAWN: the positive result did not replicate
+
+**I am withdrawing the headline of this document.** Four more out-of-sample
+windows reversed its sign. The diagnostic finding below stands; the economic
+estimate does not.
+
+## What reversed
+
+The marginal effect of moving the completion ceiling 0.96 → 0.99:
+
+| clip | n = 10 OOS (original) | **n = 14 OOS (after widening)** |
+|---|---|---|
+| 1.56 | **+0.0897** | **−0.1576** |
+| 2.50 | **+0.1438** | **−0.2525** |
+| 5.00 | **+0.2875** | **−0.5050** |
+
+Sign flipped at every clip on a 40 % larger sample. **n = 10 was noise.** It
+also failed my own pre-declared decision rule on both runs — the worst seed was
+negative throughout, and at n = 14 it is worse: −1.0920, −1.7500, −3.5000.
+
+And the finding inverts in a way that matters: at n = 14, **more completion
+produced less money.** At clip 5 the 0.96 arm matched 10.6 windows for +2.8237
+while the 0.99 arm matched 11.3 for +2.3188. If completion were the money, that
+could not happen.
+
+## Why — and why no quick n fixes it
+
+A completed pair earns about **1.5 cents**. An unmatched residual settles 0 or 1
+at a roughly fair price: **zero mean, about $0.44 of sd at clip 1.56.** So the
+arms differ by a cent and a half per completion while each window carries
+~thirty times that in zero-mean residual variance. Which arm looks better is
+decided by residual luck, not by completion economics.
+
+Power, from the measured numbers:
+
+| clip | per-window noise sd | per-window effect | windows needed (2σ) |
+|---|---|---|---|
+| 1.56 | 0.1604 | 0.0113 | **~812** |
+| 2.50 | 0.2568 | 0.0180 | ~811 |
+| 5.00 | 0.5137 | 0.0361 | ~811 |
+
+**~810 out-of-sample windows — about 8.5 days of continuous single-series
+collection — to resolve the arms at two sigma.** Not 20, which is what I
+estimated when I proposed widening n. My estimate was wrong by ~40×, because I
+sized it against the *total* sd rather than against the per-window noise the
+effect has to beat.
+
+## What still stands
+
+The **diagnostic** claims are distributional and arithmetic, not economic
+estimates, and they are unaffected:
+
+* `pair_cost ≡ 1 − spread`, verified on 32 of 32 rows;
+* PMUS BTC15m offers a pair at ~0.99 and **0 of 228 OOS frames above 1.0000**;
+* the 0.96 ceiling therefore refuses ~90–100 % of what the venue offers, which
+  is **configuration, not market**;
+* a ceiling is a permission, not a price, so ceilings above ~0.99 are inert;
+* the empirical break-even is 1.000–1.008 depending on clip, with no per-order
+  fee on PMUS.
+
+What does **not** stand is any claim that acting on that diagnosis pays. The cap
+is demonstrably why windows end unmatched. Whether un-capping is worth money is
+**unresolved and not resolvable on this data**.
+
+## Consequence for the completion thesis
+
+The peer session and I independently converged on "the money is in completion,
+not capture". That remains the best available *hypothesis* and it is what the
+residual decomposition implies — but **this sweep is now evidence against it
+being measurable at useful size**, and at n = 14 it points mildly the wrong way.
+Neither of us should carry it forward as established.
+
+---
+*(Original document follows unchanged, for the record.)*
+
 # PMUS BTC15m: the first positive out-of-sample result in this thread — and it is weak
 
 **VENUE: PMUS**, `cpc-btc-updown-15m`, venue-native terminal-print labels.
