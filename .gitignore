@@ -81,3 +81,7 @@ data/l5_master/
 
 # derived, 28MB, rebuilt by analysis/l5/taker_entry/extract.py
 analysis/l5/taker_entry/windows.json
+
+# 28MB replay dataset derived by analysis/l5/taker_entry/extract.py; the findings,
+# the TRAIN/HELD-OUT split and its sha256 live in windows.provenance.json beside it.
+analysis/adverse_entry/windows.json

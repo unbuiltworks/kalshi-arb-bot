@@ -1,0 +1,18 @@
+{
+  "by_series": {
+    "KXBTC15M": 48,
+    "KXDOGE15M": 3,
+    "KXETH15M": 50,
+    "KXSOL15M": 14,
+    "KXXRP15M": 15
+  },
+  "file": "analysis/adverse_entry/windows.json",
+  "note": "28MB derived dataset, gitignored per repo convention for regenerable artifacts. This manifest is the durable provenance record.",
+  "regenerate": "python3 analysis/l5/taker_entry/extract.py (see L5_TAKER_ENTRY_RESEARCH.md)",
+  "sha256": "615ec3af3cc47b7690afa4d2e78d2406e77e16521565a7f860746f9c51eb21ca",
+  "split": {
+    "HELD_OUT": "series == KXBTC15M (single evaluation only)",
+    "TRAIN": "series != KXBTC15M (threshold fitting)"
+  },
+  "windows": 130
+}
