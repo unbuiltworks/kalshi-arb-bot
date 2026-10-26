@@ -207,3 +207,85 @@ the pre-correction process.
 `permits_this_window: true`, expiry 22:32:56Z. Remaining 15-minute
 boundaries outnumber the 3 remaining windows, so the window budget binds
 before the deadline does.
+
+---
+
+## 2100z and 2115z — venue-confirmed paired execution reproduced
+
+Deployment `4753571f` SUCCESS 21:00:46.965Z. The running process reports
+`{"name":"window_strategy","source":"env L5_WINDOW_STRATEGY","effective":""}`
+— empty, so neither engine is excluded. That was the only change; no code,
+no limit, no other variable.
+
+The two-sided engine submitted immediately once unblocked.
+
+### 2100z — one pair completed, one leg stranded, SETTLED
+
+Five venue orders, three filled, two cancelled individually:
+
+| order | side | wire px | own px | qty | time | comm | terminal |
+|-------|------|--------:|-------:|----:|------|-----:|----------|
+| `DBBF8JDG11MV` | DOWN | 0.79 | 0.21 | 1.72 | 21:05:12.513 | 0.0000 | FILLED |
+| `DBBFGVD011MV` | UP   | 0.61 | 0.61 | 1.72 | 21:05:46.084 | 0.0000 | FILLED |
+| `DBBFS23011R3` | DOWN | 0.74 | 0.26 | 1.77 | 21:06:27.513 | 0.0000 | FILLED |
+| `DBBFS9YG11MM` | UP   | —    | —    | —   | 21:06:20.576 | —      | CANCELED 21:06:48.757 |
+| `DBBG9B8G51MM` | UP   | —    | —    | —   | 21:07:26.634 | —      | CANCELED 21:09:27.605 |
+
+Complement filled **33.6 s** after the first leg. Live cash ledger
+reconciles exactly: `leg_cost_up 1.049200` = 1.72 x 0.61;
+`leg_cost_down 0.821400` = 1.72 x 0.21 + 1.77 x 0.26.
+
+`L5_LIVE_SETTLED` 21:16:26.942Z, `resolution_source: VENUE_SETTLEMENT_PX`,
+`venue_state: MARKET_STATE_EXPIRED`, `yes_value: 1.0000`:
+
+    matched_qty      1.72
+    matched_cost     1.454016045845272206303724928   -> 0.8454 per contract
+    matched_redeem   1.72
+    matched_pnl      +0.265983954154727793696275072
+    residual_qty     1.77 DOWN
+    residual_cost    0.416583954154727793696275072
+    residual_pnl     -0.416583954154727793696275072
+    settlement_pnl   -0.150600
+
+Matched pair cost is **0.8454**, not the 0.82 a naive read of the two DOWN
+fills gives: the engine allocates `dn_cost` pro-rata over all 3.49 DOWN
+contracts (0.2354/contract) rather than assigning the cheaper 0.21 fill to
+the matched pair. 0.8454 is level with the best Oct 24 pair (0.85).
+
+UP settled, so the stranded DOWN lost its full cost. The completed pair
+earned more than the strand lost per contract, but the strand was larger.
+
+### 2115z — pair completed at above-baseline size
+
+| order | side | wire px | own px | qty | time | comm |
+|-------|------|--------:|-------:|----:|------|-----:|
+| `DBBMDNRG11N2` | UP   | 0.37 | 0.37 | 2.18 | 21:16:43.422 | 0.0000 |
+| `DBBMDRRG11MQ` | DOWN | 0.42 | 0.58 | 2.18 | 21:17:04.253 | 0.0000 |
+
+Pair cost **0.95**, complement **20.8 s** after the first leg. Both orders
+were placed together at 21:16:32.139 and filled 11.3 s and 32.1 s later.
+Settlement pending at time of writing.
+
+### Comparison with the Oct 24 baseline
+
+| | Oct 24 (n=4 pairs) | Oct 26 2100z/2115z (n=2 pairs) |
+|---|---|---|
+| pair cost | 0.85, 0.93, 0.94, 0.96 | **0.8454**, 0.95 |
+| qty per leg | 1.04 - 1.27 | **1.72, 2.18** |
+| complement delay | 21.1 - 125.5 s, mean 82.0 | **33.6 s, 20.8 s** |
+| commission | 0.0000 on all 11 fills | 0.0000 on all 5 fills |
+| completion | 4 of 7 settled windows (57%) | 2 of 2 windows produced a pair |
+
+**Larger size did not degrade execution.** At 1.72 and 2.18 contracts --
+above the entire 1.04-1.27 baseline band -- both complements filled, and
+both filled faster than the baseline mean. Commission stayed 0.0000, so
+these remain maker fills. Two pairs is far too small a sample to claim a
+fill-probability improvement, but it does rule out the specific worry that
+3-contract sizing would stop filling.
+
+### State
+
+`windows_spent: 7, windows_remaining: 1, max_windows: 8`,
+`submissions_spent: 8`, `halt_latch: CLEAR`,
+`all_time_realized_usd: -13.79110000`, expiry 22:32:56Z. 2115z settlement
+and one remaining window outstanding.
