@@ -4680,7 +4680,45 @@ class Runner:
         if ws is None:
             return None            # the deadline path owns an unknown window
         phase = TSP.completion_phase(now, float(ws))
-        if phase != "COMPLETION":
+        # PATIENCE PROTECTS A RESTING QUOTE. WITH NOTHING RESTING IT PROTECTS
+        # NOTHING, AND THAT COST US $0.5204 ON 1945z.
+        #
+        # The MAKER-phase bail exists because "the resting quote is still the
+        # better price and crossing early throws away the edge it was placed
+        # for". True -- while a quote is actually resting. On
+        # cpc-btc-updown-15m-2026-10-25-1945z it was not: the maker complement
+        # route had refused twelve times on COMPLEMENT_PAIR_ABOVE_CAP, so
+        # nothing was ever posted, and all 121 L5_RESIDUAL_BOOK_SAMPLE rows of
+        # that window carry `order_resting: false`. The patience rationale was
+        # guarding an edge that did not exist.
+        #
+        # What it cost, measured on that window's own books: the executable
+        # exit was worth -$0.0144 at 204s (pair 0.99) and the engine's first
+        # legal opportunity was at 600s, by which time the pair had decayed to
+        # 1.33 and the best exit was -$0.5348.
+        #
+        # SO THE PHASE GATE IS RELAXED ONLY WHERE ITS OWN REASON DOES NOT
+        # APPLY, and the relaxation is evaluate-only: `completion_decision`
+        # still has to find a STRICT improvement in the worse settlement
+        # outcome, and L5_TS_COMPLETION_CROSS plus an armed transport still
+        # gate every submission. With crossing unauthorized this changes no
+        # order, only what the log can see.
+        #
+        # FAIL CLOSED: `still_fillable_order_count` charges an unreadable,
+        # parked or quarantined row as live, so "nothing is resting" has to be
+        # positively established. If we cannot tell, we stay patient.
+        resting = None
+        try:
+            resting = int(self.store.still_fillable_order_count())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["ts_completion_resting_unreadable:%s"
+                       % type(exc).__name__] += 1
+        no_quote_resting = resting == 0
+        if phase == "LATE":
+            return None
+        if phase != "COMPLETION" and not no_quote_resting:
             return None
         if now - self.last_ts_completion_t < self.TS_COMPLETION_EVERY_S:
             return None
@@ -4691,6 +4729,9 @@ class Runner:
             # another let a caller miss `crossed` on exactly the paths where
             # it matters most -- the fail-closed ones.
             rec = dict(src, phase=phase, cross=False, crossed=False,
+                       still_fillable_orders=resting,
+                       evaluated_early_no_quote_resting=(
+                           phase != "COMPLETION" and no_quote_resting),
                        authorized_to_cross=(
                            self.ts_completion_cross_authorized()))
             emit("L5_TS_COMPLETION", rec)
@@ -4709,6 +4750,9 @@ class Runner:
             gap_suspected=src["gap_suspected"])
         authorized = self.ts_completion_cross_authorized()
         rec = dict(dec, market=slug, phase=phase,
+                   still_fillable_orders=resting,
+                   evaluated_early_no_quote_resting=(
+                       phase != "COMPLETION" and no_quote_resting),
                    authorized_to_cross=authorized,
                    armed=bool(t.armed),
                    up_qty=str(src["up_qty"]), dn_qty=str(src["dn_qty"]),
