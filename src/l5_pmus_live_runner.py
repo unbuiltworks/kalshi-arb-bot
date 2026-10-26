@@ -1369,6 +1369,18 @@ class Runner:
         # recorder (`getattr(..., None)` at the call site) rather than a
         # different constructor.
         self.executor.fill_calibration = self.fill_calibration
+        # AND THE STORE, because `apply_order_progress` is where a venue fill
+        # is actually booked and is reached by four call sites -- this
+        # reconcile, the executor's terminal self-call, and the deadman
+        # cancel verifier. Attaching only to the executor would leave a fill
+        # booked by the deadman path invisible to calibration, which is the
+        # fill most worth seeing: it is the one that happened while we were
+        # trying to cancel.
+        try:
+            self.executor.store.fill_calibration = self.fill_calibration
+        except BaseException as _exc:                          # noqa: BLE001
+            if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                raise
         # THE MIRROR ITSELF, not a snapshot of it. A snapshot refreshed in
         # `shadow_tick` -- which runs LAST in the tick -- left the money
         # path's first intents after any start with `book: null` and
