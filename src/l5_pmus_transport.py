@@ -690,6 +690,18 @@ def rows_of(resp: Any, key: str) -> List[dict]:
     return [r for r in (rows or []) if isinstance(r, Mapping)]
 
 
+#: THE CHEAPEST PRICE AN ORDER MAY USE, for the fee bound only.
+#:
+#: DUPLICATED ON PURPOSE, NOT IMPORTED. This module is packaged into the
+#: GET-ONLY observer image, which does not carry `l5_two_sided_probe` --
+#: `test_deploy_fallthrough_guard` enforces that closure, and reading
+#: `TSP.MIN_PRICE` from here broke it. Importing the probe would either fail
+#: at runtime in that image or pull a POST-capable path into it, so the value
+#: is restated and `test_the_fee_floor_matches_the_probe_band` keeps the two
+#: from drifting.
+FEE_FLOOR_PRICE = D("0.05")
+
+
 class PmusTransport:
     """GET-only until armed. Mutations exist but are gated behind preflight."""
 
@@ -1452,12 +1464,7 @@ class PmusTransport:
         # cheapest price an order may use. On a $5 principal that is $0.3301
         # at the 0.05 band floor, not $0.1738 -- so the figure a campaign is
         # activated on understated the worst case by 90%.
-        try:
-            from src import l5_two_sided_probe as _TSP
-            floor_p = D(str(_TSP.MIN_PRICE))
-        except BaseException:                                  # noqa: BLE001
-            floor_p = D("0.05")      # the venue band floor, fail-conservative
-        worst_p = floor_p
+        worst_p = FEE_FLOOR_PRICE
         contracts = cap / worst_p
         fee = fees.taker_fee(worst_p, contracts)
         # format(..., "f") not str(): Decimal renders 5/0.5 as "1E+1",

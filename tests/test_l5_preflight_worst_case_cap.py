@@ -114,3 +114,28 @@ def test_the_fee_bound_is_taken_at_the_cheapest_price_under_fixed_principal(
     at_floor = D(out["max_taker_fee_usd"])
     for p in ("0.06", "0.1", "0.25", "0.5", "0.75", "0.95"):
         assert fees.taker_fee(D(p), cap / D(p)) <= at_floor, p
+
+
+def test_the_fee_floor_matches_the_probe_band():
+    """`l5_pmus_transport.FEE_FLOOR_PRICE` restates the probe's MIN_PRICE
+    rather than importing it, because the transport ships in the GET-only
+    observer image and `l5_two_sided_probe` does not
+    (`test_deploy_fallthrough_guard`). Tests may import both, so this is
+    where the two are kept from drifting."""
+    from src import l5_pmus_transport as T
+    from src import l5_two_sided_probe as TSP
+    assert D(str(T.FEE_FLOOR_PRICE)) == D(str(TSP.MIN_PRICE))
+
+
+def test_the_transport_does_not_import_the_probe():
+    """The import that broke the observer image closure must not come back."""
+    import ast
+    src = ast.parse(open("src/l5_pmus_transport.py").read())
+    names = set()
+    for n in ast.walk(src):
+        if isinstance(n, ast.ImportFrom) and n.module:
+            names.update("%s.%s" % (n.module, a.name) for a in n.names)
+        elif isinstance(n, ast.Import):
+            names.update(a.name for a in n.names)
+    assert not any("l5_two_sided_probe" in x for x in names), sorted(
+        x for x in names if "two_sided" in x)

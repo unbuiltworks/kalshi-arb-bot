@@ -277,12 +277,28 @@ def test_redact_strips_headers_and_secrets(creds):
 def test_worst_case_comes_from_the_fee_implementation(creds):
     rep = tp().preflight()
     wc = rep["worst_case"]
-    # fee is maximised at p=0.5; $5 buys 10 contracts there
-    assert wc["fee_maximising_price"] == "0.5"
-    assert wc["contracts_at_that_price"] == "10"
+    # CORRECTED. This asserted p=0.5 on the reasoning that Theta*C*p*(1-p)
+    # peaks there. It does -- PER CONTRACT. Under a fixed PRINCIPAL the
+    # contract count is cap/p, so fee = Theta*cap*(1-p), which is monotone
+    # DECREASING in p and therefore maximised at the CHEAPEST admissible
+    # price. The old expectation understated the bound by 90% ($0.1738
+    # against $0.3301 on $5), which is the wrong direction for a figure a
+    # campaign is activated on.
+    #
+    # The test's own intent -- that the fee comes from the fee
+    # IMPLEMENTATION and not from a literal -- is unchanged and still
+    # asserted below.
     from src import pmus_fees as fees
-    assert D(wc["max_taker_fee_usd"]) == fees.taker_fee(D("0.5"), D("10"))
+    from src import l5_pmus_transport as _T
+    floor = D(str(_T.FEE_FLOOR_PRICE))
+    assert wc["fee_maximising_price"] == "0.05"
+    assert D(wc["contracts_at_that_price"]) == D("5") / floor
+    assert D(wc["max_taker_fee_usd"]) == fees.taker_fee(
+        floor, D("5") / floor)
     assert D(wc["worst_case_total_usd"]) == D("5") + D(wc["max_taker_fee_usd"])
+    # no price above the floor can beat it
+    for p in ("0.1", "0.25", "0.5", "0.9"):
+        assert fees.taker_fee(D(p), D("5") / D(p)) <= D(wc["max_taker_fee_usd"])
     assert wc["tick_from_market"] == "0.01"
 
 
