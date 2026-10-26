@@ -598,3 +598,24 @@ def test_ingest_telemetry_can_never_cost_the_heartbeat():
     s._ingest_report_safe = R.Runner._ingest_report_safe.__get__(s)
     rep = s._ingest_report_safe()
     assert rep["error"] == "RuntimeError"
+
+
+def test_the_cursor_cannot_grow_without_bound_or_rewrite_when_clean():
+    """The incident this whole change addresses was an exhausted volume, so
+    the cure must not put an unbounded file on another one -- and at a 3s
+    poll it must not rewrite a megabyte when nothing changed."""
+    root = tempfile.mkdtemp()
+    path = os.path.join(root, "c.json")
+    cur = R.IngestCursor(path)
+    t0 = W0330
+    for i in range(R.CURSOR_MAX_KEYS + 5000):
+        cur.add("tx%d|tok|BUY|0.47|10|%d" % (i, t0 + i), t0 + i)
+    cur.save()
+    assert len(cur._keys) == R.CURSOR_MAX_KEYS          # capped
+    assert os.path.getsize(path) < 4 * 1024 * 1024      # bounded on disk
+
+    before = os.path.getmtime(path)
+    cur.save()                                          # nothing changed
+    assert os.path.getmtime(path) == before             # so nothing written
+
+    assert len(R.IngestCursor(path).load()._keys) == R.CURSOR_MAX_KEYS
