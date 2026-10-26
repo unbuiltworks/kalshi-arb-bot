@@ -2873,14 +2873,15 @@ def _run_session_body(t: Optional[Transport] = None,
                 if px_ >= D(str(opp_ask)):
                     return f"would_cross:{opp_ask}"
                 if relation_ in requote_relations() and touch != px_:
-                    # A RE-QUOTE THAT REPOSTS THE SAME PRICE IS PURE LOSS.
+                    # A RE-QUOTE THAT REPOSTS THE SAME PRICE IS PURE LOSS, AND
+                    # A RE-QUOTE WITH NO LEGAL PRICE AT ALL IS WORSE.
                     #
                     # This fires when the TOUCH moves away from our resting
                     # price. For OPEN and EXTEND that implies a different
                     # price, because they join the touch. A COMPLETE does
                     # NOT: its price comes from the pair bound, so the
-                    # repost recomputes the identical number and we have
-                    # cancelled only to re-queue behind everyone.
+                    # repost can recompute the identical number and we would
+                    # have cancelled only to re-queue behind everyone.
                     #
                     # Measured on the 2026-09-13/14 cohort (472 real orders,
                     # venue order_ids): of 301 re-quote transitions, 283 --
@@ -2891,12 +2892,36 @@ def _run_session_body(t: Optional[Transport] = None,
                     # behaviour this engine is meant to reproduce.
                     #
                     # So: ask what the repost would actually price, with the
-                    # same call the repost itself makes, and if it is the
-                    # price already resting, KEEP RESTING. This changes no
-                    # price, no bound and no size -- it only declines to
-                    # surrender queue position for nothing.
+                    # same call the repost itself makes, and then
+                    #
+                    #   no legal price  -> KEEP RESTING  (the cancel-before-
+                    #                      replacement defect: `nxt` is None
+                    #                      both when no fee-safe complement
+                    #                      exists and when pricing raised, and
+                    #                      the previous version fell through to
+                    #                      the cancel in BOTH cases, abandoning
+                    #                      the only order working inventory we
+                    #                      had already paid for)
+                    #   same price      -> KEEP RESTING  (the churn above)
+                    #   a different legal price -> cancel and repost at it
+                    #
+                    # A DIFFERENT PRICE IS NOT TESTED FOR DIRECTION, and that
+                    # is deliberate. The legal complement price FALLS as our
+                    # cost basis rises (basis 0.30 -> 0.68, basis 0.70 -> 0.28
+                    # at a 0.98 bound), so a lower `nxt` means the resting
+                    # order now sits ABOVE what the pair bound sanctions.
+                    # Holding it there to "keep queue position" would preserve
+                    # an order that can fill outside the bound; reposting lower
+                    # is the conservative act. Whatever `nxt` is, it came from
+                    # the bound-checked pricing call, so it is legal by
+                    # construction.
+                    #
+                    # This changes no price, no bound and no size -- it only
+                    # declines to surrender queue position for nothing, and
+                    # never destroys a complement it cannot replace.
                     if relation_ == "complete":
                         nxt = None
+                        priced_failed = None
                         try:
                             surplus = (inv.avg_dn() if side_up_
                                        else inv.avg_up())
@@ -2905,12 +2930,19 @@ def _run_session_body(t: Optional[Transport] = None,
                                 touch=(touch
                                        if complement_pricing() == "l5_touch"
                                        else None))
-                        except Exception:              # noqa: BLE001
-                            nxt = None                 # fail to the old path
-                        if nxt is not None and D(str(nxt)) == px_:
+                        except Exception as exc:      # noqa: BLE001
+                            priced_failed = type(exc).__name__
+                        if nxt is None:
+                            # FAIL CLOSED MEANS KEEP RESTING.
+                            track["requote_held"] = (
+                                ("price_failed:%s" % priced_failed)
+                                if priced_failed else "no_legal_replacement")
+                            return None
+                        if D(str(nxt)) == px_:
                             track["requotes_suppressed"] = int(
                                 track.get("requotes_suppressed") or 0) + 1
                             return None
+                        track["requote_replacement"] = str(nxt)
                     return f"touch_moved:{touch}"
                 if inv.up + inv.dn > 0:
                     k = spring_state_key(inv, b["bid"], settlement_t, wall(),
