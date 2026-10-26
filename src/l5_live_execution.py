@@ -1198,12 +1198,39 @@ class InventoryStore:
         n += len(self.state.get("quarantine") or {})
         return n
 
+    @staticmethod
+    def worst_case_remaining(o: Mapping[str, Any]) -> D:
+        """Still-fillable shares on a live row; UNREADABLE IS NOT ZERO.
+
+        `outstanding_by_market` has always substituted
+        `UNKNOWN_PRICE_WORST_CASE` for an unreadable PRICE, on the stated
+        principle that an unreadable row is not an absent one. The same rows'
+        unreadable QUANTITY was mapped to zero, which is the opposite
+        convention and the one direction that loses money: a row we cannot
+        size contributed nothing to the residual contract bound, so the bound
+        could be understated by a whole clip while `live_order_count` -- which
+        does count an unreadable row -- happily allowed the pair slot.
+
+        Order of preference: the readable `remaining`; else the row's own
+        ordered quantity; else the approved absolute residual ceiling, which
+        guarantees the bound is at least at the ceiling that refuses any
+        further opening. Fail closed, never open.
+        """
+        rem = venue_decimal(o.get("remaining"))
+        if rem is not None:
+            return rem if rem > 0 else D(0)
+        for k in ("qty", "quantity", "original_qty", "ordered_qty"):
+            v = venue_decimal(o.get(k))
+            if v is not None and v > 0:
+                return v
+        return ABS_RESIDUAL_CAP_CONTRACTS
+
     def outstanding_by_market(self) -> Dict[str, D]:
         """Still-fillable notional per market, at the price we offered."""
         out: Dict[str, D] = {}
         for o in (self.state.get("live_orders") or {}).values():
             m = str(o.get("market"))
-            rem = venue_decimal(o.get("remaining")) or D(0)
+            rem = self.worst_case_remaining(o)
             if rem <= 0:
                 continue
             px = venue_decimal(o.get("price"))
@@ -1218,7 +1245,7 @@ class InventoryStore:
         for o in (self.state.get("live_orders") or {}).values():
             if str(o.get("market")) != market:
                 continue
-            rem = venue_decimal(o.get("remaining")) or D(0)
+            rem = self.worst_case_remaining(o)
             r += rem if str(o.get("side")) == "UP" else -rem
         return r
 
