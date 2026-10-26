@@ -9,3 +9,22 @@ private_key.pem
 .github/
 CLAUDE.md
 README.md
+# BUILD SNAPSHOT SIZE IS A DEPLOYABILITY PROPERTY.
+#
+# Deployments d1447ee0 and 067f0b23 both FAILED at "failed to fetch
+# snapshot", stalling at 71.1 MB and 65.6 MB of a 221,279,882-byte snapshot
+# after ~275s. Two identical failures, so it is the snapshot and not a blip;
+# the same 221 MB fetched fine for cc98f7b5 at 16:14Z, so the builder's
+# throughput moved, not this repo.
+#
+# data/ is 935 MB of the working tree and tests/ is 42 MB, and NEITHER is
+# copied into the image: all 58 COPY/ADD sources in
+# deploy/l5_pmus_live/Dockerfile resolve under src/ (53), config/ (4) and
+# analysis/ (1). So excluding them cannot change a single byte of the image,
+# and tests/test_dockerignore_cannot_drop_a_copied_path.py pins that -- if
+# anyone later copies from an ignored path the test fails rather than the
+# build silently losing a file.
+#
+# analysis/ is NOT excluded: COPY analysis/l5/l5_action_model_v2.json.
+data/
+tests/
