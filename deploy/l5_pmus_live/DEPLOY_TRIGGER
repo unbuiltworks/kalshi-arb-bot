@@ -2171,3 +2171,51 @@ deploy: 2026-10-26 marker-reset fix — campaign untouched, maker-only, DISARMED
 # camp1.87265e609a92b5a2889e5392, its deadline 2026-10-26T17:42:45+00:00 and
 # its durable window ledger are untouched. No capital change, no taker mode.
 deploy: 2026-10-26 calibration lifecycle — observational only, campaign untouched
+
+# ============================================================================
+# 2026-10-26 — NOT_ARMED claim accounting. Owner-authorized.
+#
+# WHAT IT FIXES. The submission claim is consumed before the wire and is
+# never returned. That rule is correct and is UNCHANGED here: a claim
+# released on a crash could buy a second order into a venue that already
+# holds the first. But a DISARMED transport raises NotArmed out of submit()
+# without attempting a POST, so nothing reached the venue and nothing could
+# have.
+#
+# Campaign camp1.87265e609a92b5a2889e5392 closed having spent 1 of 21
+# submissions and 1 of 6 OPENs on a well-formed MAKER intent -- 1715z DOWN
+# 0.4500 x 1.54 -- refused NOT_ARMED after its claim was already durable.
+# submitted:false, venue_order_id:null, and the budget counted a submission
+# the venue never saw.
+#
+# THE FIX IS ORDERING, NOT RELEASING. FaithfulExecutor.disarmed_refusal()
+# declines to TAKE a claim when the transport is provably disarmed. Nothing
+# releases a claim; the never-reset rule is untouched.
+#
+# AN EFFICIENCY GUARD, NOT A SAFETY GATE -- the same class as
+# presend_cross_refusal, which exists for the same reason and which this
+# runs immediately after, at the last point before a claim becomes durable.
+# It acts ONLY on a positive `armed is False`; an absent attribute, a
+# raising attribute, 0, "", None or no transport all FAIL OPEN into the
+# existing path, because a telemetry read must never be able to halt
+# trading. Refusing early on a definite False is free: submit() would
+# refuse the same order on the next line. It cannot authorize anything --
+# a structural AST scan pins that its only calls are getattr, str and type.
+#
+# REGRESSION, name-level, both directions, same machine, same worktree:
+#   deployed cc98f7b5 : 20 failed, 13,637 passed, 27 skipped, 1 xfailed, 14 errors
+#   this tree 91845f8f: 20 failed, 13,656 passed, 27 skipped, 1 xfailed, 14 errors
+#   introduced: 0   fixed: 0   common: 34 / 34 identical by name
+#   +19 passed = exactly the new tests (test_l5_disarmed_claim_accounting)
+#
+# NOTHING ELSE CHANGES. No limit, price, size, mode, strategy ownership or
+# crossing permission is touched. L5_TS_MIN_FIRST_LEG_PRICE stays as
+# deployed, the 0.96 pair ceiling stays, L5_MAX_LIVE_ORDERS stays 1,
+# L5_DEFENSIVE_COMPLETION stays 0, L5_MAKER_PAIR_GATE is not set and its
+# code is NOT in this lineage. No capital change, no taker mode.
+#
+# THE EXPIRED CAMPAIGN IS NOT RESTARTED OR EXTENDED. Nonce
+# camp1.87265e609a92b5a2889e5392, deadline 2026-10-26T17:42:45+00:00 and
+# its durable window ledger (4 of 4 spent) are untouched. The executor
+# stays DISARMED.
+deploy: 2026-10-26 NOT_ARMED claim accounting — ordering fix, campaign untouched
