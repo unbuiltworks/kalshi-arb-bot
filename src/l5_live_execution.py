@@ -5301,6 +5301,39 @@ class FaithfulExecutor:
         dec = FT.l5_native(row)
         prov = Provenance(key, dec or {"unreadable": True}, market, window)
 
+        # THE TWO-SIDED LEG MARKERS ARE PER-CALL SCRATCH, AND THEY LEAKED.
+        #
+        # `_probe_leg_pending` / `_probe_round_pending` are set by the
+        # two-sided path later in THIS method and cleared immediately before
+        # the wire, after every gate. Nineteen refusal exits sit between
+        # those two points, and none of them reset the markers -- so any
+        # two-sided plan that was built and then refused left them set for
+        # the life of the process.
+        #
+        # WHAT THAT COST, MEASURED LIVE IN 1445z. The strategy-ownership
+        # gate below reads exactly this marker to decide whether the order in
+        # hand belongs to the two-sided engine. The first two-sided plan of
+        # the window was refused (LEG_WOULD_CROSS:DOWN), which latched the
+        # marker, and from then on every L5-following order in the window was
+        # refused by the gate whose entire purpose is to exclude the OTHER
+        # engine. 15 of 27 decisions died there, none reached the maker-only
+        # overlay (`safety` was null in all of them), and nothing reached the
+        # venue. The latch is self-sustaining: only a successful submission
+        # clears it, and it is what prevents a successful submission.
+        #
+        # It is also a risk defect, not merely a throughput one. The
+        # second-maker-slot evidence below reads `_probe_round_pending` to
+        # decide whether this order is a pair leg, so a stale marker could
+        # grant an L5-following order a slot reserved for a two-sided
+        # complement. Clearing the markers on entry is therefore
+        # risk-REDUCING; it relaxes no limit, moves no price or size, and
+        # introduces no crossing.
+        #
+        # Nothing legitimately depends on them surviving a call: both are
+        # set and consumed within one `handle()`.
+        self._probe_leg_pending = None
+        self._probe_round_pending = None
+
         # INDEPENDENT HALT, read FIRST. Before translation, before the book,
         # before any other gate: a halt must not depend on the rest of this
         # method working. Absent, stale or unreachable all refuse, because a
