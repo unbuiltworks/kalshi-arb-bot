@@ -95,15 +95,62 @@ def test_a_cancellation_race_fails_closed():
                 orders_uncertain="x") == "ORDER_STATE_UNCERTAIN"
 
 
-def test_unreadable_remaining_is_not_treated_as_zero_exposure():
+def test_unreadable_remaining_fails_closed_not_to_zero():
+    """An unreadable row is not an absent one -- in QUANTITY as in price.
+
+    This used to map to 0 contracts, so a row we could not size contributed
+    nothing to the residual bound while `live_order_count` still counted it
+    and the pair slot still opened. The bound could be understated by a
+    whole clip.
+    """
+    store = LX.InventoryStore.__new__(LX.InventoryStore)
+    # no size readable anywhere -> the approved absolute ceiling
+    store.state = {"live_orders": {
+        "a": {"market": "m", "side": "DOWN", "remaining": None},
+    }}
+    assert store.outstanding_residual("m") == -LX.ABS_RESIDUAL_CAP_CONTRACTS
+    # a corrupt string is equally unreadable
+    store.state = {"live_orders": {
+        "a": {"market": "m", "side": "UP", "remaining": "not-a-number"},
+    }}
+    assert store.outstanding_residual("m") == LX.ABS_RESIDUAL_CAP_CONTRACTS
+    # the row's own ordered quantity is preferred when present
+    for field in ("qty", "quantity", "original_qty", "ordered_qty"):
+        store.state = {"live_orders": {
+            "a": {"market": "m", "side": "DOWN", "remaining": None,
+                  field: "1.25"},
+        }}
+        assert store.outstanding_residual("m") == D("-1.25"), field
+    # a readable zero still means zero: a filled-out row is not exposure
+    store.state = {"live_orders": {
+        "a": {"market": "m", "side": "DOWN", "remaining": "0"},
+    }}
+    assert store.outstanding_residual("m") == D(0)
+
+
+def test_unreadable_remaining_also_fails_closed_in_notional():
+    """The same row must not be free in the cash/exposure bound either."""
+    store = LX.InventoryStore.__new__(LX.InventoryStore)
+    store.state = {"live_orders": {
+        "a": {"market": "m", "side": "DOWN", "remaining": None,
+              "price": None},
+    }}
+    got = store.outstanding_by_market()
+    assert got.get("m", D(0)) > 0, got
+    # worst-case price x worst-case qty, so neither unknown is free
+    assert got["m"] == LX.UNKNOWN_PRICE_WORST_CASE * LX.ABS_RESIDUAL_CAP_CONTRACTS
+
+
+def test_an_unreadable_row_now_blocks_a_further_opening():
+    """The hole this closes, end to end through the bound."""
+    lim = limits()
     store = LX.InventoryStore.__new__(LX.InventoryStore)
     store.state = {"live_orders": {
         "a": {"market": "m", "side": "DOWN", "remaining": None},
     }}
-    # None -> 0 by venue_decimal; the bound then rests on the live-order
-    # COUNT and on orders_uncertain, which is why both exist. Pin the
-    # behaviour so a change to it is visible.
-    assert store.outstanding_residual("m") == D(0)
+    out = store.outstanding_residual("m")
+    assert call(lim, qty=D("1"), residual_after=D("-1"),
+                outstanding_residual=out) == "MAX_ABS_RESIDUAL"
 
 
 def test_the_cap_arithmetic_never_exceeds_the_absolute_ceiling():

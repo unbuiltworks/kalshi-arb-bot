@@ -164,3 +164,119 @@ produces repeatable positive **settled** net across these eight windows.
 Items 1-3 are preparation and bounding. **Item 4 is the only step that can
 put an order on the wire**, and I will not take it without explicit
 authorization.
+
+---
+
+# Pre-arming verification: two blockers found
+
+## Check 1 — parity: PASS
+
+Baseline 20 failed / 13,770 passed. With the reporting fix, the floor fix
+and the nine invariant tests: **20 failed / 13,799 passed, 0 regressions**.
+Same 20 pre-existing failures and 14 pre-existing errors throughout.
+
+## Check 2 — unreadable remaining: FAILED, now FIXED
+
+It did **not** fail closed. `outstanding_residual` and
+`outstanding_by_market` both mapped an unreadable `remaining` to **0
+contracts** (`venue_decimal(...) or D(0)`), while `live_order_count`
+correctly counted such a row as live. So a row we could not size contributed
+nothing to the residual contract bound yet still occupied an order slot and
+still let the pair slot open: the 3-contract bound could be understated by a
+whole clip.
+
+The same method already substituted `UNKNOWN_PRICE_WORST_CASE` for an
+unreadable **price**, on the stated principle that an unreadable row is not
+an absent one. The quantity used the opposite convention.
+
+`InventoryStore.worst_case_remaining` now prefers the readable `remaining`,
+then the row's own ordered quantity (`qty` / `quantity` / `original_qty` /
+`ordered_qty`), then `ABS_RESIDUAL_CAP_CONTRACTS = 3` — so the bound is
+always at least at the ceiling that refuses a further opening. Both call
+sites use it. A readable zero still means zero. Four added tests cover the
+null, the corrupt string, each quantity fallback, the notional path, and the
+end-to-end refusal. Invariant tests now 11.
+
+## Check 3 — deployment health: BLOCKED, cannot be done as asked
+
+The service builds from a **different branch** than the one this work is on:
+
+    service source   branch claude/l5-narrow-campaign-prep
+                     commitSha ff1f8ea3  (PINNED)
+    watchPatterns    ["deploy/l5_pmus_live/DEPLOY_TRIGGER"]
+    our commits      claude/l5-wallet-ingestion-fix-kqcqoa
+
+So `cb22bb47`, `c16ee7ec` and the fail-closed fix are **not reachable by the
+deployed service**. Making them reachable needs one of:
+
+1. merging/pushing them onto `claude/l5-narrow-campaign-prep` — which my
+   standing instructions forbid without explicit permission ("NEVER push to
+   a different branch without explicit permission"); or
+2. repointing the service source to `claude/l5-wallet-ingestion-fix-kqcqoa`
+   — a service-config change.
+
+Either way the pinned `commitSha` must be moved and
+`deploy/l5_pmus_live/DEPLOY_TRIGGER` touched, since a code change alone does
+not match the watch pattern. **I have not done any of this.** There is no
+new deployment to verify, so check 3 cannot pass yet.
+
+## Check 4 — loss and exposure gates: PASS, but they expose a conflict
+
+Read from the running process at 22:46:25Z:
+
+    max_cumulative_loss_usd        20       account-wide lifetime
+    max_l5_cumulative_loss_usd     20
+    max_l5_daily_loss_usd           5
+    max_worst_case_deficit_usd   3.00
+    max_unmatched_contracts         5
+    max_cash_deployed_usd        6.00       (the one proposed to change)
+    cash_policy            NO_RECYCLING
+    halt_gate_configured         true
+    campaign budget_usd         29.30       peak_usd 19.9451
+
+All effective. **But the campaign worst-case budget conflicts with the
+proposed $15 envelope.** `l5_live_validation_gates.py:694`:
+
+    campaign_used = max(0, -cumulative_realized)
+                    + cash_committed(filled_legs)
+                    + pending_obligation(outstanding)
+
+gated as `campaign_used + this_order > budget_usd` ($29.30), with
+`cumulative_realized` the **account-wide** figure, now **-$15.0545**.
+
+    usable headroom   29.30 - 15.0545 = $14.2455
+    per round         $2.99 (measured)
+    max rounds        4.76  ->  R = 4
+
+| envelope | R | projected worst case | verdict |
+|---------:|--:|---------------------:|---------|
+| $15.00 | 5 | $30.0545 | **REFUSED** `CAMPAIGN_WORST_CASE_BUDGET` |
+| $14.00 | 4 | $29.0545 | OK |
+| **$12.00** | **4** | **$27.0545** | **OK, with margin** |
+| $9.00 | 3 | $24.0545 | OK |
+
+So **R=5 at $15 cannot run** without raising `L5_CAMPAIGN_BUDGET_USD`, which
+is a loss-budget increase and is not requested. R=4 fits. Note the headroom
+grows automatically as realized losses shrink, since the term is
+`max(0, -cumulative_realized)`.
+
+## Check 5 — campaign reissue: ready, deliberately not yet issued
+
+Nonce `4f1b25fe655d20d53ca8d698`, scope verified: series
+`cpc-btc-updown-15m-`, `max_windows 8`, `max_total_exposure_usd 20`,
+`max_daily_loss_usd 5`, 3h clamped to 4h by `state()`. The emitter must run
+at activation because the staleness gate is 4h, so issuing it now would
+guarantee a stale document. The exhausted
+`camp1.eb79a4b271122db56669c089` (8/8, realized **-$1.4140**) is untouched.
+
+## Revised recommendation
+
+**R=4, not R=5.** `L5_MAX_CASH_DEPLOYED_USD = 12.00`,
+`L5_TS_ROUND_ALLOCATIONS = 4`. That is the largest frequency the existing
+loss budget permits, and it is the modelled break-even (+$0.018/window)
+rather than +$0.113. It still tests the thesis — whether pairs scale with R
+while unmatched inventory stays bounded — which is what the experiment is
+for. I would rather run the honest R=4 than request a loss-budget increase
+to reach a projection.
+
+**Aggregate exposure stays $20. The previous campaign is not reset.**
