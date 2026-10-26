@@ -2115,3 +2115,59 @@ deploy: 2026-10-26 narrow release, DISARMED, owner-authorized
 # untouched, the durable window ledger keeps its 3 spent / 1 remaining, and the
 # executor was DISARMED between windows when this shipped.
 deploy: 2026-10-26 marker-reset fix — campaign untouched, maker-only, DISARMED at ship
+
+# =============================================================== 2026-10-26
+# THE CALIBRATION LIFECYCLE, COMPLETED. Two commits cherry-picked onto the
+# deployed 271d79dc: production delta 3 files, +353, -0, of which 235 lines
+# are tests. The broad development branch is NOT promoted -- the frozen-rule
+# document and the offline sequential replay stay out of the image, because
+# neither is money-path code.
+#
+# WHAT WAS BROKEN. `pre_submit` was the ONLY recorder call the money path
+# ever made. `on_ack`, `on_fill`, `on_settlement` and `on_fees_actual` were
+# implemented and called from nowhere, so `terminal_state` could never be
+# PRESENT and all 10,741 recorded rows read `venue_actual_status: PENDING`.
+# A genuine resting order would have produced an unusable record even after
+# it filled -- and that record is the only route to the maker fill rate the
+# whole maker-only question depends on.
+#
+# WHERE THE HOOKS NOW FIRE. `InventoryStore.apply_order_progress`, which is
+# the ONE idempotent choke point for a venue fill. Four call sites reach it:
+# the runner's reconcile, the executor's terminal self-call, and the deadman
+# cancel verifier. Wiring only the executor would have left a fill booked by
+# the deadman path invisible, and that is the fill most worth seeing -- it is
+# the one that happened while we were trying to cancel. on_ack stays
+# immediately after transport.submit.
+#
+# IDEMPOTENCY IS INHERITED, NOT REIMPLEMENTED. The hooks sit inside
+# `delta > 0`: a repeated poll of the same cumQuantity records nothing
+# exactly as it books nothing, partial fills arrive as successive deltas, and
+# a cum_qty that goes BACKWARDS still refuses and records nothing.
+#
+# FEES ARE THE VENUE'S OR THEY ARE UNKNOWN. `commission` fills the ACTUAL
+# column. Unstated -> None, never zero. Zero -> zero, because this venue
+# credits rebates separately and a zero commission is not a rebate.
+#
+# A MODELLED OBSERVATION IS STILL NEVER A VENUE-CONFIRMED FILL. on_terminal
+# fires here only on `prog["terminal"]` with venue_confirmed=True. The shadow
+# path keeps passing False and its records stay unusable by design.
+#
+# RECORDER FAULTS CANNOT MATTER. `_calib_safe` swallows everything, treats an
+# absent recorder and one missing the hooks as normal, and returns None
+# always. Parametrised tests raise from each hook in turn and assert the fill
+# is still booked, the position is still correct and nothing is refused.
+# Losing an order's identity over telemetry is far worse than losing the
+# telemetry.
+#
+# REGRESSION, name-level, both directions, same machine:
+#   baseline 61df0e88 : 20 failed, 13,641 passed, 27 skipped, 1 xfailed, 14 errors
+#   this tree         : 20 failed, 13,691 passed, 27 skipped, 1 xfailed, 14 errors
+#   introduced: 0   fixed: 0   common: 34 / 34 identical by name
+#   +50 passed = exactly the new tests (20 marker-leak, 15 replay, 15 lifecycle)
+# 218 money-path tests pass on this release lineage.
+#
+# NOTHING ELSE CHANGES. No limit, price, size, mode, strategy ownership or
+# crossing permission is touched. The campaign nonce
+# camp1.87265e609a92b5a2889e5392, its deadline 2026-10-26T17:42:45+00:00 and
+# its durable window ledger are untouched. No capital change, no taker mode.
+deploy: 2026-10-26 calibration lifecycle — observational only, campaign untouched
