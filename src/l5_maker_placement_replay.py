@@ -88,6 +88,25 @@ FILL_STRICT = "STRICT"           # fills only when it comes THROUGH it
 #: was going to strand the leg anyway.
 LOOSE_AFTER_S = 600.0
 
+TICK = D("0.01")
+
+#: COMPLETION-ORDER POLICY KNOBS. All default to the baseline, so a call that
+#: passes none of them behaves exactly as before they existed.
+#:
+#: `complete_improve_ticks` rests the complement BELOW its own touch. It buys
+#: a better price at the cost of fill probability, and it is the knob the
+#: completion leg should respond to: once a first leg is filled, the move that
+#: strands it is the SAME move that makes the complement cheaper, so the
+#: completion order is favourably selected and can afford to ask for more.
+#:
+#: `escalate_after_s` gives that up near the deadline, because an unfilled
+#: complement is worth far less than a slightly worse pair.
+#:
+#: `reduce_after_s` is the other lever on a residual the book will not
+#: complete: SELL the first leg back as a taker and take a small certain loss
+#: instead of carrying full notional into settlement. Measured against doing
+#: nothing, which is what the deployed engine does.
+
 
 def own_maker_cost(side: str, bid: D, ask: D) -> D:
     """Our own cost of RESTING a buy of `side`, in own terms."""
@@ -111,7 +130,12 @@ def replay(rows: Sequence[Mapping[str, Any]],
            fill_mode: str = FILL_STRICT,
            open_maker: bool = True,
            tight_ceiling: D = GATE.TAKER_ERA_CEILING,
-           loose_after_s: float = LOOSE_AFTER_S) -> Dict[str, Any]:
+           loose_after_s: float = LOOSE_AFTER_S,
+           complete_improve_ticks: int = 0,
+           complete_drift: Optional[D] = None,
+           escalate_after_s: Optional[float] = None,
+           reduce_after_s: Optional[float] = None,
+           policy_label: str = "JOIN") -> Dict[str, Any]:
     """Chronological, one shared ledger, one outstanding order.
 
     `ceiling` bounds what a COMPLETION may pay. `open_maker=False` opens at
@@ -123,7 +147,11 @@ def replay(rows: Sequence[Mapping[str, Any]],
 
     ceiling = D(str(ceiling))
     tight_ceiling = min(D(str(tight_ceiling)), ceiling)
+    c_drift = REPRICE_DRIFT if complete_drift is None else D(str(complete_drift))
     cash = D(0)
+    n_reduced = 0
+    reduced_usd = D(0)
+    reduced: List[Dict[str, Any]] = []
     realized = D(0)
     rebate = D(0)
     peak_cash = D(0)
@@ -210,12 +238,39 @@ def replay(rows: Sequence[Mapping[str, Any]],
                 resting = None
                 n_cancel_time += 1
             else:
-                want = (own_maker_cost(resting["side"], bid, ask)
-                        if resting["kind"] == "OPEN"
-                        else own_maker_cost(resting["side"], bid, ask))
-                if abs(want - resting["own_px"]) > REPRICE_DRIFT:
+                base = own_maker_cost(resting["side"], bid, ask)
+                tol = (REPRICE_DRIFT if resting["kind"] == "OPEN"
+                       else c_drift)
+                want = base - resting.get("improve", D(0))
+                if abs(want - resting["own_px"]) > tol:
                     resting = None
                     n_cancel_drift += 1
+
+        # ---- 2b. REDUCE a residual the book will not complete. Selling the
+        # held leg back is a taker trade and is charged the taker fee; it
+        # takes a small certain loss instead of carrying full notional into
+        # settlement. Only with nothing resting, so it can never race our
+        # own complement.
+        if (reduce_after_s is not None and leg is not None
+                and resting is None and el >= reduce_after_s):
+            proceeds = own_maker_cost(leg["side"], bid, ask)
+            if 0 < proceeds < 1:
+                q = leg["qty"]
+                pnl = q * (proceeds - leg["cost"]) - taker_fee(q, proceeds)
+                if leg.get("taker"):
+                    pnl -= taker_fee(q, leg["cost"])
+                realized += pnl
+                cash -= q * leg["cost"]
+                n_reduced += 1
+                reduced_usd += pnl
+                reduced.append({
+                    "market": mkt, "side": leg["side"],
+                    "own_cost": str(leg["cost"]), "qty": str(q),
+                    "sold_at": str(proceeds), "net_pnl": str(pnl)})
+                leg = None
+                equity_peak = max(equity_peak, realized)
+                drawdown = min(drawdown, realized - equity_peak)
+                continue
 
         # ---- 3. placement. One outstanding order, ever.
         if resting is None:
@@ -249,7 +304,10 @@ def replay(rows: Sequence[Mapping[str, Any]],
                 if el > COMPLETE_CUTOFF_S:
                     continue
                 comp = "DOWN" if leg["side"] == "UP" else "UP"
-                px = own_maker_cost(comp, bid, ask)
+                imp = TICK * D(int(complete_improve_ticks))
+                if escalate_after_s is not None and el >= escalate_after_s:
+                    imp = D(0)          # give up the improvement near the end
+                px = own_maker_cost(comp, bid, ask) - imp
                 if px <= 0 or px >= 1:
                     continue
                 # PATIENT: the loose ceiling is reachable only once the leg is
@@ -262,6 +320,7 @@ def replay(rows: Sequence[Mapping[str, Any]],
                     continue
                 resting = {"market": mkt, "side": comp, "own_px": px,
                            "qty": leg["qty"], "kind": "COMPLETE",
+                           "improve": imp,
                            "mid_at_place": (bid + ask) / D(2)}
 
         equity_peak = max(equity_peak, realized)
@@ -281,6 +340,14 @@ def replay(rows: Sequence[Mapping[str, Any]],
     ev = sorted({s["settlement_evidence"] for s in strands})
     return {
         "label": "L5_MAKER_PLACEMENT_REPLAY_V1",
+        "policy_label": policy_label,
+        "complete_improve_ticks": int(complete_improve_ticks),
+        "complete_drift": str(c_drift),
+        "escalate_after_s": escalate_after_s,
+        "reduce_after_s": reduce_after_s,
+        "n_reduced": n_reduced,
+        "reduced_usd": str(reduced_usd),
+        "reduced": reduced,
         "ceiling": str(ceiling),
         "tight_ceiling": str(tight_ceiling),
         "loose_after_s": loose_after_s,
@@ -312,4 +379,202 @@ def replay(rows: Sequence[Mapping[str, Any]],
             "placement is triggered by a print we could only have seen "
             "after the fact. A fill requires the opposite touch to reach "
             "our resting price; STRICT requires it to pass through."),
+    }
+
+
+# ===================================================================
+# TWO RESTING LEGS. Models a configuration that is NOT authorized live.
+# ===================================================================
+#
+# THE IDENTITY THAT MOTIVATES IT. Resting both legs at their own touch costs
+# `bid + (1 - ask) = 1 - spread`, so a maker-maker pair EARNS EXACTLY THE
+# SPREAD and a ceiling C is reachable only when `spread >= 1 - C`. Measured:
+# a 0.96 ceiling needs a 4-cent spread, present in 10.0% (PMUS observer) to
+# 22.3% (Gemini) of snapshots; a 0.99 ceiling needs 1 cent, present in 100%.
+#
+# THIS IS WHY `max_live_orders = 1` IS THE BINDING CONSTRAINT and why the
+# single-order results above are so poor: with one order we rest a leg, it
+# fills when the market comes to it, and then we must CHASE the complement.
+# That chase is the adverse-selection trap -- completion fill rate 10.5% to
+# 40%, with the strand term dominating the whole result.
+#
+# WHAT THIS FUNCTION DOES NOT ASSUME. Resting both legs does not make both
+# fill. A trending market sweeps one side and leaves the other, which lands
+# us in exactly the same strand. So `both_filled` is COUNTED here, never
+# assumed, and a one-sided outcome is settled or reduced like any strand.
+#
+# NOT AN AUTHORIZATION. The deployed `max_live_orders` is 1 and this changes
+# nothing about it. Running two resting legs live would need an explicit
+# owner decision and its own worst-case-deficit analysis, because two
+# resting legs can both fill and both commit capital.
+
+def replay_two_sided(rows: Sequence[Mapping[str, Any]],
+                     outcomes: Mapping[str, Mapping[str, Any]],
+                     *, ceiling: D = GATE.TAKER_ERA_CEILING,
+                     fill_mode: str = FILL_STRICT,
+                     reduce_after_s: Optional[float] = None,
+                     policy_label: str = "TWO_SIDED") -> Dict[str, Any]:
+    from src.l5_sequential_replay import taker_fee
+
+    ceiling = D(str(ceiling))
+    cash = D(0)
+    realized = D(0)
+    rebate = D(0)
+    peak_cash = D(0)
+    equity_peak = D(0)
+    drawdown = D(0)
+    legs: Dict[str, Dict[str, Any]] = {}      # side -> resting order
+    filled: Dict[str, Dict[str, Any]] = {}    # side -> filled leg
+    cur = None
+    completed: List[Dict[str, Any]] = []
+    strands: List[Dict[str, Any]] = []
+    reduced: List[Dict[str, Any]] = []
+    n_both = 0
+    n_one = 0
+    n_none = 0
+    n_placed = 0
+
+    def close_window(mkt, bid=None, ask=None):
+        nonlocal legs, filled, cash, realized, n_both, n_one, n_none
+        if not filled and not legs:
+            return
+        if len(filled) == 2:
+            n_both += 1
+        elif len(filled) == 1:
+            n_one += 1
+        elif legs:
+            n_none += 1
+        for sd, l in list(filled.items()):
+            o = outcomes.get(mkt) or {}
+            w = o.get("winner")
+            payoff = l["qty"] if w == sd else D(0)
+            pnl = payoff - l["qty"] * l["cost"]
+            realized += pnl
+            cash -= l["qty"] * l["cost"]
+            strands.append({
+                "market": mkt, "side": sd, "own_cost": str(l["cost"]),
+                "qty": str(l["qty"]), "winner": w, "opened_as": "MAKER",
+                "settlement_evidence": o.get("evidence",
+                                             "NO_OUTCOME_AVAILABLE"),
+                "net_pnl": str(pnl)})
+        legs = {}
+        filled = {}
+
+    for r in rows:
+        mkt = str(r["market"])
+        el = float(r["elapsed_s"])
+        bid, ask = D(str(r["bid"])), D(str(r["ask"]))
+        if cur is not None and cur != mkt:
+            close_window(cur)
+        cur = mkt
+
+        # 1. fills on either resting leg
+        for sd in ("UP", "DOWN"):
+            o = legs.get(sd)
+            if o is None:
+                continue
+            tk = own_taker_cost(sd, bid, ask)
+            if _filled(fill_mode, tk, o["own_px"]):
+                filled[sd] = {"cost": o["own_px"], "qty": o["qty"]}
+                cash += o["qty"] * o["own_px"]
+                peak_cash = max(peak_cash, cash)
+                rebate += maker_rebate_credited(o["qty"], o["own_px"])
+                del legs[sd]
+
+        # 2. BOTH legs filled -> the pair is locked
+        if len(filled) == 2:
+            q = min(filled["UP"]["qty"], filled["DOWN"]["qty"])
+            pair = filled["UP"]["cost"] + filled["DOWN"]["cost"]
+            pnl = q * (D(1) - pair)
+            realized += pnl
+            completed.append({
+                "market": mkt, "entry_own": str(filled["UP"]["cost"]),
+                "complement_own": str(filled["DOWN"]["cost"]),
+                "pair": str(pair), "qty": str(q), "net_pnl": str(pnl),
+                "opened_as": "MAKER", "rebate_credited": "0.00"})
+            cash -= (filled["UP"]["qty"] * filled["UP"]["cost"]
+                     + filled["DOWN"]["qty"] * filled["DOWN"]["cost"])
+            n_both += 1
+            filled = {}
+            for sd in list(legs):
+                del legs[sd]
+
+        # 3. reduce a one-sided fill the book will not complete
+        if (reduce_after_s is not None and len(filled) == 1
+                and el >= reduce_after_s):
+            sd, l = next(iter(filled.items()))
+            proceeds = own_maker_cost(sd, bid, ask)
+            if 0 < proceeds < 1:
+                q = l["qty"]
+                pnl = q * (proceeds - l["cost"]) - taker_fee(q, proceeds)
+                realized += pnl
+                cash -= q * l["cost"]
+                reduced.append({"market": mkt, "side": sd,
+                                "own_cost": str(l["cost"]), "qty": str(q),
+                                "sold_at": str(proceeds),
+                                "net_pnl": str(pnl)})
+                filled = {}
+                for s2 in list(legs):
+                    del legs[s2]
+
+        # 4. place BOTH legs when nothing is working and the spread pays
+        if not legs and not filled and el <= ENTRY_CUTOFF_S:
+            up = own_maker_cost("UP", bid, ask)
+            dn = own_maker_cost("DOWN", bid, ask)
+            pair = up + dn
+            if 0 < up < 1 and 0 < dn < 1 and pair <= ceiling:
+                q = floor_to_increment(min(
+                    OPENING_LEG_MAX_CONTRACTS,
+                    OPENING_NOTIONAL_BUDGET_USD / max(up, dn)))
+                if q > 0 and cash + q * pair <= MAX_CASH_DEPLOYED_USD:
+                    legs = {"UP": {"own_px": up, "qty": q},
+                            "DOWN": {"own_px": dn, "qty": q}}
+                    n_placed += 1
+
+        # 5. abandon unfilled legs past the completion cutoff
+        if legs and el > COMPLETE_CUTOFF_S:
+            legs = {}
+
+        equity_peak = max(equity_peak, realized)
+        drawdown = min(drawdown, realized - equity_peak)
+
+    if cur is not None:
+        close_window(cur)
+
+    ev = sorted({s["settlement_evidence"] for s in strands})
+    tot = n_both + n_one
+    return {
+        "label": "L5_TWO_SIDED_MAKER_REPLAY_V1",
+        "policy_label": policy_label,
+        "authorized_for_live": False,
+        "ceiling": str(ceiling),
+        "fill_mode": fill_mode,
+        "reduce_after_s": reduce_after_s,
+        "n_rows": len(rows),
+        "n_windows": len({str(r["market"]) for r in rows}),
+        "n_pairs_placed": n_placed,
+        "n_both_filled": n_both,
+        "n_one_filled": n_one,
+        "n_neither_filled": n_none,
+        "both_fill_rate": (None if tot == 0
+                           else str((D(n_both) / D(tot)).quantize(
+                               D("0.0001")))),
+        "n_completed": len(completed),
+        "n_stranded": len(strands),
+        "n_reduced": len(reduced),
+        "completed_pairs": completed,
+        "stranded": strands,
+        "reduced": reduced,
+        "net_realized_usd": str(realized),
+        "rebate_credited_usd": str(rebate),
+        "net_with_rebate_usd": str(realized + rebate),
+        "worst_drawdown_usd": str(drawdown),
+        "peak_cash_deployed_usd": str(peak_cash),
+        "settlement_evidence_grades": ev,
+        "labels": (
+            "TWO resting legs, which the deployed max_live_orders=1 does NOT "
+            "permit. both_fill_rate is COUNTED, never assumed: a trending "
+            "market sweeps one side and leaves a strand. No fee is charged "
+            "on a maker leg; the rebate is reported separately and is $0.00 "
+            "at the deployed caps. Nothing here is a venue fill."),
     }
