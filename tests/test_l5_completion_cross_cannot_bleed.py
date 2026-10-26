@@ -322,3 +322,95 @@ def test_the_ceiling_refuses_exposure_INCREASING_orders_beyond_the_limit():
                               "up_cost": "0", "dn_cost": "0"})
     assert why is not None, "a $0.69 one-sided leg must not clear a $0.10 bound"
     assert "WORST_CASE" in why or "DEFICIT" in why, why
+
+
+# ===== THE 1945z STRAND WAS A DWELL-FLAG PROBLEM, NOT A may_complete ONE
+#
+# `may_complete` permits right up to 720s and the defensive arm window is
+# [660,720) -- INSIDE the permitted region -- so may_complete never blocked
+# the defensive exit and changing it would not have helped.
+#
+# What blocked it is the DWELL. `l5_defensive_completion.decide` selects its
+# timing gate on `stranded_since_t`: None falls back to the arm window
+# [660,720); supplied, it opens continuously from `dwell_s` after the leg
+# became unmatched -- "A STRICT SUPERSET OF THE OLD GATE". The caller passes
+# None unless `L5_DEFENSIVE_DWELL` is on.
+#
+# Replayed on 1945z's real executable prices, 1.56 UP at 0.44 stranded at
+# +117s, with L5_DEFENSIVE_COMPLETION on:
+#
+#   offset  px    pair   dwell OFF                  dwell ON
+#   +120   0.56   1.00   OUTSIDE_DEFENSIVE_ARM_W    COMPLEMENT_STILL_WITHIN_DWELL
+#   +204   0.55   0.99   OUTSIDE_DEFENSIVE_ARM_W    ACT
+#   +469   0.60   1.04   OUTSIDE_DEFENSIVE_ARM_W    ACT
+#   +606   0.89   1.33   OUTSIDE_DEFENSIVE_ARM_W    DEFENSIVE_PAIR_CEILING
+#   +812   0.99   1.43   OUTSIDE_DEFENSIVE_ARM_W    INSUFFICIENT_EXECUTION_TIME
+
+_STRAND_T = 117.0
+
+
+def _dec(off, px, dwell, monkeypatch):
+    from src import l5_defensive_completion as DEF
+    monkeypatch.setenv("L5_DEFENSIVE_COMPLETION", "1")
+    cc = TSP.cancel_cutoff(900.0)
+    return DEF.decide(
+        now_t=off, window_start=0.0,
+        complete_cutoff_s=TSP.complete_cutoff_s(), cancel_cutoff_s=cc,
+        unmatched_qty=D("1.56"), first_leg_cost=D("0.44"),
+        exit_price=D(px), displayed_depth=D("38"),
+        taker_fee_per_contract=TSP.TAKER_THETA * D(px) * (1 - D(px)),
+        buy_side="DOWN", defensive_spent_usd=D(0),
+        stranded_since_t=_STRAND_T if dwell else None)
+
+
+def test_may_complete_never_blocked_the_defensive_window():
+    """The arm window sits inside the permitted region, so the gate the
+    owner asked me to change was not the cause."""
+    for off in (660, 690, 719):
+        assert TSP.may_complete(off, 0.0, 900.0) is None, off
+    assert TSP.may_complete(720, 0.0, 900.0) == "PAST_COMPLETE_CUTOFF"
+
+
+def test_with_the_dwell_off_no_exit_is_reachable_at_any_real_price(monkeypatch):
+    """The deployed configuration: every real instant refuses."""
+    for off, px in ((120, "0.56"), (204, "0.55"), (469, "0.60"),
+                    (606, "0.89"), (812, "0.99")):
+        d = _dec(off, px, False, monkeypatch)
+        assert d.get("act") is not True, (off, px, d.get("reason"))
+
+
+def test_with_the_dwell_on_the_good_real_exits_act(monkeypatch):
+    """+204s is the instant the counterfactual identified: pair 0.99."""
+    for off, px in ((204, "0.55"), (327, "0.59"), (469, "0.60")):
+        d = _dec(off, px, True, monkeypatch)
+        assert d.get("act") is True, (off, px, d.get("reason"))
+
+
+def test_the_dwell_still_gives_the_complement_time_to_fill(monkeypatch):
+    """3s after stranding is inside the 30s dwell, so it waits."""
+    d = _dec(120, "0.56", True, monkeypatch)
+    assert d.get("act") is not True
+    assert d["reason"] == "COMPLEMENT_STILL_WITHIN_DWELL"
+
+
+def test_the_dwell_does_not_weaken_the_defensive_ceiling(monkeypatch):
+    """The ruinous late prices are still refused on economics, not timing."""
+    for off, px in ((534, "0.79"), (606, "0.89")):
+        d = _dec(off, px, True, monkeypatch)
+        assert d.get("act") is not True
+        assert d["reason"] == "DEFENSIVE_PAIR_CEILING"
+
+
+def test_the_dwell_does_not_weaken_the_execution_runway(monkeypatch):
+    d = _dec(812, "0.99", True, monkeypatch)
+    assert d.get("act") is not True
+    assert d["reason"] == "INSUFFICIENT_EXECUTION_TIME"
+
+
+def test_every_exit_the_dwell_admits_sits_inside_the_010_deficit_bound():
+    """So the proposed L5_MAX_WORST_CASE_DEFICIT_USD=0.10 does not block any
+    exit the defensive path would actually have taken in the real window."""
+    for px in ("0.55", "0.59", "0.60"):
+        pair = D("0.44") + D(px)
+        certain_loss = (pair - D(1)) * D("1.56") if pair > 1 else D(0)
+        assert certain_loss + D("0.03") <= D("0.10"), (px, str(certain_loss))
