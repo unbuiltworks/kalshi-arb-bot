@@ -6601,6 +6601,42 @@ class FaithfulExecutor:
                     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                         raise
             ack = self.transport.submit(intent)
+            # THE CALIBRATION RECORD'S VENUE BINDING, and the first of the
+            # money path's lifecycle hooks to be wired at all.
+            #
+            # WHAT WAS WRONG. `pre_submit` above is the ONLY recorder call
+            # the money path has ever made. `on_ack`, `on_fill`,
+            # `on_settlement` and `on_fees_actual` are implemented and were
+            # called from nowhere, so a genuine resting order could never
+            # produce a usable record: `terminal_state` is PRESENT only when
+            # venue_confirmed, and nothing was ever going to confirm it.
+            #
+            # WITHOUT THIS BINDING the downstream hooks have nothing to
+            # correlate a venue report against, so it is the first one that
+            # has to exist. It records the id the venue returned and nothing
+            # else; it derives no fill, asserts no terminal state and claims
+            # no fee.
+            #
+            # OBSERVATIONAL, AND STRUCTURALLY UNABLE TO BE OTHERWISE. It runs
+            # AFTER the wire, so it cannot affect what was sent; it swallows
+            # its own faults, so a recorder bug cannot fail a submission that
+            # the venue has already accepted -- which would be the worst
+            # possible coupling, losing the order's identity over telemetry.
+            try:
+                _cal = getattr(self, "fill_calibration", None)
+                if _cal is not None:
+                    # the ack is a Mapping on this transport and an object on
+                    # others, so read both shapes rather than assume one. An
+                    # id we cannot find is recorded as None, which the record
+                    # then says -- never invented.
+                    if isinstance(ack, Mapping):
+                        _vid = ack.get("venue_order_id")
+                    else:
+                        _vid = getattr(ack, "venue_order_id", None)
+                    _cal.on_ack(coid, _vid)
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
         except NotArmed as exc:
             # DISARMED never reached the venue, so the reservation is undone.
             self.store.terminate_order(coid, reason="NOT_ARMED")
