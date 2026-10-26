@@ -584,3 +584,17 @@ def test_a_full_volume_does_not_stop_the_wallet_poll(monkeypatch):
             or health["new_actions"] >= 1)
     if health["identity_refused"]:
         assert health["identity_reasons"]          # named, not anonymous
+
+
+def test_ingest_telemetry_can_never_cost_the_heartbeat():
+    """The heartbeat carries the halt gate, the campaign budget and the
+    day's realized total. Losing those to a counter would be worse than the
+    fault this telemetry exists to expose."""
+    class _Broken(_Stub):
+        def ingest_report(self):
+            raise RuntimeError("boom")
+
+    s = _Broken(tempfile.mkdtemp(), [])
+    s._ingest_report_safe = R.Runner._ingest_report_safe.__get__(s)
+    rep = s._ingest_report_safe()
+    assert rep["error"] == "RuntimeError"

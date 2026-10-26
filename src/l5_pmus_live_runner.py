@@ -3964,6 +3964,24 @@ class Runner:
                        "all_time_realized_usd. None is UNKNOWN and refuses "
                        "at the gate -- it is never read as zero.")}
 
+    def _ingest_report_safe(self) -> Dict[str, Any]:
+        """`ingest_report` behind a total wrap.
+
+        It is REPORTING. A raise here would take the whole heartbeat with
+        it, and the heartbeat is how an operator sees the halt gate, the
+        campaign budget and the day's realized total -- losing those to a
+        counter would be a worse fault than the one this telemetry exists
+        to expose.
+        """
+        try:
+            return self.ingest_report()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__,
+                    "labels": "ingest telemetry unavailable; it decides "
+                              "nothing and refuses nothing"}
+
     def ingest_report(self) -> Dict[str, Any]:
         """Every stage between L5's published trade and `handle`.
 
@@ -4008,7 +4026,7 @@ class Runner:
             # be diagnosed from its own heartbeats. This block is placed
             # ahead of everything large so the question "did an L5 action
             # reach us, and if not what refused it" survives truncation.
-            "l5_ingest": self.ingest_report(),
+            "l5_ingest": self._ingest_report_safe(),
             # THE CONTRADICTION THIS REPLACES. `halt` was `self.halted()`,
             # which reads the LOCAL env override L5_LIVE_HALT alone. The gate
             # that actually refuses reads the DURABLE watchdog latch over
