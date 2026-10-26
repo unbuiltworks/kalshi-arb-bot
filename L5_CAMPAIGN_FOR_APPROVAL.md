@@ -219,3 +219,21 @@ service and is yours to resolve.
    touching `DEPLOY_TRIGGER`.
 
 Steps 1–3 are preconditions I cannot perform. **The campaign is built and waiting on them.**
+
+## Final verification (complete)
+
+| branch | commit | suite | baseline | new failures |
+|---|---|---|---|---|
+| `claude/l5-defensive-8window-prod` | `9e72f134` | 59 failed / **13,422** passed / 23 errors | 59 / 13,396 / 23 | **0** |
+| `feature/l5-transfer-backtest` | **`195f3678`** | 22 failed / **4,293** passed | 22 / 4,258 | **0** |
+
+The 22 are `test_spread_scanner` (9), `test_pmus_spring_probe_readiness` (6), `test_orderbook` (5)
+and `test_deploy_fallthrough_guard` (2) — **none in a file either commit touches**, and the 6
+readiness ones were separately confirmed pre-existing by stash.
+
+Both pushes to `feature/l5-transfer-backtest` produced **SKIPPED** deployments (`8d4e7f56`,
+`615e97e4`; `regions: []`, `snapshotId: null`). The probe still serves Oct 14's `6adcc4c4`. The
+code is staged on the branch and **a deliberate redeploy is required to run it**.
+
+**Implementation is finished. Launch is blocked on the 401 and the 96 unsettled markets, neither of
+which I can clear.**
