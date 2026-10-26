@@ -50,6 +50,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Set
 
 from src import l5_faithful_translation as FT
 from src import l5_live_authorization as AUTH
+from src import l5_decision_role as DROLE
 from src import l5_live_execution as LX
 from src import l5_maker_fill_model as FM
 from src import l5_two_sided_shadow as TS
@@ -2277,8 +2278,32 @@ class Runner:
                if not layer else "%s:%s" % (layer, rec.get("refused_reason")))
         self.win[key] += 1
         self.stats[key] += 1
+        # WHAT THIS DECISION WOULD DO TO THE IMBALANCE, on every row.
+        #
+        # `two_sided.legs_claimed` cannot answer this: it resets when a round
+        # retires, so a complement attempt against inventory from an earlier
+        # round reads as an opening. On the preserved tapes all 156
+        # COMPLEMENT_PAIR_ABOVE_CAP rows -- complement attempts by the
+        # refusal's own name -- carry it all-False or None.
+        #
+        # `inventory_class` already answers it correctly but is noted AFTER
+        # translation, so it is absent from exactly the early refusals that
+        # needed it. This is derived from realized inventory and the side
+        # alone, so it is available on every row.
+        #
+        # LOG-ONLY AND FAIL-OPEN, like `two_sided` and `two_sided_round`
+        # before it: an unreadable store yields UNKNOWN and never a guess,
+        # and nothing here is consulted by any gate.
+        try:
+            _role = DROLE.decision_role(
+                residual=self.executor.store.residual(slug),
+                side=act.get("pmus_side"))
+        except BaseException:                                  # noqa: BLE001
+            _role = DROLE.UNKNOWN
+
         doc = {"t": now_utc().isoformat(), "row": row, "record": rec,
-               "armed": bool(t and t.armed), "preflight": self.preflight_status}
+               "armed": bool(t and t.armed), "preflight": self.preflight_status,
+               "decision_role": _role}
         with open(self.tape, "a") as fh:
             fh.write(json.dumps(doc, default=str) + "\n")
         emit("L5_LIVE_DECISION", {
@@ -2312,6 +2337,7 @@ class Runner:
                       ("client_order_id", "submitted", "reason", "venue_order_id",
                        "state", "error")} if order else None,
             "intent": order.get("intent"),
+            "decision_role": _role,
             "armed": bool(t and t.armed)})
         # recv, not a fresh clock read: the placement time is when we
         # OBSERVED the action, which is what the queue model must date.
