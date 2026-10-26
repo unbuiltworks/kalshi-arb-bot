@@ -143,3 +143,62 @@
 #
 # Tests: 3940 passed / 27 skipped / 1 xfailed on this artifact; 17 new tests
 # pin every required property.
+
+# ---------------------------------------------------------------------------
+# DEPLOY 2026-10-26: settlement reconciliation recovery + tested R5FB code.
+#
+# PRE-DEPLOY STATE. Serving 6adcc4c43e67 (deployment 952ae54f), HALTED on the
+# PMUS_SPRING_SHUTDOWN latch, held_preserved [], still_open_ours [],
+# foreign_open [], open_orders_at_venue 0. THE LATCH IS NOT CLEARED HERE.
+#
+# WHAT WAS ALREADY FIXED, and is not this deploy: the probe's 401. Its
+# PMUS_API_KEY_ID/PMUS_API_SECRET_KEY are now Railway references to
+# l5-pmus-live's. Proof on the unchanged 6adcc4c4 build: the orphan sweep's
+# authenticated GET /v1/orders/open returned errors:[] after twelve days of
+# 401s, and qty_evidence.available flipped false -> true.
+#
+# WHY THIS DEPLOY. With auth restored, the settle cycle surfaced the blocker
+# underneath, and it is one this branch already fixes:
+#   429 Too Many Requests on 4 of 5 markets -- the auditor walked
+#     /v1/portfolio/activities up to 25 pages PER MARKET, and that module's own
+#     comment predicted it: "93 markets x 25 pages is ~2,300 requests, which
+#     the venue answers with HTTP 429".
+#   activity_walk_short_of_since: ended=max_pages; oldest=2026-09-27 -- 25
+#     pages reaches only to Sept 27 while these markets are Sept 6-15, so the
+#     walk cannot see their trades at all.
+# a514309b fixes both: ONE bounded shared activity walk per settle cycle
+# instead of one per market, and traded_qty_with_evidence returns None when the
+# walk does not cover a market's `since` rather than reporting a confident
+# undercount. The n_trades:0 readings in the 01:11:28Z row are artifacts of the
+# short walk, not real discrepancies, and that second fix stops them.
+#
+# ALSO CARRIED, both inert without an owner action:
+#   * the COMPLETE re-quote cancel guard (0068c52e): a complement is never
+#     cancelled for repricing without a legal replacement priced first. Dead
+#     code until PMUS_SPRING_COMPLETE_REQUOTE is armed; it is unset.
+#   * R5FB (195f3678): the owner-approved bounded rung, $1.50/market x 3 =
+#     $4.50 inside the $5 envelope, stop -$5.00, l5_touch and the par ceiling
+#     unchanged from R5FT. Inert until PMUS_SPRING_RUNG=R5FB; it is unset, so
+#     R1 stays active and the rung boot assertion mismatches.
+#
+# CANNOT TRADE AFTER THIS DEPLOY. PMUS_SPRING_SHUTDOWN set; PMUS_SPRING_RUNG
+# unset (R1, not R5FB); PMUS_SPRING_COMPLETE_REQUOTE unset so
+# requote_relations() is ("open","extend"); the PMUS_SPRING_LIVE /
+# PMUS_SPRING_ARM / PMUS_SPRING_SESSION_ID arming triple is not set by this
+# image. Shutdown mode is asserted over source to be structurally incapable of
+# OPEN/EXTEND/submission.
+#
+# UNCHANGED: $5 envelope, $1.50 per-market cap, 3-market maximum, -$5.00 stop,
+# l5_touch pricing, par pair ceiling, combined_loss_above_stop. R5FT itself is
+# untouched at $30.00/-$30.00 -- a copy was bounded, the canary was not
+# weakened. No new service, branch, strategy, credential or capital.
+#
+# ROLLBACK: deployment 952ae54f serving 6adcc4c43e67 -- safe, and it keeps the
+# credential fix, but it restores the per-market walk that 429s and cannot
+# reach September.
+#
+# Tests: branch suite 22 failed / 4,293 passed / 27 skipped / 1 xfailed against
+# the documented 22 / 4,258 baseline -- ZERO new failures. The 22 are
+# test_spread_scanner (9), test_pmus_spring_probe_readiness (6),
+# test_orderbook (5) and test_deploy_fallthrough_guard (2), none in a file
+# these commits touch.
