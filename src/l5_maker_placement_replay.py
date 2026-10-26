@@ -135,6 +135,7 @@ def replay(rows: Sequence[Mapping[str, Any]],
            complete_drift: Optional[D] = None,
            escalate_after_s: Optional[float] = None,
            reduce_after_s: Optional[float] = None,
+           min_first_leg_own_px: Optional[D] = None,
            policy_label: str = "JOIN") -> Dict[str, Any]:
     """Chronological, one shared ledger, one outstanding order.
 
@@ -152,6 +153,9 @@ def replay(rows: Sequence[Mapping[str, Any]],
     n_reduced = 0
     reduced_usd = D(0)
     reduced: List[Dict[str, Any]] = []
+    floor = (None if min_first_leg_own_px is None
+             else D(str(min_first_leg_own_px)))
+    n_refused_floor = 0
     realized = D(0)
     rebate = D(0)
     peak_cash = D(0)
@@ -282,6 +286,13 @@ def replay(rows: Sequence[Mapping[str, Any]],
                       else own_taker_cost(side, bid, ask))
                 if px <= 0 or px >= 1:
                     continue
+                # THE ENTRY FLOOR, applied to OPENINGS only -- there is no
+                # inventory here by construction, so it can never strand a
+                # position it is unable to complete. Mirrors
+                # `l5_two_sided_probe.first_leg_entry_refusal`.
+                if floor is not None and px < floor:
+                    n_refused_floor += 1
+                    continue
                 q = floor_to_increment(min(
                     OPENING_LEG_MAX_CONTRACTS,
                     OPENING_NOTIONAL_BUDGET_USD / px))
@@ -371,6 +382,8 @@ def replay(rows: Sequence[Mapping[str, Any]],
         "cancels_on_time": n_cancel_time,
         "cancels_on_drift": n_cancel_drift,
         "refused_on_cash": n_refused_cash,
+        "min_first_leg_own_px": (None if floor is None else str(floor)),
+        "refused_on_first_leg_floor": n_refused_floor,
         "settlement_evidence_grades": ev,
         "labels": (
             "Maker legs are charged NO fee and the rebate is reported "

@@ -1,5 +1,23 @@
 # Inventory completion — policy comparison, and the constraint that actually binds
 
+> ## SUPERSEDED FOR PMUS DECISIONS — see `PMUS_COMPLETION_FINDINGS.md`
+>
+> The headline sample below is **Gemini BTC05M**, a different venue and
+> duration. Re-run on **26 out-of-sample PMUS windows** it is wrong on two of
+> its four conclusions, and the error was not small:
+>
+> | | Gemini said | PMUS says |
+> |---|---|---|
+> | completion fill rate | 10.5% | **46.9%** |
+> | mean/window | −0.4281 [−0.70, −0.12] | **−0.1011 [−0.27, +0.07]** |
+> | significantly negative? | yes | **no — the CI spans zero** |
+> | does residual REDUCE help? | yes, +$1.25 | **no — $0.52 WORSE** |
+>
+> What *does* replicate on PMUS: the ceiling is inert, and two resting legs
+> are much worse. What does not: the sign, the fill rate, and the one policy
+> recommendation. **Do not use the Gemini panel to decide anything about
+> PMUS.** The sections below are retained only as structural background.
+
 **2026-10-26.** No live gate changed, nothing armed, no capital change, no new
 service. `max_live_orders` is still 1, the live ceiling is still 0.96, and
 `L5_MAKER_PAIR_GATE` is still unset.
