@@ -128,3 +128,82 @@ explicit owner approval.
 well after our read of them, worse than the −4.9 s p10 measured over 3,431
 rows earlier. 31 such rows were already unexplained. It does not affect the
 refusal above and is tracked separately.
+
+---
+
+## 2045z — armed, viable pair, refused by strategy exclusivity
+
+First window to run under the corrected `max_cumulative_loss_usd=20`
+(deployment `ed919f9c`, value flipped `10 -> 20` at 20:33:15Z). The
+cumulative-loss refusal `CUMULATIVE_LOSS_LIMIT:13.64050000>=10` appears 13
+times up to 20:31:25 and **zero times after**.
+
+Arming worked: `L5_LIVE_ARMED` at 20:46:44, claim taken 20:45:00.072 at
+window start, `preflight: PASSED`, `execution_mode: MAKER_ONLY`,
+`max_live_orders: 1`, `max_cash_deployed_usd: 6.00`.
+
+The economics passed:
+
+| field | 2045z |
+|-------|-------|
+| `two_sided.ok` | true |
+| `pair_cost` | **0.9500** (ceiling 0.96) |
+| `edge_per_contract` | 0.0500 |
+| `net_if_maker` | +0.056183750000 |
+| `net_if_taker` | +0.015618350000 |
+| `qty_per_leg` | 1.97 |
+| `cash_gate_obligation_usd` | 2.9944 (bound 3.00) |
+| `opening_leg_cap_binds` | false |
+| `opening_notional_binds` | false |
+
+**No order was submitted.** All 9 live decisions on 2045z carry
+`key: STRATEGY_EXCLUSIVE_L5_FOLLOWING`, every one of them on a plan with
+`pair_cost: 0.9500`.
+
+### Why this blocks baseline reproduction
+
+`src/l5_live_execution.py:6523` refuses the two-sided engine whenever
+`L5_WINDOW_STRATEGY == "L5_FOLLOWING"`: that value names the L5-following
+path as the sole owner of the window.
+
+The Oct 24 baseline was produced **entirely by the two-sided engine**. In
+each of the seven baseline windows the submissions carry the probe's own
+`two_sided.leg_to_place`, and the complement additionally carries
+`two_sided_round` and `two_sided_complement`. For 0130z:
+
+    01:31:25  leg_to_place=UP    legs_claimed={UP:False, DOWN:False}  (opening)
+    01:33:34  leg_to_place=DOWN  legs_claimed={UP:True,  DOWN:False}  round=0, complement SET
+
+`STRATEGY_EXCLUSIVE_*` never fires anywhere in the baseline tapes, so
+`L5_WINDOW_STRATEGY` was unset during the Oct 24 campaign.
+
+Both legs of every baseline pair would be refused under today's setting.
+**The baseline is unreproducible while `L5_WINDOW_STRATEGY=L5_FOLLOWING`.**
+
+The L5-following path cannot substitute for it in these windows: its
+translation resolves either `mode: TAKER` (refused under maker-only) or
+`mode: MAKER, reason: STRICT_NOT_EVALUABLE`. Over the 2030z and 2045z
+decisions sampled, no L5-following intent was both evaluable and maker.
+
+This is a routing setting, not a risk control. Changing it would not touch
+any exposure, loss, sizing, maker-only or cash gate. It is nonetheless an
+explicit standing instruction ("Keep `L5_WINDOW_STRATEGY=L5_FOLLOWING`. Do
+not switch to TWO_SIDED or unset exclusivity"), so it is **reported, not
+changed**.
+
+### Gates that behaved correctly and need no change
+
+`TWO_SIDED_PROBE:FIRST_LEG_BELOW_MIN_PRICE` accounted for 21 of 22 decisions
+on 2030z, refusing openings at own 0.14 and 0.18 against `min_own_px: 0.20`.
+The live floor is 0.20 as instructed and the refusals were correct. This was
+*not* the 2030z blocker in the way first reported: `ORDER:NOT_ARMED` was a
+single row, and 2030z's real loss was its claim being taken at 20:30:01 by
+the pre-correction process.
+
+### Authorization state
+
+`windows_spent: 5, windows_remaining: 3, max_windows: 8`,
+`submissions_spent: 1, max_submissions: 42`, `approval_state: approved`,
+`permits_this_window: true`, expiry 22:32:56Z. Remaining 15-minute
+boundaries outnumber the 3 remaining windows, so the window budget binds
+before the deadline does.
