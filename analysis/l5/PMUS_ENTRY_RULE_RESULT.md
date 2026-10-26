@@ -153,3 +153,70 @@ any of these arms from each other or from flat.
 **Next:** keep collecting PMUS windows. The strand-EV question — are
 residuals actually fair-priced? — is answerable from accumulated windows
 read-only, and it is the one assumption everything else now rests on.
+
+---
+
+## Appendix: the zero-EV residual assumption, tested
+
+The result above left net expectancy resting on one unverified assumption —
+that a stranded leg is fair-priced, so its EV is zero. That is directly
+measurable from the PMUS book, and book calibration is a different question
+from rule performance, so all 44 PMUS windows (2,475 rows) are fair game.
+
+For every snapshot, both sides' own maker cost `c` against whether that side
+eventually won:
+
+| own cost | n | E[win]=c | win rate | diff |
+|---|---|---|---|---|
+| [0.0,0.1) | 825 | 0.050 | 0.025 | −0.025 |
+| [0.1,0.2) | 406 | 0.150 | 0.116 | −0.034 |
+| [0.2,0.3) | 285 | 0.250 | 0.246 | −0.004 |
+| [0.3,0.4) | 473 | 0.350 | 0.233 | −0.117 |
+| [0.4,0.5) | 486 | 0.450 | 0.270 | **−0.180** |
+| [0.5,0.6) | 491 | 0.550 | 0.733 | **+0.183** |
+| [0.6,0.7) | 473 | 0.650 | 0.767 | +0.117 |
+| [0.7,0.8) | 280 | 0.750 | 0.750 | +0.000 |
+| [0.8,0.9) | 406 | 0.850 | 0.884 | +0.034 |
+| [0.9,1.0) | 825 | 0.950 | 0.975 | +0.025 |
+
+**Overall bias +0.0002/contract** on 4,950 observations (expected 2,474 wins,
+actual 2,475).
+
+### Two confounds, and the one that mattered
+
+The aggregate figure is **largely structural**: each snapshot contributes both
+sides, and `own(UP) + own(DOWN) = 1 − spread`, so the two are near-mirrors and
+the buckets are structurally paired (825/825, 406/406, 486/491 …). The
+deviations mirror exactly (−0.180 against +0.183), so this is 2,475 snapshots
+counted twice, not 4,950 independent trials.
+
+The mid-bucket pattern looked like a real signal — **a side priced 0.55 won
+73% of the time**, worth +18 cents/contract if tradeable. Two reasons it is
+not:
+
+1. **Outcomes are `TERMINAL_BOOK_INFERRED` from the same series that prices
+   the snapshots**, so a late snapshot at 0.55 is nearly reading its own
+   answer.
+2. **Within-window snapshots are heavily autocorrelated** — ~9 per window.
+
+Restricting to **one observation per window** (the earliest read, no overlap,
+no reuse of the series defining the outcome):
+
+| test | n | E[win] | win rate | edge/contract | 2se | verdict |
+|---|---|---|---|---|---|---|
+| pooled, 0–180s | 401 | 0.565 | 0.678 | +0.1132 | 0.047 | autocorrelated |
+| pooled, 540–720s | 130 | 0.531 | 0.415 | **−0.1152** | 0.086 | *wrong sign* |
+| **earliest read per window** | **34** | **0.542** | **0.529** | **−0.0126** | **0.171** | **NOT SIGNIFICANT** |
+
+The effect vanishes on independent observations, and the 540–720s bucket has
+the wrong sign — which a genuine momentum effect would not.
+
+**Conclusion: PMUS books are fair-priced as far as this can measure.** The
+zero-EV residual assumption is **supported, not contradicted**, which means
+**+$0.0674/window is the right central estimate** for the pair term rather
+than an optimistic one.
+
+**But the test is underpowered**: 34 independent observations, 2se = 0.171.
+It can rule out a large mispricing, not a small one — and a 2-cent edge on a
+residual would matter at this scale. More windows is the remedy, and it costs
+only collection time.
