@@ -2024,3 +2024,38 @@ deploy: 2026-10-25 shadow-only — residual-side boot self-check
 # THE 20-WINDOW / $90-WORST-CASE PROBE REMAINS UNAUTHORIZED. Arming it is a
 # separate owner act. This deploy only makes the preflight observable.
 deploy: 2026-10-25 shadow-only — fill-horizon probe, UNARMED
+
+# ============================================================================
+# 2026-10-26 — OWNER-AUTHORIZED **DISARMED** DEPLOYMENT OF THE NARROW RELEASE
+#
+# Promotes the narrow correction cut from the DEPLOYED commit 497b1152:
+#   * wallet ingestion reliability  -- durable IngestCursor (a restart RESUMES
+#     instead of re-seeding and discarding up to 200 of L5's newest actions),
+#     per-stage counters with timestamps, three diagnostic clocks, collector
+#     degrades instead of raising on a full volume, bounded retention.
+#   * daily/cumulative loss accounting -- the L5-SCOPED daily ceiling now
+#     reads a UTC-day figure; the cumulative ceiling keeps reading the
+#     post-baseline total and is never reset by the day boundary.
+#   * early evaluation of the EXISTING residual-completion decision -- the
+#     MAKER-phase bail yields only when `still_fillable_order_count()` is 0,
+#     i.e. only when no quote of ours can still fill and there is therefore no
+#     maker edge to protect. Evaluate-only.
+#   * preflight exposure correction -- the worst case now reads the ENFORCED
+#     L5_MAX_CASH_DEPLOYED_USD instead of a hardcoded $5, and maximises the
+#     taker fee at the CHEAPEST admissible price. Under a fixed principal
+#     contracts = cap/p, so fee = Theta*cap*(1-p) is monotone DECREASING in p;
+#     the old p=0.5 assumption understated the bound by 90%.
+#
+# NO may_complete CHANGE. The owner approved one; the evidence says it is not
+# the cause (may_complete permits to 720s and the defensive arm window
+# [660,720) sits inside it), so no money-path edit was made. The 1945z strand
+# is a DWELL-FLAG matter -- L5_DEFENSIVE_DWELL -- on an existing mechanism.
+#
+# THIS DEPLOYMENT IS DISARMED AND ADDS NO CAPABILITY.
+# No variable is changed by it. The campaign document is spent (windows 3/3),
+# the executor starts disarmed, L5_TS_COMPLETION_CROSS stays unset, and the
+# submission gate reads NOT_ARMED. Nothing here can submit an order.
+#
+# Regression: 13,595 passed, 34 total failures -- the SAME set as deployed
+# 497b1152, zero new failures.
+deploy: 2026-10-26 narrow release, DISARMED, owner-authorized
