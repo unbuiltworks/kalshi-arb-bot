@@ -46,7 +46,7 @@ import os
 import signal
 import time
 from decimal import Decimal as D
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set
 
 from src import l5_faithful_translation as FT
 from src import l5_live_authorization as AUTH
@@ -629,6 +629,183 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
     return out
 
 
+#: HOW OLD AN L5 ACTION MAY BE AND STILL REACH THE EXECUTOR, in seconds.
+#: One BTC15m window. The durable cursor means a restart no longer throws
+#: away the page it comes back to, which is the point -- but it also means a
+#: process that was down must not now act on an hour-old action as though it
+#: had just happened. This bound can only refuse.
+MAX_ACTION_AGE_ENV = "L5_LIVE_MAX_ACTION_AGE_S"
+DEFAULT_MAX_ACTION_AGE_S = 900.0
+#: how much dedupe history the cursor keeps. The feed serves the newest 200
+#: rows, so anything older than this cannot come back round to be
+#: double-counted; the cap is a second bound so the file cannot grow without
+#: limit on a volume whose exhaustion already cost this system 17 days.
+CURSOR_HORIZON_S = 86400.0
+CURSOR_MAX_KEYS = 20000
+
+
+def _max_action_age_s() -> float:
+    """The staleness bound, from the environment, floored at one tick.
+
+    A misconfigured value must not widen the bound into "accept anything":
+    an unparseable or non-positive setting falls back to the default.
+    """
+    raw = str(os.getenv(MAX_ACTION_AGE_ENV, "")).strip()
+    if not raw:
+        return DEFAULT_MAX_ACTION_AGE_S
+    try:
+        v = float(raw)
+    except ValueError:
+        return DEFAULT_MAX_ACTION_AGE_S
+    return v if v > 0 else DEFAULT_MAX_ACTION_AGE_S
+
+
+class IngestCursor:
+    """Durable dedupe + seed state for the L5 activity feed.
+
+    WHAT BROKE WITHOUT IT. `seen` was a bare in-memory set and `seeded` a
+    bare in-memory bool. The first poll of every process marked the entire
+    200-row page as history and returned, by design -- "the first read is
+    history, not a signal" -- and that design is right exactly once. Held in
+    memory it re-ran on every boot, so each restart silently discarded up to
+    200 of L5's most recent actions, and a redeploy during a live window
+    dropped whatever L5 did around it with no counter and no log line.
+
+    So the state goes on the mounted volume: seeded once ever, dedupe keys
+    bounded by age and count, written atomically. A restart RESUMES. Rows
+    already handled are still refused as duplicates, so resuming cannot
+    produce a second executable decision for one L5 action -- the two
+    properties have to hold together, and the regression tests assert both.
+
+    It holds no transport, decides nothing about an order, and every method
+    is failure-tolerant: a cursor that cannot be read starts empty and
+    UNSEEDED, which re-seeds (discarding history) rather than replaying it.
+    That is the safe direction: a missed action costs an opportunity, a
+    replayed one costs money.
+    """
+
+    def __init__(self, path: str, *, horizon_s: float = CURSOR_HORIZON_S,
+                 max_keys: int = CURSOR_MAX_KEYS) -> None:
+        self.path = path
+        self.horizon_s = float(horizon_s)
+        self.max_keys = int(max_keys)
+        self.seeded = False
+        self.seeded_at: Optional[float] = None
+        self.seeded_count: Optional[int] = None
+        #: action_key -> the row's own timestamp (never our receipt time)
+        self._keys: Dict[str, float] = {}
+        self._dirty = False
+        self.load_error: Optional[str] = None
+        self.save_error: Optional[str] = None
+        self.loaded = False
+
+    # ---------------------------------------------------------------- io
+    def load(self) -> "IngestCursor":
+        try:
+            with open(self.path) as fh:
+                doc = json.load(fh)
+        except FileNotFoundError:
+            self.loaded = True
+            return self
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # UNREADABLE IS UNSEEDED. Never "seeded with no keys", which
+            # would admit the whole page as fresh and replay history live.
+            self.load_error = "%s: %s" % (type(exc).__name__, str(exc)[:120])
+            self.loaded = True
+            return self
+        if isinstance(doc, Mapping):
+            self.seeded = bool(doc.get("seeded"))
+            sa, sc = doc.get("seeded_at"), doc.get("seeded_count")
+            self.seeded_at = float(sa) if isinstance(sa, (int, float)) else None
+            self.seeded_count = int(sc) if isinstance(sc, int) else None
+            keys = doc.get("keys")
+            if isinstance(keys, Mapping):
+                for k, v in keys.items():
+                    try:
+                        self._keys[str(k)] = float(v)
+                    except (TypeError, ValueError):
+                        continue
+        self.loaded = True
+        return self
+
+    def save(self) -> None:
+        if not self._dirty:
+            return
+        self._prune()
+        doc = {"schema": "l5_ingest_cursor/v1",
+               "seeded": self.seeded, "seeded_at": self.seeded_at,
+               "seeded_count": self.seeded_count,
+               "written_utc": now_utc().isoformat(),
+               "keys": self._keys,
+               "labels": ("dedupe keys are l5_pmus_realtime_observer."
+                          "action_key values -- the whole economic identity "
+                          "of a fill, not its transaction hash. seeded is "
+                          "set ONCE EVER; a restart resumes.")}
+        tmp = self.path + ".tmp"
+        try:
+            with open(tmp, "w") as fh:
+                json.dump(doc, fh, default=str)
+            os.replace(tmp, self.path)
+            self._dirty = False
+            self.save_error = None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # A CURSOR WE CANNOT PERSIST MUST NOT STOP US TRADING, and must
+            # not pretend it persisted. In-memory dedupe still holds for
+            # this process; the next restart re-seeds.
+            self.save_error = "%s: %s" % (type(exc).__name__, str(exc)[:120])
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+    def _prune(self) -> None:
+        if not self._keys:
+            return
+        newest = max(self._keys.values())
+        cut = newest - self.horizon_s
+        if cut > 0:
+            self._keys = {k: v for k, v in self._keys.items() if v >= cut}
+        if len(self._keys) > self.max_keys:
+            keep = sorted(self._keys.items(), key=lambda kv: kv[1],
+                          reverse=True)[:self.max_keys]
+            self._keys = dict(keep)
+
+    # ------------------------------------------------------------ state
+    def known(self, key: str) -> bool:
+        return key in self._keys
+
+    def add(self, key: str, timestamp: Any) -> None:
+        try:
+            t = float(timestamp)
+        except (TypeError, ValueError):
+            # an unparseable timestamp still has to be deduped, or it is
+            # re-handled on every single poll forever
+            t = time.time()
+        self._keys[str(key)] = t
+        self._dirty = True
+
+    def mark_seeded(self, count: int, now: Optional[float] = None) -> None:
+        self.seeded = True
+        self.seeded_at = float(now if now is not None else time.time())
+        self.seeded_count = int(count)
+        self._dirty = True
+
+    def report(self) -> Dict[str, Any]:
+        return {"path": self.path, "seeded": self.seeded,
+                "seeded_at": self.seeded_at,
+                "seeded_count": self.seeded_count,
+                "keys": len(self._keys), "loaded": self.loaded,
+                "load_error": self.load_error, "save_error": self.save_error,
+                "durable": self.save_error is None and self.load_error is None,
+                "labels": ("seeded true with a seeded_at from a PREVIOUS "
+                           "boot is the proof that a restart resumed "
+                           "instead of discarding the feed page.")}
+
+
 class Runner:
     def __init__(self, *, root: str, book: AB.AuthBook,
                  http: Optional[Any] = None, lam: D = MANIFEST_LAMBDA,
@@ -725,8 +902,30 @@ class Runner:
                            "cannot cancel. It can still latch the halt.")})
         self.limits = LX.SafetyLimits(**PROBE_LIMITS)
         self.lam = lam
-        self.seen: set = set()
-        self.seeded = False
+        #: DURABLE INGEST STATE, on the mounted volume beside the ledger.
+        #: `seen`/`seeded` remain as read-only views below so nothing that
+        #: already reads those names changes meaning.
+        self.cursor = IngestCursor(
+            os.path.join(root, "l5_ingest_cursor.json")).load()
+        self.max_action_age_s = _max_action_age_s()
+        #: every slug the feed has served this process, admitted or not
+        self.ingest_slugs: "collections.Counter[str]" = collections.Counter()
+        #: the three clocks `ingest_report` publishes. None means NEVER.
+        self.last_row_t: Optional[float] = None
+        self.last_btc15m_t: Optional[float] = None
+        self.last_admitted_t: Optional[float] = None
+        #: the newest L5 EVENT time the feed has ever served, by L5's clock
+        #: rather than ours -- a stale feed is a page whose newest event
+        #: stops advancing while our own poll clock keeps ticking.
+        self.newest_row_event_t: Optional[float] = None
+        emit("L5_INGEST_CURSOR", dict(
+            self.cursor.report(),
+            max_action_age_s=self.max_action_age_s,
+            resumed=bool(self.cursor.seeded),
+            labels=("resumed true means this boot did NOT discard the feed "
+                    "page as history. Emitted at construction so a restart "
+                    "that silently re-seeded is visible in the log that "
+                    "starts the run.")))
         self.ws: Optional[int] = None
         self.transport: Optional[T.PmusTransport] = None
         self.executor: Optional[LX.FaithfulExecutor] = None
@@ -1863,38 +2062,151 @@ class Runner:
         emit("L5_LIVE_WINDOW", out)
 
     # ------------------------------------------------------------ actions
+    @property
+    def seen(self) -> Set[str]:
+        """Read-only view of the durable dedupe keys."""
+        return set(self.cursor._keys)
+
+    @property
+    def seeded(self) -> bool:
+        return self.cursor.seeded
+
+    @staticmethod
+    def _iso(t: Optional[float]) -> Optional[str]:
+        """A stored epoch as UTC, or None. None means NEVER, not zero."""
+        if t is None:
+            return None
+        try:
+            return dt.datetime.fromtimestamp(
+                float(t), dt.timezone.utc).isoformat()
+        except (TypeError, ValueError, OSError):
+            return None
+
+    @staticmethod
+    def _action_age_s(r: Mapping[str, Any], now: float) -> Optional[float]:
+        """How long ago L5's action happened, by L5'S OWN clock.
+
+        None when the row carries no usable timestamp. Deliberately the
+        row's `timestamp` and never our receipt time: the receipt time is
+        always ~now, so measuring staleness against it would make every
+        action look fresh and the bound would never bind. A negative age (a
+        row stamped in the future) is clamped to 0 rather than refused --
+        clock skew at the source is not the action's fault.
+        """
+        try:
+            t = float(r.get("timestamp"))
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, float(now) - t)
+
     def poll(self, now: float) -> None:
+        """One read of L5's published trades -> the executor, or a refusal.
+
+        WHY THIS IS INSTRUMENTED THE WAY IT IS. For the 2026-10-26 campaign
+        the whole of this stage's telemetry was a single `seeded: 200`, and
+        the campaign's finding was reported as "approximately 200 seeded
+        historical wallet events and apparently no new matching L5 events".
+        The word doing the work there is "apparently": with no counter
+        between the feed and `handle`, four completely different states
+        produced byte-identical logs --
+
+          * L5 traded nothing;
+          * L5 traded, but only markets other than BTC15m;
+          * L5 traded BTC15m and the slug no longer matched our prefix;
+          * the feed served the same cached page forever.
+
+        None of them is distinguishable from the others without the
+        `ingest:*` counters and the observed-slug histogram below, so the
+        campaign could not be diagnosed from its own logs at all. Every
+        refusal now carries a machine-readable reason and the slugs that
+        earned it, which is what makes "L5 is currently trading only other
+        markets" a statement that can be established rather than assumed.
+        """
         rows = self.feed()
         if rows is None:
             self.stats["feed_errors"] += 1
+            self.stats["ingest:FEED_FAILED"] += 1
             return
+        self.stats["ingest:polls_ok"] += 1
+        self.stats["ingest:rows"] += len(rows)
+        if rows:
+            self.last_row_t = now
         fresh = []
         for r in rows:
             k = OBS.action_key(r)
-            if k in self.seen:
-                continue
-            self.seen.add(k)
-            fresh.append(r)
-        if not self.seeded:
-            # the first read is history, not a signal: act only on what
-            # arrives after this process began watching
-            self.seeded = True
-            self.stats["seeded"] = len(fresh)
-            return
-        for r in sorted(fresh, key=lambda x: float(x.get("timestamp") or 0)):
+            # L5'S OWN CLOCK, not ours, and over EVERY row rather than the
+            # fresh ones: a feed serving the same page forever still looks
+            # busy by our poll clock, and only the newest event time on the
+            # page shows that it has stopped moving.
+            try:
+                et = float(r.get("timestamp"))
+            except (TypeError, ValueError):
+                et = None
+            if et is not None and (self.newest_row_event_t is None
+                                   or et > self.newest_row_event_t):
+                self.newest_row_event_t = et
             if str(r.get("slug") or "").startswith("btc-updown-15m-"):
-                self.handle(r, now)
-                # ADDITIVE, AFTER, AND UNABLE TO AFFECT IT. A raise here
-                # would abandon the remaining rows of this batch, so the
-                # wrap is total -- the comparison is a record, and a record
-                # must never cost the strategy an action.
-                try:
-                    self.shadow_compare(r, now)
-                except BaseException as exc:                   # noqa: BLE001
-                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                        raise
-                    self.stats["shadow_compare_error:%s"
-                               % type(exc).__name__] += 1
+                self.last_btc15m_t = now
+            # THE SLUG OF EVERY ROW WE SEE, admitted or not. This is the one
+            # observation that answers "is L5 trading BTC15m right now", and
+            # it is taken before any filter can discard the evidence.
+            self.ingest_slugs[str(r.get("slug") or "?")] += 1
+            if self.cursor.known(k):
+                self.stats["ingest:dup"] += 1
+                continue
+            self.cursor.add(k, r.get("timestamp"))
+            fresh.append(r)
+        self.stats["ingest:new"] += len(fresh)
+        if not self.cursor.seeded:
+            # THE FIRST READ IS HISTORY, NOT A SIGNAL -- and it happens ONCE
+            # EVER, not once per boot. It used to be in-process state, so
+            # every restart re-seeded the whole 200-row page as history and
+            # discarded it: an L5 action arriving in the seconds around a
+            # redeploy was dropped permanently and silently. The cursor is
+            # on the mounted volume, so a restart RESUMES instead.
+            self.cursor.mark_seeded(len(fresh), now)
+            self.stats["seeded"] = len(fresh)
+            self.cursor.save()
+            return
+        self.cursor.save()
+        # CHRONOLOGICAL, ALWAYS. The feed serves newest-first and a delayed
+        # row can arrive out of order behind a newer one; the executor's
+        # inventory reasoning is sequential, so it must see L5's actions in
+        # the order L5 took them and not the order the API listed them.
+        for r in sorted(fresh, key=lambda x: float(x.get("timestamp") or 0)):
+            if not str(r.get("slug") or "").startswith("btc-updown-15m-"):
+                self.stats["ingest:refused:NOT_BTC15M_SLUG"] += 1
+                continue
+            # STALENESS, AND IT IS A SAFETY BOUND RATHER THAN A FILTER.
+            #
+            # Now that the seed survives a restart, a process that was down
+            # for an hour comes back holding a page of L5 trades it has
+            # never seen -- and acting on an hour-old action live would be
+            # backdating with real money. An action older than the bound is
+            # recorded and refused. It can only ever refuse.
+            age = self._action_age_s(r, now)
+            if age is None:
+                self.stats["ingest:refused:NO_TIMESTAMP"] += 1
+                continue
+            if age > self.max_action_age_s:
+                self.stats["ingest:refused:STALE_ACTION"] += 1
+                self.stats["ingest:stale_max_age_s"] = max(
+                    int(age), int(self.stats.get("ingest:stale_max_age_s", 0)))
+                continue
+            self.stats["ingest:admitted"] += 1
+            self.last_admitted_t = now
+            self.handle(r, now)
+            # ADDITIVE, AFTER, AND UNABLE TO AFFECT IT. A raise here
+            # would abandon the remaining rows of this batch, so the
+            # wrap is total -- the comparison is a record, and a record
+            # must never cost the strategy an action.
+            try:
+                self.shadow_compare(r, now)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["shadow_compare_error:%s"
+                           % type(exc).__name__] += 1
 
     def handle(self, r: Mapping[str, Any], recv: float) -> None:
         ws = OBS.l5_window_start(r.get("slug", ""))
@@ -3687,6 +3999,82 @@ class Runner:
                        "all_time_realized_usd. None is UNKNOWN and refuses "
                        "at the gate -- it is never read as zero.")}
 
+    def _ingest_report_safe(self) -> Dict[str, Any]:
+        """`ingest_report` behind a total wrap.
+
+        It is REPORTING. A raise here would take the whole heartbeat with
+        it, and the heartbeat is how an operator sees the halt gate, the
+        campaign budget and the day's realized total -- losing those to a
+        counter would be a worse fault than the one this telemetry exists
+        to expose.
+        """
+        try:
+            return self.ingest_report()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return {"error": type(exc).__name__,
+                    "labels": "ingest telemetry unavailable; it decides "
+                              "nothing and refuses nothing"}
+
+    def ingest_report(self) -> Dict[str, Any]:
+        """Every stage between L5's published trade and `handle`.
+
+        Compact by construction: the slug histogram is the top few only,
+        because the whole point is that this survives the log line limit.
+        """
+        ing = {k: v for k, v in self.stats.items()
+               if isinstance(k, str) and k.startswith("ingest:")}
+        # A COUNT WITH NO CLOCK ON IT CANNOT ANSWER THE QUESTION BEING ASKED.
+        #
+        # "zero new matching events" and "947 matching events, the last one
+        # 40 minutes ago" are different diagnoses, and a process-lifetime
+        # total reports them identically -- the same ambiguity `TimedCounter`
+        # was built for after the heartbeat printed `halt: false` through
+        # 2,939 refusals. So every ingest counter is published WITH the age
+        # of its last movement, and the two clocks that decide the question
+        # get their own fields.
+        ages = {}
+        try:
+            allages = self.stats.ages()
+            ages = {k: round(v, 1) for k, v in allages.items()
+                    if isinstance(k, str) and k.startswith("ingest:")}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+        top = collections.Counter(self.ingest_slugs).most_common(6)
+        btc = sum(n for sl, n in self.ingest_slugs.items()
+                  if sl.startswith("btc-updown-15m-"))
+        return {
+            "cursor": self.cursor.report(),
+            "max_action_age_s": self.max_action_age_s,
+            "counters": ing,
+            "counter_age_s": ages,
+            "feed_errors": self.stats.get("feed_errors", 0),
+            "distinct_slugs_seen": len(self.ingest_slugs),
+            "rows_btc15m": btc,
+            "top_slugs_seen": [{"slug": sl, "rows": n} for sl, n in top],
+            # THE THREE CLOCKS THAT SEPARATE THE THREE DIAGNOSES.
+            #   last_row_utc      -- the feed served us SOMETHING
+            #   last_btc15m_utc   -- a BTC15m-slugged row existed
+            #   last_admitted_utc -- one reached handle()
+            # absent at the source: no last_row/last_btc15m advance;
+            # silently filtered: last_btc15m advances, last_admitted does not;
+            # never reaching handle: last_admitted stale with refusals rising.
+            "last_row_utc": self._iso(self.last_row_t),
+            "last_btc15m_utc": self._iso(self.last_btc15m_t),
+            "last_admitted_utc": self._iso(self.last_admitted_t),
+            "newest_row_event_utc": self._iso(self.newest_row_event_t),
+            "labels": ("rows_btc15m counts rows of L5's OWN feed whose slug "
+                       "is a BTC15m window, before any other filter. Zero "
+                       "of it with distinct_slugs_seen > 0 establishes that "
+                       "L5 is trading other markets -- which is a finding, "
+                       "not a fault. Zero of BOTH with polls_ok rising "
+                       "means the feed is serving an empty or unchanged "
+                       "page. An observed action is not a fill of ours and "
+                       "admitted does not mean submitted."),
+        }
+
     def heartbeat(self) -> None:
         t = self.transport
         emit("L5_LIVE_HB", {
@@ -3694,6 +4082,15 @@ class Runner:
             "market": t.market_slug if t else None,
             "armed": bool(t and t.armed), "preflight": self.preflight_status,
             "owner_arm_token": Q1.armed(),
+            # THE WALLET INGESTION STAGE, EARLY IN THE LINE AND ON PURPOSE.
+            #
+            # The heartbeat exceeds the log transport's 81,920-byte line
+            # limit and its tail is truncated in production -- `stats` sits
+            # past that cut, which is why the 2026-10-26 campaign could not
+            # be diagnosed from its own heartbeats. This block is placed
+            # ahead of everything large so the question "did an L5 action
+            # reach us, and if not what refused it" survives truncation.
+            "l5_ingest": self._ingest_report_safe(),
             # THE CONTRADICTION THIS REPLACES. `halt` was `self.halted()`,
             # which reads the LOCAL env override L5_LIVE_HALT alone. The gate
             # that actually refuses reads the DURABLE watchdog latch over
@@ -4283,7 +4680,45 @@ class Runner:
         if ws is None:
             return None            # the deadline path owns an unknown window
         phase = TSP.completion_phase(now, float(ws))
-        if phase != "COMPLETION":
+        # PATIENCE PROTECTS A RESTING QUOTE. WITH NOTHING RESTING IT PROTECTS
+        # NOTHING, AND THAT COST US $0.5204 ON 1945z.
+        #
+        # The MAKER-phase bail exists because "the resting quote is still the
+        # better price and crossing early throws away the edge it was placed
+        # for". True -- while a quote is actually resting. On
+        # cpc-btc-updown-15m-2026-10-25-1945z it was not: the maker complement
+        # route had refused twelve times on COMPLEMENT_PAIR_ABOVE_CAP, so
+        # nothing was ever posted, and all 121 L5_RESIDUAL_BOOK_SAMPLE rows of
+        # that window carry `order_resting: false`. The patience rationale was
+        # guarding an edge that did not exist.
+        #
+        # What it cost, measured on that window's own books: the executable
+        # exit was worth -$0.0144 at 204s (pair 0.99) and the engine's first
+        # legal opportunity was at 600s, by which time the pair had decayed to
+        # 1.33 and the best exit was -$0.5348.
+        #
+        # SO THE PHASE GATE IS RELAXED ONLY WHERE ITS OWN REASON DOES NOT
+        # APPLY, and the relaxation is evaluate-only: `completion_decision`
+        # still has to find a STRICT improvement in the worse settlement
+        # outcome, and L5_TS_COMPLETION_CROSS plus an armed transport still
+        # gate every submission. With crossing unauthorized this changes no
+        # order, only what the log can see.
+        #
+        # FAIL CLOSED: `still_fillable_order_count` charges an unreadable,
+        # parked or quarantined row as live, so "nothing is resting" has to be
+        # positively established. If we cannot tell, we stay patient.
+        resting = None
+        try:
+            resting = int(self.store.still_fillable_order_count())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["ts_completion_resting_unreadable:%s"
+                       % type(exc).__name__] += 1
+        no_quote_resting = resting == 0
+        if phase == "LATE":
+            return None
+        if phase != "COMPLETION" and not no_quote_resting:
             return None
         if now - self.last_ts_completion_t < self.TS_COMPLETION_EVERY_S:
             return None
@@ -4294,6 +4729,9 @@ class Runner:
             # another let a caller miss `crossed` on exactly the paths where
             # it matters most -- the fail-closed ones.
             rec = dict(src, phase=phase, cross=False, crossed=False,
+                       still_fillable_orders=resting,
+                       evaluated_early_no_quote_resting=(
+                           phase != "COMPLETION" and no_quote_resting),
                        authorized_to_cross=(
                            self.ts_completion_cross_authorized()))
             emit("L5_TS_COMPLETION", rec)
@@ -4312,6 +4750,9 @@ class Runner:
             gap_suspected=src["gap_suspected"])
         authorized = self.ts_completion_cross_authorized()
         rec = dict(dec, market=slug, phase=phase,
+                   still_fillable_orders=resting,
+                   evaluated_early_no_quote_resting=(
+                       phase != "COMPLETION" and no_quote_resting),
                    authorized_to_cross=authorized,
                    armed=bool(t.armed),
                    up_qty=str(src["up_qty"]), dn_qty=str(src["dn_qty"]),

@@ -1424,8 +1424,40 @@ class PmusTransport:
         largest contract count the cap can fund at that price.
         """
         from src import pmus_fees as fees
+        # THE ENFORCED CAP, NOT A LITERAL. This was `D("5")`, hardcoded, so
+        # the preflight's worst case was decoupled from the limit actually in
+        # force: an owner who tightened L5_MAX_CASH_DEPLOYED_USD would still
+        # be shown $5 principal and $5.1738 total, and the preflight is the
+        # evidence a campaign is activated on. Unreadable or absent falls back
+        # to $5, which is the value it always reported.
         cap = D("5")
-        worst_p = D("0.5")
+        cap_source = "default"
+        raw = str(os.getenv("L5_MAX_CASH_DEPLOYED_USD", "")).strip()
+        if raw:
+            try:
+                v = D(raw)
+                if v > 0:
+                    cap, cap_source = v, "L5_MAX_CASH_DEPLOYED_USD"
+            except (ArithmeticError, ValueError):
+                cap_source = "unreadable_env_default_5"
+        # THE FEE IS MAXIMISED AT THE CHEAPEST ADMISSIBLE PRICE, NOT AT 0.50.
+        #
+        # This read `worst_p = D("0.5")`, on the reasoning that the venue's
+        # taker formula Theta*C*p*(1-p) peaks at p = 0.5. It does -- PER
+        # CONTRACT. Under a fixed PRINCIPAL the contract count is cap/p, so
+        #
+        #     fee = Theta * (cap/p) * p * (1-p) = Theta * cap * (1-p)
+        #
+        # which is monotone DECREASING in p and therefore maximised at the
+        # cheapest price an order may use. On a $5 principal that is $0.3301
+        # at the 0.05 band floor, not $0.1738 -- so the figure a campaign is
+        # activated on understated the worst case by 90%.
+        try:
+            from src import l5_two_sided_probe as _TSP
+            floor_p = D(str(_TSP.MIN_PRICE))
+        except BaseException:                                  # noqa: BLE001
+            floor_p = D("0.05")      # the venue band floor, fail-conservative
+        worst_p = floor_p
         contracts = cap / worst_p
         fee = fees.taker_fee(worst_p, contracts)
         # format(..., "f") not str(): Decimal renders 5/0.5 as "1E+1",
@@ -1434,10 +1466,29 @@ class PmusTransport:
         f = lambda d: format(D(str(d)), "f")
         return {
             "max_committed_usd": f(cap),
+            "max_committed_source": cap_source,
             "fee_maximising_price": f(worst_p),
+            "fee_maximising_basis": ("cheapest admissible price: under a "
+                                     "fixed principal, contracts = cap/p and "
+                                     "fee = Theta*cap*(1-p), monotone "
+                                     "decreasing in p"),
             "contracts_at_that_price": f(contracts),
             "max_taker_fee_usd": f(fee),
             "worst_case_total_usd": f(cap + fee),
+            # SAID PLAINLY, because the two numbers were read as one and the
+            # difference is real money. The cash gate counts PRINCIPAL only:
+            # `committed` is own_price * qty, `pending_obligation` is
+            # qty * price (or qty for a short), and the proposed order is
+            # q * px -- no term carries a fee. So the configured ceiling
+            # bounds principal and the taker fee is charged ON TOP of it.
+            "fee_is_outside_the_cash_ceiling": True,
+            "basis_fees": ("max_committed_usd is the PRINCIPAL ceiling the "
+                           "cash gate enforces; max_taker_fee_usd is charged "
+                           "in addition to it, so worst_case_total_usd is "
+                           "the figure to compare against an all-in limit. "
+                           "To hold the all-in total at X, set "
+                           "L5_MAX_CASH_DEPLOYED_USD to "
+                           "X / (1 + Theta*(1-floor_p))."),
             "tick_from_market": str(mk.get(Q1.TICK_FIELD)
                                     or mk.get("tickSize")),
             "basis": ("principal is the committed cap because a share can "

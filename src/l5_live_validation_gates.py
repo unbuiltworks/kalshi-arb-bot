@@ -472,6 +472,7 @@ class ValidationGates:
                cumulative_realized: D = D(0),
                verified_strategy_net: Optional[D] = None,
                l5_scoped_realized: Optional[D] = None,
+               l5_scoped_realized_today: Optional[D] = None,
                account_wide_delta_usd: Any = None,
                unresolved_unknown_usd: Optional[D] = None,
                cumulative_unrealized_loss: Optional[D] = D(0),
@@ -574,15 +575,47 @@ class ValidationGates:
                     return "L5_SCOPED_REALIZED_UNAVAILABLE"
             except (ValueError, ArithmeticError):
                 return "L5_SCOPED_REALIZED_UNAVAILABLE"
-            l5_loss = max(D(0), -l5r) + max(D(0), _d(cumulative_unrealized_loss))
+            # TWO BUDGETS, TWO MEASURES. Until 2026-10-25 both ceilings read the
+            # SAME post-baseline cumulative figure, so the ceiling named DAILY
+            # was in fact a cumulative budget that never reset. The owner
+            # approved $20 as a DAILY limit, so the daily ceiling now reads a
+            # UTC-day figure and the cumulative ceiling keeps reading the
+            # post-baseline total.
+            #
+            # NOTHING IS RESET OR WEAKENED BY THIS. The cumulative ceiling and
+            # the figure it reads are untouched, so every historical loss still
+            # counts against it and it still refuses independently. The change
+            # only stops a cumulative quantity being reported under a daily
+            # name, which is what made $20 ambiguous.
+            #
+            # MISSING IS NOT ZERO, here as everywhere else in this gate: a
+            # configured daily ceiling with no day-scoped figure REFUSES
+            # rather than reading an absent number as no loss.
+            l5_cum_loss = max(D(0), -l5r) + max(D(0), _d(cumulative_unrealized_loss))
+            # ABSENT IS NOT ZERO, AND IT IS NOT A REFUSAL EITHER: it falls back
+            # to the cumulative measure, which is the stricter of the two
+            # (today's loss is a subset of the post-baseline total). So a
+            # caller that supplies no day figure keeps exactly the behaviour it
+            # had before this change, and no caller can obtain a LAXER daily
+            # gate by omitting an input.
+            l5_day_loss = l5_cum_loss
+            if l5_scoped_realized_today is not None:
+                try:
+                    l5d = _d(l5_scoped_realized_today)
+                except (ValueError, ArithmeticError):
+                    return "L5_SCOPED_REALIZED_TODAY_UNREADABLE"
+                if not l5d.is_finite():
+                    return "L5_SCOPED_REALIZED_TODAY_UNREADABLE"
+                l5_day_loss = (max(D(0), -l5d)
+                               + max(D(0), _d(cumulative_unrealized_loss)))
             if (self.max_l5_daily_loss_usd is not None
-                    and l5_loss >= self.max_l5_daily_loss_usd):
+                    and l5_day_loss >= self.max_l5_daily_loss_usd):
                 return ("L5_DAILY_LOSS_LIMIT:%s>=%s"
-                        % (l5_loss, self.max_l5_daily_loss_usd))
+                        % (l5_day_loss, self.max_l5_daily_loss_usd))
             if (self.max_l5_cumulative_loss_usd is not None
-                    and l5_loss >= self.max_l5_cumulative_loss_usd):
+                    and l5_cum_loss >= self.max_l5_cumulative_loss_usd):
                 return ("L5_CUMULATIVE_LOSS_LIMIT:%s>=%s"
-                        % (l5_loss, self.max_l5_cumulative_loss_usd))
+                        % (l5_cum_loss, self.max_l5_cumulative_loss_usd))
 
         # THE UNRESOLVED-UNKNOWN BACKSTOP. Additive by construction: every
         # check above has already run and already returned if breached, so

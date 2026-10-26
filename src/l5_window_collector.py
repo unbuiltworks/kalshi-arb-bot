@@ -46,6 +46,7 @@ shaped this way rather than as a repair-specific extract.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 import threading
@@ -424,6 +425,92 @@ class RawTapeFeed:
         self.connected = False
 
 
+#: HOW MANY WINDOW DIRECTORIES THE VOLUME KEEPS. There was no retention of
+#: any kind: one directory per 15-minute window, each holding a verbatim
+#: frame tape, written forever. 96 a day filled the 50 GB volume and the
+#: collector then raised ENOSPC out of `WindowRecord.__init__` -- the FIRST
+#: statement of `collect_one` -- every five seconds from 2026-10-08 19:30Z
+#: to 2026-10-26, so `new_l5_actions` was never reached and the wallet feed
+#: was never polled at all while the deployment reported SUCCESS.
+#:
+#: The floor is a SECOND, independent bound: a retained count is a guess
+#: about row size, and the thing that actually wedges the collector is bytes.
+#: READ-ONLY VOLUME INSPECTION. Deletion lives in
+#: `l5_window_retention`, never here: this module is asserted to call
+#: no destructive verb at all, so the evidence recorder is structurally
+#: incapable of removing evidence.
+RETAIN_ENV = "L5_COLLECTOR_RETAIN_WINDOWS"
+DEFAULT_RETAIN_WINDOWS = 0            # 0 = no count bound; floor only
+FREE_FLOOR_ENV = "L5_COLLECTOR_FREE_FLOOR_MB"
+DEFAULT_FREE_FLOOR_MB = 2048.0
+MIN_RETAIN_WINDOWS = 24
+
+
+def _int_env(env: str, default: int) -> int:
+    """0 is a MEANINGFUL value here (no count bound), so only a negative or
+    unparseable setting falls back to the default."""
+    try:
+        v = int(str(os.getenv(env, "")).strip() or default)
+    except ValueError:
+        return default
+    return v if v >= 0 else default
+
+
+def _float_env(env: str, default: float) -> float:
+    try:
+        v = float(str(os.getenv(env, "")).strip() or default)
+    except ValueError:
+        return default
+    return v if v >= 0 else default
+
+
+def free_mb(path: str) -> Optional[float]:
+    """Free space on the filesystem holding `path`, or None if unreadable."""
+    try:
+        st = os.statvfs(path)
+    except OSError:
+        return None
+    return (st.f_bavail * st.f_frsize) / (1024.0 * 1024.0)
+
+
+def slug_window_start(slug: str) -> Optional[float]:
+    """Epoch start from a PMUS window slug, or None.
+
+    `cpc-btc-updown-15m-2026-10-26-0330z` -> 1792985400. Parsed locally and
+    on purpose: retention must be able to order the directories it is about
+    to delete without importing anything that could fail to import.
+    """
+    parts = str(slug).strip().rsplit("-", 4)
+    if len(parts) < 5:
+        return None
+    y, m, day, hhmm = parts[-4], parts[-3], parts[-2], parts[-1]
+    if not hhmm.endswith("z") or len(hhmm) != 5:
+        return None
+    try:
+        d = dt.datetime(int(y), int(m), int(day), int(hhmm[:2]),
+                        int(hhmm[2:4]), tzinfo=dt.timezone.utc)
+    except (ValueError, TypeError):
+        return None
+    return d.timestamp()
+
+
+def window_dirs(root: str) -> List[Path]:
+    """Existing window directories, OLDEST FIRST by the window start in the
+    slug. A directory whose slug carries no parsable start sorts first: it is
+    unidentifiable, so it is the first thing we are willing to lose."""
+    base = Path(root) / "windows"
+    try:
+        entries = [p for p in base.iterdir() if p.is_dir()]
+    except OSError:
+        return []
+
+    def key(p: Path):
+        ws = slug_window_start(p.name)
+        return (0, 0.0, p.name) if ws is None else (1, float(ws), p.name)
+
+    return sorted(entries, key=key)
+
+
 class WindowRecord:
     """One BTC15m window, written to the volume as a self-contained file."""
 
@@ -433,30 +520,109 @@ class WindowRecord:
         self.window_start = float(window_start)
         self.window_end = self.window_start + WINDOW_S
         self.dir = self.root / "windows" / slug
-        self.dir.mkdir(parents=True, exist_ok=True)
+        #: STORAGE FAILURE IS NOT A REASON TO STOP WATCHING L5.
+        #:
+        #: This mkdir raised ENOSPC out of the first statement of
+        #: `collect_one` for 17 days, so the wallet poll below it never ran
+        #: and the only instrumented record of L5's actions -- FeedHealth,
+        #: the identity gate, the per-refusal reasons -- was never produced.
+        #: An unwritable volume now DEGRADES the record instead of aborting
+        #: the window: the tape is dropped, the feed is still polled, and
+        #: `degraded` travels with every row so a window that kept no frames
+        #: can never be read as a window in which nothing happened.
+        self.degraded = False
+        self.degraded_reason: Optional[str] = None
+        try:
+            self.dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.degraded = True
+            self.degraded_reason = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
         self.raw_path = self.dir / "frames.jsonl"
         self._raw = None
         self.raw_frames = 0
+        self.write_error: Optional[str] = None
+
+    def storage(self) -> Dict[str, Any]:
+        """What this record could and could not keep. Always truthful."""
+        return {"degraded": self.degraded,
+                "degraded_reason": self.degraded_reason,
+                "write_error": self.write_error,
+                "raw_frames": self.raw_frames,
+                "dir": str(self.dir),
+                "free_mb": free_mb(str(self.root)),
+                "labels": ("degraded true means the volume refused and NO "
+                           "tape was kept for this window. The L5 feed was "
+                           "still polled; absence of frames is a storage "
+                           "fact, never an absence of trading.")}
 
     def open_raw(self):
-        self._raw = open(self.raw_path, "a", buffering=1)
+        if self.degraded:
+            return self.sink               # a sink that keeps nothing
+        try:
+            self._raw = open(self.raw_path, "a", buffering=1)
+        except OSError as exc:
+            self.degraded = True
+            self.degraded_reason = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            self._raw = None
         return self.sink
 
     def sink(self, row: Mapping[str, Any]) -> None:
         if self._raw is None:
             return
-        self._raw.write(json.dumps(row, default=str) + "\n")
+        try:
+            self._raw.write(json.dumps(row, default=str) + "\n")
+        except OSError as exc:
+            # the volume filled MID-WINDOW. Stop taping, keep watching.
+            self.degraded = True
+            self.degraded_reason = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            try:
+                self._raw.close()
+            except OSError:
+                pass
+            self._raw = None
+            return
         self.raw_frames += 1
 
     def close_raw(self) -> None:
         if self._raw is not None:
-            self._raw.close()
+            try:
+                self._raw.close()
+            except OSError:
+                pass
             self._raw = None
 
     def write(self, doc: Mapping[str, Any]) -> str:
+        """Persist the record, or report why not. NEVER raises.
+
+        A window summary that cannot be stored must still be emitted to the
+        log, so the caller gets "" and `write_error` rather than an
+        exception that would abandon the window -- and, under the restart
+        policy, the whole collection loop.
+        """
+        if self.degraded:
+            self.write_error = self.degraded_reason
+            return ""
         p = self.dir / "window.json"
         tmp = self.dir / "window.json.tmp"
-        with open(tmp, "w") as fh:
-            json.dump(doc, fh, indent=1, default=str)
-        tmp.replace(p)                 # atomic: a half-written record is not
-        return str(p)                  # a record
+        try:
+            with open(tmp, "w") as fh:
+                json.dump(doc, fh, indent=1, default=str)
+            tmp.replace(p)             # atomic: a half-written record is not
+        except OSError as exc:         # a record
+            self.degraded = True
+            self.degraded_reason = self.degraded_reason or "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            self.write_error = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            # THE PARTIAL TMP IS LEFT WHERE IT IS, deliberately. This module
+            # is asserted to call no destructive verb, which is what lets
+            # `verify_pre_cutover` prove the history unchanged -- so it does
+            # not get to remove even its own debris. `window.json.tmp` is
+            # never read by anything and the next successful write replaces
+            # it; retention is the only thing here that deletes, and it
+            # lives in `l5_window_retention`.
+            return ""
+        return str(p)
