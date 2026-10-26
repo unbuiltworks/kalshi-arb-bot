@@ -41,13 +41,18 @@ def _all_green(monkeypatch):
                         lambda t: {"ours": 0, "foreign": 0})
     monkeypatch.setattr(cont, "held_markets", lambda t: [])
     monkeypatch.setattr(cont, "_combined_now", lambda: (D("-0.1533"), True))
-    monkeypatch.setattr(cont, "_active_rung_id", lambda: "R5F")
+    # OWNER 2026-10-26: the re-arm target is R5FB, the BOUNDED fidelity rung
+    # ($1.50/market x 3 = $4.50 inside the $5 envelope, stop -$5.00), not R5F.
+    # The `rung` check comparing against REARM_RUNG is what caught this change,
+    # which is the gate doing its job: it refuses to arm on any rung but the
+    # approved one.
+    monkeypatch.setattr(cont, "_active_rung_id", lambda: "R5FB")
     monkeypatch.setattr(base, "requote_relations",
                         lambda: ("open", "extend", "complete"))
 
 
 def test_all_nine_pass_on_the_state_the_owner_described(monkeypatch):
-    """-0.1533 against -15.00, flat, swept, R5F, 0.25-0.75, ceilings 1.00."""
+    """-0.1533 against -15.00, flat, swept, R5FB, 0.25-0.75, ceilings 1.00."""
     _all_green(monkeypatch)
     rep = cont.boot_assertions(object(), CLEAN_SWEEP)
     assert rep["ok"] is True, [c for c in rep["checks"] if not c["ok"]]
@@ -205,8 +210,13 @@ def test_the_budget_check_is_strict_because_the_stop_is_inclusive():
     assert ">=" not in src
 
 
-@pytest.mark.parametrize("rung", ["R4", "R5", "r5f", ""])
-def test_any_rung_but_R5F_refuses(monkeypatch, rung):
+@pytest.mark.parametrize("rung", ["R4", "R5", "r5f", "", "R5F", "R5FT",
+                                  "r5fb"])
+def test_any_rung_but_R5FB_refuses(monkeypatch, rung):
+    """R5F and R5FT are in this list ON PURPOSE. R5FT is the $30 canary and
+    R5F is the former target; arming a $5-approved campaign on either would
+    be a six- or twentyfold envelope breach, so they must refuse like any
+    other wrong rung. Case matters too -- "r5fb" is not "R5FB"."""
     _all_green(monkeypatch)
     monkeypatch.setattr(cont, "_active_rung_id", lambda: rung)
     rep = cont.boot_assertions(object(), CLEAN_SWEEP)

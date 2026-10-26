@@ -300,6 +300,40 @@ OWNER_RUNGS: tuple[dict, ...] = (
                      "inheriting 0.98, per the rung's own 2026-09-07 approval "
                      "text; one market, $1.00 actions, and the owner's "
                      "2026-09-11 $30 capital/stop raise"},
+    # R5FB = R5FT INSIDE THE $5 ENVELOPE. OWNER 2026-10-26, answering the
+    # envelope question directly: run the l5_touch COMPLETE re-quote, but
+    # inside the $5 bound the L5 live engine already carries, not R5FT's $30.
+    #
+    # ONLY TWO LEVERS MOVE, AND BOTH MOVE DOWN. The per-market cap is sized so
+    # that the WHOLE three-window campaign fits the envelope -- 3 x 1.50 =
+    # 4.50 < 5.00 -- because the cap is per market and three sequential
+    # markets would otherwise cumulate to 3x it, capital spent on window one
+    # not being recovered until it settles. And the daily realized-loss stop
+    # comes back to -5.00, so the independent $5 halt the owner named is
+    # honoured on THIS path too rather than only on l5-pmus-live.
+    #
+    # EVERY OTHER R5FT LEVER IS COPIED VERBATIM: l5_touch pricing and the par
+    # pair ceiling (a pair at or below 1.00 locks >= $0 -- par is break-even,
+    # not a loss, and 1.00 is already the owner's hard bound), concurrency 1,
+    # four actions, $1.00 target action, $1.50 maximum leg, residual 6 units,
+    # model rest policy floored at 5 s. The mechanism under test is therefore
+    # identical to the canary's; only the money is smaller.
+    {"id": "R5FB", "name": "R5FT BOUNDED: complement joins the best "
+                           "non-crossing maker price, pair capped at par, "
+                           "whole campaign inside the $5 envelope "
+                           "(OWNER 2026-10-26)",
+     "per_market_cap_usd": "1.50", "residual_units": 6,
+     "markets_per_campaign": 3,
+     "max_unmatched_usd": None, "pair_cost_max": "1.00",
+     "complement_pricing": "l5_touch", "rest_policy": "model", "rest_floor_s": "5",
+     "campaigns_per_day": 1, "max_actions_per_session": 4, "concurrency": 1,
+     "max_sessions_per_campaign": 10080,
+     "target_notional_usd": "1.00", "max_leg_notional_usd": "1.50",
+     "daily_loss_stop_usd": "-5.00", "lever": "price", "promote": None,
+     "derived_from": "R5FT with per_market_cap_usd 30.00 -> 1.50 (so 3 "
+                     "markets x 1.50 = 4.50 < the 5.00 envelope) and "
+                     "daily_loss_stop_usd -30.00 -> -5.00; every other lever "
+                     "copied verbatim"},
 )
 ALL_RUNGS: tuple[dict, ...] = RUNGS + OWNER_RUNGS
 # fail closed at import: rung() returns the FIRST id match, so a duplicate id

@@ -1346,7 +1346,19 @@ def rearm_gate_enabled() -> bool:
         "1", "true", "yes", "on")
 
 
-REARM_RUNG = "R5F"
+# OWNER 2026-10-26: the re-arm target is the BOUNDED fidelity rung, not the
+# $30 canary. R5FB is R5FT with per_market_cap_usd 30.00 -> 1.50 (3 markets x
+# 1.50 = 4.50, inside the $5 envelope) and daily_loss_stop_usd -30.00 -> -5.00,
+# every other lever copied verbatim, so the mechanism under test is unchanged
+# and only the money is smaller.
+#
+# A SIDE EFFECT WORTH NAMING, because it is load-bearing. The Railway
+# startCommand carries `sed -i 's/^REARM_RUNG = "R5F"$/REARM_RUNG = "R5FT"/'`.
+# That pattern is anchored and requires exactly "R5F", so it NO LONGER MATCHES
+# and becomes a no-op: this constant survives to the running process without
+# any change to the service's start command. If that sed is ever edited to
+# match "R5FB", it would silently retarget a $5 campaign at the $30 rung.
+REARM_RUNG = "R5FB"
 REARM_BAND = (base.D("0.25"), base.D("0.75"))
 REARM_REQUOTE_RELATIONS = ("open", "extend", "complete")
 REARM_PAIR_CEILING = base.D("1.00")

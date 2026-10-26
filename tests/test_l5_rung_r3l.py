@@ -33,8 +33,11 @@ def test_r3l_is_the_owner_rung_with_the_derived_numbers():
     # Asserted as a TAIL rather than loosened to a membership check: the order
     # is the promotion order, and a rung silently inserted mid-ladder would
     # change what "the next rung" means.
-    assert [x["id"] for x in ladder.ladder()][-5:] == [
-        "R2C2", "R3L", "R4", "R5F", "R5FT"]
+    # R5FB is APPENDED after R5FT (OWNER 2026-10-26, the bounded $5 rung), so
+    # the tail is one longer. The original five are pinned in their original
+    # order, which is the thing this assertion exists to protect.
+    assert [x["id"] for x in ladder.ladder()][-6:] == [
+        "R2C2", "R3L", "R4", "R5F", "R5FT", "R5FB"]
 
 
 def test_r1_and_r2c_labels_stops_and_sizes_are_unchanged():
