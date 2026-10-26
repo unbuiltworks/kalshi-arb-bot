@@ -4328,6 +4328,57 @@ class FaithfulExecutor:
             return {}                      # unreadable is not a fresh book
         return fresh if isinstance(fresh, Mapping) else {}
 
+    def disarmed_refusal(self) -> Optional[Dict[str, Any]]:
+        """None unless the transport is DEFINITELY disarmed.
+
+        WHY THIS EXISTS. The submission claim is consumed before the wire and
+        is never returned -- "not by a cancellation, a partial or zero fill,
+        a reconnect, a restart, or a rejected or ambiguous acknowledgement".
+        That is the right rule: a claim released on a crash could buy a
+        second order into a venue that already holds the first.
+
+        But a DISARMED transport is not an ambiguous outcome. It raises
+        `NotArmed` from `submit()` without attempting a POST, so nothing
+        reached the venue and nothing can have. The four-window campaign
+        `camp1.87265e...` closed having spent 1 of 21 submissions and 1 of 6
+        OPENs on exactly this: a well-formed MAKER intent (1715z DOWN 0.4500
+        x 1.54) that was refused `NOT_ARMED` after its claim was already
+        durable. The budget recorded a submission the venue never saw.
+
+        AN EFFICIENCY GUARD, NOT A SAFETY GATE -- the same class of check as
+        `presend_cross_refusal`, and placed beside it. It cannot authorize
+        anything: the transport's own arm check at `submit()` is untouched
+        and remains the authority. All this can do is decline to spend a
+        claim on an order that provably cannot be sent.
+
+        IT ACTS ONLY ON A POSITIVE `armed is False`. An unreadable or absent
+        attribute FAILS OPEN into the existing path, because an unusual
+        transport that is in fact armed must not be blocked by a telemetry
+        read -- and failing open merely restores today's behaviour. Refusing
+        early when `armed` is definitively False is free by construction:
+        `submit()` would refuse the same order on the next line.
+        """
+        try:
+            tp = getattr(self, "transport", None)
+            if tp is None:
+                return None
+            armed = getattr(tp, "armed", None)
+        except BaseException:                                  # noqa: BLE001
+            return None
+        if armed is not False:
+            return None
+        return {
+            "reason": "NOT_ARMED_PRESEND",
+            "transport": str(getattr(tp, "name", type(tp).__name__))[:40],
+            "claim_consumed": False,
+            "labels": ("the transport is disarmed, so submit() cannot reach "
+                       "the venue. The submission claim is NOT consumed, "
+                       "because an order that was never sent has not spent "
+                       "the authorization. This is an accounting guard: the "
+                       "transport's own arm check still decides whether any "
+                       "order may be sent."),
+        }
+
     def presend_cross_refusal(self, market: str,
                               intent: Mapping[str, Any],
                               tr: Mapping[str, Any]
@@ -6547,6 +6598,22 @@ class FaithfulExecutor:
                 prov.stage("PRESEND_CROSS", _xr)
                 return prov.refuse("PRESEND_CROSS",
                                    str(_xr.get("reason"))[:120])
+
+            # LAST, and for the same reason PRESEND_CROSS is here: the next
+            # statement consumes a claim that is never returned. A disarmed
+            # transport cannot reach the venue, so spending one on it records
+            # a submission that never happened. Positive `armed is False`
+            # only; anything else falls through untouched.
+            _dr = self.disarmed_refusal()
+            if _dr is not None:
+                prov.stage("ORDER", {"client_order_id": coid,
+                                     "submitted": False,
+                                     "reason": "NOT_ARMED",
+                                     "claim_consumed": False,
+                                     "detail": _dr["labels"],
+                                     "intent": {k: str(v)
+                                                for k, v in intent.items()}})
+                return prov.refuse("NOT_ARMED_PRESEND", "transport disarmed")
 
             try:
                 # ACCUMULATION NEEDS MANY SUBMISSIONS, so it claims a
