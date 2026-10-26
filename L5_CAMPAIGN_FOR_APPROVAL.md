@@ -130,3 +130,92 @@ redeploy to pick up the guard, and a fresh approval document (`approved`, `nonce
 Oct 25 one expired at 20:30Z.
 
 **No new service, no new branch, no capital beyond the chosen cap, and no monetary cost to prepare.**
+
+---
+
+# ADDENDUM — envelope decided, and a HARD STOP found in deployment verification
+
+**Owner decision taken (2026-10-26): option (A), a bounded $5 `l5_touch` rung.** Built and tested.
+Then verifying the target service turned up a precondition failure that I cannot clear and that
+blocks launch outright.
+
+## What was built for (A)
+
+**`R5FB`** added to `OWNER_RUNGS` on `feature/l5-transfer-backtest`. **Exactly two levers move and
+both move down**, every other field copied from R5FT verbatim and pinned field-by-field by test:
+
+| | R5FT (configured) | **R5FB (built)** |
+|---|---|---|
+| per-market cap | $30.00 | **$1.50** |
+| markets per campaign | 1 | **3** |
+| **whole-campaign capital** | $30.00 | **3 x 1.50 = $4.50 < $5.00** |
+| daily realized-loss stop | −$30.00 | **−$5.00** |
+| pricing | `l5_touch` | `l5_touch` (unchanged) |
+| pair ceiling | 1.00 | 1.00 (unchanged) |
+| concurrency / actions / residual | 1 / 4 / 6 | 1 / 4 / 6 (unchanged) |
+
+The cap is sized per-market so the **whole three-window campaign** fits the envelope — three
+sequential markets cumulate, because capital spent on window one is not recovered until it settles.
+
+`REARM_RUNG` is now `"R5FB"`. **That needs no Railway change**: the startCommand's
+`sed -i 's/^REARM_RUNG = "R5F"$/REARM_RUNG = "R5FT"/'` is anchored on exactly `"R5F"`, so `"R5FB"`
+survives it untouched. Verified by running the real sed against the real line. The hazard is
+documented beside the constant — if that sed were ever edited to match `"R5FB"`, it would silently
+retarget a $5 campaign at the $30 rung.
+
+**Tests: 11 new (`tests/test_r5fb_bounded_rung.py`), all pass**, including that R5FT itself is
+untouched at $30.00/−$30.00 (I bounded a copy, I did not weaken the canary) and that an unset
+`PMUS_SPRING_RUNG` does **not** select R5FB, so the boot assertion mismatches and the probe stays
+halted — fail-closed.
+
+## THE HARD STOP — the target service's credentials are rejected
+
+`pmus-spring-l5-probe`, live state at `2026-10-26T00:13:16Z`:
+
+| | |
+|---|---|
+| verdict | `SHUTDOWN_VERIFIED` (halted since 2026-10-14T12:07Z) |
+| held inventory | `held_preserved: []` — flat, which is good |
+| **unsettled markets** | **`pending_total: 96`**, `pending_after: 96` — zero progress per cycle |
+| **every settlement audit** | **`HTTP Error 401: Unauthorized`** — all five per batch, plus `migration_close` |
+| quantity reconciliation | `qty_evidence.available: false` — *"the venue could not be asked for its trades"* |
+| unsettled floor | **−$17.2602** |
+| combined loss | **−$17.2602** against its `combined_budget_usd` of −$30.00 |
+
+**Three consequences, in order of severity:**
+
+1. **R5FB cannot arm there. This is arithmetic.** The `combined_loss_above_stop` boot assertion
+   compares combined loss against the rung's stop. At **−$17.2602 against R5FB's −$5.00 stop it
+   REFUSES.** The service already carries more than three times the unsettled loss floor that a
+   $5-stop rung permits. (R5FT's −$30.00 permits it — which is exactly why the loose rung was
+   chosen before, and exactly why it should not be.)
+
+2. **The campaign's own deliverable is impossible while the 401 stands.** You asked for actual
+   submitted orders, fills, **settlements**, and **realized net P&L**. The service cannot read its
+   own trades, so it cannot settle anything or reconcile a single quantity. A campaign run in this
+   state would produce submissions and fills with **no settlement and no realized net** — shadow
+   accounting by accident.
+
+3. **Two re-arm assertions need venue reads** (`orphan_sweep_clean`, `no_open_orders_fresh_read`)
+   and would error on a 401 rather than pass.
+
+## What I did not do
+
+I did not read, print, test, or modify any credential, and I did not touch
+`deploy/pmus_spring_l5/DEPLOY_TRIGGER`. The 401 is a live-credential matter on a money-moving
+service and is yours to resolve.
+
+## What clearing this requires, in order
+
+1. **Fix the 401** on `pmus-spring-l5-probe` (`PMUS_API_KEY_ID` / `PMUS_API_SECRET_KEY`). Note
+   `l5-pmus-live` is reading the venue successfully, so this is specific to that service.
+2. **Drain the 96 unsettled markets** — settlement will then start progressing on its own cycle, and
+   the −$17.2602 unsettled floor resolves into realized figures.
+3. **Re-check combined loss against −$5.00.** If it is still below the stop after settlement, R5FB
+   cannot arm and the envelope question reopens on real numbers rather than an unsettled floor.
+4. Then: clear `PMUS_SPRING_SHUTDOWN`, set `PMUS_SPRING_RUNG=R5FB` and
+   `PMUS_SPRING_COMPLETE_REQUOTE=1`, set `PMUS_SPRING_REARM_GATE`, `PMUS_SPRING_LIVE=YES` and a
+   fresh `PMUS_SPRING_SESSION_ID` with matching `PMUS_SPRING_ARM`, and deploy deliberately by
+   touching `DEPLOY_TRIGGER`.
+
+Steps 1–3 are preconditions I cannot perform. **The campaign is built and waiting on them.**
