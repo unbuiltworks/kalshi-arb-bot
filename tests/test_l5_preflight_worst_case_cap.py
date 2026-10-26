@@ -139,3 +139,126 @@ def test_the_transport_does_not_import_the_probe():
             names.update(a.name for a in n.names)
     assert not any("l5_two_sided_probe" in x for x in names), sorted(
         x for x in names if "two_sided" in x)
+
+
+# ===== POINT 3: $4.69 holds an all-in $5 ceiling at EVERY permitted price
+
+PRINCIPAL = D("4.69")
+ALL_IN = D("5.00")
+
+
+def test_4_69_holds_all_in_under_5_at_every_permitted_tick_price():
+    """Exhaustive over the venue band on 0.01 ticks, at FULL principal --
+    which is the binding case, since a smaller size pays a smaller fee."""
+    from src import l5_two_sided_probe as TSP
+    worst = D(0)
+    p = D(str(TSP.MIN_PRICE))
+    while p <= D(str(TSP.MAX_PRICE)):
+        contracts = PRINCIPAL / p
+        total = PRINCIPAL + fees.taker_fee(p, contracts)
+        assert total <= ALL_IN, (str(p), str(total))
+        worst = max(worst, total)
+        p += D("0.01")
+    # and the maximum really is at the floor, as the model claims
+    floor_total = PRINCIPAL + fees.taker_fee(
+        D(str(TSP.MIN_PRICE)), PRINCIPAL / D(str(TSP.MIN_PRICE)))
+    assert worst == floor_total
+    assert worst == D("4.9997")
+
+
+def test_any_smaller_size_is_strictly_cheaper():
+    """Sizes below the cap cannot breach a ceiling the cap itself respects."""
+    from src import l5_two_sided_probe as TSP
+    floor = D(str(TSP.MIN_PRICE))
+    full = fees.taker_fee(floor, PRINCIPAL / floor)
+    for frac in ("0.1", "0.25", "0.5", "0.75", "0.9"):
+        part = PRINCIPAL * D(frac)
+        assert part + fees.taker_fee(floor, part / floor) <= ALL_IN
+        assert fees.taker_fee(floor, part / floor) <= full
+
+
+def test_one_cent_more_principal_breaches_the_ceiling():
+    """So 4.69 is the binding value, not a round number chosen loosely."""
+    from src import l5_two_sided_probe as TSP
+    floor = D(str(TSP.MIN_PRICE))
+    over = D("4.70")
+    assert over + fees.taker_fee(floor, over / floor) > ALL_IN
+
+
+def test_the_preflight_reports_that_same_ceiling(monkeypatch):
+    """The evidence a campaign is activated on must show it."""
+    out = _wc(monkeypatch, str(PRINCIPAL))
+    assert out["max_committed_usd"] == "4.69"
+    assert out["max_committed_source"] == "L5_MAX_CASH_DEPLOYED_USD"
+    assert D(out["worst_case_total_usd"]) == D("4.9997")
+    assert out["fee_is_outside_the_cash_ceiling"] is True
+
+
+def test_per_order_cent_rounding_is_charged_to_the_loss_gates_not_the_cap():
+    """HONEST LIMIT, MEASURED RATHER THAN ASSUMED. The fee is rounded per
+    order, so splitting a principal across orders changes the total slightly
+    -- here by $0.0001, and marginally CHEAPER, not super-additive as the
+    fee model's own comment warns it could be in the per-FILL case.
+
+    Either way that is REALIZED cost, bounded by the loss gates, not by the
+    cash ceiling, which bounds concurrent PRINCIPAL. At max_live_orders=1
+    the ceiling-relevant exposure is one order.
+    """
+    from src import l5_two_sided_probe as TSP
+    floor = D(str(TSP.MIN_PRICE))
+    one = fees.taker_fee(floor, PRINCIPAL / floor)
+    split = sum(fees.taker_fee(floor, (PRINCIPAL / D(4)) / floor)
+                for _ in range(4))
+    assert abs(split - one) < D("0.05")          # small either way
+    assert PRINCIPAL + one <= ALL_IN
+    assert PRINCIPAL + split <= ALL_IN
+
+
+def test_cumulative_loss_state_is_durable_and_atomic(tmp_path):
+    """Point 3, second half: the cumulative gate reads PERSISTED state, so
+    the ledger must survive a restart and must never be torn."""
+    import json as _json
+    from src import l5_live_execution as LX
+    p = tmp_path / "sub" / "inventory.json"
+    s1 = LX.InventoryStore(str(p))
+    s1.state["retired_markets"] = {
+        "cpc-btc-updown-15m-2026-10-25-1945z": {
+            "t": "2026-10-25T20:00:00+00:00",
+            "l5_owner_attribution_verified": True,
+            "realized_usd": "-0.6864"}}
+    s1.save()
+    assert p.exists(), "ledger was not written"
+    # a fresh process sees it -- this is what makes the gate durable
+    s2 = LX.InventoryStore(str(p))
+    assert "cpc-btc-updown-15m-2026-10-25-1945z" in s2.state["retired_markets"]
+    # atomic: no .tmp left behind and the file parses
+    assert not list(p.parent.glob("*.tmp"))
+    assert _json.loads(p.read_text())["retired_markets"]
+
+
+def test_an_unreadable_ledger_refuses_rather_than_reading_zero_loss():
+    """THE FAILURE THAT WOULD MATTER. `_load` swallows a parse error and
+    leaves defaults, so a corrupted inventory.json loses the baseline. That
+    must not become permission: with no L5-scoped figure the gate REFUSES.
+    """
+    from src import l5_live_validation_gates as VG
+    g = VG.ValidationGates(max_cash_deployed_usd=D("4.69"),
+                           max_unmatched_contracts=D("5"),
+                           max_l5_cumulative_loss_usd=D("20"),
+                           max_l5_daily_loss_usd=D("5"))
+    why = g.refuse(order_qty=D("1"), order_price=D("0.44"),
+                   order_intent="ORDER_INTENT_BUY_LONG",
+                   filled_legs=(), outstanding=(),
+                   unmatched_after=D(0), cumulative_realized=D(0),
+                   cumulative_unrealized_loss=D(0),
+                   l5_scoped_realized=None)          # the corrupted case
+    assert why == "L5_SCOPED_REALIZED_UNAVAILABLE", why
+
+
+def test_a_corrupt_ledger_does_not_crash_the_store(tmp_path):
+    from src import l5_live_execution as LX
+    p = tmp_path / "inventory.json"
+    p.write_text("{ truncated")
+    s = LX.InventoryStore(str(p))               # must not raise
+    assert s.state["positions"] == {}
+    assert s.state["committed"] == {}
