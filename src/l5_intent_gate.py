@@ -150,6 +150,16 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # efficiency guard, not a safety control -- it fails OPEN on a book it
     # cannot read, because every risk gate above has already run.
     "PRESEND_CROSS:PRESEND_WOULD_CROSS",
+    # the disarmed pre-check, in the same position and for the same reason
+    # as PRESEND_CROSS above: the claim on the next line is never returned,
+    # and a disarmed transport raises NotArmed out of submit() without
+    # attempting a POST, so a claim spent on one records a submission the
+    # venue never saw. Also an efficiency guard, not a safety control: it
+    # acts ONLY on a positive `armed is False` and fails OPEN on an absent
+    # or raising attribute, because the transport's own arm check at
+    # submit() remains the authority and a telemetry read must not be able
+    # to halt trading.
+    "NOT_ARMED_PRESEND:TRANSPORT_DISARMED",
     "SUBMISSION_CLAIM:CLAIM_REASON",
     "SAFETY_OVERLAY:INTENT_MUTATED_AFTER_GATES",
     "SAFETY_OVERLAY:REFUSED_BEFORE_ORDER_POST",
