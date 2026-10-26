@@ -46,7 +46,7 @@ import os
 import signal
 import time
 from decimal import Decimal as D
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set
 
 from src import l5_faithful_translation as FT
 from src import l5_live_authorization as AUTH
@@ -629,6 +629,183 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
     return out
 
 
+#: HOW OLD AN L5 ACTION MAY BE AND STILL REACH THE EXECUTOR, in seconds.
+#: One BTC15m window. The durable cursor means a restart no longer throws
+#: away the page it comes back to, which is the point -- but it also means a
+#: process that was down must not now act on an hour-old action as though it
+#: had just happened. This bound can only refuse.
+MAX_ACTION_AGE_ENV = "L5_LIVE_MAX_ACTION_AGE_S"
+DEFAULT_MAX_ACTION_AGE_S = 900.0
+#: how much dedupe history the cursor keeps. The feed serves the newest 200
+#: rows, so anything older than this cannot come back round to be
+#: double-counted; the cap is a second bound so the file cannot grow without
+#: limit on a volume whose exhaustion already cost this system 17 days.
+CURSOR_HORIZON_S = 86400.0
+CURSOR_MAX_KEYS = 20000
+
+
+def _max_action_age_s() -> float:
+    """The staleness bound, from the environment, floored at one tick.
+
+    A misconfigured value must not widen the bound into "accept anything":
+    an unparseable or non-positive setting falls back to the default.
+    """
+    raw = str(os.getenv(MAX_ACTION_AGE_ENV, "")).strip()
+    if not raw:
+        return DEFAULT_MAX_ACTION_AGE_S
+    try:
+        v = float(raw)
+    except ValueError:
+        return DEFAULT_MAX_ACTION_AGE_S
+    return v if v > 0 else DEFAULT_MAX_ACTION_AGE_S
+
+
+class IngestCursor:
+    """Durable dedupe + seed state for the L5 activity feed.
+
+    WHAT BROKE WITHOUT IT. `seen` was a bare in-memory set and `seeded` a
+    bare in-memory bool. The first poll of every process marked the entire
+    200-row page as history and returned, by design -- "the first read is
+    history, not a signal" -- and that design is right exactly once. Held in
+    memory it re-ran on every boot, so each restart silently discarded up to
+    200 of L5's most recent actions, and a redeploy during a live window
+    dropped whatever L5 did around it with no counter and no log line.
+
+    So the state goes on the mounted volume: seeded once ever, dedupe keys
+    bounded by age and count, written atomically. A restart RESUMES. Rows
+    already handled are still refused as duplicates, so resuming cannot
+    produce a second executable decision for one L5 action -- the two
+    properties have to hold together, and the regression tests assert both.
+
+    It holds no transport, decides nothing about an order, and every method
+    is failure-tolerant: a cursor that cannot be read starts empty and
+    UNSEEDED, which re-seeds (discarding history) rather than replaying it.
+    That is the safe direction: a missed action costs an opportunity, a
+    replayed one costs money.
+    """
+
+    def __init__(self, path: str, *, horizon_s: float = CURSOR_HORIZON_S,
+                 max_keys: int = CURSOR_MAX_KEYS) -> None:
+        self.path = path
+        self.horizon_s = float(horizon_s)
+        self.max_keys = int(max_keys)
+        self.seeded = False
+        self.seeded_at: Optional[float] = None
+        self.seeded_count: Optional[int] = None
+        #: action_key -> the row's own timestamp (never our receipt time)
+        self._keys: Dict[str, float] = {}
+        self._dirty = False
+        self.load_error: Optional[str] = None
+        self.save_error: Optional[str] = None
+        self.loaded = False
+
+    # ---------------------------------------------------------------- io
+    def load(self) -> "IngestCursor":
+        try:
+            with open(self.path) as fh:
+                doc = json.load(fh)
+        except FileNotFoundError:
+            self.loaded = True
+            return self
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # UNREADABLE IS UNSEEDED. Never "seeded with no keys", which
+            # would admit the whole page as fresh and replay history live.
+            self.load_error = "%s: %s" % (type(exc).__name__, str(exc)[:120])
+            self.loaded = True
+            return self
+        if isinstance(doc, Mapping):
+            self.seeded = bool(doc.get("seeded"))
+            sa, sc = doc.get("seeded_at"), doc.get("seeded_count")
+            self.seeded_at = float(sa) if isinstance(sa, (int, float)) else None
+            self.seeded_count = int(sc) if isinstance(sc, int) else None
+            keys = doc.get("keys")
+            if isinstance(keys, Mapping):
+                for k, v in keys.items():
+                    try:
+                        self._keys[str(k)] = float(v)
+                    except (TypeError, ValueError):
+                        continue
+        self.loaded = True
+        return self
+
+    def save(self) -> None:
+        if not self._dirty:
+            return
+        self._prune()
+        doc = {"schema": "l5_ingest_cursor/v1",
+               "seeded": self.seeded, "seeded_at": self.seeded_at,
+               "seeded_count": self.seeded_count,
+               "written_utc": now_utc().isoformat(),
+               "keys": self._keys,
+               "labels": ("dedupe keys are l5_pmus_realtime_observer."
+                          "action_key values -- the whole economic identity "
+                          "of a fill, not its transaction hash. seeded is "
+                          "set ONCE EVER; a restart resumes.")}
+        tmp = self.path + ".tmp"
+        try:
+            with open(tmp, "w") as fh:
+                json.dump(doc, fh, default=str)
+            os.replace(tmp, self.path)
+            self._dirty = False
+            self.save_error = None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            # A CURSOR WE CANNOT PERSIST MUST NOT STOP US TRADING, and must
+            # not pretend it persisted. In-memory dedupe still holds for
+            # this process; the next restart re-seeds.
+            self.save_error = "%s: %s" % (type(exc).__name__, str(exc)[:120])
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+    def _prune(self) -> None:
+        if not self._keys:
+            return
+        newest = max(self._keys.values())
+        cut = newest - self.horizon_s
+        if cut > 0:
+            self._keys = {k: v for k, v in self._keys.items() if v >= cut}
+        if len(self._keys) > self.max_keys:
+            keep = sorted(self._keys.items(), key=lambda kv: kv[1],
+                          reverse=True)[:self.max_keys]
+            self._keys = dict(keep)
+
+    # ------------------------------------------------------------ state
+    def known(self, key: str) -> bool:
+        return key in self._keys
+
+    def add(self, key: str, timestamp: Any) -> None:
+        try:
+            t = float(timestamp)
+        except (TypeError, ValueError):
+            # an unparseable timestamp still has to be deduped, or it is
+            # re-handled on every single poll forever
+            t = time.time()
+        self._keys[str(key)] = t
+        self._dirty = True
+
+    def mark_seeded(self, count: int, now: Optional[float] = None) -> None:
+        self.seeded = True
+        self.seeded_at = float(now if now is not None else time.time())
+        self.seeded_count = int(count)
+        self._dirty = True
+
+    def report(self) -> Dict[str, Any]:
+        return {"path": self.path, "seeded": self.seeded,
+                "seeded_at": self.seeded_at,
+                "seeded_count": self.seeded_count,
+                "keys": len(self._keys), "loaded": self.loaded,
+                "load_error": self.load_error, "save_error": self.save_error,
+                "durable": self.save_error is None and self.load_error is None,
+                "labels": ("seeded true with a seeded_at from a PREVIOUS "
+                           "boot is the proof that a restart resumed "
+                           "instead of discarding the feed page.")}
+
+
 class Runner:
     def __init__(self, *, root: str, book: AB.AuthBook,
                  http: Optional[Any] = None, lam: D = MANIFEST_LAMBDA,
@@ -725,8 +902,22 @@ class Runner:
                            "cannot cancel. It can still latch the halt.")})
         self.limits = LX.SafetyLimits(**PROBE_LIMITS)
         self.lam = lam
-        self.seen: set = set()
-        self.seeded = False
+        #: DURABLE INGEST STATE, on the mounted volume beside the ledger.
+        #: `seen`/`seeded` remain as read-only views below so nothing that
+        #: already reads those names changes meaning.
+        self.cursor = IngestCursor(
+            os.path.join(root, "l5_ingest_cursor.json")).load()
+        self.max_action_age_s = _max_action_age_s()
+        #: every slug the feed has served this process, admitted or not
+        self.ingest_slugs: "collections.Counter[str]" = collections.Counter()
+        emit("L5_INGEST_CURSOR", dict(
+            self.cursor.report(),
+            max_action_age_s=self.max_action_age_s,
+            resumed=bool(self.cursor.seeded),
+            labels=("resumed true means this boot did NOT discard the feed "
+                    "page as history. Emitted at construction so a restart "
+                    "that silently re-seeded is visible in the log that "
+                    "starts the run.")))
         self.ws: Optional[int] = None
         self.transport: Optional[T.PmusTransport] = None
         self.executor: Optional[LX.FaithfulExecutor] = None
@@ -1863,38 +2054,124 @@ class Runner:
         emit("L5_LIVE_WINDOW", out)
 
     # ------------------------------------------------------------ actions
+    @property
+    def seen(self) -> Set[str]:
+        """Read-only view of the durable dedupe keys."""
+        return set(self.cursor._keys)
+
+    @property
+    def seeded(self) -> bool:
+        return self.cursor.seeded
+
+    @staticmethod
+    def _action_age_s(r: Mapping[str, Any], now: float) -> Optional[float]:
+        """How long ago L5's action happened, by L5'S OWN clock.
+
+        None when the row carries no usable timestamp. Deliberately the
+        row's `timestamp` and never our receipt time: the receipt time is
+        always ~now, so measuring staleness against it would make every
+        action look fresh and the bound would never bind. A negative age (a
+        row stamped in the future) is clamped to 0 rather than refused --
+        clock skew at the source is not the action's fault.
+        """
+        try:
+            t = float(r.get("timestamp"))
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, float(now) - t)
+
     def poll(self, now: float) -> None:
+        """One read of L5's published trades -> the executor, or a refusal.
+
+        WHY THIS IS INSTRUMENTED THE WAY IT IS. For the 2026-10-26 campaign
+        the whole of this stage's telemetry was a single `seeded: 200`, and
+        the campaign's finding was reported as "approximately 200 seeded
+        historical wallet events and apparently no new matching L5 events".
+        The word doing the work there is "apparently": with no counter
+        between the feed and `handle`, four completely different states
+        produced byte-identical logs --
+
+          * L5 traded nothing;
+          * L5 traded, but only markets other than BTC15m;
+          * L5 traded BTC15m and the slug no longer matched our prefix;
+          * the feed served the same cached page forever.
+
+        None of them is distinguishable from the others without the
+        `ingest:*` counters and the observed-slug histogram below, so the
+        campaign could not be diagnosed from its own logs at all. Every
+        refusal now carries a machine-readable reason and the slugs that
+        earned it, which is what makes "L5 is currently trading only other
+        markets" a statement that can be established rather than assumed.
+        """
         rows = self.feed()
         if rows is None:
             self.stats["feed_errors"] += 1
+            self.stats["ingest:FEED_FAILED"] += 1
             return
+        self.stats["ingest:polls_ok"] += 1
+        self.stats["ingest:rows"] += len(rows)
         fresh = []
         for r in rows:
             k = OBS.action_key(r)
-            if k in self.seen:
+            # THE SLUG OF EVERY ROW WE SEE, admitted or not. This is the one
+            # observation that answers "is L5 trading BTC15m right now", and
+            # it is taken before any filter can discard the evidence.
+            self.ingest_slugs[str(r.get("slug") or "?")] += 1
+            if self.cursor.known(k):
+                self.stats["ingest:dup"] += 1
                 continue
-            self.seen.add(k)
+            self.cursor.add(k, r.get("timestamp"))
             fresh.append(r)
-        if not self.seeded:
-            # the first read is history, not a signal: act only on what
-            # arrives after this process began watching
-            self.seeded = True
+        self.stats["ingest:new"] += len(fresh)
+        if not self.cursor.seeded:
+            # THE FIRST READ IS HISTORY, NOT A SIGNAL -- and it happens ONCE
+            # EVER, not once per boot. It used to be in-process state, so
+            # every restart re-seeded the whole 200-row page as history and
+            # discarded it: an L5 action arriving in the seconds around a
+            # redeploy was dropped permanently and silently. The cursor is
+            # on the mounted volume, so a restart RESUMES instead.
+            self.cursor.mark_seeded(len(fresh), now)
             self.stats["seeded"] = len(fresh)
+            self.cursor.save()
             return
+        self.cursor.save()
+        # CHRONOLOGICAL, ALWAYS. The feed serves newest-first and a delayed
+        # row can arrive out of order behind a newer one; the executor's
+        # inventory reasoning is sequential, so it must see L5's actions in
+        # the order L5 took them and not the order the API listed them.
         for r in sorted(fresh, key=lambda x: float(x.get("timestamp") or 0)):
-            if str(r.get("slug") or "").startswith("btc-updown-15m-"):
-                self.handle(r, now)
-                # ADDITIVE, AFTER, AND UNABLE TO AFFECT IT. A raise here
-                # would abandon the remaining rows of this batch, so the
-                # wrap is total -- the comparison is a record, and a record
-                # must never cost the strategy an action.
-                try:
-                    self.shadow_compare(r, now)
-                except BaseException as exc:                   # noqa: BLE001
-                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                        raise
-                    self.stats["shadow_compare_error:%s"
-                               % type(exc).__name__] += 1
+            if not str(r.get("slug") or "").startswith("btc-updown-15m-"):
+                self.stats["ingest:refused:NOT_BTC15M_SLUG"] += 1
+                continue
+            # STALENESS, AND IT IS A SAFETY BOUND RATHER THAN A FILTER.
+            #
+            # Now that the seed survives a restart, a process that was down
+            # for an hour comes back holding a page of L5 trades it has
+            # never seen -- and acting on an hour-old action live would be
+            # backdating with real money. An action older than the bound is
+            # recorded and refused. It can only ever refuse.
+            age = self._action_age_s(r, now)
+            if age is None:
+                self.stats["ingest:refused:NO_TIMESTAMP"] += 1
+                continue
+            if age > self.max_action_age_s:
+                self.stats["ingest:refused:STALE_ACTION"] += 1
+                self.stats["ingest:stale_max_age_s"] = max(
+                    int(age), int(self.stats.get("ingest:stale_max_age_s", 0)))
+                continue
+            self.stats["ingest:admitted"] += 1
+            self.handle(r, now)
+            # ADDITIVE, AFTER, AND UNABLE TO AFFECT IT. A raise here
+            # would abandon the remaining rows of this batch, so the
+            # wrap is total -- the comparison is a record, and a record
+            # must never cost the strategy an action.
+            try:
+                self.shadow_compare(r, now)
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["shadow_compare_error:%s"
+                           % type(exc).__name__] += 1
 
     def handle(self, r: Mapping[str, Any], recv: float) -> None:
         ws = OBS.l5_window_start(r.get("slug", ""))
@@ -3687,6 +3964,35 @@ class Runner:
                        "all_time_realized_usd. None is UNKNOWN and refuses "
                        "at the gate -- it is never read as zero.")}
 
+    def ingest_report(self) -> Dict[str, Any]:
+        """Every stage between L5's published trade and `handle`.
+
+        Compact by construction: the slug histogram is the top few only,
+        because the whole point is that this survives the log line limit.
+        """
+        ing = {k: v for k, v in self.stats.items()
+               if isinstance(k, str) and k.startswith("ingest:")}
+        top = collections.Counter(self.ingest_slugs).most_common(6)
+        btc = sum(n for sl, n in self.ingest_slugs.items()
+                  if sl.startswith("btc-updown-15m-"))
+        return {
+            "cursor": self.cursor.report(),
+            "max_action_age_s": self.max_action_age_s,
+            "counters": ing,
+            "feed_errors": self.stats.get("feed_errors", 0),
+            "distinct_slugs_seen": len(self.ingest_slugs),
+            "rows_btc15m": btc,
+            "top_slugs_seen": [{"slug": sl, "rows": n} for sl, n in top],
+            "labels": ("rows_btc15m counts rows of L5's OWN feed whose slug "
+                       "is a BTC15m window, before any other filter. Zero "
+                       "of it with distinct_slugs_seen > 0 establishes that "
+                       "L5 is trading other markets -- which is a finding, "
+                       "not a fault. Zero of BOTH with polls_ok rising "
+                       "means the feed is serving an empty or unchanged "
+                       "page. An observed action is not a fill of ours and "
+                       "admitted does not mean submitted."),
+        }
+
     def heartbeat(self) -> None:
         t = self.transport
         emit("L5_LIVE_HB", {
@@ -3694,6 +4000,15 @@ class Runner:
             "market": t.market_slug if t else None,
             "armed": bool(t and t.armed), "preflight": self.preflight_status,
             "owner_arm_token": Q1.armed(),
+            # THE WALLET INGESTION STAGE, EARLY IN THE LINE AND ON PURPOSE.
+            #
+            # The heartbeat exceeds the log transport's 81,920-byte line
+            # limit and its tail is truncated in production -- `stats` sits
+            # past that cut, which is why the 2026-10-26 campaign could not
+            # be diagnosed from its own heartbeats. This block is placed
+            # ahead of everything large so the question "did an L5 action
+            # reach us, and if not what refused it" survives truncation.
+            "l5_ingest": self.ingest_report(),
             # THE CONTRADICTION THIS REPLACES. `halt` was `self.halted()`,
             # which reads the LOCAL env override L5_LIVE_HALT alone. The gate
             # that actually refuses reads the DURABLE watchdog latch over

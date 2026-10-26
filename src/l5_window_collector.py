@@ -46,8 +46,10 @@ shaped this way rather than as a repair-specific extract.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
+import shutil
 import threading
 import time
 from decimal import Decimal as D
@@ -424,6 +426,193 @@ class RawTapeFeed:
         self.connected = False
 
 
+#: HOW MANY WINDOW DIRECTORIES THE VOLUME KEEPS. There was no retention of
+#: any kind: one directory per 15-minute window, each holding a verbatim
+#: frame tape, written forever. 96 a day filled the 50 GB volume and the
+#: collector then raised ENOSPC out of `WindowRecord.__init__` -- the FIRST
+#: statement of `collect_one` -- every five seconds from 2026-10-08 19:30Z
+#: to 2026-10-26, so `new_l5_actions` was never reached and the wallet feed
+#: was never polled at all while the deployment reported SUCCESS.
+#:
+#: The floor is a SECOND, independent bound: a retained count is a guess
+#: about row size, and the thing that actually wedges the collector is bytes.
+#:
+#: THE COUNT BOUND IS OFF BY DEFAULT, AND THAT IS THE WHOLE POINT.
+#: A count bound deletes history the moment it is switched on -- the volume
+#: holds months of window records, and discarding them to make room for one
+#: more window would trade the evidence this system exists to accumulate for
+#: an afternoon of collection. So the DEFAULT prune is driven by the free
+#: space floor alone: it removes the oldest windows and ONLY as many as are
+#: needed to keep collecting. An operator who wants a hard cap sets
+#: L5_COLLECTOR_RETAIN_WINDOWS deliberately.
+RETAIN_ENV = "L5_COLLECTOR_RETAIN_WINDOWS"
+DEFAULT_RETAIN_WINDOWS = 0            # 0 = no count bound; floor only
+FREE_FLOOR_ENV = "L5_COLLECTOR_FREE_FLOOR_MB"
+DEFAULT_FREE_FLOOR_MB = 2048.0
+#: never prune below this many windows, whatever the floor says. A volume
+#: that cannot hold even this is a capacity fault to report, not one to
+#: delete evidence over.
+MIN_RETAIN_WINDOWS = 24
+
+
+def _int_env(env: str, default: int) -> int:
+    """0 is a MEANINGFUL value here (no count bound), so only a negative or
+    unparseable setting falls back to the default."""
+    try:
+        v = int(str(os.getenv(env, "")).strip() or default)
+    except ValueError:
+        return default
+    return v if v >= 0 else default
+
+
+def _float_env(env: str, default: float) -> float:
+    try:
+        v = float(str(os.getenv(env, "")).strip() or default)
+    except ValueError:
+        return default
+    return v if v >= 0 else default
+
+
+def free_mb(path: str) -> Optional[float]:
+    """Free space on the filesystem holding `path`, or None if unreadable."""
+    try:
+        st = os.statvfs(path)
+    except OSError:
+        return None
+    return (st.f_bavail * st.f_frsize) / (1024.0 * 1024.0)
+
+
+def slug_window_start(slug: str) -> Optional[float]:
+    """Epoch start from a PMUS window slug, or None.
+
+    `cpc-btc-updown-15m-2026-10-26-0330z` -> 1792985400. Parsed locally and
+    on purpose: retention must be able to order the directories it is about
+    to delete without importing anything that could fail to import.
+    """
+    parts = str(slug).strip().rsplit("-", 4)
+    if len(parts) < 5:
+        return None
+    y, m, day, hhmm = parts[-4], parts[-3], parts[-2], parts[-1]
+    if not hhmm.endswith("z") or len(hhmm) != 5:
+        return None
+    try:
+        d = dt.datetime(int(y), int(m), int(day), int(hhmm[:2]),
+                        int(hhmm[2:4]), tzinfo=dt.timezone.utc)
+    except (ValueError, TypeError):
+        return None
+    return d.timestamp()
+
+
+def window_dirs(root: str) -> List[Path]:
+    """Existing window directories, OLDEST FIRST by the window start in the
+    slug. A directory whose slug carries no parsable start sorts first: it is
+    unidentifiable, so it is the first thing we are willing to lose."""
+    base = Path(root) / "windows"
+    try:
+        entries = [p for p in base.iterdir() if p.is_dir()]
+    except OSError:
+        return []
+
+    def key(p: Path):
+        ws = slug_window_start(p.name)
+        return (0, 0.0, p.name) if ws is None else (1, float(ws), p.name)
+
+    return sorted(entries, key=key)
+
+
+def _rmtree(p: Path) -> bool:
+    try:
+        shutil.rmtree(p)
+        return True
+    except OSError:
+        return False
+
+
+def prune_windows(root: str, *, retain: Optional[int] = None,
+                  floor_mb: Optional[float] = None,
+                  keep_slugs: Sequence[str] = ()) -> Dict[str, Any]:
+    """Bound the volume. Returns a machine-readable report; never raises.
+
+    Two passes, in this order. The COUNT pass drops whatever sits beyond the
+    retained window count. The FLOOR pass then keeps dropping the oldest
+    remaining window until free space clears the floor, and stops at
+    MIN_RETAIN_WINDOWS whether or not it got there -- a floor it cannot
+    reach by deleting is reported as `floor_unreachable`, because silently
+    emptying the volume would destroy the evidence the collector exists for.
+
+    `keep_slugs` is never pruned: the window being collected right now owns
+    its directory and must not have it removed underneath the open tape.
+    """
+    retain = _int_env(RETAIN_ENV, DEFAULT_RETAIN_WINDOWS) if retain is None \
+        else retain
+    floor_mb = _float_env(FREE_FLOOR_ENV, DEFAULT_FREE_FLOOR_MB) \
+        if floor_mb is None else floor_mb
+    retain = int(retain)
+    #: a count bound, once asked for, still never goes below the floor of
+    #: windows we refuse to delete over a capacity fault
+    if retain > 0:
+        retain = max(retain, MIN_RETAIN_WINDOWS)
+    protected = {str(s) for s in keep_slugs}
+    rep: Dict[str, Any] = {
+        "root": str(root), "retain_windows": retain,
+        "count_bound_active": retain > 0,
+        "free_floor_mb": round(float(floor_mb), 1),
+        "free_mb_before": None, "free_mb_after": None,
+        "windows_before": 0, "windows_after": 0,
+        "pruned_count": 0, "pruned_for_count": 0, "pruned_for_floor": 0,
+        "pruned_slugs": [], "failed_slugs": [],
+        "floor_unreachable": False, "protected": sorted(protected),
+        "labels": ("retention is a BOUND on the volume, not a policy about "
+                   "what is interesting. Oldest window first, the live "
+                   "window never, and never below MIN_RETAIN_WINDOWS. With "
+                   "count_bound_active false, windows are removed ONLY to "
+                   "clear the free-space floor -- the least history that "
+                   "lets collection continue. Deletion is irreversible: "
+                   "export the volume before setting a count bound."),
+    }
+    try:
+        rep["free_mb_before"] = free_mb(str(root))
+        dirs = [p for p in window_dirs(root) if p.name not in protected]
+        rep["windows_before"] = len(dirs) + len(
+            [1 for p in window_dirs(root) if p.name in protected])
+
+        # pass 1: the count bound, only if one was asked for
+        excess = max(0, len(dirs) - retain) if retain > 0 else 0
+        for p in dirs[:excess]:
+            if _rmtree(p):
+                rep["pruned_slugs"].append(p.name)
+                rep["pruned_for_count"] += 1
+            else:
+                rep["failed_slugs"].append(p.name)
+        dirs = dirs[excess:]
+
+        # pass 2: the byte floor
+        free = free_mb(str(root))
+        while free is not None and free < floor_mb and len(dirs) > MIN_RETAIN_WINDOWS:
+            p = dirs.pop(0)
+            if _rmtree(p):
+                rep["pruned_slugs"].append(p.name)
+                rep["pruned_for_floor"] += 1
+            else:
+                rep["failed_slugs"].append(p.name)
+            free = free_mb(str(root))
+        if free is not None and free < floor_mb:
+            rep["floor_unreachable"] = True
+
+        rep["free_mb_after"] = free
+        rep["windows_after"] = len(window_dirs(root))
+        rep["pruned_count"] = (rep["pruned_for_count"]
+                               + rep["pruned_for_floor"])
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        rep["error"] = "%s: %s" % (type(exc).__name__, str(exc)[:160])
+    for k in ("free_mb_before", "free_mb_after"):
+        if isinstance(rep[k], float):
+            rep[k] = round(rep[k], 1)
+    return rep
+
+
 class WindowRecord:
     """One BTC15m window, written to the volume as a self-contained file."""
 
@@ -433,30 +622,106 @@ class WindowRecord:
         self.window_start = float(window_start)
         self.window_end = self.window_start + WINDOW_S
         self.dir = self.root / "windows" / slug
-        self.dir.mkdir(parents=True, exist_ok=True)
+        #: STORAGE FAILURE IS NOT A REASON TO STOP WATCHING L5.
+        #:
+        #: This mkdir raised ENOSPC out of the first statement of
+        #: `collect_one` for 17 days, so the wallet poll below it never ran
+        #: and the only instrumented record of L5's actions -- FeedHealth,
+        #: the identity gate, the per-refusal reasons -- was never produced.
+        #: An unwritable volume now DEGRADES the record instead of aborting
+        #: the window: the tape is dropped, the feed is still polled, and
+        #: `degraded` travels with every row so a window that kept no frames
+        #: can never be read as a window in which nothing happened.
+        self.degraded = False
+        self.degraded_reason: Optional[str] = None
+        try:
+            self.dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.degraded = True
+            self.degraded_reason = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
         self.raw_path = self.dir / "frames.jsonl"
         self._raw = None
         self.raw_frames = 0
+        self.write_error: Optional[str] = None
+
+    def storage(self) -> Dict[str, Any]:
+        """What this record could and could not keep. Always truthful."""
+        return {"degraded": self.degraded,
+                "degraded_reason": self.degraded_reason,
+                "write_error": self.write_error,
+                "raw_frames": self.raw_frames,
+                "dir": str(self.dir),
+                "free_mb": free_mb(str(self.root)),
+                "labels": ("degraded true means the volume refused and NO "
+                           "tape was kept for this window. The L5 feed was "
+                           "still polled; absence of frames is a storage "
+                           "fact, never an absence of trading.")}
 
     def open_raw(self):
-        self._raw = open(self.raw_path, "a", buffering=1)
+        if self.degraded:
+            return self.sink               # a sink that keeps nothing
+        try:
+            self._raw = open(self.raw_path, "a", buffering=1)
+        except OSError as exc:
+            self.degraded = True
+            self.degraded_reason = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            self._raw = None
         return self.sink
 
     def sink(self, row: Mapping[str, Any]) -> None:
         if self._raw is None:
             return
-        self._raw.write(json.dumps(row, default=str) + "\n")
+        try:
+            self._raw.write(json.dumps(row, default=str) + "\n")
+        except OSError as exc:
+            # the volume filled MID-WINDOW. Stop taping, keep watching.
+            self.degraded = True
+            self.degraded_reason = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            try:
+                self._raw.close()
+            except OSError:
+                pass
+            self._raw = None
+            return
         self.raw_frames += 1
 
     def close_raw(self) -> None:
         if self._raw is not None:
-            self._raw.close()
+            try:
+                self._raw.close()
+            except OSError:
+                pass
             self._raw = None
 
     def write(self, doc: Mapping[str, Any]) -> str:
+        """Persist the record, or report why not. NEVER raises.
+
+        A window summary that cannot be stored must still be emitted to the
+        log, so the caller gets "" and `write_error` rather than an
+        exception that would abandon the window -- and, under the restart
+        policy, the whole collection loop.
+        """
+        if self.degraded:
+            self.write_error = self.degraded_reason
+            return ""
         p = self.dir / "window.json"
         tmp = self.dir / "window.json.tmp"
-        with open(tmp, "w") as fh:
-            json.dump(doc, fh, indent=1, default=str)
-        tmp.replace(p)                 # atomic: a half-written record is not
-        return str(p)                  # a record
+        try:
+            with open(tmp, "w") as fh:
+                json.dump(doc, fh, indent=1, default=str)
+            tmp.replace(p)             # atomic: a half-written record is not
+        except OSError as exc:         # a record
+            self.degraded = True
+            self.degraded_reason = self.degraded_reason or "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            self.write_error = "%s:errno=%s" % (
+                type(exc).__name__, getattr(exc, "errno", None))
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return ""
+        return str(p)

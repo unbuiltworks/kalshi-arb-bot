@@ -74,7 +74,11 @@ def collect_one(slug: str, start: float, *, clock=time.time,
     say("L5_COLLECTOR_WINDOW_OPEN", {
         "market": slug, "window_start_utc":
             dt.datetime.utcfromtimestamp(start).isoformat() + "Z",
-        "lead_s": round(start - clock(), 1), "root": root()})
+        "lead_s": round(start - clock(), 1), "root": root(),
+        # LOUD, AND AT THE TOP OF THE WINDOW. A full volume used to be a
+        # five-second traceback with no window line at all; it is now a
+        # window that opens, says it cannot keep a tape, and still polls.
+        "storage": rec.storage()})
     feed.start(cov)
     try:
         while clock() < end:
@@ -133,6 +137,10 @@ def collect_one(slug: str, start: float, *, clock=time.time,
                  "raw_frames": rec.raw_frames,
                  "feed_errors": feed.errors[-3:],
                  "stop_reason": feed.stop_reason},
+        # WHETHER THE VOLUME KEPT ANY OF THIS. A degraded window polled the
+        # L5 feed exactly as a healthy one does and kept no tape, so the
+        # two must never be told apart by the absence of frames alone.
+        "storage": rec.storage(),
         "actions": actions,
         "prints": prints,
         "book_states": books,
@@ -155,7 +163,12 @@ def collect_one(slug: str, start: float, *, clock=time.time,
         "max_gap_s": coverage["max_gap_s"],
         "prints": len(prints), "book_states": len(books),
         "raw_frames": rec.raw_frames,
+        "storage_degraded": rec.degraded,
+        "storage_degraded_reason": rec.degraded_reason,
         "l5_actions": len(actions), "l5_polls_ok": polls_ok,
+        "l5_polls": polls,
+        "l5_feed_health": (health.as_dict()
+                           if hasattr(health, "as_dict") else {}),
         "feed_connected_ever": coverage["frames"] > 0,
         "feed_errors": feed.errors[-2:],
         "primary": elig["primary"], "excluded_for": elig["excluded_for"]})
@@ -211,6 +224,30 @@ def main(argv: Optional[List[str]] = None) -> int:
             if wait > 0:
                 time.sleep(min(wait, 600.0))
                 continue
+            # BOUND THE VOLUME BEFORE OPENING THE NEXT WINDOW.
+            #
+            # There was no retention at all: one directory per 15-minute
+            # window, written forever, and when the 50 GB volume filled on
+            # 2026-10-08 the collector raised ENOSPC out of the first
+            # statement of `collect_one` every five seconds for 17 days
+            # without ever polling the L5 feed. Pruning here -- before the
+            # record is created, never during -- is what stops that
+            # recurring. The live window is protected by name so the tape
+            # it is about to open cannot be deleted underneath it.
+            try:
+                pr = C.prune_windows(root(), keep_slugs=[slug])
+                if (pr.get("pruned_count") or pr.get("failed_slugs")
+                        or pr.get("floor_unreachable") or pr.get("error")):
+                    say("L5_COLLECTOR_RETENTION", pr)
+            except BaseException as exc:                   # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # retention is housekeeping. It must never be the reason a
+                # window goes uncollected -- that is the failure mode this
+                # whole change exists to remove.
+                say("L5_COLLECTOR_RETENTION", {
+                    "error": "%s: %s" % (type(exc).__name__, str(exc)[:160]),
+                    "effect": "not pruned; collection continues"})
             collect_one(slug, start)
         except KeyboardInterrupt:
             return 0
