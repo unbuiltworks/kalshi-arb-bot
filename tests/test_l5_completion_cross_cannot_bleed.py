@@ -209,3 +209,116 @@ def test_attempts_are_throttled_and_class_budgeted():
     assert "if now - self.last_ts_completion_t < self.TS_COMPLETION_EVERY_S:" in src
     auth = open("src/l5_live_authorization.py").read()
     assert '"COMPLETE": "L5_LIVE_AUTH_MAX_COMPLETE"' in auth
+
+
+# ============ POINT 2: the $0.10 ceiling, on the REAL 1945z book
+#
+# Every price below is a complement own price that was ACTUALLY EXECUTABLE
+# against displayed depth in cpc-btc-updown-15m-2026-10-25-1945z, taken from
+# the window's own L5_RESIDUAL_BOOK_SAMPLE rows (109 executable instants of
+# 121). Held inventory is the venue-confirmed 1.56 UP at own cost 0.44,
+# acquisition $0.6864.
+#
+# The cheap complements all occur EARLY (0.55 at +204s, 0.56 at +120s,
+# 0.58-0.68 between +126s and +526s); the dear ones only LATE (0.89-0.99
+# between +606s and +819s). So the ceiling has to admit the early, sound
+# exits and refuse the late, ruinous ones.
+
+REAL_1945Z = [
+    # (complement own px, first offset seen, pair own cost)
+    ("0.55", 204, "0.99"), ("0.56", 120, "1.00"), ("0.58", 398, "1.02"),
+    ("0.60", 307, "1.04"), ("0.63", 146, "1.07"), ("0.68", 133, "1.12"),
+    ("0.89", 606, "1.33"), ("0.94", 566, "1.38"), ("0.99", 812, "1.43"),
+]
+
+
+def _real(px, ceiling):
+    return TSP.completion_decision(
+        up_qty="1.56", dn_qty="0", up_cost_px="0.44", dn_cost_px="0",
+        taker_price=px, available_depth="38", tick="0.01", min_qty="0.01",
+        cash_headroom="4.69", worst_case_ceiling=ceiling, book_age_s="0.5")
+
+
+def test_the_010_ceiling_admits_the_beneficial_real_exits():
+    """Risk-reducing and economically beneficial: pair at or below $1.00, so
+    the exit books no certain loss beyond the fee."""
+    for px, off, pair in REAL_1945Z:
+        if D(pair) <= D("1.00"):
+            dec = _real(px, "0.10")
+            assert dec.get("ok") is True, (px, pair, dec.get("reason"))
+            # it strictly improves the worse outcome, by more than its fee
+            assert D(dec["worst_improvement_usd"]) > D(dec["taker_fee_usd"])
+            # and it reduces, never increases, unmatched inventory
+            assert D(dec["qty"]) <= D("1.56")
+
+
+def test_the_010_ceiling_refuses_every_ruinous_real_exit():
+    """A pair above ~1.02 books a certain loss bigger than the bound. At
+    $0.10 each is refused BY THE CEILING, by name, and each of these prices
+    was only executable late in the window."""
+    for px, off, pair in REAL_1945Z:
+        if D(pair) >= D("1.04") and D(px) <= TSP.MAX_PRICE:
+            dec = _real(px, "0.10")
+            assert dec.get("ok") is False, (px, pair)
+            assert dec["reason"] == "COMPLETION_EXCEEDS_WORST_CASE_CEILING"
+
+
+def test_the_dearest_real_complements_are_already_refused_by_the_band():
+    """Measured, and it narrows the claim honestly: complements at or above
+    0.96 are refused by the deployed price band (MIN_PRICE..MAX_PRICE =
+    0.05..0.95) at EITHER ceiling, so the $2.00 gap is the 0.56-0.95 range
+    rather than everything. 0.99 was executable at +812s."""
+    assert TSP.MAX_PRICE == D("0.95")
+    for ceiling in ("2.00", "0.10"):
+        dec = _real("0.99", ceiling)
+        assert dec.get("ok") is False
+        assert dec["reason"] == "COMPLETION_PRICE_OUT_OF_BAND"
+
+
+def test_the_deployed_200_ceiling_admits_the_in_band_ruinous_exits():
+    """Which is why $2.00 is not a control at this size: every in-band price
+    passes, including 0.95 -- pair 1.39, a certain -$0.6484 on a $0.6864
+    leg, i.e. 94% of acquisition locked in."""
+    for px, off, pair in REAL_1945Z:
+        if D(px) <= TSP.MAX_PRICE:
+            assert _real(px, "2.00").get("ok") is True, (px, pair)
+    worst = _real("0.95", "2.00")
+    assert D(worst["worst_after"]) == D("-0.6484")
+    # and the same price is refused under the proposal
+    assert _real("0.95", "0.10").get("ok") is False
+
+
+def test_what_the_010_bound_actually_permits_is_bounded_downside():
+    """The permitted set is exactly 'leaves at most $0.10 of certain
+    downside', and each one is a large improvement on holding."""
+    hold_worst = -(D("1.56") * D("0.44"))          # -0.6864
+    permitted = []
+    for px, off, pair in REAL_1945Z:
+        dec = _real(px, "0.10")
+        if dec.get("ok"):
+            permitted.append(px)
+            assert D(dec["worst_after"]) >= D("-0.10")
+            assert D(dec["worst_after"]) > hold_worst
+            assert D(dec["worst_improvement_usd"]) > D(dec["taker_fee_usd"])
+    assert permitted == ["0.55", "0.56", "0.58"]
+
+
+def test_the_ceiling_refuses_exposure_INCREASING_orders_beyond_the_limit():
+    """The other half of the proof: the same bound must refuse an order that
+    would leave the book able to lose more than it permits. Asserted on the
+    deployed gate, with an exposure-increasing first leg."""
+    from src import l5_live_validation_gates as VG
+    g = VG.ValidationGates(max_cash_deployed_usd=D("4.69"),
+                           max_unmatched_contracts=D("5"),
+                           max_worst_case_deficit_usd=D("0.10"))
+    # a NEW one-sided leg: nothing held, so the worst outcome loses it all
+    why = g.refuse(order_qty=D("1.56"), order_price=D("0.44"),
+                   order_intent="ORDER_INTENT_BUY_LONG",
+                   filled_legs=(), outstanding=(),
+                   unmatched_after=D("1.56"),
+                   cumulative_realized=D(0),
+                   cumulative_unrealized_loss=D(0),
+                   inventory={"up_qty": "0", "dn_qty": "0",
+                              "up_cost": "0", "dn_cost": "0"})
+    assert why is not None, "a $0.69 one-sided leg must not clear a $0.10 bound"
+    assert "WORST_CASE" in why or "DEFICIT" in why, why
