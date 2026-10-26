@@ -2059,3 +2059,59 @@ deploy: 2026-10-25 shadow-only — fill-horizon probe, UNARMED
 # Regression: 13,595 passed, 34 total failures -- the SAME set as deployed
 # 497b1152, zero new failures.
 deploy: 2026-10-26 narrow release, DISARMED, owner-authorized
+
+# =============================================================== 2026-10-26
+# OWNER-AUTHORIZED PROMOTION OF THE MARKER-RESET FIX. Two commits only,
+# cherry-picked onto the deployed 728d3bb2 so the production delta is exactly
+# the fix and its tests -- 2 files, +408, -0. The divergent development branch
+# (claude/l5-wallet-ingestion-fix-kqcqoa) is NOT promoted: it carries 67 files
+# and +91,719 lines of research material the owner excluded from this release,
+# and it deletes tests/test_l5_completion_cross_cannot_bleed.py.
+#
+# THE DEFECT. `_probe_leg_pending` / `_probe_round_pending` are set by the
+# two-sided path inside `handle` and cleared immediately before the wire, with
+# nineteen refusal exits in between that reset nothing. One refused two-sided
+# plan latched them for the life of the process, and the strategy-ownership
+# gate then refused every subsequent L5-FOLLOWING order as though it belonged
+# to the other engine. The latch was self-sustaining: only a successful
+# submission cleared it, and it is what prevented one.
+#
+# MEASURED IN camp1.87265e609a92b5a2889e5392, window 1445z, 27 decisions on
+# authenticated books: 15 refused STRATEGY_EXCLUSIVE_L5_FOLLOWING with l5f-
+# coids, `safety` null on every one (so the maker-only overlay was never
+# reached), zero orders to the venue.
+#
+# ALSO A RISK DEFECT: the second-maker-slot evidence reads
+# `_probe_round_pending` to decide whether an order is a pair leg, so a stale
+# marker could grant an L5-following order a slot reserved for a two-sided
+# complement. The reset is risk-REDUCING.
+#
+# THE FIX IS TWO LINES: reset both markers on entry to `handle`. They are
+# per-call scratch, set and consumed within one call. No limit, price, size,
+# mode, ownership rule or crossing permission is touched. L5_WINDOW_STRATEGY
+# stays L5_FOLLOWING, maker-only stays in force, L5_DEFENSIVE_COMPLETION stays
+# 0, L5_TS_COMPLETION_CROSS stays unset.
+#
+# WHAT IT DOES NOT DO. It creates no executable maker opportunity. Zero of the
+# 27 candidates produced a valid maker translation, so none would have
+# submitted even without the latch. L5 pays THROUGH the touch: across 71
+# faithful taker translations the median |slippage vs L5| was two ticks and the
+# pair cost was 1.0100 if both legs are taken, exactly 1.0000 with the second
+# leg rested at the touch, and 0 of 71 reached the 0.96 fee-safe target. After
+# this deploy a taker-only translation is refused BY NAME at the maker-only
+# overlay instead of being misattributed to strategy ownership, which is the
+# point: the logs start telling the truth about why nothing trades.
+#
+# REGRESSION, name-level and both directions, same machine:
+#   baseline 61df0e88 : 20 failed, 13,641 passed, 27 skipped, 1 xfailed, 14 errors
+#   fix      2025f875 : 20 failed, 13,659 passed, 27 skipped, 1 xfailed, 14 errors
+#   introduced: 0   fixed: 0   common: 34 / 34 identical by name
+#   collection 13,703 -> 13,723 = +20, exactly the new tests
+# 240 tests pass on this release lineage. The 14 errors are
+# tests/test_pmus_status_live_handoff.py, pre-existing and identical at base.
+#
+# THE CAMPAIGN IS NOT RENEWED, RESET OR EXTENDED. Nonce
+# camp1.87265e609a92b5a2889e5392 and deadline 2026-10-26T17:42:45+00:00 are
+# untouched, the durable window ledger keeps its 3 spent / 1 remaining, and the
+# executor was DISARMED between windows when this shipped.
+deploy: 2026-10-26 marker-reset fix — campaign untouched, maker-only, DISARMED at ship
