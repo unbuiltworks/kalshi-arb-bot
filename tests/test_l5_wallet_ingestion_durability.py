@@ -289,7 +289,11 @@ class _Stub:
             os.path.join(root, "l5_ingest_cursor.json")).load()
         self.max_action_age_s = max_age
         self.ingest_slugs = collections.Counter()
-        self.stats = collections.Counter()
+        self.stats = R.TimedCounter()
+        self.last_row_t = None
+        self.last_btc15m_t = None
+        self.last_admitted_t = None
+        self.newest_row_event_t = None
         self.rows = rows
         self.handled = []
         self.shadow_seen = []
@@ -308,6 +312,7 @@ class _Stub:
     # class yields the plain function, which would otherwise rebind as an
     # instance method here and receive `self`.
     _action_age_s = staticmethod(R.Runner._action_age_s)
+    _iso = staticmethod(R.Runner._iso)
     poll = R.Runner.poll
     ingest_report = R.Runner.ingest_report
 
@@ -655,3 +660,94 @@ def test_retention_never_touches_the_pre_cutover_manifest():
     assert "old" not in rep["pruned_slugs"]
     assert (hist / "a.jsonl").read_text() == '{"historical":1}\n'
     assert C.verify_pre_cutover(root)["all_unchanged"] is True
+
+
+# ================================ the three-way diagnosis, with timestamps
+#
+# "zero new matching events" is not a diagnosis. These three cases are the
+# ones the 2026-10-26 campaign could not tell apart, and each now leaves a
+# different, timestamped signature.
+
+def test_absent_at_the_source_is_distinguishable():
+    """The feed answers, with nothing on it. last_row stays None."""
+    s = _Stub(tempfile.mkdtemp(), [])
+    s.poll(W0330)
+    rep = s.ingest_report()
+    assert rep["counters"]["ingest:polls_ok"] == 1
+    assert rep["last_row_utc"] is None          # NEVER, not zero
+    assert rep["last_btc15m_utc"] is None
+    assert rep["last_admitted_utc"] is None
+    assert rep["rows_btc15m"] == 0
+
+
+def test_trading_other_markets_is_distinguishable_from_a_stale_feed():
+    """last_btc15m stays None while last_row advances, and the histogram
+    names the markets. This is the case the campaign called 'apparently no
+    new matching L5 events'."""
+    root = tempfile.mkdtemp()
+    now = W0330
+    seed = _row(now - 500, tx="0xseed", slug="eth-updown-15m-000")
+    _Stub(root, [seed]).poll(now)
+    s = _Stub(root, [_row(now, tx="0xETH", slug="eth-updown-15m-123"), seed])
+    s.poll(now + 1.0)
+    rep = s.ingest_report()
+    assert rep["last_row_utc"] is not None      # the feed IS serving rows
+    assert rep["last_btc15m_utc"] is None       # none of them are BTC15m
+    assert rep["last_admitted_utc"] is None
+    assert rep["counters"]["ingest:refused:NOT_BTC15M_SLUG"] == 1
+    assert "eth-updown-15m-123" in {d["slug"] for d in rep["top_slugs_seen"]}
+
+
+def test_a_stale_page_is_distinguishable_by_l5s_own_clock():
+    """A feed serving the same page forever looks busy by OUR poll clock.
+    Only the newest EVENT time on the page shows it has stopped moving."""
+    root = tempfile.mkdtemp()
+    page = [_row(W0330, tx="0xA")]
+    s = _Stub(root, page)
+    s.poll(W0330 + 10.0)                        # seeds
+    first = s.ingest_report()["newest_row_event_utc"]
+    for i in range(5):                          # same page, later polls
+        s.poll(W0330 + 20.0 + i)
+    rep = s.ingest_report()
+    assert rep["newest_row_event_utc"] == first   # L5's clock never moved
+    assert rep["counters"]["ingest:polls_ok"] == 6
+    assert rep["counters"]["ingest:dup"] >= 5     # and every row was a repeat
+
+
+def test_silently_filtered_vs_reaching_handle_have_different_clocks():
+    """A BTC15m row that arrives but is refused advances last_btc15m and
+    NOT last_admitted. One that reaches handle advances both."""
+    root = tempfile.mkdtemp()
+    now = W0330
+    _Stub(root, [_row(now - 10_000, tx="0xseed")]).poll(now)
+
+    # arrives, refused on staleness
+    s = _Stub(root, [_row(now - 5_000, tx="0xSTALE"),
+                     _row(now - 10_000, tx="0xseed")])
+    s.poll(now)
+    rep = s.ingest_report()
+    assert rep["last_btc15m_utc"] is not None
+    assert rep["last_admitted_utc"] is None
+    assert rep["counters"]["ingest:refused:STALE_ACTION"] == 1
+
+    # arrives, reaches handle
+    s2 = _Stub(root, [_row(now + 1.0, tx="0xOK"),
+                      _row(now - 10_000, tx="0xseed")])
+    s2.poll(now + 2.0)
+    rep2 = s2.ingest_report()
+    assert rep2["last_btc15m_utc"] is not None
+    assert rep2["last_admitted_utc"] is not None
+    assert len(s2.handled) == 1
+
+
+def test_every_ingest_counter_carries_the_age_of_its_last_movement():
+    """A process-lifetime count with no clock reports 'stopped an hour ago'
+    and 'happening now' identically -- the ambiguity TimedCounter exists
+    for. Asked for explicitly in the audit."""
+    s = _Stub(tempfile.mkdtemp(), [])
+    s.poll(W0330)
+    rep = s.ingest_report()
+    assert rep["counter_age_s"], "no ages published"
+    for k in rep["counters"]:
+        assert k in rep["counter_age_s"], k
+        assert rep["counter_age_s"][k] >= 0.0

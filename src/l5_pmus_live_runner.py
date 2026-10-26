@@ -910,6 +910,14 @@ class Runner:
         self.max_action_age_s = _max_action_age_s()
         #: every slug the feed has served this process, admitted or not
         self.ingest_slugs: "collections.Counter[str]" = collections.Counter()
+        #: the three clocks `ingest_report` publishes. None means NEVER.
+        self.last_row_t: Optional[float] = None
+        self.last_btc15m_t: Optional[float] = None
+        self.last_admitted_t: Optional[float] = None
+        #: the newest L5 EVENT time the feed has ever served, by L5's clock
+        #: rather than ours -- a stale feed is a page whose newest event
+        #: stops advancing while our own poll clock keeps ticking.
+        self.newest_row_event_t: Optional[float] = None
         emit("L5_INGEST_CURSOR", dict(
             self.cursor.report(),
             max_action_age_s=self.max_action_age_s,
@@ -2064,6 +2072,17 @@ class Runner:
         return self.cursor.seeded
 
     @staticmethod
+    def _iso(t: Optional[float]) -> Optional[str]:
+        """A stored epoch as UTC, or None. None means NEVER, not zero."""
+        if t is None:
+            return None
+        try:
+            return dt.datetime.fromtimestamp(
+                float(t), dt.timezone.utc).isoformat()
+        except (TypeError, ValueError, OSError):
+            return None
+
+    @staticmethod
     def _action_age_s(r: Mapping[str, Any], now: float) -> Optional[float]:
         """How long ago L5's action happened, by L5'S OWN clock.
 
@@ -2110,9 +2129,24 @@ class Runner:
             return
         self.stats["ingest:polls_ok"] += 1
         self.stats["ingest:rows"] += len(rows)
+        if rows:
+            self.last_row_t = now
         fresh = []
         for r in rows:
             k = OBS.action_key(r)
+            # L5'S OWN CLOCK, not ours, and over EVERY row rather than the
+            # fresh ones: a feed serving the same page forever still looks
+            # busy by our poll clock, and only the newest event time on the
+            # page shows that it has stopped moving.
+            try:
+                et = float(r.get("timestamp"))
+            except (TypeError, ValueError):
+                et = None
+            if et is not None and (self.newest_row_event_t is None
+                                   or et > self.newest_row_event_t):
+                self.newest_row_event_t = et
+            if str(r.get("slug") or "").startswith("btc-updown-15m-"):
+                self.last_btc15m_t = now
             # THE SLUG OF EVERY ROW WE SEE, admitted or not. This is the one
             # observation that answers "is L5 trading BTC15m right now", and
             # it is taken before any filter can discard the evidence.
@@ -2160,6 +2194,7 @@ class Runner:
                     int(age), int(self.stats.get("ingest:stale_max_age_s", 0)))
                 continue
             self.stats["ingest:admitted"] += 1
+            self.last_admitted_t = now
             self.handle(r, now)
             # ADDITIVE, AFTER, AND UNABLE TO AFFECT IT. A raise here
             # would abandon the remaining rows of this batch, so the
@@ -3990,6 +4025,23 @@ class Runner:
         """
         ing = {k: v for k, v in self.stats.items()
                if isinstance(k, str) and k.startswith("ingest:")}
+        # A COUNT WITH NO CLOCK ON IT CANNOT ANSWER THE QUESTION BEING ASKED.
+        #
+        # "zero new matching events" and "947 matching events, the last one
+        # 40 minutes ago" are different diagnoses, and a process-lifetime
+        # total reports them identically -- the same ambiguity `TimedCounter`
+        # was built for after the heartbeat printed `halt: false` through
+        # 2,939 refusals. So every ingest counter is published WITH the age
+        # of its last movement, and the two clocks that decide the question
+        # get their own fields.
+        ages = {}
+        try:
+            allages = self.stats.ages()
+            ages = {k: round(v, 1) for k, v in allages.items()
+                    if isinstance(k, str) and k.startswith("ingest:")}
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
         top = collections.Counter(self.ingest_slugs).most_common(6)
         btc = sum(n for sl, n in self.ingest_slugs.items()
                   if sl.startswith("btc-updown-15m-"))
@@ -3997,10 +4049,22 @@ class Runner:
             "cursor": self.cursor.report(),
             "max_action_age_s": self.max_action_age_s,
             "counters": ing,
+            "counter_age_s": ages,
             "feed_errors": self.stats.get("feed_errors", 0),
             "distinct_slugs_seen": len(self.ingest_slugs),
             "rows_btc15m": btc,
             "top_slugs_seen": [{"slug": sl, "rows": n} for sl, n in top],
+            # THE THREE CLOCKS THAT SEPARATE THE THREE DIAGNOSES.
+            #   last_row_utc      -- the feed served us SOMETHING
+            #   last_btc15m_utc   -- a BTC15m-slugged row existed
+            #   last_admitted_utc -- one reached handle()
+            # absent at the source: no last_row/last_btc15m advance;
+            # silently filtered: last_btc15m advances, last_admitted does not;
+            # never reaching handle: last_admitted stale with refusals rising.
+            "last_row_utc": self._iso(self.last_row_t),
+            "last_btc15m_utc": self._iso(self.last_btc15m_t),
+            "last_admitted_utc": self._iso(self.last_admitted_t),
+            "newest_row_event_utc": self._iso(self.newest_row_event_t),
             "labels": ("rows_btc15m counts rows of L5's OWN feed whose slug "
                        "is a BTC15m window, before any other filter. Zero "
                        "of it with distinct_slugs_seen > 0 establishes that "
