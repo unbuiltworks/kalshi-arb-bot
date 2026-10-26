@@ -441,8 +441,28 @@ def first_leg_entry_refusal(*, side: str, own_px: Any,
     if up is None or dn is None:
         return None                     # unreadable inventory is not ours
         # to adjudicate: the residual and uncertainty gates own that case
-    if up != 0 or dn != 0:
-        return None                     # managing inventory already held
+    if up != dn:
+        return None                     # a real imbalance: this is managing it
+        # KEYED ON THE IMBALANCE, NOT ON HOLDING ANYTHING.
+        #
+        # This read `up != 0 or dn != 0` -- "the market already holds filled
+        # quantity on either side" -- and that waived the floor for the rest
+        # of the window as soon as ANY inventory existed. After a pair
+        # completes, `up` and `dn` are both non-zero AND EQUAL: there is no
+        # imbalance to manage, so a further leg is a fresh OPENING and must
+        # face the same floor as the first one. Under the old predicate it
+        # did not.
+        #
+        # 2026-10-26 2115z is the case. The window paired 2.18 at 0.95,
+        # leaving up == dn == 2.18, and the engine then opened DOWN at own
+        # 0.17 -- below the live 0.20 floor, which was waived by this line.
+        # It stranded and settled -$0.2856.
+        #
+        # `up == dn` covers flat (0 == 0) too, which is the first leg of a
+        # window and has always faced the floor. Completion and genuine
+        # inventory management are untouched: an imbalance still returns
+        # None here unconditionally, so this can never strand a position it
+        # cannot complete.
     floor = min_first_leg_own_price()
     if floor <= 0:
         return None                     # explicitly disabled by the owner
