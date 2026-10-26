@@ -10,6 +10,39 @@ This is the extension `L5_COMPLETION_IS_A_QUEUE_PROBLEM.md` asked for in its own
 "honest limits": *"One window. The obvious extension is the same measurement
 across many windows, which needs only the log stream already running."*
 
+## 0. UPDATE — extended to two nights and to the real-inventory sampler
+
+The census now also reads `L5_RESIDUAL_BOOK_SAMPLE`, the money path's own
+sampler, which carries the **ACTUAL filled quantity** rather than a modelled
+residual. The reachability block is computed identically for both — it is a
+fact about the venue book and the quantity needed, not about whose inventory it
+is — so refusing those rows would have discarded the better evidence of the
+two. They are counted separately and never collapsed.
+
+| | 1 window (prior) | 6 windows, 1 night | **9 windows, 2 nights** |
+|---|---|---|---|
+| book instants | ~108 | 827 | **1,211** |
+| arm samples | 501 | 1,756 | **2,378** |
+| of which real inventory | 0 | 0 | **121** |
+| nothing to cross (per instant) | **52.3%** | 7.5% | **6.4%** |
+| queue mult p50 (per instant) | 4,758x | 594.9x | **630.0x** |
+| queue mult >= 1x | 100.0% | 99.7% | **99.7%** |
+| queue mult min | 14x | 0.1x | **0.1x** |
+
+Nights: 2026-10-25, 2026-10-26. Per-window nothing-to-cross spans **0.0% to
+28.6%**; per-window queue medians span **230x to 1,269x** and never fall below
+230x. Both conclusions from §2 and §3 below are unchanged by the second night:
+the 52.3% figure does not generalize, and the queue finding holds at roughly a
+seventh of its originally reported magnitude.
+
+The venue-confirmed window `2026-10-25-1945z` — the real stranded leg, 121
+real-inventory samples — sits inside that range at **9.9%** nothing-to-cross
+and a queue median of **938.2x**, with a minimum of 6.4x.
+
+**Still two nights, and still not a corpus across regimes.** Nine consecutive
+or near-consecutive windows from two adjacent dates cannot establish a stable
+rate, and the direction of the remaining uncertainty is stated in §5.
+
 ## 1. Corpus
 
 | | |

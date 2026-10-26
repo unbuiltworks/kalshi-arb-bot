@@ -38,7 +38,15 @@ import statistics
 import sys
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-LABEL = "L5_SHADOW_RESIDUAL_BOOK_SAMPLE"
+#: BOTH SAMPLERS. The shadow arms emit L5_SHADOW_RESIDUAL_BOOK_SAMPLE and
+#: carry modelled inventory; the money path emits L5_RESIDUAL_BOOK_SAMPLE and
+#: carries the ACTUAL filled quantity. The reachability block is computed
+#: identically for both -- it is a fact about the venue book and the quantity
+#: needed, not about whose inventory it is -- so refusing the real-inventory
+#: rows would discard the better evidence of the two. `source` on every row
+#: keeps them distinguishable, and they are counted separately as well.
+LABELS = ("L5_SHADOW_RESIDUAL_BOOK_SAMPLE", "L5_RESIDUAL_BOOK_SAMPLE")
+LABEL = LABELS[0]
 
 
 def iter_samples(paths: Iterable[str]) -> Iterable[dict]:
@@ -57,7 +65,7 @@ def iter_samples(paths: Iterable[str]) -> Iterable[dict]:
             continue
         for row in (doc.get("deploy") or []):
             msg = str(row.get("message") or "")
-            if LABEL not in msg:
+            if not any(l in msg for l in LABELS):
                 continue
             try:
                 d = json.loads(msg.split(" ", 1)[1])
@@ -93,6 +101,8 @@ def census(samples: Iterable[dict]) -> Dict[str, Any]:
         tw = reach.get("taker_walk") or {}
         rec = {
             "window": window, "arm": arm,
+            "source": str(d.get("label") or ""),
+            "real_inventory": str(d.get("label") or "") == LABELS[1],
             "row_t": row.get("t"),
             "held_side": d.get("held_side"),
             "n_bids": row.get("n_bids"), "n_asks": row.get("n_asks"),
@@ -127,6 +137,12 @@ def census(samples: Iterable[dict]) -> Dict[str, Any]:
         "n_arm_samples": len(arms),
         "n_book_instants": len(inst),
         "arms_seen": sorted({r["arm"] for r in arms if r["arm"]}),
+        # the two populations, never collapsed: a modelled residual and a
+        # venue-confirmed one are different grades of evidence
+        "n_real_inventory_samples": sum(1 for r in arms if r["real_inventory"]),
+        "n_shadow_samples": sum(1 for r in arms if not r["real_inventory"]),
+        "nights": sorted({r["window"][-16:-6] for r in arms
+                          if len(r["window"]) > 16}),
         "nothing_to_cross_pct": {
             "per_arm_sample": rate(arms, "nothing_to_cross"),
             "per_book_instant": rate(inst, "nothing_to_cross"),
