@@ -46,6 +46,12 @@ WORKDIR /app
 RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 
 COPY src/__init__.py src/__init__.py
+# Reporting only: stamps every L5_LIVE_DECISION with whether it would OPEN
+# new exposure or COMPLETE existing inventory. The runner imports it at
+# module scope, so it has to be in the image -- without this line the
+# entrypoint raises ImportError at boot, which is precisely what the
+# image-closure tests caught.
+COPY src/l5_decision_role.py src/l5_decision_role.py
 COPY src/l5_execution_translations.py src/l5_execution_translations.py
 COPY src/l5_faithful_translation.py src/l5_faithful_translation.py
 COPY src/l5_live_execution.py src/l5_live_execution.py
