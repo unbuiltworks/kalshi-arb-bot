@@ -225,3 +225,151 @@ def test_the_reset_does_not_clear_a_halt_or_a_latch():
     window = _reset_statements().lower()
     for forbidden in ("halt", "latch", "uncertain", "shadow"):
         assert forbidden not in window, forbidden
+
+
+# ============================================ the behavioural two-call test
+#
+# The source assertions above pin the invariant; this drives the real defect:
+# a REFUSED two-sided plan in call one, a genuine L5-following decision in
+# call two. Before the entry reset, call two was refused on strategy
+# ownership by a marker call one had left behind.
+
+MARKET = "cpc-btc-updown-15m-2026-10-26-1445z"
+
+
+def _executor(tmp_path, monkeypatch, *, owner="L5_FOLLOWING"):
+    import tests.test_l5_live_execution as H
+    from src import l5_two_sided_probe as TS
+
+    monkeypatch.setenv("L5_LIVE_AUTH_LEDGER", str(tmp_path / "auth.jsonl"))
+    monkeypatch.setenv("L5_WINDOW_STRATEGY", owner)
+    # the two-sided engine ACTIVE on this market, which is what lets call
+    # one build a plan and so set the markers
+    monkeypatch.setenv(TS.MARKET_ENV, MARKET)
+    monkeypatch.setenv(TS.ROUND_ALLOCATIONS_ENV, "2")
+    monkeypatch.setenv(TS.MIN_FIRST_LEG_ENV, "0.20")
+    monkeypatch.setenv(TS.OPENING_NOTIONAL_ENV, "0.80")
+    t = H.FakeTransport(fill_all=False)
+    t.tick_size, t.quantity_increment = D("0.01"), D("0.01")
+    x = E.FaithfulExecutor(H.store(tmp_path), H.limits(max_live_orders=1),
+                           transport=t, now_fn=H.NOW)
+    return x, t, H
+
+
+def test_a_refused_two_sided_plan_cannot_refuse_the_NEXT_l5_following_call(
+        tmp_path, monkeypatch):
+    """THE REGRESSION. Two consecutive calls, the real `handle`.
+
+    Call one runs with the two-sided engine active so it builds a plan and
+    sets the markers, then refuses. Call two is a plain L5-following
+    decision. The marker must not reach it.
+    """
+    import tests.test_l5_live_execution as H
+    x, t, H = _executor(tmp_path, monkeypatch)
+
+    r1 = x.handle(H.row(key="two-sided-1", side="UP", l5px="0.65"),
+                  {}, market=MARKET, window="14:45")
+    # call one refused something -- which reason does not matter here, only
+    # that it did NOT reach the wire and may have left the markers set
+    assert r1.get("submitted") is not True
+
+    # SIMULATE THE LEAK EXACTLY AS PRODUCTION PRODUCED IT. Call one's own
+    # refusal path is what left these set in 1445z; forcing them here makes
+    # the test independent of which of the nineteen exits call one took.
+    x._probe_leg_pending = "DOWN"
+    x._probe_round_pending = 0
+
+    r2 = x.handle(H.row(key="l5-following-2", side="UP", l5px="0.65"),
+                  {}, market=MARKET, window="14:45")
+
+    # 1. no stale marker survives into or out of the second call
+    assert getattr(x, "_probe_leg_pending", "sentinel") is None
+    assert getattr(x, "_probe_round_pending", "sentinel") is None
+
+    # 2. the correct strategy is identified: an L5-following order in an
+    #    L5_FOLLOWING window is NEVER excluded as the other engine
+    assert r2.get("refused_by_layer") != "STRATEGY_EXCLUSIVE_L5_FOLLOWING"
+
+    # 3. no unauthorized order slot was granted. With the markers cleared
+    #    the accumulation path is not consulted at all, so whatever reaches
+    #    the wire does so as an ordinary L5-following order on its own
+    #    single-submission claim -- never on a borrowed pair slot.
+    #
+    #    IN THIS HARNESS THE ORDER DOES REACH THE WIRE, and that is the
+    #    point: the latch, not the economics, was stopping it here. It is
+    #    NOT evidence that production will submit. Production's books had
+    #    L5 quoting THROUGH the touch, so no valid maker translation
+    #    existed; this synthetic book (bid 0.40 / ask 0.60, L5 0.65) admits
+    #    one. The fix removes a refusal that should not have applied; it
+    #    creates no executable maker opportunity.
+    assert len(t.sent) == 1, t.sent
+    sent = t.sent[0]
+    assert str(sent["client_order_id"]).startswith("l5f-")
+    assert str(sent["side"]) == "UP"
+
+
+def test_the_marker_still_excludes_a_REAL_two_sided_leg_in_the_same_call(
+        tmp_path, monkeypatch):
+    """The fix must not disarm ownership: a marker set WITHIN a call still
+    identifies that call's order as the two-sided engine's."""
+    x, t, H = _executor(tmp_path, monkeypatch)
+    body = _body()
+    # the gate reads the marker by getattr at the point of decision, so a
+    # marker set during the call is still seen; only a marker from a
+    # PREVIOUS call is cleared
+    i_reset = body.index("self._probe_leg_pending = None")
+    i_gate = body.index('"reason": "STRATEGY_EXCLUSIVE_L5_FOLLOWING"')
+    i_set = body.index("self._probe_leg_pending = nxt")
+    assert i_reset < i_set < i_gate
+
+
+def test_the_reset_does_not_disturb_a_pending_order_or_held_inventory(
+        tmp_path, monkeypatch):
+    """POINT 3: a legitimate pending order and a multi-call completion
+    lifecycle are carried by the STORE, not by these markers.
+
+    Held inventory and live orders survive the reset untouched, which is why
+    clearing the markers cannot interrupt a completion that spans calls.
+    """
+    x, t, H = _executor(tmp_path, monkeypatch)
+    x.store.apply_fill(MARKET, "UP", D("1.56"), D("0.44"), basis="OWN")
+    before = x.store.position(MARKET, "UP")
+
+    x._probe_leg_pending = "DOWN"
+    x._probe_round_pending = 1
+    x.handle(H.row(key="after-fill", side="DOWN", l5px="0.52"),
+             {}, market=MARKET, window="14:45")
+
+    assert getattr(x, "_probe_leg_pending", "sentinel") is None
+    # the inventory that drives completion is untouched by the reset
+    after = x.store.position(MARKET, "UP")
+    assert after == before == D("1.56")
+
+
+def test_the_OTHER_direction_still_refuses_an_l5_following_order(
+        tmp_path, monkeypatch):
+    """Ownership still bites where it should.
+
+    With TWO_SIDED named as the owner of the window and NO leg pending, an
+    L5-following order is the one that must be excluded. If the fix had
+    disarmed the gate this order would reach the wire.
+    """
+    import tests.test_l5_live_execution as H
+    x, t, H = _executor(tmp_path, monkeypatch, owner="TWO_SIDED")
+    rec = x.handle(H.row(key="l5f-under-two-sided", side="UP", l5px="0.65"),
+                   {}, market=MARKET, window="14:45")
+    # `prov.refuse(layer, reason)` -- the gate's name is the LAYER and the
+    # market is the reason, which is also how it reads in the live logs.
+    assert rec.get("refused_by_layer") == "STRATEGY_EXCLUSIVE_TWO_SIDED"
+    assert t.sent == [], "an excluded strategy must not reach the wire"
+
+
+def test_an_unset_owner_excludes_neither_strategy(tmp_path, monkeypatch):
+    """Unset enforces nothing -- the fix adds no ownership that was absent."""
+    import tests.test_l5_live_execution as H
+    x, t, H = _executor(tmp_path, monkeypatch, owner="")
+    monkeypatch.delenv("L5_WINDOW_STRATEGY", raising=False)
+    rec = x.handle(H.row(key="l5f-unset-owner", side="UP", l5px="0.65"),
+                   {}, market=MARKET, window="14:45")
+    assert rec.get("refused_by_layer") not in (
+        "STRATEGY_EXCLUSIVE_TWO_SIDED", "STRATEGY_EXCLUSIVE_L5_FOLLOWING")
