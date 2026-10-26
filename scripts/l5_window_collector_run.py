@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from src import l5_window_actions as WA
 from src import l5_window_collector as C
+from src import l5_window_retention as RET
 
 ROOT_ENV = "L5_COLLECTOR_ROOT"
 LEAD_ENV = "L5_COLLECTOR_LEAD_S"
@@ -235,7 +236,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             # recurring. The live window is protected by name so the tape
             # it is about to open cannot be deleted underneath it.
             try:
-                pr = C.prune_windows(root(), keep_slugs=[slug])
+                pr = RET.prune_windows(root(), keep_slugs=[slug])
                 if (pr.get("pruned_count") or pr.get("failed_slugs")
                         or pr.get("floor_unreachable") or pr.get("error")):
                     say("L5_COLLECTOR_RETENTION", pr)

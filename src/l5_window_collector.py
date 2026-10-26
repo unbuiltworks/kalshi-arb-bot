@@ -49,7 +49,6 @@ import asyncio
 import datetime as dt
 import json
 import os
-import shutil
 import threading
 import time
 from decimal import Decimal as D
@@ -436,22 +435,14 @@ class RawTapeFeed:
 #:
 #: The floor is a SECOND, independent bound: a retained count is a guess
 #: about row size, and the thing that actually wedges the collector is bytes.
-#:
-#: THE COUNT BOUND IS OFF BY DEFAULT, AND THAT IS THE WHOLE POINT.
-#: A count bound deletes history the moment it is switched on -- the volume
-#: holds months of window records, and discarding them to make room for one
-#: more window would trade the evidence this system exists to accumulate for
-#: an afternoon of collection. So the DEFAULT prune is driven by the free
-#: space floor alone: it removes the oldest windows and ONLY as many as are
-#: needed to keep collecting. An operator who wants a hard cap sets
-#: L5_COLLECTOR_RETAIN_WINDOWS deliberately.
+#: READ-ONLY VOLUME INSPECTION. Deletion lives in
+#: `l5_window_retention`, never here: this module is asserted to call
+#: no destructive verb at all, so the evidence recorder is structurally
+#: incapable of removing evidence.
 RETAIN_ENV = "L5_COLLECTOR_RETAIN_WINDOWS"
 DEFAULT_RETAIN_WINDOWS = 0            # 0 = no count bound; floor only
 FREE_FLOOR_ENV = "L5_COLLECTOR_FREE_FLOOR_MB"
 DEFAULT_FREE_FLOOR_MB = 2048.0
-#: never prune below this many windows, whatever the floor says. A volume
-#: that cannot hold even this is a capacity fault to report, not one to
-#: delete evidence over.
 MIN_RETAIN_WINDOWS = 24
 
 
@@ -518,99 +509,6 @@ def window_dirs(root: str) -> List[Path]:
         return (0, 0.0, p.name) if ws is None else (1, float(ws), p.name)
 
     return sorted(entries, key=key)
-
-
-def _rmtree(p: Path) -> bool:
-    try:
-        shutil.rmtree(p)
-        return True
-    except OSError:
-        return False
-
-
-def prune_windows(root: str, *, retain: Optional[int] = None,
-                  floor_mb: Optional[float] = None,
-                  keep_slugs: Sequence[str] = ()) -> Dict[str, Any]:
-    """Bound the volume. Returns a machine-readable report; never raises.
-
-    Two passes, in this order. The COUNT pass drops whatever sits beyond the
-    retained window count. The FLOOR pass then keeps dropping the oldest
-    remaining window until free space clears the floor, and stops at
-    MIN_RETAIN_WINDOWS whether or not it got there -- a floor it cannot
-    reach by deleting is reported as `floor_unreachable`, because silently
-    emptying the volume would destroy the evidence the collector exists for.
-
-    `keep_slugs` is never pruned: the window being collected right now owns
-    its directory and must not have it removed underneath the open tape.
-    """
-    retain = _int_env(RETAIN_ENV, DEFAULT_RETAIN_WINDOWS) if retain is None \
-        else retain
-    floor_mb = _float_env(FREE_FLOOR_ENV, DEFAULT_FREE_FLOOR_MB) \
-        if floor_mb is None else floor_mb
-    retain = int(retain)
-    #: a count bound, once asked for, still never goes below the floor of
-    #: windows we refuse to delete over a capacity fault
-    if retain > 0:
-        retain = max(retain, MIN_RETAIN_WINDOWS)
-    protected = {str(s) for s in keep_slugs}
-    rep: Dict[str, Any] = {
-        "root": str(root), "retain_windows": retain,
-        "count_bound_active": retain > 0,
-        "free_floor_mb": round(float(floor_mb), 1),
-        "free_mb_before": None, "free_mb_after": None,
-        "windows_before": 0, "windows_after": 0,
-        "pruned_count": 0, "pruned_for_count": 0, "pruned_for_floor": 0,
-        "pruned_slugs": [], "failed_slugs": [],
-        "floor_unreachable": False, "protected": sorted(protected),
-        "labels": ("retention is a BOUND on the volume, not a policy about "
-                   "what is interesting. Oldest window first, the live "
-                   "window never, and never below MIN_RETAIN_WINDOWS. With "
-                   "count_bound_active false, windows are removed ONLY to "
-                   "clear the free-space floor -- the least history that "
-                   "lets collection continue. Deletion is irreversible: "
-                   "export the volume before setting a count bound."),
-    }
-    try:
-        rep["free_mb_before"] = free_mb(str(root))
-        dirs = [p for p in window_dirs(root) if p.name not in protected]
-        rep["windows_before"] = len(dirs) + len(
-            [1 for p in window_dirs(root) if p.name in protected])
-
-        # pass 1: the count bound, only if one was asked for
-        excess = max(0, len(dirs) - retain) if retain > 0 else 0
-        for p in dirs[:excess]:
-            if _rmtree(p):
-                rep["pruned_slugs"].append(p.name)
-                rep["pruned_for_count"] += 1
-            else:
-                rep["failed_slugs"].append(p.name)
-        dirs = dirs[excess:]
-
-        # pass 2: the byte floor
-        free = free_mb(str(root))
-        while free is not None and free < floor_mb and len(dirs) > MIN_RETAIN_WINDOWS:
-            p = dirs.pop(0)
-            if _rmtree(p):
-                rep["pruned_slugs"].append(p.name)
-                rep["pruned_for_floor"] += 1
-            else:
-                rep["failed_slugs"].append(p.name)
-            free = free_mb(str(root))
-        if free is not None and free < floor_mb:
-            rep["floor_unreachable"] = True
-
-        rep["free_mb_after"] = free
-        rep["windows_after"] = len(window_dirs(root))
-        rep["pruned_count"] = (rep["pruned_for_count"]
-                               + rep["pruned_for_floor"])
-    except BaseException as exc:                               # noqa: BLE001
-        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-            raise
-        rep["error"] = "%s: %s" % (type(exc).__name__, str(exc)[:160])
-    for k in ("free_mb_before", "free_mb_after"):
-        if isinstance(rep[k], float):
-            rep[k] = round(rep[k], 1)
-    return rep
 
 
 class WindowRecord:
@@ -719,9 +617,12 @@ class WindowRecord:
                 type(exc).__name__, getattr(exc, "errno", None))
             self.write_error = "%s:errno=%s" % (
                 type(exc).__name__, getattr(exc, "errno", None))
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
+            # THE PARTIAL TMP IS LEFT WHERE IT IS, deliberately. This module
+            # is asserted to call no destructive verb, which is what lets
+            # `verify_pre_cutover` prove the history unchanged -- so it does
+            # not get to remove even its own debris. `window.json.tmp` is
+            # never read by anything and the next successful write replaces
+            # it; retention is the only thing here that deletes, and it
+            # lives in `l5_window_retention`.
             return ""
         return str(p)

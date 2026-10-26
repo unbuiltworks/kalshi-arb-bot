@@ -45,6 +45,7 @@ import tempfile
 import pytest
 
 from src import l5_window_collector as C
+from src import l5_window_retention as RET
 
 # real window boundaries from deployment 482cb9e3
 W0315 = 1792984500.0
@@ -90,7 +91,7 @@ def _tree(n: int, start: dt.datetime | None = None):
 
 def test_prune_drops_oldest_first_and_keeps_the_live_window():
     root, slugs = _tree(40)
-    rep = C.prune_windows(root, retain=30, floor_mb=0.0,
+    rep = RET.prune_windows(root, retain=30, floor_mb=0.0,
                           keep_slugs=[slugs[-1]])
     # 39 directories are prunable (the live window is protected), so the
     # count bound drops 39 - 30 = 9, oldest first.
@@ -106,7 +107,7 @@ def test_prune_drops_unidentifiable_directories_first():
     are willing to lose: it cannot be placed in the study."""
     root, slugs = _tree(30)
     (pathlib.Path(root) / "windows" / "not-a-window").mkdir()
-    rep = C.prune_windows(root, retain=C.MIN_RETAIN_WINDOWS, floor_mb=0.0)
+    rep = RET.prune_windows(root, retain=RET.MIN_RETAIN_WINDOWS, floor_mb=0.0)
     assert rep["pruned_slugs"][0] == "not-a-window"
 
 
@@ -114,9 +115,9 @@ def test_prune_never_empties_the_volume_for_an_unreachable_floor():
     """The bug was a volume that filled; the cure must not be a volume that
     deletes everything trying to satisfy a floor it can never reach."""
     root, _ = _tree(40)
-    rep = C.prune_windows(root, retain=1, floor_mb=10.0 ** 9)
+    rep = RET.prune_windows(root, retain=1, floor_mb=10.0 ** 9)
     assert rep["floor_unreachable"] is True
-    assert rep["windows_after"] == C.MIN_RETAIN_WINDOWS
+    assert rep["windows_after"] == RET.MIN_RETAIN_WINDOWS
 
 
 def test_default_prune_deletes_no_history_when_space_is_adequate():
@@ -128,7 +129,7 @@ def test_default_prune_deletes_no_history_when_space_is_adequate():
     already satisfied, the default prune is a no-op.
     """
     root, slugs = _tree(40)
-    rep = C.prune_windows(root)                 # no arguments: the default
+    rep = RET.prune_windows(root)                 # no arguments: the default
     assert rep["count_bound_active"] is False
     assert rep["pruned_count"] == 0
     assert rep["windows_after"] == 40
@@ -150,9 +151,9 @@ def test_floor_prune_removes_only_the_oldest_and_only_as_needed(monkeypatch):
         calls["n"] += 1
         return True
 
-    monkeypatch.setattr(C, "free_mb", fake_free)
-    monkeypatch.setattr(C, "_rmtree", fake_rmtree)
-    rep = C.prune_windows(root, floor_mb=200.0)
+    monkeypatch.setattr(RET, "free_mb", fake_free)
+    monkeypatch.setattr(RET, "_rmtree", fake_rmtree)
+    rep = RET.prune_windows(root, floor_mb=200.0)
     assert rep["count_bound_active"] is False
     assert rep["pruned_for_count"] == 0
     # free goes 100 -> 150 -> 200; it stops the instant the floor clears
@@ -163,15 +164,15 @@ def test_floor_prune_removes_only_the_oldest_and_only_as_needed(monkeypatch):
 
 def test_prune_is_idempotent():
     root, slugs = _tree(40)
-    first = C.prune_windows(root, retain=30, floor_mb=0.0)
-    second = C.prune_windows(root, retain=30, floor_mb=0.0)
+    first = RET.prune_windows(root, retain=30, floor_mb=0.0)
+    second = RET.prune_windows(root, retain=30, floor_mb=0.0)
     assert first["pruned_count"] == 10
     assert second["pruned_count"] == 0
     assert second["windows_after"] == 30
 
 
 def test_prune_reports_rather_than_raises_on_a_missing_root():
-    rep = C.prune_windows("/nonexistent/path/for/test")
+    rep = RET.prune_windows("/nonexistent/path/for/test")
     assert rep["pruned_count"] == 0
     assert "error" not in rep or rep["pruned_count"] == 0
 
@@ -619,3 +620,38 @@ def test_the_cursor_cannot_grow_without_bound_or_rewrite_when_clean():
     assert os.path.getmtime(path) == before             # so nothing written
 
     assert len(R.IngestCursor(path).load()._keys) == R.CURSOR_MAX_KEYS
+
+
+# ========================================= the invariant the split protects
+
+def test_only_the_retention_module_deletes_anything():
+    """`l5_window_collector` is asserted to call no destructive verb, which
+    is what lets `verify_pre_cutover` prove the pre-cutover history
+    unchanged byte for byte. Adding retention must not weaken that, so the
+    one function that deletes lives in its own module."""
+    import ast as _ast
+    src = _ast.parse(open("src/l5_window_collector.py").read())
+    calls = {getattr(n.func, "attr", getattr(n.func, "id", ""))
+             for n in _ast.walk(src) if isinstance(n, _ast.Call)}
+    for verb in ("unlink", "rmtree", "remove", "truncate", "rmdir",
+                 "move", "copytree"):
+        assert verb not in calls, verb
+    assert not hasattr(C, "prune_windows")
+    assert hasattr(RET, "prune_windows")
+
+
+def test_retention_never_touches_the_pre_cutover_manifest():
+    """Deleting a manifested file would not merely lose history -- it would
+    break the proof that the history was preserved."""
+    root, slugs = _tree(30)
+    hist = pathlib.Path(root) / "old"
+    hist.mkdir()
+    (hist / "a.jsonl").write_text('{"historical":1}\n')
+    C.snapshot_pre_cutover(root)
+    assert "old" in RET.manifest_protected(root)
+
+    # ask for an aggressive prune; the manifested tree must survive it
+    rep = RET.prune_windows(root, retain=1, floor_mb=10.0 ** 9)
+    assert "old" not in rep["pruned_slugs"]
+    assert (hist / "a.jsonl").read_text() == '{"historical":1}\n'
+    assert C.verify_pre_cutover(root)["all_unchanged"] is True
