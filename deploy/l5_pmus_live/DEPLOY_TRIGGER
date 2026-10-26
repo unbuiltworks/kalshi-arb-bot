@@ -2240,3 +2240,48 @@ deploy: 2026-10-26 NOT_ARMED claim accounting — ordering fix, campaign untouch
 # campaign stays expired and is neither restarted nor extended; the executor
 # stays disarmed.
 deploy: 2026-10-26 NOT_ARMED accounting fix, retry with a fetchable snapshot
+
+# =====================================================================
+# 2026-10-26 — owner-authorized promotion of four narrow verified fixes,
+# for the R=4 bounded frequency experiment. DISARMED promotion: nothing
+# here arms anything, and the arming handshake is deliberately NOT part
+# of this deployment.
+#
+# Approved commits (owner named all four):
+#   cb22bb47  first-leg floor keyed on the unmatched imbalance
+#   c16ee7ec  decision-role reporting field + its Dockerfile COPY
+#   471b10d0  fail closed on an unreadable order quantity
+#   d48f22e3  final parity record
+#
+# Applied here as:
+#   83a47688  cherry-pick -x cb22bb47
+#   7708bd92  cherry-pick -x c16ee7ec
+#   33358b1e  471b10d0 with d48f22e3 folded in, applied BY CONTENT
+#
+# WHY THE THIRD IS NOT A CHERRY-PICK. 471b10d0 modifies two files that
+# were created in c4e5bae5, which the owner did not approve, so the
+# approved four are not self-contained. The three affected paths were
+# taken at their verified state from d48f22e3 instead, after confirming
+# that the diff to src/l5_live_execution.py against this branch is
+# exactly the 29-insertion/2-deletion fail-closed change and nothing
+# else. No unapproved commit is included.
+#
+# WHAT CHANGES AT RUNTIME.
+#   - a post-pair opening now faces the same 0.20 first-leg floor as the
+#     first leg, because `up == dn` means there is no imbalance to manage
+#   - an unreadable order `remaining` now contributes its worst case to
+#     the residual and notional bounds instead of zero
+#   - every L5_LIVE_DECISION carries decision_role (reporting only; an
+#     AST test asserts it drives no control flow)
+#
+# WHAT DOES NOT CHANGE. No limit is raised. Aggregate exposure stays $20,
+# unmatched inventory stays bounded at 3 contracts, the pair ceiling stays
+# 0.96, execution stays MAKER_ONLY, and the daily, cumulative, campaign,
+# deficit and watchdog limits are untouched. L5_CAMPAIGN_BUDGET_USD is NOT
+# raised and the exhausted campaign is NOT reset.
+#
+# VERIFIED BEFORE THIS LINE WAS WRITTEN.
+#   image closure + the four fixes: 61 passed
+#   all four modules import, including src.l5_pmus_live_runner
+#   deployment-branch parity: see the figures in the promotion report
+R=4 frequency experiment, DISARMED promotion 2026-10-26T23:24:34Z
