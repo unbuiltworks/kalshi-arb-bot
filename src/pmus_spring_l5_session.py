@@ -3212,6 +3212,55 @@ def _run_session_body(t: Optional[Transport] = None,
                 if px_ >= D(str(opp_ask)):
                     return f"would_cross:{opp_ask}"
                 if relation_ in requote_relations() and touch != px_:
+                    # A COMPLETE IS NEVER CANCELLED WITHOUT A LEGAL
+                    # REPLACEMENT IN HAND. OPEN and EXTEND may cancel on a
+                    # moved touch and re-derive a price next poll: if none
+                    # exists they simply do not open, and nothing is at
+                    # risk. A COMPLETE is the opposite case -- cancelling it
+                    # abandons the only order working an inventory we have
+                    # ALREADY PAID FOR. Cancel-then-refuse leaves the window
+                    # with no complement resting at all, which is strictly
+                    # worse than the static order it replaced.
+                    #
+                    # So for COMPLETE the replacement is priced FIRST, by the
+                    # same `complement_plan` the executor would use, against
+                    # the same book this poll just read, and the cancel is
+                    # returned only if that price (a) exists and (b) is
+                    # better placed than what is already resting. Both the
+                    # active fee_safe ceiling and the hard >=1c-after-fees
+                    # bound are inside `complement_plan`, so a replacement
+                    # that would breach either is simply never offered here.
+                    #
+                    # NOTE ON THE ACTIVE REGIME: under `fee_safe` the
+                    # complement price is a function of the cost basis and
+                    # the opposite ask, NOT of the touch. The touch can move
+                    # without the legal price moving at all, and then (b)
+                    # holds the order still instead of churning it.
+                    if relation_ == "complete":
+                        try:
+                            plan_ = complement_plan(
+                                not (inv.residual < 0),
+                                (inv.avg_dn() if inv.residual < 0
+                                 else inv.avg_up()),
+                                b, spec["tick"])
+                            new_px_ = plan_.get("px")
+                        except Exception as exc:      # noqa: BLE001
+                            # FAIL CLOSED MEANS KEEP RESTING. An error while
+                            # pricing a replacement is not a reason to
+                            # destroy the order we have.
+                            track["requote_guard"] = (
+                                "priced_failed:%s" % type(exc).__name__)
+                            return None
+                        if new_px_ is None:
+                            track["requote_guard"] = "no_legal_replacement"
+                            return None
+                        if D(str(new_px_)) <= px_:
+                            track["requote_guard"] = (
+                                "replacement_not_better:%s<=%s"
+                                % (new_px_, px_))
+                            return None
+                        track["requote_guard"] = "replacement_ready:%s" % new_px_
+                        return f"touch_moved:{touch}|replacement:{new_px_}"
                     return f"touch_moved:{touch}"
                 if inv.up + inv.dn > 0:
                     k = spring_state_key(inv, b["bid"], settlement_t, wall(),
