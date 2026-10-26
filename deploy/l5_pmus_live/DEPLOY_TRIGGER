@@ -2219,3 +2219,24 @@ deploy: 2026-10-26 calibration lifecycle — observational only, campaign untouc
 # its durable window ledger (4 of 4 spent) are untouched. The executor
 # stays DISARMED.
 deploy: 2026-10-26 NOT_ARMED claim accounting — ordering fix, campaign untouched
+
+# ----------------------------------------------------------------------------
+# 2026-10-26 retry — the promotion above could not be FETCHED, twice.
+#
+# d1447ee0 and 067f0b23 both FAILED at "failed to fetch snapshot", stalling
+# at 71.1 MB and 65.6 MB of a 221,279,882-byte snapshot after ~275s. Two
+# identical failures rule out a blip, and the same 221 MB fetched fine for
+# cc98f7b5 at 16:14Z, so the builder's throughput moved rather than this
+# repo. The code being promoted is UNCHANGED from 1c9b3b52.
+#
+# data/ (935 MB of working tree) and tests/ (42 MB) are now excluded from the
+# build snapshot. This CANNOT change the image: all 58 COPY/ADD sources in
+# this Dockerfile resolve under src/ (53), config/ (4) and analysis/ (1), and
+# tests/test_dockerignore_cannot_drop_a_copied_path.py asserts that, so a
+# later COPY from an ignored path fails a test instead of silently shipping
+# an image missing a file. analysis/ is deliberately NOT excluded.
+#
+# Still no limit, gate, price, size, mode or strategy ownership change. The
+# campaign stays expired and is neither restarted nor extended; the executor
+# stays disarmed.
+deploy: 2026-10-26 NOT_ARMED accounting fix, retry with a fetchable snapshot
