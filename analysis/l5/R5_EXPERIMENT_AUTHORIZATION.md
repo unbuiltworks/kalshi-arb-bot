@@ -172,8 +172,15 @@ authorization.
 ## Check 1 — parity: PASS
 
 Baseline 20 failed / 13,770 passed. With the reporting fix, the floor fix
-and the nine invariant tests: **20 failed / 13,799 passed, 0 regressions**.
-Same 20 pre-existing failures and 14 pre-existing errors throughout.
+and the nine invariant tests: 20 failed / 13,799 passed, 0 regressions.
+With the fail-closed fix of check 2 and its two further tests:
+**20 failed / 13,801 passed, 0 regressions**. Same 20 pre-existing failures
+and 14 pre-existing errors throughout.
+
+Worth stating explicitly: making `outstanding_residual` and
+`outstanding_by_market` STRICTER broke no existing test. A more conservative
+exposure bound could easily have turned previously-passing gate tests into
+refusals, and it did not, so the money path tolerates the tighter bound.
 
 ## Check 2 — unreadable remaining: FAILED, now FIXED
 
