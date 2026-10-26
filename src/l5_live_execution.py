@@ -1075,6 +1075,21 @@ class InventoryStore:
     def __init__(self, path: str,
                  now_fn: Optional[Callable[[], dt.datetime]] = None) -> None:
         self.path = path
+        #: THE CALIBRATION RECORDER, attached by the executor and optional.
+        #:
+        #: It lives here rather than only on the executor because
+        #: `apply_order_progress` is the ONE idempotent choke point for a
+        #: venue fill: four call sites reach it (the runner's reconcile, the
+        #: executor's terminal self-call, and the deadman cancel verifier),
+        #: and the recorder has to see all of them or a fill booked by the
+        #: deadman path would be invisible to calibration. Wiring it at the
+        #: choke point also inherits the idempotency for free -- the hooks
+        #: fire only on the DELTA, so polling the same cumQuantity twice
+        #: records one fill, exactly as it books one.
+        #:
+        #: None is the default and the normal state for every non-money
+        #: caller, so nothing changes for a store that nobody attaches one to.
+        self.fill_calibration: Optional[Any] = None
         #: THE CLOCK THAT STAMPS A SUBMISSION. `record_submit` writes the
         #: durable submit time that the per-order deadline later measures
         #: against the runner's `now`. In production both are the wall clock
@@ -2888,6 +2903,29 @@ class InventoryStore:
             self.state.setdefault("filled_qty", {})[coid] = str(cum)
             fees = self.state.setdefault("fees", {})
             fees[coid] = str(D(str(prog.get("commission") or 0)))
+            # THE CALIBRATION RECORD'S FILL AND ITS ACTUAL FEE, from the one
+            # place the venue's own numbers are booked.
+            #
+            # IDEMPOTENT BY INHERITANCE: this sits inside `delta > 0`, so a
+            # second poll of the same cumQuantity books nothing and records
+            # nothing. Partial fills arrive as successive deltas and are
+            # recorded as successive fills, which is what a fill model needs.
+            #
+            # `commission` is the VENUE's figure, so it fills the ACTUAL fee
+            # column -- the one that has read PENDING on all 10,741 rows
+            # because nothing ever called this. A commission the venue did
+            # not state is passed as None and recorded as unknown; a zero is
+            # a FACT and is recorded as zero, because this venue credits
+            # rebates separately and a zero commission is not a rebate.
+            self._calib_safe(
+                "on_fill", coid, qty=delta,
+                price=D(str(prog.get("avg_px") or 0)),
+                cumulative_qty=cum, remaining=D(str(prog.get("leaves_qty")
+                                                    or 0)))
+            _comm = prog.get("commission")
+            self._calib_safe("on_fees_actual", coid,
+                             fee_usd=(None if _comm is None else D(str(_comm))),
+                             source="venue_order_progress.commission")
         elif delta < 0:
             # the venue went BACKWARDS on a cumulative field. Do not guess.
             self.mark_uncertain(
@@ -2904,8 +2942,40 @@ class InventoryStore:
             self.state.setdefault("filled_qty", {})[coid] = str(cum)
             self.state.setdefault("live_orders", {}).pop(coid, None)
             out["released"] = bool(was_live)
+            # VENUE-CONFIRMED TERMINAL. This is the only place in the money
+            # path that learns an order's end FROM THE VENUE, which is why
+            # `terminal_state` could never be PRESENT before: the shadow path
+            # passes venue_confirmed=False by construction, correctly, and
+            # nothing else called it. A modelled observation is still never
+            # promoted to a venue-confirmed fill -- this fires only on
+            # `prog["terminal"]`, which is the venue saying the order is done.
+            self._calib_safe("on_terminal", coid,
+                             state=str(prog.get("state") or "TERMINAL"),
+                             reason="venue_order_progress",
+                             venue_confirmed=True)
         self.save()
         return out
+
+    def _calib_safe(self, hook: str, coid: str, **kw: Any) -> None:
+        """Call one recorder hook, and never let it matter.
+
+        A recorder fault must not fail a submission the venue has already
+        accepted, nor corrupt a reconciliation that has already booked a
+        fill: losing an order's identity over telemetry is a far worse
+        outcome than losing the telemetry. So every fault is swallowed, the
+        absence of a recorder is normal, and this returns None always. It
+        has no veto and cannot acquire one.
+        """
+        cal = getattr(self, "fill_calibration", None)
+        if cal is None:
+            return
+        try:
+            fn = getattr(cal, hook, None)
+            if callable(fn):
+                fn(coid, **kw)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
 
     def canonicalize_position_keys(self) -> Dict[str, Any]:
         """Merge ledger keys written under a raw venue side word.
