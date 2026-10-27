@@ -2285,3 +2285,12 @@ deploy: 2026-10-26 NOT_ARMED accounting fix, retry with a fetchable snapshot
 #   all four modules import, including src.l5_pmus_live_runner
 #   deployment-branch parity: see the figures in the promotion report
 R=4 frequency experiment, DISARMED promotion 2026-10-26T23:24:34Z
+
+LOGGING-ONLY promotion of fa682b80, 2026-10-27T03:30Z.
+Records L5_ACC_RECOVER_REFUSED when a resting leg qualified for a
+stale-by-distance recovery on every test and was refused by the
+per-market cap alone. No execution decision, cancellation, price, size,
+risk gate or durable order state changes; the recovery list is never
+written. Deployment-branch parity exact: 20 failed / 14 errors, passes
+13,690 -> 13,705 (the 15 new tests). DISARMED: the campaign approval
+expired 02:46:48Z and its windows are 8/8 spent, so this cannot arm.
