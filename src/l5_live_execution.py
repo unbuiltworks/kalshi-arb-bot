@@ -5995,7 +5995,25 @@ class FaithfulExecutor:
                                     None),
                     depth_ticks=_dticks,
                     book_age_s=ts_book.get("stream_age_s"),
-                    gap_suspected=bool(ts_book.get("gap_suspected")))
+                    gap_suspected=bool(ts_book.get("gap_suspected")),
+                    # WHAT THE COMPLEMENT IS FOR, stated rather than
+                    # implied. The market is the one this inventory is in
+                    # and the one `ts_book` was resolved for, so a
+                    # complement priced from any other book is refused at
+                    # the adoption site below instead of being trusted.
+                    # `_other` is the side we HOLD, so `complement_order`
+                    # can assert that `nxt` is its opposite rather than
+                    # take it on faith -- both are derived from the same
+                    # variable here, which is exactly why the assertion
+                    # belongs on the far side of the call.
+                    market=market, held_side=_other,
+                    # THE RESTING SIDE'S OWN DEPTH. A maker BUY of UP rests
+                    # a YES bid and a BUY of DOWN rests a YES sell on the
+                    # ask, so `complement_order` selects by side -- it is
+                    # handed both and picks, rather than being handed the
+                    # taker-side depth the defensive unwind needs below.
+                    bid_shares=ts_book.get("bid_shares"),
+                    ask_shares=ts_book.get("ask_shares"))
                 # ============ DEFENSIVE COMPLETION, IN TWO PHASES
                 #
                 # PRIORITY ONE IS STILL THE PROFITABLE COMPLETION above, and
@@ -6122,6 +6140,29 @@ class FaithfulExecutor:
                     return prov.refuse("TWO_SIDED_PROBE",
                                        str(comp.get("reason"))[:120])
                 else:
+                    # ADOPTION, AND WHAT IT IS CHECKED AGAINST FIRST.
+                    #
+                    # `complement_order` priced this against a book, a cost
+                    # basis and a quantity. Everything it was given is
+                    # checked inside it; what it CANNOT check is whether the
+                    # caller handed it the right market and the right side,
+                    # because those are the caller's own variables. So they
+                    # are verified here, against the inventory this leg is
+                    # meant to match, before the leg replaces the plan.
+                    #
+                    # Neither can currently fail -- both are passed from
+                    # `market` and `_other` a few lines above. That is the
+                    # point: an adoption that silently matched the wrong
+                    # market's book, or doubled the side we already hold,
+                    # would look exactly like a correct one in the record.
+                    _cm = comp.get("market")
+                    if _cm is not None and str(_cm) != str(market):
+                        return prov.refuse(
+                            "TWO_SIDED_PROBE",
+                            "COMPLEMENT_MARKET_MISMATCH:%s" % str(_cm)[:60])
+                    if str((comp.get("leg") or {}).get("side")) != str(nxt):
+                        return prov.refuse("TWO_SIDED_PROBE",
+                                           "COMPLEMENT_SIDE_MISMATCH")
                     leg = dict(comp["leg"])
                 # NO PAIR RE-GATE HERE, DELIBERATELY. `probe_precheck` prices
                 # both legs as if BOTH were still outstanding, which is right

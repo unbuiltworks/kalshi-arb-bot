@@ -2005,10 +2005,27 @@ def plan_executable(plan: Mapping[str, Any], *, bid: Any, ask: Any,
     return None
 
 
+def resting_depth(side: str, *, bid_shares: Any, ask_shares: Any) -> Optional[D]:
+    """The displayed size on the side this MAKER leg would rest on.
+
+    NOT the side a taker would consume, and the distinction is the whole
+    point. `resting_side` is BID for UP and ASK for DOWN: buying UP rests a
+    YES bid, buying DOWN rests a YES sell on the ask. The defensive unwind
+    is a TAKER and so reads the OPPOSITE side -- buying DOWN sells into the
+    bid and consumes bid depth -- which is why that path derives its
+    `displayed_depth` the other way round. Reading one for the other would
+    pass a plausible number that describes the wrong side of the book.
+    """
+    return _d(bid_shares if side == UP else ask_shares)
+
+
 def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
                      tick: Any, min_qty: Any, depth_ticks: int,
                      book_age_s: Any = None,
-                     gap_suspected: bool = False) -> Dict[str, Any]:
+                     gap_suspected: bool = False,
+                     market: Any = None, held_side: Any = None,
+                     bid_shares: Any = None,
+                     ask_shares: Any = None) -> Dict[str, Any]:
     """Price the SECOND leg against the book in front of us and the cost we
     ACTUALLY paid for the first.
 
@@ -2033,6 +2050,19 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
 
     if side not in (UP, DOWN):
         return no("COMPLEMENT_SIDE_UNKNOWN", side=str(side))
+    # THE SIDE MUST BE THE ONE WE DO NOT HOLD. The caller derives both from
+    # one variable, so this cannot currently disagree -- which is exactly
+    # why it is asserted here rather than assumed: a complement priced on
+    # the side we already hold would double the exposure it exists to
+    # remove, and nothing downstream would notice. Unstated is permitted,
+    # because the deployed caller does not state it.
+    if held_side is not None:
+        want = DOWN if str(held_side) == UP else UP
+        if str(held_side) not in (UP, DOWN):
+            return no("COMPLEMENT_HELD_SIDE_UNKNOWN", held_side=str(held_side))
+        if side != want:
+            return no("COMPLEMENT_NOT_OPPOSITE_SIDE",
+                      side=str(side), held_side=str(held_side))
     if gap_suspected:
         return no("GAP_SUSPECTED")
     age = _d(book_age_s)
@@ -2074,6 +2104,24 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     if q < mq:
         return no("NOTHING_TO_MATCH_ON_GRID", need=str(need), min_qty=str(mq))
 
+    # A DISPLAYED QUOTE IS NOT A FILL, AND A PRICE WITH NOTHING BEHIND IT
+    # IS NOT A MARKET. The price above comes from the touch, which one
+    # resting contract is enough to set; completing against it would hand
+    # the realised cost of leg one to a quote that cannot absorb leg two.
+    # So the side we would REST on must display at least the quantity we
+    # are about to place. MEASURED on the ten preserved BTC15m windows:
+    # displayed depth on the resting side ran 96x to 4097x the complement
+    # quantity across all seven accepted completions, so this refuses none
+    # of them -- it binds at a size we do not yet trade, which is when it
+    # is wanted. Unreadable depth is NOT a refusal: the deployed caller
+    # passes none, and failing closed there would strand inventory the
+    # engine completes today.
+    depth = resting_depth(side, bid_shares=bid_shares, ask_shares=ask_shares)
+    if depth is not None and depth < q:
+        return no("COMPLEMENT_DEPTH_INSUFFICIENT", price=str(px),
+                  qty=str(q), resting_side=resting_side(side),
+                  displayed_depth=str(depth))
+
     up_px, dn_px = ((paid, px) if side == DOWN else (px, paid))
     floor = fee_floor(up_px, dn_px)
     pair = up_px + dn_px
@@ -2099,6 +2147,13 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     econ_taker = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
                                 dn_price=dn_px, theta=TAKER_THETA)
     return {"ok": True, "provenance": "DERIVED_FROM_CURRENT_BOOK",
+            # THE MARKET THIS WAS PRICED FROM, carried on the leg so the
+            # adoption site can refuse a complement priced from another
+            # market's book instead of trusting that it was not. None when
+            # the caller does not name one, which is today's behaviour.
+            "market": (str(market) if market is not None else None),
+            "held_side": (str(held_side) if held_side is not None else None),
+            "resting_depth": (str(depth) if depth is not None else None),
             "leg": {"side": side, "action": "BUY", "price": str(px),
                     "qty": str(q), "mode": MODE, "post_only": True,
                     "depth_ticks": int(depth_ticks),
