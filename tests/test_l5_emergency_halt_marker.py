@@ -266,14 +266,23 @@ def test_a_second_DIFFERENT_marker_can_still_halt_after_a_reset():
         == ["halt-0001", "halt-0002"]
 
 
-def test_an_unreadable_nonce_record_refuses_rather_than_re_latching():
-    """Guessing the other way would overwrite the original halt's evidence
-    on every sweep."""
-    store = MemStore(fail=True)
-    a = HG.HaltAsserter(MemStore(), who="l5-watchdog")
-    out = M.check(Src(marker(nonce="__unreadable__")), a, store,
-                  service=SERVICE, secret=SECRET, now=NOW)
-    assert out["acted"] is False
+def test_an_unreadable_nonce_record_still_latches_a_genuine_halt():
+    """A corrupt bookkeeping file must not be able to silence the owner's
+    emergency stop. The sentinel `_acted` returns is not any real nonce, so
+    the replay check does not match it and the halt goes through. What is
+    lost is replay suppression, and a replayed marker can only re-latch
+    HALT -- its one cost is overwriting the original halt's evidence.
+
+    Asserted with a REAL nonce: signing the sentinel as the nonce would
+    only match it against itself and prove nothing."""
+    halt_store = MemStore()
+    a = HG.HaltAsserter(halt_store, who="l5-watchdog")
+    out = M.check(Src(marker(nonce="halt-REAL-FRESH-0001")), a,
+                  MemStore(fail=True), service=SERVICE, secret=SECRET,
+                  now=NOW)
+    assert out["acted"] is True
+    assert out["reason"] == "HALT_LATCHED_FROM_OWNER_MARKER"
+    assert HG.HaltGate(halt_store).state()["permitted"] is False
 
 
 # ----------------------------------- 7. cancellation uncertainty & config

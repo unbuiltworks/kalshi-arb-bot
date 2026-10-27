@@ -236,10 +236,12 @@ def _acted(store: Any) -> list:
     try:
         raw = store.get(ACTED_KEY)
     except BaseException:                                      # noqa: BLE001
-        # UNREADABLE IS TREATED AS "EVERYTHING ACTED": the only consequence
-        # is that we do not latch again, and the system is already halted or
-        # was never halted by a marker. Guessing the other way would re-latch
-        # on every sweep and overwrite the original halt evidence.
+        # UNREADABLE LOSES REPLAY SUPPRESSION, NOT THE HALT. The sentinel
+        # below is not any real nonce, so `nonce in acted` stays False and a
+        # GENUINE owner marker still latches -- a corrupt bookkeeping file
+        # must not be able to silence the emergency stop. What is given up
+        # is replay suppression, and a replayed marker can only re-latch
+        # HALT; its one cost is overwriting the original halt's evidence.
         return ["__unreadable__"]
     if not raw:
         return []
