@@ -1606,7 +1606,15 @@ class Runner:
         # windows -- so the delay is ours and attempts 1..5 are exactly what
         # is unaccounted. One compact line per attempt, at most seven per
         # window, and it decides nothing.
-        self.emit_preflight_attempt(now, rep, dur_s)
+        #
+        # getattr, in the house idiom used wherever reporting hangs off the
+        # money path ("TELEMETRY MUST NOT BE ABLE TO KILL A RECONCILE"): a
+        # host without this helper -- a harness exercising maybe_preflight in
+        # isolation, or a partially constructed runner -- still gets its
+        # preflight. The helper itself also never raises.
+        _rec = getattr(self, "emit_preflight_attempt", None)
+        if _rec is not None:
+            _rec(now, rep, dur_s)
         if self.preflight_status == "PASSED":
             # preflight reads tick and quantity increment off THIS market
             # and stores them on the transport; None means "not established"
