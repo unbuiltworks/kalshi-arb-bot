@@ -293,6 +293,39 @@ def verify_alignment(window_start: int) -> Dict[str, Any]:
     }
     want_ev = "btc-updown-15m-%s-%02d%02dz" % (
         want.strftime("%Y-%m-%d"), want.hour, want.minute)
+    # ASK FOR THE EVENT BY NAME FIRST. The scan below reads the series from
+    # offset 0 in pages of 100 until it meets the window, and the window we
+    # are trading is always at the far end: MEASURED on 2026-10-27 at
+    # 1900z, 34 GETs, 7.83s and 20.7 MB to confirm one fifteen-minute
+    # window. `/v1/events/slug/{event}` answers the same question from the
+    # same venue in 1 GET, 0.45s and 18.8 KB, and answers it more precisely
+    # -- the slug is MATCHED by the route instead of scanned for, so there
+    # is no page to fall off the end of.
+    #
+    # This is on the critical path. `venue_window_bounds` is called from
+    # the arming boundary, no order may be submitted before arming, and
+    # arming is what lands last at every window roll.
+    #
+    # The scan is KEPT as the fallback, so a venue that stops serving the
+    # slug route degrades to today's behaviour rather than to an
+    # unconfirmed window. Both paths end in the same place: no usable
+    # startTime leaves `aligned` None, which `venue_window_bounds` turns
+    # into None and the boundary refuses by name.
+    try:
+        ev = _get("%s/v1/events/slug/%s" % (PMUS_GATEWAY, want_ev)) or {}
+        doc = ev.get("event") or ev
+        if str(doc.get("slug")) == want_ev:
+            st = str(doc.get("startTime", "")).replace("Z", "+00:00")
+            got = dt.datetime.fromisoformat(st)
+            out["pmus_start_utc"] = got.isoformat()
+            out["aligned"] = (got == want)
+            out["source"] = "events_slug"
+            out["why"] = ("PMUS event startTime equals L5's window epoch"
+                          if out["aligned"] else
+                          "PMUS startTime %s != L5 %s" % (got, want))
+            return out
+    except Exception:                                          # noqa: BLE001
+        pass                      # the paginated scan below is the fallback
     try:
         # PAGINATED, oldest first. A single unpaginated page answers for the
         # series' FIRST hundred windows and silently reports "not listed" for
@@ -312,6 +345,7 @@ def verify_alignment(window_start: int) -> Dict[str, Any]:
                 got = dt.datetime.fromisoformat(st)
                 out["pmus_start_utc"] = got.isoformat()
                 out["aligned"] = (got == want)
+                out["source"] = "series_scan"
                 out["why"] = ("PMUS event startTime equals L5's window epoch"
                               if out["aligned"] else
                               "PMUS startTime %s != L5 %s" % (got, want))
