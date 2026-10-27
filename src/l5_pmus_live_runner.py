@@ -1459,6 +1459,90 @@ class Runner:
         self.win = collections.Counter()
         self.first_action_t = None
 
+    def emit_preflight_attempt(self, now: float, rep: Mapping[str, Any],
+                               dur_s: float) -> None:
+        """One line per preflight attempt: when, how long, what blocked it.
+
+        REPORTING ONLY, and it must never break a preflight. Every read is
+        defensive and the whole body is wrapped, because an attempt that
+        failed is exactly the state where a telemetry helper is most likely
+        to meet a None it did not expect -- and losing the preflight to
+        describe it would be the wrong trade.
+
+        The three things the record has to separate, which no existing line
+        does:
+
+          * WHICH GATE blocked. `first_blocking` is the first check with
+            passed false and blocking not false, in the order preflight
+            evaluates them, so a ladder of attempts shows whether the
+            blocker moved or stood still.
+          * HOW LONG the attempt itself took, so an attempt that is slow is
+            distinguishable from an attempt that is merely late.
+          * WHETHER THE SOCKET COULD HAVE SUBSTITUTED. The REST book route
+            does not serve a 15m market for its first minutes and the
+            authenticated socket does; `_ws_book_substitute` requires a
+            two-sided snapshot, `subscribed_before_open` true and a fresh
+            frame. All three are recorded as the attempt saw them, so
+            "the socket was not ready" and "the socket was ready and the
+            fallback still did not fire" stop being the same observation.
+        """
+        try:
+            checks = list(rep.get("checks") or [])
+            first_blocking = None
+            for c in checks:
+                if (not c.get("passed")) and c.get("blocking") is not False:
+                    first_blocking = c.get("check")
+                    break
+            book_attempts = None
+            for c in checks:
+                if c.get("check") == "book_read_attempts":
+                    book_attempts = c.get("detail")
+                    break
+            ws: Dict[str, Any] = {"snapshot": False}
+            try:
+                snap = self.book.snapshot(str(rep.get("market_slug") or ""))
+            except BaseException:                              # noqa: BLE001
+                snap = None
+            if snap:
+                ws = {"snapshot": True,
+                      "bid": str(snap.get("bid")),
+                      "ask": str(snap.get("ask")),
+                      "two_sided": snap.get("bid") is not None
+                      and snap.get("ask") is not None,
+                      "subscribed_before_open": snap.get(
+                          "subscribed_before_open"),
+                      "stream_age_s": snap.get("stream_age_s"),
+                      "book_updates": snap.get("book_updates"),
+                      "market_state": snap.get("market_state")}
+            ws["fallback_max_age_s"] = getattr(
+                T, "WS_BOOK_FALLBACK_MAX_AGE_S", None)
+            lim = getattr(self.transport, "limiter", None)
+            emit("L5_LIVE_PREFLIGHT_ATTEMPT", {
+                "market": rep.get("market_slug"),
+                "attempt": self.preflight_attempts,
+                "verdict": rep.get("preflight"),
+                "t_in_window_s": (None if self.ws is None
+                                  else round(now - float(self.ws), 2)),
+                "attempt_duration_s": round(float(dur_s), 3),
+                "next_attempt_in_s": PREFLIGHT_BACKOFF_S[
+                    min(self.preflight_attempts,
+                        len(PREFLIGHT_BACKOFF_S) - 1)],
+                "first_blocking": first_blocking,
+                "blocking_failures": rep.get("blocking_failures"),
+                "fatal": rep.get("fatal"),
+                "book_read_attempts": book_attempts,
+                "ws_book": ws,
+                "tick_wait_s": (None if lim is None
+                                else getattr(lim, "tick_wait_s", None)),
+                "labels": ("reporting only. One line per attempt including "
+                           "the failures L5_LIVE_PREFLIGHT suppresses when "
+                           "the blockers have not changed.")})
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["preflight_attempt_emit_error:%s"
+                       % type(exc).__name__] += 1
+
     def maybe_preflight(self, now: float) -> None:
         t = self.transport
         if t is None:
@@ -1495,6 +1579,7 @@ class Runner:
             return
         self.last_preflight_t = now
         self.preflight_attempts += 1
+        t0 = time.monotonic()
         try:
             rep = t.preflight(
                 expect_account=os.getenv("L5_LIVE_EXPECT_ACCOUNT", "").strip()
@@ -1504,12 +1589,24 @@ class Runner:
         except Exception as exc:                               # noqa: BLE001
             rep = {"preflight": "FAILED", "market_slug": t.market_slug,
                    "fatal": T.redact("%s: %s" % (type(exc).__name__, exc))}
+        dur_s = time.monotonic() - t0
         self.preflight_status = rep.get("preflight", "FAILED")
         blockers = rep.get("blocking_failures")
         # log every PASS, and a FAIL only when what blocks it changes
         if self.preflight_status == "PASSED" or blockers != self.last_blockers:
             emit("L5_LIVE_PREFLIGHT", rep)
         self.last_blockers = blockers
+        # EVERY ATTEMPT, INCLUDING THE SILENT FAILURES. The line above is the
+        # reason eighty seconds of this engine's most expensive interval has
+        # no record: a FAILED attempt whose blockers match the previous one
+        # emits nothing at all, and at a window roll every early attempt
+        # fails the same way. MEASURED 2026-10-27: the venue flips a new
+        # window to MARKET_STATUS_OPEN at +0.6s and serves its metadata from
+        # -5.9s, while preflight passed at +80.1s to +107.8s across nine
+        # windows -- so the delay is ours and attempts 1..5 are exactly what
+        # is unaccounted. One compact line per attempt, at most seven per
+        # window, and it decides nothing.
+        self.emit_preflight_attempt(now, rep, dur_s)
         if self.preflight_status == "PASSED":
             # preflight reads tick and quantity increment off THIS market
             # and stores them on the transport; None means "not established"
