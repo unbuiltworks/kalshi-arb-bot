@@ -2331,3 +2331,22 @@ which tightens the gates rather than loosening them.
 
 L5_SHADOW_ONLY stays 1; submit() raises NotArmed structurally. No gate,
 risk limit, order route, retirement rule or settlement accounting moves.
+
+--- 2026-10-27T23:01 UTC: per-stage tick timing ---------------------------
+Diagnostic only, additions only, parity against be4e5dea IDENTICAL by
+exact test name (34 each side), passes 13,743 -> 13,753.
+
+Times the thirteen calls between tick() entry and maybe_preflight() and
+emits L5_LIVE_TICK_STAGES, slowest first, only when the pass exceeds 5s.
+It wraps no call: marks sit BETWEEN the existing statements so every call
+expression stays byte-identical, which the call-recorder stubs in
+test_l5_uncertainty_recovery and test_l5_mechanism_tick_wiring require.
+
+Deployed deliberately AFTER the 23:00 boundary: a restart inside the
+LEAD_S=120s pre-open subscribe window is what left 2230z with no book
+until +454.1s, subscribed_before_open false and a single resubscribe at
++454.0s -- resub_due iterates self.subscribed only, so a slug that misses
+its pre-open subscribe has no retry path at all. Service up well before
+2315z subscribes at 23:13; 2315z is the first clean measurement.
+
+L5_SHADOW_ONLY stays 1; submit() raises NotArmed structurally.
