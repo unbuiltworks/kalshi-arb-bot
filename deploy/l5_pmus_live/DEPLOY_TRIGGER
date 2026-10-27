@@ -2294,3 +2294,15 @@ risk gate or durable order state changes; the recovery list is never
 written. Deployment-branch parity exact: 20 failed / 14 errors, passes
 13,690 -> 13,705 (the 15 new tests). DISARMED: the campaign approval
 expired 02:46:48Z and its windows are 8/8 spent, so this cannot arm.
+
+TELEMETRY-ONLY promotion of eb332879, 2026-10-27T21:30Z, SHADOW-LOCKED.
+Records L5_LIVE_PREFLIGHT_ATTEMPT for EVERY preflight attempt, including
+the failures maybe_preflight suppresses when the blockers have not
+changed -- which is why 80-107s of every window roll has no record. One
+method and its getattr call site; additions only, 2 files / +313 / zero
+deletions against f6ad0f55. No gate, limit, order path, settlement path,
+watchdog behaviour, round_allocations or capital figure changes.
+Deployment-branch parity exact against f6ad0f55: 20 failed / 14 errors,
+identical 34-name failure/error sets, passes 13,705 -> 13,724 (the 19 new
+tests). L5_SHADOW_ONLY=1, so submit() raises NotArmed structurally; the
+campaign approval is expired and its windows are 8/8 spent.
