@@ -4748,6 +4748,90 @@ class FaithfulExecutor:
             return "STATE_UNREADABLE:%s" % type(exc).__name__
         return None
 
+    def stale_plan_cancel_candidates(self, market: str
+                                     ) -> Optional[Dict[str, Any]]:
+        """Resting orders to withdraw so an unexecutable round can re-plan.
+
+        None unless EVERY one of these holds. Any unknown returns None, so
+        this can only ever cancel in a state it has fully established.
+
+          * a frozen plan exists for the current round and
+            `TS.plan_executable` says it cannot be executed;
+          * `probe_round_is_safe_to_retire` is blocked SOLELY by a live or
+            still-fillable order -- never by inventory. A fill of ANY size,
+            a partial included, is real exposure, keeps its actual cost
+            basis and stays on the completion path, so it returns None here;
+          * no leg of this market holds any position at all;
+          * every live order in this market has ZERO cumulative fill, read
+            from the booked quantity on its own durable row.
+
+        WHY THIS EXISTS. The retirement path at the decision site already
+        detects the stale plan and already re-plans the round -- but only
+        once nothing is live. Nothing withdraws a resting leg BECAUSE its
+        sibling became unexecutable, so the only thing that frees the round
+        is `maybe_ts_deadline`, which fires on the WINDOW at
+        `L5_TS_CANCEL_MARGIN_S` before its end. On 2026-10-27 0100z that
+        left a leg resting from 01:02 to 01:10 while its sibling provably
+        could not be placed, and rounds 2 to 4 never ran.
+
+        IT DECIDES NOTHING ELSE. It does not retire the round, re-plan,
+        reprice, or touch a limit: it only names the orders to cancel. The
+        caller withdraws them by exact venue id through the existing
+        deadman, which proves terminal by re-read and books any fill it
+        finds, and the EXISTING retirement gate re-plans on a later pass.
+        """
+        try:
+            rnd = self.probe_round(market)
+            if rnd is None:
+                return None
+            plan = self.probe_stored_plan(market, rnd)
+            if plan is None:
+                return None
+            book = self.ts_authenticated_book(market, {}) or {}
+            why = TS.plan_executable(
+                plan, bid=book.get("bid"), ask=book.get("ask"),
+                tick=getattr(self.transport, "tick_size", None),
+                depth_ticks=int(os.getenv("L5_TS_DEPTH_TICKS", "2")))
+            if not why:
+                return None                  # still executable: leave it
+            blocked = self.probe_round_is_safe_to_retire(market, rnd)
+            if blocked not in ("ORDER_STILL_LIVE", "ORDER_STILL_FILLABLE"):
+                return None     # already retirable, or held by inventory
+            for leg in (UP, DOWN):
+                if self.store.position(market, leg) != D(0):
+                    return None              # any fill stays on completion
+            coids = []
+            for coid, row in sorted(
+                    (self.store.live_orders() or {}).items()):
+                if str(row.get("market") or "") != str(market):
+                    return None   # an order elsewhere: not ours to judge
+                booked = venue_decimal(row.get("cum_qty"))
+                if booked is None:
+                    booked = venue_decimal(row.get("filled"))
+                if booked is None:
+                    # UNREADABLE IS NOT ZERO. A row we cannot read may
+                    # carry a partial, which must never be cancelled here.
+                    return None
+                if booked != D(0):
+                    return None
+                coids.append(coid)
+            if not coids:
+                return None
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                      # unreadable cancels nothing
+        return {"reason": "TS_STALE_PLAN_NO_FILL",
+                "market": market, "round": int(rnd),
+                "plan_unexecutable": why,
+                "retirement_blocked_by": blocked,
+                "coids": coids,
+                "labels": ("the round's frozen plan cannot be executed and "
+                           "nothing is filled, so the resting legs are "
+                           "withdrawn by exact id to let the EXISTING "
+                           "retirement gate re-plan. A fill of any size, a "
+                           "partial included, would have kept this None.")}
+
     def probe_leg_order(self, market: str, legs: Mapping[str, Any],
                         cheapest_first: Sequence[str]) -> List[str]:
         """Which leg to offer next: the one that REDUCES a held residual.

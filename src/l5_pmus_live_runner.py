@@ -4871,6 +4871,56 @@ class Runner:
         emit("L5_TS_DEADLINE", dict(out, slug=slug, now=now, result=res))
         return res
 
+    def maybe_ts_stale_plan_cancel(self, now: float
+                                   ) -> Optional[Dict[str, Any]]:
+        """Withdraw resting legs of a round whose plan cannot be executed.
+
+        INERT BY DEFAULT in every sense that matters: it returns at once
+        unless the two-sided engine is active for this market, and the
+        executor's `stale_plan_cancel_candidates` returns None for anything
+        it cannot fully establish -- no plan, an executable plan, a round
+        already retirable, ANY position on either leg, any order whose
+        booked quantity is non-zero or unreadable, or a raising helper.
+
+        A PARTIAL IS EXPOSURE, NOT A CANDIDATE. The executor refuses to
+        name any order once a leg holds a position, so a partially filled
+        round keeps its actual cost basis and stays on the completion path.
+        Nothing here resets a round as flat.
+
+        THROUGH THE SAME ROUTE AS EVERY OTHER CANCEL. `deadman(..., only=
+        [...])` inherits cancel-by-venue-id, proof by re-read, fill-booking
+        and the UNCERTAIN marking on `still_open`/`unverified`, so an order
+        that turns out to have filled is booked rather than lost and an
+        ambiguous answer halts instead of being assumed cancelled.
+
+        IT DOES NOT RETIRE OR RE-PLAN THE ROUND. The existing retirement
+        gate at the decision site owns that, and reaches it on a later pass
+        once these cancels are terminal with nothing filled.
+        """
+        from src import l5_two_sided_probe as TSP
+        t = self.transport
+        if t is None:
+            return None
+        slug = getattr(t, "market_slug", None)
+        if not slug or not TSP.active(slug):
+            return None
+        ex = getattr(self, "executor", None)
+        if ex is None:
+            return None
+        try:
+            cand = ex.stale_plan_cancel_candidates(str(slug))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        if not cand:
+            return None
+        res = LX.deadman(self.store, t, reason="ts_stale_plan_no_fill",
+                         only=list(cand["coids"]))
+        emit("L5_TS_STALE_PLAN_CANCEL",
+             dict(cand, slug=str(slug), now=now, result=res))
+        return res
+
     def maybe_acc_deadline(self, now: float) -> Optional[Dict[str, Any]]:
         """Cancel each accumulation order at min(submit + TTL, terminal).
 
@@ -5092,6 +5142,11 @@ class Runner:
         # overdue leg must be withdrawn before anything new is priced
         # against the inventory it would have left.
         self.maybe_acc_deadline(now)
+        # THE STALE-PLAN WITHDRAWAL, immediately after that deadline and for
+        # the same reason: a leg resting on a plan the book has left cannot
+        # fill, and until it is terminal the EXISTING retirement gate cannot
+        # re-plan the round. Inert unless nothing at all is filled.
+        self.maybe_ts_stale_plan_cancel(now)
         # REPORTING ONLY: the opposite side while we hold unmatched
         # inventory, sampled whether or not an order is resting.
         self.sample_residual_book(
