@@ -56,6 +56,11 @@ COPY src/pmus_auth.py         src/pmus_auth.py
 COPY src/l5_halt_gate.py      src/l5_halt_gate.py
 COPY src/l5_halt_server.py    src/l5_halt_server.py
 COPY src/l5_mandate_signature.py src/l5_mandate_signature.py
+# The owner's emergency-HALT marker verifier. Stdlib only, so this is
+# the whole import closure. The SIGNER (scripts/l5_emergency_halt_sign.py)
+# is deliberately NOT copied: minting must not be possible from inside
+# any deployed image.
+COPY src/l5_emergency_halt_marker.py src/l5_emergency_halt_marker.py
 COPY src/l5_watchdog.py       src/l5_watchdog.py
 # the ownership contract's constants (REGISTRY_KEY). The watchdog imports it
 # to name the key it reads; it serves nothing and holds no venue route.

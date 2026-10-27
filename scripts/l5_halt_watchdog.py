@@ -155,8 +155,43 @@ def main() -> int:
     # loop below has no clear path and never calls it.
     if str(os.getenv(BOOT_RESET_ENV, "")).strip().upper() == "YES":
         emit(*boot_reset(store))
+    # THE OWNER'S EMERGENCY HALT, on the sweep loop that already exists.
+    #
+    # Wired HERE rather than inside `sweep()` so the sweep's contract and its
+    # 166 tests are untouched. Off unless BOTH the URL and the HMAC secret
+    # are set; a half-configured mechanism is off, because a URL with no
+    # secret would accept an unsigned marker.
+    #
+    # It can only ever reach `assert_halt`. It cannot clear a latch, cannot
+    # attest "no halt", and cannot authorize trading -- `HaltAsserter` has no
+    # clear by construction. A latched HALT is what makes the EXECUTOR cancel:
+    # `Runner.maybe_halt_deadman` runs `deadman()`, which cancels by exact
+    # venue id and proves it by re-reading the order.
+    from src import l5_emergency_halt_marker as EHM
+    _ehm = EHM.from_env(store, wd.asserter)
+    emit("L5_EMERGENCY_HALT_MARKER_CONFIG", {
+        "configured": _ehm is not None,
+        "url_env": EHM.MARKER_URL_ENV, "secret_env": EHM.MARKER_SECRET_ENV,
+        "poll_s": poll_s,
+        "timeout_s": (None if _ehm is None else _ehm["source"].timeout_s),
+        "max_marker_age_s": EHM.MAX_MARKER_AGE_S,
+        "service": (None if _ehm is None else _ehm["service"]),
+        "labels": ("HALT only. Unreachable retains the existing state and "
+                   "asserts nothing; the executor is failed closed by the "
+                   "attestation going stale, not by this.")})
     while True:
         try:
+            if _ehm is not None:
+                # never allowed to break the sweep: check() does not raise.
+                _m = EHM.check(_ehm["source"], _ehm["asserter"],
+                               _ehm["store"], service=_ehm["service"],
+                               secret=_ehm["secret"])
+                if _m.get("acted") or _m.get("reason") not in (
+                        "MARKER_UNREACHABLE", "MARKER_COMMAND_NOT_HALT",
+                        "MARKER_ALREADY_ACTED"):
+                    # quiet on the three steady-state outcomes; loud on
+                    # anything that latched or looked wrong.
+                    emit("L5_EMERGENCY_HALT_MARKER", _m)
             # BEFORE the sweep, and never allowed to break it: a
             # publishing failure must leave the documents to go stale and
             # refuse, not stop the watchdog from watching.
