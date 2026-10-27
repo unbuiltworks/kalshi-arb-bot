@@ -1834,8 +1834,21 @@ def recover_stale_leg(*, side: str, own_px: Any, qty: Any, remaining: Any,
     #    strictly worse than leaving the order resting, so an exhausted OPEN
     #    budget declines the recovery rather than spending the cancel.
     if int(recoveries_used) >= recover_max_per_market():
+        # THE REFUSAL CARRIES THE STATE THAT QUALIFIED IT. Every other test
+        # has already passed by this line -- zero fill, readable tick, usable
+        # and fresh book, rest past the floor, drift past tolerance -- so a
+        # leg refused here is one the budget ALONE declined. Reporting only
+        # `used` made that indistinguishable from "nothing drifted", and the
+        # count of legs that would have qualified is exactly the quantity
+        # needed to judge whether the cap of 1 is the right number. These are
+        # the values already computed above; nothing new is measured and no
+        # decision changes.
         return no("RECOVERY_BUDGET_SPENT", used=int(recoveries_used),
-                  max_per_market=recover_max_per_market())
+                  max_per_market=recover_max_per_market(),
+                  side=str(side), own_px=str(own),
+                  would_quote_now=str(now_px), drift_ticks=str(ticks),
+                  allowed_ticks=str(allow), rest_s=str(rest),
+                  book_age_s=str(age), qualified=True)
     obr = open_budget_remaining
     if obr is not None:
         try:

@@ -610,6 +610,30 @@ def acc_stale_by_distance(runner: Any, now: float, slug: Any,
                 recoveries_used=used + len(out),
                 open_budget_remaining=obr)
             count("acc_recover:%s" % (v.get("reason") or "RECOVER"))
+            # LOG-ONLY. A leg refused RECOVERY_BUDGET_SPENT passed every
+            # other test and was declined by the cap alone, which is the
+            # one quantity the existing records cannot show: `stale_by_
+            # distance: []` reads identically whether nothing drifted or
+            # the budget was gone. Counting these says whether a second
+            # recovery is ever even wanted. Nothing is cancelled, replaced,
+            # priced or gated by this branch; `out` is untouched.
+            if str(v.get("reason")) == "RECOVERY_BUDGET_SPENT":
+                try:
+                    _rnd = getattr(getattr(runner, "executor", None),
+                                   "probe_round", lambda _m: None)(str(slug))
+                except BaseException as exc:               # noqa: BLE001
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    _rnd = None
+                emit("L5_ACC_RECOVER_REFUSED", dict(
+                    v, market=str(slug), round=_rnd, coid=coid,
+                    venue_order_id=row.get("venue_order_id"),
+                    labels=("REPORTING ONLY. This leg qualified for a "
+                            "stale-by-distance recovery on every other "
+                            "test and was refused solely because the "
+                            "per-market recovery budget was spent. No "
+                            "order, price, cancellation, risk gate or "
+                            "durable state is affected by this record.")))
             if v.get("recover"):
                 out.append(coid)
                 emit("L5_ACC_RECOVER", dict(
