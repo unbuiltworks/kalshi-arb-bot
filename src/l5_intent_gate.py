@@ -134,6 +134,16 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # on the other side.
     "BALANCING_DOES_NOT_REDUCE",
     "BALANCING_WOULD_OVERSHOOT",
+    # THE TWO IDENTITY GUARDS ON COMPLEMENT ADOPTION, added 2026-10-27.
+    # `complement_order` checks everything it is GIVEN; it cannot check
+    # whether the caller handed it the right market and the right side,
+    # because those are the caller's own variables. Neither can fire from
+    # the deployed call site, which passes both from `market` and `_other`
+    # a few lines above -- and that is why they exist: an adoption that
+    # silently matched another market's book, or doubled the side already
+    # held, would look exactly like a correct one in the record.
+    "TWO_SIDED_PROBE:COMPLEMENT_MARKET_MISMATCH",
+    "TWO_SIDED_PROBE:COMPLEMENT_SIDE_MISMATCH",
     "QUEUE_MEASUREMENT:BUILD_REASON",
     "SAFETY_OVERLAY:MAKER_ONLY_NO_TAKER",
     "SAFETY_OVERLAY:QUANTITY_INCREMENT_UNKNOWN",
