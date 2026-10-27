@@ -344,6 +344,54 @@ def emit(kind: str, doc: Mapping[str, Any]) -> None:
                                       separators=(",", ":"))), flush=True)
 
 
+#: how many markets ONE settlement sweep may read. None is unbounded, which
+#: is what the engine has always done. See `settlement_sweep_cap`.
+SETTLEMENT_SWEEP_CAP_ENV = "PMUS_SETTLEMENT_SWEEP_CAP"
+
+
+def settlement_sweep_cap() -> Optional[int]:
+    """How many markets one settlement sweep may read. None is unbounded.
+
+    MEASURED 2026-10-27 on the running executor (deployment 4fc4e25b).
+    `markets_with_exposure` had grown to **86** BTC15m markets reaching back
+    to 2026-10-12, none of which can retire: they hold unmatched inventory,
+    so `retire_settled_market` refuses and they stay in the book forever.
+    The sweep reads one `/v1/markets/{slug}/bbo` per market, serially,
+    through the shared 1.5 rps limiter -- and it runs BEFORE
+    `maybe_preflight` and before the decision path. The egress trace for
+    the 2130z window sits at exactly 1.5 flows/second from 21:31:26 to
+    21:32:18, and the tick that began at window+48.8s did not reach
+    preflight until window+142.8s. Preflight itself then PASSED on attempt
+    1 in 1.574s against a two-sided websocket book 0.083s old.
+
+    So the engine was never slow to decide. It spent the first ninety
+    seconds of every window asleep in the limiter, re-reading the
+    settlement of markets that settled a fortnight ago, and the decision
+    path sat behind that. Worse, the sweep takes ~55s where
+    SETTLEMENT_POLL_S is 10s, so every market is due again the instant the
+    pass ends: a treadmill, not a backlog.
+
+    A cap defers reads, it never drops them. The deferred markets are
+    chosen by OLDEST READ FIRST, and a market never read sorts first of
+    all, so the window that just closed -- the settlement we actually want
+    -- is read on the next tick rather than behind a fortnight of backlog.
+
+    Unset, blank, unparseable and non-positive all mean UNBOUNDED rather
+    than some default cap, so a typo cannot silently throttle settlement
+    detection. Unbounded keeps the iteration order the engine has always
+    used, which is what makes the default byte-for-byte the frozen
+    behaviour.
+    """
+    raw = (os.getenv(SETTLEMENT_SWEEP_CAP_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        cap = int(raw)
+    except Exception:                                          # noqa: BLE001
+        return None
+    return cap if cap > 0 else None
+
+
 def residual_cap_k() -> Optional[D]:
     """The k for RESIDUAL_CAP, read from PMUS_RESIDUAL_CAP_K. None is OFF.
 
@@ -1643,6 +1691,13 @@ class Runner:
         t = self.transport
         if t is None:
             return
+        # WHAT IS DUE, before anything is read. The loop used to read as it
+        # walked, so the number of venue reads one sweep could make was
+        # whatever `markets_with_exposure` happened to return -- 86 of them
+        # by 2026-10-27, which is 55s asleep in the limiter ahead of
+        # preflight and ahead of the decision path. Collecting first is what
+        # makes a per-tick cap possible at all.
+        due = []
         for market in self.store.markets_with_exposure():
             if market == t.market_slug:
                 continue                       # the one we are working now
@@ -1650,9 +1705,29 @@ class Runner:
             # run on every 3s tick against every market still in the book,
             # and with 2115z stuck there by the retirement defect that was a
             # settlement GET every 3 seconds forever.
-            if (self.now_t - self.last_settlement_poll.get(market, 0.0)
-                    < SETTLEMENT_POLL_S):
+            last = self.last_settlement_poll.get(market, 0.0)
+            if self.now_t - last < SETTLEMENT_POLL_S:
                 continue
+            due.append((last, market))
+        cap = settlement_sweep_cap()
+        if cap is None:
+            # UNBOUNDED, and in the order `markets_with_exposure` returned
+            # them, which is the order this loop has always read in.
+            markets = [m for _last, m in due]
+        else:
+            # OLDEST READ FIRST. A market never read has last == 0.0 and so
+            # sorts ahead of everything, which is the property that matters:
+            # the window that just closed is the settlement we are waiting
+            # for, and it must not queue behind a fortnight of markets that
+            # will never retire. Deferred, never dropped -- the rest are due
+            # again on the next pass.
+            due.sort()
+            if len(due) > cap:
+                self.stats["settlement_sweep_deferred"] += len(due) - cap
+                self.win["settlement_sweep_deferred"] += len(due) - cap
+            markets = [m for _last, m in due[:cap]]
+        self.stats["settlement_sweep_read"] += len(markets)
+        for market in markets:
             self.last_settlement_poll[market] = self.now_t
             try:
                 rep = t.settlement(market)
