@@ -39,10 +39,18 @@ sys.path.insert(0, HERE)
 from src import l5_campaign_approval as CA        # noqa: E402
 
 #: what we ASK for. The code's own ceilings decide what is granted.
-ASK_WINDOWS = 4
-ASK_EXPOSURE_USD = "5"
-ASK_DAILY_LOSS_USD = "5"
-ASK_DURATION_S = 4 * 3600
+#
+# OVERRIDABLE PER CAMPAIGN, because the ask is a per-campaign decision and
+# editing this file to change one was the previous ceremony. The defaults
+# are exactly the values that were hardcoded here, so a run with no
+# overrides is byte-for-byte what it always produced. Asking for more than
+# the code constants permits still yields less, silently and by design --
+# the gate reports every field it clamped, and this script verifies the
+# document against that real gate before calling it valid.
+ASK_WINDOWS = int(os.getenv("ASK_WINDOWS", "4"))
+ASK_EXPOSURE_USD = os.getenv("ASK_EXPOSURE_USD", "5")
+ASK_DAILY_LOSS_USD = os.getenv("ASK_DAILY_LOSS_USD", "5")
+ASK_DURATION_S = int(os.getenv("ASK_DURATION_S", str(4 * 3600)))
 
 
 def build(now: dt.datetime | None = None) -> dict:
