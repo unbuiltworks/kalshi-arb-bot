@@ -130,7 +130,10 @@ def test_the_disarmed_cancel_goes_through_the_shared_rate_limiter(wire):
     tp = real_disarmed()
     seen = []
     tp.limiter = type("L", (), {
-        "before": lambda _s, write=False: seen.append(("before", write)),
+        # `purpose` is accepted and ignored: this test is about the write
+        # flag reaching the limiter, not about the accounting tag.
+        "before": lambda _s, write=False, purpose="": seen.append(
+            ("before", write)),
         "on_success": lambda _s: seen.append(("ok", None)),
         "on_429": lambda _s: seen.append(("429", None))})()
     tp.cancel(VID)

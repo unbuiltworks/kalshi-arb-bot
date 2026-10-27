@@ -36,7 +36,7 @@ import os
 import re
 import time
 from decimal import Decimal as D
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from src import pmus_auth as Q1
 from src.l5_live_execution import NotArmed
@@ -101,7 +101,9 @@ class RateLimiter:
 
     def __init__(self, *, rps: float = 1.5, burst: float = 4.0,
                  backoff_s: float = 2.0, backoff_max_s: float = 60.0,
-                 now_fn=None, sleep_fn=None) -> None:
+                 now_fn=None, sleep_fn=None,
+                 tick_wait_budget_s: float = 0.0,
+                 deferrable_purposes: Optional[Iterable[str]] = None) -> None:
         self.rps = float(rps)
         self.burst = float(burst)
         self.backoff_s = float(backoff_s)
@@ -123,7 +125,20 @@ class RateLimiter:
         self.counts: Dict[str, int] = {"requests": 0, "demanded": 0,
                                        "http_429": 0, "throttled_waits": 0,
                                        "refused_in_cooloff": 0,
-                                       "recoveries": 0}
+                                       "recoveries": 0, "deferred": 0,
+                                       "ticks": 0}
+        #: per-purpose accounting. Pure observation: nothing reads it to
+        #: decide anything except the allowlisted budget below, which is
+        #: off unless both of the next two fields are set.
+        self.by_purpose: Dict[str, Dict[str, Any]] = {}
+        #: seconds this limiter may sleep within ONE tick before refusing
+        #: further DEFERRABLE requests. 0 disables the budget entirely and
+        #: is the default, which is today's behaviour exactly.
+        self.tick_wait_budget_s = float(tick_wait_budget_s)
+        #: purposes the budget may refuse. Empty by default. See `before`
+        #: for why `order_progress` and `reconcile` may never be added.
+        self.deferrable_purposes = frozenset(deferrable_purposes or ())
+        self.tick_wait_s = 0.0
         self.started_t = self.last_t
         self.total_wait_s = 0.0
         self.max_wait_s = 0.0
@@ -135,12 +150,57 @@ class RateLimiter:
                           self.tokens + (now - self.last_t) * self.rps)
         self.last_t = now
 
-    def before(self, *, write: bool) -> None:
-        """Called before a request leaves. Raises inside the cool-off."""
+    def tick_begin(self) -> None:
+        """Start a new tick's wait accounting.
+
+        Called by the money-path loop, once per pass. Outside a loop that
+        calls it, `tick_wait_s` simply accumulates for the life of the
+        process and the budget below is never reached -- which is the
+        behaviour every existing caller already has.
+        """
+        self.tick_wait_s = 0.0
+        self.counts["ticks"] += 1
+
+    def before(self, *, write: bool, purpose: str = "unclassified") -> None:
+        """Called before a request leaves. Raises inside the cool-off.
+
+        `purpose` is ACCOUNTING FIRST. The boundary burst that costs this
+        engine 84-142s of every window was measured three ways -- +121
+        requests and +61.14s of in-tick sleep across one window roll, a
+        skipped 60s heartbeat, and an egress trace pinned at exactly 1.5
+        flows/second for 80 seconds -- and NONE of those says which caller
+        asked. There is no per-path counter anywhere in this process, so
+        the composition of that burst is not attributable from telemetry
+        that exists. This makes it attributable; nothing about it changes
+        what leaves.
+
+        THE DEFERRAL BUDGET IS OFF BY DEFAULT AND ALLOWLISTED EVEN WHEN ON.
+        A tick that has already slept `tick_wait_budget_s` inside this
+        limiter refuses further requests whose purpose is in
+        `deferrable_purposes`, by raising VenueThrottled -- the SAME
+        exception the cool-off already raises, so every caller's existing
+        handling applies unchanged and nothing new has to be proven about
+        it.
+
+        The allowlist is empty by default and must stay confined to callers
+        that treat a failed read as "not yet" rather than as a reason to
+        fail closed harder. `sweep_settlements` qualifies: it counts
+        `settlement_read_error` and leaves the market unretired, which its
+        own docstring calls the safe direction. `poll_orders` and
+        `reconcile_if_needed` DO NOT: both call `mark_uncertain` on any
+        exception, which refuses submissions until an authoritative read
+        succeeds. Deferring either would trade latency for a stopped
+        engine, so neither may be added here.
+        """
         now = self._now()
         self.counts["demanded"] += 1
+        acct = self.by_purpose.setdefault(
+            purpose, {"demanded": 0, "requests": 0, "waits": 0,
+                      "wait_s": 0.0, "deferred": 0, "refused_in_cooloff": 0})
+        acct["demanded"] += 1
         if now < self.cool_until:
             self.counts["refused_in_cooloff"] += 1
+            acct["refused_in_cooloff"] += 1
             raise VenueThrottled(
                 "venue rate limit: %.1fs of cool-off remaining"
                 % (self.cool_until - now))
@@ -149,16 +209,32 @@ class RateLimiter:
             # not queued, but it still spends what is there
             self.tokens = max(0.0, self.tokens - 1.0)
             self.counts["requests"] += 1
+            acct["requests"] += 1
             return
         if self.tokens < 1.0:
             wait = (1.0 - self.tokens) / self.rps if self.rps > 0 else 0.0
+            if (self.tick_wait_budget_s > 0.0
+                    and purpose in self.deferrable_purposes
+                    and self.tick_wait_s + wait > self.tick_wait_budget_s):
+                # NOT a skip. The caller's own retry interval brings it
+                # back on a later tick with the state it could not read
+                # still unread, which is exactly where it was.
+                self.counts["deferred"] += 1
+                acct["deferred"] += 1
+                raise VenueThrottled(
+                    "tick wait budget spent: %.2fs of %.2fs used, %s deferred"
+                    % (self.tick_wait_s, self.tick_wait_budget_s, purpose))
             self.counts["throttled_waits"] += 1
+            acct["waits"] += 1
             self.total_wait_s += wait
+            self.tick_wait_s += wait
+            acct["wait_s"] += wait
             self.max_wait_s = max(self.max_wait_s, wait)
             self._sleep(wait)
             self._refill()
         self.tokens = max(0.0, self.tokens - 1.0)
         self.counts["requests"] += 1
+        acct["requests"] += 1
 
     def on_success(self) -> None:
         if self.consecutive_429:
@@ -211,6 +287,20 @@ class RateLimiter:
             "cooloff_remaining_s": round(max(0.0, self.cool_until - now), 2),
             "total_wait_s": round(self.total_wait_s, 2),
             "rps_budget": self.rps,
+            # WHICH CALLER ASKED. Added because the window-boundary burst
+            # was measurable three ways and attributable none.
+            "by_purpose": {k: {"demanded": v["demanded"],
+                               "requests": v["requests"],
+                               "waits": v["waits"],
+                               "wait_s": round(v["wait_s"], 2),
+                               "deferred": v["deferred"],
+                               "refused_in_cooloff": v["refused_in_cooloff"]}
+                           for k, v in sorted(self.by_purpose.items())},
+            "deferred": self.counts["deferred"],
+            "ticks": self.counts["ticks"],
+            "tick_wait_s": round(self.tick_wait_s, 2),
+            "tick_wait_budget_s": self.tick_wait_budget_s,
+            "deferrable_purposes": sorted(self.deferrable_purposes),
             "time_to_authoritative_recovery_s": (
                 None if self.last_recovery_s is None
                 else round(self.last_recovery_s, 2)),
@@ -247,7 +337,16 @@ def shared_limiter() -> "RateLimiter":
             rps=float(os.getenv("PMUS_RPS", "1.5")),
             burst=float(os.getenv("PMUS_BURST", "4")),
             backoff_s=float(os.getenv("PMUS_BACKOFF_S", "2")),
-            backoff_max_s=float(os.getenv("PMUS_BACKOFF_MAX_S", "60")))
+            backoff_max_s=float(os.getenv("PMUS_BACKOFF_MAX_S", "60")),
+            # OFF unless BOTH are set. 0 seconds of budget disables the
+            # deferral entirely, and an empty allowlist makes it a no-op
+            # even if a budget is set, so the default is two independent
+            # ways of being today's behaviour.
+            tick_wait_budget_s=float(
+                os.getenv("PMUS_TICK_WAIT_BUDGET_S", "0")),
+            deferrable_purposes=[
+                p for p in os.getenv("PMUS_DEFERRABLE_PURPOSES", "").split(",")
+                if p.strip()])
     return _SHARED_LIMITER
 
 
@@ -758,7 +857,8 @@ class PmusTransport:
     # ------------------------------------------------------------ read only
 
     def _request(self, method: str, path: str, body=None,
-                 base: str = Q1.API, *, http: Optional[Any] = None) -> Any:
+                 base: str = Q1.API, *, http: Optional[Any] = None,
+                 purpose: str = "unclassified") -> Any:
         """The single door every venue request goes through.
 
         Nothing here retries. A 429 is recorded, the shared cool-off is
@@ -787,7 +887,7 @@ class PmusTransport:
                 "_request http override is limited to this transport's own "
                 "cancel-only object")
         write = str(method).upper() != "GET"
-        self.limiter.before(write=write)
+        self.limiter.before(write=write, purpose=purpose)
         try:
             out = (http or self.http).request(method, path, body, base)
         except BaseException as exc:                           # noqa: BLE001
@@ -799,8 +899,9 @@ class PmusTransport:
         self.limiter.on_success()
         return out
 
-    def _get(self, path: str, base: str = Q1.API) -> Any:
-        return self._request("GET", path, None, base)
+    def _get(self, path: str, base: str = Q1.API,
+             purpose: str = "unclassified") -> Any:
+        return self._request("GET", path, None, base, purpose=purpose)
 
     def account(self) -> Dict[str, Any]:
         """/v1/account/balances is the route this venue serves.
@@ -810,7 +911,7 @@ class PmusTransport:
         but does not answer GET. Those are the paths pmus_q1_executor has
         always used for live campaigns; these now match it.
         """
-        return self._get("/v1/account/balances") or {}
+        return self._get("/v1/account/balances", purpose="account") or {}
 
     def market(self, slug: str) -> Dict[str, Any]:
         """Authoritative market METADATA, which /bbo does not carry.
@@ -822,7 +923,8 @@ class PmusTransport:
         return resolve_market(self.http, slug)
 
     def book(self, slug: str) -> Dict[str, Any]:
-        r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}
+        r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY,
+                       purpose="book") or {}
         return r.get("marketData") or r
 
     def settlement(self, slug: str) -> Dict[str, Any]:
@@ -834,7 +936,7 @@ class PmusTransport:
         1.0000. `terminal` is true only when BOTH a terminal state and a
         price are present -- never on the state alone.
         """
-        r = self._get("/v1/markets/%s/bbo" % slug) or {}
+        r = self._get("/v1/markets/%s/bbo" % slug, purpose="settlement") or {}
         md = r.get("marketData") or r
         state = str((md or {}).get("state") or "")
         px = settlement_decimal((md or {}).get("settlementPx"))
@@ -1064,7 +1166,8 @@ class PmusTransport:
         settlements on this venue, and this matches that behaviour rather
         than inventing a second reading of the same resource.
         """
-        return rows_of(self._get("/v1/portfolio/positions"), "positions")
+        return rows_of(self._get("/v1/portfolio/positions", purpose="reconcile"),
+                       "positions")
 
     def available_positions(self) -> List[dict]:
         """`availablePositions`, which the venue serves beside `positions`.
@@ -1091,14 +1194,15 @@ class PmusTransport:
         The ACK for that order had said filled_qty 0. It filled two
         milliseconds later and nothing ever asked again.
         """
-        r = self._get("/v1/order/%s" % order_id) or {}
+        r = self._get("/v1/order/%s" % order_id,
+                      purpose="order_progress") or {}
         if isinstance(r, Mapping):
             inner = r.get("order")
             return dict(inner) if isinstance(inner, Mapping) else dict(r)
         return {}
 
     def open_orders(self) -> List[dict]:
-        r = self._get("/v1/orders/open") or {}
+        r = self._get("/v1/orders/open", purpose="reconcile") or {}
         if isinstance(r, Mapping):
             return r.get("orders") or r.get("openOrders") or []
         return r or []
@@ -1581,14 +1685,16 @@ class PmusTransport:
         self.submit_stage = "PREVIEW_REQUEST"
         self.preview_attempted = True
         pv = self._request("POST", "/v1/order/preview",
-                               OB.preview_envelope(body), Q1.API) or {}
+                           OB.preview_envelope(body), Q1.API,
+                           purpose="order_preview") or {}
         self.preview_status = 200          # urlopen raises on any non-2xx
         self.submit_stage = "PREVIEW_ECHO_VALIDATION"
         self.last_preview = {"body": body, "response": pv,
                              "echo": PG.require_echo(body, pv)}
         self.submit_stage = "ORDER_POST"
         self.order_post_attempted = True
-        return self._request("POST", "/v1/orders", body, Q1.API) or {}
+        return self._request("POST", "/v1/orders", body, Q1.API,
+                             purpose="order_submit") or {}
 
     def cancel(self, order_id: str,
                market_slug: Optional[str] = None) -> Dict[str, Any]:

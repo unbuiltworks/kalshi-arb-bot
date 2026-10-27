@@ -5145,6 +5145,14 @@ class Runner:
             # reads the running websocket book and writes one local file.
             self.shadow_tick(now)
             return
+        # ONE TICK'S WAIT ACCOUNTING STARTS HERE. Observation by default:
+        # the limiter's budget is 0 and its allowlist empty unless both
+        # PMUS_TICK_WAIT_BUDGET_S and PMUS_DEFERRABLE_PURPOSES are set, so
+        # this records how long the pass spent asleep in the limiter and
+        # changes nothing about what leaves.
+        lim = getattr(self.transport, "limiter", None)
+        if lim is not None and hasattr(lim, "tick_begin"):
+            lim.tick_begin()
         self.maybe_preflight(now)
         if self.store.live_order_count():
             self.poll_orders()
