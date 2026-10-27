@@ -349,6 +349,64 @@ def emit(kind: str, doc: Mapping[str, Any]) -> None:
 SETTLEMENT_SWEEP_CAP_ENV = "PMUS_SETTLEMENT_SWEEP_CAP"
 
 
+#: a tick stage slower than this makes the pass worth a record. The loop
+#: runs every ~3s, so a per-tick line would bury the log; the delay being
+#: hunted is ~110s, so anything near it is far above this.
+TICK_STAGE_REPORT_S = 5.0
+
+
+class _StageClock:
+    """Elapsed time between the tick's existing calls. REPORTING ONLY.
+
+    WHY IT MEASURES RATHER THAN INFERS. The pre-preflight delay was
+    attributed to `sweep_settlements` from a transitive source scan that
+    matched the NAME inside two docstrings -- `two_sided_settle` and
+    `two_sided_close` mention it and neither calls it. The real call sites
+    are AFTER `maybe_preflight`, so the cap could not have helped, and the
+    measured pre-preflight time stayed at 109.8s against a 92.4-110.9s
+    baseline. This records which call actually holds the tick, from the
+    running process.
+
+    It never wraps a call. `mark` is invoked BETWEEN the existing
+    statements, so every call expression in `tick` stays byte-identical --
+    which matters because several tests drive `tick` against a stub that
+    records method calls by name, and one asserts their order.
+    """
+
+    __slots__ = ("t0", "last", "stages")
+
+    def __init__(self) -> None:
+        self.t0 = self.last = time.monotonic()
+        self.stages = []
+
+    def mark(self, name: str) -> None:
+        try:
+            now = time.monotonic()
+            self.stages.append((str(name), now - self.last))
+            self.last = now
+        except BaseException:                                  # noqa: BLE001
+            pass
+
+    def total_s(self) -> float:
+        try:
+            return self.last - self.t0
+        except BaseException:                                  # noqa: BLE001
+            return 0.0
+
+    def report(self) -> Dict[str, Any]:
+        """Slowest first, so the holder of the tick is the first thing read."""
+        ranked = sorted(self.stages, key=lambda kv: -kv[1])
+        return {
+            "total_s": round(self.total_s(), 3),
+            "slowest": ranked[0][0] if ranked else None,
+            "slowest_s": round(ranked[0][1], 3) if ranked else None,
+            "stages_s": {n: round(v, 3) for n, v in ranked},
+            "labels": ("elapsed between the tick's EXISTING calls, before "
+                       "maybe_preflight. Reporting only: it wraps nothing, "
+                       "changes no order and cannot refuse anything."),
+        }
+
+
 def settlement_sweep_cap() -> Optional[int]:
     """How many markets one settlement sweep may read. None is unbounded.
 
@@ -5275,7 +5333,9 @@ class Runner:
 
     def tick(self, now: float) -> None:
         self.now_t = now
+        _sc = _StageClock()
         self.roll(now)
+        _sc.mark("roll")
         if self.halted() and self.transport is not None and self.transport.armed:
             emit("L5_LIVE_HALT", LX.deadman(self.store, self.transport,
                                             reason="operator_halt"))
@@ -5283,19 +5343,24 @@ class Runner:
         # the INDEPENDENT latch, which the env var above is not: it is
         # written by a process we do not control and survives our restart.
         self.maybe_halt_deadman(now)
+        _sc.mark("maybe_halt_deadman")
         # and the claim's own venue-bounded expiry, same cancellation route
         self.maybe_expire_authorization(now)
+        _sc.mark("maybe_expire_authorization")
         # and, when NOT armed, withdraw anything this ledger still owns: a
         # crash leaves exactly that state and no other path covers it.
         self.maybe_cancel_orphans(now)
+        _sc.mark("maybe_cancel_orphans")
         # the queue measurement's own per-order deadline. Inert unless an
         # experiment AND its market are both named -- see maybe_qm_deadline.
         self.maybe_qm_deadline(now)
+        _sc.mark("maybe_qm_deadline")
         # THE ACCUMULATION ENGINE'S PER-ORDER AGE DEADLINE. Before the
         # completion decision and before the window sweep, because an
         # overdue leg must be withdrawn before anything new is priced
         # against the inventory it would have left.
         self.maybe_acc_deadline(now)
+        _sc.mark("maybe_acc_deadline")
         # REPORTING ONLY: the opposite side while we hold unmatched
         # inventory, sampled whether or not an order is resting.
         self.sample_residual_book(
@@ -5304,8 +5369,11 @@ class Runner:
         # BEFORE the deadline sweep, deliberately. The completion
         # decision needs the order still resting to be worth making;
         # after the cutoff there is nothing left to complete against.
+        _sc.mark("sample_residual_book")
         self.maybe_ts_completion(now)
+        _sc.mark("maybe_ts_completion")
         self.maybe_ts_deadline(now)
+        _sc.mark("maybe_ts_deadline")
         # MODELLED fills advance BEFORE the cool-off check, for the same
         # reason the cool-off branch still calls poll(): this is local
         # bookkeeping over the websocket feed and costs the venue nothing.
@@ -5313,10 +5381,14 @@ class Runner:
         # recorder's trade list is a rolling 500 -- a long enough stall
         # drops prints the model never sees.
         self.model_advance(now)
+        _sc.mark("model_advance")
         self.two_sided_advance(now)
+        _sc.mark("two_sided_advance")
         self.two_sided_settle(now)
+        _sc.mark("two_sided_settle")
         # one question per tick instead of one per caller
         cooling = self.venue_cooling()
+        _sc.mark("venue_cooling")
         if cooling > 0:
             self.stats["ticks_skipped_in_cooloff"] += 1
             self.win["ticks_skipped_in_cooloff"] += 1
@@ -5325,6 +5397,17 @@ class Runner:
             # reads the running websocket book and writes one local file.
             self.shadow_tick(now)
             return
+        if _sc.total_s() >= TICK_STAGE_REPORT_S:
+            try:
+                emit("L5_LIVE_TICK_STAGES", dict(
+                    _sc.report(),
+                    market=getattr(self.transport, "market_slug", None),
+                    t_in_window_s=(round(now - self.ws, 2)
+                                   if self.ws else None)))
+            except BaseException as _exc:              # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.stats["tick_stage_emit_error"] += 1
         self.maybe_preflight(now)
         if self.store.live_order_count():
             self.poll_orders()
