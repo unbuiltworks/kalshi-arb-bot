@@ -2306,3 +2306,28 @@ Deployment-branch parity exact against f6ad0f55: 20 failed / 14 errors,
 identical 34-name failure/error sets, passes 13,705 -> 13,724 (the 19 new
 tests). L5_SHADOW_ONLY=1, so submit() raises NotArmed structurally; the
 campaign approval is expired and its windows are 8/8 spent.
+
+--- 2026-10-27T22:3x UTC: settlement-sweep cap ---------------------------
+Promotes ea3bece5 on top of caf790a5: ONLY the sweep cap and its 19 tests.
+Two files, four hunks, all in the new env reader and sweep_settlements.
+The lim.tick_begin() lines from 0c692074's limiter accounting were found
+riding along and REMOVED -- they are unrelated to this fix.
+
+Parity against caf790a5: 34-name failure/error set IDENTICAL, passes
+13,724 -> 13,743 (the 19 new tests). 20 failed / 14 errors both sides.
+
+WHY. Four telemetry boundaries on 4fc4e25b show preflight PASSING on
+attempt 1 every time -- 1.5-4.0s, first_blocking null, socket book
+56-183ms old -- while the executor does not REACH it until +92.4s,
++103.6s, +102.5s and +110.9s. sweep_settlements reads one bbo per market
+in markets_with_exposure(), and the heartbeat names 86 of them back to
+2026-10-12, none retirable. 86 reads at the shared 1.5 rps is 57s of
+synchronous sleep ahead of preflight AND the decision path.
+
+PMUS_SETTLEMENT_SWEEP_CAP=4 is set. Deferred, never dropped: oldest read
+first, a market never read sorts first, and committed cash is released
+ONLY in retire_settled_market -- so a deferred read leaves cash reserved,
+which tightens the gates rather than loosening them.
+
+L5_SHADOW_ONLY stays 1; submit() raises NotArmed structurally. No gate,
+risk limit, order route, retirement rule or settlement accounting moves.
