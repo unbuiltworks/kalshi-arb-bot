@@ -486,7 +486,8 @@ class SafetyLimits:
                outstanding_residual: D = D(0),
                orders_uncertain: Optional[str] = None,
                risk_by_market: Optional[Mapping[str, D]] = None,
-               pair_second_leg_ok: bool = False
+               pair_second_leg_ok: bool = False,
+               settlement_pending: Sequence[str] = ()
                ) -> Optional[str]:
         """Refuse on POTENTIAL exposure: filled + still-fillable + this one.
 
@@ -548,8 +549,29 @@ class SafetyLimits:
             return "MAX_ABS_RESIDUAL"
         live_markets = set(open_markets) | {
             m for m, v in outstanding_by_market.items() if v > 0}
-        if (market not in live_markets
-                and len(live_markets) >= self.max_concurrent_markets):
+        # SETTLEMENT-PENDING MARKETS DO NOT OCCUPY A CONCURRENCY SLOT.
+        #
+        # `open_markets` is `committed > 0`, and commitment is released only
+        # by `retire_settled_market`. One quantity was answering two
+        # unrelated questions: HOW MUCH CAPITAL IS TIED UP, and HOW MANY
+        # MARKETS AM I QUOTING IN. The first must survive expiry; the second
+        # must not. On 2026-10-27 that conflation cost 85-115s of every
+        # window: the venue posts settlement that long after expiry, and the
+        # next window's first order landed 0.39s after it did.
+        #
+        # ONLY the concurrency count is narrowed. committed_by_market,
+        # risk_by_market, the cash envelope, MAX_USD_PER_MARKET,
+        # MAX_TOTAL_EXPOSURE and both loss halts above are untouched and
+        # still read the FULL set, so unsettled funds are never recycled --
+        # the next window is sized against what is actually left.
+        #
+        # The CALLER decides what is settlement-pending and must fail
+        # closed: unknown expiry, or any order that might still be live,
+        # keeps the market in this count. The empty default is today's
+        # behaviour byte for byte, so this is inert unless wired.
+        tradable = live_markets - {str(m) for m in settlement_pending}
+        if (market not in tradable
+                and len(tradable) >= self.max_concurrent_markets):
             return "MAX_CONCURRENT_MARKETS"
         if self.band is not None and not (self.band[0] <= price <= self.band[1]):
             return "BAND"
@@ -3418,6 +3440,47 @@ class InventoryStore:
         return {"ok": True, "risk_by_market": out,
                 "markets": sorted(markets),
                 "total_usd": str(sum(out.values(), D(0)))}
+
+    def settlement_pending_markets(
+            self, *, expired: Mapping[str, Any],
+            exclude: str = "") -> List[str]:
+        """Markets that are EXPIRED, quiet, and merely awaiting settlement.
+
+        These still owe their committed capital, their inventory and their
+        reconciliation; they simply cannot be quoted in any more. Only the
+        MAX_CONCURRENT_MARKETS count may narrow on this. Every capital and
+        loss gate keeps reading the full book.
+
+        FAIL CLOSED, in four ways, because the whole value of this list is
+        that nothing uncertain is on it:
+
+          * `expired` must say True for the market. Missing, None, or
+            anything that is not exactly True reads as NOT expired, so an
+            unreadable venue clock keeps the slot occupied.
+          * ANY live order anywhere means we return nothing at all. The
+            per-market attribution of a live order can be wrong -- that is
+            the `None or ""` quarantine that once refused every window --
+            so one unattributable order suppresses the whole list rather
+            than freeing the wrong slot.
+          * ANY still-fillable order, same rule.
+          * An unreadable order book, same rule, via the except below.
+
+        `exclude` is the market being worked now; it is never pending.
+        """
+        try:
+            if self.live_order_count() or self.still_fillable_order_count():
+                return []
+            if self.orders_uncertain():
+                return []
+        except BaseException:                                  # noqa: BLE001
+            return []
+        out: List[str] = []
+        for m in self.markets_with_exposure():
+            if m == exclude:
+                continue
+            if expired.get(m) is True:
+                out.append(m)
+        return out
 
     def markets_with_exposure(self) -> List[str]:
         """Every market this book still has anything in.
