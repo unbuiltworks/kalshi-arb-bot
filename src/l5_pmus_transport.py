@@ -311,6 +311,48 @@ class RateLimiter:
         }
 
 
+#: WHICH CALLER ASKED, derived from the ROUTE rather than tagged at the
+#: call site. Tagging each caller was the first shape of this and it broke
+#: five tests that assert on the source text of those very call sites --
+#: `test_the_read_is_a_plain_get_on_the_balances_route` reads
+#: `account()`'s body and requires the literal `_get("/v1/account/balances")`,
+#: and four settlement tests stub `_get` with a fake that takes no extra
+#: keyword. Those tests are right: a call site that has to grow an argument
+#: for accounting is accounting leaking into the money path. Classifying
+#: here keeps every call site byte-identical and puts the mapping in one
+#: readable place.
+#:
+#: Longest prefix wins, so /v1/orders/open does not read as /v1/orders.
+_PURPOSE_ROUTES = (
+    ("POST", "/v1/order/preview", "order_preview"),
+    ("POST", "/v1/orders", "order_submit"),
+    ("POST", "/v1/order/", "order_cancel"),
+    ("GET", "/v1/account/balances", "account"),
+    ("GET", "/v1/markets/", "market_data"),
+    ("GET", "/v1/portfolio/positions", "reconcile_positions"),
+    ("GET", "/v1/orders/open", "reconcile_orders"),
+    ("GET", "/v1/order/", "order_progress"),
+)
+
+
+def purpose_for(method: str, path: str) -> str:
+    """The accounting bucket for one request. Never raises, never decides.
+
+    `market_data` covers both /book and /bbo: the two share a prefix and
+    the settlement sweep and the preflight book read are the same route
+    family to the venue, which is the unit a rate budget is spent in.
+    Anything unrecognised is `other`, which is a signal to extend this
+    table rather than a reason to fail a request.
+    """
+    m = str(method).upper()
+    p = str(path).split("?")[0]
+    best = ("", "other")
+    for want_m, prefix, name in _PURPOSE_ROUTES:
+        if m == want_m and p.startswith(prefix) and len(prefix) > len(best[0]):
+            best = (prefix, name)
+    return best[1]
+
+
 #: ONE LIMITER FOR THE PROCESS.
 #:
 #: It used to be built in PmusTransport.__init__, and Runner.roll() builds a
@@ -857,8 +899,7 @@ class PmusTransport:
     # ------------------------------------------------------------ read only
 
     def _request(self, method: str, path: str, body=None,
-                 base: str = Q1.API, *, http: Optional[Any] = None,
-                 purpose: str = "unclassified") -> Any:
+                 base: str = Q1.API, *, http: Optional[Any] = None) -> Any:
         """The single door every venue request goes through.
 
         Nothing here retries. A 429 is recorded, the shared cool-off is
@@ -887,7 +928,8 @@ class PmusTransport:
                 "_request http override is limited to this transport's own "
                 "cancel-only object")
         write = str(method).upper() != "GET"
-        self.limiter.before(write=write, purpose=purpose)
+        self.limiter.before(write=write,
+                            purpose=purpose_for(method, path))
         try:
             out = (http or self.http).request(method, path, body, base)
         except BaseException as exc:                           # noqa: BLE001
@@ -899,9 +941,8 @@ class PmusTransport:
         self.limiter.on_success()
         return out
 
-    def _get(self, path: str, base: str = Q1.API,
-             purpose: str = "unclassified") -> Any:
-        return self._request("GET", path, None, base, purpose=purpose)
+    def _get(self, path: str, base: str = Q1.API) -> Any:
+        return self._request("GET", path, None, base)
 
     def account(self) -> Dict[str, Any]:
         """/v1/account/balances is the route this venue serves.
@@ -911,7 +952,7 @@ class PmusTransport:
         but does not answer GET. Those are the paths pmus_q1_executor has
         always used for live campaigns; these now match it.
         """
-        return self._get("/v1/account/balances", purpose="account") or {}
+        return self._get("/v1/account/balances") or {}
 
     def market(self, slug: str) -> Dict[str, Any]:
         """Authoritative market METADATA, which /bbo does not carry.
@@ -923,8 +964,7 @@ class PmusTransport:
         return resolve_market(self.http, slug)
 
     def book(self, slug: str) -> Dict[str, Any]:
-        r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY,
-                       purpose="book") or {}
+        r = self._get("/v1/markets/%s/book" % slug, base=Q1.GATEWAY) or {}
         return r.get("marketData") or r
 
     def settlement(self, slug: str) -> Dict[str, Any]:
@@ -936,7 +976,7 @@ class PmusTransport:
         1.0000. `terminal` is true only when BOTH a terminal state and a
         price are present -- never on the state alone.
         """
-        r = self._get("/v1/markets/%s/bbo" % slug, purpose="settlement") or {}
+        r = self._get("/v1/markets/%s/bbo" % slug) or {}
         md = r.get("marketData") or r
         state = str((md or {}).get("state") or "")
         px = settlement_decimal((md or {}).get("settlementPx"))
@@ -1166,8 +1206,7 @@ class PmusTransport:
         settlements on this venue, and this matches that behaviour rather
         than inventing a second reading of the same resource.
         """
-        return rows_of(self._get("/v1/portfolio/positions", purpose="reconcile"),
-                       "positions")
+        return rows_of(self._get("/v1/portfolio/positions"), "positions")
 
     def available_positions(self) -> List[dict]:
         """`availablePositions`, which the venue serves beside `positions`.
@@ -1194,15 +1233,14 @@ class PmusTransport:
         The ACK for that order had said filled_qty 0. It filled two
         milliseconds later and nothing ever asked again.
         """
-        r = self._get("/v1/order/%s" % order_id,
-                      purpose="order_progress") or {}
+        r = self._get("/v1/order/%s" % order_id) or {}
         if isinstance(r, Mapping):
             inner = r.get("order")
             return dict(inner) if isinstance(inner, Mapping) else dict(r)
         return {}
 
     def open_orders(self) -> List[dict]:
-        r = self._get("/v1/orders/open", purpose="reconcile") or {}
+        r = self._get("/v1/orders/open") or {}
         if isinstance(r, Mapping):
             return r.get("orders") or r.get("openOrders") or []
         return r or []
@@ -1685,16 +1723,14 @@ class PmusTransport:
         self.submit_stage = "PREVIEW_REQUEST"
         self.preview_attempted = True
         pv = self._request("POST", "/v1/order/preview",
-                           OB.preview_envelope(body), Q1.API,
-                           purpose="order_preview") or {}
+                           OB.preview_envelope(body), Q1.API) or {}
         self.preview_status = 200          # urlopen raises on any non-2xx
         self.submit_stage = "PREVIEW_ECHO_VALIDATION"
         self.last_preview = {"body": body, "response": pv,
                              "echo": PG.require_echo(body, pv)}
         self.submit_stage = "ORDER_POST"
         self.order_post_attempted = True
-        return self._request("POST", "/v1/orders", body, Q1.API,
-                             purpose="order_submit") or {}
+        return self._request("POST", "/v1/orders", body, Q1.API) or {}
 
     def cancel(self, order_id: str,
                market_slug: Optional[str] = None) -> Dict[str, Any]:

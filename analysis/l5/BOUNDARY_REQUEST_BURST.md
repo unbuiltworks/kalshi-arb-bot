@@ -134,8 +134,22 @@ the money-path tick*, not smarter scheduling of the same requests.
 1. **Per-purpose accounting — always on, pure observation.** `before()`
    takes a `purpose`; `metrics()["by_purpose"]` reports demanded /
    requests / waits / wait_s / deferred / refused_in_cooloff per purpose.
-   Every transport read and write is tagged. Nothing about what leaves the
-   process changes.
+   The purpose is derived from the ROUTE by `purpose_for(method, path)`
+   inside `_request`, the single door every venue request goes through.
+   Nothing about what leaves the process changes.
+
+   **This is the second shape of the change, and parity is why.** Tagging
+   each call site with `purpose=` broke five tests:
+   `test_the_read_is_a_plain_get_on_the_balances_route` reads `account()`'s
+   source and requires the literal `_get("/v1/account/balances")`, and four
+   `test_l5_binary_settlement` cases stub `_get` with a fake taking no
+   extra keyword. Those tests were right — a money-path call site that has
+   to grow an argument for accounting is accounting leaking into the money
+   path. Classifying by route keeps every call site byte-identical, puts
+   the mapping in one readable table, and is strictly smaller. One test
+   fake did still need widening: the cancel test stubs `limiter.before`
+   itself with a two-parameter lambda, and `before`'s signature is what
+   this change alters.
 2. **A per-tick wait budget — off by default, twice.**
    `PMUS_TICK_WAIT_BUDGET_S` (default `0`, which disables it) and
    `PMUS_DEFERRABLE_PURPOSES` (default empty, which makes any budget a

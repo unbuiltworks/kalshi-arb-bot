@@ -207,6 +207,55 @@ def test_cooloff_still_wins_over_the_budget_and_is_counted_apart():
     assert lm.counts["deferred"] == 0
 
 
+# ----------------------------------------------- the route classifier itself
+
+@pytest.mark.parametrize("method,path,want", [
+    ("GET", "/v1/account/balances", "account"),
+    ("GET", "/v1/markets/cpc-btc-updown-15m-2026-10-27-1515z/bbo",
+     "market_data"),
+    ("GET", "/v1/markets/cpc-btc-updown-15m-2026-10-27-1515z/book",
+     "market_data"),
+    ("GET", "/v1/portfolio/positions", "reconcile_positions"),
+    # longest prefix wins, so this is NOT order_progress
+    ("GET", "/v1/orders/open", "reconcile_orders"),
+    ("GET", "/v1/order/CQ5NPBADMYC3", "order_progress"),
+    ("GET", "/v1/orders?limit=50&cursor=abc", "other"),
+    ("POST", "/v1/order/preview", "order_preview"),
+    ("POST", "/v1/orders", "order_submit"),
+    ("POST", "/v1/order/CQ5NPBADMYC3/cancel", "order_cancel"),
+    ("GET", "/v1/something/unmapped", "other"),
+])
+def test_the_route_classifier(method, path, want):
+    assert T.purpose_for(method, path) == want
+
+
+def test_the_classifier_never_raises_on_junk():
+    for m, p in ((None, None), ("", ""), ("get", "/v1/orders"), (1, 2)):
+        assert isinstance(T.purpose_for(m, p), str)
+
+
+def test_the_call_sites_carry_no_accounting_argument():
+    """The reason the classifier exists.
+
+    Tagging each caller broke five tests that assert on the source text of
+    those call sites, including one that requires the literal
+    `_get("/v1/account/balances")` inside `account()`. Accounting must not
+    appear in the money path's call sites, so this pins that it does not.
+    """
+    import inspect
+    import re
+    src = inspect.getsource(T.PmusTransport)
+    # the literal that test_the_read_is_a_plain_get_on_the_balances_route
+    # reads out of account()'s body, unchanged
+    assert '_get("/v1/account/balances")' in src
+    # the purpose is computed in exactly ONE place: the single door
+    assert src.count("purpose=") == 1
+    assert "purpose=purpose_for(method, path)" in src
+    # and no _get/_request CALL passes one
+    for call in re.findall(r"_(?:get|request)\((?:[^()]|\([^()]*\))*\)", src):
+        assert "purpose" not in call, call
+
+
 # ------------------------------------------------------- the measured effect
 
 def test_budget_bounds_the_tick_while_the_default_does_not():
