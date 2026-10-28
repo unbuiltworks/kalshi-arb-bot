@@ -204,3 +204,202 @@ def test_both_placement_gates_are_still_called_by_name(probe):
     src = inspect.getsource(E.FaithfulExecutor.handle)
     assert "TS.may_enter(" in src
     assert "TS.may_complete(" in src
+
+
+# ================= late completion cannot OVERSHOOT or REVERSE the residual
+#
+# The extra 120s of completion runway is only safe if what it places can
+# never become a NEW directional position on the other side. Two mechanisms
+# carry that, and these assert both through the real executor rather than
+# trusting their interaction:
+#
+#   probe_reducing_side  reads the PROSPECTIVE residual -- realized plus
+#                        every outstanding order as if it filled -- so a
+#                        complement already resting for the whole residual
+#                        leaves nothing to reduce and the gate reverts to
+#                        ENTRY semantics, which past T+600 means refusal.
+#   probe_leg_qty_cap    clips a reducing leg to the magnitude of that same
+#                        prospective residual, so it cannot cross zero.
+
+
+def _resting(ex, market, side, qty, px):
+    """An outstanding order the store counts in `outstanding_residual`."""
+    ex.store.record_submit("coid-%s-%s" % (side, qty),
+                           {"market": market, "side": side,
+                            "qty": str(qty), "price": str(px),
+                            "mode": "MAKER"}, mode="MAKER")
+
+
+def test_a_complement_already_resting_for_the_whole_residual_adds_nothing(
+        probe, tmp_path, at):
+    """2.29 UP held and 2.29 DOWN already working: prospective residual is
+    zero, so there is nothing to reduce and no second order is placed."""
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, t = mk(H, E, tmp_path)
+    _hold(ex)
+    _resting(ex, "m", "DOWN", "2.29", "0.37")
+    assert ex.probe_reducing_side("m") is None
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert not t.sent, "placed a SECOND completion over a full one"
+    assert rec.get("refused_reason") is not None
+
+
+def test_a_partial_complement_resting_leaves_only_the_remainder(
+        probe, tmp_path, at):
+    """2.29 UP held, 1.00 DOWN working: 1.29 remains reducible and a further
+    completion may never exceed it."""
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, t = mk(H, E, tmp_path)
+    _hold(ex)
+    _resting(ex, "m", "DOWN", "1.00", "0.37")
+    assert ex.probe_reducing_side("m") == "DOWN"
+    assert ex.store.residual("m") + ex.store.outstanding_residual("m") \
+        == D("1.29")
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    if t.sent:
+        assert t.sent[-1]["side"] == "DOWN"
+        assert D(t.sent[-1]["qty"]) <= D("1.29"), "overshot the remainder"
+
+
+def test_the_qty_cap_is_the_PROSPECTIVE_residual_not_the_realized_one(
+        probe, tmp_path, at):
+    """The cap must count outstanding orders, or two sequential completions
+    each sized to the REALIZED residual would reverse the book."""
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, _t = mk(H, E, tmp_path)
+    _hold(ex)
+    _resting(ex, "m", "DOWN", "1.00", "0.37")
+    assert ex.probe_leg_qty_cap("m", "DOWN", D("2.29")) <= D("1.29")
+
+
+def test_when_the_outstanding_order_FILLS_no_further_completion_is_placed(
+        probe, tmp_path, at):
+    """The sequence that would reverse the residual: place the completion,
+    let the VENUE fill it, then tick again.
+
+    The fill is the transport's, not the test's. An earlier draft booked the
+    whole intent by hand on top of the ack `FakeTransport` had already
+    recorded, counted 2.29 twice and accused the engine of an overshoot it
+    had not made -- the engine sent exactly the 2.29 the residual called
+    for.
+    """
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, t = mk(H, E, tmp_path, t=H.FakeTransport(fill_all=True))
+    _hold(ex)
+    rec1 = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert t.sent, rec1.get("refused_reason")
+    assert t.sent[-1]["side"] == "DOWN"
+    # the venue filled the whole completion: matched exactly, never crossed
+    assert ex.store.residual("m") == D("0"), ex.store.residual("m")
+    sent_before = len(t.sent)
+    rec2 = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert ex.store.residual("m") == D("0"), "the residual reversed"
+    assert len(t.sent) == sent_before, (
+        "opened a NEW leg past the entry cutoff: %s"
+        % ([x["side"] for x in t.sent], rec2.get("refused_reason")))
+
+
+def test_a_PARTIAL_fill_leaves_only_the_remainder_reducible(
+        probe, tmp_path, at):
+    """`FakeTransport` acks 1.00 of the 2.29 offered, so the residual walks
+    2.29 -> 1.29. The next completion may take that and no more, and the
+    book may never cross zero on the way."""
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, t = mk(H, E, tmp_path)           # fill_all=False: acks 1.00
+    _hold(ex)
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert ex.store.residual("m") == D("1.29"), ex.store.residual("m")
+    for _ in range(4):
+        ex.handle(_row(H), _book(), market="m", window="21:00")
+        assert ex.store.residual("m") >= D("0"), "crossed zero"
+    # every leg that ever went out was the reducing one
+    assert {x["side"] for x in t.sent} == {"DOWN"}
+
+
+def test_a_completion_may_never_cross_zero_even_offered_a_huge_plan(
+        probe, tmp_path, at):
+    """Directly: the cap clips to the residual magnitude, both signs."""
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, _t = mk(H, E, tmp_path)
+    _hold(ex, up="0.50", down="0")
+    assert ex.probe_leg_qty_cap("m", "DOWN", D("99")) <= D("0.50")
+
+
+# ================================================= fail closed, not open
+
+
+def test_an_unreadable_residual_is_treated_as_an_ENTRY_and_refused_late(
+        probe, tmp_path, at, monkeypatch):
+    """An unreadable residual must not buy the LATER deadline. It reverts to
+    entry semantics, which past T+600 is a refusal."""
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, t = mk(H, E, tmp_path)
+    _hold(ex)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("inventory unreadable")
+    monkeypatch.setattr(ex.store, "residual", boom)
+    assert ex.probe_reducing_side("m") is None
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert not t.sent
+    assert rec.get("refused_reason") == "PAST_ENTRY_CUTOFF"
+
+
+def test_an_unreadable_outstanding_residual_also_fails_closed(
+        probe, tmp_path, at, monkeypatch):
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, t = mk(H, E, tmp_path)
+    _hold(ex)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("outstanding unreadable")
+    monkeypatch.setattr(ex.store, "outstanding_residual", boom)
+    assert ex.probe_reducing_side("m") is None
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert not t.sent
+    assert rec.get("refused_reason") == "PAST_ENTRY_CUTOFF"
+
+
+def test_an_UNCERTAIN_order_state_refuses_the_late_completion(
+        probe, tmp_path, at):
+    """An order we cannot place at the venue is assumed live. No completion
+    may be submitted on top of that ignorance, late or otherwise."""
+    H, E = probe
+    at(INSIDE_COMPLETION)
+    ex, t = mk(H, E, tmp_path)
+    _hold(ex)
+    ex.store.mark_uncertain("TEST_UNVERIFIED_SUBMIT")
+    rec = ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert not t.sent, "submitted while the order state was UNCERTAIN"
+    assert rec.get("refused_reason") is not None
+
+
+def test_an_UNCERTAIN_state_refuses_EARLY_completions_too(
+        probe, tmp_path, at):
+    """Not a property of the cutoff: the same refusal holds inside the
+    entry window, so P0 did not open a late-only hole."""
+    H, E = probe
+    at(EARLY)
+    ex, t = mk(H, E, tmp_path)
+    _hold(ex)
+    ex.store.mark_uncertain("TEST_UNVERIFIED_SUBMIT")
+    ex.handle(_row(H), _book(), market="m", window="21:00")
+    assert not t.sent
+
+
+def test_the_reducing_side_is_None_when_flat_and_when_matched(
+        probe, tmp_path, at):
+    H, E = probe
+    at(EARLY)
+    ex, _t = mk(H, E, tmp_path)
+    assert ex.probe_reducing_side("m") is None          # flat
+    _hold(ex, up="2", down="2")
+    assert ex.probe_reducing_side("m") is None          # matched
