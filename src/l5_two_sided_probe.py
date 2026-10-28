@@ -2019,13 +2019,68 @@ def resting_depth(side: str, *, bid_shares: Any, ask_shares: Any) -> Optional[D]
     return _d(bid_shares if side == UP else ask_shares)
 
 
+#: THE CEILINGS A RISK-REDUCING COMPLETION ANSWERS TO.
+#
+# `pair_cap` is the OPENING discipline: it asks whether a pair is worth
+# starting, and it belongs on a first leg. `positive_both` asks the same
+# question in a stronger form. Neither is the question a completion faces,
+# which is whether completing beats carrying the residual to settlement --
+# and on the four windows of 2026-10-28 `pair_cap` bound in every single
+# case while `improves` permitted the whole price grid. 1245z stranded 2.27
+# UP for -$0.7264 while a 0.97 pair at the touch would have left the book
+# near flat.
+#
+# `improves` is a WORST-CASE test and not an expected-value one: completing
+# surrenders the outcome in which the residual wins. That is the intended
+# trade under the operating model's rule that residual directional exposure
+# is not assumed to carry predictive skill, while a matched pair redeems
+# exactly $1.00. `within_budget` keeps the completed worst case inside the
+# residual risk the owner actually approved, so the pair of them is bounded
+# by an owner number rather than by this module's opinion.
+COMPLETION_CEILINGS_IN_FORCE = ("improves", "within_budget")
+
+
+def completion_ceiling(**kw: Any) -> Optional[D]:
+    """The dearest own price at which completing is permissible, or None.
+
+    The minimum of `COMPLETION_CEILINGS_IN_FORCE` as `max_completion_price`
+    computes them. None whenever the policy cannot be computed at all or any
+    ceiling in force is unsatisfiable anywhere on the grid -- the caller then
+    falls back to the opening cap, which is the stricter rule, so an
+    unreadable input can never buy a dearer completion.
+    """
+    try:
+        rep = max_completion_price(**kw)
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+    if not rep.get("ok"):
+        return None
+    ceilings = rep.get("ceilings") or {}
+    vals = []
+    for name in COMPLETION_CEILINGS_IN_FORCE:
+        v = ceilings.get(name)
+        if v is None:
+            return None
+        d = _d(v)
+        if d is None:
+            return None
+        vals.append(d)
+    return min(vals) if vals else None
+
+
 def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
                      tick: Any, min_qty: Any, depth_ticks: int,
                      book_age_s: Any = None,
                      gap_suspected: bool = False,
                      market: Any = None, held_side: Any = None,
                      bid_shares: Any = None,
-                     ask_shares: Any = None) -> Dict[str, Any]:
+                     ask_shares: Any = None,
+                     held_qty: Any = None, held_cost_usd: Any = None,
+                     deficient_qty: Any = None,
+                     deficient_cost_usd: Any = None,
+                     residual_budget_usd: Any = None) -> Dict[str, Any]:
     """Price the SECOND leg against the book in front of us and the cost we
     ACTUALLY paid for the first.
 
@@ -2087,7 +2142,47 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     if paid is None or paid <= 0:
         return no("FIRST_LEG_COST_UNKNOWN", cost_px=str(cost_px))
 
-    px = quote_own_price(side, bid=b, ask=a, tick=tk, depth_ticks=depth_ticks)
+    # ============ THE COMPLETION CEILING, AND QUOTING AT THE TOUCH
+    #
+    # Two separate defects cost the 2026-10-28 completions, and both live
+    # here. The cap refused dear-but-improving prices (1245z), and the
+    # `depth_ticks` offset rested the quote where the price had to come BACK
+    # to reach it (1215z at own 0.47 against a 0.49 touch, 56s, no fill;
+    # 1245z at 0.63 against 0.65, 21s, no fill, with the queue telemetry
+    # reporting `requires_price_to_reach_us` true).
+    #
+    # So when the caller supplies the inventory it actually holds, the quote
+    # starts AT the touch -- the dearest price and the one most likely to
+    # fill -- and steps cheaper only while the ceiling demands it. Stepping
+    # cheaper moves AWAY from the touch, which is the conservative direction
+    # in price and the costly one in fill probability; it is taken because
+    # the ceiling says so and never to chase.
+    #
+    # NO CONTEXT, NO NEW RULE. Without the inventory, or with a ceiling that
+    # cannot be computed, `ceil` is None and everything below is exactly
+    # today's behaviour at today's `depth_ticks`, gated by the opening cap.
+    # That is the stricter path, so an unreadable input cannot buy a dearer
+    # completion.
+    ceil = None
+    if held_qty is not None and residual_budget_usd is not None:
+        ceil = completion_ceiling(
+            held_side=(str(held_side) if held_side is not None
+                       else (DOWN if side == UP else UP)),
+            held_qty=held_qty, held_cost_usd=held_cost_usd,
+            deficient_qty=(0 if deficient_qty is None else deficient_qty),
+            deficient_cost_usd=(0 if deficient_cost_usd is None
+                                else deficient_cost_usd),
+            complete_qty=qty, residual_budget_usd=residual_budget_usd,
+            tick=tk)
+    # THE OPENING PRICE IS STILL THE FIRST ANSWER. `ceil` only ever
+    # RESCUES a quote the opening discipline refuses; it never replaces it.
+    # Deciding the other way round made every ordinary second leg a
+    # "completion" and quoted it at the touch, which pushed routine pairs
+    # past 0.96 and -- where the ceiling was tighter than the touch --
+    # refused the second leg outright, stopping accumulation dead. The
+    # opening cap stays the rule for any pair that can satisfy it.
+    px = quote_own_price(side, bid=b, ask=a, tick=tk,
+                         depth_ticks=depth_ticks)
     if px is None:
         return no("PRICE_UNDERIVABLE")
     if px < MIN_PRICE or px > MAX_PRICE:
@@ -2126,24 +2221,50 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
     floor = fee_floor(up_px, dn_px)
     pair = up_px + dn_px
     cap_px = max_pair_cost()
+    econ = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
+                          dn_price=dn_px, theta=MAKER_THETA)
+    # THE OPENING DISCIPLINE, FIRST AND UNCHANGED. Three tests, all asking
+    # whether the PAIR is worth having: the cap on the realised first leg
+    # plus this quote, the fee floor, and both-outcomes-positive.
+    opening_no: Optional[Dict[str, Any]] = None
     if pair > cap_px:
         # the REALISED first leg plus this quote is what must clear the cap,
         # so a leg that filled dearer than planned tightens the complement
-        return no("COMPLEMENT_PAIR_ABOVE_CAP", pair_cost=str(pair),
-                  max_pair_cost=str(cap_px), first_leg_cost=str(paid),
-                  complement_price=str(px))
-    if not floor["ok"]:
-        return no("COMPLEMENT_BELOW_FEE_FLOOR", pair_cost=str(pair),
-                  edge=str(floor["edge"]),
-                  net_if_maker=str(floor["net_if_maker"]),
-                  net_if_taker=str(floor["net_if_taker"]),
-                  first_leg_cost=str(paid), complement_price=str(px))
-    econ = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
-                          dn_price=dn_px, theta=MAKER_THETA)
-    if not econ["both_positive"]:
-        return no("COMPLEMENT_NOT_POSITIVE_ON_BOTH_OUTCOMES",
-                  up_pnl=str(econ["up_pnl"]), dn_pnl=str(econ["dn_pnl"]),
-                  pair_cost=str(pair))
+        opening_no = no("COMPLEMENT_PAIR_ABOVE_CAP", pair_cost=str(pair),
+                        max_pair_cost=str(cap_px), first_leg_cost=str(paid),
+                        complement_price=str(px))
+    elif not floor["ok"]:
+        opening_no = no("COMPLEMENT_BELOW_FEE_FLOOR", pair_cost=str(pair),
+                        edge=str(floor["edge"]),
+                        net_if_maker=str(floor["net_if_maker"]),
+                        net_if_taker=str(floor["net_if_taker"]),
+                        first_leg_cost=str(paid), complement_price=str(px))
+    elif not econ["both_positive"]:
+        opening_no = no("COMPLEMENT_NOT_POSITIVE_ON_BOTH_OUTCOMES",
+                        up_pnl=str(econ["up_pnl"]),
+                        dn_pnl=str(econ["dn_pnl"]), pair_cost=str(pair))
+    # ... AND ONLY THEN THE COMPLETION RESCUE. Each opening test asks
+    # whether this pair is worth STARTING; this inventory is already held,
+    # so a refusal there is a decision to strand it. 1245z lost the whole of
+    # its -$0.7264 that way. Where the held inventory and the owner's
+    # residual budget are both known, a refused completion gets one more
+    # question -- does completing at this price beat carrying the residual
+    # to settlement, inside the approved budget -- and is permitted on that
+    # answer alone.
+    #
+    # STRICTLY ADDITIVE. Anything the opening discipline accepts is returned
+    # exactly as before, at the same price; this can only ever convert a
+    # refusal into a permitted completion, never the reverse. The fee is
+    # inside the ceiling at the TAKER coefficient, the worst case should no
+    # maker rebate be credited.
+    judged = "OPENING"
+    if opening_no is not None:
+        if ceil is None or px > ceil:
+            return dict(opening_no,
+                        completion_ceiling=(None if ceil is None
+                                            else str(ceil)),
+                        completion_rescue_available=False)
+        judged = "COMPLETION"
     econ_taker = net_settlement(up_qty=q, dn_qty=q, up_price=up_px,
                                 dn_price=dn_px, theta=TAKER_THETA)
     return {"ok": True, "provenance": "DERIVED_FROM_CURRENT_BOOK",
@@ -2162,6 +2283,15 @@ def complement_order(*, side: str, qty: Any, cost_px: Any, bid: Any, ask: Any,
                     "wire_price": str(wire_price(side, px)),
                     "resting_side": resting_side(side)},
             "first_leg_cost": str(paid), "pair_cost": str(pair),
+            # WHICH QUESTION THIS WAS JUDGED ON, stated rather than inferred
+            # from which fields are present. A COMPLETION answered to
+            # `completion_ceiling`; an OPENING answered to the pair cap, the
+            # fee floor and both-outcomes-positive. The three opening figures
+            # are reported either way, so a completion that would ALSO have
+            # cleared the opening tests is visible as such.
+            "judged_as": judged,
+            "completion_ceiling": (None if ceil is None else str(ceil)),
+            "clears_opening_pair_cap": bool(pair <= cap_px),
             "edge_per_contract": str(floor["edge"]),
             "fee_floor": floor,
             "up_pnl": str(econ["up_pnl"]), "dn_pnl": str(econ["dn_pnl"]),

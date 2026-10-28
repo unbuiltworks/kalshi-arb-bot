@@ -6238,11 +6238,31 @@ class FaithfulExecutor:
             # which stopped accumulation dead at one pair. A completion
             # exists only while one side is ahead of the other.
             if _need is not None and _need > D(0):
-                _basis = self.store.leg_cost(market).get(_other)
+                _legs = self.store.leg_cost(market)
+                _basis = _legs.get(_other)
                 _avg = (_basis / _held) if (_basis is not None
                                             and _held > D(0)) else None
+                # THE COMPLETION CONTEXT. With the inventory actually held
+                # and the owner's residual budget, `complement_order` judges
+                # this on `completion_ceiling` -- does completing beat
+                # carrying the residual to settlement -- instead of on the
+                # 0.96 OPENING cap, and it quotes at the touch rather than
+                # `depth_ticks` behind it. Withholding any of these reverts
+                # it to the opening cap, which is the stricter path, so an
+                # unreadable budget cannot buy a dearer completion.
+                #
+                # The budget is the owner's approved worst-case directional
+                # deficit, read from the gate that enforces it rather than
+                # from a second copy of the number.
+                _vg = getattr(self, "validation_gates", None)
+                _resid_budget = getattr(_vg, "max_worst_case_deficit_usd",
+                                        None)
                 comp = TS.complement_order(
                     side=nxt, qty=_need, cost_px=_avg,
+                    held_qty=_held, held_cost_usd=_basis,
+                    deficient_qty=_mine,
+                    deficient_cost_usd=_legs.get(nxt),
+                    residual_budget_usd=_resid_budget,
                     bid=ts_book.get("bid"), ask=ts_book.get("ask"),
                     tick=_tick,
                     min_qty=getattr(self.transport, "quantity_increment",
