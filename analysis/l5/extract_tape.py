@@ -10,12 +10,18 @@ Shadow rows are dropped on the coid prefix: only `l5f-` is a live order. A
 """
 import json
 import pathlib
+import re
+import sys
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 \
+    else pathlib.Path(__file__).resolve().parent
 RAW = HERE / "raw"
 
-# The campaign's four authorized windows, in order.
-WINDOWS = ("1545z", "1600z", "1615z", "1630z")
+#: A BTC15m slug ends in the window stamp, e.g. ...-2026-10-28-1630z.
+#: Deriving it beats listing the authorized windows: a window the claim
+#: budget REFUSED still appears, and `transmitted` is what separates a
+#: priced candidate from an order the venue answered.
+WINDOW_RE = re.compile(r"-(\d{4}z)$")
 
 
 def rows(path):
@@ -34,10 +40,8 @@ def rows(path):
 
 
 def window_of(slug):
-    for w in WINDOWS:
-        if slug and slug.endswith(w):
-            return w
-    return None
+    m = WINDOW_RE.search(str(slug or ""))
+    return m.group(1) if m else None
 
 
 def live(payload):
