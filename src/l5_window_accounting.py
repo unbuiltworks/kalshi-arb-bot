@@ -119,6 +119,84 @@ def fill_events(lifecycle: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def merge_fill_sources(lifecycle: Sequence[Mapping[str, Any]],
+                       fills: Sequence[Mapping[str, Any]] = (),
+                       ) -> List[Dict[str, Any]]:
+    """Lifecycle rows plus any fill the lifecycle stream never reported.
+
+    A FILL THAT RACES ITS OWN CANCELLATION DOES NOT PRODUCE A LIFECYCLE
+    DELTA. Campaign 6's 1630z DOWN leg (l5f-4fad3a63e7, 2.15 at wire 0.4900)
+    filled microseconds before the requote's cancel took. The venue reported
+    it on the cancel re-read, the inventory book took it with its cost basis,
+    and the cash moved -- but its only ORDER_PROGRESS row said cum 0, so
+    `fill_events` and `qty_filled` both scored it zero. The campaign counted
+    11 fills and 21.67 contracts where the venue had settled 12 and 23.82.
+
+    Money was never wrong: the pair matched, the residual was zero and the
+    cash agreed. Only the counters were, which is worse than it sounds --
+    those counters are what a campaign is judged repeatable by.
+
+    So the fill-record stream is merged in as a second source. A fill already
+    carried by the lifecycle is dropped on its cumulative quantity, which is
+    why running this twice is identical to running it once. Keys are read
+    loosely because the two producers disagree on them: the recorder writes
+    `cumulative_qty`/`price`, the cancel path writes `qty`/`avg_px`.
+    """
+    merged: List[Dict[str, Any]] = [dict(r) for r in (lifecycle or ())
+                                    if isinstance(r, Mapping)]
+    best: Dict[str, D] = {}
+    for row in merged:
+        coid = row.get("coid")
+        if not coid:
+            continue
+        cum = _d(row.get("cum_qty"))
+        if cum is None:
+            cum = _d(row.get("cum"))
+        if cum is None:
+            continue
+        key = str(coid)
+        if key not in best or cum > best[key]:
+            best[key] = cum
+    for f in (fills or ()):
+        if not isinstance(f, Mapping):
+            continue
+        coid = f.get("coid") or f.get("client_order_id")
+        if not coid:
+            continue
+        cum = _d(f.get("cumulative_qty"))
+        if cum is None:
+            cum = _d(f.get("cum_qty"))
+        if cum is None:
+            # The cancel path reports the whole fill with leaves at zero, so
+            # its qty IS the cumulative. Nothing is inferred beyond that.
+            cum = _d(f.get("qty"))
+        if cum is None or cum <= 0:
+            continue
+        key = str(coid)
+        seen = best.get(key)
+        if seen is not None and seen >= cum:
+            continue            # the lifecycle already has this fill
+        delta = cum - (seen if seen is not None else D(0))
+        px = _d(f.get("price"))
+        if px is None:
+            px = _d(f.get("avg_px"))
+        merged.append({
+            "coid": key,
+            "cum_qty": cum,
+            "delta": delta,
+            "state": "ORDER_STATE_FILLED",
+            "terminal": True,
+            "avg_px": px,
+            "commission": _d(f.get("commission")),
+            "event": "FILL_RECONSTRUCTED",
+            "source": "fill_record",
+            "labels": ("booked from the venue's own fill record because no "
+                       "lifecycle delta carried it; not an assumed fill"),
+        })
+        best[key] = cum
+    return merged
+
+
 def order_outcomes(submits: Sequence[Mapping[str, Any]],
                    lifecycle: Sequence[Mapping[str, Any]]
                    ) -> List[Dict[str, Any]]:
@@ -207,6 +285,92 @@ def order_outcomes(submits: Sequence[Mapping[str, Any]],
     return out
 
 
+def pair_economics(orders: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Split completed pairs into pair edge and DEFENSIVE loss.
+
+    A matched UP/DOWN pair redeems exactly $1.00, so its cost is the sum of
+    the two OWN prices and its result is fixed the moment both legs fill.
+    Below $1.00 that is pair edge. Above $1.00 it is a loss taken on purpose.
+
+    Those are different events and summing them hides the one worth watching.
+    Campaign 6's 1600z window completed 1.94 at own 0.41 + 0.64 = 1.05, a
+    certain -$0.0970, because the alternative was carrying 1.94 DOWN
+    unmatched against a -$0.7907 downside. The
+    completion logic chose correctly and the venue's matched_pnl line then
+    reported +$1.5908 for the campaign with that loss folded invisibly in.
+    Netted together they read as thinner edge; separated they read as what
+    they are -- $1.6878 of pair edge and $0.0970 spent bounding a tail.
+
+    This is OUR decomposition from OUR fills, not a venue line. It never
+    feeds realized_net_usd, which stays venue-settlement-only.
+
+    Legs pair FIFO in submission order, the same ordering that assigns
+    FIRST_LEG and COMPLEMENT, and a leg with no readable own price is left
+    unpaired and counted rather than guessed at.
+
+    FIFO IS A CHOICE AND IT IS NOT THE ENGINE'S BASIS. The inventory store
+    carries a weighted-average cost per side, so where lots are uneven --
+    two openings of different size against one complement, say -- FIFO pair
+    costs and weighted-average pair costs disagree, and only the totals are
+    guaranteed to match. Campaign 6's six pairs were all 1:1 and equal
+    quantity, so the two agree there exactly; a window with uneven lots
+    should be read as a distribution of pair costs under FIFO, not as the
+    basis the engine priced against.
+    """
+    lots: Dict[str, List[List[Any]]] = {"UP": [], "DOWN": []}
+    pairs: List[Dict[str, Any]] = []
+    unpriceable = 0
+    for o in (orders or ()):
+        if not isinstance(o, Mapping):
+            continue
+        got = _d(o.get("qty_filled"))
+        if got is None or got <= 0:
+            continue
+        side = str(o.get("side") or "").strip().upper()
+        side = "UP" if side.endswith("UP") else (
+            "DOWN" if side.endswith("DOWN") else "")
+        own = _d(o.get("own_px"))
+        if not side or own is None:
+            unpriceable += 1
+            continue
+        lots[side].append([got, own, o.get("coid")])
+        while lots["UP"] and lots["DOWN"]:
+            up, dn = lots["UP"][0], lots["DOWN"][0]
+            q = min(up[0], dn[0])
+            cost = up[1] + dn[1]
+            pairs.append({"qty": q, "pair_cost": cost,
+                          "up_own": up[1], "dn_own": dn[1],
+                          "pnl_usd": q * (D(1) - cost),
+                          "defensive": cost > D(1),
+                          "up_coid": up[2], "dn_coid": dn[2]})
+            up[0] -= q
+            dn[0] -= q
+            if up[0] == 0:
+                lots["UP"].pop(0)
+            if dn[0] == 0:
+                lots["DOWN"].pop(0)
+    edge = sum((p["pnl_usd"] for p in pairs if not p["defensive"]), D(0))
+    defensive = sum((p["pnl_usd"] for p in pairs if p["defensive"]), D(0))
+    return {
+        "pairs": pairs,
+        "pairs_completed": len(pairs),
+        "matched_qty": sum((p["qty"] for p in pairs), D(0)),
+        "pair_edge_usd": edge,
+        "defensive_loss_usd": defensive,
+        "defensive_pairs": sum(1 for p in pairs if p["defensive"]),
+        "worst_pair_cost": (max((p["pair_cost"] for p in pairs))
+                            if pairs else None),
+        "residual_qty": {s: sum((l[0] for l in lots[s]), D(0))
+                         for s in ("UP", "DOWN")},
+        "unpriceable_legs": unpriceable,
+        "labels": ("DERIVED from our own fills, never a venue line, and "
+                   "never summed into realized_net_usd. pair_edge_usd "
+                   "counts pairs at or under $1.00; defensive_loss_usd "
+                   "counts pairs above it, which are risk-reducing "
+                   "completions and are expected to be negative."),
+    }
+
+
 def credited_rebates(credits: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
     """Only ACTUALLY credited rebates, deduplicated on a durable id.
 
@@ -239,13 +403,19 @@ def credited_rebates(credits: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
 def window_record(*, market: str,
                   submits: Sequence[Mapping[str, Any]] = (),
                   lifecycle: Sequence[Mapping[str, Any]] = (),
+                  fills: Sequence[Mapping[str, Any]] = (),
                   settlement: Optional[Mapping[str, Any]] = None,
                   rebate_credits: Iterable[Mapping[str, Any]] = (),
                   rebate_eligibility: str = "UNVERIFIED",
                   ) -> Dict[str, Any]:
     """One window's accounting. PROVISIONAL without a settlement record,
     CONFIRMED with one -- the same window reported twice, never two windows.
+
+    `fills` is the venue's fill-record stream, merged in so a fill that raced
+    its own cancellation is counted; see merge_fill_sources. Omitting it
+    reproduces the old counts exactly.
     """
+    lifecycle = merge_fill_sources(lifecycle, fills)
     orders = order_outcomes(submits, lifecycle)
     ev = fill_events(lifecycle)
     filled = [o for o in orders if (o["qty_filled"] or D(0)) > 0]
@@ -298,6 +468,7 @@ def window_record(*, market: str,
                        "durable credit_id are counted, deduplicated on it. "
                        "realized_net_usd below excludes BOTH."),
         },
+        "pair_economics": pair_economics(orders),
     }
     if settlement is None:
         rec["provisional_inventory"] = {
@@ -376,6 +547,19 @@ def campaign_rolling(records: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         + s(prov, "contracts", "filled_total"),
         "matched_surplus_usd": matched,
         "residual_pnl_usd": residual,
+        # The venue's matched line folds a risk-reducing completion above
+        # $1.00 into the same number as pair edge. These two separate it, from
+        # our own fills, across every window including provisional ones.
+        "pair_edge_usd": s(conf, "pair_economics", "pair_edge_usd")
+        + s(prov, "pair_economics", "pair_edge_usd"),
+        "defensive_loss_usd": s(conf, "pair_economics", "defensive_loss_usd")
+        + s(prov, "pair_economics", "defensive_loss_usd"),
+        "defensive_pairs": int(s(conf, "pair_economics", "defensive_pairs")
+                               + s(prov, "pair_economics",
+                                   "defensive_pairs")),
+        "pairs_completed": int(s(conf, "pair_economics", "pairs_completed")
+                               + s(prov, "pair_economics",
+                                   "pairs_completed")),
         "actual_fees_usd": s(conf, "execution", "actual_fees_usd")
         + s(prov, "execution", "actual_fees_usd"),
         "realized_net_usd": realized,
@@ -395,5 +579,9 @@ def campaign_rolling(records: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         "labels": ("realized_net_usd is the sum of venue-confirmed "
                    "settlement lines over CONFIRMED windows only. "
                    "Provisional windows are counted and never netted. No "
-                   "rebate of any kind is inside it."),
+                   "rebate of any kind is inside it. pair_edge_usd and "
+                   "defensive_loss_usd are OUR decomposition of our own "
+                   "fills and are not venue lines: they split what the "
+                   "venue's matched line reports as one number, and are "
+                   "never added to realized_net_usd."),
     }

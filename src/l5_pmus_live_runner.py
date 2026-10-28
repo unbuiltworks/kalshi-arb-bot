@@ -626,6 +626,41 @@ def _window_submits(runner: Any, market: str) -> List[Dict[str, Any]]:
     return out
 
 
+def _window_fills(runner: Any, market: str) -> List[Dict[str, Any]]:
+    """The venue's fill records for one market, in fill order.
+
+    THE LIFECYCLE STREAM IS NOT A COMPLETE FILL SOURCE. A fill that lands
+    between a cancel being sent and the venue answering it never produces a
+    positive ORDER_PROGRESS delta: Campaign 6's 1630z DOWN leg filled 2.15 at
+    wire 0.4900 that way, and the window counted 3 fills where the venue had
+    settled 4. The recorder's own fill slots did see it, because the cancel
+    path reports the fill it raced.
+
+    Read from the same `FillCalibration.orders` fold as `_window_submits`, so
+    the two cannot disagree about which orders belong to this window, and
+    never raising into the reporting path.
+    """
+    out: List[Dict[str, Any]] = []
+    try:
+        orders = getattr(getattr(runner, "fill_calibration", None),
+                         "orders", None) or {}
+        for coid, row in orders.items():
+            if not str(coid).startswith("l5f-"):
+                continue              # shadow and calibration ids are not ours
+            ps = (row or {}).get("pre_submit") or {}
+            if str(ps.get("slug") or "") != str(market):
+                continue
+            for f in ((row or {}).get("fills") or ()):
+                if isinstance(f, Mapping):
+                    out.append(dict(f, coid=str(coid)))
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return out
+    out.sort(key=lambda r: (r.get("t") or 0.0, str(r.get("coid"))))
+    return out
+
+
 def _gates_realized(runner: Any) -> Any:
     """The account's realized figure for the campaign-budget telemetry block,
     or None. REPORTING ONLY, and it must never break a heartbeat: an
@@ -3162,6 +3197,11 @@ class Runner:
                 submits=_window_submits(self, str(market)),
                 lifecycle=(getattr(self, "win_lifecycle", None)
                            or {}).get(str(market)) or (),
+                # The venue's fill records, so a fill that raced its own
+                # cancellation is counted. Deduplicated against the lifecycle
+                # on cumulative quantity, so this can only ever add a fill
+                # the lifecycle stream never reported.
+                fills=_window_fills(self, str(market)),
                 settlement=settlement,
                 # ONLY ACTUALLY CREDITED rebates, and we hold none: no venue
                 # credit record is reachable from this process, so the field
