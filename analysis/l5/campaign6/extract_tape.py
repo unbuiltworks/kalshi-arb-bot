@@ -67,7 +67,7 @@ def main():
                 and live(p):
             terminal_coids.add(p["coid"])
 
-    submits, fills, fees = [], [], []
+    submits, fills, fees, terminals = [], [], [], []
     for label, p, ts in rows(fc):
         if not live(p):
             continue
@@ -96,6 +96,13 @@ def main():
                 "cumulative_qty": p.get("cumulative_qty"),
                 "remaining": p.get("remaining"),
             })
+        elif label == "L5_FILL_CALIB_TERMINAL":
+            # When the slot was RELEASED. Occupancy is submit -> terminal,
+            # and with one resting order that interval is the whole engine's
+            # capacity, which is what throughput.py measures.
+            terminals.append({"utc": p.get("utc"), "coid": p["coid"],
+                              "state": p.get("state"),
+                              "venue_confirmed": p.get("venue_confirmed")})
         elif label == "L5_FILL_CALIB_FEES_ACTUAL":
             fees.append({"utc": p.get("utc"), "coid": p["coid"],
                          "fee_usd": p.get("fee_usd"),
@@ -143,6 +150,7 @@ def main():
     write("tape_submits.jsonl", submits)
     write("tape_fills.jsonl", fills)
     write("tape_fees.jsonl", fees)
+    write("tape_terminals.jsonl", terminals)
     write("tape_cash_moves.jsonl", moves)
     write("tape_rolling.jsonl", rolling)
     write("tape_arming.jsonl", arming)
