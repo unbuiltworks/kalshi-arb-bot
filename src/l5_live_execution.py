@@ -5502,6 +5502,86 @@ class FaithfulExecutor:
             return None
         return dict(m)
 
+    def completion_pair_rescue(self, market: str, *, side: str, other: str,
+                               px: D, qty: D, held: Mapping[str, D],
+                               after: Mapping[str, D],
+                               lc: Mapping[str, Any], eff: D
+                               ) -> Dict[str, Any]:
+        """May this order clear the pair gate as a COMPLETION rather than an
+        opening, and if not, why not.
+
+        EVERY CONDITION IS NECESSARY and each one closes a specific way a
+        rescue could do harm. `reduces` keeps it from being an opening wearing
+        a completion's name. `no_reversal` keeps it from buying through parity
+        into fresh exposure on the other side. `eff <= 1.00` keeps the matched
+        book off a certain loss, because a matched pair pays exactly $1.00 a
+        share. And the price must clear `completion_ceiling`, which is the
+        minimum of "completing beats carrying the residual to settlement" and
+        "the completed worst case stays inside the approved residual
+        deficit", so the whole thing is bounded by an owner number rather
+        than by this method's opinion.
+
+        FAILS CLOSED EVERYWHERE. An unreadable budget, an unreadable basis or
+        an unreadable ceiling all refuse, which leaves the 0.96 opening
+        ceiling in force -- the stricter rule.
+        """
+        out: Dict[str, Any] = {"ok": False, "reason": None,
+                               "effective_pair_cost": str(eff)}
+        try:
+            h_other, h_side = D(str(held[other])), D(str(held[side]))
+            a_side = D(str(after[side]))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["reason"] = "INVENTORY_UNREADABLE:%s" % type(exc).__name__
+            return out
+        out["reduces"] = bool(h_other > h_side)
+        if not out["reduces"]:
+            out["reason"] = "NOT_A_COMPLETION_NOTHING_UNMATCHED"
+            return out
+        out["no_reversal"] = bool(a_side <= h_other)
+        if not out["no_reversal"]:
+            out["reason"] = "WOULD_CROSS_ZERO_INTO_NEW_EXPOSURE"
+            return out
+        # A MATCHED PAIR PAYS EXACTLY $1.00 A SHARE. Above that the matched
+        # book is a certain loss, which no residual argument can justify.
+        if eff > D(1):
+            out["reason"] = "EFFECTIVE_PAIR_ABOVE_REDEMPTION"
+            out["redemption"] = "1.00"
+            return out
+        try:
+            _vg = getattr(self, "validation_gates", None)
+            budget = getattr(_vg, "max_worst_case_deficit_usd", None)
+            if budget is None:
+                out["reason"] = "RESIDUAL_BUDGET_UNKNOWN"
+                return out
+            ceil = TS.completion_ceiling(
+                held_side=other, held_qty=h_other,
+                held_cost_usd=lc.get(other), deficient_qty=h_side,
+                deficient_cost_usd=(lc.get(side) or D(0)),
+                complete_qty=qty, residual_budget_usd=budget)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["reason"] = "CEILING_UNREADABLE:%s" % type(exc).__name__
+            return out
+        out["completion_ceiling"] = (None if ceil is None else str(ceil))
+        out["residual_budget_usd"] = str(budget)
+        if ceil is None:
+            out["reason"] = "NO_COMPLETION_CEILING"
+            return out
+        if px > ceil:
+            out["reason"] = "ABOVE_COMPLETION_CEILING"
+            return out
+        out["ok"] = True
+        out["labels"] = ("judged as a COMPLETION of confirmed residual "
+                         "inventory, not as an opening. It reduces an "
+                         "unmatched position without crossing zero, the "
+                         "matched book stays at or under the $1.00 a share a "
+                         "pair redeems, and the price clears the completion "
+                         "ceiling the owner's residual budget bounds.")
+        return out
+
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """None if this order keeps the market's pair cost under the ceiling.
@@ -5553,7 +5633,45 @@ class FaithfulExecutor:
         cap = (DEF.DEFENSIVE_PAIR_CEILING if _mand else TS.max_pair_cost())
         if eff <= cap:
             return None
+        # ============ OPENING EXPOSURE VERSUS COMPLETING WHAT WE HOLD
+        #
+        # This gate is the one that actually decides, and it sits at the
+        # SUBMISSION boundary -- after `complement_order` has priced the leg.
+        # So widening the ceiling inside the complement achieved nothing on
+        # the books that matter: 1245z's completion at own 0.65 against a
+        # 0.7264 basis makes `eff` 0.9699, and 0.96 refused it HERE.
+        #
+        # The two cases are different questions and the codebase already
+        # says so for the defensive mandate above. An order that OPENS
+        # exposure answers to 0.96: a pair above it is a worse bargain than
+        # the strategy accepts. An order that COMPLETES confirmed residual
+        # inventory is not buying a bargain at all -- it is choosing between
+        # a dear pair and a stranded leg -- so it answers to the completion
+        # economics and the owner's approved residual budget.
+        #
+        # THREE CONDITIONS, ALL REQUIRED, so a rescue can neither increase
+        # directional exposure nor create a guaranteed loss:
+        #
+        #   it must REDUCE an unmatched position   held[other] > held[side]
+        #   it must not CROSS ZERO                 after[side] <= held[other]
+        #   the matched book must not settle at a
+        #   certain loss                           eff <= 1.00
+        #
+        # and the price must clear `completion_ceiling`, which is itself the
+        # minimum of "beats carrying the residual to settlement" and "stays
+        # inside the approved residual deficit". A matched pair pays exactly
+        # $1.00 a share, so `eff <= 1.00` is the line between a dear rescue
+        # and a certain loss, and it is never crossed.
+        if not _mand:
+            _resc = self.completion_pair_rescue(
+                market, side=side, other=other, px=px, qty=qty,
+                held=held, after=after, lc=lc, eff=eff)
+            if _resc.get("ok"):
+                return None
+        else:
+            _resc = None
         return {"why": "PAIR_COST_ABOVE_CEILING",
+                "completion_rescue": _resc,
                 "effective_pair_cost": str(eff.quantize(D("0.0001"))),
                 "ceiling": str(cap),
                 "ceiling_is_defensive": bool(_mand),
