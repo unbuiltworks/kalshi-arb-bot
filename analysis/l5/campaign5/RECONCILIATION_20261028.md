@@ -135,3 +135,35 @@ exact four in the arming report before the lock is lifted.
 7. lift `L5_SHADOW_ONLY` **last**, and name the four eligible windows.
 
 Any failure keeps the lock engaged and is reported as the specific blocker.
+
+## Shadow validation against live market data — window 1115z on `ea67b2c5`
+
+| observation | value |
+|---|---|
+| market | `cpc-btc-updown-15m-2026-10-28-1115z` |
+| book source | `authenticated_ws`, `stream_age_s` **0.079 – 0.095** |
+| planner output | `two_sided.pair_cost: "0.9500"` — inside the 0.96 ceiling, on real books |
+| every decision | `TWO_SIDED_PROBE:PAIR_UP:CAMPAIGN_IDENTITY_UNAVAILABLE` |
+| `armed` | **false** on every decision |
+| orders submitted | **0** |
+| `two_sided_round` | **null** — the round lifecycle is not reached |
+| old deadlock signature | **0 occurrences** |
+| decision latency | `latency_s` 7.85 – 24.7 s |
+
+What this establishes: the corrected SHA is running, consuming
+authenticated books under 0.1 s stale, and its planner is producing
+fundable pairs at 0.9500 on live data — while refusing every one of them at
+`CAMPAIGN_IDENTITY_UNAVAILABLE`, which is the correct refusal with no
+approval in force, and arming nothing.
+
+What it cannot establish, as set out above: the round-retirement transition.
+The campaign-identity gate refuses upstream of the round lifecycle, and
+even past it shadow mode fills nothing, so no round can hold the matched
+pair the correction acts on. `two_sided_round: null` on every tick is the
+expected reading, not a silent failure.
+
+**One thing worth noting for the campaign:** `latency_s` runs 7.85 – 24.7 s
+between decision and send. That is the same decision-to-send latency that
+makes post-only rejection a real and unmodelled risk, and it is the most
+likely explanation for a quote that looks executable in telemetry but never
+rests. It should be recorded per order next to the fill outcome.
