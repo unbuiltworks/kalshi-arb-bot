@@ -5123,10 +5123,33 @@ class Runner:
                 self.stats["requote_refused:NO_VENUE_ID"] += 1
                 return None
             side = str(row.get("side") or "")
-            # THE RESTING ORDER MUST BE THE REDUCING ONE. A first leg that
-            # has not filled is not a completion and is owned by the TTL and
-            # terminal deadlines, not by this.
-            if side != str(self.executor.probe_reducing_side(str(slug)) or ""):
+            # THE RESTING ORDER MUST BE THE REDUCING ONE, JUDGED ON THE
+            # REALISED RESIDUAL.
+            #
+            # NOT `probe_reducing_side`, and the end-to-end test is what
+            # found that. That helper reads the PROSPECTIVE residual --
+            # realised inventory PLUS every outstanding order as if it
+            # filled -- which is exactly the right basis for choosing which
+            # leg to offer next, and exactly the wrong one here: a
+            # completion that fully covers its residual drives the
+            # prospective figure to ZERO, so the helper reported no reducing
+            # side and the requote could never fire in the normal case.
+            #
+            # Here the question is about the order we are about to CANCEL, so
+            # the residual to read is the one that would remain without it:
+            # the realised position.
+            try:
+                realised = D(str(self.store.residual(str(slug))))
+            except BaseException:                              # noqa: BLE001
+                self.stats["requote_refused:RESIDUAL_UNREADABLE"] += 1
+                return None
+            if realised == 0:
+                self.stats["requote_refused:NOTHING_TO_COMPLETE"] += 1
+                return None
+            reducing = "DOWN" if realised > 0 else "UP"
+            if side != reducing:
+                # a first leg that has not filled is not a completion, and is
+                # owned by the TTL and terminal deadlines rather than by this
                 self.stats["requote_refused:NOT_THE_REDUCING_LEG"] += 1
                 return None
             held = "DOWN" if side == "UP" else "UP"

@@ -237,9 +237,13 @@ def test_no_resting_order_is_nothing_to_requote():
 
 
 def test_a_first_leg_is_not_a_completion():
-    """The resting order is the side we already hold, so it is an opening
-    that has not filled -- owned by the TTL and terminal deadlines."""
-    s, rec = run(reducing="UP")
+    """The resting order is on the side we already HOLD, so it adds to the
+    residual rather than reducing it: an opening that has not filled, owned
+    by the TTL and terminal deadlines. Modelled on the order's side against
+    the realised residual, which is what the runner reads."""
+    s, rec = run(orders={"c": {"venue_order_id": "v1", "market": SLUG,
+                               "side": "UP", "qty": "1", "price": "0.40",
+                               "remaining": "1"}})
     assert rec is None
     assert s.stats["requote_refused:NOT_THE_REDUCING_LEG"] == 1
 
