@@ -111,6 +111,14 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # branch is `_entering`, and refusing a completion would strand the very
     # inventory the rule protects. An unreadable budget reads as spent.
     "TWO_SIDED_PROBE:DEFENSIVE_BUDGET_EXHAUSTED_NO_NEW_ENTRY",
+    # P0, from live 1215z on 2026-10-28. Completion eligibility is a MARKET
+    # fact, so a market holding an unmatched residual keeps the later
+    # `may_complete` deadline (T+720) even on a FRESH round. This is the
+    # refusal that stops the extra runway becoming a late OPENING: past the
+    # entry cutoff the only leg that may reach the wire is the one that
+    # reduces the residual. Like the two rules below and above it, an ENTRY
+    # rule -- it can never refuse a completion.
+    "TWO_SIDED_PROBE:PAST_ENTRY_CUTOFF_NOT_A_COMPLETION",
     # the own-side price floor for OPENING a leg, from six settled windows
     # on 2026-10-23: the four that opened at own 0.29-0.36 all completed and
     # paid, and the two that opened at own 0.12 and 0.06 never completed and
