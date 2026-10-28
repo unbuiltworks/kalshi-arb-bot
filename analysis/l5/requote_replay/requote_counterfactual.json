@@ -1,0 +1,160 @@
+[
+ {
+  "notes": [
+   "+288s complement DOWN 0.5500 refused PAIR_ABOVE_CAP 0.9900",
+   "+288s complement DOWN 0.5500 refused PAIR_ABOVE_CAP 0.9900",
+   "+288s complement DOWN 0.5500 refused PAIR_ABOVE_CAP 0.9900",
+   "+321s complement DOWN 0.6100 refused PAIR_ABOVE_CAP 1.0500",
+   "+321s complement DOWN 0.6100 refused PAIR_ABOVE_CAP 1.0500",
+   "+321s complement DOWN 0.6100 refused PAIR_ABOVE_CAP 1.0500",
+   "+321s complement DOWN 0.6100 refused PAIR_ABOVE_CAP 1.0500",
+   "+321s complement DOWN 0.6100 refused PAIR_ABOVE_CAP 1.0500",
+   "+321s complement DOWN 0.6100 refused PAIR_ABOVE_CAP 1.0500",
+   "+321s complement DOWN 0.6100 refused PAIR_ABOVE_CAP 1.0500",
+   "+387s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 0.9700",
+   "+387s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 0.9700",
+   "+521s complement DOWN 0.4300 refused PAIR_ABOVE_CAP 1.0400",
+   "+522s complement DOWN 0.4300 refused PAIR_ABOVE_CAP 1.0400",
+   "+522s complement DOWN 0.4300 refused PAIR_ABOVE_CAP 1.0400",
+   "+522s complement DOWN 0.4300 refused PAIR_ABOVE_CAP 1.0400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+554s complement DOWN 0.5300 refused PAIR_ABOVE_CAP 1.1400",
+   "+587s complement DOWN 0.5400 refused PAIR_ABOVE_CAP 1.1500",
+   "+587s complement DOWN 0.5400 refused PAIR_ABOVE_CAP 1.1500",
+   "+653s complement DOWN 0.4800 refused PAIR_ABOVE_CAP 1.0900"
+  ],
+  "orders": [
+   {
+    "ask": "0.4700",
+    "bid": "0.4600",
+    "fill_evidence": "touch traversed to 0.4200/0.4300",
+    "fill_t": "00:19:48",
+    "filled": true,
+    "in_window_s": 154.0,
+    "qty": "1.87",
+    "refused_own": "0.6000",
+    "requote_own": "0.4400",
+    "role": "OPEN",
+    "side": "UP",
+    "t": "00:17:34",
+    "ticks_lower": "16.00"
+   },
+   {
+    "ask": "0.4900",
+    "bid": "0.4800",
+    "fill_evidence": "touch traversed to 0.6300/0.6400",
+    "fill_t": "00:23:07",
+    "filled": true,
+    "in_window_s": 421.0,
+    "pair_cost_if_filled": "0.9300",
+    "qty": "1.87",
+    "requote_own": "0.4900",
+    "role": "COMPLETE",
+    "side": "DOWN",
+    "t": "00:22:01"
+   },
+   {
+    "ask": "0.6400",
+    "bid": "0.6300",
+    "fill_evidence": "touch traversed to 0.5400/0.5500",
+    "fill_t": "00:23:41",
+    "filled": true,
+    "in_window_s": 487.0,
+    "planned_pair": "0.9500",
+    "qty": "1.87",
+    "requote_own": "0.6100",
+    "role": "OPEN*",
+    "side": "UP",
+    "t": "00:23:07"
+   }
+  ],
+  "pairs": [
+   {
+    "down_own": "0.4900",
+    "gross_edge": "0.130900",
+    "pair_cost": "0.9300",
+    "qty": "1.87",
+    "t": "00:23:07",
+    "up_own": "0.4400"
+   }
+  ],
+  "records": 99,
+  "residual": {
+   "DOWN": "1.87",
+   "UP": "3.74",
+   "unmatched": "1.87"
+  },
+  "tape_ends_s": 887.0,
+  "window": "0015z"
+ },
+ {
+  "notes": [
+   "an order was still resting when the tape ended at +451s: its fill is UNKNOWN, not absent"
+  ],
+  "orders": [
+   {
+    "ask": "0.7000",
+    "bid": "0.6900",
+    "fill_evidence": null,
+    "fill_t": null,
+    "filled": false,
+    "in_window_s": 383.0,
+    "open_at_tape_end": true,
+    "qty": "1.92",
+    "refused_own": "0.3900",
+    "requote_own": "0.2800",
+    "role": "OPEN",
+    "side": "DOWN",
+    "t": "00:36:23",
+    "ticks_lower": "11.00"
+   }
+  ],
+  "pairs": [],
+  "records": 41,
+  "residual": {
+   "DOWN": "0",
+   "UP": "0",
+   "unmatched": "0"
+  },
+  "tape_ends_s": 451.0,
+  "window": "0030z"
+ },
+ {
+  "notes": [],
+  "orders": [],
+  "pairs": [],
+  "records": 31,
+  "residual": {
+   "DOWN": "0",
+   "UP": "0",
+   "unmatched": "0"
+  },
+  "tape_ends_s": 282.0,
+  "window": "0045z"
+ },
+ {
+  "notes": [],
+  "orders": [],
+  "pairs": [],
+  "records": 24,
+  "residual": {
+   "DOWN": "0",
+   "UP": "0",
+   "unmatched": "0"
+  },
+  "tape_ends_s": 150.0,
+  "window": "0100z"
+ }
+]

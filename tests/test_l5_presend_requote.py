@@ -272,3 +272,121 @@ def test_the_call_site_refuses_when_the_requote_declines():
     assert 'prov.stage("PRESEND_REQUOTE", _rq)' in blk
     # the disarmed check still follows, so a disarmed transport cannot send
     assert "disarmed_refusal" in src
+
+
+# ============================== THE AGE GATE, which the guard does not have
+#
+# `presend_cross_refusal` fails OPEN on every unknown, deliberately: it only
+# ever declines an order, and a budget-saving guard that halts trading on a
+# mirror hiccup would be a worse change than the waste it removes. The
+# requote SENDS one, so on the same unknowns it must fail the other way.
+# Without these the gate could be deleted and every test above would still
+# pass -- the helper supplies a fresh age.
+
+def test_a_stalled_mirror_refuses_rather_than_repricing():
+    out = Ex().presend_requote(
+        MKT, {"side": "UP", "price": D("0.61")}, {},
+        book("0.47", "0.48", age=str(TS.MAX_BOOK_AGE_S + 0.1)))
+    assert out is None
+
+
+def test_a_book_with_no_age_at_all_refuses():
+    """`ts_authenticated_book` returns {} on every failure, and {} has no
+    age. That must reach the original refusal, not a repriced order."""
+    out = Ex().presend_requote(
+        MKT, {"side": "UP", "price": D("0.61")}, {},
+        {"bid": "0.47", "ask": "0.48"})
+    assert out is None
+
+
+def test_an_empty_book_refuses():
+    assert Ex().presend_requote(
+        MKT, {"side": "UP", "price": D("0.61")}, {}, {}) is None
+
+
+@pytest.mark.parametrize("age", ["", "   ", "abc", "NaN", "Infinity", None])
+def test_an_unreadable_age_refuses(age):
+    out = Ex().presend_requote(
+        MKT, {"side": "UP", "price": D("0.61")}, {},
+        book("0.47", "0.48", age=age))
+    assert out is None, age
+
+
+def test_an_age_exactly_at_the_bound_is_still_fresh():
+    """`age > MAX` and not `>=`, the same test `build_orders` applies, so one
+    definition of 'fresh' governs the planner and the requote alike."""
+    out = Ex().presend_requote(
+        MKT, {"side": "UP", "price": D("0.61")}, {},
+        book("0.47", "0.48", age=str(TS.MAX_BOOK_AGE_S)))
+    assert out is not None
+
+
+def test_the_record_states_the_bound_it_enforced():
+    out = Ex().presend_requote(
+        MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48"))
+    assert out["stream_age_s"] == "0.05"
+    assert out["max_book_age_s"] == str(TS.MAX_BOOK_AGE_S)
+
+
+def test_the_gate_uses_the_shared_constant_and_not_a_local_copy():
+    """A second definition of 'fresh' is how the planner and the send path
+    drift apart. Tightening the shared constant must tighten this too."""
+    tight = 0.001
+    saved = TS.MAX_BOOK_AGE_S
+    try:
+        TS.MAX_BOOK_AGE_S = tight
+        assert Ex().presend_requote(
+            MKT, {"side": "UP", "price": D("0.61")}, {},
+            book("0.47", "0.48", age="0.05")) is None
+    finally:
+        TS.MAX_BOOK_AGE_S = saved
+
+
+# ================= THE SNAPSHOT IS THE GUARD'S OWN, NOT A SECOND READ
+#
+# The guard decides "this price crosses" against one snapshot and puts the
+# bid, the ask and the stream age it used into its record. If the requote
+# re-read the mirror it would price against a DIFFERENT book from the one
+# that refused -- two snapshots, one decision, which is the stale-input
+# mistake this path exists to remove -- and would spend an extra read per
+# crossing decision at the window boundary, where read counts are bounded.
+# Asserted on the source because the call site sits inside `handle`, and a
+# behavioural test of it would need the whole gate stack stood up.
+
+def _presend_cross_block() -> str:
+    import inspect
+    src = inspect.getsource(LX.FaithfulExecutor.handle)
+    i = src.index("_xr = self.presend_cross_refusal(")
+    j = src.index("_dr = self.disarmed_refusal()", i)
+    return src[i:j]
+
+
+def test_the_requote_is_handed_the_guards_own_record():
+    assert "self.presend_requote(market, intent, tr, _xr)" \
+        in _presend_cross_block()
+
+
+def test_the_call_site_takes_no_second_book_snapshot():
+    assert "ts_authenticated_book" not in _presend_cross_block()
+
+
+def test_the_guard_record_carries_the_three_keys_the_requote_reads():
+    """`_xr` is only usable as a book because the guard names its fields
+    exactly as the requote reads them. Pin that contract."""
+    import inspect
+    src = inspect.getsource(LX.FaithfulExecutor.presend_cross_refusal)
+    for key in ('"bid": str(bid)', '"ask": str(ask)', '"stream_age_s"'):
+        assert key in src, key
+
+
+def test_the_guards_record_round_trips_as_a_book():
+    """End to end on the data shape: feed a real refusal record back in."""
+    ex = Ex()
+    xr = {"reason": "PRESEND_WOULD_CROSS:UP", "side": "UP",
+          "own_px": "0.61", "wire_px": "0.61",
+          "bid": "0.47", "ask": "0.48", "stream_age_s": "0.05",
+          "skips": {"UP": 1, "total": 1}}
+    out = ex.presend_requote(MKT, {"side": "UP", "price": D("0.61")}, {}, xr)
+    assert out is not None
+    assert out["own_px_now"] == "0.45"
+    assert out["bid"] == "0.47" and out["ask"] == "0.48"

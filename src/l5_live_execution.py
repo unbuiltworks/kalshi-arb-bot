@@ -4627,6 +4627,17 @@ class FaithfulExecutor:
             tk = _num(tick)
             if tk is None or tk <= 0:
                 return None
+            # THE AGE GATE, and the reason it is here rather than in the
+            # guard. `presend_cross_refusal` fails OPEN on every unknown
+            # because declining an order is free. This one SENDS one, so it
+            # fails closed on the same unknowns -- and a price computed from
+            # a stalled mirror is exactly the input a requote must never
+            # act on. Same constant and same `None or >` test as
+            # `build_orders`' BOOK_STALE, so one definition of "fresh"
+            # governs the planner and the requote alike.
+            age = _num(book.get("stream_age_s"))
+            if age is None or age > D(str(TS.MAX_BOOK_AGE_S)):
+                return None
             bid, ask = book.get("bid"), book.get("ask")
             b, a = _num(bid), _num(ask)
             if b is None or a is None or b <= 0 or a <= 0 or a <= b:
@@ -4665,8 +4676,8 @@ class FaithfulExecutor:
                 "bid": str(b), "ask": str(a),
                 "depth_ticks": dticks,
                 "completing": completing,
-                "stream_age_s": (None if book.get("stream_age_s") is None
-                                 else str(book.get("stream_age_s"))),
+                "stream_age_s": str(age),
+                "max_book_age_s": str(TS.MAX_BOOK_AGE_S),
                 "labels": ("the SAME snapshot the cross guard read, quoted "
                            "depth_ticks behind the CURRENT touch. Strictly "
                            "lower than the refused price, so pair cost, "
@@ -6873,11 +6884,17 @@ class FaithfulExecutor:
                 # rather than re-entering the stack. OFF unless the owner
                 # names L5_PRESEND_REQUOTE, so the default path is the
                 # refusal below, unchanged.
+                # `_xr` IS THAT SNAPSHOT. The guard already put the bid,
+                # the ask and the stream age it judged against into its own
+                # record, under exactly those keys. Re-reading the mirror
+                # here would price against a DIFFERENT snapshot from the one
+                # that refused -- which is the stale-input mistake this whole
+                # path exists to remove -- and would cost a second read per
+                # crossing decision at the window boundary, where read counts
+                # are already the thing being bounded.
                 _rq = None
                 try:
-                    _rq = self.presend_requote(
-                        market, intent, tr,
-                        self.ts_authenticated_book(market, {}) or {})
+                    _rq = self.presend_requote(market, intent, tr, _xr)
                 except BaseException as _exc:                  # noqa: BLE001
                     if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
                         raise
