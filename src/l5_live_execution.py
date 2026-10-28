@@ -6902,9 +6902,43 @@ class FaithfulExecutor:
                 if _rq is None:
                     return prov.refuse("PRESEND_CROSS",
                                        str(_xr.get("reason"))[:120])
-                prov.stage("PRESEND_REQUOTE", _rq)
-                intent = dict(intent, price=D(_rq["own_px_now"]))
-                tr = dict(tr, price=D(_rq["own_px_now"]))
+                # THE INTEGRITY BOUNDARY IS TOLD, NOT BYPASSED.
+                #
+                # `gated_money` was captured where the gates ran, and the
+                # equality check immediately before the wire refuses -- AND
+                # marks the store UNCERTAIN -- on any later change to a
+                # money field. Its comment says so: "Any later override must
+                # not change these behind the gates' back."
+                #
+                # A requote changes `price`, so without this line the
+                # feature does not merely fail to help. The first crossing
+                # refusal would refuse the order AND leave the store
+                # uncertain, which the arming and submission gates then
+                # refuse on -- so enabling it would have HALTED the engine
+                # on the measured 0015z window rather than repriced one
+                # order.
+                #
+                # So the one field a requote may move is moved here,
+                # explicitly, and only in the direction whose safety was
+                # argued. The invariant is re-checked against the GATED
+                # value rather than trusted from the helper, because
+                # trusting the caller is precisely what this boundary
+                # exists to stop. Every other money field -- market, side,
+                # quantity, mode -- must still match byte-for-byte.
+                _new_px = D(_rq["own_px_now"])
+                try:
+                    _gated_px = D(str(gated_money["price"]))
+                except (InvalidOperation, TypeError, ValueError):
+                    _gated_px = None
+                if _gated_px is None or not _new_px < _gated_px:
+                    return prov.refuse("SAFETY_OVERLAY",
+                                       "REQUOTE_NOT_BELOW_GATED_PRICE")
+                prov.stage("PRESEND_REQUOTE", dict(
+                    _rq, gated_price_was=str(gated_money["price"]),
+                    gated_price_now=str(_new_px)))
+                intent = dict(intent, price=_new_px)
+                tr = dict(tr, price=_new_px)
+                gated_money = dict(gated_money, price=str(_new_px))
 
             # LAST, and for the same reason PRESEND_CROSS is here: the next
             # statement consumes a claim that is never returned. A disarmed

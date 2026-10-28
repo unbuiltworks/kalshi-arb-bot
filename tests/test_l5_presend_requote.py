@@ -269,7 +269,10 @@ def test_the_call_site_refuses_when_the_requote_declines():
     blk = blk[:blk.index("_dr = self.disarmed_refusal()")]
     assert "if _rq is None:" in blk
     assert 'return prov.refuse("PRESEND_CROSS"' in blk
-    assert 'prov.stage("PRESEND_REQUOTE", _rq)' in blk
+    # staged with the gated price it was checked against, so the provenance
+    # record shows the integrity boundary was informed and not bypassed
+    assert 'prov.stage("PRESEND_REQUOTE", dict(' in blk
+    assert 'gated_price_was=str(gated_money["price"])' in blk
     # the disarmed check still follows, so a disarmed transport cannot send
     assert "disarmed_refusal" in src
 
@@ -390,3 +393,102 @@ def test_the_guards_record_round_trips_as_a_book():
     assert out is not None
     assert out["own_px_now"] == "0.45"
     assert out["bid"] == "0.47" and out["ask"] == "0.48"
+
+
+# =========== THE INTENT-INTEGRITY BOUNDARY, which the requote must not trip
+#
+# WHAT WAS WRONG, and why 55 tests above did not see it. `handle` captures
+# `gated_money` where the safety gates run and compares it byte-for-byte with
+# the intent about to be sent; a mismatch refuses AND calls
+# `store.mark_uncertain`. Its own comment: "Any later override must not
+# change these behind the gates' back."
+#
+# The requote changes `price` after that capture. So enabling
+# L5_PRESEND_REQUOTE would not merely have failed to help -- the first
+# crossing refusal would have refused the order and left the store
+# UNCERTAIN, which the arming and submission gates refuse on. On the
+# measured 0015z window that is a halted engine, not a repriced order.
+#
+# Every test above exercises `presend_requote` in isolation, which is why
+# none of them caught it. These pin the call site instead.
+
+def _handle_src():
+    import inspect
+    return inspect.getsource(LX.FaithfulExecutor.handle)
+
+
+def test_the_requote_updates_the_gated_money_it_is_checked_against():
+    src = _handle_src()
+    assert 'gated_money = dict(gated_money, price=str(_new_px))' in src
+
+
+def test_the_gated_update_sits_between_the_requote_and_the_integrity_check():
+    src = _handle_src()
+    i_cap = src.index('gated_money = {"market"')
+    i_upd = src.index('gated_money = dict(gated_money, price=str(_new_px))')
+    i_chk = src.index('if sent_money != gated_money:')
+    assert i_cap < i_upd < i_chk
+
+
+def test_the_price_is_the_only_money_field_the_requote_touches():
+    """market, side, qty and mode must still match byte-for-byte, or the
+    boundary has been widened rather than informed."""
+    src = _handle_src()
+    i_rq = src.index('_new_px = D(_rq["own_px_now"])')
+    i_chk = src.index('if sent_money != gated_money:')
+    block = src[i_rq:i_chk]
+    for field in ('"market"', '"side"', '"qty"', '"mode"'):
+        assert ("gated_money, %s" % field) not in block, field
+    assert 'dict(intent, price=_new_px)' in block
+    assert 'dict(tr, price=_new_px)' in block
+
+
+def test_the_invariant_is_rechecked_against_the_gated_value(monkeypatch):
+    """Not trusted from the helper. Trusting the caller is exactly what this
+    boundary exists to stop."""
+    src = _handle_src()
+    i_rq = src.index('_new_px = D(_rq["own_px_now"])')
+    block = src[i_rq:i_rq + 900]
+    assert 'gated_money["price"]' in block
+    assert 'not _new_px < _gated_px' in block
+    assert 'REQUOTE_NOT_BELOW_GATED_PRICE' in block
+
+
+def test_a_requote_at_or_above_the_gated_price_is_refused_not_sent():
+    """The simulated comparison `handle` performs, both ways round."""
+    def verdict(gated_px, new_px):
+        g = D(str(gated_px))
+        n = D(str(new_px))
+        if not n < g:
+            return "REFUSED"
+        gated = {"market": "m", "side": "UP", "price": str(n),
+                 "qty": "1.87", "mode": "MAKER"}
+        sent = {"market": "m", "side": "UP", "price": str(n),
+                "qty": "1.87", "mode": "MAKER"}
+        return "SENT" if sent == gated else "INTENT_MUTATED_AFTER_GATES"
+
+    assert verdict("0.6000", "0.4400") == "SENT"
+    assert verdict("0.6000", "0.6000") == "REFUSED"
+    assert verdict("0.6000", "0.6100") == "REFUSED"
+
+
+def test_without_the_gated_update_the_old_code_would_have_been_refused():
+    """The defect, reproduced on the exact dicts `handle` builds, so the
+    regression is pinned by behaviour and not only by source order."""
+    tr = {"price": D("0.6000"), "qty": D("1.87"), "mode": "MAKER"}
+    gated = {"market": "m", "side": "UP", "price": str(tr["price"]),
+             "qty": str(tr["qty"]), "mode": str(tr["mode"])}
+    intent = {"market": "m", "side": "UP", "price": D("0.4400"),
+              "qty": D("1.87"), "mode": "MAKER"}
+    sent = {"market": str(intent["market"]), "side": str(intent["side"]),
+            "price": str(intent["price"]), "qty": str(intent["qty"]),
+            "mode": str(intent["mode"] or "")}
+    assert sent != gated, "the old code would have passed the boundary"
+    fixed = dict(gated, price=str(intent["price"]))
+    assert sent == fixed, "the informed boundary accepts the requoted price"
+
+
+def test_the_new_refusal_is_registered_in_the_executor_inventory():
+    from src import l5_intent_gate as IG
+    assert "SAFETY_OVERLAY:REQUOTE_NOT_BELOW_GATED_PRICE" in \
+        IG.EXECUTOR_GATES_NOT_EVALUATED_HERE

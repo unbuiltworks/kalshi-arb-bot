@@ -56,9 +56,16 @@ Counterfactual, one resting order at a time, COMPLETE before OPEN:
   **−$1.14**.
 
 The live run stranded the same leg one tick cheaper, at own 0.6000, for the
-reported **−$1.1313**. So the net effect of the requote on this window is
-roughly **+$0.09**: one extra completed pair, and the dominant loss
-untouched.
+reported **−$1.1313**.
+
+> **Superseded by `EXECUTION_UNCERTAINTY_20261028.md`.** An earlier version
+> of this file reported the net effect as "roughly +$0.09", which treated a
+> traversal-supported fill as a fill that would have happened. The
+> complement that makes this pair profitable is conditional on a rebound to
+> 0.63 that nothing in the mechanism controls; without it the same UP leg
+> strands at own 0.4400 for −$0.8228. The honest range is **+$0.11 to
+> −$0.82**, and the replay does not establish that the requote improves net
+> economics — only that it acts.
 
 **The requote is a throughput fix, not a loss fix.** It does not address
 the stranded-leg loss, and the replay says so directly: the leg that loses

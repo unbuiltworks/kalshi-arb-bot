@@ -1165,9 +1165,20 @@ def claim_once(path: str, sid: str, payload: Mapping[str, Any]) -> None:
 EXPERIMENT_ENV = "L5_EXPERIMENT_ID"
 
 
-#: The variable carrying the campaign document. Read here only to key the
-#: claim namespace; the document itself is parsed by `l5_campaign_approval`.
-CAMPAIGN_APPROVAL_ENV = "L5_CAMPAIGN_APPROVAL"
+#: THE LONGEST SID MUST FIT IN `_lock_path`'s 120 CHARACTERS, so this caps
+#: the experiment id rather than letting a long one be silently cut.
+#:
+#: The longest id any claim builds is an accumulation claim --
+#: `acc1.<exp>.<market>.<rnd>.<leg>.a<attempt>` -- so the budget is:
+#:
+#:     "acc1." 5 + "." 1 + market 40 + "." 1 + rnd 2 + "." 1
+#:           + "DOWN" 4 + "." 1 + "a" 1 + attempt 2            = 58
+#:
+#: 120 - 58 = 62. A PMUS BTC15m slug is 35 characters, so 40 leaves room for
+#: a longer series without this needing revisiting; if a venue ever exceeds
+#: it, the sid is still cut, so the figure is checked by a test rather than
+#: trusted.
+MAX_EXPERIMENT_LEN = 62
 
 
 def campaign_claim_suffix() -> str:
@@ -1236,7 +1247,27 @@ def experiment_id() -> str:
     if not base:
         return ""
     suf = campaign_claim_suffix()
-    return "%s.%s" % (base, suf) if suf else base
+    if not suf:
+        return base
+    # THE DIGEST SURVIVES, THE LABEL GIVES WAY. `_lock_path` truncates the
+    # WHOLE sid at 120 characters, and the longest sid is an accumulation
+    # claim, which carries the market slug as well as the experiment (see
+    # MAX_EXPERIMENT_LEN). Appending 30 characters of campaign suffix spends
+    # most of the headroom that id had, so a longer experiment label would
+    # push `acc1....DOWN.a3` past the cut -- and a truncated sid makes two
+    # distinct claims share one lock file, which leaves the single-use
+    # ledger ambiguous about which leg it is holding.
+    #
+    # So the composed id is bounded, and it is the owner's LABEL that is
+    # shortened rather than the digest: the digest is the part that carries
+    # isolation, and a shortened label can at worst collide with another
+    # label inside the SAME campaign, which is cosmetic. Losing digest
+    # characters would merge two campaigns' budgets, which is the bug this
+    # whole mechanism exists to fix.
+    room = MAX_EXPERIMENT_LEN - len(suf) - 1
+    if room < 1:
+        return suf                      # unreachable at any sane suffix
+    return "%s.%s" % (base[:room], suf)
 
 
 def submission_sid(experiment: str) -> str:
