@@ -123,8 +123,10 @@ def test_the_emit_is_guarded_so_reporting_cannot_kill_a_tick():
 
 
 def test_every_pre_preflight_call_has_a_mark():
-    """All thirteen, so the holder of the tick cannot hide in an unmeasured
-    gap."""
+    """All fourteen, so the holder of the tick cannot hide in an
+    unmeasured gap. `maybe_completion_requote` is the fourteenth: a new
+    stage must be MARKED and declared, which is exactly what this guard is
+    for."""
     import inspect
     src = inspect.getsource(R.Runner.tick)
     head = src[:src.index("self.maybe_preflight(now)")]
@@ -132,6 +134,7 @@ def test_every_pre_preflight_call_has_a_mark():
     assert marked == {
         "roll", "maybe_halt_deadman", "maybe_expire_authorization",
         "maybe_cancel_orphans", "maybe_qm_deadline", "maybe_acc_deadline",
-        "sample_residual_book", "maybe_ts_completion", "maybe_ts_deadline",
+        "sample_residual_book", "maybe_ts_completion",
+        "maybe_completion_requote", "maybe_ts_deadline",
         "model_advance", "two_sided_advance", "two_sided_settle",
         "venue_cooling"}, sorted(marked)

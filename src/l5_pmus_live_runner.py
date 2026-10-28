@@ -5133,6 +5133,140 @@ class Runner:
         emit("L5_TS_DEADLINE", dict(out, slug=slug, now=now, result=res))
         return res
 
+    def maybe_completion_requote(self, now: float
+                                 ) -> Optional[Dict[str, Any]]:
+        """Cancel a completion that has drifted off the touch, so the
+        existing complement path can re-place it against the current book.
+
+        WHAT THIS DOES NOT DO. It does not submit anything. The replacement
+        is placed by the ordinary complement path on a later tick, as the
+        next ATTEMPT of the same leg of the same round, which `acc_leg_attempt`
+        charges to the REPLACE budget and which it refuses outright while any
+        order is live. That is what makes two competing completion orders
+        structurally impossible rather than merely avoided: the only way to a
+        replacement is through a cancellation this method has already proved.
+
+        WHY A CANCEL IS THE WHOLE CHANGE. `complement_order` already prices
+        against the CURRENT book from the store's realised leg costs, so a
+        complement re-placed after a cancel is automatically repriced and
+        resized on the inventory that remains. The defect was never the
+        pricing of a new complement; it was that a resting one was left
+        frozen while the market walked 12 to 18 ticks away from it.
+
+        DEFAULT OFF. Without L5_COMPLETION_REQUOTE this is inert, so the
+        deployment carries the code and changes no behaviour until an owner
+        turns it on.
+        """
+        from src import l5_two_sided_probe as TSP
+        if not completion_requote_enabled():
+            return None
+        try:
+            t = self.transport
+            if t is None or not getattr(t, "armed", False):
+                return None
+            slug = getattr(t, "market_slug", None)
+            if not slug or not TSP.active(slug):
+                return None
+            # ONE IDENTIFIABLE RESTING ORDER IN THIS MARKET. Zero is nothing
+            # to requote; more than one is a state this engine does not
+            # create, and guessing which to cancel is how a requote becomes
+            # an unhedged leg.
+            live = {c: o for c, o in (self.store.live_orders() or {}).items()
+                    if str((o or {}).get("market") or "") == str(slug)}
+            if len(live) != 1:
+                return None
+            coid, row = next(iter(live.items()))
+            if not str(row.get("venue_order_id") or "").strip():
+                # cannot cancel what the venue cannot name, so do not start
+                self.stats["requote_refused:NO_VENUE_ID"] += 1
+                return None
+            side = str(row.get("side") or "")
+            # THE RESTING ORDER MUST BE THE REDUCING ONE, JUDGED ON THE
+            # REALISED RESIDUAL.
+            #
+            # NOT `probe_reducing_side`, and the end-to-end test is what
+            # found that. That helper reads the PROSPECTIVE residual --
+            # realised inventory PLUS every outstanding order as if it
+            # filled -- which is exactly the right basis for choosing which
+            # leg to offer next, and exactly the wrong one here: a
+            # completion that fully covers its residual drives the
+            # prospective figure to ZERO, so the helper reported no reducing
+            # side and the requote could never fire in the normal case.
+            #
+            # Here the question is about the order we are about to CANCEL, so
+            # the residual to read is the one that would remain without it:
+            # the realised position.
+            try:
+                realised = D(str(self.store.residual(str(slug))))
+            except BaseException:                              # noqa: BLE001
+                self.stats["requote_refused:RESIDUAL_UNREADABLE"] += 1
+                return None
+            if realised == 0:
+                self.stats["requote_refused:NOTHING_TO_COMPLETE"] += 1
+                return None
+            reducing = "DOWN" if realised > 0 else "UP"
+            if side != reducing:
+                # a first leg that has not filled is not a completion, and is
+                # owned by the TTL and terminal deadlines rather than by this
+                self.stats["requote_refused:NOT_THE_REDUCING_LEG"] += 1
+                return None
+            held = "DOWN" if side == "UP" else "UP"
+            legs = self.store.leg_cost(str(slug))
+            ws = AB.slug_start(str(slug))
+            if ws is None:
+                self.stats["requote_refused:WINDOW_UNKNOWN"] += 1
+                return None
+            snap = self.book.snapshot(str(slug)) or {}
+            working = LX.InventoryStore.worst_case_remaining(row)
+            qty = row.get("qty")
+            filled = ((D(str(qty)) - working)
+                      if qty is not None else D(0))
+            vg = getattr(self.executor, "validation_gates", None)
+            res = TSP.completion_requote(
+                side=side, resting_own_px=row.get("price"),
+                resting_qty=qty, resting_filled_qty=filled,
+                bid=snap.get("bid"), ask=snap.get("ask"),
+                tick=getattr(t, "tick_size", None),
+                min_qty=getattr(t, "quantity_increment", None),
+                held_qty=self.store.position(str(slug), held),
+                held_cost_usd=legs.get(held),
+                deficient_qty=self.store.position(str(slug), side),
+                deficient_cost_usd=legs.get(side),
+                residual_budget_usd=getattr(
+                    vg, "max_worst_case_deficit_usd", None),
+                now_s=now, window_start_s=float(ws),
+                window_end_s=TSP.window_end(float(ws)),
+                book_age_s=snap.get("stream_age_s"),
+                gap_suspected=bool(snap.get("gap_suspected")),
+                orders_uncertain=self.store.orders_uncertain())
+            if not res.get("act"):
+                self.stats["requote_refused:%s" % res.get("reason")] += 1
+                return None
+            # CANCEL EXACTLY THIS ORDER, by venue id, proof by re-read, and
+            # any fill found while cancelling is BOOKED with its cost basis
+            # rather than discarded. An ambiguous outcome marks the store
+            # UNCERTAIN, which refuses every subsequent submission until an
+            # authoritative read agrees -- so a failed requote cannot leave a
+            # replacement racing a live order.
+            out = LX.deadman(self.store, t, reason="completion_requote",
+                             only=[coid])
+            self.stats["requote_cancelled"] += 1
+            rec = dict(res, slug=str(slug), client_order_id=coid,
+                       cancel=out, now=now,
+                       labels=("the CANCEL half only. The replacement is "
+                               "placed by the ordinary complement path as "
+                               "the next attempt of this leg, charged to "
+                               "REPLACE, and cannot be sent while this "
+                               "order is live. No fill is implied by "
+                               "either half."))
+            emit("L5_TS_REQUOTE", rec)
+            return rec
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["requote_error:%s" % type(exc).__name__] += 1
+            return None
+
     def maybe_acc_deadline(self, now: float) -> Optional[Dict[str, Any]]:
         """Cancel each accumulation order at min(submit + TTL, terminal).
 
@@ -5372,6 +5506,13 @@ class Runner:
         _sc.mark("sample_residual_book")
         self.maybe_ts_completion(now)
         _sc.mark("maybe_ts_completion")
+        # AFTER the completion decision and BEFORE the terminal sweep. After,
+        # because a completion that can act on the book as it stands should
+        # do so rather than be cancelled first; before, because a quote the
+        # market has walked away from is worth replacing while runway
+        # remains. Inert unless L5_COMPLETION_REQUOTE is set.
+        self.maybe_completion_requote(now)
+        _sc.mark("maybe_completion_requote")
         self.maybe_ts_deadline(now)
         _sc.mark("maybe_ts_deadline")
         # MODELLED fills advance BEFORE the cool-off check, for the same
@@ -6431,6 +6572,18 @@ def model_fills() -> bool:
 
 def shadow_only() -> bool:
     return str(os.getenv(SHADOW_ONLY_ENV, "1")).strip() != "0"
+
+
+#: completion repricing. DEFAULT OFF, so the code can be deployed and
+#: reviewed in place before it is ever allowed to cancel an order. It adds a
+#: cancellation, never a capability: the replacement goes through the same
+#: complement path, the same gates and the same REPLACE budget as today.
+COMPLETION_REQUOTE_ENV = "L5_COMPLETION_REQUOTE"
+
+
+def completion_requote_enabled() -> bool:
+    return (str(os.getenv(COMPLETION_REQUOTE_ENV, "")).strip().upper()
+            in ("1", "YES", "TRUE", "ON"))
 
 
 #: names the guard service's READ-ONLY halt endpoint. Unset = inert.

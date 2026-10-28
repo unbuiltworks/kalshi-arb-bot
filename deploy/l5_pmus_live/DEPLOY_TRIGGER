@@ -2367,3 +2367,39 @@ P0 completion-cutoff correction, shadow-locked 2026-10-28T13:25Z
   34 pre-existing ids, 13860 -> 13881 passes (+21 new tests).
   L5_SHADOW_ONLY is re-engaged and the campaign authorization is exhausted
   (4 of 4 windows spent), so nothing can be armed or submitted.
+
+Campaign 6: completion repricing, shadow-locked 2026-10-28T15:30Z
+  Owner-authorized four-window BTC15m validation. Three corrections to
+  completion EXECUTION, which is where the whole -$2.0463 of 2026-10-28
+  lived: matched surplus +$0.8571 against stranded losses -$2.9034.
+
+  P0  completion eligibility is a MARKET fact, not a ROUND fact, so a
+      risk-reducing completion stays eligible to T+720 while no new
+      directional opening is permitted after T+600.
+  P1  a refused completion gets a fee-aware beats-stranding second question,
+      bounded by the owner's approved residual deficit.
+  P2  completion_requote cancels a quote the market has walked away from, by
+      exact venue id with proof by re-read, so the ordinary complement path
+      re-places it against the current book, charged to REPLACE.
+  P3  pair_cost_refusal now separates OPENING exposure, which keeps the 0.96
+      ceiling, from COMPLETING confirmed residual, which answers to the
+      completion economics. This is the gate that actually refused 1245z at
+      a realised 0.9699, and without it the repricing could not reach the
+      wire. A rescue requires all of: reduces an unmatched position, does
+      not cross zero, effective pair <= $1.00 (a pair redeems exactly that),
+      and price within the completion ceiling.
+
+  Plus three same-subsystem prerequisites the deploy branch lacked
+  (cb22bb47, fa682b80, e51f17ff) and l5_capital_block, which prices every
+  refusal by the cash envelope, exposure cap, residual limit or order-count
+  limit. Reporting only.
+
+  ISOLATED PARITY against ea67b2c5: 34 failing node ids on both, IDENTICAL
+  sets, 13860 -> 14039 passes. The promoted src/ and tests/ are byte-
+  identical to the tree that parity ran on.
+
+  BOTH LOCKS STAY ON at deploy time: L5_SHADOW_ONLY=1 and no live
+  authorization installed. L5_COMPLETION_REQUOTE is the only behavioural
+  change and is enabled explicitly. No capital limit is changed: cash
+  headroom ran $9.35-$16.70 against the $12 envelope and peak exposure
+  ~$3.03 against $20, so dollars are not the binding constraint.

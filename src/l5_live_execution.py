@@ -5279,6 +5279,86 @@ class FaithfulExecutor:
             return None
         return dict(m)
 
+    def completion_pair_rescue(self, market: str, *, side: str, other: str,
+                               px: D, qty: D, held: Mapping[str, D],
+                               after: Mapping[str, D],
+                               lc: Mapping[str, Any], eff: D
+                               ) -> Dict[str, Any]:
+        """May this order clear the pair gate as a COMPLETION rather than an
+        opening, and if not, why not.
+
+        EVERY CONDITION IS NECESSARY and each one closes a specific way a
+        rescue could do harm. `reduces` keeps it from being an opening wearing
+        a completion's name. `no_reversal` keeps it from buying through parity
+        into fresh exposure on the other side. `eff <= 1.00` keeps the matched
+        book off a certain loss, because a matched pair pays exactly $1.00 a
+        share. And the price must clear `completion_ceiling`, which is the
+        minimum of "completing beats carrying the residual to settlement" and
+        "the completed worst case stays inside the approved residual
+        deficit", so the whole thing is bounded by an owner number rather
+        than by this method's opinion.
+
+        FAILS CLOSED EVERYWHERE. An unreadable budget, an unreadable basis or
+        an unreadable ceiling all refuse, which leaves the 0.96 opening
+        ceiling in force -- the stricter rule.
+        """
+        out: Dict[str, Any] = {"ok": False, "reason": None,
+                               "effective_pair_cost": str(eff)}
+        try:
+            h_other, h_side = D(str(held[other])), D(str(held[side]))
+            a_side = D(str(after[side]))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["reason"] = "INVENTORY_UNREADABLE:%s" % type(exc).__name__
+            return out
+        out["reduces"] = bool(h_other > h_side)
+        if not out["reduces"]:
+            out["reason"] = "NOT_A_COMPLETION_NOTHING_UNMATCHED"
+            return out
+        out["no_reversal"] = bool(a_side <= h_other)
+        if not out["no_reversal"]:
+            out["reason"] = "WOULD_CROSS_ZERO_INTO_NEW_EXPOSURE"
+            return out
+        # A MATCHED PAIR PAYS EXACTLY $1.00 A SHARE. Above that the matched
+        # book is a certain loss, which no residual argument can justify.
+        if eff > D(1):
+            out["reason"] = "EFFECTIVE_PAIR_ABOVE_REDEMPTION"
+            out["redemption"] = "1.00"
+            return out
+        try:
+            _vg = getattr(self, "validation_gates", None)
+            budget = getattr(_vg, "max_worst_case_deficit_usd", None)
+            if budget is None:
+                out["reason"] = "RESIDUAL_BUDGET_UNKNOWN"
+                return out
+            ceil = TS.completion_ceiling(
+                held_side=other, held_qty=h_other,
+                held_cost_usd=lc.get(other), deficient_qty=h_side,
+                deficient_cost_usd=(lc.get(side) or D(0)),
+                complete_qty=qty, residual_budget_usd=budget)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out["reason"] = "CEILING_UNREADABLE:%s" % type(exc).__name__
+            return out
+        out["completion_ceiling"] = (None if ceil is None else str(ceil))
+        out["residual_budget_usd"] = str(budget)
+        if ceil is None:
+            out["reason"] = "NO_COMPLETION_CEILING"
+            return out
+        if px > ceil:
+            out["reason"] = "ABOVE_COMPLETION_CEILING"
+            return out
+        out["ok"] = True
+        out["labels"] = ("judged as a COMPLETION of confirmed residual "
+                         "inventory, not as an opening. It reduces an "
+                         "unmatched position without crossing zero, the "
+                         "matched book stays at or under the $1.00 a share a "
+                         "pair redeems, and the price clears the completion "
+                         "ceiling the owner's residual budget bounds.")
+        return out
+
     def pair_cost_refusal(self, market: str, dec: Mapping[str, Any],
                           tr: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         """None if this order keeps the market's pair cost under the ceiling.
@@ -5330,7 +5410,45 @@ class FaithfulExecutor:
         cap = (DEF.DEFENSIVE_PAIR_CEILING if _mand else TS.max_pair_cost())
         if eff <= cap:
             return None
+        # ============ OPENING EXPOSURE VERSUS COMPLETING WHAT WE HOLD
+        #
+        # This gate is the one that actually decides, and it sits at the
+        # SUBMISSION boundary -- after `complement_order` has priced the leg.
+        # So widening the ceiling inside the complement achieved nothing on
+        # the books that matter: 1245z's completion at own 0.65 against a
+        # 0.7264 basis makes `eff` 0.9699, and 0.96 refused it HERE.
+        #
+        # The two cases are different questions and the codebase already
+        # says so for the defensive mandate above. An order that OPENS
+        # exposure answers to 0.96: a pair above it is a worse bargain than
+        # the strategy accepts. An order that COMPLETES confirmed residual
+        # inventory is not buying a bargain at all -- it is choosing between
+        # a dear pair and a stranded leg -- so it answers to the completion
+        # economics and the owner's approved residual budget.
+        #
+        # THREE CONDITIONS, ALL REQUIRED, so a rescue can neither increase
+        # directional exposure nor create a guaranteed loss:
+        #
+        #   it must REDUCE an unmatched position   held[other] > held[side]
+        #   it must not CROSS ZERO                 after[side] <= held[other]
+        #   the matched book must not settle at a
+        #   certain loss                           eff <= 1.00
+        #
+        # and the price must clear `completion_ceiling`, which is itself the
+        # minimum of "beats carrying the residual to settlement" and "stays
+        # inside the approved residual deficit". A matched pair pays exactly
+        # $1.00 a share, so `eff <= 1.00` is the line between a dear rescue
+        # and a certain loss, and it is never crossed.
+        if not _mand:
+            _resc = self.completion_pair_rescue(
+                market, side=side, other=other, px=px, qty=qty,
+                held=held, after=after, lc=lc, eff=eff)
+            if _resc.get("ok"):
+                return None
+        else:
+            _resc = None
         return {"why": "PAIR_COST_ABOVE_CEILING",
+                "completion_rescue": _resc,
                 "effective_pair_cost": str(eff.quantize(D("0.0001"))),
                 "ceiling": str(cap),
                 "ceiling_is_defensive": bool(_mand),
@@ -6015,18 +6133,56 @@ class FaithfulExecutor:
             # which stopped accumulation dead at one pair. A completion
             # exists only while one side is ahead of the other.
             if _need is not None and _need > D(0):
-                _basis = self.store.leg_cost(market).get(_other)
+                _legs = self.store.leg_cost(market)
+                _basis = _legs.get(_other)
                 _avg = (_basis / _held) if (_basis is not None
                                             and _held > D(0)) else None
+                # THE COMPLETION CONTEXT. With the inventory actually held
+                # and the owner's residual budget, `complement_order` judges
+                # this on `completion_ceiling` -- does completing beat
+                # carrying the residual to settlement -- instead of on the
+                # 0.96 OPENING cap, and it quotes at the touch rather than
+                # `depth_ticks` behind it. Withholding any of these reverts
+                # it to the opening cap, which is the stricter path, so an
+                # unreadable budget cannot buy a dearer completion.
+                #
+                # The budget is the owner's approved worst-case directional
+                # deficit, read from the gate that enforces it rather than
+                # from a second copy of the number.
+                _vg = getattr(self, "validation_gates", None)
+                _resid_budget = getattr(_vg, "max_worst_case_deficit_usd",
+                                        None)
                 comp = TS.complement_order(
                     side=nxt, qty=_need, cost_px=_avg,
+                    held_qty=_held, held_cost_usd=_basis,
+                    deficient_qty=_mine,
+                    deficient_cost_usd=_legs.get(nxt),
+                    residual_budget_usd=_resid_budget,
                     bid=ts_book.get("bid"), ask=ts_book.get("ask"),
                     tick=_tick,
                     min_qty=getattr(self.transport, "quantity_increment",
                                     None),
                     depth_ticks=_dticks,
                     book_age_s=ts_book.get("stream_age_s"),
-                    gap_suspected=bool(ts_book.get("gap_suspected")))
+                    gap_suspected=bool(ts_book.get("gap_suspected")),
+                    # WHAT THE COMPLEMENT IS FOR, stated rather than
+                    # implied. The market is the one this inventory is in
+                    # and the one `ts_book` was resolved for, so a
+                    # complement priced from any other book is refused at
+                    # the adoption site below instead of being trusted.
+                    # `_other` is the side we HOLD, so `complement_order`
+                    # can assert that `nxt` is its opposite rather than
+                    # take it on faith -- both are derived from the same
+                    # variable here, which is exactly why the assertion
+                    # belongs on the far side of the call.
+                    market=market, held_side=_other,
+                    # THE RESTING SIDE'S OWN DEPTH. A maker BUY of UP rests
+                    # a YES bid and a BUY of DOWN rests a YES sell on the
+                    # ask, so `complement_order` selects by side -- it is
+                    # handed both and picks, rather than being handed the
+                    # taker-side depth the defensive unwind needs below.
+                    bid_shares=ts_book.get("bid_shares"),
+                    ask_shares=ts_book.get("ask_shares"))
                 # ============ DEFENSIVE COMPLETION, IN TWO PHASES
                 #
                 # PRIORITY ONE IS STILL THE PROFITABLE COMPLETION above, and
@@ -6153,6 +6309,29 @@ class FaithfulExecutor:
                     return prov.refuse("TWO_SIDED_PROBE",
                                        str(comp.get("reason"))[:120])
                 else:
+                    # ADOPTION, AND WHAT IT IS CHECKED AGAINST FIRST.
+                    #
+                    # `complement_order` priced this against a book, a cost
+                    # basis and a quantity. Everything it was given is
+                    # checked inside it; what it CANNOT check is whether the
+                    # caller handed it the right market and the right side,
+                    # because those are the caller's own variables. So they
+                    # are verified here, against the inventory this leg is
+                    # meant to match, before the leg replaces the plan.
+                    #
+                    # Neither can currently fail -- both are passed from
+                    # `market` and `_other` a few lines above. That is the
+                    # point: an adoption that silently matched the wrong
+                    # market's book, or doubled the side we already hold,
+                    # would look exactly like a correct one in the record.
+                    _cm = comp.get("market")
+                    if _cm is not None and str(_cm) != str(market):
+                        return prov.refuse(
+                            "TWO_SIDED_PROBE",
+                            "COMPLEMENT_MARKET_MISMATCH:%s" % str(_cm)[:60])
+                    if str((comp.get("leg") or {}).get("side")) != str(nxt):
+                        return prov.refuse("TWO_SIDED_PROBE",
+                                           "COMPLEMENT_SIDE_MISMATCH")
                     leg = dict(comp["leg"])
                 # NO PAIR RE-GATE HERE, DELIBERATELY. `probe_precheck` prices
                 # both legs as if BOTH were still outstanding, which is right

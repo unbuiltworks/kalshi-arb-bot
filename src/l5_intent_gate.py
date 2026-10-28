@@ -119,6 +119,12 @@ EXECUTOR_GATES_NOT_EVALUATED_HERE: Tuple[str, ...] = (
     # reduces the residual. Like the two rules below and above it, an ENTRY
     # rule -- it can never refuse a completion.
     "TWO_SIDED_PROBE:PAST_ENTRY_CUTOFF_NOT_A_COMPLETION",
+    # the two refusals `Verify the complement before adopting it` added to
+    # `handle`: a complement priced from another market's book, and one on
+    # the side we already hold. Registered here because that commit added
+    # the sites without the inventory entries, which this guard catches.
+    "TWO_SIDED_PROBE:COMPLEMENT_MARKET_MISMATCH",
+    "TWO_SIDED_PROBE:COMPLEMENT_SIDE_MISMATCH",
     # the own-side price floor for OPENING a leg, from six settled windows
     # on 2026-10-23: the four that opened at own 0.29-0.36 all completed and
     # paid, and the two that opened at own 0.12 and 0.06 never completed and
