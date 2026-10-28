@@ -91,3 +91,47 @@ rather than against anything hand-edited:
 
 Any failure keeps the lock engaged and is reported as the specific blocker.
 No automatic relaunch after completion or a crash.
+
+## Deployment of the correction — completed 2026-10-28
+
+| | |
+|---|---|
+| deployment | `842462fa` **SUCCESS** 11:09Z |
+| running SHA | **`ea67b2c5`** on `claude/l5-narrow-campaign-prep` |
+| promoted from | `239ce8d2`, fast-forward, ancestry verified |
+| shadow lock | **engaged at boot** — `locked: true, blocked: ["submit"], cancel_still_permitted: true` |
+| requote | **absent from the tree** (`grep -c fresh_book_requote` = 0) |
+| parity | failure sets IDENTICAL to `239ce8d2`; 13,753 → 13,860 passes |
+
+Runtime config reads **`PASS: false`**, and that is the correct verdict
+rather than a regression: eight rows report `required:
+NO_APPROVAL_IN_FORCE` because the campaign document is expired. Every
+`effective` value is already right — OPEN/COMPLETE/REPLACE/backstop
+40/40/64/40, exposure $20, daily loss $5, windows 4 — so those rows turn
+green the moment a valid document is in force. The derived verifier refuses
+to bless a configuration it cannot attribute to an approval, which is
+exactly what it was changed to do.
+
+`experiment_id` reads the bare `l5-btc15m-prog24-c1-3bf1daa5`, because the
+`camp.<digest>` suffix exists only under an approved campaign. A new
+document will produce a new namespace automatically.
+
+### What shadow mode CANNOT verify, stated plainly
+
+The corrected transition fires only when a round **holds a matched pair**,
+and a matched pair requires fills. Shadow mode submits nothing, so nothing
+fills, so no round ever holds inventory and **`LEG_HOLDS_UNMATCHED` cannot
+appear in shadow telemetry at all.**
+
+What is verified live: the deployed SHA carries the correction, the service
+runs it against authenticated live books, the two-sided decision path is
+reached each tick, and the shadow lock holds. What is verified only by test:
+the transition itself — 29 behavioural tests, mutation-checked in both
+directions, plus the production state reproduced from the tape.
+
+So the first real evidence for the fix will be the campaign's own
+`TWO_SIDED_ROUND` records: the deadlock signature
+(`retirement_blocked_by: LEG_HOLDS_*` on a zero residual) must be **absent**,
+and `retired: true` on a matched round must appear. That is the first thing
+to check in window 1, and it is a reason to watch window 1 closely rather
+than to let four windows run unattended.
