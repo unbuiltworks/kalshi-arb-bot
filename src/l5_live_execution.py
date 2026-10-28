@@ -4726,10 +4726,31 @@ class FaithfulExecutor:
             be orphaned by moving on from the round that owns it -- it has to
             be cancelled by its own deadline first, by exact id, and proved
             terminal by a re-read.
-          * ANY filled quantity on either leg, including a PARTIAL. Retiring
-            a round that holds inventory would strand it: the complement is
+          * UNMATCHED filled quantity, including a PARTIAL. Retiring a
+            round that holds an imbalance would strand it: the complement is
             tracked per round, so walking past the round walks past the only
             thing that would have hedged it.
+
+        KEYED ON THE IMBALANCE, NOT ON HOLDING ANYTHING -- the same
+        correction the opening floor already carries, and for the same
+        reason. This read `position(market, leg) != 0` on either leg, so a
+        round became unretirable the instant ANY quantity filled. After a
+        pair COMPLETES both sides are non-zero AND EQUAL: there is nothing
+        left to strand, because the complement this round was tracking has
+        already been bought.
+
+        MEASURED, and it cost a window. 2026-10-28 0015z round 1 matched its
+        pair at +29s and +74s, leaving UP 1.87 and DOWN 1.87. Its frozen
+        plan had been priced against a 0.62 touch and the book then walked to
+        0.46/0.47, so `plan_executable` returned LEG_WOULD_CROSS:UP on every
+        later tick -- and retirement was refused with
+        `LEG_HOLDS_INVENTORY:UP` against a perfectly balanced book. The round
+        could neither execute nor retire, the UP leg at own 0.6000 was
+        re-proposed 23 times from 00:17:34 to 00:22:01, and the cross guard
+        refused each one: 446 of 600 seconds of entry capacity lost, and 3
+        of 4 authorized round allocations never usable. Across the preserved
+        tapes 139 ticks in eight windows were blocked this way with a ZERO
+        residual.
 
         An unreadable position or order count forbids it too, because an
         unknown is not a zero.
@@ -4739,9 +4760,10 @@ class FaithfulExecutor:
                 return "ORDER_STILL_LIVE"
             if self.store.still_fillable_order_count():
                 return "ORDER_STILL_FILLABLE"
-            for leg in ("UP", "DOWN"):
-                if self.store.position(market, leg) != D(0):
-                    return "LEG_HOLDS_INVENTORY:%s" % leg
+            up = self.store.position(market, UP)
+            dn = self.store.position(market, DOWN)
+            if up != dn:
+                return "LEG_HOLDS_UNMATCHED:%s" % (UP if up > dn else DOWN)
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

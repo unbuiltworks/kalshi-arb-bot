@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import json
 import os
-from decimal import Decimal as D
-from typing import Any, Callable, Dict, List, Optional
+from decimal import Decimal as D, InvalidOperation
+from typing import (Any, Callable, Dict, List, Mapping,
+                    Optional)
 
 
 #: THE OWNER'S APPROVED FIGURES for the eight-window live TWO_SIDED
@@ -289,6 +290,121 @@ def _mandate_verdict_reason() -> str:
         return "VERIFY_RAISED:%s" % type(exc).__name__
 
 
+#: Sentinel for a row whose authority is the owner's approval document when
+#: no document is in force. It is NOT a value and never compares equal to
+#: one, so such a row FAILS -- which is the whole point: an unverifiable
+#: configuration is not an approved configuration.
+NO_APPROVAL = "NO_APPROVAL_IN_FORCE"
+
+
+def approved_scope() -> Optional[Dict[str, Any]]:
+    """The scope of the campaign actually in force, or None.
+
+    WHY ROWS DERIVE FROM THIS. `APPROVED` below was campaign 1's profile,
+    frozen in code. By 2026-10-28 eight of its rows disagreed with the
+    configuration the owner had since approved -- backstop 40 against an
+    expected 56, exposure $20 against $5, four windows against eight -- so
+    `L5_EFFECTIVE_RUNTIME_CONFIG` read `PASS: false` on a correctly
+    configured service. A gate that always fails is a gate nobody can use,
+    and it was about to be the pre-arm check for a live campaign.
+
+    So the figures the owner sets PER CAMPAIGN are graded against the
+    document that approved them, and the figures that are code ceilings stay
+    graded against the code. Nothing is graded against a number that has to
+    be hand-edited each campaign.
+    """
+    try:
+        from src import l5_campaign_approval as _CA
+        st = _CA.approval_gate().state() or {}
+        if not st.get("approved"):
+            return None
+        sc = st.get("scope")
+        return dict(sc) if isinstance(sc, Mapping) else None
+    except BaseException:                                      # noqa: BLE001
+        return None
+
+
+def _scope_dec(scope: Optional[Mapping[str, Any]], field: str,
+               ceiling: Any) -> Any:
+    """What the document approved for `field`, intersected with the code
+    ceiling. An approval can never widen a ceiling, so the expected value is
+    the MINIMUM of the two -- and with no document it is `NO_APPROVAL`, so
+    the row fails rather than passing on a default."""
+    if scope is None:
+        return NO_APPROVAL
+    try:
+        v = D(str(scope.get(field)))
+    except (InvalidOperation, TypeError, ValueError):
+        return NO_APPROVAL
+    if not v.is_finite() or v <= 0:
+        return NO_APPROVAL
+    cap = D(str(ceiling))
+    return v if v < cap else cap
+
+
+def _scope_int(scope: Optional[Mapping[str, Any]], field: str,
+               ceiling: int) -> Any:
+    if scope is None:
+        return NO_APPROVAL
+    try:
+        v = int(scope.get(field))
+    except (TypeError, ValueError):
+        return NO_APPROVAL
+    if v <= 0:
+        return NO_APPROVAL
+    return min(v, int(ceiling))
+
+
+def _budget(scope: Optional[Mapping[str, Any]], field: str,
+             ceiling: Any) -> Any:
+    """The budget the document approved, or the invariant when it is silent.
+
+    PREFER THE DOCUMENT. When the owner states a budget, the deployed
+    variable is graded against THAT -- so a value left over from a previous
+    campaign fails, which is the drift this row exists to catch. When the
+    document is silent the row falls back to `_configured_within`, which
+    still requires the variable to be configured and inside the code
+    ceiling, so a silent document is never an unconditional pass.
+    """
+    if scope is None:
+        return NO_APPROVAL
+    budgets = scope.get("submission_budgets")
+    if not isinstance(budgets, Mapping) or budgets.get(field) is None:
+        return None                         # caller applies the invariant
+    try:
+        v = D(str(budgets.get(field)))
+    except (InvalidOperation, TypeError, ValueError):
+        return NO_APPROVAL
+    if not v.is_finite() or v <= 0 or v > D(str(ceiling)):
+        return NO_APPROVAL
+    return int(v)
+
+
+def _configured_within(ceiling: Any):
+    """A comparison for a per-campaign operational budget that has no field
+    in the approval document: it must be CONFIGURED and within the code
+    ceiling. Unset fails, zero fails, over the ceiling fails.
+
+    This is deliberately an invariant and not a magic number. The owner
+    chooses the submission budgets per campaign, so grading them against a
+    frozen integer guarantees a stale failure; grading them against nothing
+    would be an unconditional PASS. Grading them against the ceiling is the
+    check that actually protects something.
+    """
+    cap = D(str(ceiling))
+
+    def cmp(got: Any, _required: Any) -> bool:
+        if got is None:
+            return False
+        try:
+            v = D(str(got))
+        except (InvalidOperation, TypeError, ValueError):
+            return False
+        return v.is_finite() and v > 0 and v <= cap
+
+    return cmp
+
+
 def verify() -> Dict[str, Any]:
     """Every approved figure, read effectively. `PASS` only if all hold."""
     from src import l5_campaign_approval as CA
@@ -301,18 +417,43 @@ def verify() -> Dict[str, Any]:
     from src import l5_campaign_baseline as CBL
 
     A = APPROVED
+    SC = approved_scope()
+    # the per-campaign figures, derived from the document that approved them
+    # and intersected with the code ceilings they can never widen
+    exp_usd = _scope_dec(SC, "max_total_exposure_usd",
+                         CA.MAX_TOTAL_EXPOSURE_USD)
+    daily_usd = _scope_dec(SC, "max_daily_loss_usd", CA.MAX_DAILY_LOSS_USD)
+    windows = _scope_int(SC, "max_windows", CA.MAX_WINDOWS)
+    CAP = AUTH._CLASS_TICKET_CEILING
+
+    def budget_row(name: str, source: str, read: Any, field: str):
+        want = _budget(SC, field, CAP)
+        if want is None:                    # the document is silent
+            return _row(name, source, read, "configured, 1..%d" % CAP,
+                        compare=_configured_within(CAP))
+        return _row(name, source, read, want)
+
     rows: List[Dict[str, Any]] = [
         # ---------------------------------------- submission budgets
-        _row("submission_budget_open", "AUTH.max_of_class('OPEN')",
-             lambda: AUTH.max_of_class("OPEN"), A["submission_budget_open"]),
-        _row("submission_budget_complete", "AUTH.max_of_class('COMPLETE')",
-             lambda: AUTH.max_of_class("COMPLETE"),
-             A["submission_budget_complete"]),
-        _row("submission_budget_replace", "AUTH.max_of_class('REPLACE')",
-             lambda: AUTH.max_of_class("REPLACE"),
-             A["submission_budget_replace"]),
-        _row("submission_backstop", "AUTH.max_submissions()",
-             AUTH.max_submissions, A["submission_backstop"]),
+        # THE SUBMISSION BUDGETS are the owner's per-campaign numbers and
+        # the approval document has no field for them, so they are graded
+        # as INVARIANTS rather than against a frozen integer: configured,
+        # positive, and within the code ticket ceiling. Unset fails and so
+        # does over-ceiling; what cannot happen is a stale magic number
+        # failing a correctly configured service.
+        budget_row("submission_budget_open", "AUTH.max_of_class('OPEN')",
+                   lambda: AUTH.max_of_class("OPEN"),
+                   "max_open_submissions"),
+        budget_row("submission_budget_complete",
+                   "AUTH.max_of_class('COMPLETE')",
+                   lambda: AUTH.max_of_class("COMPLETE"),
+                   "max_complete_submissions"),
+        budget_row("submission_budget_replace",
+                   "AUTH.max_of_class('REPLACE')",
+                   lambda: AUTH.max_of_class("REPLACE"),
+                   "max_replace_submissions"),
+        budget_row("submission_backstop", "AUTH.max_submissions()",
+                   AUTH.max_submissions, "max_total_submissions"),
 
         # ---------------------------------------------- hard money limits
         _row("defensive_loss_budget_usd",
@@ -340,8 +481,7 @@ def verify() -> Dict[str, Any]:
         # rather than being discovered by an order that used the old ceiling.
         _row("aggregate_exposure_usd",
              "R.max_total_exposure_usd() (the variable)",
-             lambda: R.max_total_exposure_usd(),
-             A["aggregate_exposure_usd"]),
+             lambda: R.max_total_exposure_usd(), exp_usd),
         _row("campaign_additional_loss_usd",
              "CBL.limit_from_env() clamped by CBL.MAX_ADDITIONAL_LOSS_USD",
              lambda: CBL.limit_from_env(),
@@ -350,14 +490,15 @@ def verify() -> Dict[str, Any]:
              "TS.opening_notional_budget_usd() clamped by "
              "TS.OPENING_NOTIONAL_MAX_USD",
              lambda: TS.opening_notional_budget_usd(),
-             A["opening_notional_budget_usd"]),
+             "configured, 0..%s" % TS.OPENING_NOTIONAL_MAX_USD,
+             compare=_configured_within(TS.OPENING_NOTIONAL_MAX_USD)),
         _row("aggregate_exposure_in_force_usd",
              "R.PROBE_LIMITS['max_total_exposure_usd'] (frozen at boot)",
              lambda: D(str(R.PROBE_LIMITS["max_total_exposure_usd"])),
-             A["aggregate_exposure_usd"]),
+             exp_usd),
         _row("daily_realized_loss_halt_usd",
              "R.daily_realized_loss_halt()",
-             R.daily_realized_loss_halt, A["daily_realized_loss_halt_usd"]),
+             R.daily_realized_loss_halt, daily_usd),
         _row("max_live_orders", "R.max_live_orders()",
              R.max_live_orders, A["max_live_orders"]),
 
@@ -398,8 +539,11 @@ def verify() -> Dict[str, Any]:
         # ------------------------------------------------ campaign scope
         _row("max_windows_code_ceiling", "CA.MAX_WINDOWS (code constant)",
              lambda: CA.MAX_WINDOWS, A["max_windows"]),
+        # THE WINDOW BUDGET comes from the document, capped by CA.MAX_WINDOWS.
+        # It used to expect 8 -- campaign 1's figure -- which failed the
+        # four-window campaign the owner had approved.
         _row("max_windows_authorization", "AUTH.max_windows_env()",
-             AUTH.max_windows_env, A["max_windows"]),
+             AUTH.max_windows_env, windows),
         _row("campaign_duration_ceiling_s",
              "CA.MAX_CAMPAIGN_S (code constant)",
              lambda: float(CA.MAX_CAMPAIGN_S),

@@ -58,10 +58,42 @@ def _pin_the_frozen_ceiling(monkeypatch):
     monkeypatch.setitem(_R.PROBE_LIMITS, "max_total_exposure_usd", D("5"))
 
 
+def _approval_document():
+    """The document that APPROVES the figures `APPROVED_ENV` deploys.
+
+    The verifier now grades the per-campaign figures against the owner's
+    document rather than against a dict frozen in code -- which is what let
+    eight of its rows drift out of agreement with the configuration the
+    owner had actually approved. So the fixture has to carry the document
+    too: without one the document-derived rows read NO_APPROVAL_IN_FORCE and
+    fail, which is correct behaviour and not a bug in the verifier.
+    """
+    import datetime as _dt
+    import json as _json
+    now = _dt.datetime.now(_dt.timezone.utc)
+    return _json.dumps({
+        "approved": True, "nonce": "a" * 64,
+        "series": "cpc-btc-updown-15m-",
+        "issued_utc": now.isoformat(),
+        "expires_utc": (now + _dt.timedelta(hours=2)).isoformat(),
+        "max_windows": int(APPROVED_ENV["L5_LIVE_AUTH_MAX_WINDOWS"]),
+        "max_total_exposure_usd": APPROVED_ENV["L5_MAX_TOTAL_EXPOSURE_USD"],
+        "max_daily_loss_usd": "5",
+        "max_open_submissions": int(APPROVED_ENV["L5_LIVE_AUTH_MAX_OPEN"]),
+        "max_complete_submissions":
+            int(APPROVED_ENV["L5_LIVE_AUTH_MAX_COMPLETE"]),
+        "max_replace_submissions":
+            int(APPROVED_ENV["L5_LIVE_AUTH_MAX_REPLACE"]),
+        "max_total_submissions":
+            int(APPROVED_ENV["L5_LIVE_AUTH_MAX_SUBMISSIONS"]),
+    })
+
+
 @pytest.fixture()
 def approved(monkeypatch):
     for k, v in APPROVED_ENV.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", _approval_document())
     # the defensive flag is OFF at deploy, which the verifier requires
     monkeypatch.delenv("L5_DEFENSIVE_COMPLETION", raising=False)
     monkeypatch.delenv("L5_DAILY_REALIZED_LOSS_HALT_USD", raising=False)
@@ -354,14 +386,20 @@ CURRENT_SNAPSHOT = dict(_CUR,
                            "L5_LIVE_AUTH_MAX_WINDOWS": "4"})
 
 
-def test_the_approved_snapshot_predicts_a_pass():
+def test_the_approved_snapshot_predicts_a_pass(monkeypatch):
+    # THE DOCUMENT IS NOT A SNAPSHOT VARIABLE, deliberately: it carries the
+    # nonce, and `SNAPSHOT_ALLOWED` exists so a file that gets pasted into a
+    # chat cannot contain a credential. So a prediction reads the document
+    # from the ambient environment, and a test that predicts has to set one.
+    monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", _approval_document())
     out = V.verify_snapshot(APPROVED_SNAPSHOT)
     assert out["PASS"] is True, out["failed"]
     assert out["basis"] == "SNAPSHOT_PREDICTION"
 
 
-def test_todays_production_values_predict_exactly_the_rows_that_must_change():
-    """The useful answer: not "something is wrong" but WHICH five."""
+def test_todays_production_values_predict_exactly_the_rows_that_must_change(monkeypatch):
+    """The useful answer: not "something is wrong" but WHICH rows."""
+    monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", _approval_document())
     out = V.verify_snapshot(CURRENT_SNAPSHOT)
     assert out["PASS"] is False
     assert set(out["failed"]) == {
@@ -455,8 +493,11 @@ def test_a_snapshot_that_is_not_an_object_is_refused():
             V.verify_snapshot(bad)
 
 
-def test_the_cli_exits_nonzero_on_a_failing_prediction(capsys, tmp_path):
+def test_the_cli_exits_nonzero_on_a_failing_prediction(capsys, tmp_path,
+                                                       monkeypatch):
     import json as _json
+    # as above: the document is ambient, never part of the snapshot file
+    monkeypatch.setenv("L5_CAMPAIGN_APPROVAL", _approval_document())
     f = tmp_path / "snap.json"
     f.write_text(_json.dumps(CURRENT_SNAPSHOT))
     assert V.main(["--from-snapshot", str(f)]) == 1

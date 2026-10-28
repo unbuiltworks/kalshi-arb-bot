@@ -956,14 +956,46 @@ def class_sid(experiment: str, klass: str, n: int) -> str:
 
 
 def class_spent(path: str, experiment: str, klass: str) -> List[str]:
-    """Every ticket this class holds. Durable; counted from the filesystem."""
+    """Every ticket this class holds. Durable; counted from the filesystem.
+
+    COUNTS THIS ID'S OWN TICKETS AND ITS CAMPAIGNS'. A ticket is named
+    `cls1.<exp>.<CLASS>.<n>`, and under a campaign `<exp>` carries the
+    `.camp.<digest>` suffix `experiment_id` appends -- so a campaign's
+    tickets are named `cls1.<base>.camp.<digest>.<CLASS>.<n>`. Matching the
+    class at the TAIL rather than at a fixed offset makes both forms count
+    under the base id, while a campaign id still counts only its own.
+
+    That asymmetry is the whole point, and it is what keeps the namespace
+    from becoming a way to replenish a budget:
+
+      * under campaign X the prefix is `<base>.camp.X`, which no other
+        campaign's and not the bare id's tickets match -- X gets the fresh
+        budget the owner authorized for it;
+      * under the bare `<base>` -- which is what an absent, unreadable or
+        expired campaign falls back to -- every campaign's tickets match, so
+        the fallback can only ever see MORE spent than any campaign did.
+
+    A restart inside one campaign re-derives the same digest and so re-reads
+    the same files; it sees its own spend, never a clean budget.
+    """
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(experiment))[:120]
     d = pathlib.Path(path).parent
     if not d.is_dir():
         return []
-    pre = "l5_auth_claim_cls1.%s.%s." % (safe, str(klass).upper())
-    return sorted(p.name for p in d.glob("l5_auth_claim_cls1.*.lock")
-                  if p.name.startswith(pre))
+    k = str(klass).upper()
+    # the trailing dot matters: without it `<exp>` would also match the
+    # tickets of any id it is a textual prefix of, which is a DIFFERENT
+    # experiment rather than a campaign of this one.
+    head = "l5_auth_claim_cls1.%s." % (safe,)
+    out = []
+    for p in d.glob("l5_auth_claim_cls1.*.lock"):
+        n = p.name
+        if not n.startswith(head):
+            continue
+        parts = n[len(head):-len(".lock")].split(".")
+        if len(parts) >= 2 and parts[-2] == k:
+            out.append(n)
+    return sorted(out)
 
 
 def class_budget_report(path: str, experiment: str) -> Dict[str, Any]:
@@ -1133,8 +1165,109 @@ def claim_once(path: str, sid: str, payload: Mapping[str, Any]) -> None:
 EXPERIMENT_ENV = "L5_EXPERIMENT_ID"
 
 
+#: THE LONGEST SID MUST FIT IN `_lock_path`'s 120 CHARACTERS, so this caps
+#: the experiment id rather than letting a long one be silently cut.
+#:
+#: The longest id any claim builds is an accumulation claim --
+#: `acc1.<exp>.<market>.<rnd>.<leg>.a<attempt>` -- so the budget is:
+#:
+#:     "acc1." 5 + "." 1 + market 40 + "." 1 + rnd 2 + "." 1
+#:           + "DOWN" 4 + "." 1 + "a" 1 + attempt 2            = 58
+#:
+#: 120 - 58 = 62. A PMUS BTC15m slug is 35 characters, so 40 leaves room for
+#: a longer series without this needing revisiting; if a venue ever exceeds
+#: it, the sid is still cut, so the figure is checked by a test rather than
+#: trusted.
+MAX_EXPERIMENT_LEN = 62
+
+
+def campaign_claim_suffix() -> str:
+    """`camp.<digest>` while an approved campaign is in force, else "".
+
+    WHY THE EXPERIMENT ID IS NOT ENOUGH ON ITS OWN. Every durable submission
+    claim is a lock file keyed on the experiment string -- `sub1.<exp>`,
+    `acc1.<exp>...`, `cls1.<exp>.<CLASS>.<n>`. The owner sets `<exp>` in a
+    variable, and nothing ties that variable to the campaign it is spending
+    for, so two consecutively authorized campaigns carrying the same value
+    share one budget: the second inherits every claim the first spent.
+
+    That is not hypothetical. Window 4 of the four-window campaign of
+    2026-10-28 submitted NOTHING, because 27 claims left by earlier
+    campaigns under the same `L5_EXPERIMENT_ID` were counted against its
+    40-submission backstop -- `total_max: 40, total_spent: 38` -- leaving no
+    room for the completion reserve. The window was authorized and funded
+    and traded nothing.
+
+    So the namespace is keyed on the campaign ITSELF rather than on a
+    variable whose value the campaign's scope does not control. The campaign
+    already has a durable identity -- `campaign_claim_sid`, the SHA-256 of
+    the owner-held nonce -- and appending it gives every authorized campaign
+    its own budget without the owner having to remember to rotate anything.
+
+    WHY A RESTART CANNOT REPLENISH. The suffix is a pure function of the
+    nonce, which lives in a variable the executor cannot write. A restart,
+    a redeploy or a crash-recovery re-reads the same nonce, derives the same
+    digest, and therefore counts the same claim files. Only a NEW document
+    carrying a NEW nonce -- which only the owner can issue -- opens a new
+    namespace. Budget replenishment is an owner action, by construction.
+
+    FAILS TOWARD FEWER CLAIMS, NEVER MORE. Anything but a readable, approved
+    document yields "", which leaves the bare experiment id -- and that id
+    counts every campaign-suffixed claim too, because `submissions_spent`
+    matches on prefix and `class_spent` matches the class segment at the
+    tail. So an unreadable or expired campaign sees MORE spent, never less.
+    A budget we cannot attribute is not a budget we may assume has room.
+    """
+    try:
+        from src import l5_campaign_approval as _CA   # late: avoids a cycle
+        st = _CA.approval_gate().state() or {}
+        if not st.get("approved"):
+            return ""
+        return campaign_claim_sid(st.get("scope") or {})
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return ""
+
+
 def experiment_id() -> str:
-    return (os.getenv(EXPERIMENT_ENV) or "").strip()
+    """The claim namespace THIS campaign's submissions are counted in.
+
+    `<owner id>.camp.<digest>` under an approved campaign; the bare owner id
+    otherwise, which is the behaviour every caller had before campaigns
+    existed and is still what applies when none is in force.
+
+    AN UNNAMED EXPERIMENT STAYS UNNAMED. A campaign never supplies the id by
+    itself: with `L5_EXPERIMENT_ID` unset this returns "", so the callers
+    that refuse on an unnamed experiment -- `SUBMISSION_CLAIM_NO_EXPERIMENT`
+    and its siblings -- go on refusing. The suffix narrows a named budget; it
+    does not create one.
+    """
+    base = (os.getenv(EXPERIMENT_ENV) or "").strip()
+    if not base:
+        return ""
+    suf = campaign_claim_suffix()
+    if not suf:
+        return base
+    # THE DIGEST SURVIVES, THE LABEL GIVES WAY. `_lock_path` truncates the
+    # WHOLE sid at 120 characters, and the longest sid is an accumulation
+    # claim, which carries the market slug as well as the experiment (see
+    # MAX_EXPERIMENT_LEN). Appending 30 characters of campaign suffix spends
+    # most of the headroom that id had, so a longer experiment label would
+    # push `acc1....DOWN.a3` past the cut -- and a truncated sid makes two
+    # distinct claims share one lock file, which leaves the single-use
+    # ledger ambiguous about which leg it is holding.
+    #
+    # So the composed id is bounded, and it is the owner's LABEL that is
+    # shortened rather than the digest: the digest is the part that carries
+    # isolation, and a shortened label can at worst collide with another
+    # label inside the SAME campaign, which is cosmetic. Losing digest
+    # characters would merge two campaigns' budgets, which is the bug this
+    # whole mechanism exists to fix.
+    room = MAX_EXPERIMENT_LEN - len(suf) - 1
+    if room < 1:
+        return suf                      # unreachable at any sane suffix
+    return "%s.%s" % (base[:room], suf)
 
 
 def submission_sid(experiment: str) -> str:
