@@ -51,6 +51,15 @@ ASK_WINDOWS = int(os.getenv("ASK_WINDOWS", "4"))
 ASK_EXPOSURE_USD = os.getenv("ASK_EXPOSURE_USD", "5")
 ASK_DAILY_LOSS_USD = os.getenv("ASK_DAILY_LOSS_USD", "5")
 ASK_DURATION_S = int(os.getenv("ASK_DURATION_S", str(4 * 3600)))
+#: THE SUBMISSION BUDGETS, now GRADED and no longer audit-trail-only. The
+#: runtime-config verifier reads them from the document and compares them
+#: with the deployed variables, so a value left over from a previous
+#: campaign fails instead of passing quietly. The defaults are the figures
+#: this script hardcoded before, so a run with no overrides is unchanged.
+ASK_OPEN = int(os.getenv("ASK_OPEN", "8"))
+ASK_COMPLETE = int(os.getenv("ASK_COMPLETE", "12"))
+ASK_REPLACE = int(os.getenv("ASK_REPLACE", "16"))
+ASK_TOTAL = int(os.getenv("ASK_TOTAL", "28"))
 
 
 def build(now: dt.datetime | None = None) -> dict:
@@ -67,24 +76,29 @@ def build(now: dt.datetime | None = None) -> dict:
         "max_windows": ASK_WINDOWS,
         "max_total_exposure_usd": ASK_EXPOSURE_USD,
         "max_daily_loss_usd": ASK_DAILY_LOSS_USD,
-        # free-form, carried for the AUDIT TRAIL only; the gate ignores
-        # every field below. The limits that bind are the code constants
-        # and the env budgets -- these record what was approved, so a
-        # settlement audit can be read against the approval it ran under.
+        # carried for the audit trail. The ARMING gate still ignores every
+        # field below -- the limits that bind are the code constants and
+        # the env budgets -- but the four submission budgets are now read
+        # by the runtime-config verifier and graded against the deployed
+        # variables, so they are no longer decorative.
         "strategy": "TWO_SIDED",
         "pair_cost_ceiling": "0.96",
         "max_live_orders": 1,
         # THE THREE DURABLE CLASS BUDGETS, campaign-wide. One flat total
         # cannot tell an order that takes on risk from one that unwinds it,
         # so it is spent by the first kind and refuses the second.
-        "max_open_submissions": 8,
-        "max_complete_submissions": 12,
-        "max_replace_submissions": 16,
+        "max_open_submissions": ASK_OPEN,
+        "max_complete_submissions": ASK_COMPLETE,
+        "max_replace_submissions": ASK_REPLACE,
         # the finite backstop, deliberately BELOW the sum of the three, so
         # no two classes can both run to their ceiling. It does NOT bind a
         # risk-reducing order: a global count that can refuse an order
         # which provably reduces |unmatched| can only STRAND risk.
-        "max_submissions_total": 28,
+        # NAMED TO MATCH THE VERIFIER, which reads `max_total_submissions`.
+        # This field was `max_submissions_total` while nothing read it; the
+        # two spellings would have left the backstop ungraded, which is the
+        # one budget whose drift silenced a whole window.
+        "max_total_submissions": ASK_TOTAL,
         "completion_reserve_submissions": 2,
         "backstop_exempts_risk_reducing": True,
         "cancellations": "UNBUDGETED: a bound that could refuse a cancel is "
