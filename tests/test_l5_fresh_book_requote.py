@@ -43,12 +43,12 @@ MKT = "cpc-btc-updown-15m-2026-10-28-0015z"
 
 
 class Ex:
-    """The five attributes presend_requote touches."""
+    """The five attributes fresh_book_requote touches."""
 
-    presend_requote = LX.FaithfulExecutor.presend_requote
-    presend_requote_enabled = staticmethod(
-        LX.FaithfulExecutor.presend_requote_enabled)
-    PRESEND_REQUOTE_ENV = LX.FaithfulExecutor.PRESEND_REQUOTE_ENV
+    fresh_book_requote = LX.FaithfulExecutor.fresh_book_requote
+    fresh_book_requote_enabled = staticmethod(
+        LX.FaithfulExecutor.fresh_book_requote_enabled)
+    FRESH_BOOK_REQUOTE_ENV = LX.FaithfulExecutor.FRESH_BOOK_REQUOTE_ENV
 
     def __init__(self, up=D(0), dn=D(0), leg_pending=None, tick="0.01"):
         self.transport = type("T", (), {"tick_size": tick})()
@@ -63,30 +63,30 @@ def book(bid, ask, age="0.05"):
 
 @pytest.fixture(autouse=True)
 def _on(monkeypatch):
-    monkeypatch.setenv(LX.FaithfulExecutor.PRESEND_REQUOTE_ENV, "YES")
+    monkeypatch.setenv(LX.FaithfulExecutor.FRESH_BOOK_REQUOTE_ENV, "YES")
 
 
 # ------------------------------------------------------- the default is off
 
 def test_it_is_off_unless_named(monkeypatch):
-    monkeypatch.delenv(LX.FaithfulExecutor.PRESEND_REQUOTE_ENV, raising=False)
-    assert LX.FaithfulExecutor.presend_requote_enabled() is False
-    assert Ex().presend_requote(
+    monkeypatch.delenv(LX.FaithfulExecutor.FRESH_BOOK_REQUOTE_ENV, raising=False)
+    assert LX.FaithfulExecutor.fresh_book_requote_enabled() is False
+    assert Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48")
     ) is None
 
 
 @pytest.mark.parametrize("raw", ["", " ", "0", "no", "off", "maybe", "Y"])
 def test_only_an_explicit_yes_enables_it(monkeypatch, raw):
-    monkeypatch.setenv(LX.FaithfulExecutor.PRESEND_REQUOTE_ENV, raw)
-    assert LX.FaithfulExecutor.presend_requote_enabled() is False
+    monkeypatch.setenv(LX.FaithfulExecutor.FRESH_BOOK_REQUOTE_ENV, raw)
+    assert LX.FaithfulExecutor.fresh_book_requote_enabled() is False
 
 
 # ------------------------------------------ the measured 0015z refusal
 
 def test_the_0015z_up_refusal_becomes_a_lower_non_crossing_price():
     """The exact case: UP at own 0.61 against a book gone to 0.47/0.48."""
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48"))
     assert out is not None
     assert out["own_px_was"] == "0.61"
@@ -120,13 +120,13 @@ def test_the_obligation_and_deficit_both_fall():
 def test_a_price_that_is_not_strictly_lower_is_refused():
     """A rising market would need the price RAISED to stop crossing, and
     that is exactly what must never happen."""
-    assert Ex().presend_requote(
+    assert Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.20")}, {}, book("0.47", "0.48")
     ) is None
 
 
 def test_an_equal_price_is_refused_too():
-    assert Ex().presend_requote(
+    assert Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.45")}, {}, book("0.47", "0.48")
     ) is None
 
@@ -134,7 +134,7 @@ def test_an_equal_price_is_refused_too():
 def test_the_result_never_crosses_on_either_side():
     for side, bid, ask, old in (("UP", "0.47", "0.48", "0.61"),
                                 ("DOWN", "0.20", "0.21", "0.95")):
-        out = Ex().presend_requote(
+        out = Ex().fresh_book_requote(
             MKT, {"side": side, "price": D(old)}, {}, book(bid, ask))
         if out is None:
             continue
@@ -143,7 +143,7 @@ def test_the_result_never_crosses_on_either_side():
 
 
 def test_a_down_leg_is_quoted_from_one_minus_the_ask():
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "DOWN", "price": D("0.95")}, {}, book("0.20", "0.21"))
     assert out is not None
     # DOWN own touch is 1 - ask = 0.79, less 2 ticks
@@ -156,7 +156,7 @@ def test_a_down_leg_is_quoted_from_one_minus_the_ask():
 def test_an_opening_requote_may_not_walk_under_the_first_leg_floor():
     """0.20 exists to stop cheap legs stranding; a requote must not slip
     beneath it."""
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.18", "0.19"))
     assert out is None                        # would be 0.16, under 0.20
 
@@ -165,7 +165,7 @@ def test_a_completion_is_exempt_from_that_floor():
     """Same reason first_leg_entry_refusal exempts it: refusing the leg
     that matches held inventory can only strand it."""
     ex = Ex(up=D("1.85"), dn=D(0), leg_pending="DOWN")
-    out = ex.presend_requote(
+    out = ex.fresh_book_requote(
         MKT, {"side": "DOWN", "price": D("0.95")}, {}, book("0.80", "0.81"))
     assert out is not None
     assert out["completing"] is True
@@ -174,13 +174,13 @@ def test_a_completion_is_exempt_from_that_floor():
 
 def test_a_flat_book_is_an_opening_not_a_completion():
     ex = Ex(up=D("1.85"), dn=D("1.85"), leg_pending="UP")
-    out = ex.presend_requote(
+    out = ex.fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.18", "0.19"))
     assert out is None                        # floor binds: not completing
 
 
 def test_the_price_stays_on_the_venue_grid_and_in_band():
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48"))
     tick = D("0.01")
     px = D(out["own_px_now"])
@@ -198,26 +198,26 @@ def test_the_price_stays_on_the_venue_grid_and_in_band():
 def test_an_unusable_book_refuses_rather_than_sending(bk):
     """The guard before it fails OPEN because declining is free. This one
     SENDS, so anything it cannot establish must refuse."""
-    assert Ex().presend_requote(
+    assert Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, bk) is None
 
 
 @pytest.mark.parametrize("bad", [None, "", "junk", "nan"])
 def test_an_unreadable_old_price_refuses(bad):
-    assert Ex().presend_requote(
+    assert Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": bad}, {}, book("0.47", "0.48")) is None
 
 
 @pytest.mark.parametrize("tick", [None, "0", "-0.01", "junk"])
 def test_an_unreadable_tick_refuses(tick):
-    assert Ex(tick=tick).presend_requote(
+    assert Ex(tick=tick).fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48")
     ) is None
 
 
 def test_an_unknown_side_refuses():
     for side in (None, "", "SIDEWAYS"):
-        assert Ex().presend_requote(
+        assert Ex().fresh_book_requote(
             MKT, {"side": side, "price": D("0.61")}, {}, book("0.47", "0.48")
         ) is None
 
@@ -231,7 +231,7 @@ def test_a_raising_store_refuses_rather_than_sending():
         raise RuntimeError("ledger unreadable")
 
     ex.store = type("S", (), {"position": lambda _s, m, s: boom(m, s)})()
-    assert ex.presend_requote(
+    assert ex.fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48")
     ) is None
 
@@ -245,7 +245,7 @@ def test_with_no_leg_pending_the_ledger_is_never_read():
         raise RuntimeError("must not be called")
 
     ex.store = type("S", (), {"position": lambda _s, m, s: boom(m, s)})()
-    out = ex.presend_requote(
+    out = ex.fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48"))
     assert out is not None and out["completing"] is False
 
@@ -255,25 +255,27 @@ def test_the_helper_does_not_depend_on_a_name_from_another_module():
     swallowed by the catch -- making the requote silently inert while
     every test that only asserts None still passed."""
     import inspect
-    src = inspect.getsource(LX.FaithfulExecutor.presend_requote)
+    src = inspect.getsource(LX.FaithfulExecutor.fresh_book_requote)
     assert "_d(" not in src
     assert "def _num(" in src
 
 
-# ------------------------------------------- the call site stays guarded
+# ------------------------- the send boundary CHANGES NOTHING any more
 
-def test_the_call_site_refuses_when_the_requote_declines():
+def test_the_send_boundary_refuses_and_does_not_reprice():
+    """Requirement: do not modify an already-approved money intent. The
+    cross guard either lets the gated order through untouched or refuses."""
     import inspect
     src = inspect.getsource(LX.FaithfulExecutor)
     blk = src[src.index("_xr = self.presend_cross_refusal"):]
     blk = blk[:blk.index("_dr = self.disarmed_refusal()")]
-    assert "if _rq is None:" in blk
     assert 'return prov.refuse("PRESEND_CROSS"' in blk
-    # staged with the gated price it was checked against, so the provenance
-    # record shows the integrity boundary was informed and not bypassed
-    assert 'prov.stage("PRESEND_REQUOTE", dict(' in blk
-    assert 'gated_price_was=str(gated_money["price"])' in blk
-    # the disarmed check still follows, so a disarmed transport cannot send
+    # nothing in that block touches a money field
+    # the CALL, not the word -- the comment cross-references the helper
+    for forbidden in ("self.fresh_book_requote(", "dict(tr, price=",
+                      "dict(intent, price=", "gated_money = dict("):
+        assert forbidden not in blk, forbidden
+    # and the disarmed check still follows, so a disarmed transport cannot send
     assert "disarmed_refusal" in src
 
 
@@ -287,7 +289,7 @@ def test_the_call_site_refuses_when_the_requote_declines():
 # pass -- the helper supplies a fresh age.
 
 def test_a_stalled_mirror_refuses_rather_than_repricing():
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {},
         book("0.47", "0.48", age=str(TS.MAX_BOOK_AGE_S + 0.1)))
     assert out is None
@@ -296,20 +298,20 @@ def test_a_stalled_mirror_refuses_rather_than_repricing():
 def test_a_book_with_no_age_at_all_refuses():
     """`ts_authenticated_book` returns {} on every failure, and {} has no
     age. That must reach the original refusal, not a repriced order."""
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {},
         {"bid": "0.47", "ask": "0.48"})
     assert out is None
 
 
 def test_an_empty_book_refuses():
-    assert Ex().presend_requote(
+    assert Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, {}) is None
 
 
 @pytest.mark.parametrize("age", ["", "   ", "abc", "NaN", "Infinity", None])
 def test_an_unreadable_age_refuses(age):
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {},
         book("0.47", "0.48", age=age))
     assert out is None, age
@@ -318,14 +320,14 @@ def test_an_unreadable_age_refuses(age):
 def test_an_age_exactly_at_the_bound_is_still_fresh():
     """`age > MAX` and not `>=`, the same test `build_orders` applies, so one
     definition of 'fresh' governs the planner and the requote alike."""
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {},
         book("0.47", "0.48", age=str(TS.MAX_BOOK_AGE_S)))
     assert out is not None
 
 
 def test_the_record_states_the_bound_it_enforced():
-    out = Ex().presend_requote(
+    out = Ex().fresh_book_requote(
         MKT, {"side": "UP", "price": D("0.61")}, {}, book("0.47", "0.48"))
     assert out["stream_age_s"] == "0.05"
     assert out["max_book_age_s"] == str(TS.MAX_BOOK_AGE_S)
@@ -338,157 +340,91 @@ def test_the_gate_uses_the_shared_constant_and_not_a_local_copy():
     saved = TS.MAX_BOOK_AGE_S
     try:
         TS.MAX_BOOK_AGE_S = tight
-        assert Ex().presend_requote(
+        assert Ex().fresh_book_requote(
             MKT, {"side": "UP", "price": D("0.61")}, {},
             book("0.47", "0.48", age="0.05")) is None
     finally:
         TS.MAX_BOOK_AGE_S = saved
 
 
-# ================= THE SNAPSHOT IS THE GUARD'S OWN, NOT A SECOND READ
+# ==================== REPRICING HAPPENS BEFORE THE GATES, NOT AFTER
 #
-# The guard decides "this price crosses" against one snapshot and puts the
-# bid, the ask and the stream age it used into its record. If the requote
-# re-read the mirror it would price against a DIFFERENT book from the one
-# that refused -- two snapshots, one decision, which is the stale-input
-# mistake this path exists to remove -- and would spend an extra read per
-# crossing decision at the window boundary, where read counts are bounded.
-# Asserted on the source because the call site sits inside `handle`, and a
-# behavioural test of it would need the whole gate stack stood up.
-
-def _presend_cross_block() -> str:
-    import inspect
-    src = inspect.getsource(LX.FaithfulExecutor.handle)
-    i = src.index("_xr = self.presend_cross_refusal(")
-    j = src.index("_dr = self.disarmed_refusal()", i)
-    return src[i:j]
-
-
-def test_the_requote_is_handed_the_guards_own_record():
-    assert "self.presend_requote(market, intent, tr, _xr)" \
-        in _presend_cross_block()
-
-
-def test_the_call_site_takes_no_second_book_snapshot():
-    assert "ts_authenticated_book" not in _presend_cross_block()
-
-
-def test_the_guard_record_carries_the_three_keys_the_requote_reads():
-    """`_xr` is only usable as a book because the guard names its fields
-    exactly as the requote reads them. Pin that contract."""
-    import inspect
-    src = inspect.getsource(LX.FaithfulExecutor.presend_cross_refusal)
-    for key in ('"bid": str(bid)', '"ask": str(ask)', '"stream_age_s"'):
-        assert key in src, key
-
-
-def test_the_guards_record_round_trips_as_a_book():
-    """End to end on the data shape: feed a real refusal record back in."""
-    ex = Ex()
-    xr = {"reason": "PRESEND_WOULD_CROSS:UP", "side": "UP",
-          "own_px": "0.61", "wire_px": "0.61",
-          "bid": "0.47", "ask": "0.48", "stream_age_s": "0.05",
-          "skips": {"UP": 1, "total": 1}}
-    out = ex.presend_requote(MKT, {"side": "UP", "price": D("0.61")}, {}, xr)
-    assert out is not None
-    assert out["own_px_now"] == "0.45"
-    assert out["bid"] == "0.47" and out["ask"] == "0.48"
-
-
-# =========== THE INTENT-INTEGRITY BOUNDARY, which the requote must not trip
+# An earlier version repriced at the send boundary. `handle` captures
+# `gated_money` where the gates run and compares it byte-for-byte with the
+# intent reaching the wire; editing the price after that refuses the order
+# AND calls `store.mark_uncertain`, which the arming and submission gates
+# then refuse on. Enabling it would have halted the engine on the measured
+# 0015z window rather than repriced one order.
 #
-# WHAT WAS WRONG, and why 55 tests above did not see it. `handle` captures
-# `gated_money` where the safety gates run and compares it byte-for-byte with
-# the intent about to be sent; a mismatch refuses AND calls
-# `store.mark_uncertain`. Its own comment: "Any later override must not
-# change these behind the gates' back."
-#
-# The requote changes `price` after that capture. So enabling
-# L5_PRESEND_REQUOTE would not merely have failed to help -- the first
-# crossing refusal would have refused the order and left the store
-# UNCERTAIN, which the arming and submission gates refuse on. On the
-# measured 0015z window that is a halted engine, not a repriced order.
-#
-# Every test above exercises `presend_requote` in isolation, which is why
-# none of them caught it. These pin the call site instead.
+# These pin the ordering that makes the exception unnecessary.
 
 def _handle_src():
     import inspect
     return inspect.getsource(LX.FaithfulExecutor.handle)
 
 
-def test_the_requote_updates_the_gated_money_it_is_checked_against():
+def test_the_reprice_runs_before_the_gated_money_capture():
     src = _handle_src()
-    assert 'gated_money = dict(gated_money, price=str(_new_px))' in src
-
-
-def test_the_gated_update_sits_between_the_requote_and_the_integrity_check():
-    src = _handle_src()
+    i_rq = src.index('tr = dict(tr, price=D(_fb["own_px_now"]))')
     i_cap = src.index('gated_money = {"market"')
-    i_upd = src.index('gated_money = dict(gated_money, price=str(_new_px))')
-    i_chk = src.index('if sent_money != gated_money:')
-    assert i_cap < i_upd < i_chk
+    assert i_rq < i_cap
 
 
-def test_the_price_is_the_only_money_field_the_requote_touches():
-    """market, side, qty and mode must still match byte-for-byte, or the
-    boundary has been widened rather than informed."""
+def test_the_reprice_runs_before_every_economic_gate():
+    """maker_only, the imbalance suppressor, the validation gates and the
+    residual cap must all judge the repriced price."""
     src = _handle_src()
-    i_rq = src.index('_new_px = D(_rq["own_px_now"])')
-    i_chk = src.index('if sent_money != gated_money:')
-    block = src[i_rq:i_chk]
-    for field in ('"market"', '"side"', '"qty"', '"mode"'):
-        assert ("gated_money, %s" % field) not in block, field
-    assert 'dict(intent, price=_new_px)' in block
-    assert 'dict(tr, price=_new_px)' in block
+    i_rq = src.index('tr = dict(tr, price=D(_fb["own_px_now"]))')
+    for gate in ('if self.maker_only and',
+                 'IMBALANCE_INCREASE_SUPPRESSED',
+                 'VALIDATION_GATES',
+                 'RESIDUAL_ABOVE_CAP'):
+        assert i_rq < src.index(gate), gate
 
 
-def test_the_invariant_is_rechecked_against_the_gated_value(monkeypatch):
-    """Not trusted from the helper. Trusting the caller is exactly what this
-    boundary exists to stop."""
+def test_no_money_field_is_edited_after_the_gated_capture():
+    """The integrity boundary keeps its teeth: no exception, no update."""
     src = _handle_src()
-    i_rq = src.index('_new_px = D(_rq["own_px_now"])')
-    block = src[i_rq:i_rq + 900]
-    assert 'gated_money["price"]' in block
-    assert 'not _new_px < _gated_px' in block
-    assert 'REQUOTE_NOT_BELOW_GATED_PRICE' in block
+    tail = src[src.index('gated_money = {"market"'):]
+    assert "gated_money = dict(" not in tail
+    assert 'dict(tr, price=' not in tail
+    assert 'dict(intent, price=' not in tail
 
 
-def test_a_requote_at_or_above_the_gated_price_is_refused_not_sent():
-    """The simulated comparison `handle` performs, both ways round."""
-    def verdict(gated_px, new_px):
-        g = D(str(gated_px))
-        n = D(str(new_px))
-        if not n < g:
-            return "REFUSED"
-        gated = {"market": "m", "side": "UP", "price": str(n),
-                 "qty": "1.87", "mode": "MAKER"}
-        sent = {"market": "m", "side": "UP", "price": str(n),
-                "qty": "1.87", "mode": "MAKER"}
-        return "SENT" if sent == gated else "INTENT_MUTATED_AFTER_GATES"
-
-    assert verdict("0.6000", "0.4400") == "SENT"
-    assert verdict("0.6000", "0.6000") == "REFUSED"
-    assert verdict("0.6000", "0.6100") == "REFUSED"
+def test_the_integrity_check_is_unconditional():
+    src = _handle_src()
+    assert "if sent_money != gated_money:" in src
+    assert "INTENT_MUTATED_AFTER_GATES" in src
+    assert "REQUOTE_NOT_BELOW_GATED_PRICE" not in src
 
 
-def test_without_the_gated_update_the_old_code_would_have_been_refused():
-    """The defect, reproduced on the exact dicts `handle` builds, so the
-    regression is pinned by behaviour and not only by source order."""
-    tr = {"price": D("0.6000"), "qty": D("1.87"), "mode": "MAKER"}
-    gated = {"market": "m", "side": "UP", "price": str(tr["price"]),
-             "qty": str(tr["qty"]), "mode": str(tr["mode"])}
-    intent = {"market": "m", "side": "UP", "price": D("0.4400"),
-              "qty": D("1.87"), "mode": "MAKER"}
-    sent = {"market": str(intent["market"]), "side": str(intent["side"]),
-            "price": str(intent["price"]), "qty": str(intent["qty"]),
-            "mode": str(intent["mode"] or "")}
-    assert sent != gated, "the old code would have passed the boundary"
-    fixed = dict(gated, price=str(intent["price"]))
-    assert sent == fixed, "the informed boundary accepts the requoted price"
-
-
-def test_the_new_refusal_is_registered_in_the_executor_inventory():
+def test_the_post_gate_exception_is_not_registered_as_a_refusal():
     from src import l5_intent_gate as IG
-    assert "SAFETY_OVERLAY:REQUOTE_NOT_BELOW_GATED_PRICE" in \
+    assert "SAFETY_OVERLAY:REQUOTE_NOT_BELOW_GATED_PRICE" not in \
         IG.EXECUTOR_GATES_NOT_EVALUATED_HERE
+
+
+def test_the_reprice_is_gated_on_maker_mode_at_the_call_site():
+    """A taker intent is never repriced, so maker-only discipline holds by
+    construction rather than by the helper's own checks alone."""
+    src = _handle_src()
+    i = src.index("if self.fresh_book_requote_enabled()")
+    head = src[i:i + 200]
+    assert "FT.MAKER" in head
+
+
+def test_the_reprice_passes_the_decisions_side_not_a_stale_one():
+    src = _handle_src()
+    i = src.index("self.fresh_book_requote(")
+    assert 'dec.get("side")' in src[i:i + 200]
+
+
+def test_the_helper_accepts_the_authenticated_book_shape():
+    """`authenticated` carries bid, ask and stream_age_s under exactly the
+    keys the helper reads."""
+    out = Ex().fresh_book_requote(
+        MKT, {"side": "UP", "price": D("0.61")}, {},
+        {"bid": "0.4700", "ask": "0.4800", "stream_age_s": 0.05,
+         "bid_shares": "321.00", "ask_shares": "5.01"})
+    assert out is not None
+    assert out["own_px_now"] == "0.4500"

@@ -4543,17 +4543,24 @@ class FaithfulExecutor:
     #: the requote is OFF unless the owner names it. Unset, blank, "0", "no"
     #: and a typo all leave `presend_cross_refusal` declining exactly as it
     #: does today, so the default is byte-for-byte the deployed behaviour.
-    PRESEND_REQUOTE_ENV = "L5_PRESEND_REQUOTE"
+    FRESH_BOOK_REQUOTE_ENV = "L5_FRESH_BOOK_REQUOTE"
 
     @staticmethod
-    def presend_requote_enabled() -> bool:
-        raw = (os.getenv(FaithfulExecutor.PRESEND_REQUOTE_ENV) or "")
+    def fresh_book_requote_enabled() -> bool:
+        raw = (os.getenv(FaithfulExecutor.FRESH_BOOK_REQUOTE_ENV) or "")
         return raw.strip().upper() in ("1", "YES", "TRUE")
 
-    def presend_requote(self, market: str, intent: Mapping[str, Any],
-                        tr: Mapping[str, Any], book: Mapping[str, Any]
-                        ) -> Optional[Dict[str, Any]]:
-        """A non-crossing own price from the SAME snapshot, or None.
+    def fresh_book_requote(self, market: str, intent: Mapping[str, Any],
+                           tr: Mapping[str, Any], book: Mapping[str, Any]
+                           ) -> Optional[Dict[str, Any]]:
+        """A non-crossing own price from the CURRENT book, or None.
+
+        CALLED BEFORE THE GATES, and that placement is the whole design.
+        An earlier version ran it at the send boundary, after the gates had
+        already approved a price: that edits an approved money intent, which
+        `gated_money` refuses -- and marks the store UNCERTAIN for -- so it
+        would have halted the engine rather than repriced an order. Here,
+        every gate below judges the price this returns.
 
         WHY THIS EXISTS, MEASURED. 0015z spent 351 seconds -- 267 of them in
         23 consecutive `PRESEND_WOULD_CROSS:UP` refusals from 00:17:34 to
@@ -4571,8 +4578,11 @@ class FaithfulExecutor:
         drop below the computed price in between. The cross is systematic in
         a trend, not a random race.
 
-        WHY LOWERING IS SAFE WITHOUT RE-RUNNING THE GATE STACK, which is the
-        load-bearing argument. To stop crossing, the own price must FALL:
+        WHY IT ONLY EVER LOWERS. The gates re-run over whatever this
+        returns, so correctness no longer rests on the direction -- but the
+        direction is still bounded, because chasing a book downward without
+        limit is a behaviour and not a mere repricing. To stop crossing, the
+        own price must FALL:
         UP crosses when `own >= ask`, DOWN when its wire `1 - own <= bid`,
         i.e. `own >= 1 - bid`. A strictly lower own price therefore moves
         every economic check already run at the call site in the SAFE
@@ -4601,7 +4611,7 @@ class FaithfulExecutor:
         because declining is free; this one SENDS an order, so anything it
         cannot establish returns None and the refusal stands.
         """
-        if not self.presend_requote_enabled():
+        if not self.fresh_book_requote_enabled():
             return None
 
         def _num(v):
@@ -4678,7 +4688,7 @@ class FaithfulExecutor:
                 "completing": completing,
                 "stream_age_s": str(age),
                 "max_book_age_s": str(TS.MAX_BOOK_AGE_S),
-                "labels": ("the SAME snapshot the cross guard read, quoted "
+                "labels": ("the CURRENT book, quoted "
                            "depth_ticks behind the CURRENT touch. Strictly "
                            "lower than the refused price, so pair cost, "
                            "obligation, deficit and edge all move the safe "
@@ -6402,6 +6412,50 @@ class FaithfulExecutor:
             prov.stage("QUEUE_MEASUREMENT",
                        dict(mi, replaced_l5_intent=dict(superseded_l5)))
 
+        # ====================== FRESH-BOOK REPRICING, BEFORE THE GATES
+        #
+        # WHY HERE AND NOWHERE LATER. A maker price is computed from the
+        # mirror and the book keeps moving, so by the send boundary the
+        # planned price can already cross -- 23 consecutive
+        # PRESEND_WOULD_CROSS:UP refusals over 267 s of the 0015z window of
+        # 2026-10-28, with the plan frozen at 0.6000 while the touch walked
+        # 0.46 -> 0.36 -> 0.48.
+        #
+        # Repricing at the send boundary was the wrong answer. `gated_money`
+        # is captured below and compared byte-for-byte with the intent that
+        # reaches the wire; editing the price after that refuses the order
+        # AND marks the store UNCERTAIN, which the arming and submission
+        # gates refuse on. So it is done HERE, upstream, exactly as the
+        # queue-measurement override above was moved upstream for the same
+        # reason: maker_only, the imbalance suppressor, the validation
+        # gates, the residual cap, the cash and worst-case checks and the
+        # pair-cost ceiling all then evaluate THE PRICE ACTUALLY SENT. The
+        # integrity boundary needs no exception, because nothing downstream
+        # changes a money field.
+        #
+        # STRICTLY LOWER, OR NOTHING -- see `fresh_book_requote`. Quantity
+        # is untouched: `desired` comes from the translation, never from the
+        # price, so a lower price cannot buy more contracts. OFF unless the
+        # owner names L5_FRESH_BOOK_REQUOTE, and with it unset this block
+        # leaves `tr` byte-identical.
+        if self.fresh_book_requote_enabled() and str(
+                tr.get("mode") or "").upper() == FT.MAKER:
+            _fb = None
+            try:
+                _fb = self.fresh_book_requote(
+                    market, {"side": dec.get("side"),
+                             "price": tr.get("price")}, tr, authenticated)
+            except BaseException as _exc:                      # noqa: BLE001
+                if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                _fb = None
+            if _fb is not None:
+                prov.stage("FRESH_BOOK_REQUOTE", dict(
+                    _fb, labels=("repriced BEFORE the gates, so every gate "
+                                 "below judged this price. Quantity, side, "
+                                 "market and mode are unchanged.")))
+                tr = dict(tr, price=D(_fb["own_px_now"]))
+
         if self.maker_only and str(tr.get("mode") or "").upper() != FT.MAKER:
             # DEFENSIVE-ONLY TAKER, NEVER GLOBALLY. The overlay stands for
             # every order in the system; the single exception is an order a
@@ -6877,68 +6931,16 @@ class FaithfulExecutor:
             _xr = self.presend_cross_refusal(market, intent, tr)
             if _xr is not None:
                 prov.stage("PRESEND_CROSS", _xr)
-                # ONE REQUOTE FROM THE SAME SNAPSHOT, strictly lower or not
-                # at all. See `presend_requote`: a lower own price moves
-                # every gate already run above in the safe direction at
-                # unchanged quantity, which is what lets this sit after them
-                # rather than re-entering the stack. OFF unless the owner
-                # names L5_PRESEND_REQUOTE, so the default path is the
-                # refusal below, unchanged.
-                # `_xr` IS THAT SNAPSHOT. The guard already put the bid,
-                # the ask and the stream age it judged against into its own
-                # record, under exactly those keys. Re-reading the mirror
-                # here would price against a DIFFERENT snapshot from the one
-                # that refused -- which is the stale-input mistake this whole
-                # path exists to remove -- and would cost a second read per
-                # crossing decision at the window boundary, where read counts
-                # are already the thing being bounded.
-                _rq = None
-                try:
-                    _rq = self.presend_requote(market, intent, tr, _xr)
-                except BaseException as _exc:                  # noqa: BLE001
-                    if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
-                        raise
-                    _rq = None
-                if _rq is None:
-                    return prov.refuse("PRESEND_CROSS",
-                                       str(_xr.get("reason"))[:120])
-                # THE INTEGRITY BOUNDARY IS TOLD, NOT BYPASSED.
-                #
-                # `gated_money` was captured where the gates ran, and the
-                # equality check immediately before the wire refuses -- AND
-                # marks the store UNCERTAIN -- on any later change to a
-                # money field. Its comment says so: "Any later override must
-                # not change these behind the gates' back."
-                #
-                # A requote changes `price`, so without this line the
-                # feature does not merely fail to help. The first crossing
-                # refusal would refuse the order AND leave the store
-                # uncertain, which the arming and submission gates then
-                # refuse on -- so enabling it would have HALTED the engine
-                # on the measured 0015z window rather than repriced one
-                # order.
-                #
-                # So the one field a requote may move is moved here,
-                # explicitly, and only in the direction whose safety was
-                # argued. The invariant is re-checked against the GATED
-                # value rather than trusted from the helper, because
-                # trusting the caller is precisely what this boundary
-                # exists to stop. Every other money field -- market, side,
-                # quantity, mode -- must still match byte-for-byte.
-                _new_px = D(_rq["own_px_now"])
-                try:
-                    _gated_px = D(str(gated_money["price"]))
-                except (InvalidOperation, TypeError, ValueError):
-                    _gated_px = None
-                if _gated_px is None or not _new_px < _gated_px:
-                    return prov.refuse("SAFETY_OVERLAY",
-                                       "REQUOTE_NOT_BELOW_GATED_PRICE")
-                prov.stage("PRESEND_REQUOTE", dict(
-                    _rq, gated_price_was=str(gated_money["price"]),
-                    gated_price_now=str(_new_px)))
-                intent = dict(intent, price=_new_px)
-                tr = dict(tr, price=_new_px)
-                gated_money = dict(gated_money, price=str(_new_px))
+                # FAIL CLOSED, AND CHANGE NOTHING. The gates validated the
+                # price this order carries; if the book has since moved far
+                # enough that the same price would cross, the order is not
+                # sent. It is NOT repriced here -- an already-approved money
+                # intent must not be edited behind the gates that approved
+                # it, which is what `gated_money` exists to enforce and why
+                # the repricing was moved upstream of them instead (see
+                # `fresh_book_requote`).
+                return prov.refuse("PRESEND_CROSS",
+                                   str(_xr.get("reason"))[:120])
 
             # LAST, and for the same reason PRESEND_CROSS is here: the next
             # statement consumes a claim that is never returned. A disarmed
