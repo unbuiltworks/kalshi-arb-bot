@@ -2350,3 +2350,4 @@ its pre-open subscribe has no retry path at all. Service up well before
 2315z subscribes at 23:13; 2315z is the first clean measurement.
 
 L5_SHADOW_ONLY stays 1; submit() raises NotArmed structurally.
+deploy trigger 2026-10-28T06:00:30Z: round-retirement correction, shadow-locked
