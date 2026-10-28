@@ -111,6 +111,19 @@ def main(argv: list) -> int:
         sys.stderr.write("usage: make_campaign_approval.py <out.json>\n")
         return 2
     out = argv[1]
+    # AN OPTION-SHAPED PATH IS A MISTAKE, NEVER A DESTINATION. There is no
+    # argparse here, so `--help` was taken as the output path and MINTED A
+    # REAL DOCUMENT -- nonce and all -- into the repository working tree,
+    # one `git add` away from being committed. 2026-10-28: that file was
+    # caught by the untracked-file check and destroyed unread. Refusing the
+    # whole `-` prefix costs nothing: no legitimate output path starts with
+    # one, and a credential written to the wrong place cannot be unwritten.
+    if out.startswith("-"):
+        sys.stderr.write(
+            "refusing to mint into %r: an option-shaped path is a typo, and "
+            "this writes a live credential.\nusage: "
+            "make_campaign_approval.py <out.json>\n" % out)
+        return 2
     doc = build()
     body = json.dumps(doc, sort_keys=True, separators=(",", ":"))
     fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

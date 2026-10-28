@@ -1560,3 +1560,47 @@ pair-cost ceiling" on the live gate is independently confirmed.
 
 Detail: `analysis/l5/RUN_LENGTH_PREREGISTRATION.md` (frozen before scoring),
 `analysis/l5/RUN_LENGTH_FINDINGS.md`.
+
+## Campaign activation ordering (2026-10-28, Campaign 7)
+
+**Set the scope variables BEFORE the approval document is installed, and do
+not touch them again while the campaign runs.**
+
+`mandate_scope()` builds the campaign's scope digest from the *deployed*
+environment -- `not_after` is read straight from `L5_LIVE_AUTH_NOT_AFTER`,
+and `max_windows` from `L5_LIVE_AUTH_MAX_WINDOWS` intersected with the
+document's own budget. That digest is written into the campaign claim by
+`O_EXCL` and the claim file is never rewritten, so it is immutable by
+construction. Changing either variable afterwards refuses every remaining
+window with `MANDATE_SCOPE_CHANGED`.
+
+Campaign 7 hit this. The document (`cd831438`) was installed while the two
+variables still held Campaign 6's values (`4`, `2026-10-28T19:35:48Z`). The
+engine armed 1930z at 19:33:01 and took the claim over the stale digest.
+Correcting them to the approved `8` / `23:05:06Z` then invalidated it, and
+the campaign was deadlocked both ways: the recorded values were already
+expired, the correct ones no longer matched. One leg had filled by then
+(DOWN 1.76 @ own 0.24) and was orphaned by the restart, unmatched, past
+`may_complete`'s T+600 terminal.
+
+The gate behaved correctly throughout: `windows_spent` held at 1 across both
+refusals and the pre-claim refusal logged `claim_taken: false`, so
+`MANDATE_SCOPE_CHANGED` costs no window. The failure was ordering, not
+enforcement.
+
+Two consequences worth keeping:
+
+1. **A restart inside a window with a filled leg abandons live inventory.**
+   It does not merely cost an opening. A variable write triggers a redeploy,
+   so treat one as money-moving whenever unmatched inventory exists.
+2. **The remedy is a new document, by design**, not a claim edit:
+   "A new campaign is a new nonce is a new identity, which takes a fresh
+   mandate under the new scope automatically" (`campaign_claim_sid`).
+
+Candidate durable fix, not enacted: leave **both** variables empty. An unset
+`max_windows` defers to the document (a set one "can only tighten it"), and
+an empty `not_after` skips the env deadline while the document's expiry
+still refuses via `CAMPAIGN_EXPIRED`. That makes the document the single
+source of scope truth and removes the stale-leftover failure mode entirely.
+It removes a redundant copy, not a ceiling -- but it widens configuration
+authority, so it needs explicit owner approval.
