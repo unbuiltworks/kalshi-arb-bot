@@ -5032,6 +5032,28 @@ class FaithfulExecutor:
             return list(cheapest_first)
         return [need] + [k for k in cheapest_first if k != need]
 
+    def probe_reducing_side(self, market: str) -> Optional[str]:
+        """The side whose purchase REDUCES this market's residual, or None.
+
+        THE SAME BASIS `probe_leg_order` USES -- realized inventory plus
+        every outstanding order as if it filled -- read through the same two
+        store calls, so the eligibility gate and the leg ordering can never
+        disagree about whether a completion exists. A flat or matched market
+        returns None, and so does an unreadable one: the caller then treats
+        the action as an ENTRY and the earlier `may_enter` cutoff applies,
+        which fails closed.
+        """
+        try:
+            signed = (D(str(self.store.residual(market)))
+                      + D(str(self.store.outstanding_residual(market))))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+        if signed == 0:
+            return None
+        return DOWN if signed > 0 else UP
+
     def probe_leg_qty_cap(self, market: str, side: str, qty: D) -> D:
         """Never overshoot a residual into a reversal on the other side.
 
@@ -6008,14 +6030,45 @@ class FaithfulExecutor:
             # this is comes from the claims on disk, not from memory, so a
             # restart mid-round still completes rather than re-entering.
             _claimed = self.probe_legs_claimed(market, rnd)
-            _entering = not any(_claimed.values())
             _tnow = float(self._now().timestamp())
+            # WHETHER THIS IS A COMPLETION IS A MARKET FACT, NOT A ROUND
+            # FACT. `_entering` used to read `not any(_claimed.values())`
+            # alone, which is a question about THIS round and says nothing
+            # about what the market holds.
+            #
+            # LIVE 1215z, 2026-10-28. A third UP leg filled at 12:22:46
+            # leaving 4.21 UP against 1.92 DOWN. The DOWN completion rested
+            # 56s unfilled and was cancelled at 12:24:49; the probe then
+            # advanced to round 4, a FRESH round with nothing claimed, so
+            # `_entering` read True and this gate asked `may_enter` (T+600)
+            # instead of `may_complete` (T+720). Eleven seconds later entry
+            # closed and the engine logged PAST_ENTRY_CUTOFF with
+            # `decision_role` COMPLEMENT and `two_sided_complement` null at
+            # 12:25:03 and 12:26:16. 120s of authorized completion runway
+            # went unused while 2.29 UP sat unmatched; at 12:25:03 DOWN was
+            # available at own 0.43 for a pair cost of 0.799. The contracts
+            # expired worthless and the window settled -$0.3835 instead of
+            # roughly +$0.91.
+            #
+            # `may_complete` already documents the intent this restores:
+            # "completing removes risk, so the engine keeps doing it after
+            # it has stopped opening."
+            _reducing = self.probe_reducing_side(market)
+            _entering = not any(_claimed.values()) and _reducing is None
             late = (TS.may_enter(_tnow, float(ws), float(ws) + TS.WINDOW_S)
                     if _entering
                     else TS.may_complete(_tnow, float(ws),
                                          float(ws) + TS.WINDOW_S))
             if late:
                 return prov.refuse("TWO_SIDED_PROBE", late)
+            # THE LATER DEADLINE IS NOT A LATE OPENING. Past the entry
+            # cutoff the ONLY leg that may reach the wire is the one that
+            # reduces the residual, so the extra 120s can never be spent
+            # taking on fresh directional exposure. Asserted again below,
+            # once `nxt` is known, because that is the first point at which
+            # the side actually being placed exists.
+            _entry_shut = TS.may_enter(_tnow, float(ws),
+                                       float(ws) + TS.WINDOW_S) is not None
 
             # A SPENT DEFENSIVE BUDGET CLOSES THE DOOR, NOT THE BUILDING.
             #
@@ -6102,6 +6155,25 @@ class FaithfulExecutor:
                 # probe_round only returns an INCOMPLETE round, so this is
                 # unreachable unless the claim state changed underneath us.
                 return prov.refuse("TWO_SIDED_PROBE", "ACCUMULATION_EXHAUSTED")
+            # PAST THE ENTRY CUTOFF, ONLY A COMPLETION. `_entry_shut` means
+            # `may_enter` has closed and we are here on the completion
+            # deadline instead; the one leg that may be placed is the
+            # reducing one. `probe_leg_order` already puts it first and
+            # `probe_leg_qty_cap` already stops it overshooting into a
+            # reversal, so this normally agrees with `nxt` -- it is the
+            # explicit refusal that makes "no new directional opening after
+            # T+600" a property of this gate rather than of their
+            # interaction.
+            if _entry_shut and nxt != _reducing:
+                prov.stage("TWO_SIDED_PROBE", {
+                    "refused": "PAST_ENTRY_CUTOFF_NOT_A_COMPLETION",
+                    "leg_to_place": nxt, "reducing_side": _reducing,
+                    "labels": ("the completion deadline extends the window "
+                               "for REDUCING a residual only. Opening a new "
+                               "leg here would be fresh directional "
+                               "exposure taken after entry closed.")})
+                return prov.refuse("TWO_SIDED_PROBE",
+                                   "PAST_ENTRY_CUTOFF_NOT_A_COMPLETION")
             leg = legs[nxt]
 
             # ============== THE OPENING LEG'S OWN-SIDE PRICE FLOOR
