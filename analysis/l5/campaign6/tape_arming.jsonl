@@ -1,0 +1,4 @@
+{"armed": true, "market": "cpc-btc-updown-15m-2026-10-28-1545z", "utc": "2026-10-28T15:47:54.102792+00:00", "window_budget": 4, "window_start_utc": "2026-10-28T15:45:00+00:00", "windows_spent_before": 0}
+{"armed": true, "market": "cpc-btc-updown-15m-2026-10-28-1600z", "utc": "2026-10-28T16:00:03.294307+00:00", "window_budget": 4, "window_start_utc": "2026-10-28T16:00:00+00:00", "windows_spent_before": 1}
+{"armed": true, "market": "cpc-btc-updown-15m-2026-10-28-1615z", "utc": "2026-10-28T16:15:00.809845+00:00", "window_budget": 4, "window_start_utc": "2026-10-28T16:15:00+00:00", "windows_spent_before": 2}
+{"armed": true, "market": "cpc-btc-updown-15m-2026-10-28-1630z", "utc": "2026-10-28T16:30:02.889755+00:00", "window_budget": 4, "window_start_utc": "2026-10-28T16:30:00+00:00", "windows_spent_before": 3}
