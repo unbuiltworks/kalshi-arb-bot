@@ -2351,3 +2351,19 @@ its pre-open subscribe has no retry path at all. Service up well before
 
 L5_SHADOW_ONLY stays 1; submit() raises NotArmed structurally.
 deploy trigger 2026-10-28T06:00:30Z: round-retirement correction, shadow-locked
+
+P0 completion-cutoff correction, shadow-locked 2026-10-28T13:25Z
+  Completion eligibility is a MARKET fact, not a ROUND fact. Live 1215z
+  stranded 2.29 UP because the probe advanced to a fresh round after a
+  cancelled completion, so `_entering` read True and the gate asked
+  may_enter (T+600) instead of may_complete (T+720); 120s of authorized
+  completion runway went unused and the window settled -$0.3835. All four
+  campaign windows stranded UP for -$2.9034 against +$0.8571 of matched
+  pair profit.
+  Narrow: 3 files. Adds a refusal (PAST_ENTRY_CUTOFF_NOT_A_COMPLETION) and
+  the later deadline for RISK-REDUCING completions only. No capital, loss,
+  deficit, deadline, watchdog or submission limit changes. The requote
+  mechanism stays absent. Parity against ea67b2c5: identical failure sets,
+  34 pre-existing ids, 13860 -> 13881 passes (+21 new tests).
+  L5_SHADOW_ONLY is re-engaged and the campaign authorization is exhausted
+  (4 of 4 windows spent), so nothing can be armed or submitted.
