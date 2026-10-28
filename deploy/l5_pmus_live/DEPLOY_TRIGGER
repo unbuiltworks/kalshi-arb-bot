@@ -2403,3 +2403,55 @@ Campaign 6: completion repricing, shadow-locked 2026-10-28T15:30Z
   change and is enabled explicitly. No capital limit is changed: cash
   headroom ran $9.35-$16.70 against the $12 envelope and peak exposure
   ~$3.03 against $20, so dollars are not the binding constraint.
+
+Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
+  Owner-approved deployment preparation for Campaign 7. Accounting and
+  reporting only. No execution path, gate, pricing or cancellation logic
+  changes, and no opening threshold or defensive completion behaviour is
+  touched.
+
+  THE 12TH FILL. A fill that lands between a cancel being sent and the
+  venue answering it leaves no positive ORDER_PROGRESS delta. Campaign 6's
+  1630z DOWN leg filled 2.15 at wire 0.4900 that way: its only lifecycle
+  row read cum 0, the venue reported it on the cancel re-read, the book
+  took it with its cost basis and the cash moved -- but fill_events counts
+  positive lifecycle deltas, so the campaign reported 11 fills and 21.67
+  contracts where the venue had settled 12 and 23.82. Cash and residual
+  were always right; the counters a campaign is judged repeatable by were
+  not.
+
+  merge_fill_sources() folds the venue's fill-record stream in as a second
+  source, deduplicated on cumulative quantity, so it can only ever add a
+  fill the lifecycle never carried. Idempotent, and omitting the argument
+  reproduces the old counts exactly. _window_fills() reads the same
+  FillCalibration.orders fold _window_submits already uses, so the two
+  cannot disagree about window membership, and never raises into reporting.
+
+  DEFENSIVE LOSSES ON THEIR OWN LINE. pair_economics() separates pairs
+  completed above $1.00 from pair edge. Campaign 6 was $1.6878 of edge and
+  $0.0970 of defence, still summing to the +$1.5908 the cash confirms,
+  where the venue's matched line reports the two as one number. Per owner
+  ruling NO hard $1.00 completion ceiling is imposed: a risk-reducing
+  completion above $1 stays available where it reduces expected loss, and
+  is now accounted separately rather than read as thin edge.
+  realized_net_usd stays venue-settlement-only and excludes both.
+
+  The runner diff is 40 insertions and ZERO deletions, all inside
+  emit_window_accounting. l5_two_sided_probe.py, l5_live_execution.py,
+  l5_live_validation_gates.py, l5_intent_gate.py and the cancel mechanism
+  are untouched, and the _StageClock tick instrumentation this branch
+  carries is preserved with its test passing.
+
+  ISOLATED PARITY against d096ef7d on the promoted tree: 34 failing node
+  ids on both, IDENTICAL sets, all pre-existing and in unrelated modules.
+  Both changed source files were byte-identical on this branch and on the
+  verified fb18aaa2 parity base before the change, so the deployed content
+  is the content parity ran on.
+
+  NOT ARMED. No Campaign 7 authorization is installed and the Campaign 6
+  approval's window budget is exhausted (4 of 4 spent), which is what
+  refused a fifth window at 1645z. Arming remains a separate owner act and
+  is NOT requested by this deploy. Deployed deliberately well ahead of any
+  proposed window so the process spans a window boundary before arming:
+  Campaign 6 armed in 174.1s in the window its deploy restarted into,
+  against 0.8-3.3s in the three windows the process already spanned.
