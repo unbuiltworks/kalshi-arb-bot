@@ -4540,6 +4540,145 @@ class FaithfulExecutor:
                        "order is simply not sent."),
         }
 
+    #: the requote is OFF unless the owner names it. Unset, blank, "0", "no"
+    #: and a typo all leave `presend_cross_refusal` declining exactly as it
+    #: does today, so the default is byte-for-byte the deployed behaviour.
+    PRESEND_REQUOTE_ENV = "L5_PRESEND_REQUOTE"
+
+    @staticmethod
+    def presend_requote_enabled() -> bool:
+        raw = (os.getenv(FaithfulExecutor.PRESEND_REQUOTE_ENV) or "")
+        return raw.strip().upper() in ("1", "YES", "TRUE")
+
+    def presend_requote(self, market: str, intent: Mapping[str, Any],
+                        tr: Mapping[str, Any], book: Mapping[str, Any]
+                        ) -> Optional[Dict[str, Any]]:
+        """A non-crossing own price from the SAME snapshot, or None.
+
+        WHY THIS EXISTS, MEASURED. 0015z spent 351 seconds -- 267 of them in
+        23 consecutive `PRESEND_WOULD_CROSS:UP` refusals from 00:17:34 to
+        00:22:01 -- proposing one price the book had already left. The guard
+        is right to decline it; what it does not do is reprice, and its own
+        docstring says so: "No price, size, depth, TTL or cutoff is changed;
+        the order is simply not sent." So the next tick proposed the same
+        price and was declined again. Round 1 of that window matched a pair
+        in 45 seconds, so the dead interval was worth roughly three or four
+        further attempts.
+
+        WHY THE PRICE CROSSES AT ALL. It is computed from the mirror and
+        then re-read at the send boundary; in a steadily falling market --
+        0.63 to 0.47 across 7,913 book updates in that window -- both sides
+        drop below the computed price in between. The cross is systematic in
+        a trend, not a random race.
+
+        WHY LOWERING IS SAFE WITHOUT RE-RUNNING THE GATE STACK, which is the
+        load-bearing argument. To stop crossing, the own price must FALL:
+        UP crosses when `own >= ask`, DOWN when its wire `1 - own <= bid`,
+        i.e. `own >= 1 - bid`. A strictly lower own price therefore moves
+        every economic check already run at the call site in the SAFE
+        direction, at unchanged quantity:
+
+          * cost basis falls, so the realised pair cost falls and the
+            0.96 ceiling is cleared by MORE than the gates just verified;
+          * the fee floor's edge is `1 - pair`, so it grows;
+          * the cash obligation `1 + up_px` falls, as does opening notional;
+          * the worst-case deficit `C - min(up_qty, dn_qty)` falls with `C`;
+          * residual quantity and side are untouched.
+
+        A price that is not strictly lower is REFUSED rather than sent, so
+        this can never raise a price, never cross, and never chase a rising
+        market to meet it. It quotes FURTHER BEHIND the new touch at a
+        better price, which is the opposite of chasing.
+
+        WHAT IT STILL REFUSES. The venue grid and band, and -- for an
+        OPENING leg -- `min_first_leg_own_price`, because a requote must not
+        walk an entry under the floor that exists to stop cheap legs
+        stranding. A completion is exempt from that floor for the same
+        reason `first_leg_entry_refusal` exempts it: refusing it would
+        strand the inventory it exists to match.
+
+        FAILS CLOSED, unlike the guard it follows. The guard fails open
+        because declining is free; this one SENDS an order, so anything it
+        cannot establish returns None and the refusal stands.
+        """
+        if not self.presend_requote_enabled():
+            return None
+
+        def _num(v):
+            """Decimal or None. `_d` lives in l5_two_sided_probe, not here,
+            and a NameError inside this method would be swallowed by the
+            catch below -- making the whole requote silently inert."""
+            try:
+                if v is None:
+                    return None
+                out = D(str(v))
+                return out if out.is_finite() else None
+            except (InvalidOperation, TypeError, ValueError):
+                return None
+
+        try:
+            side = str(intent.get("side") or "")
+            if side not in (UP, DOWN):
+                return None
+            old = _num(intent.get("price"))
+            if old is None or not old.is_finite():
+                return None
+            tick = getattr(self.transport, "tick_size", None)
+            tk = _num(tick)
+            if tk is None or tk <= 0:
+                return None
+            bid, ask = book.get("bid"), book.get("ask")
+            b, a = _num(bid), _num(ask)
+            if b is None or a is None or b <= 0 or a <= 0 or a <= b:
+                return None
+            dticks = int(os.getenv("L5_TS_DEPTH_TICKS", "2"))
+            px = TS.quote_own_price(side, bid=b, ask=a, tick=tk,
+                                    depth_ticks=dticks)
+            if px is None or not px.is_finite():
+                return None
+            # STRICTLY LOWER, OR NOTHING. This is the whole safety argument.
+            if px >= old:
+                return None
+            if px < TS.MIN_PRICE or px > TS.MAX_PRICE:
+                return None
+            if (px / tk) != (px / tk).to_integral_value():
+                return None
+            # cannot happen from quote_own_price at depth_ticks >= 0, and is
+            # asserted rather than assumed because post-only would reject it
+            if TS.leg_crosses(side, px, bid=b, ask=a):
+                return None
+            # THE OPENING FLOOR STILL BINDS. A completion is exempt, exactly
+            # as it is in first_leg_entry_refusal: this leg matches
+            # inventory already held and refusing it would strand that.
+            completing = bool(getattr(self, "_probe_leg_pending", None)) and (
+                self.store.position(market, UP)
+                != self.store.position(market, DOWN))
+            if not completing:
+                floor = TS.min_first_leg_own_price()
+                if floor > 0 and px < floor:
+                    return None
+            return {
+                "requoted": True, "side": side,
+                "own_px_was": str(old), "own_px_now": str(px),
+                "ticks_lower": str((old - px) / tk),
+                "wire_px_now": str(TS.wire_price(side, px)),
+                "bid": str(b), "ask": str(a),
+                "depth_ticks": dticks,
+                "completing": completing,
+                "stream_age_s": (None if book.get("stream_age_s") is None
+                                 else str(book.get("stream_age_s"))),
+                "labels": ("the SAME snapshot the cross guard read, quoted "
+                           "depth_ticks behind the CURRENT touch. Strictly "
+                           "lower than the refused price, so pair cost, "
+                           "obligation, deficit and edge all move the safe "
+                           "way at unchanged quantity. Never raises a "
+                           "price, never crosses, never chases."),
+            }
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None                      # it sends: unknown is a refusal
+
     def probe_plan(self, market: str,
                    authenticated: Mapping[str, Any],
                    loss_ceiling: Optional[D] = None) -> Dict[str, Any]:
@@ -6727,8 +6866,28 @@ class FaithfulExecutor:
             _xr = self.presend_cross_refusal(market, intent, tr)
             if _xr is not None:
                 prov.stage("PRESEND_CROSS", _xr)
-                return prov.refuse("PRESEND_CROSS",
-                                   str(_xr.get("reason"))[:120])
+                # ONE REQUOTE FROM THE SAME SNAPSHOT, strictly lower or not
+                # at all. See `presend_requote`: a lower own price moves
+                # every gate already run above in the safe direction at
+                # unchanged quantity, which is what lets this sit after them
+                # rather than re-entering the stack. OFF unless the owner
+                # names L5_PRESEND_REQUOTE, so the default path is the
+                # refusal below, unchanged.
+                _rq = None
+                try:
+                    _rq = self.presend_requote(
+                        market, intent, tr,
+                        self.ts_authenticated_book(market, {}) or {})
+                except BaseException as _exc:                  # noqa: BLE001
+                    if isinstance(_exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    _rq = None
+                if _rq is None:
+                    return prov.refuse("PRESEND_CROSS",
+                                       str(_xr.get("reason"))[:120])
+                prov.stage("PRESEND_REQUOTE", _rq)
+                intent = dict(intent, price=D(_rq["own_px_now"]))
+                tr = dict(tr, price=D(_rq["own_px_now"]))
 
             # LAST, and for the same reason PRESEND_CROSS is here: the next
             # statement consumes a claim that is never returned. A disarmed
