@@ -226,6 +226,28 @@ class ApprovalGate:
                           "max_windows": eff_w,
                           "max_total_exposure_usd": str(eff_exp),
                           "max_daily_loss_usd": str(eff_loss),
+                          # THE SUBMISSION BUDGETS, OPTIONAL AND PASSED
+                          # THROUGH. They are the owner's per-campaign
+                          # operational numbers and no gate here reads them
+                          # -- the durable claim ledger enforces them. They
+                          # are carried so the runtime-config verifier can
+                          # grade the DEPLOYED variables against the
+                          # document that approved them instead of against
+                          # a figure hand-edited in code, which is how eight
+                          # of its rows came to disagree with the
+                          # configuration the owner had actually approved.
+                          #
+                          # Absent is absent, never a default: the verifier
+                          # falls back to an invariant when a field is
+                          # missing, and must not be handed a zero it would
+                          # read as an approved budget.
+                          "submission_budgets": {
+                              k: str(doc[k]) for k in
+                              ("max_open_submissions",
+                               "max_complete_submissions",
+                               "max_replace_submissions",
+                               "max_total_submissions")
+                              if doc.get(k) is not None},
                           "expires_utc": eff_expires.isoformat(),
                           "issued_utc": issued.isoformat(),
                           "clamped": {

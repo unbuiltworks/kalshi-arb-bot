@@ -799,7 +799,7 @@ def test_a_round_is_NEVER_retired_while_a_leg_HOLDS_inventory(tmp_path):
     w.book.set("0.80", "0.82")
     rec = w.tick(170.0)
     blocked = rec.get("TWO_SIDED_ROUND", {}).get("retirement_blocked_by")
-    assert blocked is not None and blocked.startswith("LEG_HOLDS_INVENTORY")
+    assert blocked is not None and blocked.startswith("LEG_HOLDS_UNMATCHED")
     assert w.ex.probe_round_retired(SLUG, 0) is False
 
 
@@ -973,9 +973,9 @@ def test_a_PARTIAL_fill_racing_the_cancel_books_the_part_and_withdraws_rest(
     assert w.store.position(SLUG, intent["side"]) == D("1.00")
     assert w.venue.cancelled == ["v1"]
     assert w.store.still_fillable_order_count() == 0
-    # and the round now HOLDS inventory, so it may not be retired
+    # and the round now holds UNMATCHED inventory, so it may not be retired
     blocked = w.ex.probe_round_is_safe_to_retire(SLUG, 0)
-    assert blocked is not None and blocked.startswith("LEG_HOLDS_INVENTORY")
+    assert blocked is not None and blocked.startswith("LEG_HOLDS_UNMATCHED")
 
 
 # ============================== repricing the complement after a PARTIAL fill

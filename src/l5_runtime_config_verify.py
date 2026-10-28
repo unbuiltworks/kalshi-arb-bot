@@ -355,6 +355,31 @@ def _scope_int(scope: Optional[Mapping[str, Any]], field: str,
     return min(v, int(ceiling))
 
 
+def _budget(scope: Optional[Mapping[str, Any]], field: str,
+             ceiling: Any) -> Any:
+    """The budget the document approved, or the invariant when it is silent.
+
+    PREFER THE DOCUMENT. When the owner states a budget, the deployed
+    variable is graded against THAT -- so a value left over from a previous
+    campaign fails, which is the drift this row exists to catch. When the
+    document is silent the row falls back to `_configured_within`, which
+    still requires the variable to be configured and inside the code
+    ceiling, so a silent document is never an unconditional pass.
+    """
+    if scope is None:
+        return NO_APPROVAL
+    budgets = scope.get("submission_budgets")
+    if not isinstance(budgets, Mapping) or budgets.get(field) is None:
+        return None                         # caller applies the invariant
+    try:
+        v = D(str(budgets.get(field)))
+    except (InvalidOperation, TypeError, ValueError):
+        return NO_APPROVAL
+    if not v.is_finite() or v <= 0 or v > D(str(ceiling)):
+        return NO_APPROVAL
+    return int(v)
+
+
 def _configured_within(ceiling: Any):
     """A comparison for a per-campaign operational budget that has no field
     in the approval document: it must be CONFIGURED and within the code
@@ -399,6 +424,15 @@ def verify() -> Dict[str, Any]:
                          CA.MAX_TOTAL_EXPOSURE_USD)
     daily_usd = _scope_dec(SC, "max_daily_loss_usd", CA.MAX_DAILY_LOSS_USD)
     windows = _scope_int(SC, "max_windows", CA.MAX_WINDOWS)
+    CAP = AUTH._CLASS_TICKET_CEILING
+
+    def budget_row(name: str, source: str, read: Any, field: str):
+        want = _budget(SC, field, CAP)
+        if want is None:                    # the document is silent
+            return _row(name, source, read, "configured, 1..%d" % CAP,
+                        compare=_configured_within(CAP))
+        return _row(name, source, read, want)
+
     rows: List[Dict[str, Any]] = [
         # ---------------------------------------- submission budgets
         # THE SUBMISSION BUDGETS are the owner's per-campaign numbers and
@@ -407,22 +441,19 @@ def verify() -> Dict[str, Any]:
         # positive, and within the code ticket ceiling. Unset fails and so
         # does over-ceiling; what cannot happen is a stale magic number
         # failing a correctly configured service.
-        _row("submission_budget_open", "AUTH.max_of_class('OPEN')",
-             lambda: AUTH.max_of_class("OPEN"),
-             "configured, 1..%d" % AUTH._CLASS_TICKET_CEILING,
-             compare=_configured_within(AUTH._CLASS_TICKET_CEILING)),
-        _row("submission_budget_complete", "AUTH.max_of_class('COMPLETE')",
-             lambda: AUTH.max_of_class("COMPLETE"),
-             "configured, 1..%d" % AUTH._CLASS_TICKET_CEILING,
-             compare=_configured_within(AUTH._CLASS_TICKET_CEILING)),
-        _row("submission_budget_replace", "AUTH.max_of_class('REPLACE')",
-             lambda: AUTH.max_of_class("REPLACE"),
-             "configured, 1..%d" % AUTH._CLASS_TICKET_CEILING,
-             compare=_configured_within(AUTH._CLASS_TICKET_CEILING)),
-        _row("submission_backstop", "AUTH.max_submissions()",
-             AUTH.max_submissions,
-             "configured, 1..%d" % AUTH._CLASS_TICKET_CEILING,
-             compare=_configured_within(AUTH._CLASS_TICKET_CEILING)),
+        budget_row("submission_budget_open", "AUTH.max_of_class('OPEN')",
+                   lambda: AUTH.max_of_class("OPEN"),
+                   "max_open_submissions"),
+        budget_row("submission_budget_complete",
+                   "AUTH.max_of_class('COMPLETE')",
+                   lambda: AUTH.max_of_class("COMPLETE"),
+                   "max_complete_submissions"),
+        budget_row("submission_budget_replace",
+                   "AUTH.max_of_class('REPLACE')",
+                   lambda: AUTH.max_of_class("REPLACE"),
+                   "max_replace_submissions"),
+        budget_row("submission_backstop", "AUTH.max_submissions()",
+                   AUTH.max_submissions, "max_total_submissions"),
 
         # ---------------------------------------------- hard money limits
         _row("defensive_loss_budget_usd",

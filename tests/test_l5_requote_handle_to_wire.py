@@ -186,7 +186,7 @@ def test_an_imbalance_is_completed_from_the_current_book(rig):
     """DOWN is held, so the complement path prices UP from the book."""
     rec = run(rig)
     assert rec["TWO_SIDED_ROUND"]["retirement_blocked_by"] == \
-        "LEG_HOLDS_INVENTORY:DOWN"
+        "LEG_HOLDS_UNMATCHED:DOWN"
     assert rec["TWO_SIDED_COMPLEMENT"]["ok"] is True
     assert rec["TWO_SIDED_COMPLEMENT"]["provenance"] == \
         "DERIVED_FROM_CURRENT_BOOK"
@@ -194,14 +194,120 @@ def test_an_imbalance_is_completed_from_the_current_book(rig):
     assert rec.get("FRESH_BOOK_REQUOTE") is None
 
 
-def test_a_matched_book_selects_the_other_leg(tmp_path, monkeypatch):
+# ============ THE 0015z DEADLOCK, reproduced from the production tape
+#
+# PRODUCTION STATE at 2026-10-28T00:17:34.676Z, from the committed tape
+# (`analysis/l5/requote_replay/presend_cross_20261028.jsonl`, and the raw
+# record behind it):
+#
+#   market            cpc-btc-updown-15m-2026-10-28-0015z
+#   accumulation_round 1          legs_claimed {UP: false, DOWN: true}
+#   plan              UP 0.6000 / DOWN 0.3500, pair 0.9500, qty 1.87
+#   touch_at_placement UP 0.6200 -- the plan was priced against a 0.62 bid
+#   book now          bid 0.4600 / ask 0.4700, stream_age_s 0.296
+#   decision_role     FLAT_OPEN           two_sided_complement  null
+#   inventory         UP 1.87 and DOWN 1.87 -- round 1's pair, filled at
+#                     +29s (DOWN own 0.33) and +74s (UP own 0.61)
+#   two_sided_round   plan_unexecutable LEG_WOULD_CROSS:UP
+#                     retired false, retirement_blocked_by
+#                     LEG_HOLDS_INVENTORY:UP
+#
+# So all three existing mechanisms declined, each for its own correct-looking
+# reason, and none of them resolved the stale candidate:
+#
+#   retirement   detected the cross and was REFUSED, because a leg held
+#                filled quantity -- even though both legs held the SAME
+#                quantity and there was no imbalance to strand;
+#   complement   never applied: residual is zero, so the role is FLAT_OPEN
+#                and there is nothing to complete;
+#   other leg    DOWN was already claimed, so UP was the leg to place.
+#
+# Result: 23 PRESEND_WOULD_CROSS:UP refusals from 00:17:34 to 00:22:01.
+
+def test_the_production_deadlock_state_now_retires(tmp_path, monkeypatch):
+    """The reproduction. A matched pair plus a crossing frozen plan used to
+    be unretirable; it now retires and re-plans from the current book."""
+    rig_ = _bare_rig(tmp_path, monkeypatch)
+    hold_a_fill(rig_, "UP", "1.87", "0.6100")      # +74s
+    hold_a_fill(rig_, "DOWN", "1.87", "0.3300")    # +29s
+    assert rig_["store"].residual(SLUG) == D(0), "the pair is matched"
+    rec = run(rig_)
+    rnd = rec["TWO_SIDED_ROUND"]
+    assert rnd["plan_unexecutable"] == "LEG_WOULD_CROSS:UP"
+    assert rnd["retirement_blocked_by"] is None
+    assert rnd["retired"] is True
+
+
+def test_the_deadlocked_candidate_is_replaced_not_re_proposed(tmp_path,
+                                                              monkeypatch):
+    rig_ = _bare_rig(tmp_path, monkeypatch)
+    hold_a_fill(rig_, "UP", "1.87", "0.6100")
+    hold_a_fill(rig_, "DOWN", "1.87", "0.3300")
+    run(rig_)
+    assert rig_["t"].sent, "the window is no longer dead"
+    px = D(str(rig_["t"].sent[-1]["price"]))
+    assert px == D("0.41")                 # bid 0.43 less two ticks
+    assert px != D("0.60")                 # never the stale candidate
+
+
+def test_an_unmatched_holding_still_blocks_retirement(tmp_path, monkeypatch):
+    """The protection the old predicate existed for is intact: an imbalance
+    would be STRANDED by retiring the round that tracks its complement."""
+    for side in ("UP", "DOWN"):
+        rig_ = _bare_rig(tmp_path / ("x" + side), monkeypatch)
+        hold_a_fill(rig_, side, "1.87", "0.5000")
+        rec = run(rig_)
+        rnd = rec.get("TWO_SIDED_ROUND") or {}
+        assert rnd.get("retired") is False, side
+        assert rnd.get("retirement_blocked_by") == \
+            "LEG_HOLDS_UNMATCHED:%s" % side, side
+
+
+def test_a_partial_fill_on_one_leg_still_blocks_retirement(tmp_path,
+                                                           monkeypatch):
+    rig_ = _bare_rig(tmp_path, monkeypatch)
+    hold_a_fill(rig_, "UP", "1.87", "0.6100")
+    hold_a_fill(rig_, "DOWN", "0.50", "0.3300")    # a PARTIAL complement
+    rec = run(rig_)
+    rnd = rec.get("TWO_SIDED_ROUND") or {}
+    assert rnd.get("retired") is False
+    assert rnd.get("retirement_blocked_by") == "LEG_HOLDS_UNMATCHED:UP"
+
+
+def test_a_live_order_still_blocks_retirement_regardless_of_balance(
+        tmp_path, monkeypatch):
+    """Order safety is unchanged and is checked BEFORE the balance: a live
+    order cannot be orphaned by moving on from the round that owns it."""
+    rig_ = _bare_rig(tmp_path, monkeypatch)
+    hold_a_fill(rig_, "UP", "1.87", "0.6100")
+    hold_a_fill(rig_, "DOWN", "1.87", "0.3300")
+    ex = rig_["ex"]
+    ex.store.live_order_count = lambda: 1
+    assert ex.probe_round_is_safe_to_retire(SLUG, 0) == "ORDER_STILL_LIVE"
+
+
+def test_unreadable_state_still_forbids_retirement(tmp_path, monkeypatch):
+    rig_ = _bare_rig(tmp_path, monkeypatch)
+    ex = rig_["ex"]
+
+    def boom(*_a, **_k):
+        raise RuntimeError("store exploded")
+
+    ex.store.position = boom
+    why = ex.probe_round_is_safe_to_retire(SLUG, 0)
+    assert why is not None and why.startswith("STATE_UNREADABLE")
+
+
+def test_a_matched_round_needs_no_new_pricing_mechanism(tmp_path,
+                                                        monkeypatch):
+    """The reprice stays inert through the fix: retirement re-plans from the
+    current book, which is the price a reprice would have produced anyway."""
     rig_ = _bare_rig(tmp_path, monkeypatch)
     hold_a_fill(rig_, "UP", "1.87", "0.6100")
     hold_a_fill(rig_, "DOWN", "1.87", "0.3300")
     rec = run(rig_)
-    assert rig_["t"].sent
-    assert D(str(rig_["t"].sent[-1]["price"])) == D("0.35")  # the DOWN leg
     assert rec.get("FRESH_BOOK_REQUOTE") is None
+    assert D(str(rig_["t"].sent[-1]["price"])) == D("0.41")
 
 
 def test_the_stale_plan_price_never_reaches_the_wire_in_any_state(tmp_path,
