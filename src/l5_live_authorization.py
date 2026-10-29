@@ -1287,6 +1287,39 @@ def mandate_claim_sid(mandate_id: str, seq: Any, key_id: str,
     return "mand.%s.%s" % (hashlib.sha256(raw.encode()).hexdigest()[:16], d)
 
 
+def mandate_rate_day_key(mandate_id: str, *, day: str) -> str:
+    """`mand.<digest of mandate_id>.<YYYYMMDD>` -- the PER-DAY RATE namespace.
+
+    DELIBERATELY WITHOUT `seq` AND WITHOUT `key_id`, and that is the whole
+    point of it existing separately from `mandate_claim_sid`.
+
+    A per-day RATE is a statement about how much activity the owner permits
+    in a day. If its namespace carried `seq`, re-signing the SAME mandate --
+    to correct a typo, to tighten a limit, to rotate a compromised key --
+    would hand the day a FRESH allowance: sign 8 windows a day, renew at
+    noon, and the day permits 16. The owner never approved 16, and renewal
+    is the ordinary act of a standing mandate rather than a rare one.
+
+    So the rate is keyed on the mandate's IDENTITY alone. A renewal or a key
+    rotation continues the same day's allowance; the new scope still binds
+    going forward, because verification runs on every arming.
+
+    WHAT THIS CANNOT PREVENT, stated plainly: choosing a different
+    `mandate_id` does start a fresh allowance. That is unavoidable -- it is
+    a different mandate by definition -- but it is a visible, deliberate act
+    in a signed document, not a side effect of renewing.
+
+    `mandate_claim_sid` keeps `seq` and `key_id` because it identifies the
+    GRANT: a new grant must not inherit a spent single-use window claim.
+    The two keys answer different questions and must not be merged.
+    """
+    mid = str(mandate_id or "").strip()
+    d = str(day or "").strip()
+    if not mid or not d:
+        return ""
+    return "mand.%s.%s" % (hashlib.sha256(mid.encode()).hexdigest()[:16], d)
+
+
 def mandate_signed_window_rate(scope: Mapping[str, Any]) -> int:
     """The signed `max_windows_per_day`, validated. Refuses if unreadable.
 
@@ -2186,6 +2219,10 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #: which is what keeps the budget statement below on the campaign/env
     #: path untouched.
     _mandate_per_day: Optional[int] = None
+    #: the verified mandate's identity, carried to the claim boundary so the
+    #: per-day RATE ledger can be keyed on it. Keyed on identity alone, so a
+    #: renewal or key rotation cannot reset the day's allowance.
+    _mandate_id: Optional[str] = None
     _mandate_auth = mandate_as_authorization_enabled()
     # computed here only to decide whether a FAILED mandate should refuse on
     # the spot (today's rule) or fall through to step 2 so the refusal is
@@ -2393,6 +2430,11 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                 {"note": "a verified mandate with no derivable identity "
                          "cannot key a durable claim, and an unkeyed claim "
                          "is not a claim"})
+        _mandate_id = str(_mandate_verdict.get("mandate_id") or "").strip()
+        if not _mandate_id:
+            raise ArmingRefusal("MANDATE_IDENTITY_UNKNOWN",
+                                {"note": "no mandate_id to key the per-day "
+                                         "rate ledger on"})
         # PUBLISH THE VERIFIED NAMESPACE for the submission and per-class
         # claim counters. Reached only after `verify` returned ok, so no
         # unsigned document can set it, and unreachable while a campaign is
@@ -2400,10 +2442,44 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         # re-namespaced onto a mandate. Setting it does not consume
         # anything: it names where claims are counted, and claims only
         # happen inside a window that armed.
-        _set_active_mandate_suffix(sid)
+        # THE RATE NAMESPACE, NOT THE GRANT IDENTITY. `sid` carries `seq`
+        # and `key_id`, so using it here would let a renewal reset the day's
+        # submission budget. `mandate_rate_day_key` drops both.
+        _set_active_mandate_suffix(
+            mandate_rate_day_key(
+                _mandate_id,
+                day=(now or dt.datetime.now(dt.timezone.utc)
+                     ).strftime("%Y%m%d")))
         # CAPTURED, NOT APPLIED HERE. It is intersected into `mw` below, at
         # the one statement that computes the budget the window test reads.
         _mandate_per_day = mandate_signed_window_rate(_mp2)
+        # THE PER-DAY RATE LEDGER, ASKED WITHOUT PAYING.
+        #
+        # `DailyActionLedger` is the durable per-UTC-day accounting, keyed on
+        # the mandate's IDENTITY, so renewal and key rotation cannot reset
+        # it. This call WRITES NOTHING -- it exists because a window
+        # reserved while arming is structurally blocked is a window spent on
+        # nothing. The reservation itself happens next to the durable window
+        # claim, so the two commit together.
+        #
+        # AN UNREADABLE LEDGER REFUSES. "I could not tell" and "nothing used
+        # today" differ by the whole day's allowance.
+        from src import l5_daily_action_ledger as DAL   # late: image closure
+        _dal = DAL.DailyActionLedger()
+        _would = _dal.would_reserve_window(
+            _mandate_id, market,
+            max_windows_per_day=_mandate_per_day, now=now)
+        if not _would.get("ok"):
+            raise ArmingRefusal(
+                str(_would.get("reason") or "DAILY_WINDOW_REFUSED"),
+                {"detail": _would.get("detail"),
+                 "utc_day": _would.get("utc_day"),
+                 "windows_used": _would.get("windows_used"),
+                 "max": _would.get("max"),
+                 "mandate_id": _mandate_id,
+                 "note": "the signed per-day window rate is accounted on the "
+                         "volume per UTC day and per mandate identity; a "
+                         "renewal or key rotation does not reset it"})
         # THE SIGNED SUBMISSION RATE MUST ALSO BIND, and it binds the same
         # way the signed exposure and daily-loss ceilings do: by refusing
         # when the RUNNING limit is wider than the signed one.
@@ -2819,7 +2895,27 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     if mw > 1:
         # a campaign's own expiry, verified at step 8 above, IS the absolute
         # deadline this requires; the env one is then optional.
-        if not _camp_ok and not os.getenv(NOT_AFTER_ENV, "").strip():
+        # A SIGNED MANDATE CARRIES ITS OWN ABSOLUTE DEADLINE, exactly as a
+        # campaign document does, so it gets the same exemption.
+        #
+        # `MS.verify` runs `_check_validity` on EVERY arming, which refuses
+        # MANDATE_EXPIRED past the signed `not_after` and enforces the
+        # 30-day duration ceiling. So the mandate path already has the
+        # bounded session this check exists to require.
+        #
+        # REQUIRING THE ENV DEADLINE HERE WAS A DEFECT, and a subtle one:
+        # it forced an operator to set `L5_LIVE_AUTH_NOT_AFTER` for a
+        # mandate, and the deadline check at step 8 then applies whichever
+        # is EARLIER -- so a stale value left over from a 4-hour campaign
+        # would kill a seven-day mandate after four hours with
+        # AUTHORIZATION_EXPIRED. Fail-closed, but it would have looked like
+        # the mandate itself expiring.
+        #
+        # The env deadline stays OPTIONAL and can still only TIGHTEN, which
+        # is the right discipline; it is simply no longer mandatory for a
+        # path that has a signed one.
+        if not _camp_ok and _mandate_per_day is None \
+                and not os.getenv(NOT_AFTER_ENV, "").strip():
             raise ArmingRefusal("MANDATE_HAS_NO_DEADLINE",
                                 {"env": NOT_AFTER_ENV,
                                  "note": "a budget above one window with no "
@@ -2929,6 +3025,38 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         # a window already spent is refused here, by the same O_EXCL call that
         # refuses a second Stage A claim: AUTHORIZATION_ALREADY_USED.
         claim_once(path, wkey, wclaim)
+        # THE RATE RESERVATION, COMMITTED WITH THE WINDOW CLAIM.
+        #
+        # Placed AFTER `claim_once` on purpose: that call is the point of no
+        # return for this window, so a reservation taken before it could be
+        # spent on an arming that then refused. Placed BEFORE `_append` so
+        # the rate is accounted before the window is announced.
+        #
+        # `reserve_window` RESUMES rather than respends when this slug
+        # already holds today's claim, so a restart re-arming the same market
+        # does not consume a second window -- the same property `claim_once`
+        # has, which is why the two belong next to each other.
+        if _mandate_id and _mandate_per_day is not None:
+            from src import l5_daily_action_ledger as DAL2
+            _res = DAL2.DailyActionLedger().reserve_window(
+                _mandate_id, market,
+                max_windows_per_day=_mandate_per_day, now=now)
+            if not _res.get("ok"):
+                # The window claim is already spent and is deliberately not
+                # rolled back: handing the same claim out twice is worse
+                # than losing one. Refusing here stops the ORDER path, and
+                # the lost window is the conservative direction.
+                raise ArmingRefusal(
+                    str(_res.get("reason") or "DAILY_WINDOW_REFUSED"),
+                    {"detail": _res.get("detail"),
+                     "mandate_id": _mandate_id,
+                     "note": "the per-day rate ledger refused after the "
+                             "window claim was taken; the claim is spent "
+                             "and not rolled back, because reissuing a "
+                             "single-use claim is the worse failure"})
+            wclaim["daily_rate"] = {k: _res.get(k) for k in
+                                    ("utc_day", "used_before", "max",
+                                     "resumed")}
         _append(path, wclaim)
         if auth is not None:
             auth.sid, auth.market, auth.claimed = sid, market, True

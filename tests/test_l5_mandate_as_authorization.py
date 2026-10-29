@@ -233,6 +233,15 @@ def armed_ok(armed_env, monkeypatch, tmp_path):
 #: literal string was a bug in the first version of these tests.
 GRANTED = ("WINDOW", "CLAIMED")
 
+#: TWO GATES REFUSE A SPENT DAY, and either is correct. The
+#: `DailyActionLedger` pre-check runs FIRST and refuses
+#: DAILY_WINDOW_BUDGET_SPENT before any work is done; the older
+#: sid-prefix count behind it refuses MANDATE_WINDOW_BUDGET_SPENT and
+#: remains as a second line of defence. Asserting one name would make the
+#: test brittle about which layer caught it rather than about the budget
+#: being enforced.
+DAY_SPENT = ("DAILY_WINDOW_BUDGET_SPENT", "MANDATE_WINDOW_BUDGET_SPENT")
+
 
 def test_the_fixture_really_arms(armed_ok, monkeypatch):
     monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
@@ -284,7 +293,7 @@ def test_the_per_day_window_budget_is_enforced_from_the_volume(
     armed_ok(market=MARKET2)
     with pytest.raises(AUTH.ArmingRefusal) as e:
         armed_ok(market="cpc-btc-updown-15m-2026-10-24-2230z")
-    assert _reason(e.value) == "MANDATE_WINDOW_BUDGET_SPENT"
+    assert _reason(e.value) in DAY_SPENT
 
 
 def test_duplicate_arming_of_one_market_resumes_not_respends(
@@ -320,7 +329,7 @@ def test_a_restart_cannot_buy_another_window(armed_ok, monkeypatch):
     monkeypatch.setattr(os, "getpid", lambda: _real + 1)   # lambda recurses
     with pytest.raises(AUTH.ArmingRefusal) as e:
         armed_ok(market="cpc-btc-updown-15m-2026-10-24-2230z")
-    assert _reason(e.value) == "MANDATE_WINDOW_BUDGET_SPENT"
+    assert _reason(e.value) in DAY_SPENT
 
 
 def test_a_restart_does_not_brick_the_rest_of_the_day(armed_ok, monkeypatch):
@@ -368,7 +377,7 @@ def test_day_rollover_opens_a_fresh_window_budget(armed_ok, monkeypatch):
     armed_ok(market=MARKET2, when=d1)         # day 1's two are now spent
     with pytest.raises(AUTH.ArmingRefusal) as e:
         armed_ok(market=M3, when=d1)
-    assert _reason(e.value) == "MANDATE_WINDOW_BUDGET_SPENT"
+    assert _reason(e.value) in DAY_SPENT
     b = armed_ok(market=M3, when=d2)          # day 2 starts fresh
     assert a["session_id"] != b["session_id"]
     assert b["event"] in GRANTED
@@ -713,3 +722,164 @@ def test_telemetry_never_carries_the_document(armed_env, monkeypatch):
     assert "sig" not in json.loads(t) and "payload" not in json.loads(t)
     for secret in ("not_before", "capital", "promotion"):
         assert secret not in t
+
+
+# ===================================================================
+#  Q1 — renewal and key rotation must NOT reset the day's allowance
+# ===================================================================
+def test_the_rate_key_ignores_seq_and_key_id(armed_env):
+    """A per-day RATE keyed on `seq` would hand a fresh allowance to every
+    renewal: sign 8/day, re-sign at noon, and the day permits 16."""
+    a = AUTH.mandate_rate_day_key("m-1", day="20261029")
+    assert a and a == AUTH.mandate_rate_day_key("m-1", day="20261029")
+    # the GRANT identity does separate seq and key; the RATE key must not
+    assert AUTH.mandate_claim_sid("m-1", 1, "k1", day="20261029") != \
+        AUTH.mandate_claim_sid("m-1", 2, "k1", day="20261029")
+    assert AUTH.mandate_rate_day_key("m-1", day="20261029") == \
+        AUTH.mandate_rate_day_key("m-1", day="20261029")
+    # a different day and a different mandate DO separate
+    assert a != AUTH.mandate_rate_day_key("m-1", day="20261030")
+    assert a != AUTH.mandate_rate_day_key("m-2", day="20261029")
+    assert AUTH.mandate_rate_day_key("", day="20261029") == ""
+    assert AUTH.mandate_rate_day_key("m-1", day="") == ""
+
+
+def test_a_renewal_cannot_reset_the_days_window_allowance(
+        armed_ok, monkeypatch):
+    """THE OWNER'S QUESTION 1. Spend the day under seq=1, re-sign the SAME
+    mandate as seq=2, and the day must still be spent."""
+    monkeypatch.delenv(AUTH.MAX_WINDOWS_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=2, seq=1)))
+    armed_ok(market=MARKET)
+    armed_ok(market=MARKET2)                      # day spent under seq 1
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=2, seq=2)))
+    with pytest.raises(AUTH.ArmingRefusal) as e:
+        armed_ok(market="cpc-btc-updown-15m-2026-10-24-2230z")
+    assert _reason(e.value) in DAY_SPENT, _reason(e.value)
+
+
+def test_a_key_rotation_cannot_reset_the_days_window_allowance(
+        armed_ok, monkeypatch):
+    """Rotating a compromised key is an ordinary act. It must not also hand
+    the day a fresh allowance."""
+    monkeypatch.delenv(AUTH.MAX_WINDOWS_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=2)))
+    armed_ok(market=MARKET)
+    armed_ok(market=MARKET2)
+    other, other_pub = _keypair()
+    monkeypatch.setitem(MS.MANDATE_PUBKEYS, "rotated-key", other_pub)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(other, _payload(per_day=2, seq=3),
+                             key_id="rotated-key"))
+    with pytest.raises(AUTH.ArmingRefusal) as e:
+        armed_ok(market="cpc-btc-updown-15m-2026-10-24-2230z")
+    assert _reason(e.value) in DAY_SPENT, _reason(e.value)
+
+
+def test_a_renewal_does_not_reset_the_submission_namespace(
+        armed_ok, monkeypatch):
+    """The submission budget is counted over the claim namespace, so that
+    namespace must be renewal-stable too."""
+    monkeypatch.delenv(AUTH.MAX_WINDOWS_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=4, seq=1)))
+    armed_ok(market=MARKET)
+    first = AUTH.experiment_id()
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=4, seq=2)))
+    armed_ok(market=MARKET2)
+    assert AUTH.experiment_id() == first, "a renewal re-namespaced the budget"
+
+
+def test_a_different_mandate_id_does_start_a_fresh_day(armed_ok, monkeypatch):
+    """Stated plainly rather than hidden: a NEW mandate_id is a new mandate
+    and does get its own allowance. That is a deliberate, visible act in a
+    signed document, not a side effect of renewing."""
+    monkeypatch.delenv(AUTH.MAX_WINDOWS_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=1)))
+    armed_ok(market=MARKET)
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(
+        armed_ok.priv, _payload(per_day=1, mandate_id="test-002")))
+    assert armed_ok(market=MARKET2)["event"] in GRANTED
+
+
+def test_the_window_claim_records_the_daily_rate(armed_ok, monkeypatch):
+    """The reservation is auditable from the claim the owner already reads."""
+    monkeypatch.delenv(AUTH.MAX_WINDOWS_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=3)))
+    claim = armed_ok(market=MARKET)
+    assert claim["daily_rate"]["max"] == 3
+    assert claim["daily_rate"]["utc_day"]
+
+
+def test_an_unreadable_rate_ledger_refuses(armed_ok, monkeypatch):
+    """"I could not tell" and "nothing used today" differ by the whole day's
+    allowance, so an unreadable ledger must refuse."""
+    monkeypatch.delenv(AUTH.MAX_WINDOWS_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=2)))
+    from src import l5_daily_action_ledger as DAL
+
+    def boom(self, mandate_id, day, prefix):
+        raise DAL.DailyLedgerUnavailable("volume unreadable")
+    monkeypatch.setattr(DAL.DailyActionLedger, "_list", boom)
+    with pytest.raises(AUTH.ArmingRefusal) as e:
+        armed_ok(market=MARKET)
+    assert _reason(e.value) == "DAILY_LEDGER_UNAVAILABLE"
+
+
+# ===================================================================
+#  Q4 — the signed validity must not be cut short by an env deadline
+# ===================================================================
+def test_a_signed_mandate_does_not_require_an_env_deadline(
+        armed_env, monkeypatch):
+    """THE OWNER'S QUESTION 4. Requiring L5_LIVE_AUTH_NOT_AFTER forced an
+    operator to set it, and step 8 then applies whichever is EARLIER -- so a
+    stale 4-hour campaign value would kill a seven-day mandate after four
+    hours. The signed `not_after` is verified on every arming, so the env one
+    is optional."""
+    monkeypatch.setenv(AUTH.MANDATE_AS_AUTH_ENV, "1")
+    monkeypatch.setenv(AUTH.MAX_SUBMISSIONS_ENV, "40")
+    monkeypatch.delenv(AUTH.NOT_AFTER_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_env, _payload(per_day=8, hours_valid=168)))
+    assert _reason(_arm()) != "MANDATE_HAS_NO_DEADLINE"
+
+
+def test_a_campaignless_legacy_path_still_requires_the_env_deadline(
+        armed_env, monkeypatch):
+    """The exemption is for a SIGNED mandate only. Nothing else gained it."""
+    monkeypatch.delenv(AUTH.MANDATE_AS_AUTH_ENV, raising=False)
+    monkeypatch.delenv(AUTH.NOT_AFTER_ENV, raising=False)
+    monkeypatch.delenv(MS.MANDATE_ENV, raising=False)
+    monkeypatch.setitem(MS.MANDATE_PUBKEYS, KEY_ID, "00" * 32)
+    # with no mandate and no campaign the legacy handshake is the only route
+    # and its multi-window form still needs an absolute deadline
+    assert _reason(_arm()) in ("MANDATE_ABSENT", "OWNER_AUTHORIZATION_ABSENT",
+                              "MANDATE_HAS_NO_DEADLINE")
+
+
+def test_an_env_deadline_can_still_tighten_a_signed_mandate(
+        armed_ok, monkeypatch):
+    """Optional, but it still binds when set: the EARLIER of the two wins,
+    which is the right discipline. This is also the trap to remember -- a
+    stale value from a previous campaign silently shortens a mandate.
+
+    Uses the arming fixture because the deadline is checked at step 8, after
+    preflight, so a harness with no preflight refuses earlier for an
+    unrelated reason."""
+    monkeypatch.delenv(AUTH.MAX_WINDOWS_ENV, raising=False)
+    monkeypatch.setenv(MS.MANDATE_ENV,
+                       _sign(armed_ok.priv, _payload(per_day=8,
+                                                     hours_valid=168)))
+    past = (dt.datetime.now(dt.timezone.utc)
+            - dt.timedelta(minutes=5)).isoformat()
+    monkeypatch.setenv(AUTH.NOT_AFTER_ENV, past)
+    with pytest.raises(AUTH.ArmingRefusal) as e:
+        armed_ok(market=MARKET)
+    assert _reason(e.value) == "AUTHORIZATION_EXPIRED"
