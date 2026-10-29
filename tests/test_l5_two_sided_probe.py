@@ -903,10 +903,7 @@ def test_the_l5_following_translation_path_is_untouched():
     L5-following pricing and sizing cannot change."""
     import inspect
     from src import l5_live_execution as E
-    # `_handle` is the BODY this test reviews. `handle` is now a thin
-    # try/finally wrapper that guarantees the two-sided leg markers
-    # never outlive the call, and it contains no translation at all.
-    body = inspect.getsource(E.FaithfulExecutor._handle)
+    body = inspect.getsource(E.FaithfulExecutor.handle)
     i = body.index("FT.pmus_translate(")
     call = body[i:i + 120]
     assert "authenticated" in call

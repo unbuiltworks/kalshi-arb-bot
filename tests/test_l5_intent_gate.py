@@ -509,12 +509,8 @@ def test_the_executor_refusal_inventory_is_still_complete():
     import re
     root = pathlib.Path(__file__).resolve().parents[1]
     src = (root / "src" / "l5_live_execution.py").read_text().splitlines()
-    # `_handle` is the BODY that carries the refusal sites. `handle` is a
-    # thin try/finally wrapper added so the two-sided leg markers cannot
-    # outlive the call; scanning it would find zero sites and report that
-    # the executor had stopped refusing anything.
     start = next(i for i, l in enumerate(src)
-                 if l.startswith("    def _handle(self, row: Mapping"))
+                 if l.startswith("    def handle(self, row: Mapping"))
     end = len(src)
     for i in range(start + 1, len(src)):
         if re.match(r"^    def |^class ", src[i]):
