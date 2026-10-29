@@ -687,3 +687,52 @@ def telemetry(verdict: Mapping[str, Any]) -> Dict[str, Any]:
         "labels": ("PHASE 1: REPORTING ONLY. No arming decision consults "
                    "this module yet."),
     }
+
+
+def identity_unverified(raw: Any) -> Optional[Tuple[str, int, str]]:
+    """`(mandate_id, seq, key_id)` read WITHOUT checking the signature.
+
+    FOR NAMESPACING ONLY, AND THAT IS WHY IT MAY SKIP VERIFICATION. The
+    durable claim namespace has to be derivable from the environment alone,
+    with no I/O, because `campaign_claim_suffix` is a pure function of the
+    owner's nonce and that purity is what makes a restart unable to
+    replenish a spent budget: the same document yields the same digest
+    yields the same claim files. Verification needs the watchdog's replay
+    floor and revocation list, so a namespace that required it would do
+    network I/O on every claim and would return "" whenever the watchdog
+    blinked -- handing out a FRESH budget exactly when the system is least
+    healthy.
+
+    Getting the namespace wrong can only mis-COUNT claims; it can never
+    authorize anything. Authorization remains the whole of `verify`, behind
+    the arming boundary. So this reads the three identity fields and nothing
+    else, and a document that does not parse yields None rather than a
+    guess.
+
+    SEQ IS PART OF THE IDENTITY. Two mandates sharing a `mandate_id` but
+    differing in `seq` are different grants with different scope, so they
+    must not share a submission budget -- the same reason two campaigns with
+    one `L5_EXPERIMENT_ID` must not.
+    """
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    try:
+        doc = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+    except BaseException:                                      # noqa: BLE001
+        return None
+    if not isinstance(doc, dict):
+        return None
+    payload = doc.get("payload")
+    key_id = doc.get("key_id")
+    if not isinstance(payload, dict) or not isinstance(key_id, str):
+        return None
+    mid = payload.get("mandate_id")
+    seq = payload.get("seq")
+    if not isinstance(mid, str) or not mid.strip():
+        return None
+    # the same strict int the verifier demands: a bool is not a seq and a
+    # float is not a seq, because a namespace that accepts what the verifier
+    # rejects would key claims under an identity that can never arm.
+    if _pos_int(seq) is None:
+        return None
+    return (mid.strip(), int(seq), key_id.strip())
