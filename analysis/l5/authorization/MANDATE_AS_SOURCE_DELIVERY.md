@@ -440,3 +440,36 @@ readable; the running action set following the requote flag; an unsigned
 running action refusing and signing it admitting the requote; a signed action
 the engine never emits being harmless; gates disabled; defensive completion;
 and the campaign path untouched.
+
+## Baseline parity for this change
+
+Both runs full-suite, same machine, **same flags** (`-p no:randomly`) — the
+earlier 20-failure baseline was taken under random ordering and is not
+comparable, because several failures in this suite are order-sensitive.
+
+| | failed | errors | passed |
+|---|---|---|---|
+| parent `f3409cd8` | **21** | **14** | 14387 |
+| `d4e37fcf` (this change) | **21** | **14** | 14405 |
+
+The 21 failure **names are identical** (`diff` clean), the 14 errors are the
+same pre-existing `test_pmus_status_live_handoff.py` collection errors, and
+the +18 passed are exactly the 18 tests added here. **No regressions.**
+
+### A pre-existing cross-file pollution, named rather than left mysterious
+
+Four `test_pmus_auth.py::test_the_signature_is_byte_identical_to_the_executors`
+parametrisations fail when `tests/test_l5_mandate_as_authorization.py` runs
+first in the same process. Both files pass alone.
+
+The mechanism: `fake_ed` substitutes the Ed25519 module via
+`monkeypatch.setitem(sys.modules, ...)`, but `pmus_auth` reaches it with
+`from cryptography.hazmat.primitives.asymmetric import ed25519`, which
+resolves by `getattr` on the already-imported parent package. The mandate
+test file imports the real `ed25519` at module scope, which sets that
+attribute, so the stub is bypassed and the recorder stays empty.
+
+**This reproduces identically at the parent commit** and is in both columns
+of the table above, so it is not a regression from this change. The fix
+belongs in `fake_ed` (patch the package attribute as well as `sys.modules`)
+and is deliberately left out of this diff as an unrelated change.
