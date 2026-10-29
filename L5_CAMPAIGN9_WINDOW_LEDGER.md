@@ -47,6 +47,7 @@ residual ceiling 3 contracts · `journal_errors > 0` · 8 windows spent ·
 | # | window | armed | submissions | venue fills | completed pairs | unmatched | Route B trigger | settled net |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 1845z | 18:45:09Z, spent 1/8 | **0** | 0 | 0 | 0 | n/a (Route B inert) | n/a |
+| 2 | 1900z | 19:00:09Z, spent 2/8 | **0** | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×374 | n/a |
 
 ### Window 1 — 1845z — ZERO ORDERS, genuine constraint
 
@@ -68,3 +69,65 @@ attributable to the activation restart, not to the engine.
 Venue state at 18:53:08Z: `open_orders_at_venue 0`, `pending_terminal_total 0`,
 `adopted []`, `quarantined []`, campaign ledger `peak_usd 0` — nothing was
 ever submitted.
+
+
+### Window 2 — 1900z — ZERO ORDERS — root cause: no L5 activity to mirror
+
+Armed 19:00:09Z, `windows_spent: 2/8`, claim `…w.05b6e506790426e7`, scope
+digest `9beae198…` unchanged, `MAKER_ONLY`, preflight PASSED. First Route B
+window. No halt condition approached.
+
+**Route B's hook DID run.** `book_completion:NO_ACTION_YET = 374` — a
+non-empty counter set, which is the checklist's pass condition. It is not the
+defect case. `L5_BOOK_COMPLETION_TRIGGER` with
+`triggered_by: BOOK_NOT_L5_ACTION` has not appeared because the hook has not
+yet had cause to act, which is a decision, not a failure.
+
+**Why zero orders.** The runner is strictly L5-following, by its own contract:
+
+> `L5 realtime activity -> authenticated PMUS BTC15m book -> L5_NATIVE
+> (frozen) -> PMUS_TRANSLATION (frozen) -> SAFETY_OVERLAY -> PmusTransport`
+> … "each new L5 fill in that window is driven through FaithfulExecutor"
+
+An order is placed only when a **new L5 fill** is ingested and admitted
+(`l5_pmus_live_runner.py:2500` `ingest:new`, `:2537` `ingest:admitted`).
+This window:
+
+| counter | value |
+|---|---|
+| `ingest:polls_ok` | 374 |
+| `ingest:rows` | 74800 (= 374 × **200.0**) |
+| `ingest:dup` | **74800** |
+| `ingest:new` | **0** |
+| `ingest:admitted` | absent (never incremented) |
+| `ingest:refused:*` | absent (nothing was filtered) |
+| `feed_errors` | 0 |
+
+Every poll returns L5's same latest 200 actions and all 200 are already
+known. Nothing arrived, so nothing was even filtered.
+
+**The newest L5 activity in the feed page is the 17:45z window.**
+`top_slugs_seen` tops out at `btc-updown-15m-1793295900` = **17:45z**, with
+17:00z / 17:15z / 17:30z behind it. We are trading the 19:00z window, so the
+followed trader has been idle for roughly 75+ minutes.
+
+**Verdict: genuine upstream input condition, NOT an implementation defect,
+and not one of our risk gates refusing.** The ingest path is demonstrably
+healthy: `feed_errors 0`, cursor `loaded`/`durable` with no load or save
+error, and `keys: 5556` accumulated against `seeded_count: 200` since
+`seeded_at` 2026-10-26T13:00:31Z (3.26 days) — the new-row path has admitted
+thousands of rows historically, so it works when rows exist. `max_action_age_s`
+is 900, so a 17:45z action could not be acted on even if it were new.
+
+**Consequence the owner should weigh.** Windows are spent by *arming*, not by
+trading: 2 of 8 are gone, both with zero orders. The remaining 6 will be
+consumed on the clock by roughly 20:45z whether or not L5 acts. If L5 stays
+idle, the campaign will spend its full authorization with no submissions and
+produce **no measurable comparison against the C6–C8 baseline**. This is not
+a defect to fix and no infrastructure change would address it — it is the
+strategy's dependence on an external trader being active.
+
+Other counters: `ts_completion:NO_INVENTORY_TO_COMPLETE = 76` (no first leg
+ever filled, so nothing to complete), `campaign:OK = 217`,
+`campaign_window:RESERVED = 1`, `two_sided_awaiting_settlement = 3`.
+All `shadow_*` counters are modelled and excluded from this ledger.
