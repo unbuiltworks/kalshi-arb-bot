@@ -93,6 +93,10 @@ class _Limits:
         self.max_usd_per_market = AUTH.D("5")
         self.max_total_exposure_usd = AUTH.D(exposure)
         self.daily_realized_loss_halt_usd = AUTH.D(daily)
+        #: the SafetyLimits half of the running residual cap. The runtime
+        #: takes the tighter of this and the gates' unmatched ceiling, and
+        #: the arming check derives it the same way.
+        self.max_abs_residual = AUTH.D("3")
 
     def as_dict(self):
         return {"max_usd_per_market": self.max_usd_per_market,
@@ -206,6 +210,19 @@ def armed_ok(armed_env, monkeypatch, tmp_path):
     # process does not.
     monkeypatch.setenv("RAILWAY_DEPLOYMENT_ID", "dep-test-1")
     monkeypatch.setenv("RAILWAY_REPLICA_ID", "rep-test-1")
+    # THE RUNNING ENVELOPE, configured to sit INSIDE the signed one. Every
+    # signed capital/loss/residual term is now compared to the variable the
+    # deployment actually enforces through, and an unset variable fails
+    # closed -- so a fixture that leaves them out does not arm. That is the
+    # point: before this change the same fixture armed with none of them
+    # set, which is exactly how five signatures came to bound nothing.
+    monkeypatch.setenv(AUTH.RUN_CASH_ENV, "5")
+    monkeypatch.setenv(AUTH.RUN_CAMPAIGN_BUDGET_ENV, "5")
+    monkeypatch.setenv(AUTH.RUN_CUMULATIVE_LOSS_ENV, "20")
+    monkeypatch.setenv(AUTH.RUN_UNMATCHED_ENV, "3")
+    monkeypatch.delenv(AUTH.RUN_REQUOTE_ENV, raising=False)
+    monkeypatch.delenv(AUTH.RUN_DEFENSIVE_ENV, raising=False)
+    monkeypatch.delenv(AUTH.RUN_GATES_ENV, raising=False)
     ledger = str(tmp_path / "ledger.jsonl")
 
     def arm(market=MARKET, when=None, **kw):
@@ -883,3 +900,223 @@ def test_an_env_deadline_can_still_tighten_a_signed_mandate(
     with pytest.raises(AUTH.ArmingRefusal) as e:
         armed_ok(market=MARKET)
     assert _reason(e.value) == "AUTHORIZATION_EXPIRED"
+
+
+# ============================ THE FIVE SIGNED TERMS THAT BOUND NOTHING
+#
+# `max_cash_deployed_usd`, `campaign_budget_usd`, `max_cumulative_loss_usd`,
+# `residual_cap_contracts` and `allowed_actions` were verified for FORM by
+# the signer and then never compared to anything running. A mandate signing
+# `max_cash_deployed_usd: "5"` did not stop a deployment configured for
+# $500. Each test below sets the variable the DEPLOYMENT enforces through --
+# the same names `l5_pmus_live_runner.validation_gates()` reads -- and
+# asserts arming refuses when the running limit is wider, and refuses again
+# when there is no running limit at all.
+#
+# ABSENT IS NOT TIGHTER. `L5_CAMPAIGN_BUDGET_USD` unset means the budget
+# gate is OFF; `L5_VALIDATION_GATES=0` removes the object the cash and
+# cumulative-loss ceilings live on. Both are wider than any signature, so
+# both refuse.
+
+
+def _armed_reason(fn):
+    try:
+        fn()
+    except AUTH.ArmingRefusal as exc:
+        return str(exc)
+    return None
+
+
+def _detail(fn):
+    try:
+        fn()
+    except AUTH.ArmingRefusal as exc:
+        return dict(getattr(exc, "detail", None) or {})
+    return {}
+
+
+@pytest.mark.parametrize("env_attr,field,wider", [
+    ("RUN_CASH_ENV", "max_cash_deployed_usd", "500"),
+    ("RUN_CAMPAIGN_BUDGET_ENV", "campaign_budget_usd", "500"),
+    ("RUN_CUMULATIVE_LOSS_ENV", "max_cumulative_loss_usd", "500"),
+])
+def test_a_running_money_limit_wider_than_signed_refuses(
+        armed_ok, monkeypatch, env_attr, field, wider):
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.setenv(getattr(AUTH, env_attr), wider)
+    assert _armed_reason(armed_ok) == "MANDATE_LIMITS_WIDER_THAN_SIGNED"
+    assert _detail(armed_ok).get("field") == field
+
+
+@pytest.mark.parametrize("env_attr,field", [
+    ("RUN_CASH_ENV", "max_cash_deployed_usd"),
+    ("RUN_CAMPAIGN_BUDGET_ENV", "campaign_budget_usd"),
+    ("RUN_CUMULATIVE_LOSS_ENV", "max_cumulative_loss_usd"),
+])
+def test_no_running_money_limit_at_all_refuses(
+        armed_ok, monkeypatch, env_attr, field):
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.delenv(getattr(AUTH, env_attr), raising=False)
+    assert _armed_reason(armed_ok) == "MANDATE_LIMIT_BACKSTOP_ABSENT"
+    assert _detail(armed_ok).get("field") == field
+
+
+def test_an_equal_running_money_limit_is_inside_the_signature(
+        armed_ok, monkeypatch):
+    """Equal is INSIDE, not outside. $5 signed and $5 running must arm."""
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.setenv(AUTH.RUN_CASH_ENV, "5")
+    assert armed_ok()["event"] in GRANTED
+
+
+def test_a_tighter_running_money_limit_is_inside_the_signature(
+        armed_ok, monkeypatch):
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.setenv(AUTH.RUN_CASH_ENV, "1")
+    monkeypatch.setenv(AUTH.RUN_CUMULATIVE_LOSS_ENV, "2")
+    claim = armed_ok()
+    assert claim["event"] in GRANTED
+    # and the comparison is recorded on the durable claim, not re-derived
+    assert claim["signed_envelope"]["max_cash_deployed_usd"] == {
+        "signed": "5", "running": "1"}
+
+
+def test_disabling_the_validation_gates_refuses(armed_ok, monkeypatch):
+    """The gates ENFORCE the cash and cumulative-loss ceilings.
+
+    With `L5_VALIDATION_GATES=0` the runner returns None instead of the
+    gate object, so those two variables would be read at arming and
+    enforced by nothing afterwards. That is the decoration this change
+    exists to end, so it refuses rather than reading them.
+    """
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.setenv(AUTH.RUN_GATES_ENV, "0")
+    assert _armed_reason(armed_ok) == "MANDATE_GATES_DISABLED"
+
+
+def test_the_residual_cap_binds_on_the_tighter_of_the_two_bounds(
+        armed_ok, monkeypatch):
+    """`effective_residual_cap` takes the MIN; the arming check must too."""
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    # the gates' ceiling is wider than signed, but SafetyLimits is tighter,
+    # so the inventory a live run can actually reach is 3 and it arms.
+    monkeypatch.setenv(AUTH.RUN_UNMATCHED_ENV, "50")
+    lim = _Limits()
+    lim.max_abs_residual = AUTH.D("2")
+    claim = armed_ok(limits=lim)
+    assert claim["event"] in GRANTED
+    assert claim["signed_envelope"]["residual_cap_contracts"] == {
+        "signed": "3", "running": "2"}
+
+
+def test_a_residual_cap_wider_than_signed_refuses(armed_ok, monkeypatch):
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.setenv(AUTH.RUN_UNMATCHED_ENV, "50")
+    lim = _Limits()
+    lim.max_abs_residual = AUTH.D("40")
+    assert _armed_reason(lambda: armed_ok(limits=lim)) == \
+        "MANDATE_LIMITS_WIDER_THAN_SIGNED"
+    assert _detail(lambda: armed_ok(limits=lim)).get("field") == \
+        "residual_cap_contracts"
+
+
+def test_no_readable_residual_bound_at_all_refuses(armed_ok, monkeypatch):
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.delenv(AUTH.RUN_UNMATCHED_ENV, raising=False)
+    lim = _Limits()
+    del lim.max_abs_residual
+    assert _armed_reason(lambda: armed_ok(limits=lim)) == \
+        "MANDATE_LIMIT_BACKSTOP_ABSENT"
+    assert _detail(lambda: armed_ok(limits=lim)).get("field") == \
+        "residual_cap_contracts"
+
+
+# ----------------------------- allowed_actions
+#
+# The dangerous direction is the deployment emitting an action the owner did
+# not sign, so every RUNNING kind must appear in the signed list. A signed
+# kind with no running counterpart takes nothing away and is allowed.
+
+
+def test_the_running_action_set_follows_the_requote_flag():
+    assert AUTH.running_action_kinds() == ["CANCEL", "COMPLETE", "OPEN"]
+    os.environ[AUTH.RUN_REQUOTE_ENV] = "1"
+    try:
+        assert AUTH.running_action_kinds() == [
+            "CANCEL", "COMPLETE", "OPEN", "REPLACE"]
+    finally:
+        os.environ.pop(AUTH.RUN_REQUOTE_ENV, None)
+
+
+def test_an_unsigned_running_action_refuses(armed_ok, monkeypatch):
+    """The seven-day payload signs OPEN/COMPLETE/CANCEL and NOT REPLACE.
+
+    `L5_COMPLETION_REQUOTE` adds REPLACE to what the engine can emit. That
+    combination is a real one -- the completion requote is a measured part
+    of the strategy -- so this is the check catching a live mismatch, not a
+    hypothetical one.
+    """
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.setenv(AUTH.RUN_REQUOTE_ENV, "1")
+    assert _armed_reason(armed_ok) == "MANDATE_RUNNING_ACTION_NOT_SIGNED"
+    assert _detail(armed_ok).get("unsigned") == ["REPLACE"]
+
+
+def test_signing_replace_admits_the_requote(armed_ok, monkeypatch):
+    pay = _payload()
+    pay["allowed_actions"] = ["OPEN", "COMPLETE", "CANCEL", "REPLACE"]
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, pay))
+    monkeypatch.setenv(AUTH.RUN_REQUOTE_ENV, "1")
+    assert armed_ok()["event"] in GRANTED
+
+
+def test_a_signed_action_the_engine_never_emits_is_harmless(
+        armed_ok, monkeypatch):
+    pay = _payload()
+    pay["allowed_actions"] = ["OPEN", "COMPLETE", "CANCEL", "REPLACE"]
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, pay))
+    monkeypatch.delenv(AUTH.RUN_REQUOTE_ENV, raising=False)
+    assert armed_ok()["event"] in GRANTED
+
+
+def test_a_deployment_that_can_cross_cannot_be_mandate_authorized(
+        armed_ok, monkeypatch):
+    """No mandate expresses a taker action, so none can cover a crosser.
+
+    `KNOWN_ACTIONS` has no taker name and `execution_mode` must be
+    MAKER_ONLY by signature. With `L5_DEFENSIVE_COMPLETION` on, the
+    deployment can cross the spread, and there is no way to write a
+    signature that covers that -- so this refuses on the configuration
+    rather than letting MAKER_ONLY read as a guarantee it is not.
+    """
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    monkeypatch.setenv(AUTH.RUN_DEFENSIVE_ENV, "1")
+    assert _armed_reason(armed_ok) == "MANDATE_CANNOT_AUTHORIZE_TAKER"
+
+
+def test_the_envelope_check_does_not_touch_the_campaign_path(
+        armed_ok, monkeypatch):
+    """A valid campaign arms with none of the five variables configured.
+
+    The check lives at the end of the mandate-as-authorization branch, so
+    it is unreachable while a campaign is the authorization source. This
+    pins that: it is the whole reason the check is not at verification
+    time, where it would have added refusals to every path that works
+    today.
+    """
+    monkeypatch.setenv(MS.MANDATE_ENV, _sign(armed_ok.priv, _payload()))
+    for attr in ("RUN_CASH_ENV", "RUN_CAMPAIGN_BUDGET_ENV",
+                 "RUN_CUMULATIVE_LOSS_ENV", "RUN_UNMATCHED_ENV"):
+        monkeypatch.delenv(getattr(AUTH, attr), raising=False)
+    monkeypatch.setenv(AUTH.RUN_DEFENSIVE_ENV, "1")
+    camp = {"present": True, "ok": True,
+            "scope": {"campaign_id": "c-envelope-1",
+                      "max_windows": 8, "max_submissions": 72}}
+    reason = _armed_reason(lambda: armed_ok(campaign=camp))
+    # it does NOT refuse for any mandate-envelope reason; whatever the
+    # campaign path does here, it is not one of these.
+    assert reason not in ("MANDATE_LIMIT_BACKSTOP_ABSENT",
+                          "MANDATE_LIMITS_WIDER_THAN_SIGNED",
+                          "MANDATE_CANNOT_AUTHORIZE_TAKER",
+                          "MANDATE_GATES_DISABLED",
+                          "MANDATE_RUNNING_ACTION_NOT_SIGNED")

@@ -338,3 +338,105 @@ Recorded deliberately rather than silently carried:
 - Several nits: asymmetric int/bool strictness, `raise ... from None`, one
   hardcoded `"L5_MANDATE_DOC"` string, `_camp_ok_pre` duplicating logic
   computed later.
+
+---
+
+# Addendum 2 — the five signed terms now bind (closing the stated reservation)
+
+The reservation on the previous GO was explicit: five signed terms were
+verified for FORM and then compared to nothing running, so a mandate signing
+`max_cash_deployed_usd: "5"` did not stop a deployment configured for $500.
+That is now closed.
+
+## What was added
+
+One function, `mandate_bind_running_envelope(scope, limits)` in
+`src/l5_live_authorization.py`, called once at the **end** of the
+mandate-as-authorization branch in `authorize_arming`. It returns what it
+proved and raises `ArmingRefusal` otherwise.
+
+| signed term | running limit it is now compared against | refusals |
+|---|---|---|
+| `capital.max_cash_deployed_usd` | `L5_MAX_CASH_DEPLOYED_USD` | `..._BACKSTOP_ABSENT`, `..._WIDER_THAN_SIGNED` |
+| `capital.campaign_budget_usd` | `L5_CAMPAIGN_BUDGET_USD` | same |
+| `loss_limits.max_cumulative_loss_usd` | `L5_MAX_CUMULATIVE_LOSS_USD` | same |
+| `residual_cap_contracts` | `min(SafetyLimits.max_abs_residual, L5_MAX_UNMATCHED_CONTRACTS)` | same |
+| `allowed_actions` | `running_action_kinds()` from `L5_COMPLETION_REQUOTE` | `MANDATE_RUNNING_ACTION_NOT_SIGNED` |
+
+Two further refusals fall out of the same reasoning:
+
+- **`MANDATE_GATES_DISABLED`** — the cash and cumulative-loss ceilings are
+  enforced by `ValidationGates`, and `L5_VALIDATION_GATES=0` makes the runner
+  return `None` instead of the gate object. Reading those variables at arming
+  while nothing enforces them afterwards is precisely the decoration this
+  change ends, so it refuses rather than reading them.
+- **`MANDATE_CANNOT_AUTHORIZE_TAKER`** — `KNOWN_ACTIONS` contains no taker
+  name and `execution_mode` must be `MAKER_ONLY`, so no signature can express
+  a crossing order. With `L5_DEFENSIVE_COMPLETION` set the deployment *can*
+  cross, and no mandate covers that configuration. It refuses on the flag
+  rather than letting MAKER_ONLY read as a guarantee it is not.
+
+## The discipline, unchanged
+
+The signed number does **not** become the enforced number. That would make a
+second writer of a budget the runtime already enforces, and two writers of
+one budget is how a budget gets spent twice. Arming refuses unless the limit
+actually running is inside the signed one; the runtime stays the single
+enforcer and the signature becomes a precondition on its configuration. This
+is the same discipline the exposure and daily-loss comparison already used.
+
+## Fail-closed, specifically
+
+**Absent is not tighter.** `L5_CAMPAIGN_BUDGET_USD` unset means the budget
+gate is OFF entirely; a default is not a backstop. Every term refuses on an
+unset variable, on an unparseable one, and on a signed value that cannot be
+read as a number. The proof that this is live rather than nominal: the
+existing 56-test fixture **stopped arming** when the checks went in and had
+to be given a configured running envelope. Before this change the same
+fixture armed with none of the five variables set — which is exactly how
+five signatures came to bound nothing.
+
+## Placement, and why it is not at verification time
+
+The verification block runs whenever a trusted key is registered — flag off,
+campaign in force, legacy handshake — so a check there would add refusals to
+paths that work today. A first attempt did exactly that and broke
+`test_with_the_flag_off_a_valid_mandate_does_not_authorize`. The call now
+sits at the end of the mandate-as-authorization branch, reached **only**
+where the mandate is itself the authorization, and placed after the
+submission backstop so every pre-existing refusal still reports its own name
+first. `test_the_envelope_check_does_not_touch_the_campaign_path` pins it.
+
+## Recorded, not re-derived
+
+What was proved is written onto the durable window claim as
+`signed_envelope`, so the comparison is read off the record rather than
+re-derived later from variables that may have changed since.
+
+## One change to the prepared 7-day payload
+
+`allowed_actions` becomes `["OPEN", "COMPLETE", "REPLACE", "CANCEL"]`.
+`REPLACE` is added because `L5_COMPLETION_REQUOTE` makes the deployment emit
+it, and it ran that way inside the envelope the owner approved for campaigns
+6–8. Omitting it would not narrow the engine — it would make arming refuse
+`MANDATE_RUNNING_ACTION_NOT_SIGNED` against the deployment as it actually
+runs. If the flag is off when this is signed, a signed action the engine
+never emits takes nothing away. There is still no taker action in the list,
+and none can be written.
+
+**Not verifiable from here:** the live service's variables are not readable
+with this session's Railway role (`list-variables` returns a role error), so
+whether `L5_COMPLETION_REQUOTE` is currently set on `l5-pmus-live` is
+unconfirmed. Either state is handled — one arms, the other refuses by name —
+but the owner should expect `MANDATE_RUNNING_ACTION_NOT_SIGNED` on first
+arming if the deployed flag set differs from what gets signed.
+
+## Tests
+
+`tests/test_l5_mandate_as_authorization.py`, 56 → **74 tests, all passing**.
+New coverage: each money term wider / absent / equal / tighter; the residual
+cap binding on the tighter of its two bounds and refusing with neither
+readable; the running action set following the requote flag; an unsigned
+running action refusing and signing it admitting the requote; a signed action
+the engine never emits being harmless; gates disabled; defensive completion;
+and the campaign path untouched.

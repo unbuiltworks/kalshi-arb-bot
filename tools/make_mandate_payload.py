@@ -62,7 +62,20 @@ def build(start: dt.datetime) -> dict:
         "series": "cpc-btc-updown-15m-",
         "not_before": start.isoformat(),
         "not_after": (start + dt.timedelta(days=DAYS)).isoformat(),
-        "allowed_actions": ["OPEN", "COMPLETE", "CANCEL"],
+        # REPLACE IS SIGNED BECAUSE THE DEPLOYMENT EMITS IT. The completion
+        # requote (`L5_COMPLETION_REQUOTE`) ran in campaigns 6-8 inside the
+        # envelope the owner approved, and `running_action_kinds()` reports
+        # REPLACE whenever that flag is set. Omitting it here would not
+        # narrow the engine -- it would make arming refuse
+        # MANDATE_RUNNING_ACTION_NOT_SIGNED against the deployment as it
+        # actually runs. If the flag is OFF when this is signed, a signed
+        # action the engine never emits takes nothing away.
+        #
+        # THERE IS STILL NO TAKER ACTION. `KNOWN_ACTIONS` has none and
+        # `execution_mode` is MAKER_ONLY, so a deployment with
+        # L5_DEFENSIVE_COMPLETION set refuses MANDATE_CANNOT_AUTHORIZE_TAKER
+        # rather than being covered by this list.
+        "allowed_actions": ["OPEN", "COMPLETE", "REPLACE", "CANCEL"],
         "execution_mode": "MAKER_ONLY",
         "max_windows_per_day": MAX_WINDOWS_PER_DAY,
         "max_submissions_per_day": MAX_SUBMISSIONS_PER_DAY,

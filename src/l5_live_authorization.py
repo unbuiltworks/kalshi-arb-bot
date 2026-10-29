@@ -1351,6 +1351,206 @@ def mandate_signed_window_rate(scope: Mapping[str, Any]) -> int:
     return int(per_day)
 
 
+# ===================================================================== the
+# SIGNED ENVELOPE AGAINST THE RUNNING ENVELOPE
+# =====================================================================
+#
+# A signature over a number that nothing reads is decoration. Five signed
+# terms were in that position: `max_cash_deployed_usd`, `campaign_budget_usd`,
+# `max_cumulative_loss_usd`, `residual_cap_contracts` and `allowed_actions`
+# were verified for FORM by the signer and then never compared to anything
+# running, so a mandate signing `max_cash_deployed_usd: "5"` did not stop a
+# deployment configured for $500.
+#
+# THE DISCIPLINE IS THE ONE THE EXPOSURE CEILING ALREADY USES: the signed
+# number does not become the enforced number -- that would make a second
+# writer of a budget the runtime already enforces, and two writers of one
+# budget is how a budget gets spent twice. Instead arming REFUSES unless the
+# limit actually running is inside the signed one. The runtime stays the
+# single enforcer; the signature becomes a precondition on its configuration.
+#
+# FAIL CLOSED MEANS ABSENT REFUSES TOO. "No cumulative-loss ceiling
+# configured" and "a ceiling inside the signed one" are not the same state,
+# and an unset variable is the wider of the two: `L5_CAMPAIGN_BUDGET_USD`
+# unset means the budget gate is OFF entirely. A default is not a backstop,
+# either -- `L5_VALIDATION_GATES=0` removes the whole gate object that the
+# cash and cumulative-loss defaults live on, so the checks below require the
+# gates to be ON before they will credit any value read from their variables.
+
+#: the running variables each signed capital/loss term is enforced through.
+#: These are the names the DEPLOYMENT reads, not names invented here --
+#: `l5_pmus_live_runner.validation_gates()` constructs `ValidationGates` from
+#: exactly these, and `L5_VALIDATION_GATES=0` returns None instead of the
+#: object, which is why it is checked first.
+RUN_GATES_ENV = "L5_VALIDATION_GATES"
+RUN_CASH_ENV = "L5_MAX_CASH_DEPLOYED_USD"
+RUN_CUMULATIVE_LOSS_ENV = "L5_MAX_CUMULATIVE_LOSS_USD"
+RUN_UNMATCHED_ENV = "L5_MAX_UNMATCHED_CONTRACTS"
+RUN_CAMPAIGN_BUDGET_ENV = CAMPAIGN_BUDGET_ENV
+
+#: the flags that decide which ACTION KINDS the running deployment can emit.
+#: OPEN, COMPLETE and CANCEL are unconditional: the engine opens, completes
+#: and cancels in every configuration, including the deadman path. REPLACE is
+#: conditional on the completion-requote flag, which is the only switch that
+#: adds an action kind rather than changing one.
+RUN_REQUOTE_ENV = "L5_COMPLETION_REQUOTE"
+RUN_DEFENSIVE_ENV = "L5_DEFENSIVE_COMPLETION"
+_RUN_TRUE = ("1", "yes", "true", "on")
+
+
+def _env_true(name: str) -> bool:
+    return (os.getenv(name) or "").strip().lower() in _RUN_TRUE
+
+
+def running_action_kinds() -> List[str]:
+    """The action kinds this deployment can actually emit, from its flags.
+
+    Sorted, so the refusal detail and any digest over it are stable.
+
+    WHY A SUBSET TEST AND NOT AN EQUALITY TEST. A mandate may sign an action
+    the deployment cannot currently emit -- that is an owner permitting
+    something unused, which takes nothing away. The dangerous direction is
+    the other one: the deployment emitting an action the owner did not sign.
+    So every RUNNING kind must appear in the signed list, and a signed kind
+    with no running counterpart is fine.
+    """
+    kinds = {"OPEN", "COMPLETE", "CANCEL"}
+    if _env_true(RUN_REQUOTE_ENV):
+        kinds.add("REPLACE")
+    return sorted(kinds)
+
+
+def mandate_bind_running_envelope(scope: Mapping[str, Any],
+                                  limits: Any) -> Dict[str, Any]:
+    """Refuse unless every remaining signed term bounds a running limit.
+
+    Returns what it proved, for the arming record. Raises `ArmingRefusal`
+    otherwise. Called only on a mandate that has already VERIFIED, beside the
+    exposure and daily-loss comparison that was here first; this closes the
+    five terms that comparison did not reach.
+    """
+    cap = dict(scope.get("capital") or {})
+    loss = dict(scope.get("loss_limits") or {})
+    proved: Dict[str, Any] = {}
+
+    # TAKER CROSSING IS NOT EXPRESSIBLE IN A MANDATE AT ALL -- there is no
+    # action name for it and `execution_mode` must be MAKER_ONLY. So a
+    # deployment that can cross cannot be covered by any signature, however
+    # the actions are written, and this refuses before reading them.
+    if _env_true(RUN_DEFENSIVE_ENV):
+        raise ArmingRefusal(
+            "MANDATE_CANNOT_AUTHORIZE_TAKER",
+            {"flag": RUN_DEFENSIVE_ENV,
+             "note": "defensive completion can cross the spread; no signed "
+                     "mandate expresses a taker action, so no mandate can "
+                     "authorize this configuration"})
+
+    # 5. ALLOWED ACTIONS. Every kind the deployment can emit must be signed.
+    signed_actions = scope.get("allowed_actions")
+    if not isinstance(signed_actions, list) or not signed_actions             or any(not isinstance(a, str) for a in signed_actions):
+        raise ArmingRefusal(
+            "MANDATE_ACTIONS_UNREADABLE",
+            {"allowed_actions": str(signed_actions)[:60]})
+    signed_set = {a.strip().upper() for a in signed_actions}
+    running = running_action_kinds()
+    unsigned = [a for a in running if a not in signed_set]
+    if unsigned:
+        raise ArmingRefusal(
+            "MANDATE_RUNNING_ACTION_NOT_SIGNED",
+            {"unsigned": unsigned, "running": running,
+             "signed": sorted(signed_set),
+             "flags": {RUN_REQUOTE_ENV: _env_true(RUN_REQUOTE_ENV)},
+             "note": "the deployment can emit an action the owner did not "
+                     "sign; widening the signature is the owner's act, not "
+                     "this process's"})
+    proved["actions"] = {"running": running, "signed": sorted(signed_set)}
+
+    # THE GATE OBJECT ITSELF. The cash and cumulative-loss ceilings are
+    # enforced by `ValidationGates`, and `L5_VALIDATION_GATES=0` means there
+    # is no such object -- so its variables would be read here and enforced
+    # nowhere. That is exactly the decoration this function exists to end.
+    if str(os.getenv(RUN_GATES_ENV, "1")).strip() == "0":
+        raise ArmingRefusal(
+            "MANDATE_GATES_DISABLED",
+            {"flag": RUN_GATES_ENV,
+             "note": "the signed cash and cumulative-loss ceilings are "
+                     "enforced by the validation gates; with the gates off "
+                     "nothing enforces them and the signature would be "
+                     "decoration"})
+
+    # 1-3. THE MONEY CEILINGS. Each must be signed as a readable money
+    # string, explicitly configured in the deployment, and no wider.
+    for label, signed_raw, env_name in (
+            ("max_cash_deployed_usd", cap.get("max_cash_deployed_usd"),
+             RUN_CASH_ENV),
+            ("campaign_budget_usd", cap.get("campaign_budget_usd"),
+             RUN_CAMPAIGN_BUDGET_ENV),
+            ("max_cumulative_loss_usd", loss.get("max_cumulative_loss_usd"),
+             RUN_CUMULATIVE_LOSS_ENV)):
+        sig = _dec_or_none(signed_raw)
+        if sig is None:
+            raise ArmingRefusal(
+                "MANDATE_SCOPE_UNREADABLE",
+                {"field": label, "value": str(signed_raw)[:40]})
+        raw = (os.getenv(env_name) or "").strip()
+        if not raw:
+            raise ArmingRefusal(
+                "MANDATE_LIMIT_BACKSTOP_ABSENT",
+                {"field": label, "needs": env_name,
+                 "signed": str(sig),
+                 "note": "unset is not a tighter limit; the signed ceiling "
+                         "is made binding by the configured one and there "
+                         "is none to bound"})
+        run = _dec_or_none(raw)
+        if run is None:
+            raise ArmingRefusal(
+                "MANDATE_RUNNING_LIMITS_UNREADABLE",
+                {"field": label, "env": env_name, "value": raw[:40]})
+        if run > sig:
+            raise ArmingRefusal(
+                "MANDATE_LIMITS_WIDER_THAN_SIGNED",
+                {"field": label, "signed": str(sig), "running": str(run),
+                 "env": env_name})
+        proved[label] = {"signed": str(sig), "running": str(run)}
+
+    # 4. THE RESIDUAL CAP, IN CONTRACTS. The running cap is the TIGHTER of
+    # the two things that bound unmatched inventory, exactly as
+    # `effective_residual_cap` derives it: `SafetyLimits.max_abs_residual`
+    # and the gates' `max_unmatched_contracts`. Either alone is a cap; with
+    # neither readable there is no cap and this refuses.
+    sig_res = _dec_or_none(scope.get("residual_cap_contracts"))
+    if sig_res is None:
+        raise ArmingRefusal(
+            "MANDATE_SCOPE_UNREADABLE",
+            {"field": "residual_cap_contracts",
+             "value": str(scope.get("residual_cap_contracts"))[:40]})
+    caps: List[Any] = []
+    _lim_res = _limit_of(limits, "max_abs_residual")
+    if _lim_res is not None:
+        caps.append(_lim_res)
+    _unm = _dec_or_none((os.getenv(RUN_UNMATCHED_ENV) or "").strip())
+    if _unm is not None:
+        caps.append(_unm)
+    if not caps:
+        raise ArmingRefusal(
+            "MANDATE_LIMIT_BACKSTOP_ABSENT",
+            {"field": "residual_cap_contracts",
+             "needs": [RUN_UNMATCHED_ENV, "SafetyLimits.max_abs_residual"],
+             "signed": str(sig_res),
+             "note": "no readable bound on unmatched inventory, so the "
+                     "signed residual cap bounds nothing"})
+    run_res = min(caps)
+    if run_res > sig_res:
+        raise ArmingRefusal(
+            "MANDATE_LIMITS_WIDER_THAN_SIGNED",
+            {"field": "residual_cap_contracts", "signed": str(sig_res),
+             "running": str(run_res),
+             "from": [str(c) for c in caps]})
+    proved["residual_cap_contracts"] = {"signed": str(sig_res),
+                                        "running": str(run_res)}
+    return proved
+
+
 #: The claim namespace of the mandate that ACTUALLY AUTHORIZED the current
 #: window, set by `authorize_arming` only after `verify` returned ok. It is
 #: process state rather than a function of the environment, and an
@@ -2219,6 +2419,10 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     #: which is what keeps the budget statement below on the campaign/env
     #: path untouched.
     _mandate_per_day: Optional[int] = None
+    #: what the signed envelope was proved to bound, recorded on the window
+    #: claim so the comparison is read off the durable record rather than
+    #: re-derived from variables that may have changed since.
+    _mandate_envelope_bound: Optional[Dict[str, Any]] = None
     #: the verified mandate's identity, carried to the claim boundary so the
     #: per-day RATE ledger can be keyed on it. Keyed on identity alone, so a
     #: renewal or key rotation cannot reset the day's allowance.
@@ -2514,6 +2718,21 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
             raise ArmingRefusal(
                 "MANDATE_SUBMISSION_BACKSTOP_WIDER_THAN_SIGNED",
                 {"signed_per_day": _sig_subs, "running_backstop": _run_subs})
+        # AND THE REMAINING FIVE SIGNED TERMS BIND THE SAME WAY. Exposure
+        # and daily loss were compared at verification; cash, campaign
+        # budget, cumulative loss, the residual cap and the action allowlist
+        # were signed and compared to NOTHING, which made those five
+        # signatures decoration. This refuses unless each one bounds a limit
+        # the deployment actually enforces through.
+        #
+        # HERE, NOT AT VERIFICATION, and last in this branch. The
+        # verification block runs whenever a trusted key is registered --
+        # flag off, campaign in force, legacy handshake -- so a check there
+        # would add refusals to paths that work today. This point is reached
+        # ONLY where the mandate is itself the authorization, and placed
+        # after the submission backstop so every pre-existing refusal still
+        # reports its own name first.
+        _mandate_envelope_bound = mandate_bind_running_envelope(_mp2, limits)
     elif Q1.armed():
         sid = session_id()
         if not sid:
@@ -3022,6 +3241,8 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                       budget_release=_budget_release,
                       note=("one window of a mandate; the claim is spent on "
                             "this market and is never cleared"))
+        if _mandate_envelope_bound is not None:
+            wclaim["signed_envelope"] = _mandate_envelope_bound
         # a window already spent is refused here, by the same O_EXCL call that
         # refuses a second Stage A claim: AUTHORIZATION_ALREADY_USED.
         claim_once(path, wkey, wclaim)
