@@ -1287,20 +1287,25 @@ def mandate_claim_sid(mandate_id: str, seq: Any, key_id: str,
     return "mand.%s.%s" % (hashlib.sha256(raw.encode()).hexdigest()[:16], d)
 
 
-def mandate_window_rate(scope: Mapping[str, Any], caller_max: Any) -> int:
-    """`min(signed per-day rate, what the caller already permits)`.
+def mandate_signed_window_rate(scope: Mapping[str, Any]) -> int:
+    """The signed `max_windows_per_day`, validated. Refuses if unreadable.
 
-    INTERSECTION, NEVER SUBSTITUTION, and it is a named function rather than
-    an inline `min` so there is one place to read the rule and one place to
-    test it. A signed rate may only TIGHTEN: a mandate naming 8 windows a
-    day against a caller permitting 2 yields 2, because the owner signing a
-    ceiling did not thereby raise every other ceiling underneath it.
+    EXTRACTION AND VALIDATION ONLY. The INTERSECTION happens where the
+    campaign's does -- at the one place `mw` is computed, just before
+    `mandate_scope` -- because that is the value the window budget test
+    actually reads. An earlier version of this returned `min(signed,
+    caller)` into the `max_windows` parameter, which is never read again:
+    the signed rate was computed and thrown away, and the budget stayed
+    whatever `L5_LIVE_AUTH_MAX_WINDOWS` said. An adversarial review caught
+    it. The lesson is in the shape of this function now: it answers "what
+    did the owner sign", and the caller is responsible for intersecting it
+    with everything else, in the same statement that does so for a campaign.
 
-    AN UNREADABLE RATE REFUSES rather than defaulting. A per-day budget we
-    cannot read is not a budget, and defaulting it to anything would invent
-    an allowance the owner never signed. A bool is not an int here for the
-    same reason it is not one in the verifier: `True` is `1` to Python and
-    "one window a day" is not what `true` meant.
+    A per-day budget we cannot read is not a budget, so it refuses rather
+    than defaulting -- defaulting would invent an allowance nobody signed. A
+    bool is not an int here for the same reason it is not one in the
+    verifier: `True` is `1` to Python, and "one window a day" is not what
+    `true` meant.
     """
     per_day = scope.get("max_windows_per_day")
     if isinstance(per_day, bool) or not isinstance(per_day, int) \
@@ -1310,47 +1315,56 @@ def mandate_window_rate(scope: Mapping[str, Any], caller_max: Any) -> int:
             {"max_windows_per_day": str(per_day)[:40],
              "note": "a per-day window budget that cannot be read is not a "
                      "budget; it refuses rather than defaulting"})
-    try:
-        caller = int(caller_max)
-    except (TypeError, ValueError):
-        raise ArmingRefusal(
-            "MANDATE_WINDOW_RATE_UNREADABLE",
-            {"caller_max_windows": str(caller_max)[:40]})
-    return min(caller, per_day)
+    return int(per_day)
+
+
+#: The claim namespace of the mandate that ACTUALLY AUTHORIZED the current
+#: window, set by `authorize_arming` only after `verify` returned ok. It is
+#: process state rather than a function of the environment, and an
+#: adversarial review is the reason.
+#:
+#: THE FIRST VERSION DERIVED THIS FROM THE ENVIRONMENT WITHOUT VERIFYING, to
+#: keep it a pure function the way `campaign_claim_suffix` is. Two holes
+#: followed, both reachable with NO registered key:
+#:
+#:   * rotating `seq` in an UNSIGNED document minted a fresh namespace on
+#:     demand, replenishing the per-day submission and per-class budgets --
+#:     so "it can only mis-count, never authorize" was wrong;
+#:   * `campaign_claim_suffix()` returns "" on an expired or momentarily
+#:     unreadable campaign, and the fallback then switched a campaign- or
+#:     Q1-authorized session onto the mandate namespace, which matches none
+#:     of its existing claim files. That handed a running session a fresh
+#:     budget mid-window and relaxed two paths that work today.
+#:
+#: Being set post-verify fixes both: an unsigned document can never set it,
+#: and it is never set while a campaign is the authorization source, because
+#: the mandate branch is unreachable when a campaign is valid.
+_ACTIVE_MANDATE_SUFFIX: Optional[str] = None
+
+
+def _set_active_mandate_suffix(suffix: Optional[str]) -> None:
+    """Record the verified mandate's namespace. Called from arming only."""
+    global _ACTIVE_MANDATE_SUFFIX
+    _ACTIVE_MANDATE_SUFFIX = str(suffix) if suffix else None
 
 
 def mandate_claim_suffix(now: Optional[dt.datetime] = None) -> str:
-    """`mand.<digest>.<YYYYMMDD>` for the installed mandate, else "".
+    """The VERIFIED mandate's claim namespace for TODAY, else "".
 
-    A PURE FUNCTION OF THE ENVIRONMENT AND THE CLOCK, and that is the whole
-    point, for the same reason `campaign_claim_suffix` is: a restart, a
-    redeploy or a crash recovery re-reads the same document, derives the
-    same digest and therefore counts the same claim files. Budget
-    replenishment stays an owner action -- a new `seq`, or tomorrow.
-
-    IT DOES NOT VERIFY, and it must not. Verification needs the watchdog's
-    replay floor and revocation list, so a namespace that verified would do
-    network I/O per claim and would return "" whenever the watchdog blinked
-    -- handing out a fresh budget exactly when the system is least healthy.
-    Authorization is `authorize_arming`'s job and is unaffected by this.
-
-    FAILS TOWARD FEWER CLAIMS, NEVER MORE. Anything unreadable yields "",
-    which leaves the bare experiment id -- and that id counts every
-    suffixed claim too, because the counters match on prefix. So an
-    unreadable mandate sees MORE spent, never less.
+    THE DAY IS RE-CHECKED ON EVERY READ, and it must be. The suffix is
+    pinned at arming, so a session armed at 23:50 keeps yesterday's
+    namespace. If that were handed out after midnight it would count
+    yesterday's claim files against today's budget -- an UNDERCOUNT, which
+    is the dangerous direction. So a stale day yields "" instead, which
+    leaves the bare experiment id, and that id prefix-matches every
+    suffixed claim: the session sees MORE spent, never less, until it
+    re-arms under today's namespace.
     """
-    try:
-        from src import l5_mandate_signature as MS   # late: image closure
-        ident = MS.identity_unverified(os.getenv(MS.MANDATE_ENV))
-        if not ident:
-            return ""
-        when = now or dt.datetime.now(dt.timezone.utc)
-        return mandate_claim_sid(ident[0], ident[1], ident[2],
-                                 day=when.strftime("%Y%m%d"))
-    except BaseException as exc:                               # noqa: BLE001
-        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-            raise
+    suf = _ACTIVE_MANDATE_SUFFIX
+    if not suf:
         return ""
+    day = (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y%m%d")
+    return suf if suf.endswith("." + day) else ""
 
 
 def experiment_id() -> str:
@@ -2167,6 +2181,11 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     # trusted key is registered and the document verifies, so with no key --
     # the shipped state -- step 2 sees exactly what it saw before.
     _mandate_verdict: Optional[Dict[str, Any]] = None
+    #: the signed per-day window rate, set ONLY when a verified mandate is
+    #: the authorization source. `None` means "no mandate authorized this",
+    #: which is what keeps the budget statement below on the campaign/env
+    #: path untouched.
+    _mandate_per_day: Optional[int] = None
     _mandate_auth = mandate_as_authorization_enabled()
     # computed here only to decide whether a FAILED mandate should refuse on
     # the spot (today's rule) or fall through to step 2 so the refusal is
@@ -2374,7 +2393,17 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                 {"note": "a verified mandate with no derivable identity "
                          "cannot key a durable claim, and an unkeyed claim "
                          "is not a claim"})
-        max_windows = mandate_window_rate(_mp2, max_windows)
+        # PUBLISH THE VERIFIED NAMESPACE for the submission and per-class
+        # claim counters. Reached only after `verify` returned ok, so no
+        # unsigned document can set it, and unreachable while a campaign is
+        # the authorization source, so a campaign's budget can never be
+        # re-namespaced onto a mandate. Setting it does not consume
+        # anything: it names where claims are counted, and claims only
+        # happen inside a window that armed.
+        _set_active_mandate_suffix(sid)
+        # CAPTURED, NOT APPLIED HERE. It is intersected into `mw` below, at
+        # the one statement that computes the budget the window test reads.
+        _mandate_per_day = mandate_signed_window_rate(_mp2)
         # THE SIGNED SUBMISSION RATE MUST ALSO BIND, and it binds the same
         # way the signed exposure and daily-loss ceilings do: by refusing
         # when the RUNNING limit is wider than the signed one.
@@ -2738,6 +2767,23 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         # to the campaign, and a SET one can only tighten it.
         mw = _cmw if not (os.getenv(MAX_WINDOWS_ENV) or "").strip() \
             else min(mw, _cmw)
+    elif _mandate_per_day is not None:
+        # THE SIGNED PER-DAY RATE, INTERSECTED EXACTLY AS A CAMPAIGN'S IS.
+        # This statement is the fix for the hole an adversarial review found:
+        # the rate used to be clamped onto the `max_windows` parameter, which
+        # nothing reads after step 2, so a mandate signed for 2 windows a day
+        # ran 50 if `L5_LIVE_AUTH_MAX_WINDOWS` said 50 -- an executor-writable
+        # variable overriding the owner's signature, which is the precise
+        # thing a signature exists to prevent.
+        #
+        # An UNSET env defers to the signature (the env default of 1 would
+        # otherwise cap an 8-window mandate at one window); a SET one can
+        # only tighten. The budget test below reads `mw`, and `mw` is counted
+        # against the day-scoped claim prefix, so this is what makes the
+        # signed rate durable across restarts.
+        mw = _mandate_per_day \
+            if not (os.getenv(MAX_WINDOWS_ENV) or "").strip() \
+            else min(mw, _mandate_per_day)
     scope = mandate_scope(market=("" if mw > 1 else market), limits=limits,
                           series=pre, max_windows=mw,
                           # the identity that KEYS the claim, so a legacy
@@ -2837,7 +2883,21 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
             # still refused -- that is about self-knowledge, not continuity,
             # and an actor we cannot name has no business taking a claim.
             # The legacy single-window path keeps the original rule intact.
-            if _camp_ok:
+            if _camp_ok or _mandate_per_day is not None:
+                # A STANDING MANDATE SPANS PROCESS LIFETIMES, exactly as a
+                # campaign does, so it takes the campaign's rule rather than
+                # the legacy pid comparison. With the strict rule a mandate
+                # bricked the rest of its UTC day on ANY respawn --
+                # MANDATE_HOLDER_MISMATCH on `pid`, recoverable only by a new
+                # owner-signed `seq` or by waiting for midnight. That fails
+                # closed, so it was not a hole, but a seven-day mandate that
+                # dies on every restart is the kind of friction that gets a
+                # safety check loosened later under pressure. Decided here
+                # deliberately instead.
+                #
+                # NOTHING IS WEAKENED BY IT: the per-day budget is counted
+                # from the lock files on the volume, not from the holder, so
+                # a restart still cannot buy a window.
                 _me = dict(holder)
                 if not _me.get("deployment_id") or not _me.get("boot_id"):
                     raise ArmingRefusal(
