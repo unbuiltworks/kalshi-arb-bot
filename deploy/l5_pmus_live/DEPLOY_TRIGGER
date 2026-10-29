@@ -2490,3 +2490,48 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
 # NOT ARMED. No campaign approval is installed; arming still refuses
 # NOT_ARMED until the owner signs and installs a fresh eight-window
 # document.
+
+# =====================================================================
+# 2026-10-29 23:20Z -- READ-ONLY COLLECTOR: cache-bypass on the L5 feed
+# =====================================================================
+#
+# WHY. The activity request was byte-identical on every poll and carried
+# nothing but a User-Agent, so any intermediary could serve one cached body
+# behind a clean HTTP 200 indefinitely. Measured to 22:48Z: 3,166 polls,
+# feed_errors 0, exactly 200.0 rows per poll, ingest:dup 633,200 of 633,200,
+# ingest:new 0, cursor keys frozen at 5,556, newest_row_event_utc frozen at
+# 17:54:50Z, last_admitted_utc null.
+#
+# THE CHANGE. `l5_activity` now sends Cache-Control no-cache/no-store/
+# max-age=0 with Pragma no-cache and a per-poll `_cb` cache-buster. `_get`
+# gained a keyword-only `no_cache=False`, so the five PMUS gateway callers
+# are byte-identical. No retry, no new endpoint, no second request.
+#
+# IT CLAIMS NOTHING. A wallet that genuinely stopped trading produces the
+# same signature; this removes the one explanation removable from inside
+# the process. Recovery is judged on NEW UNIQUE TRADES, not HTTP 200s:
+# cursor keys > 5,556, ingest:new > 0, ingest:admitted present,
+# newest_row_event_utc > 17:54:50Z.
+#
+# ALSO IN THIS IMAGE, all incapable of submitting -- audited line by line
+# for submit/arm/cancel/claim/transport and limit changes, none present:
+#   * l5_pmus_live_runner      read-only: residual sampler first-leg cost,
+#                              plus a shadow defensive-decision recorder
+#                              that calls DEF.decide(simulate=True) and
+#                              writes one log line
+#   * pmus_sports_l5_decision  read-only: held-leg cost in the snapshot
+#   * l5_runtime_config_verify read-only: one observed telemetry row
+#   * l5_two_sided_probe       MAX_FIRST_LEG_OWN_PRICE 0.60, REFUSE-ONLY --
+#                              it can only decline an opening, never cause
+#                              an order. Shipped because the verifier row
+#                              above calls its accessor, so a partial
+#                              revert would AttributeError at boot.
+#
+# LIMITS UNCHANGED. Exposure $20, max_live_orders 1, cash $12.00,
+# worst-case deficit $3.00, daily $5, L5 cumulative $20, account-wide
+# $18.6325, NO_RECYCLING, halt gate configured.
+#
+# STILL DISARMED, AND NOT A MANDATE. PMUS_Q1_LIVE=NO, preflight
+# fail ["owner_arm_token"]. L5_DEFENSIVE_COMPLETION stays OFF and the
+# unsafe 1.20 defensive default is NOT enabled; the 1.00 all-in ceiling
+# stands. The withdrawn three-window draft is not installed.
