@@ -272,3 +272,126 @@ windows/day** at a median of **107 legs/window** and acts roughly every 34 s
 when active; today's ~2-hour silence is anomalous, not normal. The binding
 constraints on pairs-per-window are **`max_live_orders = 1`** and the **0.96
 pair ceiling** — not L5's cadence.
+
+---
+
+# IMPLEMENTED — the $0.60 first-leg opening-price guard
+
+`src/l5_two_sided_probe.py` · `src/l5_runtime_config_verify.py` ·
+`tests/test_l5_first_leg_price_ceiling.py` (83 tests)
+
+Production remains **disarmed** (`PMUS_Q1_LIVE=NO`). Nothing deployed, no
+live authorization requested, and the $3.00 opening-notional cap was **not**
+touched.
+
+## What was added
+
+`MAX_FIRST_LEG_OWN_PRICE = D("0.60")`, env `L5_TS_MAX_FIRST_LEG_PRICE`, and
+`max_first_leg_own_price()`, consulted in exactly one place: inside
+`first_leg_entry_refusal`, after every unconditional permit. New refusal
+reason `FIRST_LEG_ABOVE_MAX_PRICE`. The permitted opening band is now
+**0.20 <= own_px <= 0.60**, both bounds inclusive.
+
+Strictly refuse-only, and each property is a test:
+
+- **Applies to new opening inventory only.** A claimed leg, or any held
+  imbalance (`up != dn`), returns `None` before the ceiling is read —
+  asserted by AST, not just by behaviour. A dear *complement* (0.83–0.99) is
+  never refused.
+- **Does not block completing existing inventory.** The same early permits
+  the floor uses, unchanged.
+- **Changes no sizing, execution or risk limit.** Asserted unchanged: pair
+  cap 0.96, opening contract cap 3, `OPENING_NOTIONAL_MAX_USD` 5, depth
+  ticks 2, cutoffs 600/720, runway 300, residual cap 3, round-allocation cap
+  4. The predicate calls nothing resembling submit/cancel/arm/save/post.
+- **Does not affect unrelated strategies.** Confined to the two-sided
+  probe's opening predicate plus one observed telemetry row.
+
+Two design points worth recording:
+
+1. **Neither bound disables the other.** The floor's old `<= 0` escape
+   returned before the price was parsed, so routing the ceiling through it
+   would have let `L5_TS_MIN_FIRST_LEG_PRICE=0` silently switch off a bound
+   the owner never mentioned. Each bound now applies only if itself enabled,
+   and the band collapses to "permit" only when both are off.
+2. **The config fallback is deliberately asymmetric.** A ceiling below 0.50
+   falls back to 0.60 rather than being honoured, because 0.4–0.5 is the best
+   measured bucket in the curve (88.9% completion, +$0.0566/contract, n=315)
+   and a typo must not be able to refuse it.
+
+## Verification against historical decisions
+
+### In-sample — 20261025 PMUS campaign, through the real predicate
+
+| episode | own px | verdict | outcome |
+|---|---|---|---|
+| 0030z | 0.55 | OPEN | completed |
+| 0045z | 0.50 | OPEN | completed |
+| 0115z | 0.48 | OPEN | completed |
+| 0100z-B | 0.75 | **REFUSED** | completed **+$0.0344** |
+| 0130z | 0.62 | **REFUSED** | stranded **−$1.1594** |
+
+- **openings excluded: 2 of 5 (40%)**
+- **profitable pairs lost: 1, −$0.0344**
+- **stranded losses avoided: 1, +$1.1594**
+- **net economic impact: +$1.1250**, reconciling exactly with the replay's
+  own baseline → capped figures (+$0.1256 → +$1.2506).
+
+### Out-of-sample — L5's residual-state replay, 2,118 bucketed windows
+
+| region | windows | share | aggregate EV/contract | mean |
+|---|---:|---:|---:|---:|
+| refused by **ceiling** (>0.60) | **849** | 40% | **−$155.95** | −$0.1837 |
+| retained band 0.20–0.60 | 1,060 | 50% | **+$37.27** | +$0.0352 |
+| refused by floor (<0.20) | ~209 | 10% | +$3.51 | +$0.0168 |
+
+Of the 849 the ceiling refuses, **553 would have completed** (pairs
+declined) and **296 would have stranded** (avoided). The expected-value
+swing from the ceiling alone is **+$155.95/contract across 849 windows**,
+and the retained band's mean EV (**+$0.0352**) is 5.2× better than the
+refused region's (**−$0.1837**), in the right direction.
+
+## Honest limits on this result
+
+- **The in-sample +$1.1250 is knife-edge and is NOT the justification.** The
+  single strand sat at own 0.62, so 0.60 catches it while **0.65 refuses only
+  the winner and is $0.0344 worse than doing nothing.** One observation sets
+  the parameter in-sample, and `L5_FOUR_POLICY_REPLAY.md` rejected a price cap
+  on exactly that ground. The 849-window out-of-sample curve is the support.
+- **The floor is not free out-of-sample.** By midpoint bucketing it also
+  declines the 0.1–0.2 bucket, which is positive-EV (+$0.0322, n=114), for a
+  net +$3.51 of EV declined. That figure is approximate because the 0.1–0.2
+  bucket straddles the 0.20 boundary; the ceiling's 849 does not straddle and
+  is exact.
+- **Unvalidated for PMUS depth-2 maker placement specifically.** The curve is
+  L5's own BTC/ETH 5m+15m Polymarket history, not our ladder.
+- **Nothing here is realized.** No order has been placed under this guard.
+
+## Test and regression status
+
+- `tests/test_l5_first_leg_price_ceiling.py`: **83 passed**.
+- Focused suite (floor, imbalance, ceiling, round allocation, marker leak,
+  e2e window, intent gate, adapters, opening caps, notional caps, runtime
+  config): **511 passed**.
+- Full suite: **14,085 passed / 54 failed / 23 errors**, and the
+  FAILED+ERROR set is **byte-identical** to a pristine `06f7b27c` baseline
+  run with the same command — so this change introduced **zero** regressions.
+  The pre-existing failures are mostly
+  `ModuleNotFoundError: No module named 'httpx'`.
+- One stale expectation corrected, not weakened:
+  `test_at_or_above_the_floor_opens` asserted `0.99` opens. "Above the floor"
+  is no longer the same as "permitted", so that case became `0.60` (the far
+  edge of the band) with a comment pointing at the ceiling file, which walks
+  every cent 0.00–1.00 and asserts the band exactly.
+
+## Next concrete step toward autonomous live trading
+
+Mine the already-running continuous shadow for **matched-pair formation
+inside the 0.20–0.60 band**. The shadow records every policy's decision with
+its opening price, so the guard's effect on *autonomous* openings is
+measurable without deploying it and without a new service.
+
+The gate to clear before the live intent adapter is worth building:
+**matched pairs forming at a pair cost below the 0.9532 break-even, at a
+rate separable from the current ~0.35%** (`PAIR_AVAILABLE:complete` fired 3
+times in ~862 decisions).

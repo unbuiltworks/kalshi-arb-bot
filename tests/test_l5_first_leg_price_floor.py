@@ -69,7 +69,13 @@ class TestTheFloorItself:
         assert TS.MIN_FIRST_LEG_OWN_PRICE == D("0.20")
         assert TS.min_first_leg_own_price() == D("0.20")
 
-    @pytest.mark.parametrize("px", ["0.20", "0.21", "0.35", "0.50", "0.99"])
+    # 0.99 WAS A CASE HERE AND IS NOT ANY MORE. `MAX_FIRST_LEG_OWN_PRICE`
+    # now refuses a dear opening, so "above the floor" is no longer the same
+    # as "permitted" -- the permitted band is 0.20..0.60. These cases stay
+    # inside it and 0.60 pins the far edge; the dear side is owned by
+    # tests/test_l5_first_leg_price_ceiling.py, including a test that walks
+    # every cent from 0.00 to 1.00 and asserts the band exactly.
+    @pytest.mark.parametrize("px", ["0.20", "0.21", "0.35", "0.50", "0.60"])
     def test_at_or_above_the_floor_opens(self, px):
         assert no("UP", px) is None
         assert no("DOWN", px) is None

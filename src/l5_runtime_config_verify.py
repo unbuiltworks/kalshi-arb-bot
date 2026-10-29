@@ -621,6 +621,13 @@ def verify() -> Dict[str, Any]:
              TS.round_allocations),
             ("ts_min_first_leg_own_price", "TS.min_first_leg_own_price()",
              TS.min_first_leg_own_price),
+            # REPORTED BESIDE THE FLOOR AND GRADED THE SAME WAY -- which is
+            # to say observed, not graded. The owner chooses both bounds per
+            # campaign, so a frozen required value here would fail the
+            # service on a legitimate change; printing it on every boot is
+            # what makes a variable edit that did not take effect visible.
+            ("ts_max_first_leg_own_price", "TS.max_first_leg_own_price()",
+             TS.max_first_leg_own_price),
             ("ts_order_ttl_s", "TS.order_ttl_s()", TS.order_ttl_s),
             ("ts_entry_cutoff_s", "TS.entry_cutoff_s()",
              TS.entry_cutoff_s),

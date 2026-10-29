@@ -173,6 +173,54 @@ ROUND_ALLOCATIONS_MAX = 4
 MIN_FIRST_LEG_OWN_PRICE = D("0.20")
 MIN_FIRST_LEG_ENV = "L5_TS_MIN_FIRST_LEG_PRICE"
 
+#: THE OWN-SIDE CEILING FOR OPENING A LEG -- the symmetric partner of the
+#: floor above, and the gap 0130z walked through.
+#:
+#: WHY AN UPPER BOUND AT ALL. The floor bounds the cheap end because a
+#: complement priced `1 - wire_ask - 2 ticks` runs away as the cheap side
+#: gets cheaper. The expensive end fails for the mirror-image reason and was
+#: unguarded: a dear opening leg IS most of a $1.00 pair on its own, so the
+#: strand it leaves when the complement never arrives is nearly the whole
+#: obligation rather than a fraction of it.
+#:
+#: THE EVIDENCE IS OUT-OF-SAMPLE, which is the point.
+#: `l5_residual_state_replay` over L5's own BTC/ETH 5m+15m history -- 2,216
+#: windows with a first leg, 1,610 paired (72.7%) -- gives completion by the
+#: opening own price, which is KNOWN BEFORE THE ORDER IS SENT:
+#:
+#:     own px     n    completes   EV/contract
+#:     0.1-0.2   114     67.5%      +$0.0322
+#:     0.2-0.3   109     80.7%      +$0.0485
+#:     0.4-0.5   315     88.9%      +$0.0566   <- best
+#:     0.5-0.6   494     85.2%      +$0.0208
+#:     0.6-0.7   408     76.2%      -$0.0633   <- sign flips here
+#:     0.7-0.8   257     60.7%      -$0.2220
+#:     0.8-0.9   184     46.7%      -$0.3971
+#:
+#: with `EV(p) = P(complete|p) * $0.1199 - (1 - P(complete|p)) * p` on a
+#: measured mean pair profit of $0.1199/contract. 849 of those windows sit
+#: above 0.60 and every bucket there is negative. The 0.6-0.7 bucket turns
+#: positive only if mean pair profit exceeds $0.2030/contract -- 69.3% above
+#: the measured figure -- so the SIGN is robust even though the magnitude is
+#: not.
+#:
+#: WHAT THE IN-SAMPLE DATA DOES *NOT* SUPPORT, stated here so the number is
+#: not mistaken for a fitted one. On our own 8-window 20261025 campaign a
+#: price cap is knife-edge: 0.60 refuses 0130z@0.62 (-$1.1594 stranded) and
+#: 0100z-B@0.75 (+$0.0344 completed) for +$1.1250, but 0.65 refuses only the
+#: WINNER and is -$0.0344 WORSE than doing nothing. One strand sets the
+#: parameter. `L5_FOUR_POLICY_REPLAY.md` rejected a price cap on exactly that
+#: ground. 0.60 is taken from the 2,216-window out-of-sample curve above and
+#: NOT from those 8 windows, and it remains unvalidated for PMUS depth-2
+#: maker placement specifically.
+#:
+#: IT CAN ONLY REFUSE AN OPENING. It is consulted inside
+#: `first_leg_entry_refusal`, after every unconditional permit, so a
+#: completion and genuine inventory management are untouched. It changes no
+#: size, no price, no cutoff, no pair ceiling and no risk limit.
+MAX_FIRST_LEG_OWN_PRICE = D("0.60")
+MAX_FIRST_LEG_ENV = "L5_TS_MAX_FIRST_LEG_PRICE"
+
 #: THE WORST-CASE OPENING NOTIONAL, IN DOLLARS. The replay's answer to the
 #: one window that lost money.
 #:
@@ -303,6 +351,36 @@ def min_first_leg_own_price() -> D:
         return MIN_FIRST_LEG_OWN_PRICE
     if not v.is_finite() or v < 0 or v > D("0.50"):
         return MIN_FIRST_LEG_OWN_PRICE
+    return v
+
+
+def max_first_leg_own_price() -> D:
+    """The own-side ceiling for OPENING a leg. Never for completing one.
+
+    Configurable, because 0.60 is where an out-of-sample EV curve changes
+    sign and not a tuned optimum: a value in 0.50..1.00 is honoured, and so
+    is an exact 0, which DISABLES the rule and is an explicit owner act.
+
+    ANYTHING ELSE FALLS BACK TO 0.60, including a value BELOW 0.50. That
+    asymmetry with the floor is deliberate: the 0.4-0.5 band is the best
+    measured bucket in the whole curve (88.9% completion, +$0.0566/contract),
+    so a ceiling under 0.50 would refuse the most profitable openings we
+    know of. A typo must not be able to do that, and it must not be able to
+    re-admit the regime this bounds either.
+    """
+    raw = (os.getenv(MAX_FIRST_LEG_ENV) or "").strip()
+    if not raw:
+        return MAX_FIRST_LEG_OWN_PRICE
+    try:
+        v = D(raw)
+    except (InvalidOperation, ValueError, TypeError, ArithmeticError):
+        return MAX_FIRST_LEG_OWN_PRICE
+    if not v.is_finite():
+        return MAX_FIRST_LEG_OWN_PRICE
+    if v == 0:
+        return v                        # explicitly disabled by the owner
+    if v < D("0.50") or v > D("1.00"):
+        return MAX_FIRST_LEG_OWN_PRICE
     return v
 
 
@@ -464,16 +542,24 @@ def first_leg_entry_refusal(*, side: str, own_px: Any,
         # None here unconditionally, so this can never strand a position it
         # cannot complete.
     floor = min_first_leg_own_price()
-    if floor <= 0:
-        return None                     # explicitly disabled by the owner
+    # THE CEILING IS READ BESIDE THE FLOOR, AND NEITHER DISABLES THE OTHER.
+    # The floor's own `<= 0` escape used to return before the price was even
+    # parsed, so routing the ceiling through it would have made
+    # `L5_TS_MIN_FIRST_LEG_PRICE=0` silently switch off a bound the owner
+    # never mentioned. Each bound is now applied only if it is itself
+    # enabled, and the band collapses to "permit" only when BOTH are off.
+    ceiling = max_first_leg_own_price()
+    if floor <= 0 and ceiling <= 0:
+        return None                     # both explicitly disabled by the owner
     # `_d` returns Decimal("NaN") for "nan", which is NOT None and which
     # RAISES InvalidOperation on comparison -- a crash in the decision path
     # rather than a refusal. Non-finite is unreadable.
     p = _d(own_px)
     if p is None or not p.is_finite():
         return {"reason": "FIRST_LEG_PRICE_UNREADABLE", "side": str(side),
-                "own_px": str(own_px), "min_own_px": str(floor)}
-    if p < floor:
+                "own_px": str(own_px), "min_own_px": str(floor),
+                "max_own_px": str(ceiling)}
+    if floor > 0 and p < floor:
         return {"reason": "FIRST_LEG_BELOW_MIN_PRICE", "side": str(side),
                 "own_px": str(p), "min_own_px": str(floor),
                 "env": MIN_FIRST_LEG_ENV,
@@ -484,6 +570,20 @@ def first_leg_entry_refusal(*, side: str, own_px: Any,
                          "rather than a pair edge. This refuses OPENING "
                          "only; completion and inventory management are "
                          "never blocked by it.")}
+    if ceiling > 0 and p > ceiling:
+        return {"reason": "FIRST_LEG_ABOVE_MAX_PRICE", "side": str(side),
+                "own_px": str(p), "max_own_px": str(ceiling),
+                "env": MAX_FIRST_LEG_ENV,
+                "note": ("a dear opening leg is most of a $1.00 pair on its "
+                         "own, so the strand it leaves when the complement "
+                         "never arrives is nearly the whole obligation. On "
+                         "L5's own 2,216-window history, completion falls "
+                         "from 85.2% in 0.5-0.6 to 76.2%/60.7%/46.7% across "
+                         "0.6-0.9 and EV per contract turns negative above "
+                         "0.60 (-$0.0633, -$0.2220, -$0.3971 over 849 "
+                         "windows). This refuses OPENING only; completion "
+                         "and inventory management are never blocked by "
+                         "it.")}
     return None
 
 
