@@ -2455,3 +2455,38 @@ Campaign 7 prep: accounting only, NOT armed 2026-10-28T17:50Z
   proposed window so the process spans a window boundary before arming:
   Campaign 6 armed in 174.1s in the window its deploy restarted into,
   against 0.8-3.3s in the three windows the process already spanned.
+
+# 2026-10-29 -- ROUTE B PORTED ALONE ONTO THE DEPLOYED BASELINE. INERT.
+#
+# Promotes the book-driven completion hook and NOTHING else. Branched from
+# 202456d3, the commit this service is already running and the one that
+# produced the +$3.8861 settled result across campaigns 6, 7 and 8. The 37
+# trading-path commits on claude/l5-wallet-ingestion-fix-kqcqoa -- P0-P3
+# completion, requote, basis, budget isolation -- are deliberately NOT here,
+# and PR #193 is not merged.
+#
+# WHOLE DIFF vs 202456d3: three files, 189 insertions, TWO deletions, and
+# both deletions are the same `rec = ex.handle(row, {}, ...)` call
+# re-indented into a try block. No other line that already executed changed,
+# so entry, completion pricing, requoting, inventory accounting, the risk
+# gates and settlement are untouched BY CONSTRUCTION.
+#
+# SHIPS INERT. L5_BOOK_COMPLETION stays UNSET. A Runner carrying only
+# `stats` returns None from the hook, touches no attribute and emits no
+# counter -- if the flag check were not the first statement that raises
+# AttributeError, and both the behaviour and the source ordering are pinned
+# by tests.
+#
+# REGRESSION: full suite against 202456d3 itself -- 20 failed / 14 errors on
+# both sides, failure sets identical, +55 passed from the new tests.
+#
+# LIMITS UNCHANGED, verified from L5_LIVE_GATES at 17:00:06Z:
+#   max_cash_deployed_usd 12.00, max_unmatched_contracts 5,
+#   max_worst_case_deficit_usd 3.00, max_l5_daily_loss_usd 5,
+#   max_l5_cumulative_loss_usd 20, max_cumulative_loss_usd 18.6325
+#   (account-wide, stricter), cash_policy NO_RECYCLING,
+#   halt_gate_configured true, journal_errors 0.
+#
+# NOT ARMED. No campaign approval is installed; arming still refuses
+# NOT_ARMED until the owner signs and installs a fresh eight-window
+# document.
