@@ -242,3 +242,99 @@ last two.
 7. First window under the mandate: verify `budget_release`, the claim
    identity, the per-day counters and the halt path before leaving it
    unattended.
+
+---
+
+# ADDENDUM — adversarial review results and the fixes they forced
+
+The independent review found a **critical** defect in the first
+implementation. Everything in §1–§7 above describes the design; this section
+corrects what the code actually did.
+
+## The review was right, and green tests hid it
+
+**The signed `max_windows_per_day` was a dead store.** It was clamped onto
+the `max_windows` parameter, which nothing reads after the authorization
+step. 343 lines later `mw = max_windows_env()` is what flows into
+`mandate_scope` and into the window budget test. So:
+
+> a mandate signed for **2 windows a day** ran **50** if
+> `L5_LIVE_AUTH_MAX_WINDOWS` said 50 — an executor-writable variable
+> overriding the owner's signature, which is the precise thing a signature
+> exists to prevent.
+
+The review proved it at runtime: `signed per-day: 2`, `window_budget: 50`.
+
+**My own test for it asserted only that the helper had been called**, never
+that its return value bound, and its docstring claimed the opposite ("the
+unit tests of the rule are tests of the deployed behaviour"). 52 tests were
+green over a hole in the one property the change exists to provide. No test
+in that file reached a successful arming, so the entire downstream — `mw`,
+the window claim, the holder check, day rollover — was unexercised.
+
+## Fixed (commit `3bddb281`)
+
+| # | severity | defect | fix |
+|---|---|---|---|
+| 1 | **critical** | signed window rate discarded; env var bound instead | `mandate_signed_window_rate()` extracts and validates only; the **intersection happens in the same statement that does it for a campaign**, where `mw` is computed |
+| 2 | **high** | namespace derived from the env **without verifying**, so rotating `seq` in an *unsigned* document minted fresh per-day budgets — with no registered key | namespace is published from arming **after `verify` returned ok**; `identity_unverified` deleted rather than left as dead attack surface |
+| 3 | **high** | that derivation took over whenever `campaign_claim_suffix()` returned `""` (expired/unreadable campaign), re-namespacing a campaign- or Q1-authorized session mid-window onto a namespace matching none of its claims | never set while a campaign is the authorization source, because that branch is unreachable then |
+| 4 | medium | a standing mandate took the legacy **pid** holder check, so any respawn refused `MANDATE_HOLDER_MISMATCH` and the rest of the UTC day was unreachable | takes the campaign's deployment-named rule; budget still counted from lock files, so a restart still cannot buy a window |
+| — | low | my test's `lambda` called the `os.getpid` it had just patched (RecursionError); private-key scan read the runner's real environment | both corrected |
+
+Findings 2 and 3 **relaxed paths that work today**, which is exactly what I
+had claimed the change was incapable of. That claim was wrong about the
+budget side; it was only ever verified for the arming side.
+
+## The owner's acceptance criterion, now demonstrated
+
+Not asserted — **arming successfully and reading the claim**:
+
+| requirement | evidence |
+|---|---|
+| signed rate is what binds | signed 2 + `L5_LIVE_AUTH_MAX_WINDOWS=50` → `window_budget == 2` |
+| env may only tighten | unset → 8; set to 3 → 3 |
+| 8/day enforced durably | arm distinct markets until `MANDATE_WINDOW_BUDGET_SPENT`, counted from lock files on the volume |
+| duplicate arming | same market refused `AUTHORIZATION_ALREADY_USED`, not granted twice; the day's other windows remain |
+| simultaneous workers | identity is a pure function (50 derivations → one string), so concurrent arms contend for one `O_EXCL` name |
+| restart | a respawn cannot buy a window (`MANDATE_WINDOW_BUDGET_SPENT` survives it) **and** does not brick the day's remainder |
+| day rollover | day 1's budget spent → refused; the same market on day 2 arms, with a different claim identity |
+| mandate replacement | a new `seq` gets its own day budget; a rolled-back `seq` refuses against the watchdog floor |
+| revocation | revoking after arming refuses the next window |
+| **failed arming consumes nothing** | arms that fail on preflight and on the halt latch leave the day's single window intact |
+| deployment identity | an executor that cannot name its deployment refuses `DEPLOYMENT_IDENTITY_UNKNOWN` |
+
+## Review findings NOT fixed, and why
+
+Recorded deliberately rather than silently carried:
+
+- **Five signed terms are still never compared to anything running**:
+  `capital.max_cash_deployed_usd`, `capital.campaign_budget_usd`,
+  `loss_limits.max_cumulative_loss_usd`, `residual_cap_contracts`,
+  `allowed_actions`. Only exposure, daily loss and the submission backstop
+  are bound. **A mandate signing `max_cash_deployed_usd: "5"` does not stop
+  a running $500.** This is the largest remaining gap and it should be
+  closed before the flag is ever set.
+- **The submission binding is TOCTOU**: `max_submissions()` is re-read on
+  every claim, so raising the env var *after* arming un-binds the signed
+  rate for the rest of the session. Same shape as the critical finding, one
+  layer down.
+- **The signed `not_after` is not the session deadline** —
+  `L5_LIVE_AUTH_NOT_AFTER` is. Bounded, because `_check_validity` re-checks
+  the signed window on every arming.
+- **Forward clock skew** opens tomorrow's budget today; no high-water mark
+  on the day. Needs clock control to exploit.
+- **Observability regression**: flag on + campaign present-but-invalid +
+  invalid mandate reports `CAMPAIGN_NOT_APPROVED` and hides the mandate
+  reason.
+- **`L5_MANDATE_STORE_URL` and `L5_HALT_URL` are executor-writable.**
+  Pre-existing, but the flag makes the store the *single* withdrawal path
+  where a campaign document used to be required as well.
+- **`MANDATE_PUBKEYS` is a mutable dict and Ed25519 signing is already in
+  the image** (for the PMUS venue key). So "the executor cannot
+  self-approve" rests on code integrity, not a capability boundary — not
+  introduced here, not fixable in Python, but the module's prose reads as
+  though it were hard.
+- Several nits: asymmetric int/bool strictness, `raise ... from None`, one
+  hardcoded `"L5_MANDATE_DOC"` string, `_camp_ok_pre` duplicating logic
+  computed later.
