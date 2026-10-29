@@ -82,3 +82,82 @@ period, and the decision tape classifies the rest.
 
 Read-only. No code, no strategy, no limit, no deployment touched. BTC15m
 remains the primary implementation priority.
+
+---
+
+# CORRECTION — the conversion figures above are withdrawn
+
+The owner challenged the attribution before it was built on, and the
+challenge is right. Two defects in the reasoning above:
+
+**1. The windows are not the same.** The 14.08s admission rate was measured
+13:05–13:20Z today with the engine **unarmed**. The ~35s order cadence came
+from Campaign 8's **armed** windows, 11 hours earlier. Comparing them
+assumes the admission rate is constant across those periods, which was never
+established.
+
+**2. The denominator is the wrong population.** Reading
+`l5_pmus_live_runner.py:2429-2448`, `ingest:admitted` counts every deduped,
+non-stale L5 trade row whose slug starts with `btc-updown-15m-` — **across
+all BTC15m windows**, not the single window we are armed on. The heartbeat
+shows `distinct_slugs_seen: 39` and `top_slugs_seen` spanning six concurrent
+slugs. Our orders are for one armed market. So the numerator and denominator
+are not the same population.
+
+### Therefore these are withdrawn
+
+- "we submit on roughly every 2.5th admitted L5 action"
+- "something discards about 60% of them"
+- "~42.6 admitted actions per 600s eligible window"
+- "12.5% conversion of admitted actions to orders"
+
+### What survives
+
+These do not depend on the comparison and still hold:
+
+- **Not poll-bound.** `ingest:polls_ok` and `shadow_decisions:ARGMAX` both
+  run at one per 3.36s, and the shadow arm reaches a decision on every poll.
+  Whatever stops the live arm is not the cadence of looking.
+- **Not the settlement sweep.** `settlement_sweep_read` was 34 cumulative
+  over ~3.4h.
+- **The idle gap is not market-driven.** Median 30.1s after a fill and
+  31.4s after a cancel, across 72 gaps — a market-driven wait would not
+  produce the same distribution for both.
+- **The capital envelope is not the constraint.** $0.82/order at 0200z
+  against a $12 ceiling permits ~14 orders/window versus 5.33 observed.
+- The profit bounds, which were derived from pairs-per-window and
+  matched economics, not from admissions: **+$0.145 to +$0.225/window**.
+
+### Why I cannot normalize this from existing telemetry
+
+`top_slugs_seen` reports **rows**, not admissions, and rows are inflated
+roughly a thousandfold by the feed re-serving open windows
+(`ingest:dup` 722,629 against `ingest:new` 466). So the per-slug share of
+admissions cannot be recovered from it, and dividing the global rate by an
+assumed concurrency produces a number with no evidential basis — at six
+concurrent slugs it would imply a per-slug interval of ~85s, which is
+*slower* than our order cadence and would mean the opposite conclusion.
+That the same data can be made to support either answer is the reason to
+report neither.
+
+### What would settle it
+
+Per-slug, per-window counts of admitted actions **for the armed slug**,
+over the same interval as that window's orders. `L5_LIVE_DECISION` carries
+the slug on each evaluation, so this is exactly the Campaign 9 capture and
+nothing short of it. The funnel the owner specified —
+
+> admitted → actionable intent → price/inventory/risk checks → order
+> candidate → submitted → acknowledged → filled → paired or stranded →
+> settled
+
+— needs the decision tape at every arrow but the first. The first arrow also
+needs duplicated or repeated L5 rows for one decision separated from
+independent opportunities: `ingest:dup` already removes feed-level repeats,
+but several rows of one L5 fill sequence still count separately, and only
+the decision records show whether the engine treated them as one
+opportunity.
+
+**Status: the funnel is not measurable from what is captured today.** It is
+the campaign's purpose, and the campaign is blocked on the one variable
+write.
