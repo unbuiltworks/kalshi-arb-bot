@@ -1230,6 +1230,376 @@ def campaign_claim_suffix() -> str:
         return ""
 
 
+#: OPT-IN, AND OFF IS THE SHIPPED STATE. Unset, blank, "0", "false" and
+#: anything unparseable all mean OFF, so the only way to reach the new
+#: authorization path is to say so explicitly. With it off, every byte of
+#: behaviour below is the behaviour that ran campaigns 1..9.
+MANDATE_AS_AUTH_ENV = "L5_MANDATE_AS_AUTHORIZATION"
+
+
+def mandate_as_authorization_enabled() -> bool:
+    """True only on an explicit opt-in. Unreadable is OFF.
+
+    A flag that defaulted to ON, or that read a typo as ON, would change
+    which owner object authorizes live trading without anyone deciding to.
+    """
+    raw = (os.getenv(MANDATE_AS_AUTH_ENV) or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def mandate_claim_sid(mandate_id: str, seq: Any, key_id: str,
+                      *, day: str) -> str:
+    """The durable claim identity of ONE mandate on ONE UTC day.
+
+    WHY THE DAY IS IN THE IDENTITY. A mandate's budgets are expressed as
+    `max_windows_per_day` and `max_submissions_per_day`, and the machinery
+    that enforces budgets here counts LOCK FILES whose names start with the
+    sid -- `windows_spent` and `submissions_spent` both match on prefix. Put
+    the UTC date in the sid and those two existing counters become per-day
+    counters with no new storage, no new counter and no new reconciliation
+    surface. Leave it out and a 30-day mandate would spend one 8-window
+    budget for the whole month.
+
+    It also makes the rollover honest in both directions: yesterday's claim
+    files no longer match today's prefix, so today starts with a full budget;
+    and they are never deleted, so yesterday's spend stays auditable.
+
+    HASHED, BUT NOT FOR SECRECY. Unlike the campaign nonce there is nothing
+    secret here -- the revocation list publishes exactly `<mandate_id>#<seq>`
+    -- so the digest is purely a length bound: `_lock_path` truncates the
+    whole sid at 120 characters and an accumulation claim also carries the
+    market slug, so an owner-chosen `mandate_id` of unbounded length would
+    push `acc1....DOWN.a3` past the cut, and a truncated sid makes two
+    distinct claims share one lock file. `key_id` is inside the digest
+    because `seq` monotonicity is tracked per key: the same seq under a
+    rotated key is a different grant.
+    """
+    mid = str(mandate_id or "").strip()
+    kid = str(key_id or "").strip()
+    d = str(day or "").strip()
+    if not mid or not d:
+        return ""
+    try:
+        n = int(seq)
+    except (TypeError, ValueError):
+        return ""
+    raw = "%s#%d|%s" % (mid, n, kid)
+    return "mand.%s.%s" % (hashlib.sha256(raw.encode()).hexdigest()[:16], d)
+
+
+def mandate_rate_day_key(mandate_id: str, *, day: str) -> str:
+    """`mand.<digest of mandate_id>.<YYYYMMDD>` -- the PER-DAY RATE namespace.
+
+    DELIBERATELY WITHOUT `seq` AND WITHOUT `key_id`, and that is the whole
+    point of it existing separately from `mandate_claim_sid`.
+
+    A per-day RATE is a statement about how much activity the owner permits
+    in a day. If its namespace carried `seq`, re-signing the SAME mandate --
+    to correct a typo, to tighten a limit, to rotate a compromised key --
+    would hand the day a FRESH allowance: sign 8 windows a day, renew at
+    noon, and the day permits 16. The owner never approved 16, and renewal
+    is the ordinary act of a standing mandate rather than a rare one.
+
+    So the rate is keyed on the mandate's IDENTITY alone. A renewal or a key
+    rotation continues the same day's allowance; the new scope still binds
+    going forward, because verification runs on every arming.
+
+    WHAT THIS CANNOT PREVENT, stated plainly: choosing a different
+    `mandate_id` does start a fresh allowance. That is unavoidable -- it is
+    a different mandate by definition -- but it is a visible, deliberate act
+    in a signed document, not a side effect of renewing.
+
+    `mandate_claim_sid` keeps `seq` and `key_id` because it identifies the
+    GRANT: a new grant must not inherit a spent single-use window claim.
+    The two keys answer different questions and must not be merged.
+    """
+    mid = str(mandate_id or "").strip()
+    d = str(day or "").strip()
+    if not mid or not d:
+        return ""
+    return "mand.%s.%s" % (hashlib.sha256(mid.encode()).hexdigest()[:16], d)
+
+
+def mandate_signed_window_rate(scope: Mapping[str, Any]) -> int:
+    """The signed `max_windows_per_day`, validated. Refuses if unreadable.
+
+    EXTRACTION AND VALIDATION ONLY. The INTERSECTION happens where the
+    campaign's does -- at the one place `mw` is computed, just before
+    `mandate_scope` -- because that is the value the window budget test
+    actually reads. An earlier version of this returned `min(signed,
+    caller)` into the `max_windows` parameter, which is never read again:
+    the signed rate was computed and thrown away, and the budget stayed
+    whatever `L5_LIVE_AUTH_MAX_WINDOWS` said. An adversarial review caught
+    it. The lesson is in the shape of this function now: it answers "what
+    did the owner sign", and the caller is responsible for intersecting it
+    with everything else, in the same statement that does so for a campaign.
+
+    A per-day budget we cannot read is not a budget, so it refuses rather
+    than defaulting -- defaulting would invent an allowance nobody signed. A
+    bool is not an int here for the same reason it is not one in the
+    verifier: `True` is `1` to Python, and "one window a day" is not what
+    `true` meant.
+    """
+    per_day = scope.get("max_windows_per_day")
+    if isinstance(per_day, bool) or not isinstance(per_day, int) \
+            or per_day < 1:
+        raise ArmingRefusal(
+            "MANDATE_WINDOW_RATE_UNREADABLE",
+            {"max_windows_per_day": str(per_day)[:40],
+             "note": "a per-day window budget that cannot be read is not a "
+                     "budget; it refuses rather than defaulting"})
+    return int(per_day)
+
+
+# ===================================================================== the
+# SIGNED ENVELOPE AGAINST THE RUNNING ENVELOPE
+# =====================================================================
+#
+# A signature over a number that nothing reads is decoration. Five signed
+# terms were in that position: `max_cash_deployed_usd`, `campaign_budget_usd`,
+# `max_cumulative_loss_usd`, `residual_cap_contracts` and `allowed_actions`
+# were verified for FORM by the signer and then never compared to anything
+# running, so a mandate signing `max_cash_deployed_usd: "5"` did not stop a
+# deployment configured for $500.
+#
+# THE DISCIPLINE IS THE ONE THE EXPOSURE CEILING ALREADY USES: the signed
+# number does not become the enforced number -- that would make a second
+# writer of a budget the runtime already enforces, and two writers of one
+# budget is how a budget gets spent twice. Instead arming REFUSES unless the
+# limit actually running is inside the signed one. The runtime stays the
+# single enforcer; the signature becomes a precondition on its configuration.
+#
+# FAIL CLOSED MEANS ABSENT REFUSES TOO. "No cumulative-loss ceiling
+# configured" and "a ceiling inside the signed one" are not the same state,
+# and an unset variable is the wider of the two: `L5_CAMPAIGN_BUDGET_USD`
+# unset means the budget gate is OFF entirely. A default is not a backstop,
+# either -- `L5_VALIDATION_GATES=0` removes the whole gate object that the
+# cash and cumulative-loss defaults live on, so the checks below require the
+# gates to be ON before they will credit any value read from their variables.
+
+#: the running variables each signed capital/loss term is enforced through.
+#: These are the names the DEPLOYMENT reads, not names invented here --
+#: `l5_pmus_live_runner.validation_gates()` constructs `ValidationGates` from
+#: exactly these, and `L5_VALIDATION_GATES=0` returns None instead of the
+#: object, which is why it is checked first.
+RUN_GATES_ENV = "L5_VALIDATION_GATES"
+RUN_CASH_ENV = "L5_MAX_CASH_DEPLOYED_USD"
+RUN_CUMULATIVE_LOSS_ENV = "L5_MAX_CUMULATIVE_LOSS_USD"
+RUN_UNMATCHED_ENV = "L5_MAX_UNMATCHED_CONTRACTS"
+RUN_CAMPAIGN_BUDGET_ENV = CAMPAIGN_BUDGET_ENV
+
+#: the flags that decide which ACTION KINDS the running deployment can emit.
+#: OPEN, COMPLETE and CANCEL are unconditional: the engine opens, completes
+#: and cancels in every configuration, including the deadman path. REPLACE is
+#: conditional on the completion-requote flag, which is the only switch that
+#: adds an action kind rather than changing one.
+RUN_REQUOTE_ENV = "L5_COMPLETION_REQUOTE"
+RUN_DEFENSIVE_ENV = "L5_DEFENSIVE_COMPLETION"
+_RUN_TRUE = ("1", "yes", "true", "on")
+
+
+def _env_true(name: str) -> bool:
+    return (os.getenv(name) or "").strip().lower() in _RUN_TRUE
+
+
+def running_action_kinds() -> List[str]:
+    """The action kinds this deployment can actually emit, from its flags.
+
+    Sorted, so the refusal detail and any digest over it are stable.
+
+    WHY A SUBSET TEST AND NOT AN EQUALITY TEST. A mandate may sign an action
+    the deployment cannot currently emit -- that is an owner permitting
+    something unused, which takes nothing away. The dangerous direction is
+    the other one: the deployment emitting an action the owner did not sign.
+    So every RUNNING kind must appear in the signed list, and a signed kind
+    with no running counterpart is fine.
+    """
+    kinds = {"OPEN", "COMPLETE", "CANCEL"}
+    if _env_true(RUN_REQUOTE_ENV):
+        kinds.add("REPLACE")
+    return sorted(kinds)
+
+
+def mandate_bind_running_envelope(scope: Mapping[str, Any],
+                                  limits: Any) -> Dict[str, Any]:
+    """Refuse unless every remaining signed term bounds a running limit.
+
+    Returns what it proved, for the arming record. Raises `ArmingRefusal`
+    otherwise. Called only on a mandate that has already VERIFIED, beside the
+    exposure and daily-loss comparison that was here first; this closes the
+    five terms that comparison did not reach.
+    """
+    cap = dict(scope.get("capital") or {})
+    loss = dict(scope.get("loss_limits") or {})
+    proved: Dict[str, Any] = {}
+
+    # TAKER CROSSING IS NOT EXPRESSIBLE IN A MANDATE AT ALL -- there is no
+    # action name for it and `execution_mode` must be MAKER_ONLY. So a
+    # deployment that can cross cannot be covered by any signature, however
+    # the actions are written, and this refuses before reading them.
+    if _env_true(RUN_DEFENSIVE_ENV):
+        raise ArmingRefusal(
+            "MANDATE_CANNOT_AUTHORIZE_TAKER",
+            {"flag": RUN_DEFENSIVE_ENV,
+             "note": "defensive completion can cross the spread; no signed "
+                     "mandate expresses a taker action, so no mandate can "
+                     "authorize this configuration"})
+
+    # 5. ALLOWED ACTIONS. Every kind the deployment can emit must be signed.
+    signed_actions = scope.get("allowed_actions")
+    if not isinstance(signed_actions, list) or not signed_actions             or any(not isinstance(a, str) for a in signed_actions):
+        raise ArmingRefusal(
+            "MANDATE_ACTIONS_UNREADABLE",
+            {"allowed_actions": str(signed_actions)[:60]})
+    signed_set = {a.strip().upper() for a in signed_actions}
+    running = running_action_kinds()
+    unsigned = [a for a in running if a not in signed_set]
+    if unsigned:
+        raise ArmingRefusal(
+            "MANDATE_RUNNING_ACTION_NOT_SIGNED",
+            {"unsigned": unsigned, "running": running,
+             "signed": sorted(signed_set),
+             "flags": {RUN_REQUOTE_ENV: _env_true(RUN_REQUOTE_ENV)},
+             "note": "the deployment can emit an action the owner did not "
+                     "sign; widening the signature is the owner's act, not "
+                     "this process's"})
+    proved["actions"] = {"running": running, "signed": sorted(signed_set)}
+
+    # THE GATE OBJECT ITSELF. The cash and cumulative-loss ceilings are
+    # enforced by `ValidationGates`, and `L5_VALIDATION_GATES=0` means there
+    # is no such object -- so its variables would be read here and enforced
+    # nowhere. That is exactly the decoration this function exists to end.
+    if str(os.getenv(RUN_GATES_ENV, "1")).strip() == "0":
+        raise ArmingRefusal(
+            "MANDATE_GATES_DISABLED",
+            {"flag": RUN_GATES_ENV,
+             "note": "the signed cash and cumulative-loss ceilings are "
+                     "enforced by the validation gates; with the gates off "
+                     "nothing enforces them and the signature would be "
+                     "decoration"})
+
+    # 1-3. THE MONEY CEILINGS. Each must be signed as a readable money
+    # string, explicitly configured in the deployment, and no wider.
+    for label, signed_raw, env_name in (
+            ("max_cash_deployed_usd", cap.get("max_cash_deployed_usd"),
+             RUN_CASH_ENV),
+            ("campaign_budget_usd", cap.get("campaign_budget_usd"),
+             RUN_CAMPAIGN_BUDGET_ENV),
+            ("max_cumulative_loss_usd", loss.get("max_cumulative_loss_usd"),
+             RUN_CUMULATIVE_LOSS_ENV)):
+        sig = _dec_or_none(signed_raw)
+        if sig is None:
+            raise ArmingRefusal(
+                "MANDATE_SCOPE_UNREADABLE",
+                {"field": label, "value": str(signed_raw)[:40]})
+        raw = (os.getenv(env_name) or "").strip()
+        if not raw:
+            raise ArmingRefusal(
+                "MANDATE_LIMIT_BACKSTOP_ABSENT",
+                {"field": label, "needs": env_name,
+                 "signed": str(sig),
+                 "note": "unset is not a tighter limit; the signed ceiling "
+                         "is made binding by the configured one and there "
+                         "is none to bound"})
+        run = _dec_or_none(raw)
+        if run is None:
+            raise ArmingRefusal(
+                "MANDATE_RUNNING_LIMITS_UNREADABLE",
+                {"field": label, "env": env_name, "value": raw[:40]})
+        if run > sig:
+            raise ArmingRefusal(
+                "MANDATE_LIMITS_WIDER_THAN_SIGNED",
+                {"field": label, "signed": str(sig), "running": str(run),
+                 "env": env_name})
+        proved[label] = {"signed": str(sig), "running": str(run)}
+
+    # 4. THE RESIDUAL CAP, IN CONTRACTS. The running cap is the TIGHTER of
+    # the two things that bound unmatched inventory, exactly as
+    # `effective_residual_cap` derives it: `SafetyLimits.max_abs_residual`
+    # and the gates' `max_unmatched_contracts`. Either alone is a cap; with
+    # neither readable there is no cap and this refuses.
+    sig_res = _dec_or_none(scope.get("residual_cap_contracts"))
+    if sig_res is None:
+        raise ArmingRefusal(
+            "MANDATE_SCOPE_UNREADABLE",
+            {"field": "residual_cap_contracts",
+             "value": str(scope.get("residual_cap_contracts"))[:40]})
+    caps: List[Any] = []
+    _lim_res = _limit_of(limits, "max_abs_residual")
+    if _lim_res is not None:
+        caps.append(_lim_res)
+    _unm = _dec_or_none((os.getenv(RUN_UNMATCHED_ENV) or "").strip())
+    if _unm is not None:
+        caps.append(_unm)
+    if not caps:
+        raise ArmingRefusal(
+            "MANDATE_LIMIT_BACKSTOP_ABSENT",
+            {"field": "residual_cap_contracts",
+             "needs": [RUN_UNMATCHED_ENV, "SafetyLimits.max_abs_residual"],
+             "signed": str(sig_res),
+             "note": "no readable bound on unmatched inventory, so the "
+                     "signed residual cap bounds nothing"})
+    run_res = min(caps)
+    if run_res > sig_res:
+        raise ArmingRefusal(
+            "MANDATE_LIMITS_WIDER_THAN_SIGNED",
+            {"field": "residual_cap_contracts", "signed": str(sig_res),
+             "running": str(run_res),
+             "from": [str(c) for c in caps]})
+    proved["residual_cap_contracts"] = {"signed": str(sig_res),
+                                        "running": str(run_res)}
+    return proved
+
+
+#: The claim namespace of the mandate that ACTUALLY AUTHORIZED the current
+#: window, set by `authorize_arming` only after `verify` returned ok. It is
+#: process state rather than a function of the environment, and an
+#: adversarial review is the reason.
+#:
+#: THE FIRST VERSION DERIVED THIS FROM THE ENVIRONMENT WITHOUT VERIFYING, to
+#: keep it a pure function the way `campaign_claim_suffix` is. Two holes
+#: followed, both reachable with NO registered key:
+#:
+#:   * rotating `seq` in an UNSIGNED document minted a fresh namespace on
+#:     demand, replenishing the per-day submission and per-class budgets --
+#:     so "it can only mis-count, never authorize" was wrong;
+#:   * `campaign_claim_suffix()` returns "" on an expired or momentarily
+#:     unreadable campaign, and the fallback then switched a campaign- or
+#:     Q1-authorized session onto the mandate namespace, which matches none
+#:     of its existing claim files. That handed a running session a fresh
+#:     budget mid-window and relaxed two paths that work today.
+#:
+#: Being set post-verify fixes both: an unsigned document can never set it,
+#: and it is never set while a campaign is the authorization source, because
+#: the mandate branch is unreachable when a campaign is valid.
+_ACTIVE_MANDATE_SUFFIX: Optional[str] = None
+
+
+def _set_active_mandate_suffix(suffix: Optional[str]) -> None:
+    """Record the verified mandate's namespace. Called from arming only."""
+    global _ACTIVE_MANDATE_SUFFIX
+    _ACTIVE_MANDATE_SUFFIX = str(suffix) if suffix else None
+
+
+def mandate_claim_suffix(now: Optional[dt.datetime] = None) -> str:
+    """The VERIFIED mandate's claim namespace for TODAY, else "".
+
+    THE DAY IS RE-CHECKED ON EVERY READ, and it must be. The suffix is
+    pinned at arming, so a session armed at 23:50 keeps yesterday's
+    namespace. If that were handed out after midnight it would count
+    yesterday's claim files against today's budget -- an UNDERCOUNT, which
+    is the dangerous direction. So a stale day yields "" instead, which
+    leaves the bare experiment id, and that id prefix-matches every
+    suffixed claim: the session sees MORE spent, never less, until it
+    re-arms under today's namespace.
+    """
+    suf = _ACTIVE_MANDATE_SUFFIX
+    if not suf:
+        return ""
+    day = (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y%m%d")
+    return suf if suf.endswith("." + day) else ""
+
+
 def experiment_id() -> str:
     """The claim namespace THIS campaign's submissions are counted in.
 
@@ -1247,6 +1617,13 @@ def experiment_id() -> str:
     if not base:
         return ""
     suf = campaign_claim_suffix()
+    # THE CAMPAIGN WINS WHEN BOTH EXIST. A campaign document is the narrower,
+    # shorter-lived grant, so if the owner has issued one it is the thing
+    # whose budget is being spent. The mandate namespace is consulted only
+    # where there is no campaign to attribute the spend to, and only behind
+    # the opt-in -- so with the flag off this function is unchanged.
+    if not suf and mandate_as_authorization_enabled():
+        suf = mandate_claim_suffix()
     if not suf:
         return base
     # THE DIGEST SURVIVES, THE LABEL GIVES WAY. `_lock_path` truncates the
@@ -2032,6 +2409,30 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     # import their own entrypoint. `test_l5_live_probe_image_closure` caught
     # it. The gate runs once per arming attempt, so a local import costs
     # nothing, and this keeps each image's surface to what it actually runs.
+    # THE VERDICT IS HOISTED so step 2 can use it as an AUTHORIZATION
+    # SOURCE rather than only as an extra condition. It stays None unless a
+    # trusted key is registered and the document verifies, so with no key --
+    # the shipped state -- step 2 sees exactly what it saw before.
+    _mandate_verdict: Optional[Dict[str, Any]] = None
+    #: the signed per-day window rate, set ONLY when a verified mandate is
+    #: the authorization source. `None` means "no mandate authorized this",
+    #: which is what keeps the budget statement below on the campaign/env
+    #: path untouched.
+    _mandate_per_day: Optional[int] = None
+    #: what the signed envelope was proved to bound, recorded on the window
+    #: claim so the comparison is read off the durable record rather than
+    #: re-derived from variables that may have changed since.
+    _mandate_envelope_bound: Optional[Dict[str, Any]] = None
+    #: the verified mandate's identity, carried to the claim boundary so the
+    #: per-day RATE ledger can be keyed on it. Keyed on identity alone, so a
+    #: renewal or key rotation cannot reset the day's allowance.
+    _mandate_id: Optional[str] = None
+    _mandate_auth = mandate_as_authorization_enabled()
+    # computed here only to decide whether a FAILED mandate should refuse on
+    # the spot (today's rule) or fall through to step 2 so the refusal is
+    # named there. It does not authorize anything; step 2 re-derives it.
+    _camp_ok_pre = bool(campaign is not None and campaign.get("present")
+                        and campaign.get("ok"))
     from src import l5_mandate_signature as MS
     if MS.MANDATE_PUBKEYS:
         # THE HALT LATCH IS STILL REQUIRED, as the FAST revocation route.
@@ -2095,7 +2496,22 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
             series=(series or os.getenv(SERIES_ENV, "")),
             now=now,
             seq_floor=_floor, revoked=_revoked)
-        if not _v.get("ok"):
+        # A FAILED MANDATE STILL REFUSES ON THE SPOT in every configuration
+        # that ran before, and in the one case it does not, it refuses two
+        # statements later with a BETTER name.
+        #
+        # The exception is narrow on purpose: mandate-as-authorization is
+        # ENABLED and there is no valid campaign document. There, the
+        # mandate is the only candidate authorization, so raising here would
+        # report `MANDATE_EXPIRED` as the reason arming failed before step 2
+        # has established that nothing else could have authorized it --
+        # which is true but says nothing about the legacy handshake. Falling
+        # through lets step 2 name every route that was tried.
+        #
+        # WITH A VALID CAMPAIGN THE MANDATE REMAINS REQUIRED, flag or not.
+        # Enabling the flag therefore cannot relax any path that works
+        # today; it only adds a path where today there is only a refusal.
+        if not _v.get("ok") and not (_mandate_auth and not _camp_ok_pre):
             raise ArmingRefusal(
                 str(_v.get("reason") or "MANDATE_REFUSED"),
                 {"detail": _v.get("detail"),
@@ -2103,38 +2519,53 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                  "note": "a trusted key is registered, so a valid "
                          "owner-SIGNED mandate is required and no variable "
                          "edit can substitute for one"})
-        # THE SIGNED SCOPE MUST BOUND THE RUNNING LIMITS, by the same
-        # intersection discipline the campaign approval uses: a limit
-        # widened after signing invalidates the signature's scope rather
-        # than inheriting it.
-        # the verdict carries the payload under `scope`, not `payload`
-        _mp = dict(_v.get("scope") or {})
-        _mcap = dict(_mp.get("capital") or {})
-        _mloss = dict(_mp.get("loss_limits") or {})
-        _sig_exp = _dec_or_none(_mcap.get("max_total_exposure_usd"))
-        _sig_loss = _dec_or_none(_mloss.get("daily_realized_loss_halt_usd"))
-        _run_exp = _limit_of(limits, "max_total_exposure_usd")
-        _run_loss = _limit_of(limits, "daily_realized_loss_halt_usd")
-        if _sig_exp is None or _sig_loss is None:
-            raise ArmingRefusal("MANDATE_SCOPE_UNREADABLE", {})
-        if _run_exp is None or _run_loss is None:
-            raise ArmingRefusal(
-                "MANDATE_RUNNING_LIMITS_UNREADABLE",
-                {"note": "limits that cannot be read cannot be shown to be "
-                         "inside the signed scope"})
-        if _run_exp > _sig_exp or _run_loss > _sig_loss:
-            raise ArmingRefusal(
-                "MANDATE_LIMITS_WIDER_THAN_SIGNED",
-                {"signed_exposure": str(_sig_exp),
-                 "running_exposure": str(_run_exp),
-                 "signed_daily_loss": str(_sig_loss),
-                 "running_daily_loss": str(_run_loss)})
-        # MAKER ONLY IS A SIGNED TERM, re-asserted here so a signed mandate
-        # cannot be read as authorizing a crossing order even if some other
-        # layer were to permit one.
-        if str(_mp.get("execution_mode") or "").upper() != "MAKER_ONLY":
-            raise ArmingRefusal("MANDATE_EXECUTION_MODE_NOT_MAKER_ONLY",
-                                {"mode": str(_mp.get("execution_mode"))[:40]})
+        if not _v.get("ok"):
+            # RECORDED, NOT ACTED ON. Step 2 raises with this reason, so the
+            # operator still sees MANDATE_EXPIRED / MANDATE_REVOKED rather
+            # than a generic "no authorization". The scope checks below are
+            # SKIPPED because an unverified payload has no signed scope to
+            # check -- running them would raise MANDATE_SCOPE_UNREADABLE and
+            # bury the real reason.
+            _mandate_verdict = dict(_v)
+        else:
+            # THE SIGNED SCOPE MUST BOUND THE RUNNING LIMITS, by the same
+            # intersection discipline the campaign approval uses: a limit
+            # widened after signing invalidates the signature's scope rather
+            # than inheriting it.
+            # the verdict carries the payload under `scope`, not `payload`
+            _mp = dict(_v.get("scope") or {})
+            _mcap = dict(_mp.get("capital") or {})
+            _mloss = dict(_mp.get("loss_limits") or {})
+            _sig_exp = _dec_or_none(_mcap.get("max_total_exposure_usd"))
+            _sig_loss = _dec_or_none(
+                _mloss.get("daily_realized_loss_halt_usd"))
+            _run_exp = _limit_of(limits, "max_total_exposure_usd")
+            _run_loss = _limit_of(limits, "daily_realized_loss_halt_usd")
+            if _sig_exp is None or _sig_loss is None:
+                raise ArmingRefusal("MANDATE_SCOPE_UNREADABLE", {})
+            if _run_exp is None or _run_loss is None:
+                raise ArmingRefusal(
+                    "MANDATE_RUNNING_LIMITS_UNREADABLE",
+                    {"note": "limits that cannot be read cannot be shown to "
+                             "be inside the signed scope"})
+            if _run_exp > _sig_exp or _run_loss > _sig_loss:
+                raise ArmingRefusal(
+                    "MANDATE_LIMITS_WIDER_THAN_SIGNED",
+                    {"signed_exposure": str(_sig_exp),
+                     "running_exposure": str(_run_exp),
+                     "signed_daily_loss": str(_sig_loss),
+                     "running_daily_loss": str(_run_loss)})
+            # MAKER ONLY IS A SIGNED TERM, re-asserted here so a signed
+            # mandate cannot be read as authorizing a crossing order even if
+            # some other layer were to permit one.
+            if str(_mp.get("execution_mode") or "").upper() != "MAKER_ONLY":
+                raise ArmingRefusal(
+                    "MANDATE_EXECUTION_MODE_NOT_MAKER_ONLY",
+                    {"mode": str(_mp.get("execution_mode"))[:40]})
+            # ONLY NOW is the verdict usable as an authorization source: it
+            # verified, its signed scope bounds the running limits, and it
+            # says MAKER_ONLY.
+            _mandate_verdict = dict(_v)
 
     # 2. EXPLICIT OWNER AUTHORIZATION, from EITHER of two owner-held
     #    objects. Not both, and neither is weaker than the other.
@@ -2177,6 +2608,131 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                                          "identity cannot key a durable "
                                          "claim, and an unkeyed claim is "
                                          "not a claim"})
+    elif _mandate_auth and _mandate_verdict is not None:
+        # THE MANDATE AS AN AUTHORIZATION SOURCE. Reached only with the
+        # opt-in set, a trusted key registered, and NO valid campaign -- so
+        # it adds a route where there would otherwise be a refusal and
+        # relaxes none that works today.
+        if not _mandate_verdict.get("ok"):
+            # it was verified above and failed; refuse by its own name so
+            # "expired" or "revoked" is not reported as "absent".
+            raise ArmingRefusal(
+                str(_mandate_verdict.get("reason") or "MANDATE_REFUSED"),
+                {"detail": _mandate_verdict.get("detail"),
+                 "note": "mandate-as-authorization is enabled and this "
+                         "mandate did not verify; no campaign document is "
+                         "in force to authorize instead"})
+        _mp2 = dict(_mandate_verdict.get("scope") or {})
+        sid = mandate_claim_sid(
+            _mandate_verdict.get("mandate_id"),
+            _mandate_verdict.get("seq"),
+            _mandate_verdict.get("key_id"),
+            day=(now or dt.datetime.now(dt.timezone.utc)).strftime("%Y%m%d"))
+        if not sid:
+            raise ArmingRefusal(
+                "MANDATE_IDENTITY_UNKNOWN",
+                {"note": "a verified mandate with no derivable identity "
+                         "cannot key a durable claim, and an unkeyed claim "
+                         "is not a claim"})
+        _mandate_id = str(_mandate_verdict.get("mandate_id") or "").strip()
+        if not _mandate_id:
+            raise ArmingRefusal("MANDATE_IDENTITY_UNKNOWN",
+                                {"note": "no mandate_id to key the per-day "
+                                         "rate ledger on"})
+        # PUBLISH THE VERIFIED NAMESPACE for the submission and per-class
+        # claim counters. Reached only after `verify` returned ok, so no
+        # unsigned document can set it, and unreachable while a campaign is
+        # the authorization source, so a campaign's budget can never be
+        # re-namespaced onto a mandate. Setting it does not consume
+        # anything: it names where claims are counted, and claims only
+        # happen inside a window that armed.
+        # THE RATE NAMESPACE, NOT THE GRANT IDENTITY. `sid` carries `seq`
+        # and `key_id`, so using it here would let a renewal reset the day's
+        # submission budget. `mandate_rate_day_key` drops both.
+        _set_active_mandate_suffix(
+            mandate_rate_day_key(
+                _mandate_id,
+                day=(now or dt.datetime.now(dt.timezone.utc)
+                     ).strftime("%Y%m%d")))
+        # CAPTURED, NOT APPLIED HERE. It is intersected into `mw` below, at
+        # the one statement that computes the budget the window test reads.
+        _mandate_per_day = mandate_signed_window_rate(_mp2)
+        # THE PER-DAY RATE LEDGER, ASKED WITHOUT PAYING.
+        #
+        # `DailyActionLedger` is the durable per-UTC-day accounting, keyed on
+        # the mandate's IDENTITY, so renewal and key rotation cannot reset
+        # it. This call WRITES NOTHING -- it exists because a window
+        # reserved while arming is structurally blocked is a window spent on
+        # nothing. The reservation itself happens next to the durable window
+        # claim, so the two commit together.
+        #
+        # AN UNREADABLE LEDGER REFUSES. "I could not tell" and "nothing used
+        # today" differ by the whole day's allowance.
+        from src import l5_daily_action_ledger as DAL   # late: image closure
+        _dal = DAL.DailyActionLedger()
+        _would = _dal.would_reserve_window(
+            _mandate_id, market,
+            max_windows_per_day=_mandate_per_day, now=now)
+        if not _would.get("ok"):
+            raise ArmingRefusal(
+                str(_would.get("reason") or "DAILY_WINDOW_REFUSED"),
+                {"detail": _would.get("detail"),
+                 "utc_day": _would.get("utc_day"),
+                 "windows_used": _would.get("windows_used"),
+                 "max": _would.get("max"),
+                 "mandate_id": _mandate_id,
+                 "note": "the signed per-day window rate is accounted on the "
+                         "volume per UTC day and per mandate identity; a "
+                         "renewal or key rotation does not reset it"})
+        # THE SIGNED SUBMISSION RATE MUST ALSO BIND, and it binds the same
+        # way the signed exposure and daily-loss ceilings do: by refusing
+        # when the RUNNING limit is wider than the signed one.
+        #
+        # WHY NOT ENFORCE IT DIRECTLY. The enforced submission budget is
+        # `max_submissions()`, counted over the claim namespace -- which,
+        # under a mandate, carries the UTC day, so that budget is already
+        # per-day. Making the signed number the enforced number would mean
+        # a second writer of submission claims, and two writers of one
+        # budget is how a budget gets spent twice. So the signed rate is
+        # made binding by bounding the budget that is already enforced.
+        #
+        # A MANDATE THAT NAMES NO READABLE RATE REFUSES, and so does a
+        # deployment with no backstop at all: "unlimited submissions inside
+        # a signed envelope" is not something a signature can grant here.
+        _sig_subs = _mp2.get("max_submissions_per_day")
+        if isinstance(_sig_subs, bool) or not isinstance(_sig_subs, int) \
+                or _sig_subs < 1:
+            raise ArmingRefusal(
+                "MANDATE_SUBMISSION_RATE_UNREADABLE",
+                {"max_submissions_per_day": str(_sig_subs)[:40]})
+        _run_subs = max_submissions()
+        if _run_subs is None:
+            raise ArmingRefusal(
+                "MANDATE_SUBMISSION_BACKSTOP_ABSENT",
+                {"needs": [MAX_SUBMISSIONS_ENV],
+                 "signed_max_submissions_per_day": _sig_subs,
+                 "note": "the signed per-day rate is made binding by the "
+                         "deployed backstop; with no backstop there is "
+                         "nothing to bound and it refuses"})
+        if _run_subs > _sig_subs:
+            raise ArmingRefusal(
+                "MANDATE_SUBMISSION_BACKSTOP_WIDER_THAN_SIGNED",
+                {"signed_per_day": _sig_subs, "running_backstop": _run_subs})
+        # AND THE REMAINING FIVE SIGNED TERMS BIND THE SAME WAY. Exposure
+        # and daily loss were compared at verification; cash, campaign
+        # budget, cumulative loss, the residual cap and the action allowlist
+        # were signed and compared to NOTHING, which made those five
+        # signatures decoration. This refuses unless each one bounds a limit
+        # the deployment actually enforces through.
+        #
+        # HERE, NOT AT VERIFICATION, and last in this branch. The
+        # verification block runs whenever a trusted key is registered --
+        # flag off, campaign in force, legacy handshake -- so a check there
+        # would add refusals to paths that work today. This point is reached
+        # ONLY where the mandate is itself the authorization, and placed
+        # after the submission backstop so every pre-existing refusal still
+        # reports its own name first.
+        _mandate_envelope_bound = mandate_bind_running_envelope(_mp2, limits)
     elif Q1.armed():
         sid = session_id()
         if not sid:
@@ -2185,12 +2741,21 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     else:
         raise ArmingRefusal(
             "OWNER_AUTHORIZATION_ABSENT",
+            # THE KEY KEEPS ITS NAME though there are now three routes.
+            # `needs_either` is part of the refusal shape an operator reads
+            # and a test pins, and renaming a published contract to fix a
+            # word is churn: the note below says plainly that there are
+            # three.
             {"needs_either": {
                 "campaign": [CAMPAIGN_APPROVAL_ENV],
+                "signed_mandate": [MANDATE_AS_AUTH_ENV, "L5_MANDATE_DOC"],
                 "legacy_handshake": [Q1.LIVE_ENV, Q1.SID_ENV, Q1.ARM_ENV]},
              "campaign_present": _camp_present,
+             "mandate_as_authorization": _mandate_auth,
              "note": "a valid campaign approval authorizes campaign windows "
-                     "on its own; without one the legacy one-window "
+                     "on its own; a verified owner-signed mandate does the "
+                     "same when the opt-in is set and a trusted key is "
+                     "registered; without either the legacy one-window "
                      "handshake is required"})
     # 2b. THE CAMPAIGN APPROVAL, when one exists.
     #
@@ -2497,6 +3062,23 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
         # to the campaign, and a SET one can only tighten it.
         mw = _cmw if not (os.getenv(MAX_WINDOWS_ENV) or "").strip() \
             else min(mw, _cmw)
+    elif _mandate_per_day is not None:
+        # THE SIGNED PER-DAY RATE, INTERSECTED EXACTLY AS A CAMPAIGN'S IS.
+        # This statement is the fix for the hole an adversarial review found:
+        # the rate used to be clamped onto the `max_windows` parameter, which
+        # nothing reads after step 2, so a mandate signed for 2 windows a day
+        # ran 50 if `L5_LIVE_AUTH_MAX_WINDOWS` said 50 -- an executor-writable
+        # variable overriding the owner's signature, which is the precise
+        # thing a signature exists to prevent.
+        #
+        # An UNSET env defers to the signature (the env default of 1 would
+        # otherwise cap an 8-window mandate at one window); a SET one can
+        # only tighten. The budget test below reads `mw`, and `mw` is counted
+        # against the day-scoped claim prefix, so this is what makes the
+        # signed rate durable across restarts.
+        mw = _mandate_per_day \
+            if not (os.getenv(MAX_WINDOWS_ENV) or "").strip() \
+            else min(mw, _mandate_per_day)
     scope = mandate_scope(market=("" if mw > 1 else market), limits=limits,
                           series=pre, max_windows=mw,
                           # the identity that KEYS the claim, so a legacy
@@ -2532,7 +3114,27 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
     if mw > 1:
         # a campaign's own expiry, verified at step 8 above, IS the absolute
         # deadline this requires; the env one is then optional.
-        if not _camp_ok and not os.getenv(NOT_AFTER_ENV, "").strip():
+        # A SIGNED MANDATE CARRIES ITS OWN ABSOLUTE DEADLINE, exactly as a
+        # campaign document does, so it gets the same exemption.
+        #
+        # `MS.verify` runs `_check_validity` on EVERY arming, which refuses
+        # MANDATE_EXPIRED past the signed `not_after` and enforces the
+        # 30-day duration ceiling. So the mandate path already has the
+        # bounded session this check exists to require.
+        #
+        # REQUIRING THE ENV DEADLINE HERE WAS A DEFECT, and a subtle one:
+        # it forced an operator to set `L5_LIVE_AUTH_NOT_AFTER` for a
+        # mandate, and the deadline check at step 8 then applies whichever
+        # is EARLIER -- so a stale value left over from a 4-hour campaign
+        # would kill a seven-day mandate after four hours with
+        # AUTHORIZATION_EXPIRED. Fail-closed, but it would have looked like
+        # the mandate itself expiring.
+        #
+        # The env deadline stays OPTIONAL and can still only TIGHTEN, which
+        # is the right discipline; it is simply no longer mandatory for a
+        # path that has a signed one.
+        if not _camp_ok and _mandate_per_day is None \
+                and not os.getenv(NOT_AFTER_ENV, "").strip():
             raise ArmingRefusal("MANDATE_HAS_NO_DEADLINE",
                                 {"env": NOT_AFTER_ENV,
                                  "note": "a budget above one window with no "
@@ -2596,7 +3198,21 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
             # still refused -- that is about self-knowledge, not continuity,
             # and an actor we cannot name has no business taking a claim.
             # The legacy single-window path keeps the original rule intact.
-            if _camp_ok:
+            if _camp_ok or _mandate_per_day is not None:
+                # A STANDING MANDATE SPANS PROCESS LIFETIMES, exactly as a
+                # campaign does, so it takes the campaign's rule rather than
+                # the legacy pid comparison. With the strict rule a mandate
+                # bricked the rest of its UTC day on ANY respawn --
+                # MANDATE_HOLDER_MISMATCH on `pid`, recoverable only by a new
+                # owner-signed `seq` or by waiting for midnight. That fails
+                # closed, so it was not a hole, but a seven-day mandate that
+                # dies on every restart is the kind of friction that gets a
+                # safety check loosened later under pressure. Decided here
+                # deliberately instead.
+                #
+                # NOTHING IS WEAKENED BY IT: the per-day budget is counted
+                # from the lock files on the volume, not from the holder, so
+                # a restart still cannot buy a window.
                 _me = dict(holder)
                 if not _me.get("deployment_id") or not _me.get("boot_id"):
                     raise ArmingRefusal(
@@ -2625,9 +3241,43 @@ def authorize_arming(*, market: str, preflight: Any, store: Any,
                       budget_release=_budget_release,
                       note=("one window of a mandate; the claim is spent on "
                             "this market and is never cleared"))
+        if _mandate_envelope_bound is not None:
+            wclaim["signed_envelope"] = _mandate_envelope_bound
         # a window already spent is refused here, by the same O_EXCL call that
         # refuses a second Stage A claim: AUTHORIZATION_ALREADY_USED.
         claim_once(path, wkey, wclaim)
+        # THE RATE RESERVATION, COMMITTED WITH THE WINDOW CLAIM.
+        #
+        # Placed AFTER `claim_once` on purpose: that call is the point of no
+        # return for this window, so a reservation taken before it could be
+        # spent on an arming that then refused. Placed BEFORE `_append` so
+        # the rate is accounted before the window is announced.
+        #
+        # `reserve_window` RESUMES rather than respends when this slug
+        # already holds today's claim, so a restart re-arming the same market
+        # does not consume a second window -- the same property `claim_once`
+        # has, which is why the two belong next to each other.
+        if _mandate_id and _mandate_per_day is not None:
+            from src import l5_daily_action_ledger as DAL2
+            _res = DAL2.DailyActionLedger().reserve_window(
+                _mandate_id, market,
+                max_windows_per_day=_mandate_per_day, now=now)
+            if not _res.get("ok"):
+                # The window claim is already spent and is deliberately not
+                # rolled back: handing the same claim out twice is worse
+                # than losing one. Refusing here stops the ORDER path, and
+                # the lost window is the conservative direction.
+                raise ArmingRefusal(
+                    str(_res.get("reason") or "DAILY_WINDOW_REFUSED"),
+                    {"detail": _res.get("detail"),
+                     "mandate_id": _mandate_id,
+                     "note": "the per-day rate ledger refused after the "
+                             "window claim was taken; the claim is spent "
+                             "and not rolled back, because reissuing a "
+                             "single-use claim is the worse failure"})
+            wclaim["daily_rate"] = {k: _res.get(k) for k in
+                                    ("utc_day", "used_before", "max",
+                                     "resumed")}
         _append(path, wclaim)
         if auth is not None:
             auth.sid, auth.market, auth.claimed = sid, market, True
