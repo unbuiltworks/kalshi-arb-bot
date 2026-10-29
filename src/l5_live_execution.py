@@ -5830,6 +5830,42 @@ class FaithfulExecutor:
                authenticated: Mapping[str, Any],
                *, market: str, window: str,
                open_markets: Sequence[str] = ()) -> Dict[str, Any]:
+        """`_handle` with the two-sided leg markers guaranteed cleared.
+
+        THE REMAINING HOLE IN THE 1445z FIX. `_handle` clears
+        `_probe_leg_pending` / `_probe_round_pending` on ENTRY, which closes
+        every REFUSAL path: nineteen refusal exits sit between the set and
+        the consume, and none of them reset the markers, but the next call
+        does before it reads them.
+
+        AN EXCEPTION IS NOT A REFUSAL. If `_handle` raises between the set
+        (the two-sided adoption) and the consume (immediately before the
+        wire), the markers stay set until the NEXT call to this method --
+        and `fresh_book_requote` reads `_probe_leg_pending` outside
+        `handle` entirely, so in that gap it sees a leg that is not pending.
+        Entry-clearing cannot close that, because the gap is before the
+        entry it would clear at.
+
+        THIS MATTERS MORE UNDER BOOK-DRIVEN RE-EVALUATION, which re-enters
+        this method far more often than one L5 action at a time, so a gap
+        that was rare becomes reachable.
+
+        `finally` rather than `except`: the exception is re-raised
+        unchanged, every caller's error handling is untouched, and the only
+        thing added is that the scratch markers never outlive the call that
+        set them.
+        """
+        try:
+            return self._handle(row, authenticated, market=market,
+                                window=window, open_markets=open_markets)
+        finally:
+            self._probe_leg_pending = None
+            self._probe_round_pending = None
+
+    def _handle(self, row: Mapping[str, Any],
+                authenticated: Mapping[str, Any],
+                *, market: str, window: str,
+                open_markets: Sequence[str] = ()) -> Dict[str, Any]:
         key = str(row.get("action_key"))
         dec = FT.l5_native(row)
         prov = Provenance(key, dec or {"unreadable": True}, market, window)
