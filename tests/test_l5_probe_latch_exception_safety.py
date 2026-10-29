@@ -3,209 +3,143 @@
 WHAT THEY ARE. `_probe_leg_pending` / `_probe_round_pending` are per-call
 scratch set by the two-sided adoption inside `FaithfulExecutor.handle` and
 consumed immediately before the wire. The strategy-ownership gate reads
-`_probe_leg_pending` to decide whether the order in hand belongs to the
-two-sided engine, and `fresh_book_requote` reads it OUTSIDE that method.
+`_probe_leg_pending`, and `fresh_book_requote` reads it OUTSIDE that method.
 
 THE 1445z DEFECT. Nineteen refusal exits sit between the set and the
 consume and none reset the markers, so a refused two-sided plan latched
-them for the life of the process: 15 of 27 decisions then died in the gate
-whose whole purpose is to exclude the OTHER engine, and the latch was
-self-sustaining because only a successful submission cleared it. That was
-fixed by clearing on ENTRY, which closes every refusal path.
+them for the life of the process: 15 of 27 decisions died in the gate whose
+whole purpose is to exclude the OTHER engine, self-sustaining because only
+a successful submission cleared it. Fixed by clearing on ENTRY, which closes
+every refusal path.
 
-WHAT ENTRY-CLEARING CANNOT FIX. An EXCEPTION between the set and the
-consume leaves the markers set until the next call, and `fresh_book_requote`
-reads them in that gap. Route B re-enters far more often than one L5 action
-at a time, so the gap stops being rare.
+WHAT ENTRY-CLEARING CANNOT FIX. An EXCEPTION between the set and the consume
+leaves the markers set until the next call, and `fresh_book_requote` reads
+them in that gap. Entry-clearing cannot close it: the gap precedes the entry
+it would clear at. Route B re-enters far more often than one L5 action at a
+time, so the gap stops being rare.
 
-WHY THE GUARANTEE IS THE RUNNER'S. It was first placed in the executor, by
-splitting `handle` into a thin wrapper over a renamed `_handle`. That
-worked and cost too much: eleven existing review guards introspect
-`FaithfulExecutor.handle`'s SOURCE -- gate ordering, the marker reset
-position, the refusal inventory -- and every one began reading the wrapper
-instead of the body, with one reporting zero refusal sites against an
-inventory of forty-four. Those guards are safety assets, so the guarantee
-moved to `Runner.handle`, the only production caller, where it costs none
-of them.
+WHY THESE ARE SOURCE ASSERTIONS. Reaching `ex.handle` through
+`Runner.handle` needs the transport, the book, the intent gate and the
+window all satisfied, and a fixture that heavy would be asserting its own
+scaffolding. `test_l5_probe_leg_marker_leak.py` already pins this same
+invariant from the source, and this file follows it.
+
+TWO PLACEMENTS WERE TRIED AND REVERTED, which is why the structure is
+asserted rather than just the behaviour. Splitting the executor's `handle`
+into a wrapper over a renamed `_handle` broke ELEVEN review guards -- the
+refusal inventory reported ZERO sites against an inventory of 44. Splitting
+`Runner.handle` the same way broke THREE more that look for
+`GATE.L5_FOLLOWED` and the emitted two-sided stages in that method's own
+text. The guarantee belongs at the CALL SITE, where it costs no guard.
 """
 from __future__ import annotations
+
+import inspect
 
 import pytest
 
 from src import l5_live_execution as LX
 from src import l5_pmus_live_runner as R
 
-
-class _Boom(RuntimeError):
-    pass
+BOTH = ("self._probe_leg_pending = None", "self._probe_round_pending = None")
 
 
-class _Ex:
-    """Stands in for the executor: it only has to carry the markers."""
-
-    def __init__(self) -> None:
-        self._probe_leg_pending = None
-        self._probe_round_pending = None
+def _runner_handle_src() -> str:
+    return inspect.getsource(R.Runner.handle)
 
 
-def _runner(body):
-    """A Runner whose `_handle_action` is `body`. `Runner.handle` is the
-    thing under test, so the body is stubbed deliberately: these tests are
-    about the guarantee the caller makes, not what the executor decides."""
-    r = R.Runner.__new__(R.Runner)
-    r.executor = _Ex()
-    r._handle_action = body
-    return r
+# ------------------------------------------------- the guarantee's shape
+def test_the_executor_call_is_wrapped_in_try_finally():
+    src = _runner_handle_src()
+    i = src.index("rec = ex.handle(row, {}")
+    head = src[:i]
+    assert head.rstrip().endswith("try:"), head[-200:]
 
 
-def _mark(r, leg="UP", rnd=2):
-    r.executor._probe_leg_pending = leg
-    r.executor._probe_round_pending = rnd
+def test_the_finally_clears_both_markers():
+    src = _runner_handle_src()
+    i = src.index("rec = ex.handle(row, {}")
+    tail = src[i:]
+    j = tail.index("finally:")
+    block = tail[j:j + 300]
+    assert "ex._probe_leg_pending = None" in block
+    assert "ex._probe_round_pending = None" in block
 
 
-def _clear(r):
-    return (r.executor._probe_leg_pending is None
-            and r.executor._probe_round_pending is None)
+def test_it_is_finally_and_not_except():
+    """`except` would swallow the exception and change every caller's error
+    handling. `finally` re-raises unchanged and only clears the scratch."""
+    src = _runner_handle_src()
+    i = src.index("rec = ex.handle(row, {}")
+    tail = src[i:i + 600]
+    assert "finally:" in tail
+    assert "except" not in tail
 
 
-def test_the_markers_are_cleared_after_a_normal_return():
-    r = _runner(lambda row, recv: None)
-    r_ = r
-
-    def body(row, recv):
-        _mark(r_)
-
-    r._handle_action = body
-    r.handle({}, 0.0)                      # Runner.handle returns None
-    assert _clear(r)
-
-
-def test_the_markers_are_cleared_after_a_refusal_return():
-    r = _runner(lambda row, recv: None)
-
-    def body(row, recv):
-        _mark(r, "DOWN", 1)
-
-    r._handle_action = body
-    r.handle({}, 0.0)
-    assert _clear(r)
-
-
-def test_the_markers_are_cleared_when_the_body_raises():
-    """The hole entry-clearing cannot close."""
-    r = _runner(lambda row, recv: None)
-
-    def body(row, recv):
-        _mark(r, "UP", 3)
-        raise _Boom("after the set, before the consume")
-
-    r._handle_action = body
-    with pytest.raises(_Boom):
-        r.handle({}, 0.0)
-    assert _clear(r)
-
-
-def test_the_exception_is_re_raised_unchanged():
-    """`finally`, not `except`: no caller's error handling moves."""
-    sentinel = _Boom("exact instance")
-
-    def body(row, recv):
-        raise sentinel
-
-    r = _runner(body)
-    with pytest.raises(_Boom) as got:
-        r.handle({}, 0.0)
-    assert got.value is sentinel
-
-
-def test_a_keyboard_interrupt_also_clears():
-    """BaseException, not just Exception: a shutdown mid-plan must not
-    leave a marker behind."""
-    r = _runner(lambda row, recv: None)
-
-    def body(row, recv):
-        _mark(r)
-        raise KeyboardInterrupt()
-
-    r._handle_action = body
-    with pytest.raises(KeyboardInterrupt):
-        r.handle({}, 0.0)
-    assert _clear(r)
-
-
-def test_repeated_evaluations_cannot_accumulate_a_latch():
-    """The Route B case: many calls, some raising. After every one the
-    markers are clear, so call N+1 can never inherit call N's leg."""
-    seen = []
-    r = _runner(lambda row, recv: None)
-
-    def body(row, recv):
-        _mark(r, "UP", len(seen))
-        seen.append(1)
-        if len(seen) % 3 == 0:
-            raise _Boom("every third")
-
-    r._handle_action = body
-    for i in range(30):
-        try:
-            r.handle({}, float(i))
-        except _Boom:
-            pass
-        assert _clear(r), i
-    assert len(seen) == 30
-
-
-def test_a_missing_executor_does_not_turn_a_refusal_into_a_crash():
-    """The clear is defensive about its own target: an early-constructed
-    Runner with no executor must not raise from the `finally`."""
-    r = R.Runner.__new__(R.Runner)
-    r.executor = None
-    r._handle_action = lambda row, recv: None
-    r.handle({}, 0.0)
-
-
-def test_the_arguments_pass_through_unchanged():
-    got = {}
-
-    def body(row, recv):
-        got.update(row=row, recv=recv)
-
-    r = _runner(body)
-    r.handle({"action_key": "k"}, 123.5)
-    assert got == {"row": {"action_key": "k"}, "recv": 123.5}
+def test_nothing_was_renamed_so_the_review_guards_still_read_the_body():
+    """The whole reason for this placement. These are the exact strings the
+    three guards my second attempt broke were looking for."""
+    src = _runner_handle_src()
+    assert "GATE.L5_FOLLOWED" in src
+    assert "rec = ex.handle(row, {}" in src
+    assert not hasattr(R.Runner, "_handle_action")
+    assert not hasattr(LX.FaithfulExecutor, "_handle")
 
 
 def test_the_executors_entry_clear_is_still_present():
-    """A second line, not a replacement: the entry clear is what closes the
+    """A first line of defence, not replaced: it is what closes the
     nineteen refusal exits from inside the executor."""
-    import inspect
     src = inspect.getsource(LX.FaithfulExecutor.handle)
     head = src[:src.index("# INDEPENDENT HALT")]
-    assert "self._probe_leg_pending = None" in head
-    assert "self._probe_round_pending = None" in head
+    for stmt in BOTH:
+        assert stmt in head
 
 
-def test_no_other_module_calls_the_runners_private_handler():
-    """Nothing may reach `_handle_action` and skip the guarantee.
+def test_the_executor_still_consumes_the_markers_before_the_wire():
+    """The set and the consume both stay inside the executor; the runner's
+    `finally` is additive and must not have removed either."""
+    src = inspect.getsource(LX.FaithfulExecutor.handle)
+    assert "self._probe_leg_pending = nxt" in src
+    i_set = src.index("self._probe_leg_pending = nxt")
+    i_consume = src.index("self._probe_leg_pending = None", i_set)
+    assert i_consume > i_set
 
-    Scoped by name and by `self`: an earlier version of this guard matched
-    any `._handle(` and failed on `l5_pmus_realtime_observer`, a different
-    class calling its own unrelated method.
-    """
-    import ast
-    import pathlib
-    root = pathlib.Path(__file__).resolve().parents[1] / "src"
-    guilty = []
-    for py in sorted(root.rglob("*.py")):
-        if py.name == "l5_pmus_live_runner.py":
-            continue
+
+# ------------------------------------------------- the semantics it relies on
+def test_a_finally_clears_on_every_exit_including_a_raise():
+    """The language guarantee this rests on, pinned so a refactor that
+    replaced `finally` with something weaker is caught here too."""
+    state = {}
+
+    class _Boom(RuntimeError):
+        pass
+
+    def call(mode):
         try:
-            tree = ast.parse(py.read_text(errors="replace"))
-        except SyntaxError:                                # pragma: no cover
-            continue
-        for node in ast.walk(tree):
-            if (isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "_handle_action"):
-                guilty.append("%s:%d" % (py.name, node.lineno))
-    assert guilty == [], guilty
+            state["leg"] = "UP"
+            if mode == "raise":
+                raise _Boom()
+            if mode == "interrupt":
+                raise KeyboardInterrupt()
+            return {"ok": True}
+        finally:
+            state["leg"] = None
+
+    assert call("ok") == {"ok": True}
+    assert state["leg"] is None
+    with pytest.raises(_Boom):
+        call("raise")
+    assert state["leg"] is None
+    with pytest.raises(KeyboardInterrupt):
+        call("interrupt")
+    assert state["leg"] is None
+
+
+def test_the_book_completion_module_is_in_the_deployed_image():
+    """It is lazily imported by `maybe_book_completion`, so absent from the
+    image it would raise ModuleNotFoundError on the first tick with the
+    flag set -- a production crash, not a test failure."""
+    import pathlib
+    dockerfile = (pathlib.Path(__file__).resolve().parents[1]
+                  / "deploy" / "l5_pmus_live" / "Dockerfile").read_text()
+    assert "COPY src/l5_book_completion.py" in dockerfile

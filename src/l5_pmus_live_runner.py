@@ -2506,44 +2506,6 @@ class Runner:
                            % type(exc).__name__] += 1
 
     def handle(self, r: Mapping[str, Any], recv: float) -> None:
-        """The runner's side of one L5 action, with the two-sided leg
-        markers guaranteed cleared afterwards.
-
-        WHY THE GUARANTEE LIVES HERE AND NOT IN THE EXECUTOR.
-        `FaithfulExecutor.handle` clears `_probe_leg_pending` /
-        `_probe_round_pending` on ENTRY, which closes every REFUSAL path:
-        nineteen refusal exits sit between the set and the consume and none
-        reset the markers, but the next call does before it reads them.
-
-        AN EXCEPTION IS NOT A REFUSAL. A raise between the two-sided
-        adoption and the consume leaves the markers set until the next
-        call, and `fresh_book_requote` reads `_probe_leg_pending` outside
-        that method entirely, so in the gap it sees a leg that is not
-        pending. Entry-clearing cannot close it: the gap precedes the entry
-        it would clear at. Route B re-enters far more often than one L5
-        action at a time, so the gap stops being rare.
-
-        I FIRST PUT THIS IN THE EXECUTOR, by splitting `handle` into a thin
-        wrapper over a renamed `_handle`. That worked and cost too much:
-        eleven existing review guards introspect `FaithfulExecutor.handle`'s
-        SOURCE -- gate ordering, the marker reset position, the refusal
-        inventory -- and all of them began reading the wrapper instead of
-        the body. One reported zero refusal sites against an inventory of
-        forty-four. Those guards are safety assets, so the guarantee moved
-        to the only production caller instead, where it costs none of them.
-
-        `finally`, so the exception is re-raised unchanged and no caller's
-        error handling moves.
-        """
-        try:
-            self._handle_action(r, recv)
-        finally:
-            _ex = getattr(self, "executor", None)
-            if _ex is not None:
-                _ex._probe_leg_pending = None
-                _ex._probe_round_pending = None
-
-    def _handle_action(self, r: Mapping[str, Any], recv: float) -> None:
         ws = OBS.l5_window_start(r.get("slug", ""))
         t, ex = self.transport, self.executor
         slug = OBS.pmus_slug_for(ws) if ws else None
@@ -2591,8 +2553,38 @@ class Runner:
             # chasing under another name, and it has never been tested
             # with money. The 8-live-order cap and the $5 exposure bound
             # are what keep unfilled orders from accumulating.
-            rec = ex.handle(row, {}, market=slug, window=str(ws),
-                            open_markets=self.open_markets())
+            # THE MARKERS MUST NOT OUTLIVE THIS CALL.
+            #
+            # `FaithfulExecutor.handle` clears `_probe_leg_pending` /
+            # `_probe_round_pending` on ENTRY, which closes every REFUSAL
+            # path: nineteen refusal exits sit between the set and the
+            # consume and none reset them, but the next call does before it
+            # reads them.
+            #
+            # AN EXCEPTION IS NOT A REFUSAL. A raise between the two-sided
+            # adoption and the consume leaves them set until the next call,
+            # and `fresh_book_requote` reads `_probe_leg_pending` outside
+            # that method entirely -- so in the gap it sees a leg that is
+            # not pending. Entry-clearing cannot close it: the gap precedes
+            # the entry it would clear at. Route B re-enters far more often
+            # than one L5 action at a time, so the gap stops being rare.
+            #
+            # WRAPPED AT THE CALL SITE, AND THAT PLACEMENT IS THE POINT. I
+            # tried this twice as a method split -- once in the executor,
+            # once here -- and both times the renamed body moved out from
+            # under source-introspection review guards. The executor
+            # version broke eleven, including the refusal inventory, which
+            # reported ZERO sites against an inventory of 44; the runner
+            # version broke three more that look for `GATE.L5_FOLLOWED` and
+            # the emitted two-sided stages in this method's own text. Those
+            # guards are safety assets. A `finally` around the one call
+            # that sets the markers costs none of them.
+            try:
+                rec = ex.handle(row, {}, market=slug, window=str(ws),
+                                open_markets=self.open_markets())
+            finally:
+                ex._probe_leg_pending = None
+                ex._probe_round_pending = None
         layer = rec.get("refused_by_layer")
         order = rec.get("ORDER") or {}
         key = ("ORDER:%s" % (order.get("reason") or
