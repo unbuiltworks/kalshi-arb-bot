@@ -110,3 +110,38 @@ nonce-bearing file hand-carried into Railway, and the 7-day standing mandate
 covers the decision-tape campaign and its successors inside the same limits.
 Nothing about this widens risk: every limit is compared against the running
 configuration and arming fails closed if any is wider.
+
+## 5. The ~34 s cadence: a code-grounded hypothesis, not a measurement
+
+Stated so the Campaign 9 tape has something specific to confirm or kill.
+The engine's submit path is **serial**, and three of its latencies are
+constants in the deployed code or already measured:
+
+| stage | period | source |
+|---|---|---|
+| main loop granularity | 3.0 s | `L5_LIVE_POLL_S` default, `l5_pmus_live_runner.py:6920` |
+| order-state poll — how late a terminal is *noticed* | 6.0 s | `ORDER_POLL_S`, `:217` |
+| admitted L5 action arrival | 14.08 s | measured, `GAP_MECHANISM_NARROWED.md` |
+| measured order dwell (C8 median) | ~11 s | `c8_joined.json` |
+
+Summed serially: 11 + 6 + 14 + 3 ≈ **34 s**, which is the observed cadence.
+Under one-order concurrency each stage has to complete before the next
+submission can be built, so they add rather than overlap.
+
+**This is arithmetic that fits, not a demonstration.** I have not shown that
+the slot actually waits on each stage in turn, and the fit would survive a
+quite different mechanism with a similar total. Treat it as the hypothesis to
+test, not a finding.
+
+What makes it worth testing: if it holds, **two of the three waits are plain
+configuration** — the order poll and the loop granularity — with no bearing
+on clip size, pricing, concurrency or any risk limit. Lowering
+`ORDER_POLL_S` and `L5_LIVE_POLL_S` would be the smallest possible
+improvement to matched volume: a constant change, no new code path, no risk
+envelope implication, and the coverage gain is directly measurable against
+this 12.0 % baseline.
+
+The confirming measurement is the Campaign 9 decision tape, which records
+every evaluation with its refusal class, so the wait each submission actually
+sat in is read off the record instead of inferred. That is the one thing
+still blocked.
