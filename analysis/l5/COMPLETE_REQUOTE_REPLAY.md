@@ -56,3 +56,31 @@ Authorises designing a live A/B: **True**. Authorises shipping: **False**.
 ## Non-contamination
 
 L5_COMPLETION_EXTENSION_GATE_v1 is frozen and running. This bar shares no threshold with it, reads no forward evidence, and its verdict has no effect on that gate's sample minimums or criteria. Any live trial designed from this bar must be separable in the tape by an explicit arm label, so the extension's attribution stays clean.
+
+---
+
+## CORRECTION 2026-10-29: this bar's net is invalidated by settled evidence
+
+The `+16.2153` net at full conversion above is **not usable**. $17.9281 of it
+is "residual loss avoided", charged at **−$0.331449 per unit** from a cohort
+mean. Campaigns 6–8 have since measured residual settlement directly on 7
+stranded legs totalling 12.82 contracts: **+$0.6005, i.e. +$0.0468 per unit
+— the opposite sign.**
+
+Recomputed at the measured rate, full conversion is **−$4.24**, not
+`+16.2153`. The sign of the headline flips.
+
+The bar's own counterfactual median pair cost was **1.01** with 66.7% above
+par, which is the same above-par problem seen from the other side, and the
+settled break-even completion pair cost is **0.9532** against an achieved
+0.9530 — so converting strands into above-par pairs destroys value rather
+than rescuing it.
+
+This does not impeach the bar's mechanics or its stated bounds
+(`aggregate_not_sequence`, `one_sided_trigger_detection`), which were
+correct and explicit. It impeaches the residual price it was multiplied by.
+`Authorises shipping: False` stands, and is now stronger: do not design a
+live A/B on this evidence either.
+
+See `analysis/l5/campaign9/THROUGHPUT_AND_INCENTIVES.md` and
+`analysis/l5/campaign8/ACCOUNTING_AND_DWELL_VERDICT.md`.
