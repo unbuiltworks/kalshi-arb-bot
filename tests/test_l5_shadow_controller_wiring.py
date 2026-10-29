@@ -273,7 +273,8 @@ def test_simulated_inventory_survives_a_restart(tmp_path, monkeypatch):
         c._store_inventory(PMUS, inv, scen)
     c._save()
     again = build(tmp_path, monkeypatch, root=root)
-    assert ctl(again).inventory_for(PMUS).snapshot() == {
+    got = ctl(again).inventory_for(PMUS).snapshot()
+    assert {k: got[k] for k in ("yes", "no", "matched", "residual")} == {
         "yes": 1, "no": 0, "matched": 0, "residual": 1}
 
 

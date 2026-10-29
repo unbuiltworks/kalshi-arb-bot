@@ -189,7 +189,13 @@ def test_from_flat_the_decision_is_an_open(tmp_path):
     rec = c.step(WS + 310.0, slug=SLUG, book=_book(), window_end_ts=WEND)
     assert rec["decision"] == "quote"
     assert rec["relation"] == "open"
-    assert rec["inventory"] == {"yes": 0, "no": 0, "matched": 0, "residual": 0}
+    # SUBSET, not exact equality: `snapshot()` also reports the held
+    # leg's cost basis for the residual sampler, and pinning every
+    # additive reporting key here would break on each new one.
+    inv = rec["inventory"]
+    assert {k: inv[k] for k in ("yes", "no", "matched", "residual")} == {
+        "yes": 0, "no": 0, "matched": 0, "residual": 0}
+    assert inv["held_leg_side"] is None        # flat: nothing is held
 
 
 def test_a_surplus_extends_the_surplus_side(tmp_path):
@@ -447,8 +453,13 @@ def test_inventory_survives_a_restart(tmp_path):
     c._store_inventory(SLUG, inv)
     c._save()
     again = ctl(tmp_path)                 # a fresh object, same state file
-    assert again.inventory_for(SLUG).snapshot() == {
+    got = again.inventory_for(SLUG).snapshot()
+    assert {k: got[k] for k in ("yes", "no", "matched", "residual")} == {
         "yes": 1, "no": 0, "matched": 0, "residual": 1}
+    # the cost basis must survive the restart too, or the sampler
+    # cannot price a completion after a redeploy
+    assert got["held_leg_side"] == "YES"
+    assert got["held_leg_own_cost"] == "0.48"
 
 
 def test_unreadable_state_starts_clean_rather_than_crashing(tmp_path):

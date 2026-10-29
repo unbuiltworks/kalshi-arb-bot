@@ -3472,7 +3472,16 @@ class Runner:
             out = s.sample(
                 slug="%s|%s" % (slug, variant), now=now,
                 residual=inv.get("residual"),
-                first_leg_own_px=inv.get("pair_unit_cost"),
+                # THE HELD LEG'S COST, NOT A PAIR COST. A pair unit cost
+                # only exists once something is matched, so it is None in
+                # exactly the case this sampler fires on -- an outstanding
+                # residual -- which left `first_leg_own_px` None in 401 of
+                # 401 frames and every `pair_if_*` reading
+                # `no_first_leg_price`. `pair_unit_cost` is kept as a
+                # fallback so any other producer of this record is
+                # unaffected.
+                first_leg_own_px=(inv.get("held_leg_own_cost")
+                                  or inv.get("pair_unit_cost")),
                 order_resting=bool((rec.get("resting") or {}) or False),
                 book=ring.latest(str(slug)),
                 depth_ticks=_evidence_depth_ticks())

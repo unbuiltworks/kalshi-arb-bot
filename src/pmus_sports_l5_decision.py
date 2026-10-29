@@ -130,8 +130,37 @@ class Inventory:
         return (c / n) if n else None
 
     def snapshot(self) -> dict:
+        """Counts, plus the cost basis a completion decision needs.
+
+        WHY THE COSTS ARE HERE. The residual sampler prices a completing
+        pair as `first_leg_own_px + complement_own_px`, and it was handed
+        `inventory["pair_unit_cost"]` -- a key this snapshot never emitted,
+        so `first_leg_own_px` was None in every frame and
+        `pair_if_maker` / `pair_if_maker_behind_touch` /
+        `pair_if_taker_walk` all read `why: no_first_leg_price`. Measured on
+        2026-10-29: null in 401 of 401 frames, which made maker-completion
+        economics unmeasurable in shadow.
+
+        `held_leg_own_cost` IS THE RIGHT FIGURE, AND A PAIR COST IS NOT.
+        A pair unit cost only exists once something is matched, so it is
+        None exactly when a residual is outstanding -- the only case this
+        sampler fires on. What a completion decision needs is the average
+        own cost of the side actually carrying the imbalance.
+
+        REPORTING ONLY. Nothing here decides, submits or sizes anything;
+        the keys are additive and no existing reader loses a field.
+        """
+        r = self.residual
+        held = (self.avg(True) if r > 0
+                else self.avg(False) if r < 0 else None)
+        ay, an = self.avg(True), self.avg(False)
         return {"yes": self.yes, "no": self.no, "matched": self.matched,
-                "residual": self.residual}
+                "residual": r,
+                "avg_yes_cost": None if ay is None else str(ay),
+                "avg_no_cost": None if an is None else str(an),
+                "held_leg_side": ("YES" if r > 0 else
+                                  "NO" if r < 0 else None),
+                "held_leg_own_cost": None if held is None else str(held)}
 
 
 def complement_target(avg_surplus: D,
