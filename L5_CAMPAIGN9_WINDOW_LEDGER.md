@@ -131,3 +131,67 @@ Other counters: `ts_completion:NO_INVENTORY_TO_COMPLETE = 76` (no first leg
 ever filled, so nothing to complete), `campaign:OK = 217`,
 `campaign_window:RESERVED = 1`, `two_sided_awaiting_settlement = 3`.
 All `shadow_*` counters are modelled and excluded from this ledger.
+
+
+---
+
+## Authoritative end-of-window accounting (`L5_WINDOW_ACCOUNTING`, phase PROVISIONAL)
+
+Both closed windows are identical and empty. These are the venue-facing
+counters, not shadow:
+
+| field | 1845z (closed 19:00:01Z) | 1900z (closed 19:15:02Z) |
+|---|---:|---:|
+| `orders.submitted` | **0** | **0** |
+| `orders.acknowledged` | 0 | 0 |
+| `orders.filled_orders` | 0 | 0 |
+| `orders.partial_fills` | 0 | 0 |
+| `orders.cancelled` / `rejected` | 0 / 0 | 0 / 0 |
+| `orders.fill_events` | 0 | 0 |
+| `contracts.filled_total` | 0 | 0 |
+| `contracts.first_leg_filled` | 0 | 0 |
+| `contracts.complement_filled` | 0 | 0 |
+| `execution.maker_orders` / `taker_orders` | 0 / 0 | 0 / 0 |
+| `execution.actual_fees_usd` | 0 | 0 |
+| `pair_economics.pairs_completed` | 0 | 0 |
+| `pair_economics.matched_qty` | 0 | 0 |
+| `pair_economics.pair_edge_usd` | 0 | 0 |
+| `pair_economics.defensive_loss_usd` | 0 | 0 |
+| `pair_economics.residual_qty` | UP 0 / DOWN 0 | UP 0 / DOWN 0 |
+| `provisional_inventory.unmatched_estimate` | 0 | 0 |
+| **`realized_net_usd`** | **null** | **null** |
+
+`rebate_estimate_usd` 0 with `eligibility:
+UNVERIFIED_NO_VENUE_CREDIT_RECORD`. Per the field's own label, an estimate is
+never income and `realized_net_usd` excludes it regardless.
+
+### Per-window arm decisions
+
+- **1845z**: `arm_refused_authorization_already_used: 15`,
+  `arm_refused_window_not_usable: 201`
+- **1900z**: `arm_refused_window_not_usable: 18` — all after the 600 s entry
+  cutoff, i.e. the ordinary post-entry state with no inventory. It *was*
+  armed at 19:00:09.
+
+### The market was not the problem
+
+1900z observability: `subscribed_before_open: **true**`,
+`first_book_offset_s: 0.3`, `first_trade_offset_s: 5.8`,
+`book_updates: **8578**`, `trades_seen: 500`, state OPEN at +0.3 s. The
+authenticated feed was early, dense and liquid, and the real sampler emitted
+**0** while the shadow sampler emitted **800**.
+
+So the absence of orders is not market data, not liquidity, and not our risk
+gates. It is the absence of a new L5 action to mirror. The system states the
+same thing in its own label:
+
+> "A fill record needs a fill and a residual sample needs unmatched inventory,
+> so zero of either is expected on a flat window and is NOT evidence of a
+> fault."
+
+### Campaign totals so far
+
+2 of 8 windows spent · **0 submissions** · 0 venue-confirmed fills ·
+0 completed pairs · 0 unmatched inventory · 0 Route B action triggers (hook
+ran, `NO_ACTION_YET` ×374) · settled net **n/a — nothing to settle**.
+Campaign ledger `peak_usd` still **0**; no limit has been approached.
