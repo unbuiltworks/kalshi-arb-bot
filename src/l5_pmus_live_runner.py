@@ -3493,10 +3493,103 @@ class Runner:
                             "Exercises the unmatched-inventory path on live "
                             "books with nothing at risk.")
             emit("L5_SHADOW_RESIDUAL_BOOK_SAMPLE", out)
+            self.shadow_defensive_decision(
+                variant, out, inv=inv, slug=slug, now=now,
+                window_end_ts=rec.get("window_end_ts"))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             self.stats["shadow_residual_book_error:%s"
+                       % type(exc).__name__] += 1
+
+    def shadow_defensive_decision(self, variant: str,
+                                  sample: Mapping[str, Any], *,
+                                  inv: Mapping[str, Any], slug: str,
+                                  now: float,
+                                  window_end_ts: Any = None) -> None:
+        """SHADOW-ONLY defensive-completion decision, recorded not taken.
+
+        WHAT THIS MEASURES AND WHY IT IS THE ONE MISSING NUMBER. The
+        20261025 replay says autonomous ARGMAX turns positive if defensive
+        completion lands on **26.8%** of residual (pair_net +10.1837,
+        residual -13.3237, pre-emption -0.8080). The retained evidence is
+        n=1: the single genuinely stranded episode, 0130z, was completable
+        at pair 0.9656 and filled at both 0.5 s and 8.818 s of latency.
+        One observation is not a rate, and the rate is what decides whether
+        the live adapter is worth building. This records a decision per
+        residual sample so the rate can be counted over many windows.
+
+        IT REUSES THE REAL POLICY. `DEF.decide` is the deployed decision
+        function, called with `simulate=True`; no second copy of the rule
+        exists here. `DEF.alternatives` inside it prices taker completion,
+        maker completion, partial and hold-to-settlement side by side, which
+        are exactly the courses being compared.
+
+        THE CEILING IS 1.00, NOT THE 1.20 CODE DEFAULT. The venue has no
+        maker-fee term and a matched pair redeems exactly $1.00, so a pair
+        above $1.00 is a locked loss: at the 1.20 default the same bound
+        arithmetic gives -8.0931, worse than doing nothing.
+
+        IT CANNOT SUBMIT. It writes one log line. There is no transport, no
+        claim, no order and no store write on this path, and the executor's
+        own `maker_only_forbids_defensive_crossing` is untouched.
+        """
+        try:
+            from src import l5_defensive_completion as DEF
+            from src import pmus_fees as PFEE
+            # NOT the module-level `TS`, which is `l5_two_sided_shadow`
+            # here. The cutoffs live on the PROBE, and reaching for the
+            # wrong `TS` is an AttributeError this import exists to avoid.
+            from src import l5_two_sided_probe as TSP
+            # the sampler nests these under `reachability`; the underlying
+            # `complement_reachability` returns them at top level. Accept
+            # either so this is testable against the function directly.
+            r = sample.get("reachability") or sample
+            walk = r.get("taker_walk") or {}
+            behind = r.get("maker_quote_behind_touch") or {}
+            exitpx = _dec(walk.get("vwap_own_px"))
+            qty = _dec(inv.get("residual"))
+            first = _dec(inv.get("held_leg_own_cost"))
+            if exitpx is None or qty is None or first is None or qty == 0:
+                self.stats["shadow_defensive:NOT_PRICEABLE"] += 1
+                return
+            qty = abs(qty)
+            wend = _dec(window_end_ts)
+            wstart = (float(wend) - float(AB.WINDOW_S)
+                      if wend is not None else now - float(AB.WINDOW_S))
+            d = DEF.decide(
+                now_t=now, window_start=wstart,
+                complete_cutoff_s=TSP.complete_cutoff_s(),
+                cancel_cutoff_s=TSP.cancel_cutoff(AB.WINDOW_S),
+                unmatched_qty=qty, first_leg_cost=first, exit_price=exitpx,
+                displayed_depth=_dec(walk.get("displayed_qty_crossed")),
+                taker_fee_per_contract=PFEE.taker_fee(exitpx, D(1)),
+                maker_complement_price=_dec(behind.get("own_px")),
+                buy_side=r.get("complement_side"),
+                # the venue break-even, NOT the 1.20 default -- see above
+                pair_ceiling=D("1.00"),
+                simulate=True)
+            act = str(d.get("action") or d.get("reason") or "?")
+            self.stats["shadow_defensive:%s" % act] += 1
+            emit("L5_SHADOW_DEFENSIVE_DECISION", {
+                "label": "L5_SHADOW_DEFENSIVE_DECISION",
+                "slug": str(slug), "shadow_variant": str(variant),
+                "unmatched_qty": str(qty), "first_leg_own_cost": str(first),
+                "exit_price_own": str(exitpx),
+                "maker_complement_own": behind.get("own_px"),
+                "pair_if_taker": str(first + exitpx),
+                "pair_ceiling_used": "1.00",
+                "decision": d,
+                "basis": ("SHADOW. DEF.decide(simulate=True) over MODELLED "
+                          "inventory on a live book. Nothing was submitted, "
+                          "filled, settled or realized, and a displayed "
+                          "quote is not a promise that it survives our "
+                          "latency."),
+            })
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            self.stats["shadow_defensive_error:%s"
                        % type(exc).__name__] += 1
 
     def emit_fill_evidence(self, ev: Mapping[str, Any]) -> None:
