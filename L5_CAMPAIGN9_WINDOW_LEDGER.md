@@ -49,7 +49,9 @@ residual ceiling 3 contracts · `journal_errors > 0` · 8 windows spent ·
 | 1 | 1845z | 18:45:09Z, spent 1/8 | **0** | 0 | 0 | 0 | n/a (Route B inert) | n/a |
 | 2 | 1900z | 19:00:09Z, spent 2/8 | **0** | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×374 | n/a |
 | 3 | 1915z | 19:15:08Z, spent 3/8 | **0** | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×619 | n/a |
-| 4 | 1930z | 19:30:07Z, spent 4/8 | 0 (in flight) | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×862 | pending |
+| 4 | 1930z | 19:30:07Z, spent 4/8 | **0** | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×862 | n/a |
+| 5 | 1945z | 19:45:27Z, spent 5/8 | **0** | 0 | 0 | 0 | hook RAN | n/a |
+| — | 2000z+ | **NOT ARMED — stood down** | — | — | — | — | — | — |
 
 ### Window 1 — 1845z — ZERO ORDERS, genuine constraint
 
@@ -271,3 +273,140 @@ any point in this deployment.
 
 **4 of 8 spent, 0 submissions.** Four remain (1945z, 2000z, 2015z, 2030z),
 exhausted by roughly 20:45z.
+
+
+---
+
+# STAND-DOWN — 2026-10-29 19:50Z
+
+## Pre-revocation safety check (venue authority)
+
+`L5_LIVE_RECONCILE` 19:44:05Z, `authority: VENUE`: `reconciled true`,
+`uncertainty_cleared true`, `open_orders_at_venue **0**`,
+`live_orders_pending_terminal []`, `live_orders_released_unacked []`,
+`pending_terminal_total **0**`, `live_orders_adopted []`, `quarantined []`,
+`ALERT null`. Nothing live, nothing unresolved from this campaign. Revoked
+only after this read.
+
+## Mechanism used — the documented revocation, nothing else
+
+`Q1.armed()` (`pmus_q1_executor.py:108`) requires all three:
+`PMUS_Q1_LIVE == "YES"`, a non-empty `PMUS_Q1_SESSION_ID`, and
+`PMUS_Q1_ARM == PMUS_Q1_SESSION_ID`.
+
+**Changed exactly one value: `PMUS_Q1_LIVE` `YES` -> `NO`.**
+
+This is the mechanism the engine itself names — every `L5_LIVE_ARMED` record
+carries `"arming is revocable by unsetting the owner token"`. It leaves the
+`PMUS_Q1_ARM` / `PMUS_Q1_SESSION_ID` pairing intact, so resumption is a
+single flag flip with no token to reconstruct.
+
+**Deliberately NOT used:** the halt latch. `HaltAsserter` is
+"write-only, assert-only… has no delete and no clear, by construction" and
+the executor has no code path to clear it. Asserting it would have been
+irreversible and would have halted more than this campaign. `halt_gate`
+remains `permitted: true`.
+
+**No counter was reset or bypassed.** No ledger write, no nonce rotation, no
+window-budget edit, no approval change.
+
+## Verified stood down
+
+Deployment `a9bbbd02`, SUCCESS 19:51:50Z, same commit `c39183a3`.
+
+`L5_AUTHORIZATION_PREFLIGHT` 19:51:55Z: **`ok: false`, `fail: ["owner_arm_token"]`**
+— `owner_arm_token: FAIL`, blocking `OWNER_AUTHORIZATION_ABSENT (step 11)`.
+
+Everything else **preserved and still passing**:
+
+| row | state |
+|---|---|
+| `campaign_approval` | **PASS**, `approved`, 8 windows, $20, $5, digest `ac855ce3…` |
+| `absolute_deadline` | **PASS**, OPEN, 8899.2 s left (22:20:15Z) |
+| `halt_gate` | PASS, `permitted: true` (latch NOT asserted) |
+| `shadow_lock` | PASS, not engaged |
+| `residual_ceiling` | PASS, 3 contracts |
+| `window_budget_env` | PASS, 8 |
+
+At 19:52:05Z the runner refused 2026-10-29-1945z with `claim_taken: false`
+and the label *"no campaign window is spent and the authorization is still
+available to a later window"* — confirming no further window will be
+consumed.
+
+## Window budget
+
+**5 of 8 spent** — 1845z, 1900z, 1915z, 1930z, 1945z. `1945z` armed at
+19:45:27Z (`windows_spent: 5`) on the previous container, before the
+revocation redeploy landed; it submitted nothing.
+
+**3 windows remain unspent and preserved**, usable only while the approval is
+in force (i.e. before **22:20:15Z**); after that they require a fresh
+owner-minted approval.
+
+Every spent window: `orders.submitted 0`, `realized_net_usd null`.
+
+---
+
+# VERIFIED CAUSE: our ingestion is NOT defective; the upstream page is frozen
+
+The code carries a purpose-built diagnostic for this exact question
+(`l5_pmus_live_runner.py:1114-1117`):
+
+> "the newest L5 EVENT time the feed has ever served, by L5's clock rather
+> than ours — a stale feed is a page whose newest event stops advancing while
+> our own poll clock keeps ticking."
+
+Its value at 19:36:04Z:
+
+| field | value |
+|---|---|
+| `newest_row_event_utc` | **2026-10-29T17:54:50Z** — frozen |
+| `last_row_utc` | 2026-10-29T19:36:03Z — advancing |
+| `last_btc15m_utc` | 2026-10-29T19:36:03Z — advancing |
+| `last_admitted_utc` | **null** |
+| `rows_btc15m` | 163,780 and growing |
+| `distinct_slugs_seen` | 13 |
+| `feed_errors` | 0 |
+
+## What this definitively EXCLUDES
+
+1. **Cursor behaviour.** `newest_row_event_t` is computed over **every row,
+   before** the `cursor.known(k)` dedupe check (`:2478-2488`). Cursor state
+   cannot hold it back. A stuck cursor would still show a rising newest
+   event time.
+2. **Pagination.** `l5_activity` is documented *"L5's published trades,
+   newest first"* and we read a 200-row page from the **head**. Newer actions
+   would appear at the top; pagination can only ever hide **older** rows. So
+   no offset/paging bug can conceal recent activity.
+3. **Dedupe / `ingest:dup`.** Same reason as (1) — it is measured pre-dedupe.
+4. **API reachability.** `feed_errors 0`, `ingest:polls_ok` 862, exactly
+   200.0 rows per poll, rows still classified BTC15m.
+5. **Our filters.** No `ingest:refused:*` counter ever incremented — nothing
+   reached the staleness or slug filters, because nothing new arrived.
+6. **Market data and risk gates.** 1900z: subscribed before open, first book
+   +0.3 s, 8578 book updates, 500 trades. All gates PASS throughout.
+
+**Conclusion: the page `data-api.polymarket.com/activity` serves contains
+nothing newer than 17:54:50Z. That is established. Nothing in our ingestion
+is broken, so there is no specific feed defect to fix.**
+
+## What remains UNDETERMINED, stated plainly
+
+Whether the frozen page means **(a)** L5 genuinely stopped trading at
+17:54:50Z, or **(b)** the upstream API is serving a stale/cached page.
+
+Both produce exactly the signature above. Separating them needs one direct
+read of `data-api.polymarket.com` — **blocked by this environment's network
+policy** (403 to CONNECT, `connect_rejected`). No live independent poller is
+available to corroborate: `l5-pmus-observer` is crashlooping on
+`[Errno 28] No space left on device` at `/state/l5-pmus-obs`, and
+`l5-exec-shadow` last produced logs on 2026-10-08.
+
+**A reason not to assume (a):** the 200-row page spans roughly 17:00–17:54:50
+— about **3–4 L5 trades per minute** while active. Zero actions for ~2 hours
+is a very large deviation from that rate. It is consistent with a genuine
+stop, and equally consistent with a frozen upstream page. So "L5 is
+inactive" is **not** certified here.
+
+The stand-down is the correct action under **both** branches, which is why it
+did not wait on this answer.
