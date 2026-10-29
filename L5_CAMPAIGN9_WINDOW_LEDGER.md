@@ -48,7 +48,8 @@ residual ceiling 3 contracts · `journal_errors > 0` · 8 windows spent ·
 |---|---|---|---|---|---|---|---|---|
 | 1 | 1845z | 18:45:09Z, spent 1/8 | **0** | 0 | 0 | 0 | n/a (Route B inert) | n/a |
 | 2 | 1900z | 19:00:09Z, spent 2/8 | **0** | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×374 | n/a |
-| 3 | 1915z | 19:15:08Z, spent 3/8 | 0 (in flight) | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×619 | pending |
+| 3 | 1915z | 19:15:08Z, spent 3/8 | **0** | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×619 | n/a |
+| 4 | 1930z | 19:30:07Z, spent 4/8 | 0 (in flight) | 0 | 0 | 0 | hook RAN, `NO_ACTION_YET` ×862 | pending |
 
 ### Window 1 — 1845z — ZERO ORDERS, genuine constraint
 
@@ -234,3 +235,39 @@ Route B's hook continues to run (`book_completion:NO_ACTION_YET` 374 → 619).
 2015z, 2030z), which the clock will consume by roughly 20:45z. The
 authorization itself does not expire until 22:20:15Z, so the window budget —
 not the deadline — is the binding constraint.
+
+
+---
+
+### Window 3 closed / Window 4 armed
+
+**1915z closed 19:30:01Z** — `L5_WINDOW_ACCOUNTING` identical to the first
+two: `orders.submitted 0`, acknowledged 0, filled_orders 0, partial_fills 0,
+cancelled 0, rejected 0, fill_events 0, `filled_total 0`,
+`pairs_completed 0`, `matched_qty 0`, `residual_qty` UP 0 / DOWN 0,
+`unmatched_estimate 0`, **`realized_net_usd: null`**.
+
+**1930z armed 19:30:07Z**, `windows_spent 4/8`, claim
+`…w.3242466a27b93ef1`, window 19:30–19:45Z, scope digest `9beae198…`
+unchanged, `MAKER_ONLY`, preflight PASSED, `halt_latch CLEAR`.
+
+**L5 idle through 19:36:04Z.** The cursor key count has now been flat across
+488 polls:
+
+| counter | 19:08:51Z | 19:22:28Z | 19:36:04Z |
+|---|---:|---:|---:|
+| `ingest:polls_ok` | 374 | 619 | 862 |
+| `ingest:dup` | 74800 | 123800 | **172400** |
+| `ingest:new` | 0 | 0 | **0** |
+| cursor `keys` | 5556 | 5556 | **5556** |
+| newest slug | 17:45z | 17:45z | **17:45z** |
+
+172400 / 862 = exactly **200.0**. `feed_errors 0`. The newest L5 action in
+the feed page is ~110 minutes stale against a 900 s `max_action_age_s`.
+
+No `L5_FILL_BOOK_EVIDENCE`, `L5_LIVE_SETTLED`, `L5_MODEL_FILL`,
+`L5_LIVE_ORDERS_STALLED` or `L5_BOOK_COMPLETION_TRIGGER` has been emitted at
+any point in this deployment.
+
+**4 of 8 spent, 0 submissions.** Four remain (1945z, 2000z, 2015z, 2030z),
+exhausted by roughly 20:45z.
